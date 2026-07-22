@@ -15,10 +15,10 @@
  * context (PR7 will mount it in a dedicated print route that Playwright
  * navigates to — Server Components can render it directly).
  *
- * ponytail: cover + index only — R5.5/5.6 only asks for a live title/index
- * preview in this phase, not per-product page layout (R6.1's actual product
- * pages are PR7's job). PR7 should extend this component (e.g. an optional
- * `children` slot or a `products` prop) rather than build a second template.
+ * PR7 update: extended with an optional `productPages` prop (R6.1's actual
+ * per-product pages) rather than a second template — see `productPages`
+ * below. Still additive/optional so PR6b's `CatalogBuilderForm` preview
+ * (cover+index only, R5.5/5.6) needs no changes.
  */
 export type CatalogTemplateBranding = {
   logoUrl: string;
@@ -33,13 +33,23 @@ export type CatalogIndexSection = {
   productCount: number;
 };
 
+/** R6.1 — minimal per-product print fields; reuses catalog-builder's `ProductRef` shape (no new product data-fetching added this phase). */
+export type ProductPrintRef = {
+  id: string;
+  name: string;
+  categoryL1: string | null;
+  categoryL2: string | null;
+};
+
 export type CatalogTemplateProps = {
   title: string;
   branding: CatalogTemplateBranding | null;
   sections: CatalogIndexSection[];
+  /** R6.1 — one array per printed page (already chunked to `productsPerPage` by `pdf-generation/render.ts`'s `chunkProducts`). Omitted for the builder's cover+index-only live preview. */
+  productPages?: ProductPrintRef[][];
 };
 
-export function CatalogTemplate({ title, branding, sections }: CatalogTemplateProps) {
+export function CatalogTemplate({ title, branding, sections, productPages = [] }: CatalogTemplateProps) {
   // R6.3 — index only ever lists sections with >=1 product. `buildIndexSections`
   // (catalog-builder/selection.ts) already guarantees this, but filtering here
   // too keeps the shared renderer correct for any future caller that passes
@@ -77,6 +87,25 @@ export function CatalogTemplate({ title, branding, sections }: CatalogTemplatePr
           </ul>
         )}
       </section>
+
+      {productPages.map((page, pageIndex) => (
+        <section
+          key={pageIndex}
+          aria-label={`Product page ${pageIndex + 1}`}
+          style={{ padding: "1rem", pageBreakBefore: "always" }}
+        >
+          <ul>
+            {page.map((product) => (
+              <li key={product.id}>
+                {product.name}
+                {product.categoryL1
+                  ? ` — ${product.categoryL1}${product.categoryL2 ? ` / ${product.categoryL2}` : ""}`
+                  : ""}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </article>
   );
 }
