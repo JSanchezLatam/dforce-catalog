@@ -8,6 +8,13 @@
       "when": 1784693381702,
       "tag": "0000_light_lady_deathstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784694106899,
+      "tag": "0001_lying_the_professor",
+      "breakpoints": true
     }
   ]
 }

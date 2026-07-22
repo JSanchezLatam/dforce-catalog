@@ -24,6 +24,8 @@ export const env = {
   DATABASE_URL: required("DATABASE_URL"),
   /** Interfuerza API token — server-only, never log or expose (NFR-4). */
   IFX_TOKEN: optional("IFX_TOKEN"),
+  /** Interfuerza API base URL — e.g. https://api.interfuerza.example. */
+  IFX_BASE_URL: optional("IFX_BASE_URL"),
   NODE_ENV: optional("NODE_ENV", "development"),
 } as const;
 
