@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+/*
+ * Kanagawa Dragon theme tokens (design.md, confirmed palette).
+ * @theme registers these as both `--color-*` CSS variables and
+ * `bg-dragon-*` / `text-dragon-*` / etc. Tailwind v4 utilities —
+ * no separate tailwind.config needed for this.
+ */
+@theme {
+  --color-dragon-bg: #181616;
+  --color-dragon-sidebar-bg: #0d0c0c;
+  --color-dragon-fg: #c5c9c5;
+  --color-dragon-muted: #625e5a;
+  --color-dragon-blue: #8ba4b0;
+  --color-dragon-green: #87a987;
+  --color-dragon-red: #c4746e;
+  --color-dragon-yellow: #c4b28a;
+}
