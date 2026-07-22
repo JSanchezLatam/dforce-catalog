@@ -12,6 +12,7 @@ import {
   normalizeFilters,
 } from "@/modules/inventory-view/queries";
 import { ManualSyncButton } from "@/modules/inventory-sync/ManualSyncButton";
+import { PAGE_HEADING, TABLE_TD, TABLE_TH } from "@/shared/ui/styles";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -49,17 +50,19 @@ export default async function InventoryPage({
 
   if (dbEmpty) {
     return (
-      <main>
-        <h1>Inventory</h1>
-        <p>The inventory is empty. Ask an administrator to run an inventory sync to populate it.</p>
+      <main className="p-8">
+        <h1 className={PAGE_HEADING}>Inventory</h1>
+        <p className="text-sm text-dragon-fg">
+          The inventory is empty. Ask an administrator to run an inventory sync to populate it.
+        </p>
         {canTriggerSync && <ManualSyncButton />}
       </main>
     );
   }
 
   return (
-    <main>
-      <h1>Inventory</h1>
+    <main className="p-8">
+      <h1 className={PAGE_HEADING}>Inventory</h1>
       {canTriggerSync && <ManualSyncButton />}
       <InventoryFilters
         categoryL1Options={categoryL1Options}
@@ -67,37 +70,50 @@ export default async function InventoryPage({
         selected={filters}
       />
       {items.length === 0 ? (
-        <p>
-          No products match the selected filters. <Link href="/inventory">Clear filters</Link>
+        <p className="text-sm text-dragon-fg">
+          No products match the selected filters.{" "}
+          <Link href="/inventory" className="text-dragon-blue hover:underline">
+            Clear filters
+          </Link>
         </p>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Name</th>
-              <th>Category L1</th>
-              <th>Category L2</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.id}>
-                <td>{item.id}</td>
-                <td>{item.name}</td>
-                <td>{item.categoryL1 ?? "—"}</td>
-                <td>{item.categoryL2 ?? "—"}</td>
+        <div className="overflow-x-auto rounded-lg border border-dragon-muted/40">
+          <table className="w-full border-collapse">
+            <thead className="bg-dragon-sidebar-bg">
+              <tr>
+                <th className={TABLE_TH}>ID</th>
+                <th className={TABLE_TH}>Name</th>
+                <th className={TABLE_TH}>Category L1</th>
+                <th className={TABLE_TH}>Category L2</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id} className="border-t border-dragon-muted/20">
+                  <td className={TABLE_TD}>{item.id}</td>
+                  <td className={TABLE_TD}>{item.name}</td>
+                  <td className={TABLE_TD}>{item.categoryL1 ?? "—"}</td>
+                  <td className={TABLE_TD}>{item.categoryL2 ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
-      <nav>
+      <nav className="mt-4 flex items-center gap-4 text-sm text-dragon-fg">
         <span>
           Page {pageWindow.page} of {pageCount}
         </span>
-        {pageWindow.page > 1 && <Link href={buildPageHref(params, pageWindow.page - 1)}>Previous</Link>}
-        {pageWindow.page < pageCount && <Link href={buildPageHref(params, pageWindow.page + 1)}>Next</Link>}
+        {pageWindow.page > 1 && (
+          <Link href={buildPageHref(params, pageWindow.page - 1)} className="text-dragon-blue hover:underline">
+            Previous
+          </Link>
+        )}
+        {pageWindow.page < pageCount && (
+          <Link href={buildPageHref(params, pageWindow.page + 1)} className="text-dragon-blue hover:underline">
+            Next
+          </Link>
+        )}
       </nav>
     </main>
   );

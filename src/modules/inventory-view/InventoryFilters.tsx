@@ -2,6 +2,8 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
+import { INPUT, LABEL } from "@/shared/ui/styles";
+
 /**
  * Category filter selects (R3.1/3.2). Updates the URL via `router.push` —
  * Next.js App Router soft-navigates (no full reload), same mechanism the
@@ -40,10 +42,14 @@ export function InventoryFilters({
   const hasActiveFilters = Boolean(selected.categoryL1 || selected.categoryL2);
 
   return (
-    <div>
-      <label>
+    <div className="mb-4 flex flex-wrap items-end gap-4">
+      <label className={LABEL}>
         Category L1
-        <select value={selected.categoryL1 ?? ""} onChange={(e) => applyFilter("categoryL1", e.target.value)}>
+        <select
+          className={`mt-1 ${INPUT}`}
+          value={selected.categoryL1 ?? ""}
+          onChange={(e) => applyFilter("categoryL1", e.target.value)}
+        >
           <option value="">All</option>
           {categoryL1Options.map((option) => (
             <option key={option} value={option}>
@@ -52,9 +58,13 @@ export function InventoryFilters({
           ))}
         </select>
       </label>
-      <label>
+      <label className={LABEL}>
         Category L2
-        <select value={selected.categoryL2 ?? ""} onChange={(e) => applyFilter("categoryL2", e.target.value)}>
+        <select
+          className={`mt-1 ${INPUT}`}
+          value={selected.categoryL2 ?? ""}
+          onChange={(e) => applyFilter("categoryL2", e.target.value)}
+        >
           <option value="">All</option>
           {categoryL2Options.map((option) => (
             <option key={option} value={option}>
@@ -63,7 +73,14 @@ export function InventoryFilters({
           ))}
         </select>
       </label>
-      {hasActiveFilters && <button onClick={() => router.push(pathname)}>Clear filters</button>}
+      {hasActiveFilters && (
+        <button
+          onClick={() => router.push(pathname)}
+          className="rounded border border-dragon-muted px-3 py-2 text-sm text-dragon-fg hover:bg-dragon-muted/20"
+        >
+          Clear filters
+        </button>
+      )}
     </div>
   );
 }

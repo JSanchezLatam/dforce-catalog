@@ -5,6 +5,7 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { listAllCatalogs, listCatalogsForUser } from "@/modules/catalog-storage/queries";
 import type { Catalog } from "@/shared/db/schema";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
+import { PAGE_HEADING, TABLE_TD, TABLE_TH } from "@/shared/ui/styles";
 
 /**
  * R7 — catalog listing (name/date/categories). Per-user scope; Administrador
@@ -19,29 +20,35 @@ export default async function CatalogsPage() {
   const catalogs = can(user, "catalogs.listAll") ? await listAllCatalogs() : await listCatalogsForUser(user.id);
 
   return (
-    <main>
-      <h1>My catalogs</h1>
+    <main className="p-8">
+      <h1 className={PAGE_HEADING}>My catalogs</h1>
       {catalogs.length === 0 ? (
-        <p>
-          No catalogs yet. <Link href="/builder">Build one</Link>.
+        <p className="text-sm text-dragon-fg">
+          No catalogs yet.{" "}
+          <Link href="/builder" className="text-dragon-blue hover:underline">
+            Build one
+          </Link>
+          .
         </p>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Date</th>
-              <th>Categories</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {catalogs.map((catalog) => (
-              <CatalogRow key={catalog.id} catalog={catalog} />
-            ))}
-          </tbody>
-        </table>
+        <div className="overflow-x-auto rounded-lg border border-dragon-muted/40">
+          <table className="w-full border-collapse">
+            <thead className="bg-dragon-sidebar-bg">
+              <tr>
+                <th className={TABLE_TH}>Name</th>
+                <th className={TABLE_TH}>Date</th>
+                <th className={TABLE_TH}>Categories</th>
+                <th className={TABLE_TH}>Status</th>
+                <th className={TABLE_TH}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {catalogs.map((catalog) => (
+                <CatalogRow key={catalog.id} catalog={catalog} />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </main>
   );
@@ -52,20 +59,27 @@ function CatalogRow({ catalog }: { catalog: Catalog }) {
   const categoryLabel = categories.map((c) => c.categoryL1).join(", ") || "—";
 
   return (
-    <tr>
-      <td>{catalog.title}</td>
-      <td>{catalog.createdAt.toLocaleDateString()}</td>
-      <td>{categoryLabel}</td>
-      <td>
+    <tr className="border-t border-dragon-muted/20">
+      <td className={TABLE_TD}>{catalog.title}</td>
+      <td className={TABLE_TD}>{catalog.createdAt.toLocaleDateString()}</td>
+      <td className={TABLE_TD}>{categoryLabel}</td>
+      <td className={TABLE_TD}>
         <StatusBadge status={catalog.uploadStatus} label={statusLabel(catalog.uploadStatus)} />
       </td>
-      <td>
+      <td className={`${TABLE_TD} space-x-2`}>
         {catalog.uploadStatus === "uploaded" ? (
           <>
-            <a href={`/api/catalogs/${catalog.id}/file`} target="_blank" rel="noreferrer">
+            <a
+              href={`/api/catalogs/${catalog.id}/file`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-dragon-blue hover:underline"
+            >
               Preview
-            </a>{" "}
-            <a href={`/api/catalogs/${catalog.id}/file?download=1`}>Download</a>
+            </a>
+            <a href={`/api/catalogs/${catalog.id}/file?download=1`} className="text-dragon-blue hover:underline">
+              Download
+            </a>
           </>
         ) : catalog.uploadStatus === "failed" ? (
           // R7.5 — no persisted product selection to auto-replay (`categories`
@@ -73,9 +87,11 @@ function CatalogRow({ catalog }: { catalog: Catalog }) {
           // "regenerate" is a link back to the builder, not an automatic
           // re-run. ponytail: revisit if a requirement asks to restore the
           // original selection instead of re-picking it.
-          <Link href="/builder">Regenerate</Link>
+          <Link href="/builder" className="text-dragon-blue hover:underline">
+            Regenerate
+          </Link>
         ) : (
-          "Processing…"
+          <span className="text-dragon-muted">Processing…</span>
         )}
       </td>
     </tr>

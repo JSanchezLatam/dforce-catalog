@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { StatusBadge } from "@/shared/ui/StatusBadge";
+import { PRIMARY_BUTTON } from "@/shared/ui/styles";
 
 type SyncRunStatus = "running" | "completed" | "failed";
 
@@ -97,8 +98,8 @@ export function ManualSyncButton() {
   }
 
   return (
-    <div>
-      <button type="button" onClick={handleClick} disabled={running}>
+    <div className="mb-4 flex items-center gap-3">
+      <button type="button" onClick={handleClick} disabled={running} className={PRIMARY_BUTTON}>
         {running ? "Syncing…" : "Sync now"}
       </button>
       {running ? (
@@ -106,7 +107,11 @@ export function ManualSyncButton() {
       ) : (
         lastRun && <StatusBadge status={lastRun.status} label={syncStatusLabel(lastRun.status)} />
       )}
-      {message && <p role="status">{message}</p>}
+      {message && (
+        <p role="status" className="text-sm text-dragon-fg">
+          {message}
+        </p>
+      )}
     </div>
   );
 }
