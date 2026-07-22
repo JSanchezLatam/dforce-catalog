@@ -11,25 +11,27 @@
  * the rendered buffer to a `pdf-upload` job and returning; it never awaits
  * the upload itself.
  *
- * Handoff shape for PR8: the rendered PDF buffer is NOT put inline in the
- * `pdf-upload` job payload — pg-boss payloads are JSONB, and a multi-MB
- * binary blob embedded there would bloat `pgboss.job` and every query
- * against it. Instead the buffer is written to a local temp file (this is
- * ONE long-lived Docker process per design.md, not serverless, so the file
- * survives from "render complete" to "PR8's pdf-upload worker picks it up"
- * within the same container) and only the file path crosses the job
+ * Handoff shape (resolved in PR8): the rendered PDF buffer is NOT put inline
+ * in the `pdf-upload` job payload — pg-boss payloads are JSONB, and a
+ * multi-MB binary blob embedded there would bloat `pgboss.job` and every
+ * query against it. Instead the buffer is written to a local temp file (this
+ * is ONE long-lived Docker process per design.md, not serverless, so the
+ * file survives from "render complete" to "the pdf-upload worker picks it
+ * up" within the same container) and only the file path crosses the job
  * boundary as `pdfBufferRef` — matching design.md's literal payload shape
- * `{ catalogId, userId, pdfBufferRef }`.
+ * `{ catalogId, userId, pdfBufferRef }` (unchanged by PR8).
  *
- * PR8 MUST: read the file at `pdfBufferRef`, upload it to R2, then delete
- * the temp file (on success or final failure) — this module does not clean
- * up after itself once a job is handed off.
+ * PR7's "PR8 MUST" gap — `pdf-upload`'s payload has no `title`/`categories`
+ * for the `catalogs` row — is resolved here, NOT by widening that payload:
+ * `createPendingCatalog()` inserts the row right below, while this worker
+ * still has the full `pdf-generate` payload (title, sections) in hand. The
+ * `pdf-upload` worker (catalog-storage/upload-status.ts) only ever needs
+ * `catalogId`/`userId`/`pdfBufferRef` to know WHICH already-existing row to
+ * update.
  *
- * ponytail: PR8 doesn't exist yet to register a `pdf-upload` worker, so
- * `pdf-upload` jobs will sit in `created` state until PR8 adds
- * `registerPdfUploadWorker()`. That is expected and matches design.md's
- * decoupled-upload boundary — this worker must not block on that queue
- * having a consumer.
+ * `pdf-upload` is enqueued with pg-boss's native `retryLimit:2`/`retryDelay:
+ * 30` (R11.5) — see catalog-storage/upload-status.ts for why that worker
+ * does a single attempt per invocation instead of a manual retry loop.
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -37,6 +39,7 @@ import { join } from "node:path";
 import { chromium } from "playwright";
 
 import { getBoss } from "@/shared/jobs/boss";
+import { createPendingCatalog } from "../catalog-storage/queries";
 import { buildIndexSections } from "../catalog-builder/selection";
 import { PDF_GENERATE_JOB, PDF_UPLOAD_JOB, type PdfGeneratePayload } from "./enqueue";
 import { chunkProducts, renderCatalogHtml } from "./render";
@@ -90,13 +93,16 @@ export async function registerPdfGenerateWorker(): Promise<void> {
   await boss.work<PdfGeneratePayload>(PDF_GENERATE_JOB, { localConcurrency: 1 }, async ([job]) => {
     const buffer = await renderPdfBuffer(job.data);
     const pdfBufferRef = await handoffPdfBuffer(job.data.catalogId, buffer);
-    await boss.send(PDF_UPLOAD_JOB, {
-      catalogId: job.data.catalogId,
-      userId: job.data.userId,
-      pdfBufferRef,
-    } satisfies PdfUploadPayload);
+    // Risk-1 (PR8) — insert the catalogs row BEFORE enqueuing pdf-upload, so
+    // a crash at any later point still leaves a visible "pending" row.
+    await createPendingCatalog(job.data);
+    await boss.send(
+      PDF_UPLOAD_JOB,
+      { catalogId: job.data.catalogId, userId: job.data.userId, pdfBufferRef } satisfies PdfUploadPayload,
+      { retryLimit: 2, retryDelay: 30 }, // R11.5 — pg-boss's own native retry (see catalog-storage/upload-status.ts)
+    );
     // Returning here resolves the job — pg-boss frees this worker's
     // localConcurrency:1 slot right now, at "PDF generated", regardless of
-    // whether/when a pdf-upload consumer (PR8) exists yet.
+    // how long the decoupled upload+retention (catalog-storage) takes.
   });
 }
