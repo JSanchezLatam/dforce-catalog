@@ -56,7 +56,15 @@ export const producto = pgTable(
     categoryL1: text("category_l1"),
     categoryL2: text("category_l2"),
     price: real("price"),
-    stock: integer("stock"),
+    /**
+     * `real`, not `integer`/`numeric` — Interfuerza's `Available` field is a
+     * decimal string (e.g. "-3.0000") summed across warehouses (see
+     * inventory-sync/mapper.ts), and `real` keeps Drizzle's inferred
+     * TypeScript type as `number | null` (unlike `numeric`, which infers
+     * `string` and would cascade type changes into job.ts). See
+     * interfuerza-api-contract-fix design.md.
+     */
+    stock: real("stock"),
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

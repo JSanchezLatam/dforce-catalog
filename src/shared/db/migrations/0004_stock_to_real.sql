@@ -1,0 +1,1 @@
+ALTER TABLE "producto" ALTER COLUMN "stock" SET DATA TYPE real;

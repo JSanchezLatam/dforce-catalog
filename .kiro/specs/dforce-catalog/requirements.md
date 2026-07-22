@@ -56,6 +56,8 @@ El sistema cubre cinco áreas funcionales principales:
 8. IF la API_Interfuerza devuelve un código de error HTTP durante la sincronización, THEN THE Sync_Service SHALL registrar el error con el detalle del código recibido y reintentar la solicitud hasta 3 veces con un intervalo de 60 segundos entre intentos.
 9. IF todos los reintentos de una solicitud paginada fallan, THEN THE Sync_Service SHALL abortar la sincronización en curso y conservar el estado previo del Inventory_DB sin modificaciones parciales.
 
+> **Nota de corrección (interfuerza-api-contract-fix, 2026-07 — verificado con smoke test en vivo):** El contrato real de la API_Interfuerza NO es GET /products con query params. Es un único endpoint POST a IFX_BASE_URL con body JSON {class:"GET",action:"products",page:"<string>",filters:[{field,type:"=",value}]}. La respuesta trae {products:[...], count} donde count es el total global; la paginación (25/página) termina cuando page*25>=count. El passthrough de Category_L1/L2 (R3.3) se envía como entradas del array filters, no como query param. Ver sdd/interfuerza-api-contract-fix.
+
 ---
 
 ### Requisito 2: Sincronización Manual del Inventario
@@ -83,6 +85,8 @@ El sistema cubre cinco áreas funcionales principales:
 3. WHEN el Usuario aplica un filtro de Category_L1, THE Sync_Service SHALL pasar ese valor como parámetro al endpoint GET /products de la API_Interfuerza en la siguiente sincronización con filtro.
 4. WHEN el Usuario aplica un filtro por categoría en la vista de inventario, THE Sistema SHALL mostrar únicamente los productos del Inventory_DB que correspondan al filtro seleccionado.
 5. WHEN el Usuario elimina todos los filtros activos, THE Sistema SHALL mostrar la totalidad de productos disponibles en el Inventory_DB.
+
+> **Nota de corrección (interfuerza-api-contract-fix, 2026-07 — verificado con smoke test en vivo):** El contrato real de la API_Interfuerza NO es GET /products con query params. Es un único endpoint POST a IFX_BASE_URL con body JSON {class:"GET",action:"products",page:"<string>",filters:[{field,type:"=",value}]}. La respuesta trae {products:[...], count} donde count es el total global; la paginación (25/página) termina cuando page*25>=count. El passthrough de Category_L1/L2 (R3.3) se envía como entradas del array filters, no como query param. Ver sdd/interfuerza-api-contract-fix.
 
 ---
 
