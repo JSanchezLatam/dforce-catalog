@@ -48,7 +48,9 @@ describe("hasActiveSyncRun", () => {
 describe("runSync — no partial write on abort (R1.9)", () => {
   it("marks the sync_runs row failed (never completed) when a page aborts mid-run", async () => {
     async function* fakePages() {
-      yield [{ id: "1", name: "A" }];
+      // 5-key wrapper shape (mapper.ts's real, unmocked parseProduct runs
+      // against these fixtures) — see interfuerza-api-contract-fix PR3.
+      yield [{ Producto: { id: "1", Nombre: "A" }, InStock: [], PriceLists: [], Images: [], Matrix: [] }];
       throw new SyncAbortError("page 2 failed after 3 attempts");
     }
 
@@ -97,8 +99,11 @@ describe("runSync — no partial write on abort (R1.9)", () => {
 
   it("marks the sync_runs row completed with the correct product count on success", async () => {
     async function* fakePages() {
-      yield [{ id: "1" }, { id: "2" }];
-      yield [{ id: "3" }];
+      // 5-key wrapper shape (mapper.ts's real, unmocked parseProduct runs
+      // against these fixtures) — see interfuerza-api-contract-fix PR3.
+      const wrap = (id: string) => ({ Producto: { id }, InStock: [], PriceLists: [], Images: [], Matrix: [] });
+      yield [wrap("1"), wrap("2")];
+      yield [wrap("3")];
     }
 
     const run = { status: "running", productCount: undefined as number | undefined };
