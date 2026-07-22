@@ -2,6 +2,7 @@ import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { TemplateConfigForm } from "@/modules/template-config/TemplateConfigForm";
 import { getTemplateConfig } from "@/modules/template-config/service";
+import { PAGE_HEADING } from "@/shared/ui/styles";
 
 /**
  * R8 — Administrador-only branding config, live preview before save.
@@ -15,9 +16,9 @@ export default async function TemplateConfigPage() {
 
   if (!can(user, "template.edit")) {
     return (
-      <main>
-        <h1>Template configuration</h1>
-        <p>You do not have permission to view this page.</p>
+      <main className="p-8">
+        <h1 className={PAGE_HEADING}>Template configuration</h1>
+        <p className="text-sm text-dragon-fg">You do not have permission to view this page.</p>
       </main>
     );
   }
@@ -25,8 +26,8 @@ export default async function TemplateConfigPage() {
   const config = await getTemplateConfig();
 
   return (
-    <main>
-      <h1>Template configuration</h1>
+    <main className="p-8">
+      <h1 className={PAGE_HEADING}>Template configuration</h1>
       <TemplateConfigForm initialConfig={config} />
     </main>
   );

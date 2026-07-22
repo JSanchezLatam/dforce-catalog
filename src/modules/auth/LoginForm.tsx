@@ -2,6 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 
+import { FIELD_ERROR, INPUT, LABEL, PRIMARY_BUTTON } from "@/shared/ui/styles";
+
 /**
  * R9.1/9.2 — plain credential form, same fetch-then-status-check shape as
  * `template-config/TemplateConfigForm.tsx`. On success, a full navigation
@@ -37,22 +39,32 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <label>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <label className={LABEL}>
         Username
-        <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
+        <input
+          className={`mt-1 ${INPUT}`}
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          autoComplete="username"
+        />
       </label>
-      <label>
+      <label className={LABEL}>
         Password
         <input
           type="password"
+          className={`mt-1 ${INPUT}`}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"
         />
       </label>
-      {error && <p role="alert">{error}</p>}
-      <button type="submit" disabled={status === "submitting"}>
+      {error && (
+        <p role="alert" className={FIELD_ERROR}>
+          {error}
+        </p>
+      )}
+      <button type="submit" disabled={status === "submitting"} className={PRIMARY_BUTTON}>
         {status === "submitting" ? "Signing in…" : "Sign in"}
       </button>
     </form>

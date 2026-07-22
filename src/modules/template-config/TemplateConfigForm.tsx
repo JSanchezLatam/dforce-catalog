@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 
 import type { TemplateConfig } from "@/shared/db/schema";
+import { CARD, FIELD_ERROR, INPUT, LABEL, PRIMARY_BUTTON, SECTION_HEADING } from "@/shared/ui/styles";
 
 type FormState = {
   logoUrl: string;
@@ -71,49 +72,92 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
   }
 
   return (
-    <div>
-      <form onSubmit={handleSubmit}>
-        <label>
+    <div className="flex flex-col gap-6">
+      <form onSubmit={handleSubmit} className={`flex flex-col gap-4 ${CARD}`}>
+        <label className={LABEL}>
           Logo URL
-          <input value={form.logoUrl} onChange={(e) => update("logoUrl", e.target.value)} />
+          <input className={`mt-1 ${INPUT}`} value={form.logoUrl} onChange={(e) => update("logoUrl", e.target.value)} />
         </label>
-        {errors.logoUrl && <p role="alert">{errors.logoUrl}</p>}
+        {errors.logoUrl && (
+          <p role="alert" className={FIELD_ERROR}>
+            {errors.logoUrl}
+          </p>
+        )}
 
-        <label>
+        <label className={LABEL}>
           Primary color
-          <input type="color" value={form.primary} onChange={(e) => update("primary", e.target.value)} />
+          <input
+            type="color"
+            className="mt-1 h-10 w-16 rounded border border-dragon-muted bg-dragon-bg"
+            value={form.primary}
+            onChange={(e) => update("primary", e.target.value)}
+          />
         </label>
-        {errors.primaryColor && <p role="alert">{errors.primaryColor}</p>}
+        {errors.primaryColor && (
+          <p role="alert" className={FIELD_ERROR}>
+            {errors.primaryColor}
+          </p>
+        )}
 
-        <label>
+        <label className={LABEL}>
           Secondary color
-          <input type="color" value={form.secondary} onChange={(e) => update("secondary", e.target.value)} />
+          <input
+            type="color"
+            className="mt-1 h-10 w-16 rounded border border-dragon-muted bg-dragon-bg"
+            value={form.secondary}
+            onChange={(e) => update("secondary", e.target.value)}
+          />
         </label>
-        {errors.secondaryColor && <p role="alert">{errors.secondaryColor}</p>}
+        {errors.secondaryColor && (
+          <p role="alert" className={FIELD_ERROR}>
+            {errors.secondaryColor}
+          </p>
+        )}
 
-        <label>
+        <label className={LABEL}>
           Typography
-          <input value={form.font} onChange={(e) => update("font", e.target.value)} placeholder="e.g. Arial, sans-serif" />
+          <input
+            className={`mt-1 ${INPUT}`}
+            value={form.font}
+            onChange={(e) => update("font", e.target.value)}
+            placeholder="e.g. Arial, sans-serif"
+          />
         </label>
-        {errors.font && <p role="alert">{errors.font}</p>}
+        {errors.font && (
+          <p role="alert" className={FIELD_ERROR}>
+            {errors.font}
+          </p>
+        )}
 
-        <label>
+        <label className={LABEL}>
           Cover text
-          <textarea value={form.coverText} onChange={(e) => update("coverText", e.target.value)} />
+          <textarea className={`mt-1 ${INPUT}`} rows={3} value={form.coverText} onChange={(e) => update("coverText", e.target.value)} />
         </label>
-        {errors.coverText && <p role="alert">{errors.coverText}</p>}
+        {errors.coverText && (
+          <p role="alert" className={FIELD_ERROR}>
+            {errors.coverText}
+          </p>
+        )}
 
-        {errors.form && <p role="alert">{errors.form}</p>}
+        {errors.form && (
+          <p role="alert" className={FIELD_ERROR}>
+            {errors.form}
+          </p>
+        )}
 
-        <button type="submit" disabled={status === "saving"}>
+        <button type="submit" disabled={status === "saving"} className={`self-start ${PRIMARY_BUTTON}`}>
           {status === "saving" ? "Saving…" : "Save"}
         </button>
-        {status === "saved" && <p>Saved. New catalogs will use this template.</p>}
+        {status === "saved" && <p className="text-sm text-dragon-green">Saved. New catalogs will use this template.</p>}
       </form>
 
       {/* R8.3 — preview reflects unsaved `form` state, not the persisted config. */}
-      <section aria-label="Template preview" style={{ fontFamily: form.font || undefined, color: form.primary }}>
-        <h2>Preview</h2>
+      <section
+        aria-label="Template preview"
+        className={CARD}
+        style={{ fontFamily: form.font || undefined, color: form.primary }}
+      >
+        <h2 className={SECTION_HEADING}>Preview</h2>
         {form.logoUrl && <img src={form.logoUrl} alt="Logo preview" style={{ maxHeight: 80 }} />}
         <div
           style={{

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { CatalogTemplate } from "@/shared/template/CatalogTemplate";
 import type { TemplateConfig } from "@/shared/db/schema";
+import { CARD, FIELD_ERROR, INPUT, PRIMARY_BUTTON, SECTION_HEADING } from "@/shared/ui/styles";
 
 import type { CategoryPair } from "./queries";
 import {
@@ -169,22 +170,22 @@ export function CatalogBuilderForm({
   }
 
   return (
-    <div>
-      <section aria-label="Category selection">
-        <h2>Categories</h2>
+    <div className="flex flex-col gap-6">
+      <section aria-label="Category selection" className={CARD}>
+        <h2 className={SECTION_HEADING}>Categories</h2>
         {categoryL1Options.map((l1) => (
-          <div key={l1}>
-            <label>
+          <div key={l1} className="mb-2">
+            <label className="flex items-center gap-2 text-sm text-dragon-fg">
               <input type="checkbox" checked={includedL1.includes(l1)} onChange={() => toggleL1(l1)} />
               {l1}
             </label>
             {includedL1.includes(l1) && (
-              <ul>
+              <ul className="ml-6 flex flex-col gap-1 pt-1">
                 {categoryPairs
                   .filter((pair) => pair.categoryL1 === l1)
                   .map((pair) => (
                     <li key={categoryKey(pair.categoryL1, pair.categoryL2)}>
-                      <label>
+                      <label className="flex items-center gap-2 text-sm text-dragon-fg">
                         <input
                           type="checkbox"
                           checked={!excludedCategoryKeys.has(categoryKey(pair.categoryL1, pair.categoryL2))}
@@ -198,16 +199,20 @@ export function CatalogBuilderForm({
             )}
           </div>
         ))}
-        {errors.categories && <p role="alert">{errors.categories}</p>}
+        {errors.categories && (
+          <p role="alert" className={FIELD_ERROR}>
+            {errors.categories}
+          </p>
+        )}
       </section>
 
       {activeCandidates.length > 0 && (
-        <section aria-label="Product selection">
-          <h2>Products ({finalProducts.length} selected)</h2>
-          <ul>
+        <section aria-label="Product selection" className={CARD}>
+          <h2 className={SECTION_HEADING}>Products ({finalProducts.length} selected)</h2>
+          <ul className="flex flex-col gap-1">
             {activeCandidates.map((product) => (
               <li key={product.id}>
-                <label>
+                <label className="flex items-center gap-2 text-sm text-dragon-fg">
                   <input
                     type="checkbox"
                     checked={!excludedProductIds.has(product.id)}
@@ -221,8 +226,8 @@ export function CatalogBuilderForm({
         </section>
       )}
 
-      <section aria-label="Page density">
-        <label>
+      <section aria-label="Page density" className={CARD}>
+        <label className="text-sm font-medium text-dragon-fg">
           Products per page
           <input
             type="number"
@@ -233,14 +238,28 @@ export function CatalogBuilderForm({
               setProductsPerPage(Number(e.target.value));
               setConfirmed(false);
             }}
+            className={`mt-1 w-24 ${INPUT}`}
           />
         </label>
-        {errors.productsPerPage && <p role="alert">{errors.productsPerPage}</p>}
+        {errors.productsPerPage && (
+          <p role="alert" className={FIELD_ERROR}>
+            {errors.productsPerPage}
+          </p>
+        )}
       </section>
 
-      {errors.total && <p role="alert">{errors.total}</p>}
+      {errors.total && (
+        <p role="alert" className={FIELD_ERROR}>
+          {errors.total}
+        </p>
+      )}
 
-      <button type="button" onClick={handleContinue} disabled={generateStatus === "submitting"}>
+      <button
+        type="button"
+        onClick={handleContinue}
+        disabled={generateStatus === "submitting"}
+        className={`self-start ${PRIMARY_BUTTON}`}
+      >
         {generateStatus === "submitting" ? "Queuing…" : "Continue"}
       </button>
 
@@ -252,19 +271,24 @@ export function CatalogBuilderForm({
         // /catalogs listing already shows "Processing…" for pending/uploading
         // rows; add a poll here only if a requirement asks for in-place
         // progress on the builder screen itself.
-        <p>
+        <p className="text-sm text-dragon-green">
           Queued{queuePosition != null ? ` at position ${queuePosition}` : ""} — {finalProducts.length} products
           across {sections.length} section(s), {productsPerPage}/page.{" "}
-          <a href="/catalogs">View your catalogs</a>.
+          <a href="/catalogs" className="text-dragon-blue hover:underline">
+            View your catalogs
+          </a>
+          .
         </p>
       )}
 
       {confirmed && generateStatus === "queued" && evictionWarning && (
-        <p role="alert">{evictionWarning}</p>
+        <p role="alert" className={FIELD_ERROR}>
+          {evictionWarning}
+        </p>
       )}
 
-      <section aria-label="Live preview">
-        <h2>Preview</h2>
+      <section aria-label="Live preview" className={CARD}>
+        <h2 className={SECTION_HEADING}>Preview</h2>
         <CatalogTemplate
           title={title}
           sections={sections}

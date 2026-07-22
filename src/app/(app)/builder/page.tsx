@@ -2,6 +2,7 @@ import { CatalogBuilderForm } from "@/modules/catalog-builder/CatalogBuilderForm
 import { listCategoryPairs } from "@/modules/catalog-builder/queries";
 import { listCategoryL1Options } from "@/modules/inventory-view/queries";
 import { getTemplateConfig } from "@/modules/template-config/service";
+import { PAGE_HEADING } from "@/shared/ui/styles";
 
 /**
  * R5 — catalog builder: category/product selection with a live title/index
@@ -26,8 +27,8 @@ export default async function CatalogBuilderPage() {
   ]);
 
   return (
-    <main>
-      <h1>Build a catalog</h1>
+    <main className="p-8">
+      <h1 className={PAGE_HEADING}>Build a catalog</h1>
       <CatalogBuilderForm categoryL1Options={categoryL1Options} categoryPairs={categoryPairs} templateConfig={templateConfig} />
     </main>
   );
