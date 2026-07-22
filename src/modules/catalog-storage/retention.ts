@@ -21,6 +21,19 @@ import { deleteObject } from "./r2";
 
 export const RETENTION_LIMIT = 2; // R11.2 — max catalogs kept per user
 
+/**
+ * R11.3 — pure predicate for "will the next successful upload evict the
+ * user's oldest catalog". Exported/unit-tested standalone (no DB) so the
+ * exact trigger condition (a user who already has 2 stored catalogs) is
+ * verifiable without a live Postgres connection — same DI-friendly style as
+ * this module's other exports. Callers pass the user's CURRENT
+ * `uploaded`-status count (see catalog-storage/queries.ts's
+ * `countUploadedCatalogsForUser`).
+ */
+export function shouldWarnOfEviction(currentUploadedCount: number): boolean {
+  return currentUploadedCount >= RETENTION_LIMIT;
+}
+
 type CatalogRow = { id: string; r2Key: string | null };
 type TxLike = { execute: (query: ReturnType<typeof sql>) => Promise<{ rows: Record<string, unknown>[] }> };
 
@@ -82,6 +95,10 @@ export async function runRetentionForUser(
       }
       await tx.execute(sql`DELETE FROM catalogs WHERE id = ${row.id}`);
       evictedIds.push(row.id);
+      // R11.4 — "log the event": previously only the failure branch above
+      // logged anything; the success path had no entry at all (sdd-verify
+      // WARNING).
+      console.log(`[catalog-storage] retention: evicted catalog ${row.id} for user ${userId}`);
     }
 
     return { evictedIds };

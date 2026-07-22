@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { can } from "@/modules/auth/policy";
+import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { InventoryFilters } from "@/modules/inventory-view/InventoryFilters";
 import {
   computePageWindow,
@@ -9,6 +11,7 @@ import {
   listInventory,
   normalizeFilters,
 } from "@/modules/inventory-view/queries";
+import { ManualSyncButton } from "@/modules/inventory-sync/ManualSyncButton";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -29,6 +32,8 @@ export default async function InventoryPage({
   const params = await searchParams;
   const filters = normalizeFilters(params);
   const pageWindow = computePageWindow(params.page);
+  const user = await requireSessionFromHeaders();
+  const canTriggerSync = can(user, "sync.manual"); // R2 — admin-only manual sync trigger
 
   const [{ items, total }, categoryL1Options, categoryL2Options] = await Promise.all([
     listInventory(filters, pageWindow),
@@ -47,6 +52,7 @@ export default async function InventoryPage({
       <main>
         <h1>Inventory</h1>
         <p>The inventory is empty. Ask an administrator to run an inventory sync to populate it.</p>
+        {canTriggerSync && <ManualSyncButton />}
       </main>
     );
   }
@@ -54,6 +60,7 @@ export default async function InventoryPage({
   return (
     <main>
       <h1>Inventory</h1>
+      {canTriggerSync && <ManualSyncButton />}
       <InventoryFilters
         categoryL1Options={categoryL1Options}
         categoryL2Options={categoryL2Options}

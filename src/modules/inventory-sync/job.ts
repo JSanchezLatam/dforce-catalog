@@ -1,8 +1,8 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import type { PgBoss } from "pg-boss";
 
 import { db } from "@/shared/db/client";
-import { producto, syncRuns } from "@/shared/db/schema";
+import { producto, syncRuns, type SyncRun } from "@/shared/db/schema";
 import { getBoss } from "@/shared/jobs/boss";
 import { fetchAllProducts, type SyncFilters } from "./client";
 import { parseProduct } from "./mapper";
@@ -40,6 +40,20 @@ export async function hasActiveSyncRun(
 ): Promise<boolean> {
   const rows = await queryFn();
   return rows.length > 0;
+}
+
+/**
+ * R2.4/R2.2 — powers the manual-sync status route: the last run's
+ * status/productCount/finishedAt is the "notify count + timestamp" data
+ * (no push/email channel exists, design.md's Real-time decision is
+ * polling-only), and its absence-of-"running" is what tells the poller the
+ * sync it started has finished.
+ */
+export async function getLatestSyncRun(
+  queryFn: () => Promise<SyncRun[]> = () => db.select().from(syncRuns).orderBy(desc(syncRuns.startedAt)).limit(1),
+): Promise<SyncRun | null> {
+  const rows = await queryFn();
+  return rows[0] ?? null;
 }
 
 async function ensureQueue(boss: PgBoss): Promise<void> {

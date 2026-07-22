@@ -5,7 +5,7 @@
  * inventory-view/queries.ts and catalog-builder/queries.ts (DB-integration
  * tests deferred to the Postgres-testcontainer gap flagged since PR2/PR3).
  */
-import { desc, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { catalogs, type Catalog } from "@/shared/db/schema";
@@ -44,4 +44,13 @@ export async function listAllCatalogs(): Promise<Catalog[]> {
 export async function getCatalogById(id: string): Promise<Catalog | undefined> {
   const rows = await db.select().from(catalogs).where(eq(catalogs.id, id)).limit(1);
   return rows[0];
+}
+
+/** R11.3 — feeds `retention.ts`'s `shouldWarnOfEviction` predicate at generate-request time. */
+export async function countUploadedCatalogsForUser(userId: string): Promise<number> {
+  const rows = await db
+    .select({ value: count() })
+    .from(catalogs)
+    .where(and(eq(catalogs.userId, userId), eq(catalogs.uploadStatus, "uploaded")));
+  return rows[0]?.value ?? 0;
 }

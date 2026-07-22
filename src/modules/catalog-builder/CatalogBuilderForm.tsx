@@ -52,6 +52,7 @@ export function CatalogBuilderForm({
   const [confirmed, setConfirmed] = useState(false);
   const [generateStatus, setGenerateStatus] = useState<"idle" | "submitting" | "queued">("idle");
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
+  const [evictionWarning, setEvictionWarning] = useState<string | null>(null); // R11.3
 
   // R5.1/5.5 — refetch candidate products whenever the included L1 set changes.
   // (`candidates` is only ever set from the fetch callback below, never
@@ -163,6 +164,7 @@ export function CatalogBuilderForm({
 
     const body = await response.json();
     setQueuePosition(body.queuePosition ?? null);
+    setEvictionWarning(body.evictionWarning ?? null); // R11.3
     setGenerateStatus("queued");
   }
 
@@ -255,6 +257,10 @@ export function CatalogBuilderForm({
           across {sections.length} section(s), {productsPerPage}/page.{" "}
           <a href="/catalogs">View your catalogs</a>.
         </p>
+      )}
+
+      {confirmed && generateStatus === "queued" && evictionWarning && (
+        <p role="alert">{evictionWarning}</p>
       )}
 
       <section aria-label="Live preview">

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { RETENTION_LIMIT, runRetentionForUser } from "./retention";
+import { RETENTION_LIMIT, runRetentionForUser, shouldWarnOfEviction } from "./retention";
 
 /**
  * Fake `db.transaction` matching drizzle's shape (same style as
@@ -93,5 +93,30 @@ describe("runRetentionForUser — Risk-4 transactional retention (R11.2-4)", () 
 
   it("exposes RETENTION_LIMIT as 2 per R11.2", () => {
     expect(RETENTION_LIMIT).toBe(2);
+  });
+
+  it("logs the eviction event on the success path (R11.4 — was missing before this fix)", async () => {
+    const { database } = fakeDatabase([{ id: "cat-old", r2Key: "catalogs/cat-old.pdf" }]);
+    const deleteObject = vi.fn().mockResolvedValue(undefined);
+    const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await runRetentionForUser("user-1", { database, deleteObject });
+
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("cat-old"));
+    consoleLogSpy.mockRestore();
+  });
+});
+
+describe("shouldWarnOfEviction — R11.3 warning trigger condition", () => {
+  it("does not warn when the user has fewer than RETENTION_LIMIT stored catalogs", () => {
+    expect(shouldWarnOfEviction(1)).toBe(false);
+  });
+
+  it("warns when the user already has exactly RETENTION_LIMIT (2) stored catalogs", () => {
+    expect(shouldWarnOfEviction(RETENTION_LIMIT)).toBe(true);
+  });
+
+  it("warns above RETENTION_LIMIT too", () => {
+    expect(shouldWarnOfEviction(RETENTION_LIMIT + 1)).toBe(true);
   });
 });
