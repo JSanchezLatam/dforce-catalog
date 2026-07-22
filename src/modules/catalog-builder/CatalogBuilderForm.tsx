@@ -175,7 +175,7 @@ export function CatalogBuilderForm({
         <h2 className={SECTION_HEADING}>Categories</h2>
         {categoryL1Options.map((l1) => (
           <div key={l1} className="mb-2">
-            <label className="flex items-center gap-2 text-sm text-dragon-fg">
+            <label className="flex items-center gap-2 text-sm text-dash-fg">
               <input type="checkbox" checked={includedL1.includes(l1)} onChange={() => toggleL1(l1)} />
               {l1}
             </label>
@@ -185,7 +185,7 @@ export function CatalogBuilderForm({
                   .filter((pair) => pair.categoryL1 === l1)
                   .map((pair) => (
                     <li key={categoryKey(pair.categoryL1, pair.categoryL2)}>
-                      <label className="flex items-center gap-2 text-sm text-dragon-fg">
+                      <label className="flex items-center gap-2 text-sm text-dash-fg">
                         <input
                           type="checkbox"
                           checked={!excludedCategoryKeys.has(categoryKey(pair.categoryL1, pair.categoryL2))}
@@ -212,7 +212,7 @@ export function CatalogBuilderForm({
           <ul className="flex flex-col gap-1">
             {activeCandidates.map((product) => (
               <li key={product.id}>
-                <label className="flex items-center gap-2 text-sm text-dragon-fg">
+                <label className="flex items-center gap-2 text-sm text-dash-fg">
                   <input
                     type="checkbox"
                     checked={!excludedProductIds.has(product.id)}
@@ -227,7 +227,7 @@ export function CatalogBuilderForm({
       )}
 
       <section aria-label="Page density" className={CARD}>
-        <label className="text-sm font-medium text-dragon-fg">
+        <label className="text-sm font-medium text-dash-fg">
           Products per page
           <input
             type="number"
@@ -271,10 +271,10 @@ export function CatalogBuilderForm({
         // /catalogs listing already shows "Processing…" for pending/uploading
         // rows; add a poll here only if a requirement asks for in-place
         // progress on the builder screen itself.
-        <p className="text-sm text-dragon-green">
+        <p className="text-sm text-dash-green">
           Queued{queuePosition != null ? ` at position ${queuePosition}` : ""} — {finalProducts.length} products
           across {sections.length} section(s), {productsPerPage}/page.{" "}
-          <a href="/catalogs" className="text-dragon-blue hover:underline">
+          <a href="/catalogs" className="text-dash-purple hover:underline">
             View your catalogs
           </a>
           .

@@ -52,7 +52,7 @@ export default async function InventoryPage({
     return (
       <main className="p-8">
         <h1 className={PAGE_HEADING}>Inventory</h1>
-        <p className="text-sm text-dragon-fg">
+        <p className="text-sm text-dash-fg">
           The inventory is empty. Ask an administrator to run an inventory sync to populate it.
         </p>
         {canTriggerSync && <ManualSyncButton />}
@@ -70,16 +70,16 @@ export default async function InventoryPage({
         selected={filters}
       />
       {items.length === 0 ? (
-        <p className="text-sm text-dragon-fg">
+        <p className="text-sm text-dash-fg">
           No products match the selected filters.{" "}
-          <Link href="/inventory" className="text-dragon-blue hover:underline">
+          <Link href="/inventory" className="text-dash-purple hover:underline">
             Clear filters
           </Link>
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-dragon-muted/40">
+        <div className="overflow-x-auto rounded-lg border border-dash-muted/40">
           <table className="w-full border-collapse">
-            <thead className="bg-dragon-sidebar-bg">
+            <thead className="bg-dash-card">
               <tr>
                 <th className={TABLE_TH}>ID</th>
                 <th className={TABLE_TH}>Name</th>
@@ -89,7 +89,7 @@ export default async function InventoryPage({
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr key={item.id} className="border-t border-dragon-muted/20">
+                <tr key={item.id} className="border-t border-dash-muted/20">
                   <td className={TABLE_TD}>{item.id}</td>
                   <td className={TABLE_TD}>{item.name}</td>
                   <td className={TABLE_TD}>{item.categoryL1 ?? "—"}</td>
@@ -100,17 +100,17 @@ export default async function InventoryPage({
           </table>
         </div>
       )}
-      <nav className="mt-4 flex items-center gap-4 text-sm text-dragon-fg">
+      <nav className="mt-4 flex items-center gap-4 text-sm text-dash-fg">
         <span>
           Page {pageWindow.page} of {pageCount}
         </span>
         {pageWindow.page > 1 && (
-          <Link href={buildPageHref(params, pageWindow.page - 1)} className="text-dragon-blue hover:underline">
+          <Link href={buildPageHref(params, pageWindow.page - 1)} className="text-dash-purple hover:underline">
             Previous
           </Link>
         )}
         {pageWindow.page < pageCount && (
-          <Link href={buildPageHref(params, pageWindow.page + 1)} className="text-dragon-blue hover:underline">
+          <Link href={buildPageHref(params, pageWindow.page + 1)} className="text-dash-purple hover:underline">
             Next
           </Link>
         )}

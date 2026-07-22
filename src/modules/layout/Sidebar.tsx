@@ -15,10 +15,10 @@ export function Sidebar({ user }: { user: SessionUser }) {
   const navItems = getNavItems(user);
 
   return (
-    <aside className="flex h-screen w-[200px] shrink-0 flex-col justify-between bg-dragon-sidebar-bg">
+    <aside className="flex h-screen w-[200px] shrink-0 flex-col justify-between bg-dash-card">
       <div>
         <LogoSlot />
-        <hr className="border-dragon-muted" />
+        <hr className="border-dash-muted" />
         <nav className="flex flex-col py-2">
           {navItems.map((item) => (
             <NavItem key={item.href} href={item.href} label={item.label} />

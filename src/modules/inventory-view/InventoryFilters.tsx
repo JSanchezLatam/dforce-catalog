@@ -76,7 +76,7 @@ export function InventoryFilters({
       {hasActiveFilters && (
         <button
           onClick={() => router.push(pathname)}
-          className="rounded border border-dragon-muted px-3 py-2 text-sm text-dragon-fg hover:bg-dragon-muted/20"
+          className="rounded border border-dash-muted px-3 py-2 text-sm text-dash-fg hover:bg-dash-muted/20"
         >
           Clear filters
         </button>

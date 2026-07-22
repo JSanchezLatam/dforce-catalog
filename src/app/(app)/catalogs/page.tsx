@@ -23,17 +23,17 @@ export default async function CatalogsPage() {
     <main className="p-8">
       <h1 className={PAGE_HEADING}>My catalogs</h1>
       {catalogs.length === 0 ? (
-        <p className="text-sm text-dragon-fg">
+        <p className="text-sm text-dash-fg">
           No catalogs yet.{" "}
-          <Link href="/builder" className="text-dragon-blue hover:underline">
+          <Link href="/builder" className="text-dash-purple hover:underline">
             Build one
           </Link>
           .
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-dragon-muted/40">
+        <div className="overflow-x-auto rounded-lg border border-dash-muted/40">
           <table className="w-full border-collapse">
-            <thead className="bg-dragon-sidebar-bg">
+            <thead className="bg-dash-card">
               <tr>
                 <th className={TABLE_TH}>Name</th>
                 <th className={TABLE_TH}>Date</th>
@@ -59,7 +59,7 @@ function CatalogRow({ catalog }: { catalog: Catalog }) {
   const categoryLabel = categories.map((c) => c.categoryL1).join(", ") || "—";
 
   return (
-    <tr className="border-t border-dragon-muted/20">
+    <tr className="border-t border-dash-muted/20">
       <td className={TABLE_TD}>{catalog.title}</td>
       <td className={TABLE_TD}>{catalog.createdAt.toLocaleDateString()}</td>
       <td className={TABLE_TD}>{categoryLabel}</td>
@@ -73,11 +73,11 @@ function CatalogRow({ catalog }: { catalog: Catalog }) {
               href={`/api/catalogs/${catalog.id}/file`}
               target="_blank"
               rel="noreferrer"
-              className="text-dragon-blue hover:underline"
+              className="text-dash-purple hover:underline"
             >
               Preview
             </a>
-            <a href={`/api/catalogs/${catalog.id}/file?download=1`} className="text-dragon-blue hover:underline">
+            <a href={`/api/catalogs/${catalog.id}/file?download=1`} className="text-dash-purple hover:underline">
               Download
             </a>
           </>
@@ -87,11 +87,11 @@ function CatalogRow({ catalog }: { catalog: Catalog }) {
           // "regenerate" is a link back to the builder, not an automatic
           // re-run. ponytail: revisit if a requirement asks to restore the
           // original selection instead of re-picking it.
-          <Link href="/builder" className="text-dragon-blue hover:underline">
+          <Link href="/builder" className="text-dash-purple hover:underline">
             Regenerate
           </Link>
         ) : (
-          <span className="text-dragon-muted">Processing…</span>
+          <span className="text-dash-muted">Processing…</span>
         )}
       </td>
     </tr>

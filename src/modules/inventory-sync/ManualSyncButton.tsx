@@ -108,7 +108,7 @@ export function ManualSyncButton() {
         lastRun && <StatusBadge status={lastRun.status} label={syncStatusLabel(lastRun.status)} />
       )}
       {message && (
-        <p role="status" className="text-sm text-dragon-fg">
+        <p role="status" className="text-sm text-dash-fg">
           {message}
         </p>
       )}

@@ -7,9 +7,9 @@ import { LoginForm } from "@/modules/auth/LoginForm";
  */
 export default function LoginPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-dragon-bg">
-      <div className="w-full max-w-sm rounded-lg bg-dragon-sidebar-bg p-8 shadow-md">
-        <h1 className="mb-6 text-center text-2xl font-bold text-dragon-fg">Sign in</h1>
+    <main className="flex min-h-screen items-center justify-center bg-dash-bg">
+      <div className="w-full max-w-sm rounded-lg bg-dash-card p-8 shadow-md">
+        <h1 className="mb-6 text-center text-2xl font-bold text-dash-fg">Sign in</h1>
         <LoginForm />
       </div>
     </main>

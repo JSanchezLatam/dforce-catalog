@@ -1,18 +1,20 @@
 @import "tailwindcss";
 
 /*
- * Kanagawa Dragon theme tokens (design.md, confirmed palette).
+ * dash-* theme tokens (v2 redesign, confirmed palette — supersedes the
+ * Kanagawa Dragon `dragon-*` set from PR1-6, rejected after live testing).
  * @theme registers these as both `--color-*` CSS variables and
- * `bg-dragon-*` / `text-dragon-*` / etc. Tailwind v4 utilities —
+ * `bg-dash-*` / `text-dash-*` / etc. Tailwind v4 utilities —
  * no separate tailwind.config needed for this.
  */
 @theme {
-  --color-dragon-bg: #181616;
-  --color-dragon-sidebar-bg: #0d0c0c;
-  --color-dragon-fg: #c5c9c5;
-  --color-dragon-muted: #625e5a;
-  --color-dragon-blue: #8ba4b0;
-  --color-dragon-green: #87a987;
-  --color-dragon-red: #c4746e;
-  --color-dragon-yellow: #c4b28a;
+  --color-dash-bg: #0f172a;
+  --color-dash-card: #192134;
+  --color-dash-fg: #ffffff;
+  --color-dash-muted: #94a3b8;
+  --color-dash-purple: #7c3aed;
+  --color-dash-gold: #d97706;
+  --color-dash-green: #22c55e;
+  --color-dash-red: #ef4444;
+  --color-dash-border: #334155;
 }

@@ -88,7 +88,7 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
           Primary color
           <input
             type="color"
-            className="mt-1 h-10 w-16 rounded border border-dragon-muted bg-dragon-bg"
+            className="mt-1 h-10 w-16 rounded border border-dash-muted bg-dash-bg"
             value={form.primary}
             onChange={(e) => update("primary", e.target.value)}
           />
@@ -103,7 +103,7 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
           Secondary color
           <input
             type="color"
-            className="mt-1 h-10 w-16 rounded border border-dragon-muted bg-dragon-bg"
+            className="mt-1 h-10 w-16 rounded border border-dash-muted bg-dash-bg"
             value={form.secondary}
             onChange={(e) => update("secondary", e.target.value)}
           />
@@ -148,7 +148,7 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
         <button type="submit" disabled={status === "saving"} className={`self-start ${PRIMARY_BUTTON}`}>
           {status === "saving" ? "Saving…" : "Save"}
         </button>
-        {status === "saved" && <p className="text-sm text-dragon-green">Saved. New catalogs will use this template.</p>}
+        {status === "saved" && <p className="text-sm text-dash-green">Saved. New catalogs will use this template.</p>}
       </form>
 
       {/* R8.3 — preview reflects unsaved `form` state, not the persisted config. */}

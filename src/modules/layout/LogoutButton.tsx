@@ -19,7 +19,7 @@ export function LogoutButton() {
     <button
       type="button"
       onClick={handleClick}
-      className="p-4 text-left text-sm text-dragon-red hover:bg-dragon-red/10"
+      className="p-4 text-left text-sm text-dash-red hover:bg-dash-red/10"
     >
       Cerrar sesión
     </button>

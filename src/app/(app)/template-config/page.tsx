@@ -18,7 +18,7 @@ export default async function TemplateConfigPage() {
     return (
       <main className="p-8">
         <h1 className={PAGE_HEADING}>Template configuration</h1>
-        <p className="text-sm text-dragon-fg">You do not have permission to view this page.</p>
+        <p className="text-sm text-dash-fg">You do not have permission to view this page.</p>
       </main>
     );
   }
