@@ -15,6 +15,13 @@
       "when": 1784694106899,
       "tag": "0001_lying_the_professor",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784695231163,
+      "tag": "0002_broad_archangel",
+      "breakpoints": true
     }
   ]
 }

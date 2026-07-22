@@ -88,3 +88,23 @@ export const syncRuns = pgTable("sync_runs", {
 
 export type Producto = typeof producto.$inferSelect;
 export type SyncRun = typeof syncRuns.$inferSelect;
+
+/**
+ * `template_config` — branding persisted across restarts (R8.1,8.2,8.4).
+ *
+ * ponytail: singleton-row-no-history — R8 only asks the system to remember
+ * "the config that applies going forward" (the last saved one), not an audit
+ * trail of past templates. If a future requirement asks for branding history
+ * (e.g. "show what a catalog generated last month looked like"), promote this
+ * to a real `id`-per-version table then — not before.
+ */
+export const templateConfig = pgTable("template_config", {
+  id: text("id").primaryKey(),
+  logoUrl: text("logo_url").notNull(),
+  primaryColors: jsonb("primary_colors").notNull().$type<{ primary: string; secondary: string }>(),
+  font: text("font").notNull(),
+  coverText: text("cover_text").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type TemplateConfig = typeof templateConfig.$inferSelect;

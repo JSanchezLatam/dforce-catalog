@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
+import { headers } from "next/headers";
 
 import { db } from "@/shared/db/client";
 import { sessions, users } from "@/shared/db/schema";
@@ -58,18 +59,32 @@ export async function revokeSession(token: string): Promise<void> {
   await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.id, token));
 }
 
-/**
- * Route-handler seam (design.md: "Route handlers call requireSession() then
- * can()"). Reads the identity `middleware.ts` already validated and forwarded
- * as headers — no second DB round-trip per request.
- */
-export function requireSession(request: Request): SessionUser {
-  const id = request.headers.get("x-user-id");
-  const role = request.headers.get("x-user-role") as Role | null;
+function parseSessionUser(getHeader: (name: string) => string | null): SessionUser {
+  const id = getHeader("x-user-id");
+  const role = getHeader("x-user-role") as Role | null;
   if (!id || !role) {
     throw new Error(
-      "requireSession() called on a request middleware.ts did not validate — check the matcher",
+      "requireSession() called on a request proxy.ts did not validate — check the matcher",
     );
   }
   return { id, role };
+}
+
+/**
+ * Route-handler seam (design.md: "Route handlers call requireSession() then
+ * can()"). Reads the identity `proxy.ts` already validated and forwarded
+ * as headers — no second DB round-trip per request.
+ */
+export function requireSession(request: Request): SessionUser {
+  return parseSessionUser((name) => request.headers.get(name));
+}
+
+/**
+ * Server Component variant of `requireSession()` — Server Components don't
+ * receive a `Request` object, only the ambient `headers()` Next.js exposes
+ * (same headers `proxy.ts` forwarded). Same validation, different source.
+ */
+export async function requireSessionFromHeaders(): Promise<SessionUser> {
+  const h = await headers();
+  return parseSessionUser((name) => h.get(name));
 }
