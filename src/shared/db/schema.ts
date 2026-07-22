@@ -2,9 +2,9 @@
  * Drizzle schema.
  *
  * `users` + `sessions` land here in PR2 (auth). `producto` + `sync_runs` land
- * in PR3 (inventory-sync). Remaining tables (`catalogs`, `template_config` —
- * see design.md → "Database Schema Outline") are added in later PRs, one
- * module at a time, alongside the code that uses them.
+ * in PR3 (inventory-sync). `template_config` lands in PR5. `catalogs` lands
+ * here in PR8 (catalog-storage) — see design.md → "Database Schema Outline".
+ * Each table is added alongside the code that first needs it.
  */
 import { index, integer, jsonb, pgEnum, pgTable, real, text, timestamp } from "drizzle-orm/pg-core";
 
@@ -108,3 +108,47 @@ export const templateConfig = pgTable("template_config", {
 });
 
 export type TemplateConfig = typeof templateConfig.$inferSelect;
+
+/**
+ * `catalogs` — R7 (list/preview/download) + R11 (R2 upload, retention).
+ *
+ * `id` is minted by pdf-generation/enqueue.ts (`crypto.randomUUID()`) purely
+ * as a job/queue correlation id (PR7) — this row is inserted by
+ * pdf-generation/worker.ts right after render+handoff, BEFORE the
+ * `pdf-upload` job is even sent, with `uploadStatus: "pending"` (Risk-1,
+ * design.md's "New Risks Flagged" #1: makes a crash mid-upload-retry visible
+ * as a queryable row instead of a silently orphaned local temp file, rather
+ * than fully solving durability). `uploadStatus` then walks
+ * pending -> uploading -> uploaded|failed, driven by
+ * catalog-storage/upload-status.ts.
+ *
+ * `categories` is a denormalized snapshot (categoryL1/categoryL2 pairs) of
+ * the selection at generation time — sufficient for R7.1's "name, date,
+ * categories" listing without re-joining `producto`; it does NOT persist the
+ * full product selection, so "regenerate" (R7.5) is a link back to
+ * `/builder`, not an automatic replay (see app/catalogs/page.tsx).
+ */
+export const uploadStatusEnum = pgEnum("upload_status", ["pending", "uploading", "uploaded", "failed"]);
+
+export const catalogs = pgTable(
+  "catalogs",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    categories: jsonb("categories").notNull().$type<{ categoryL1: string; categoryL2: string | null }[]>(),
+    productsPerPage: integer("products_per_page").notNull(),
+    uploadStatus: uploadStatusEnum("upload_status").notNull().default("pending"),
+    r2Key: text("r2_key"),
+    r2Url: text("r2_url"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // R11.2 retention (oldest-first per user) + R7.1 listing (own catalogs, newest first).
+    index("catalogs_user_created_idx").on(table.userId, table.createdAt),
+  ],
+);
+
+export type Catalog = typeof catalogs.$inferSelect;
