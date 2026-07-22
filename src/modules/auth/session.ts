@@ -5,6 +5,9 @@ import { headers } from "next/headers";
 import { db } from "@/shared/db/client";
 import { sessions, users } from "@/shared/db/schema";
 
+/** Cookie name shared by `proxy.ts` (reads it) and `/api/login` (sets it) — single source of truth. */
+export const SESSION_COOKIE = "session";
+
 export type Role = "usuario" | "administrador";
 
 /** Minimal identity `can()` and route handlers need — not the full `users` row. */

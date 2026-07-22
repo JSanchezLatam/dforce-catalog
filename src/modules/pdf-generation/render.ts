@@ -4,8 +4,6 @@
  * without a browser or a database. `worker.ts` is the only file in this
  * module that imports Playwright.
  */
-import { renderToStaticMarkup } from "react-dom/server";
-
 import { CatalogTemplate, type CatalogTemplateProps, type ProductPrintRef } from "@/shared/template/CatalogTemplate";
 
 /** R6.1/R5.4 — splits the final (post-exclusion) product set into fixed-size printed pages. */
@@ -26,8 +24,21 @@ export function chunkProducts(products: ProductPrintRef[], productsPerPage: numb
  * document string, ready for Playwright's `page.setContent()`.
  * `renderToStaticMarkup` (not `renderToString`) because this markup is
  * never hydrated client-side — it only ever exists for one `page.pdf()` call.
+ *
+ * PR9 — `react-dom/server` is imported dynamically (inside the function),
+ * not as a static top-level import, so this stays async. A static top-level
+ * import here broke `next build` (confirmed with both Turbopack and
+ * webpack) once `instrumentation.ts` (PR9) made this module reachable from
+ * the app's build graph for the first time — "You're importing a component
+ * that imports react-dom/server... render or return the content directly as
+ * a Server Component instead." The dynamic import resolves the exact same
+ * module at runtime (`react-dom/server` is already a transitive dependency
+ * of `react-dom`, a hard dependency here — no new package), it just avoids
+ * whatever static-analysis rule that build check applies to top-level
+ * imports of it.
  */
-export function renderCatalogHtml(props: CatalogTemplateProps): string {
+export async function renderCatalogHtml(props: CatalogTemplateProps): Promise<string> {
+  const { renderToStaticMarkup } = await import("react-dom/server");
   const body = renderToStaticMarkup(CatalogTemplate(props));
   return `<!DOCTYPE html>
 <html>

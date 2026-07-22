@@ -39,8 +39,8 @@ describe("chunkProducts — R6.1/R5.4", () => {
 });
 
 describe("renderCatalogHtml — R6.1 (shares CatalogTemplate with the builder's live preview, Risk-5)", () => {
-  it("produces a full HTML document containing the title, index, and every product page", () => {
-    const html = renderCatalogHtml({
+  it("produces a full HTML document containing the title, index, and every product page", async () => {
+    const html = await renderCatalogHtml({
       title: "Catalog: Motor",
       branding: { logoUrl: "https://x/logo.png", primaryColors: { primary: "#111111", secondary: "#eeeeee" }, font: "Arial", coverText: "Welcome" },
       sections: [{ categoryL1: "Motor", categoryL2: null, productCount: 2 }],
@@ -54,8 +54,8 @@ describe("renderCatalogHtml — R6.1 (shares CatalogTemplate with the builder's 
     expect(html).toContain("Motor");
   });
 
-  it("renders cover+index only (no product-page markup) when productPages is omitted", () => {
-    const html = renderCatalogHtml({ title: "Empty catalog", branding: null, sections: [] });
+  it("renders cover+index only (no product-page markup) when productPages is omitted", async () => {
+    const html = await renderCatalogHtml({ title: "Empty catalog", branding: null, sections: [] });
     expect(html).toContain("Empty catalog");
     expect(html).not.toContain("Product page");
   });

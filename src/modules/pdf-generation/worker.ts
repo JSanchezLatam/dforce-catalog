@@ -67,7 +67,7 @@ export async function handoffPdfBuffer(catalogId: string, buffer: Buffer): Promi
  */
 export async function renderPdfBuffer(payload: PdfGeneratePayload): Promise<Buffer> {
   const productPages = chunkProducts(payload.products, payload.productsPerPage);
-  const html = renderCatalogHtml({
+  const html = await renderCatalogHtml({
     title: payload.title,
     branding: payload.branding,
     sections: payload.sections.length > 0 ? payload.sections : buildIndexSections(payload.products),

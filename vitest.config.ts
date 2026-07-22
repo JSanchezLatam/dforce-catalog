@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import path from "node:path";
 
 export default defineConfig({
@@ -9,6 +9,9 @@ export default defineConfig({
     // covered by integration tests once a Postgres testcontainer exists
     // (design.md Testing Strategy).
     env: { DATABASE_URL: "postgres://test:test@localhost:5432/test_placeholder" },
+    // src/e2e/** needs a REAL reachable Postgres (see vitest.e2e.config.ts +
+    // README) — excluded here so plain `npm run test` stays fast/infra-free.
+    exclude: [...configDefaults.exclude, "src/e2e/**"],
   },
   resolve: {
     // Mirror tsconfig.json's "@/*" path alias (ponytail: no vite-tsconfig-paths

@@ -24,14 +24,15 @@ function categoryKey(categoryL1: string, categoryL2: string): string {
 
 /**
  * R5 — category/product multi-select+exclude, 1-20 density, 200-cap, live
- * title/index preview. All state here is in-memory only.
+ * title/index preview. Selection state is in-memory only (R5 never asks it
+ * to survive a reload) until "Continue" validates it and POSTs it to
+ * `/api/catalog-builder/generate` (PR9), which enqueues the real
+ * `pdf-generate` job via `enqueueCatalogPdf()`.
  *
- * ponytail: client-side-only draft state, no persistence yet — R5 never asks
- * this phase to survive a reload, and pdf-generation (PR7) doesn't exist
- * yet to consume a persisted draft. PR7 will decide exactly how this
- * in-memory `draft` shape crosses into a real queued job (e.g. POST it to a
- * new endpoint at "Generate" time) — do not add a `catalogs` table or job
- * enqueue call here before that decision is made.
+ * ponytail: no live-updating queue-position poll on this screen — position is
+ * reported once at enqueue time; the `/catalogs` listing (R7) is where an
+ * in-flight job's status is checked afterward (this app's "Real-time"
+ * decision is polling-only, design.md).
  */
 export function CatalogBuilderForm({
   categoryL1Options,
@@ -49,6 +50,8 @@ export function CatalogBuilderForm({
   const [candidates, setCandidates] = useState<ProductRef[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirmed, setConfirmed] = useState(false);
+  const [generateStatus, setGenerateStatus] = useState<"idle" | "submitting" | "queued">("idle");
+  const [queuePosition, setQueuePosition] = useState<number | null>(null);
 
   // R5.1/5.5 — refetch candidate products whenever the included L1 set changes.
   // (`candidates` is only ever set from the fetch callback below, never
@@ -109,7 +112,7 @@ export function CatalogBuilderForm({
     setConfirmed(false);
   }
 
-  function handleContinue() {
+  async function handleContinue() {
     try {
       validateCatalogSelection({
         includedCategoryCount: includedL1.length,
@@ -126,6 +129,41 @@ export function CatalogBuilderForm({
       }
       throw err;
     }
+
+    // R6/R12 — hands the validated selection to the ONE function allowed to
+    // enqueue a pdf-generate job (pdf-generation/enqueue.ts's Risk-2 guard),
+    // via the server route so the queue-depth check + advisory lock run
+    // where the DB transaction lives, not in the browser.
+    setGenerateStatus("submitting");
+    const response = await fetch("/api/catalog-builder/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title,
+        sections,
+        products: finalProducts,
+        productsPerPage,
+        includedCategoryCount: includedL1.length,
+      }),
+    });
+
+    if (response.status === 409) {
+      const body = await response.json();
+      setErrors({ total: body.error ?? "Queue is full — try again once a job finishes" });
+      setGenerateStatus("idle");
+      return;
+    }
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      setErrors(body?.errors ?? { form: "Could not queue this catalog. Try again." });
+      setGenerateStatus("idle");
+      return;
+    }
+
+    const body = await response.json();
+    setQueuePosition(body.queuePosition ?? null);
+    setGenerateStatus("queued");
   }
 
   return (
@@ -200,14 +238,22 @@ export function CatalogBuilderForm({
 
       {errors.total && <p role="alert">{errors.total}</p>}
 
-      <button type="button" onClick={handleContinue}>
-        Continue
+      <button type="button" onClick={handleContinue} disabled={generateStatus === "submitting"}>
+        {generateStatus === "submitting" ? "Queuing…" : "Continue"}
       </button>
 
-      {confirmed && (
+      {confirmed && generateStatus === "queued" && (
+        // R12.3/12.4 — position is reported once at enqueue time; this app's
+        // "Real-time" decision (design.md) is polling-only, so live updates
+        // happen on the /catalogs listing page (R7), not here.
+        // ponytail: no live-updating position poll on this page — the
+        // /catalogs listing already shows "Processing…" for pending/uploading
+        // rows; add a poll here only if a requirement asks for in-place
+        // progress on the builder screen itself.
         <p>
-          Draft ready — {finalProducts.length} products across {sections.length} section(s), {productsPerPage}/page.
-          PDF generation is not available yet.
+          Queued{queuePosition != null ? ` at position ${queuePosition}` : ""} — {finalProducts.length} products
+          across {sections.length} section(s), {productsPerPage}/page.{" "}
+          <a href="/catalogs">View your catalogs</a>.
         </p>
       )}
 

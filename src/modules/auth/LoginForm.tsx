@@ -1,0 +1,60 @@
+"use client";
+
+import { useState, type FormEvent } from "react";
+
+/**
+ * R9.1/9.2 — plain credential form, same fetch-then-status-check shape as
+ * `template-config/TemplateConfigForm.tsx`. On success, a full navigation
+ * (not client-side router push) so the freshly-set `session` cookie is sent
+ * on the very next request (`proxy.ts` reads it from the request, not from
+ * client-side state).
+ */
+export function LoginForm() {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<"idle" | "submitting">("idle");
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStatus("submitting");
+    setError(null);
+
+    const response = await fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (!response.ok) {
+      // R9.2 — generic message regardless of which credential was wrong.
+      setError("Invalid username or password.");
+      setStatus("idle");
+      return;
+    }
+
+    window.location.href = "/inventory";
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <label>
+        Username
+        <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
+      </label>
+      <label>
+        Password
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+        />
+      </label>
+      {error && <p role="alert">{error}</p>}
+      <button type="submit" disabled={status === "submitting"}>
+        {status === "submitting" ? "Signing in…" : "Sign in"}
+      </button>
+    </form>
+  );
+}
