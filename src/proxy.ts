@@ -1,0 +1,40 @@
+import { NextResponse, type NextRequest } from "next/server";
+
+import { validateSession } from "@/modules/auth/session";
+
+/**
+ * Blanket route guard (NFR-5) — every route except /login requires a valid
+ * session. Proxy (renamed from "middleware" in Next.js 16, see
+ * node_modules/next/.../file-conventions/proxy.md) always runs the Node.js
+ * runtime, which session validation needs since it's a Postgres query via
+ * `pg`/Drizzle — the `runtime` config key is not settable here and would
+ * throw if we tried.
+ */
+export const config = {
+  matcher: ["/((?!login|_next/static|_next/image|favicon.ico).*)"],
+};
+
+const SESSION_COOKIE = "session";
+
+export async function proxy(request: NextRequest) {
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+
+  // No cookie at all -> 401 before any DB query executes (explicit spec scenario, NFR-5).
+  if (!token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const user = await validateSession(token);
+
+  // Invalid/expired/revoked token -> send the browser back to login (R9.3).
+  if (!user) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // Forward the resolved identity so route handlers can call can(requireSession(req), action)
+  // without re-querying the DB (design.md: "Route handlers call requireSession() then can()").
+  const headers = new Headers(request.headers);
+  headers.set("x-user-id", user.id);
+  headers.set("x-user-role", user.role);
+  return NextResponse.next({ request: { headers } });
+}

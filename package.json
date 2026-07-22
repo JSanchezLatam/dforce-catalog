@@ -14,15 +14,17 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "next": "16.2.11",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
+    "bcrypt": "^6.0.0",
     "drizzle-orm": "0.45.2",
+    "next": "16.2.11",
     "pg": "8.22.0",
     "pg-boss": "12.26.2",
-    "playwright": "1.61.1"
+    "playwright": "1.61.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
     "@types/node": "^20",
     "@types/pg": "8.20.0",
     "@types/react": "^19",
