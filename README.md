@@ -42,11 +42,15 @@ from.
    (Or `npm run db:migrate` if you're running the app outside Docker with
    `DATABASE_URL` pointed at a reachable Postgres.)
 
-4. Create at least one user. There is no seed script yet — insert directly,
-   e.g. via `docker compose exec db psql -U dforce -d dforce_catalog` and a
-   manual `INSERT INTO users ...` with a bcrypt hash (cost ≥ 12), or a short
-   one-off Node script calling `hashPassword()` from
-   `src/modules/auth/password.ts`. Log in at `/login`.
+4. Create at least one user:
+   ```
+   docker compose --profile tools run --rm migrate node scripts/seed-user.mjs admin "a-real-password" administrador
+   ```
+   (Runs against the `migrate` service's `builder`-stage image, since it has
+   the full source — the `app` image doesn't. Outside Docker: `npm run
+   db:seed-user -- admin "a-real-password" administrador`, with
+   `DATABASE_URL` pointed at a reachable Postgres.) Role is `usuario` or
+   `administrador`; log in at `/login`.
 
 ### Running without Docker
 
