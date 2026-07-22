@@ -1,8 +1,17 @@
 import { env } from "@/shared/config/env";
 
 /**
- * Interfuerza API client (R1.7/1.8, NFR-1 — see design.md → "Interfuerza API
- * Client").
+ * Interfuerza API client (R1.1/1.3-9, R3.3 — see design.md → "Interfuerza API
+ * Client", contract VERIFIED via live smoke test, not just vendor docs).
+ *
+ * The real contract is a SINGLE endpoint: POST directly to `IFX_BASE_URL`
+ * (no `/products` or any other path appended) with a JSON body describing
+ * the desired action. The response's `count` field is a STABLE GRAND TOTAL
+ * across every page (confirmed empirically: page 1 and the last page both
+ * report the same `count`), so pagination end is computed as
+ * `page * PAGE_SIZE >= count` rather than inspecting `products.length` —
+ * this is more precise and avoids a wasted extra HTTP call when the total
+ * is an exact multiple of `PAGE_SIZE`.
  *
  * Strictly SEQUENTIAL, awaited pagination — NEVER `Promise.all` over pages.
  * Concurrent requests risk tripping the API's ~20 req/10s rate limit, which
@@ -15,7 +24,7 @@ export const RATE_LIMIT_SPACING_MS = 500;
 export const MAX_ATTEMPTS = 3;
 export const RETRY_INTERVAL_MS = 60_000;
 
-export type SyncFilters = { l1?: string };
+export type SyncFilters = { l1?: string; l2?: string };
 
 /** Thrown after `MAX_ATTEMPTS` failed attempts on the same page — the caller
  * (job.ts) MUST treat this as "abort the whole run, keep prior DB state"
@@ -42,9 +51,24 @@ export type FetchProductsOptions = {
   token?: string;
 };
 
-type ProductsPage = { items: unknown[]; hasNext: boolean };
+/** Raw response shape for one page — `products` entries are passed through
+ * unchanged; parsing/reshaping them is mapper.ts's job, not this file's. */
+type FetchResult = { products: unknown[]; count: number };
 
 const defaultSleep: SleepImpl = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Builds the `filters` array entries (R3.3) — `=` only, per spec (no `>=`/`LIKE`
+ * needed for category passthrough). */
+function buildFilters(filters: SyncFilters): { field: string; type: "="; value: string }[] {
+  const entries: { field: string; type: "="; value: string }[] = [];
+  if (filters.l1) {
+    entries.push({ field: "Category_L1", type: "=", value: filters.l1 });
+  }
+  if (filters.l2) {
+    entries.push({ field: "Category_L2", type: "=", value: filters.l2 });
+  }
+  return entries;
+}
 
 async function fetchPage(
   page: number,
@@ -52,20 +76,31 @@ async function fetchPage(
   fetchImpl: FetchImpl,
   baseUrl: string,
   token: string,
-): Promise<ProductsPage> {
-  const url = new URL("/products", baseUrl);
-  url.searchParams.set("page", String(page));
-  url.searchParams.set("size", String(PAGE_SIZE));
-  if (filters.l1) {
-    // R3.3 — category filter passthrough on the next filtered sync call.
-    url.searchParams.set("category_l1", filters.l1);
+): Promise<FetchResult> {
+  const filterEntries = buildFilters(filters);
+  const body: Record<string, unknown> = {
+    class: "GET",
+    action: "products",
+    page: String(page),
+  };
+  // Only included in the request when a category filter is actually active —
+  // the live smoke test confirmed the unfiltered call omits `filters` entirely.
+  if (filterEntries.length > 0) {
+    body.filters = filterEntries;
   }
 
-  const response = await fetchImpl(url, { headers: { "X-IFX-Token": token } });
+  const response = await fetchImpl(baseUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-IFX-Token": token,
+    },
+    body: JSON.stringify(body),
+  });
   if (!response.ok) {
     throw new Error(`Interfuerza API responded with HTTP ${response.status} for page ${page}`);
   }
-  return (await response.json()) as ProductsPage;
+  return (await response.json()) as FetchResult;
 }
 
 async function fetchPageWithRetry(
@@ -75,7 +110,7 @@ async function fetchPageWithRetry(
   sleepImpl: SleepImpl,
   baseUrl: string,
   token: string,
-): Promise<ProductsPage> {
+): Promise<FetchResult> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
@@ -94,10 +129,13 @@ async function fetchPageWithRetry(
 }
 
 /**
- * Yields one page's raw items at a time so the caller (job.ts) can persist
- * incrementally inside a single DB transaction: if this generator throws
- * (page exhausted its retries), nothing yielded so far has been committed
- * yet, and the transaction rolls back the entire run (R1.9).
+ * Yields one page's raw product objects at a time so the caller (job.ts) can
+ * persist incrementally inside a single DB transaction: if this generator
+ * throws (page exhausted its retries), nothing yielded so far has been
+ * committed yet, and the transaction rolls back the entire run (R1.9).
+ *
+ * Yielded items are passed through verbatim — parsing/reshaping each product
+ * object is mapper.ts's responsibility, not this generator's.
  */
 export async function* fetchAllProducts(
   filters: SyncFilters = {},
@@ -115,17 +153,21 @@ export async function* fetchAllProducts(
   const sleepImpl = options.sleepImpl ?? defaultSleep;
 
   let page = 1;
-  let hasNext = true;
-  while (hasNext) {
+  while (true) {
     const result = await fetchPageWithRetry(page, filters, fetchImpl, sleepImpl, baseUrl, token);
-    yield result.items;
-    hasNext = result.hasNext;
-    page++;
-    if (hasNext) {
-      // ponytail: a plain awaited setTimeout is enough to satisfy NFR-1's
-      // fixed 500ms spacing — no rate-limiting library needed for one
-      // strictly sequential loop.
-      await sleepImpl(RATE_LIMIT_SPACING_MS);
+    yield result.products;
+
+    // count is a stable grand total (confirmed across pages 1/2/28/29 in the
+    // live smoke test), so this is exact — no wasted terminal request on an
+    // exact-PAGE_SIZE multiple.
+    const done = page * PAGE_SIZE >= result.count;
+    if (done) {
+      break;
     }
+    page++;
+    // ponytail: a plain awaited setTimeout is enough to satisfy NFR-1's
+    // fixed 500ms spacing — no rate-limiting library needed for one
+    // strictly sequential loop.
+    await sleepImpl(RATE_LIMIT_SPACING_MS);
   }
 }
