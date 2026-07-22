@@ -4,6 +4,7 @@ import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { listAllCatalogs, listCatalogsForUser } from "@/modules/catalog-storage/queries";
 import type { Catalog } from "@/shared/db/schema";
+import { StatusBadge } from "@/shared/ui/StatusBadge";
 
 /**
  * R7 — catalog listing (name/date/categories). Per-user scope; Administrador
@@ -55,7 +56,9 @@ function CatalogRow({ catalog }: { catalog: Catalog }) {
       <td>{catalog.title}</td>
       <td>{catalog.createdAt.toLocaleDateString()}</td>
       <td>{categoryLabel}</td>
-      <td>{statusLabel(catalog.uploadStatus)}</td>
+      <td>
+        <StatusBadge status={catalog.uploadStatus} label={statusLabel(catalog.uploadStatus)} />
+      </td>
       <td>
         {catalog.uploadStatus === "uploaded" ? (
           <>

@@ -2,10 +2,25 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { StatusBadge } from "@/shared/ui/StatusBadge";
+
+type SyncRunStatus = "running" | "completed" | "failed";
+
 type SyncStatusResponse = {
   running: boolean;
-  lastRun: { status: "running" | "completed" | "failed"; productCount: number | null; finishedAt: string | null } | null;
+  lastRun: { status: SyncRunStatus; productCount: number | null; finishedAt: string | null } | null;
 };
+
+function syncStatusLabel(status: SyncRunStatus): string {
+  switch (status) {
+    case "running":
+      return "Syncing…";
+    case "completed":
+      return "Completed";
+    case "failed":
+      return "Failed";
+  }
+}
 
 /**
  * R2 — admin-only manual sync trigger, progress indicator, and completion
@@ -16,6 +31,7 @@ type SyncStatusResponse = {
  */
 export function ManualSyncButton() {
   const [running, setRunning] = useState(false);
+  const [lastRun, setLastRun] = useState<SyncStatusResponse["lastRun"]>(null);
   const [message, setMessage] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -32,6 +48,7 @@ export function ManualSyncButton() {
   // body, which react-hooks/set-state-in-effect flags.
   function applyStatus(body: SyncStatusResponse) {
     setRunning(body.running);
+    setLastRun(body.lastRun);
     if (!body.running) {
       stopPolling();
       if (body.lastRun?.status === "completed") {
@@ -84,6 +101,11 @@ export function ManualSyncButton() {
       <button type="button" onClick={handleClick} disabled={running}>
         {running ? "Syncing…" : "Sync now"}
       </button>
+      {running ? (
+        <StatusBadge status="running" label={syncStatusLabel("running")} />
+      ) : (
+        lastRun && <StatusBadge status={lastRun.status} label={syncStatusLabel(lastRun.status)} />
+      )}
       {message && <p role="status">{message}</p>}
     </div>
   );
