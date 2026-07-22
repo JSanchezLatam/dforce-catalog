@@ -17,10 +17,18 @@ export const config = {
 
 export async function proxy(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
+  const isApiRoute = request.nextUrl.pathname.startsWith("/api/");
 
-  // No cookie at all -> 401 before any DB query executes (explicit spec scenario, NFR-5).
+  // No cookie at all -> 401 before any DB query executes (NFR-5) for API
+  // consumers (fetch/JS expects JSON); page navigations get sent to /login
+  // instead, since a raw 401 JSON body is not a usable response for a
+  // browser tab (this was the actual bug: every fresh visitor to "/" saw
+  // JSON, not a login screen).
   if (!token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (isApiRoute) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   const user = await validateSession(token);
