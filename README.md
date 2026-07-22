@@ -32,9 +32,12 @@ from.
    dependency — pg-boss's queue schema and the app's own tables both live
    in that one database.
 
-3. Run migrations (first boot, and after pulling schema changes):
+3. Run migrations (first boot, and after pulling schema changes). The `app`
+   image is a stripped-down production build with no dev tooling, so
+   migrations run against the `builder` stage instead (has drizzle-kit +
+   source), via a dedicated compose service:
    ```
-   docker compose exec app npx drizzle-kit migrate
+   docker compose --profile tools run --rm migrate
    ```
    (Or `npm run db:migrate` if you're running the app outside Docker with
    `DATABASE_URL` pointed at a reachable Postgres.)

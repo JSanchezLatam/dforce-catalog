@@ -15,6 +15,25 @@ services:
       db:
         condition: service_healthy
 
+  # Runs migrations against the `builder` stage, which still has drizzle-kit,
+  # drizzle.config.ts, and the full source (the production `app` image is
+  # intentionally stripped down to .next/standalone and doesn't have any of
+  # that — see Dockerfile). Not started by `docker compose up`; invoke with
+  # `docker compose run --rm migrate`.
+  migrate:
+    build:
+      context: .
+      target: builder
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-dforce}:${POSTGRES_PASSWORD:-dforce}@db:5432/${POSTGRES_DB:-dforce_catalog}
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["tools"]
+    command: ["npx", "drizzle-kit", "migrate"]
+
   db:
     image: postgres:17-alpine
     environment:
@@ -24,7 +43,7 @@ services:
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dforce}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dforce} -d ${POSTGRES_DB:-dforce_catalog}"]
       interval: 5s
       timeout: 5s
       retries: 5
