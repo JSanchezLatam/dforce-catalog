@@ -7,7 +7,8 @@ import type { NavLink } from "./nav-items";
 
 /**
  * Client boundary is scoped to this single component — `usePathname()` is
- * the only reason any part of the Sidebar needs to run in the browser.
+ * the only reason this piece of the Sidebar needs to run in the browser
+ * (see `LogoutButton` for the other scoped client boundary).
  */
 export function NavItem({ href, label }: NavLink) {
   const pathname = usePathname();

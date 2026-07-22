@@ -1,6 +1,7 @@
 import type { SessionUser } from "@/modules/auth/session";
 
 import { LogoSlot } from "./LogoSlot";
+import { LogoutButton } from "./LogoutButton";
 import { getNavItems } from "./nav-items";
 import { NavItem } from "./NavItem";
 
@@ -24,11 +25,7 @@ export function Sidebar({ user }: { user: SessionUser }) {
           ))}
         </nav>
       </div>
-      {/* ponytail: non-functional placeholder — POST /api/logout + redirect
-          wiring is PR3 scope (revokeSession(token) + SESSION_COOKIE clearing). */}
-      <button type="button" disabled className="p-4 text-left text-sm text-dragon-red disabled:opacity-70">
-        Cerrar sesión
-      </button>
+      <LogoutButton />
     </aside>
   );
 }
