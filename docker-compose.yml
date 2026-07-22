@@ -1,0 +1,33 @@
+# Local dev/self-hosted stack: app + Postgres (single stateful dependency —
+# see design.md "Technical Approach"). pg-boss creates its own `pgboss`
+# schema in the same database on boot; no separate queue service needed.
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-dforce}:${POSTGRES_PASSWORD:-dforce}@db:5432/${POSTGRES_DB:-dforce_catalog}
+      IFX_TOKEN: ${IFX_TOKEN:-}
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dforce}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dforce}
+      POSTGRES_DB: ${POSTGRES_DB:-dforce_catalog}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-dforce}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db-data:
