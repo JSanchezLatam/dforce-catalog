@@ -143,7 +143,7 @@ export async function listCategoryL1Options(): Promise<string[]> {
     .from(producto)
     .where(isNotNull(producto.categoryL1))
     .orderBy(asc(producto.categoryL1));
-  return rows.map((r) => r.value).filter((v): v is string => v !== null);
+  return rows.map((r) => r.value).filter((v): v is string => v !== null && v !== "");
 }
 
 /** Options for the L2 filter select, optionally narrowed by the selected L1 (R3.1/3.2). */
@@ -155,5 +155,5 @@ export async function listCategoryL2Options(categoryL1?: string): Promise<string
     .from(producto)
     .where(and(...conditions))
     .orderBy(asc(producto.categoryL2));
-  return rows.map((r) => r.value).filter((v): v is string => v !== null);
+  return rows.map((r) => r.value).filter((v): v is string => v !== null && v !== "");
 }
