@@ -48,7 +48,7 @@ import { SESSION_COOKIE, validateSession } from "@/modules/auth/session";
 import { buildIndexSections } from "@/modules/catalog-builder/selection";
 import { listCatalogsForUser } from "@/modules/catalog-storage/queries";
 import { registerPdfUploadWorker } from "@/modules/catalog-storage/upload-status";
-import { listCategoryL1Options, listInventory } from "@/modules/inventory-view/queries";
+import { countAllProducts, listCategoryL1Options, listInventory } from "@/modules/inventory-view/queries";
 import { runSync } from "@/modules/inventory-sync/job";
 import { registerPdfGenerateWorker } from "@/modules/pdf-generation/worker";
 import { proxy } from "@/proxy";
@@ -153,6 +153,10 @@ describe("full catalog-generation flow (E2E)", () => {
 
     const motorOnly = await listInventory({ categoryL1: "Motor" }, { offset: 0, limit: 25 });
     expect(motorOnly.items.map((i) => i.id).sort()).toEqual(["p1", "p2"]);
+
+    // PR10 — grand total stays 3 regardless of the active filter, unlike
+    // `listInventory().total` above which is filter-scoped (motorOnly = 2).
+    expect(await countAllProducts()).toBe(3);
 
     expect(await listCategoryL1Options()).toEqual(["Motor", "Suspensión"]);
   });

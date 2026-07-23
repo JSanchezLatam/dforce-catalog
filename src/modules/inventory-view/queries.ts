@@ -96,6 +96,17 @@ export async function hasAnyProducts(): Promise<boolean> {
   return rows.length > 0;
 }
 
+/**
+ * PR10 — grand total product count, unfiltered. `listInventory()`'s own
+ * `total` is scoped to the active filter (correct for pagination math), which
+ * would make the stat header's "TOTAL DE PRODUCTOS" card lie whenever a
+ * filter is active — this is the one genuinely missing lightweight count.
+ */
+export async function countAllProducts(): Promise<number> {
+  const rows = await db.select({ value: count() }).from(producto);
+  return rows[0]?.value ?? 0;
+}
+
 /** Options for the L1 filter select — distinct, non-null, alphabetical. */
 export async function listCategoryL1Options(): Promise<string[]> {
   const rows = await db
