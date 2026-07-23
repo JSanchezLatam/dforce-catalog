@@ -1,25 +1,48 @@
 "use client";
 
+import { BookOpen, FileSpreadsheet, Package, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import type { NavLink } from "./nav-items";
+import type { NavIconKey, NavLink } from "./nav-items";
+
+// ponytail: hardcoded icon-key → lucide component map for 4 items — no
+// generic icon-registry needed. Resolved here (client-side) since
+// `nav-items.ts` only carries a serializable string key across the RSC
+// boundary, not the component reference itself.
+const ICONS: Record<NavIconKey, typeof Package> = {
+  inventory: Package,
+  builder: FileSpreadsheet,
+  catalogs: BookOpen,
+  "template-config": Settings,
+};
 
 /**
  * Client boundary is scoped to this single component — `usePathname()` is
  * the only reason this piece of the Sidebar needs to run in the browser
  * (see `LogoutButton` for the other scoped client boundary).
+ *
+ * Icon-only rail (confirmed mockup): the icon itself is decorative
+ * (`aria-hidden`) — the accessible name lives on the `<Link>` via
+ * `aria-label`/`title` since there is no visible text label anymore.
  */
-export function NavItem({ href, label }: NavLink) {
+export function NavItem({ href, label, icon }: NavLink) {
   const pathname = usePathname();
   const isActive = pathname === href || pathname?.startsWith(`${href}/`);
+  const Icon = ICONS[icon];
 
   return (
     <Link
       href={href}
-      className={`block px-4 py-2 text-sm ${isActive ? "bg-dash-purple" : "hover:bg-dash-purple/20"}`}
+      aria-label={label}
+      title={label}
+      className={`mx-auto flex h-11 w-11 items-center justify-center rounded-lg transition-colors ${
+        isActive
+          ? "bg-dash-purple text-dash-fg"
+          : "text-dash-muted hover:bg-dash-purple/20 hover:text-dash-fg"
+      }`}
     >
-      {label}
+      <Icon aria-hidden="true" size={20} />
     </Link>
   );
 }
