@@ -1,6 +1,8 @@
 import { CatalogBuilderForm } from "@/modules/catalog-builder/CatalogBuilderForm";
 import { listCategoryPairs } from "@/modules/catalog-builder/queries";
+import { countUploadedCatalogsForUser } from "@/modules/catalog-storage/queries";
 import { listCategoryL1Options } from "@/modules/inventory-view/queries";
+import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getTemplateConfig } from "@/modules/template-config/service";
 import { PAGE_HEADING } from "@/shared/ui/styles";
 
@@ -20,16 +22,24 @@ import { PAGE_HEADING } from "@/shared/ui/styles";
 export const dynamic = "force-dynamic";
 
 export default async function CatalogBuilderPage() {
-  const [categoryL1Options, categoryPairs, templateConfig] = await Promise.all([
+  const [user, categoryL1Options, categoryPairs, templateConfig] = await Promise.all([
+    requireSessionFromHeaders(),
     listCategoryL1Options(),
     listCategoryPairs(),
     getTemplateConfig(),
   ]);
 
+  const catalogCount = await countUploadedCatalogsForUser(user.id);
+
   return (
     <div className="p-8">
       <h1 className={PAGE_HEADING}>Build a catalog</h1>
-      <CatalogBuilderForm categoryL1Options={categoryL1Options} categoryPairs={categoryPairs} templateConfig={templateConfig} />
+      <CatalogBuilderForm
+        categoryL1Options={categoryL1Options}
+        categoryPairs={categoryPairs}
+        templateConfig={templateConfig}
+        catalogCount={catalogCount}
+      />
     </div>
   );
 }
