@@ -5,7 +5,7 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { listAllCatalogs, listCatalogsForUser } from "@/modules/catalog-storage/queries";
 import type { Catalog } from "@/shared/db/schema";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
-import { PAGE_HEADING, TABLE_TD, TABLE_TH } from "@/shared/ui/styles";
+import { CARD, PAGE_HEADING, TABLE_TD, TABLE_TH } from "@/shared/ui/styles";
 
 /**
  * R7 — catalog listing (name/date/categories). Per-user scope; Administrador
@@ -22,34 +22,36 @@ export default async function CatalogsPage() {
   return (
     <main className="p-8">
       <h1 className={PAGE_HEADING}>My catalogs</h1>
-      {catalogs.length === 0 ? (
-        <p className="text-sm text-dash-fg">
-          No catalogs yet.{" "}
-          <Link href="/builder" className="text-dash-purple hover:underline">
-            Build one
-          </Link>
-          .
-        </p>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-dash-muted/40">
-          <table className="w-full border-collapse">
-            <thead className="bg-dash-card">
-              <tr>
-                <th className={TABLE_TH}>Name</th>
-                <th className={TABLE_TH}>Date</th>
-                <th className={TABLE_TH}>Categories</th>
-                <th className={TABLE_TH}>Status</th>
-                <th className={TABLE_TH}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {catalogs.map((catalog) => (
-                <CatalogRow key={catalog.id} catalog={catalog} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <div className={CARD}>
+        {catalogs.length === 0 ? (
+          <p className="text-sm text-dash-fg">
+            No catalogs yet.{" "}
+            <Link href="/builder" className="text-dash-purple hover:underline">
+              Build one
+            </Link>
+            .
+          </p>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-dash-muted/40">
+            <table className="w-full border-collapse">
+              <thead className="bg-dash-card">
+                <tr>
+                  <th className={TABLE_TH}>Name</th>
+                  <th className={TABLE_TH}>Date</th>
+                  <th className={TABLE_TH}>Categories</th>
+                  <th className={TABLE_TH}>Status</th>
+                  <th className={TABLE_TH}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {catalogs.map((catalog) => (
+                  <CatalogRow key={catalog.id} catalog={catalog} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </main>
   );
 }
