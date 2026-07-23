@@ -16,19 +16,19 @@ export default async function TemplateConfigPage() {
 
   if (!can(user, "template.edit")) {
     return (
-      <main className="p-8">
+      <div className="p-8">
         <h1 className={PAGE_HEADING}>Template configuration</h1>
-        <p className="text-sm text-dash-fg">You do not have permission to view this page.</p>
-      </main>
+        <p className="text-sm text-foreground">You do not have permission to view this page.</p>
+      </div>
     );
   }
 
   const config = await getTemplateConfig();
 
   return (
-    <main className="p-8">
+    <div className="p-8">
       <h1 className={PAGE_HEADING}>Template configuration</h1>
       <TemplateConfigForm initialConfig={config} />
-    </main>
+    </div>
   );
 }

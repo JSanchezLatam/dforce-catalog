@@ -27,9 +27,9 @@ export default async function CatalogBuilderPage() {
   ]);
 
   return (
-    <main className="p-8">
+    <div className="p-8">
       <h1 className={PAGE_HEADING}>Build a catalog</h1>
       <CatalogBuilderForm categoryL1Options={categoryL1Options} categoryPairs={categoryPairs} templateConfig={templateConfig} />
-    </main>
+    </div>
   );
 }

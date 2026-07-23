@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 
 import { StatusBadge } from "@/shared/ui/StatusBadge";
-import { PRIMARY_BUTTON } from "@/shared/ui/styles";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/shared/ui/ToastProvider";
 
 type SyncRunStatus = "running" | "completed" | "failed";
 
@@ -33,8 +34,8 @@ function syncStatusLabel(status: SyncRunStatus): string {
 export function ManualSyncButton() {
   const [running, setRunning] = useState(false);
   const [lastRun, setLastRun] = useState<SyncStatusResponse["lastRun"]>(null);
-  const [message, setMessage] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { addToast } = useToast();
 
   function stopPolling() {
     if (pollRef.current) {
@@ -53,9 +54,11 @@ export function ManualSyncButton() {
     if (!body.running) {
       stopPolling();
       if (body.lastRun?.status === "completed") {
-        // R2.4 — notify with count + finalization timestamp.
         const when = body.lastRun.finishedAt ? new Date(body.lastRun.finishedAt).toLocaleString() : "unknown time";
-        setMessage(`Sync completed: ${body.lastRun.productCount ?? 0} products synced at ${when}.`);
+        addToast("success", `Sync completed: ${body.lastRun.productCount ?? 0} products synced at ${when}.`);
+      }
+      if (body.lastRun?.status === "failed") {
+        addToast("error", "Sync failed. Check the logs and try again.");
       }
     }
   }
@@ -80,14 +83,13 @@ export function ManualSyncButton() {
   }, []);
 
   async function handleClick() {
-    setMessage(null);
     const res = await fetch("/api/inventory-sync/manual", { method: "POST" });
 
     if (res.status === 409) {
       const body = await res.json();
-      setMessage(body.error ?? "A sync is already in progress."); // R2.5
+      addToast("info", body.error ?? "A sync is already in progress.");
     } else if (!res.ok) {
-      setMessage("Could not start the sync. Try again.");
+      addToast("error", "Could not start the sync. Try again.");
       return;
     }
 
@@ -99,18 +101,13 @@ export function ManualSyncButton() {
 
   return (
     <div className="mb-4 flex items-center gap-3">
-      <button type="button" onClick={handleClick} disabled={running} className={PRIMARY_BUTTON}>
+      <Button type="button" onClick={handleClick} disabled={running}>
         {running ? "Syncing…" : "Sync now"}
-      </button>
+      </Button>
       {running ? (
         <StatusBadge status="running" label={syncStatusLabel("running")} />
       ) : (
         lastRun && <StatusBadge status={lastRun.status} label={syncStatusLabel(lastRun.status)} />
-      )}
-      {message && (
-        <p role="status" className="text-sm text-dash-fg">
-          {message}
-        </p>
       )}
     </div>
   );

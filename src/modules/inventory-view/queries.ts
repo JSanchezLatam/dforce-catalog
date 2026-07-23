@@ -5,18 +5,19 @@
  * `proxy.ts`'s blanket session guard is the only auth check this capability
  * needs, unlike `sync.manual`/`template.edit`/`catalogs.listAll` in policy.ts).
  */
-import { and, asc, count, eq, isNotNull } from "drizzle-orm";
+import { and, asc, count, eq, gt, ilike, isNotNull, isNull, or } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { producto } from "@/shared/db/schema";
 
-// ponytail: fixed page size, same rationale as inventory-sync's own 25/page —
-// no config surface requirement exists yet.
-export const PAGE_SIZE = 25;
+export const DEFAULT_PAGE_SIZE = 10;
 
 export type InventoryFilters = {
   categoryL1?: string;
   categoryL2?: string;
+  name?: string;
+  id?: string;
+  stockStatus?: "in-stock" | "out-of-stock";
 };
 
 export type InventoryListItem = {
@@ -24,6 +25,8 @@ export type InventoryListItem = {
   name: string;
   categoryL1: string | null;
   categoryL2: string | null;
+  price: number | null;
+  stock: number | null;
 };
 
 export type InventoryPage = {
@@ -38,19 +41,33 @@ function firstValue(value: string | string[] | undefined): string | undefined {
 }
 
 /** Pure — no DB access — reads Next.js's `searchParams` shape (R3.1/3.2). */
+const VALID_STOCK = new Set(["in-stock", "out-of-stock"]);
+
 export function normalizeFilters(searchParams: Record<string, string | string[] | undefined>): InventoryFilters {
   const filters: InventoryFilters = {};
   const l1 = firstValue(searchParams.categoryL1);
   const l2 = firstValue(searchParams.categoryL2);
+  const n = firstValue(searchParams.name);
+  const i = firstValue(searchParams.id);
+  const s = firstValue(searchParams.stockStatus);
   if (l1) filters.categoryL1 = l1;
   if (l2) filters.categoryL2 = l2;
+  if (n) filters.name = n;
+  if (i) filters.id = i;
+  if (s && VALID_STOCK.has(s)) filters.stockStatus = s as "in-stock" | "out-of-stock";
   return filters;
+}
+
+export function parsePageSize(pageSizeParam: string | string[] | undefined): number {
+  const raw = Number(firstValue(pageSizeParam));
+  const valid = [10, 25, 50, 100];
+  return Number.isFinite(raw) && valid.includes(raw) ? raw : DEFAULT_PAGE_SIZE;
 }
 
 /** Pure — no DB access — clamps to a valid 1-based page (R4.1-3). */
 export function computePageWindow(
   pageParam: string | string[] | undefined,
-  pageSize: number = PAGE_SIZE,
+  pageSize: number = DEFAULT_PAGE_SIZE,
 ): { page: number; offset: number; limit: number } {
   const raw = Number(firstValue(pageParam));
   const page = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 1;
@@ -61,6 +78,10 @@ function buildWhere(filters: InventoryFilters) {
   const conditions = [];
   if (filters.categoryL1) conditions.push(eq(producto.categoryL1, filters.categoryL1));
   if (filters.categoryL2) conditions.push(eq(producto.categoryL2, filters.categoryL2));
+  if (filters.name) conditions.push(ilike(producto.name, `%${filters.name}%`));
+  if (filters.id) conditions.push(ilike(producto.id, `%${filters.id}%`));
+  if (filters.stockStatus === "in-stock") conditions.push(gt(producto.stock, 0));
+  if (filters.stockStatus === "out-of-stock") conditions.push(or(eq(producto.stock, 0), isNull(producto.stock)));
   return conditions.length > 0 ? and(...conditions) : undefined;
 }
 
@@ -78,6 +99,8 @@ export async function listInventory(
         name: producto.name,
         categoryL1: producto.categoryL1,
         categoryL2: producto.categoryL2,
+        price: producto.price,
+        stock: producto.stock,
       })
       .from(producto)
       .where(where)
@@ -105,6 +128,12 @@ export async function hasAnyProducts(): Promise<boolean> {
 export async function countAllProducts(): Promise<number> {
   const rows = await db.select({ value: count() }).from(producto);
   return rows[0]?.value ?? 0;
+}
+
+/** Fetch a single product by ID with full raw payload (includes Images, PriceLists, etc.). */
+export async function getProductById(id: string) {
+  const row = await db.select().from(producto).where(eq(producto.id, id)).limit(1);
+  return row[0] ?? null;
 }
 
 /** Options for the L1 filter select — distinct, non-null, alphabetical. */

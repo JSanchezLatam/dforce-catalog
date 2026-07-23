@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { computePageWindow, normalizeFilters, PAGE_SIZE } from "./queries";
+import { computePageWindow, DEFAULT_PAGE_SIZE, normalizeFilters } from "./queries";
 
 describe("normalizeFilters", () => {
   it("returns no filters when searchParams has neither category key", () => {
@@ -25,28 +25,40 @@ describe("normalizeFilters", () => {
   it("takes the first value when Next.js gives an array (repeated query key)", () => {
     expect(normalizeFilters({ categoryL1: ["Motor", "Suspension"] })).toEqual({ categoryL1: "Motor" });
   });
+
+  it("parses in-stock stockStatus", () => {
+    expect(normalizeFilters({ stockStatus: "in-stock" })).toEqual({ stockStatus: "in-stock" });
+  });
+
+  it("parses out-of-stock stockStatus", () => {
+    expect(normalizeFilters({ stockStatus: "out-of-stock" })).toEqual({ stockStatus: "out-of-stock" });
+  });
+
+  it("rejects invalid stockStatus values", () => {
+    expect(normalizeFilters({ stockStatus: "maybe" })).toEqual({});
+  });
 });
 
 describe("computePageWindow", () => {
   it("defaults to page 1 / offset 0 when the page param is missing", () => {
-    expect(computePageWindow(undefined)).toEqual({ page: 1, offset: 0, limit: PAGE_SIZE });
+    expect(computePageWindow(undefined)).toEqual({ page: 1, offset: 0, limit: DEFAULT_PAGE_SIZE });
   });
 
   it("computes the offset for page 3 at the default page size", () => {
-    expect(computePageWindow("3")).toEqual({ page: 3, offset: 2 * PAGE_SIZE, limit: PAGE_SIZE });
+    expect(computePageWindow("3")).toEqual({ page: 3, offset: 2 * DEFAULT_PAGE_SIZE, limit: DEFAULT_PAGE_SIZE });
   });
 
   it("clamps non-numeric page params back to page 1", () => {
-    expect(computePageWindow("abc")).toEqual({ page: 1, offset: 0, limit: PAGE_SIZE });
+    expect(computePageWindow("abc")).toEqual({ page: 1, offset: 0, limit: DEFAULT_PAGE_SIZE });
   });
 
   it("clamps zero and negative page params back to page 1", () => {
-    expect(computePageWindow("0")).toEqual({ page: 1, offset: 0, limit: PAGE_SIZE });
-    expect(computePageWindow("-5")).toEqual({ page: 1, offset: 0, limit: PAGE_SIZE });
+    expect(computePageWindow("0")).toEqual({ page: 1, offset: 0, limit: DEFAULT_PAGE_SIZE });
+    expect(computePageWindow("-5")).toEqual({ page: 1, offset: 0, limit: DEFAULT_PAGE_SIZE });
   });
 
   it("floors fractional page params", () => {
-    expect(computePageWindow("2.9")).toEqual({ page: 2, offset: PAGE_SIZE, limit: PAGE_SIZE });
+    expect(computePageWindow("2.9")).toEqual({ page: 2, offset: DEFAULT_PAGE_SIZE, limit: DEFAULT_PAGE_SIZE });
   });
 
   it("respects a custom page size", () => {

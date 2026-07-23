@@ -1,5 +1,5 @@
 import type { SessionUser } from "@/modules/auth/session";
-import { CARD } from "@/shared/ui/styles";
+import { Card, CardContent } from "@/components/ui/card";
 
 const ROLE_LABELS: Record<SessionUser["role"], string> = {
   administrador: "Administrador",
@@ -17,28 +17,43 @@ const ROLE_LABELS: Record<SessionUser["role"], string> = {
  * extra DB round-trip for a cosmetic greeting, so this greets by role
  * ("Hola, Administrador"/"Hola, Usuario") instead of a real display name.
  */
-export function InventoryStatsHeader({ user, total }: { user: SessionUser; total: number }) {
+export function InventoryStatsHeader({
+  user,
+  total,
+  syncButton,
+}: {
+  user: SessionUser;
+  total: number;
+  syncButton?: React.ReactNode;
+}) {
   const roleLabel = ROLE_LABELS[user.role];
 
   return (
     <div className="mb-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <p className="text-xl font-bold text-dash-fg">Hola, {roleLabel}</p>
-          <p className="text-sm text-dash-muted">Bienvenido de nuevo a tu panel</p>
+          <p className="text-xl font-bold text-foreground">Hola, {roleLabel}</p>
+          <p className="text-sm text-muted-foreground">Bienvenido de nuevo a tu panel</p>
         </div>
         <div
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-dash-purple text-sm font-bold text-white"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-bold text-white"
           aria-hidden="true"
         >
           {roleLabel.charAt(0)}
         </div>
       </div>
-      <div className={CARD}>
-        <p className="text-xs font-semibold uppercase tracking-wide text-dash-muted">Total de productos</p>
-        <p className="mt-1 text-3xl font-bold text-dash-fg">{total}</p>
-        <p className="mt-1 text-sm text-dash-muted">sincronizados desde Interfuerza</p>
-      </div>
+      <Card size="sm">
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total de productos</p>
+              <p className="text-3xl font-bold text-foreground">{total}</p>
+              <p className="text-sm text-muted-foreground">sincronizados desde Interfuerza</p>
+            </div>
+            {syncButton}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

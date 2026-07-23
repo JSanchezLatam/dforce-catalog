@@ -17,6 +17,7 @@ export type ProductRef = {
   name: string;
   categoryL1: string | null;
   categoryL2: string | null;
+  image?: string | null;
 };
 
 export const MIN_PRODUCTS_PER_PAGE = 1;

@@ -3,7 +3,7 @@
  * `inventory-view/queries.ts` does; `listCategoryL1Options` is imported
  * directly from there for the L1 checkbox list rather than duplicated here.
  */
-import { and, eq, isNotNull, or } from "drizzle-orm";
+import { and, eq, isNotNull, or, sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { producto } from "@/shared/db/schema";
@@ -34,7 +34,13 @@ export async function listProductsInCategories(categories: CategoryRef[]): Promi
   );
 
   return db
-    .select({ id: producto.id, name: producto.name, categoryL1: producto.categoryL1, categoryL2: producto.categoryL2 })
+    .select({
+      id: producto.id,
+      name: producto.name,
+      categoryL1: producto.categoryL1,
+      categoryL2: producto.categoryL2,
+      image: sql<string>`trim(nullif(${producto.raw}->'Images'->0->>'src', ''))`,
+    })
     .from(producto)
     .where(or(...conditions));
 }

@@ -5,7 +5,12 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { listAllCatalogs, listCatalogsForUser } from "@/modules/catalog-storage/queries";
 import type { Catalog } from "@/shared/db/schema";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
-import { CARD, PAGE_HEADING, TABLE_TD, TABLE_TH } from "@/shared/ui/styles";
+import { PAGE_HEADING } from "@/shared/ui/styles";
+import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CatalogsPolling } from "./CatalogsPolling";
+
+const NON_TERMINAL = new Set(["pending", "uploading", "running"]);
 
 /**
  * R7 — catalog listing (name/date/categories). Per-user scope; Administrador
@@ -18,41 +23,44 @@ import { CARD, PAGE_HEADING, TABLE_TD, TABLE_TH } from "@/shared/ui/styles";
 export default async function CatalogsPage() {
   const user = await requireSessionFromHeaders();
   const catalogs = can(user, "catalogs.listAll") ? await listAllCatalogs() : await listCatalogsForUser(user.id);
+  const hasActive = catalogs.some((c) => NON_TERMINAL.has(c.uploadStatus));
 
   return (
-    <main className="p-8">
+    <div className="p-8">
       <h1 className={PAGE_HEADING}>My catalogs</h1>
-      <div className={CARD}>
+      <Card>
+        <CardContent className="p-6">
         {catalogs.length === 0 ? (
-          <p className="text-sm text-dash-fg">
+          <p className="text-sm text-muted-foreground">
             No catalogs yet.{" "}
-            <Link href="/builder" className="text-dash-purple hover:underline">
+            <Link href="/builder" className="text-primary hover:underline">
               Build one
             </Link>
             .
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-dash-muted/40">
-            <table className="w-full border-collapse">
-              <thead className="bg-dash-card">
-                <tr>
-                  <th className={TABLE_TH}>Name</th>
-                  <th className={TABLE_TH}>Date</th>
-                  <th className={TABLE_TH}>Categories</th>
-                  <th className={TABLE_TH}>Status</th>
-                  <th className={TABLE_TH}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+          <CatalogsPolling hasActive={hasActive}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Categories</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {catalogs.map((catalog) => (
                   <CatalogRow key={catalog.id} catalog={catalog} />
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </CatalogsPolling>
         )}
-      </div>
-    </main>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -61,25 +69,25 @@ function CatalogRow({ catalog }: { catalog: Catalog }) {
   const categoryLabel = categories.map((c) => c.categoryL1).join(", ") || "—";
 
   return (
-    <tr className="border-t border-dash-muted/20">
-      <td className={TABLE_TD}>{catalog.title}</td>
-      <td className={TABLE_TD}>{catalog.createdAt.toLocaleDateString()}</td>
-      <td className={TABLE_TD}>{categoryLabel}</td>
-      <td className={TABLE_TD}>
+    <TableRow>
+      <TableCell>{catalog.title}</TableCell>
+      <TableCell>{catalog.createdAt.toLocaleDateString()}</TableCell>
+      <TableCell>{categoryLabel}</TableCell>
+      <TableCell>
         <StatusBadge status={catalog.uploadStatus} label={statusLabel(catalog.uploadStatus)} />
-      </td>
-      <td className={`${TABLE_TD} space-x-2`}>
+      </TableCell>
+      <TableCell className="space-x-2">
         {catalog.uploadStatus === "uploaded" ? (
           <>
             <a
               href={`/api/catalogs/${catalog.id}/file`}
               target="_blank"
               rel="noreferrer"
-              className="text-dash-purple hover:underline"
+              className="text-primary hover:underline"
             >
               Preview
             </a>
-            <a href={`/api/catalogs/${catalog.id}/file?download=1`} className="text-dash-purple hover:underline">
+            <a href={`/api/catalogs/${catalog.id}/file?download=1`} className="text-primary hover:underline">
               Download
             </a>
           </>
@@ -89,14 +97,14 @@ function CatalogRow({ catalog }: { catalog: Catalog }) {
           // "regenerate" is a link back to the builder, not an automatic
           // re-run. ponytail: revisit if a requirement asks to restore the
           // original selection instead of re-picking it.
-          <Link href="/builder" className="text-dash-purple hover:underline">
+          <Link href="/builder" className="text-primary hover:underline">
             Regenerate
           </Link>
         ) : (
-          <span className="text-dash-muted">Processing…</span>
+          <span className="text-muted-foreground">Processing…</span>
         )}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
 

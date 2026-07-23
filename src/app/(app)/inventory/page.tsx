@@ -7,14 +7,18 @@ import { InventoryStatsHeader } from "@/modules/inventory-view/InventoryStatsHea
 import {
   computePageWindow,
   countAllProducts,
+  DEFAULT_PAGE_SIZE,
   hasAnyProducts,
   listCategoryL1Options,
   listCategoryL2Options,
   listInventory,
   normalizeFilters,
+  parsePageSize,
 } from "@/modules/inventory-view/queries";
 import { ManualSyncButton } from "@/modules/inventory-sync/ManualSyncButton";
-import { CARD, PAGE_HEADING, TABLE_TD, TABLE_TH } from "@/shared/ui/styles";
+import { PAGE_HEADING } from "@/shared/ui/styles";
+import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -34,7 +38,8 @@ export default async function InventoryPage({
 }) {
   const params = await searchParams;
   const filters = normalizeFilters(params);
-  const pageWindow = computePageWindow(params.page);
+  const pageSize = parsePageSize(params.pageSize);
+  const pageWindow = computePageWindow(params.page, pageSize);
   const user = await requireSessionFromHeaders();
   const canTriggerSync = can(user, "sync.manual"); // R2 — admin-only manual sync trigger
 
@@ -51,80 +56,143 @@ export default async function InventoryPage({
   // nothing" — only pay for the extra check when the current page is empty.
   const dbEmpty = total === 0 && !(await hasAnyProducts());
 
+  const syncButton = canTriggerSync ? <ManualSyncButton /> : undefined;
+
   if (dbEmpty) {
     return (
-      <main className="p-8">
-        <InventoryStatsHeader user={user} total={grandTotal} />
+      <div className="p-8">
+        <InventoryStatsHeader user={user} total={grandTotal} syncButton={syncButton} />
         <h1 className={PAGE_HEADING}>Inventory</h1>
-        <div className={CARD}>
-          <p className="text-sm text-dash-fg">
-            The inventory is empty. Ask an administrator to run an inventory sync to populate it.
-          </p>
-          {canTriggerSync && <ManualSyncButton />}
-        </div>
-      </main>
+        <Card size="sm">
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              The inventory is empty. Ask an administrator to run an inventory sync to populate it.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <main className="p-8">
-      <InventoryStatsHeader user={user} total={grandTotal} />
+    <div className="p-8">
+      <InventoryStatsHeader user={user} total={grandTotal} syncButton={syncButton} />
       <h1 className={PAGE_HEADING}>Inventory</h1>
-      <div className={CARD}>
-        {canTriggerSync && <ManualSyncButton />}
-        <InventoryFilters
-          categoryL1Options={categoryL1Options}
-          categoryL2Options={categoryL2Options}
-          selected={filters}
-        />
-        {items.length === 0 ? (
-          <p className="text-sm text-dash-fg">
-            No products match the selected filters.{" "}
-            <Link href="/inventory" className="text-dash-purple hover:underline">
-              Clear filters
-            </Link>
-          </p>
-        ) : (
-          <div className="overflow-x-auto rounded-lg border border-dash-muted/40">
-            <table className="w-full border-collapse">
-              <thead className="bg-dash-card">
-                <tr>
-                  <th className={TABLE_TH}>ID</th>
-                  <th className={TABLE_TH}>Name</th>
-                  <th className={TABLE_TH}>Category L1</th>
-                  <th className={TABLE_TH}>Category L2</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => (
-                  <tr key={item.id} className="border-t border-dash-muted/20">
-                    <td className={TABLE_TD}>{item.id}</td>
-                    <td className={TABLE_TD}>{item.name}</td>
-                    <td className={TABLE_TD}>{item.categoryL1 ?? "—"}</td>
-                    <td className={TABLE_TD}>{item.categoryL2 ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <nav className="mt-4 flex items-center gap-4 text-sm text-dash-fg">
-          <span>
-            Page {pageWindow.page} of {pageCount}
-          </span>
-          {pageWindow.page > 1 && (
-            <Link href={buildPageHref(params, pageWindow.page - 1)} className="text-dash-purple hover:underline">
-              Previous
-            </Link>
+      <Card size="sm" className="mb-4">
+        <CardContent>
+          <InventoryFilters
+            categoryL1Options={categoryL1Options}
+            categoryL2Options={categoryL2Options}
+            selected={filters}
+            pageSize={pageSize}
+          />
+        </CardContent>
+      </Card>
+      {items.length === 0 ? (
+        <Card size="sm">
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              No products match the selected filters.{" "}
+              <Link href="/inventory" className="text-primary hover:underline">
+                Clear filters
+              </Link>
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <Card size="sm" className="mb-4">
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Category L1</TableHead>
+                    <TableHead>Category L2</TableHead>
+                    <TableHead className="w-24">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {items.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-mono text-xs">{item.id}</TableCell>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell>{item.categoryL1 ?? "—"}</TableCell>
+                      <TableCell>{item.categoryL2 ?? "—"}</TableCell>
+                      <TableCell>
+                        <Link
+                          href={`/inventory/${item.id}`}
+                          className="inline-flex h-7 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-xs font-medium whitespace-nowrap text-foreground transition-colors hover:bg-muted"
+                        >
+                          Ver
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+          {pageCount > 1 && (
+            <Card size="sm">
+              <CardContent>
+                <nav className="flex items-center gap-1 text-sm text-muted-foreground">
+                  {pageWindow.page > 1 && (
+                    <Link href={buildPageHref(params, pageWindow.page - 1)} className="rounded-lg px-3 py-1.5 text-primary hover:bg-muted transition-colors">
+                      Previous
+                    </Link>
+                  )}
+                  {renderPageNumbers(pageWindow.page, pageCount, params)}
+                  {pageWindow.page < pageCount && (
+                    <Link href={buildPageHref(params, pageWindow.page + 1)} className="rounded-lg px-3 py-1.5 text-primary hover:bg-muted transition-colors">
+                      Next
+                    </Link>
+                  )}
+                  <span className="ml-4 text-muted-foreground">
+                    Page {pageWindow.page} of {pageCount} ({total} items)
+                  </span>
+                </nav>
+              </CardContent>
+            </Card>
           )}
-          {pageWindow.page < pageCount && (
-            <Link href={buildPageHref(params, pageWindow.page + 1)} className="text-dash-purple hover:underline">
-              Next
-            </Link>
-          )}
-        </nav>
-      </div>
-    </main>
+        </>
+      )}
+    </div>
+  );
+}
+
+function renderPageNumbers(current: number, total: number, params: SearchParams) {
+  const pages: (number | "ellipsis")[] = [];
+
+  if (total <= 7) {
+    for (let i = 1; i <= total; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (current > 3) pages.push("ellipsis");
+    for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
+      pages.push(i);
+    }
+    if (current < total - 2) pages.push("ellipsis");
+    pages.push(total);
+  }
+
+  return pages.map((p, idx) =>
+    p === "ellipsis" ? (
+      <span key={`e-${idx}`} className="px-2 text-muted-foreground">…</span>
+    ) : (
+      <Link
+        key={p}
+        href={buildPageHref(params, p)}
+        className={`rounded-lg px-3 py-1.5 transition-colors ${
+          p === current
+            ? "bg-primary text-primary-foreground"
+            : "text-foreground hover:bg-muted"
+        }`}
+      >
+        {p}
+      </Link>
+    ),
   );
 }
 
@@ -132,6 +200,10 @@ function buildPageHref(params: SearchParams, page: number): string {
   const search = new URLSearchParams();
   if (typeof params.categoryL1 === "string" && params.categoryL1) search.set("categoryL1", params.categoryL1);
   if (typeof params.categoryL2 === "string" && params.categoryL2) search.set("categoryL2", params.categoryL2);
+  if (typeof params.name === "string" && params.name) search.set("name", params.name);
+  if (typeof params.id === "string" && params.id) search.set("id", params.id);
+  if (typeof params.pageSize === "string" && params.pageSize) search.set("pageSize", params.pageSize);
+  if (typeof params.stockStatus === "string" && params.stockStatus) search.set("stockStatus", params.stockStatus);
   search.set("page", String(page));
   return `/inventory?${search.toString()}`;
 }

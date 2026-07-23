@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { CatalogTemplate } from "@/shared/template/CatalogTemplate";
 import type { TemplateConfig } from "@/shared/db/schema";
-import { CARD, FIELD_ERROR, INPUT, PRIMARY_BUTTON, SECTION_HEADING } from "@/shared/ui/styles";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SECTION_HEADING } from "@/shared/ui/styles";
 
 import type { CategoryPair } from "./queries";
 import {
-  applySelection,
   buildIndexSections,
   CatalogSelectionValidationError,
   deriveCatalogTitle,
@@ -18,23 +22,35 @@ import {
   type CategoryRef,
   type ProductRef,
 } from "./selection";
+import { TreeSelect, type TreeItem } from "./TreeSelect";
+import { ImagePreviewDialog } from "./ImagePreviewDialog";
 
-function categoryKey(categoryL1: string, categoryL2: string): string {
-  return `${categoryL1}::${categoryL2}`;
+function makeCategoryTree(l1Options: string[], pairs: CategoryPair[]): TreeItem[] {
+  return l1Options.map((l1) => ({
+    value: l1,
+    label: l1,
+    children: pairs
+      .filter((p) => p.categoryL1 === l1)
+      .map((p) => ({
+        value: `${l1}::${p.categoryL2}`,
+        label: p.categoryL2,
+      })),
+  }));
 }
 
-/**
- * R5 — category/product multi-select+exclude, 1-20 density, 200-cap, live
- * title/index preview. Selection state is in-memory only (R5 never asks it
- * to survive a reload) until "Continue" validates it and POSTs it to
- * `/api/catalog-builder/generate` (PR9), which enqueues the real
- * `pdf-generate` job via `enqueueCatalogPdf()`.
- *
- * ponytail: no live-updating queue-position poll on this screen — position is
- * reported once at enqueue time; the `/catalogs` listing (R7) is where an
- * in-flight job's status is checked afterward (this app's "Real-time"
- * decision is polling-only, design.md).
- */
+function selectedToCategoryRefs(selected: string[]): CategoryRef[] {
+  return selected.map((s) => {
+    const [l1, l2] = s.split("::");
+    return l2 ? { categoryL1: l1, categoryL2: l2 } : { categoryL1: l1 };
+  });
+}
+
+function uniqueL1s(refs: CategoryRef[]): string[] {
+  return [...new Set(refs.map((r) => r.categoryL1))];
+}
+
+const PAGE_SIZES = [10, 25, 50] as const;
+
 export function CatalogBuilderForm({
   categoryL1Options,
   categoryPairs,
@@ -44,68 +60,88 @@ export function CatalogBuilderForm({
   categoryPairs: CategoryPair[];
   templateConfig: TemplateConfig | null;
 }) {
-  const [includedL1, setIncludedL1] = useState<string[]>([]);
-  const [excludedCategoryKeys, setExcludedCategoryKeys] = useState<Set<string>>(new Set());
-  const [excludedProductIds, setExcludedProductIds] = useState<Set<string>>(new Set());
-  const [productsPerPage, setProductsPerPage] = useState(10);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [candidates, setCandidates] = useState<ProductRef[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [productsPerPage, setProductsPerPage] = useState(10);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirmed, setConfirmed] = useState(false);
   const [generateStatus, setGenerateStatus] = useState<"idle" | "submitting" | "queued">("idle");
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
-  const [evictionWarning, setEvictionWarning] = useState<string | null>(null); // R11.3
+  const [evictionWarning, setEvictionWarning] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
+  const tableSearchRef = useRef<HTMLInputElement>(null);
 
-  // R5.1/5.5 — refetch candidate products whenever the included L1 set changes.
-  // (`candidates` is only ever set from the fetch callback below, never
-  // synchronously in the effect body itself, per react-hooks/set-state-in-effect.)
+  const categoryRefs = useMemo(() => selectedToCategoryRefs(selectedCategories), [selectedCategories]);
+
   useEffect(() => {
-    if (includedL1.length === 0) return;
-    const categories: CategoryRef[] = includedL1.map((categoryL1) => ({ categoryL1 }));
+    if (categoryRefs.length === 0) {
+      setCandidates([]);
+      setSelectedProductIds(new Set());
+      setPage(1);
+      return;
+    }
     let cancelled = false;
     fetch("/api/catalog-builder/products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ categories }),
+      body: JSON.stringify({ categories: categoryRefs }),
     })
       .then((res) => res.json())
       .then((body) => {
-        if (!cancelled) setCandidates(body.products ?? []);
+        if (!cancelled) {
+          const products: ProductRef[] = body.products ?? [];
+          setCandidates(products);
+          setSelectedProductIds(new Set(products.map((p) => p.id)));
+          setPage(1);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [includedL1]);
+  }, [categoryRefs]);
 
-  // Derived, not stored: avoids a redundant setState when the selection is cleared.
-  const activeCandidates = includedL1.length === 0 ? [] : candidates;
+  const filteredCandidates = useMemo(() => {
+    if (!searchQuery) return candidates;
+    const q = searchQuery.toLowerCase();
+    return candidates.filter(
+      (p) => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q),
+    );
+  }, [candidates, searchQuery]);
 
-  const excludedCategories: CategoryRef[] = [...excludedCategoryKeys].map((key) => {
-    const [categoryL1, categoryL2] = key.split("::");
-    return { categoryL1, categoryL2 };
-  });
-  const finalProducts = applySelection(activeCandidates, excludedCategories, [...excludedProductIds]);
+  const pageCount = Math.max(1, Math.ceil(filteredCandidates.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const paginatedProducts = filteredCandidates.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  const finalProducts = candidates.filter((p) => selectedProductIds.has(p.id));
   const sections = buildIndexSections(finalProducts);
-  const title = deriveCatalogTitle(includedL1);
+  const title = deriveCatalogTitle(uniqueL1s(categoryRefs));
 
-  function toggleL1(categoryL1: string) {
-    setIncludedL1((prev) => (prev.includes(categoryL1) ? prev.filter((v) => v !== categoryL1) : [...prev, categoryL1]));
-    setErrors({});
+  const allVisibleSelected = paginatedProducts.length > 0 && paginatedProducts.every((p) => selectedProductIds.has(p.id));
+  const someVisibleSelected = paginatedProducts.some((p) => selectedProductIds.has(p.id));
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
+
+  function toggleAllVisible() {
+    if (allVisibleSelected) {
+      const next = new Set(selectedProductIds);
+      for (const p of paginatedProducts) next.delete(p.id);
+      setSelectedProductIds(next);
+    } else {
+      const next = new Set(selectedProductIds);
+      for (const p of paginatedProducts) next.add(p.id);
+      setSelectedProductIds(next);
+    }
     setConfirmed(false);
   }
 
-  function toggleExcludedCategory(categoryL1: string, categoryL2: string) {
-    const key = categoryKey(categoryL1, categoryL2);
-    setExcludedCategoryKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-    setConfirmed(false);
-  }
-
-  function toggleExcludedProduct(id: string) {
-    setExcludedProductIds((prev) => {
+  function toggleProduct(id: string) {
+    setSelectedProductIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -114,10 +150,43 @@ export function CatalogBuilderForm({
     setConfirmed(false);
   }
 
+  function renderPageNumbers() {
+    const pages: (number | "ellipsis")[] = [];
+    if (pageCount <= 7) {
+      for (let i = 1; i <= pageCount; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (safePage > 3) pages.push("ellipsis");
+      for (let i = Math.max(2, safePage - 1); i <= Math.min(pageCount - 1, safePage + 1); i++) pages.push(i);
+      if (safePage < pageCount - 2) pages.push("ellipsis");
+      pages.push(pageCount);
+    }
+    return pages.map((p, idx) =>
+      p === "ellipsis" ? (
+        <span key={`e-${idx}`} className="px-2 text-muted-foreground">
+          \u2026
+        </span>
+      ) : (
+        <button
+          key={p}
+          type="button"
+          onClick={() => setPage(p)}
+          className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+            p === safePage
+              ? "bg-primary text-primary-foreground"
+              : "text-foreground hover:bg-muted"
+          }`}
+        >
+          {p}
+        </button>
+      ),
+    );
+  }
+
   async function handleContinue() {
     try {
       validateCatalogSelection({
-        includedCategoryCount: includedL1.length,
+        includedCategoryCount: categoryRefs.length,
         totalProductCount: finalProducts.length,
         productsPerPage,
       });
@@ -132,10 +201,6 @@ export function CatalogBuilderForm({
       throw err;
     }
 
-    // R6/R12 — hands the validated selection to the ONE function allowed to
-    // enqueue a pdf-generate job (pdf-generation/enqueue.ts's Risk-2 guard),
-    // via the server route so the queue-depth check + advisory lock run
-    // where the DB transaction lives, not in the browser.
     setGenerateStatus("submitting");
     const response = await fetch("/api/catalog-builder/generate", {
       method: "POST",
@@ -145,13 +210,13 @@ export function CatalogBuilderForm({
         sections,
         products: finalProducts,
         productsPerPage,
-        includedCategoryCount: includedL1.length,
+        includedCategoryCount: categoryRefs.length,
       }),
     });
 
     if (response.status === 409) {
       const body = await response.json();
-      setErrors({ total: body.error ?? "Queue is full — try again once a job finishes" });
+      setErrors({ total: body.error ?? "Queue is full \u2014 try again once a job finishes" });
       setGenerateStatus("idle");
       return;
     }
@@ -165,149 +230,266 @@ export function CatalogBuilderForm({
 
     const body = await response.json();
     setQueuePosition(body.queuePosition ?? null);
-    setEvictionWarning(body.evictionWarning ?? null); // R11.3
+    setEvictionWarning(body.evictionWarning ?? null);
     setGenerateStatus("queued");
   }
 
+  const categoryTree = useMemo(
+    () => makeCategoryTree(categoryL1Options, categoryPairs),
+    [categoryL1Options, categoryPairs],
+  );
+
   return (
-    // PR11a — single page-level dash-card wraps all interactive sections,
-    // matching the one-card-per-content-block treatment established for
-    // /inventory's filters+table (PR10) rather than PR5a's per-section
-    // nested cards — reuses SECTION_HEADING to keep sub-section hierarchy.
-    <div className={`flex flex-col gap-6 ${CARD}`}>
-      <section aria-label="Category selection">
-        <h2 className={SECTION_HEADING}>Categories</h2>
-        {categoryL1Options.map((l1) => (
-          <div key={l1} className="mb-2">
-            <label className="flex items-center gap-2 text-sm text-dash-fg">
-              <input type="checkbox" checked={includedL1.includes(l1)} onChange={() => toggleL1(l1)} />
-              {l1}
-            </label>
-            {includedL1.includes(l1) && (
-              <ul className="ml-6 flex flex-col gap-1 pt-1">
-                {categoryPairs
-                  .filter((pair) => pair.categoryL1 === l1)
-                  .map((pair) => (
-                    <li key={categoryKey(pair.categoryL1, pair.categoryL2)}>
-                      <label className="flex items-center gap-2 text-sm text-dash-fg">
-                        <input
-                          type="checkbox"
-                          checked={!excludedCategoryKeys.has(categoryKey(pair.categoryL1, pair.categoryL2))}
-                          onChange={() => toggleExcludedCategory(pair.categoryL1, pair.categoryL2)}
-                        />
-                        {pair.categoryL2}
-                      </label>
-                    </li>
-                  ))}
-              </ul>
-            )}
-          </div>
-        ))}
-        {errors.categories && (
-          <p role="alert" className={FIELD_ERROR}>
-            {errors.categories}
-          </p>
-        )}
-      </section>
-
-      {activeCandidates.length > 0 && (
-        <section aria-label="Product selection">
-          <h2 className={SECTION_HEADING}>Products ({finalProducts.length} selected)</h2>
-          <ul className="flex flex-col gap-1">
-            {activeCandidates.map((product) => (
-              <li key={product.id}>
-                <label className="flex items-center gap-2 text-sm text-dash-fg">
-                  <input
-                    type="checkbox"
-                    checked={!excludedProductIds.has(product.id)}
-                    onChange={() => toggleExcludedProduct(product.id)}
-                  />
-                  {product.name}
-                </label>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <section aria-label="Page density">
-        <label className="text-sm font-medium text-dash-fg">
-          Products per page
-          <input
-            type="number"
-            min={MIN_PRODUCTS_PER_PAGE}
-            max={MAX_PRODUCTS_PER_PAGE}
-            value={productsPerPage}
-            onChange={(e) => {
-              setProductsPerPage(Number(e.target.value));
+    <Card>
+      <CardContent>
+        <section aria-label="Category selection">
+          <h2 className={SECTION_HEADING}>Categories</h2>
+          <TreeSelect
+            items={categoryTree}
+            selected={selectedCategories}
+            onSelectionChange={(v) => {
+              setSelectedCategories(v);
+              setErrors({});
               setConfirmed(false);
             }}
-            className={`mt-1 w-24 ${INPUT}`}
           />
-        </label>
-        {errors.productsPerPage && (
-          <p role="alert" className={FIELD_ERROR}>
-            {errors.productsPerPage}
-          </p>
-        )}
-      </section>
+          {errors.categories && (
+            <p role="alert" className="mt-1 text-sm text-destructive">
+              {errors.categories}
+            </p>
+          )}
+        </section>
+      </CardContent>
+
+      {candidates.length > 0 && (
+        <CardContent>
+          <section aria-label="Product selection">
+            <h2 className={SECTION_HEADING}>
+              Products ({finalProducts.length} of {candidates.length} selected)
+            </h2>
+            <Input
+              ref={tableSearchRef}
+              type="search"
+              placeholder="Search products..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
+              className="mb-3"
+            />
+            <div className="rounded-lg border border-border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={allVisibleSelected || (someVisibleSelected ? true : false)}
+                        onCheckedChange={toggleAllVisible}
+                      />
+                    </TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>ID</TableHead>
+                    <TableHead className="hidden sm:table-cell">Category L1</TableHead>
+                    <TableHead className="hidden md:table-cell">Category L2</TableHead>
+                    <TableHead className="w-24">Image</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedProducts.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                        No products match your search
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {paginatedProducts.map((product) => (
+                    <TableRow
+                      key={product.id}
+                      data-selected={selectedProductIds.has(product.id) || undefined}
+                      className="cursor-pointer data-selected:bg-muted/50"
+                      onClick={() => toggleProduct(product.id)}
+                    >
+                      <TableCell className="w-10" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedProductIds.has(product.id)}
+                          onCheckedChange={() => toggleProduct(product.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">{product.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{product.id}</TableCell>
+                      <TableCell className="hidden sm:table-cell text-muted-foreground">{product.categoryL1}</TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground">{product.categoryL2}</TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        {product.image ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setPreviewImage({ src: product.image!, alt: product.name })
+                            }
+                          >
+                            Ver imagen
+                          </Button>
+                        ) : (
+                          <Button type="button" variant="destructive" size="sm" disabled>
+                            Sin imagen
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>
+                  Showing {filteredCandidates.length > 0 ? (safePage - 1) * pageSize + 1 : 0}
+                  {"\u2013"}
+                  {Math.min(safePage * pageSize, filteredCandidates.length)} of{" "}
+                  {filteredCandidates.length} items
+                </span>
+                <span className="text-border">|</span>
+                <label className="flex items-center gap-1.5">
+                  <span>Show</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setPage(1);
+                    }}
+                    className="h-7 rounded-md border border-input bg-transparent px-2 text-xs focus-visible:outline-hidden focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-ring"
+                  >
+                    {PAGE_SIZES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                    <option value={candidates.length}>All</option>
+                  </select>
+                </label>
+              </div>
+
+              {pageCount > 1 && (
+                <nav className="flex items-center gap-1">
+                  {safePage > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setPage(safePage - 1)}
+                      className="rounded-lg px-3 py-1.5 text-sm text-primary hover:bg-muted transition-colors"
+                    >
+                      Previous
+                    </button>
+                  )}
+                  {renderPageNumbers()}
+                  {safePage < pageCount && (
+                    <button
+                      type="button"
+                      onClick={() => setPage(safePage + 1)}
+                      className="rounded-lg px-3 py-1.5 text-sm text-primary hover:bg-muted transition-colors"
+                    >
+                      Next
+                    </button>
+                  )}
+                </nav>
+              )}
+            </div>
+          </section>
+        </CardContent>
+      )}
+
+      {candidates.length > 0 && (
+        <CardContent>
+          <section aria-label="Page density">
+            <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
+              Products per page
+              <Input
+                type="number"
+                min={MIN_PRODUCTS_PER_PAGE}
+                max={MAX_PRODUCTS_PER_PAGE}
+                value={productsPerPage}
+                onChange={(e) => {
+                  setProductsPerPage(Number(e.target.value));
+                  setConfirmed(false);
+                }}
+                className="w-24"
+              />
+            </label>
+            {errors.productsPerPage && (
+              <p role="alert" className="text-sm text-destructive">
+                {errors.productsPerPage}
+              </p>
+            )}
+          </section>
+        </CardContent>
+      )}
 
       {errors.total && (
-        <p role="alert" className={FIELD_ERROR}>
+        <p role="alert" className="text-sm text-destructive">
           {errors.total}
         </p>
       )}
 
-      <button
-        type="button"
-        onClick={handleContinue}
-        disabled={generateStatus === "submitting"}
-        className={`self-start ${PRIMARY_BUTTON}`}
-      >
-        {generateStatus === "submitting" ? "Queuing…" : "Continue"}
-      </button>
+      <CardContent>
+        <Button
+          type="button"
+          onClick={handleContinue}
+          disabled={generateStatus === "submitting" || candidates.length === 0}
+        >
+          {generateStatus === "submitting" ? "Queuing\u2026" : "Continue"}
+        </Button>
+      </CardContent>
 
       {confirmed && generateStatus === "queued" && (
-        // R12.3/12.4 — position is reported once at enqueue time; this app's
-        // "Real-time" decision (design.md) is polling-only, so live updates
-        // happen on the /catalogs listing page (R7), not here.
-        // ponytail: no live-updating position poll on this page — the
-        // /catalogs listing already shows "Processing…" for pending/uploading
-        // rows; add a poll here only if a requirement asks for in-place
-        // progress on the builder screen itself.
-        <p className="text-sm text-dash-green">
-          Queued{queuePosition != null ? ` at position ${queuePosition}` : ""} — {finalProducts.length} products
-          across {sections.length} section(s), {productsPerPage}/page.{" "}
-          <a href="/catalogs" className="text-dash-purple hover:underline">
-            View your catalogs
-          </a>
-          .
-        </p>
+        <CardContent>
+          <p className="text-sm text-green-600">
+            Queued{queuePosition != null ? ` at position ${queuePosition}` : ""}{"\u2014"}{" "}
+            {finalProducts.length} products across {sections.length} section(s),{" "}
+            {productsPerPage}/page.{" "}
+            <a href="/catalogs" className="text-primary hover:underline">
+              View your catalogs
+            </a>
+            .
+          </p>
+        </CardContent>
       )}
 
       {confirmed && generateStatus === "queued" && evictionWarning && (
-        <p role="alert" className={FIELD_ERROR}>
+        <p role="alert" className="text-sm text-destructive">
           {evictionWarning}
         </p>
       )}
 
-      <section aria-label="Live preview">
-        <h2 className={SECTION_HEADING}>Preview</h2>
-        <CatalogTemplate
-          title={title}
-          sections={sections}
-          branding={
-            templateConfig
-              ? {
-                  logoUrl: templateConfig.logoUrl,
-                  primaryColors: templateConfig.primaryColors,
-                  font: templateConfig.font,
-                  coverText: templateConfig.coverText,
-                }
-              : null
-          }
+      <CardContent>
+        <section aria-label="Live preview" className="border-t border-border pt-6">
+          <h2 className={SECTION_HEADING}>Preview</h2>
+          <CatalogTemplate
+            title={title}
+            sections={sections}
+            branding={
+              templateConfig
+                ? {
+                    logoUrl: templateConfig.logoUrl,
+                    primaryColors: templateConfig.primaryColors,
+                    font: templateConfig.font,
+                    coverText: templateConfig.coverText,
+                  }
+                : null
+            }
+          />
+        </section>
+      </CardContent>
+
+      {previewImage && (
+        <ImagePreviewDialog
+          src={previewImage.src}
+          alt={previewImage.alt}
+          onClose={() => setPreviewImage(null)}
         />
-      </section>
-    </div>
+      )}
+    </Card>
   );
 }

@@ -2,7 +2,9 @@
 
 import { useState, type FormEvent } from "react";
 
-import { FIELD_ERROR, INPUT, LABEL, PRIMARY_BUTTON } from "@/shared/ui/styles";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 /**
  * R9.1/9.2 — plain credential form, same fetch-then-status-check shape as
@@ -14,6 +16,8 @@ import { FIELD_ERROR, INPUT, LABEL, PRIMARY_BUTTON } from "@/shared/ui/styles";
 export function LoginForm() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [usernameTouched, setUsernameTouched] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<"idle" | "submitting">("idle");
 
@@ -40,33 +44,43 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <label className={LABEL}>
-        Username
-        <input
-          className={`mt-1 ${INPUT}`}
+      <div className="grid gap-2">
+        <Label htmlFor="username">Username</Label>
+        <Input
+          id="username"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
+          onBlur={() => setUsernameTouched(true)}
           autoComplete="username"
+          required
         />
-      </label>
-      <label className={LABEL}>
-        Password
-        <input
+        {usernameTouched && !username && (
+          <p className="text-sm text-destructive">Username is required</p>
+        )}
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="password">Password</Label>
+        <Input
+          id="password"
           type="password"
-          className={`mt-1 ${INPUT}`}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          onBlur={() => setPasswordTouched(true)}
           autoComplete="current-password"
+          required
         />
-      </label>
+        {passwordTouched && !password && (
+          <p className="text-sm text-destructive">Password is required</p>
+        )}
+      </div>
       {error && (
-        <p role="alert" className={FIELD_ERROR}>
+        <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}
-      <button type="submit" disabled={status === "submitting"} className={PRIMARY_BUTTON}>
+      <Button type="submit" disabled={status === "submitting" || !username || !password}>
         {status === "submitting" ? "Signing in…" : "Sign in"}
-      </button>
+      </Button>
     </form>
   );
 }

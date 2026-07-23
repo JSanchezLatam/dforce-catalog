@@ -1,5 +1,8 @@
+import { AppSidebar } from "@/components/app-sidebar";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
-import { Sidebar } from "@/modules/layout/Sidebar";
+import { getNavItems } from "@/modules/layout/nav-items";
+import { ToastProvider } from "@/shared/ui/ToastProvider";
 
 /**
  * Route group — does not affect the URL path (/inventory, /builder,
@@ -9,11 +12,22 @@ import { Sidebar } from "@/modules/layout/Sidebar";
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireSessionFromHeaders();
+  const navItems = getNavItems(user);
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar user={user} />
-      <main className="min-w-0 flex-1">{children}</main>
-    </div>
+    <ToastProvider>
+      <SidebarProvider>
+        <AppSidebar navItems={navItems} user={user} />
+        <SidebarInset>
+          <div className="flex flex-1 flex-col">
+            <div className="@container/main flex flex-1 flex-col gap-2">
+              <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+                {children}
+              </div>
+            </div>
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    </ToastProvider>
   );
 }

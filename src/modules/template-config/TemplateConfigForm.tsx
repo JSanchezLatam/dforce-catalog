@@ -3,7 +3,11 @@
 import { useState, type FormEvent } from "react";
 
 import type { TemplateConfig } from "@/shared/db/schema";
-import { CARD, FIELD_ERROR, INPUT, LABEL, PRIMARY_BUTTON, SECTION_HEADING } from "@/shared/ui/styles";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { SECTION_HEADING } from "@/shared/ui/styles";
 
 type FormState = {
   logoUrl: string;
@@ -77,104 +81,115 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
     // /inventory's filters+table (PR10) rather than PR5a's two separate
     // nested cards; a border-dash-border divider (already used by INPUT)
     // separates the preview from the form instead of a second card.
-    <div className={`flex flex-col gap-6 ${CARD}`}>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <label className={LABEL}>
-          Logo URL
-          <input className={`mt-1 ${INPUT}`} value={form.logoUrl} onChange={(e) => update("logoUrl", e.target.value)} />
-        </label>
-        {errors.logoUrl && (
-          <p role="alert" className={FIELD_ERROR}>
-            {errors.logoUrl}
-          </p>
-        )}
+    <Card>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="logoUrl">Logo URL</Label>
+            <Input id="logoUrl" value={form.logoUrl} onChange={(e) => update("logoUrl", e.target.value)} />
+          </div>
+          {errors.logoUrl && (
+            <p role="alert" className="text-sm text-destructive">
+              {errors.logoUrl}
+            </p>
+          )}
 
-        <label className={LABEL}>
-          Primary color
-          <input
-            type="color"
-            className="mt-1 h-10 w-16 rounded border border-dash-muted bg-dash-bg"
-            value={form.primary}
-            onChange={(e) => update("primary", e.target.value)}
-          />
-        </label>
-        {errors.primaryColor && (
-          <p role="alert" className={FIELD_ERROR}>
-            {errors.primaryColor}
-          </p>
-        )}
+          <div className="grid gap-2">
+            <Label htmlFor="primary">Primary color</Label>
+            <Input
+              id="primary"
+              type="color"
+              className="h-10 w-16"
+              value={form.primary}
+              onChange={(e) => update("primary", e.target.value)}
+            />
+          </div>
+          {errors.primaryColor && (
+            <p role="alert" className="text-sm text-destructive">
+              {errors.primaryColor}
+            </p>
+          )}
 
-        <label className={LABEL}>
-          Secondary color
-          <input
-            type="color"
-            className="mt-1 h-10 w-16 rounded border border-dash-muted bg-dash-bg"
-            value={form.secondary}
-            onChange={(e) => update("secondary", e.target.value)}
-          />
-        </label>
-        {errors.secondaryColor && (
-          <p role="alert" className={FIELD_ERROR}>
-            {errors.secondaryColor}
-          </p>
-        )}
+          <div className="grid gap-2">
+            <Label htmlFor="secondary">Secondary color</Label>
+            <Input
+              id="secondary"
+              type="color"
+              className="h-10 w-16"
+              value={form.secondary}
+              onChange={(e) => update("secondary", e.target.value)}
+            />
+          </div>
+          {errors.secondaryColor && (
+            <p role="alert" className="text-sm text-destructive">
+              {errors.secondaryColor}
+            </p>
+          )}
 
-        <label className={LABEL}>
-          Typography
-          <input
-            className={`mt-1 ${INPUT}`}
-            value={form.font}
-            onChange={(e) => update("font", e.target.value)}
-            placeholder="e.g. Arial, sans-serif"
-          />
-        </label>
-        {errors.font && (
-          <p role="alert" className={FIELD_ERROR}>
-            {errors.font}
-          </p>
-        )}
+          <div className="grid gap-2">
+            <Label htmlFor="font">Typography</Label>
+            <Input
+              id="font"
+              value={form.font}
+              onChange={(e) => update("font", e.target.value)}
+              placeholder="e.g. Arial, sans-serif"
+            />
+          </div>
+          {errors.font && (
+            <p role="alert" className="text-sm text-destructive">
+              {errors.font}
+            </p>
+          )}
 
-        <label className={LABEL}>
-          Cover text
-          <textarea className={`mt-1 ${INPUT}`} rows={3} value={form.coverText} onChange={(e) => update("coverText", e.target.value)} />
-        </label>
-        {errors.coverText && (
-          <p role="alert" className={FIELD_ERROR}>
-            {errors.coverText}
-          </p>
-        )}
+          <div className="grid gap-2">
+            <Label htmlFor="coverText">Cover text</Label>
+            <textarea
+              id="coverText"
+              className="flex min-h-[60px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30"
+              rows={3}
+              value={form.coverText}
+              onChange={(e) => update("coverText", e.target.value)}
+            />
+          </div>
+          {errors.coverText && (
+            <p role="alert" className="text-sm text-destructive">
+              {errors.coverText}
+            </p>
+          )}
 
-        {errors.form && (
-          <p role="alert" className={FIELD_ERROR}>
-            {errors.form}
-          </p>
-        )}
+          {errors.form && (
+            <p role="alert" className="text-sm text-destructive">
+              {errors.form}
+            </p>
+          )}
 
-        <button type="submit" disabled={status === "saving"} className={`self-start ${PRIMARY_BUTTON}`}>
-          {status === "saving" ? "Saving…" : "Save"}
-        </button>
-        {status === "saved" && <p className="text-sm text-dash-green">Saved. New catalogs will use this template.</p>}
-      </form>
+          <Button type="submit" disabled={status === "saving"} className="self-start">
+            {status === "saving" ? "Saving…" : "Save"}
+          </Button>
+          {status === "saved" && <p className="text-sm text-green-600">Saved. New catalogs will use this template.</p>}
+        </form>
+      </CardContent>
 
-      {/* R8.3 — preview reflects unsaved `form` state, not the persisted config. */}
-      <section
-        aria-label="Template preview"
-        className="border-t border-dash-border pt-6"
-        style={{ fontFamily: form.font || undefined, color: form.primary }}
-      >
-        <h2 className={SECTION_HEADING}>Preview</h2>
-        {form.logoUrl && <img src={form.logoUrl} alt="Logo preview" style={{ maxHeight: 80 }} />}
-        <div
-          style={{
-            background: form.secondary,
-            color: form.primary,
-            padding: "1rem",
-            border: `2px solid ${form.primary}`,
-          }}
+      <CardContent>
+        <section
+          aria-label="Template preview"
+          className="border-t border-border pt-6"
+          style={{ fontFamily: form.font || undefined, color: form.primary }}
         >
-          <p>{form.coverText || "Cover text preview"}</p>
-        </div>
-      </section>
-    </div>
+          <h2 className={SECTION_HEADING}>Preview</h2>
+          {form.logoUrl && <img src={form.logoUrl} alt="Logo preview" style={{ maxHeight: 80 }} />}
+          <div
+            style={{
+              background: form.secondary,
+              color: form.primary,
+              padding: "1rem",
+              border: `2px solid ${form.primary}`,
+            }}
+          >
+            <p>{form.coverText || "Cover text preview"}</p>
+          </div>
+        </section>
+      </CardContent>
+    </Card>
   );
 }
