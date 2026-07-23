@@ -170,8 +170,12 @@ export function CatalogBuilderForm({
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <section aria-label="Category selection" className={CARD}>
+    // PR11a — single page-level dash-card wraps all interactive sections,
+    // matching the one-card-per-content-block treatment established for
+    // /inventory's filters+table (PR10) rather than PR5a's per-section
+    // nested cards — reuses SECTION_HEADING to keep sub-section hierarchy.
+    <div className={`flex flex-col gap-6 ${CARD}`}>
+      <section aria-label="Category selection">
         <h2 className={SECTION_HEADING}>Categories</h2>
         {categoryL1Options.map((l1) => (
           <div key={l1} className="mb-2">
@@ -207,7 +211,7 @@ export function CatalogBuilderForm({
       </section>
 
       {activeCandidates.length > 0 && (
-        <section aria-label="Product selection" className={CARD}>
+        <section aria-label="Product selection">
           <h2 className={SECTION_HEADING}>Products ({finalProducts.length} selected)</h2>
           <ul className="flex flex-col gap-1">
             {activeCandidates.map((product) => (
@@ -226,7 +230,7 @@ export function CatalogBuilderForm({
         </section>
       )}
 
-      <section aria-label="Page density" className={CARD}>
+      <section aria-label="Page density">
         <label className="text-sm font-medium text-dash-fg">
           Products per page
           <input
@@ -287,7 +291,7 @@ export function CatalogBuilderForm({
         </p>
       )}
 
-      <section aria-label="Live preview" className={CARD}>
+      <section aria-label="Live preview">
         <h2 className={SECTION_HEADING}>Preview</h2>
         <CatalogTemplate
           title={title}

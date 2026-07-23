@@ -72,8 +72,13 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <form onSubmit={handleSubmit} className={`flex flex-col gap-4 ${CARD}`}>
+    // PR11a — single page-level dash-card wraps form + preview together,
+    // matching the one-card-per-content-block treatment established for
+    // /inventory's filters+table (PR10) rather than PR5a's two separate
+    // nested cards; a border-dash-border divider (already used by INPUT)
+    // separates the preview from the form instead of a second card.
+    <div className={`flex flex-col gap-6 ${CARD}`}>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <label className={LABEL}>
           Logo URL
           <input className={`mt-1 ${INPUT}`} value={form.logoUrl} onChange={(e) => update("logoUrl", e.target.value)} />
@@ -154,7 +159,7 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
       {/* R8.3 — preview reflects unsaved `form` state, not the persisted config. */}
       <section
         aria-label="Template preview"
-        className={CARD}
+        className="border-t border-dash-border pt-6"
         style={{ fontFamily: form.font || undefined, color: form.primary }}
       >
         <h2 className={SECTION_HEADING}>Preview</h2>
