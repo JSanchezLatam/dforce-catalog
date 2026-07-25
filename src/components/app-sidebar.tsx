@@ -1,9 +1,8 @@
 "use client"
 
-import { FileSpreadsheet, LogOut, Package, BookOpen, Settings, GalleryVerticalEnd, Loader2 } from "lucide-react"
+import { FileSpreadsheet, Package, BookOpen, Settings, GalleryVerticalEnd, ChevronDown } from "lucide-react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import { useState } from "react"
+import { usePathname } from "next/navigation"
 
 import {
   Sidebar,
@@ -14,14 +13,15 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  SidebarSeparator,
 } from "@/components/ui/sidebar"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { LogoutButton } from "@/modules/layout/LogoutButton"
 
 type NavItem = { href: string; label: string; icon: string }
 
@@ -34,21 +34,9 @@ const ICON_MAP: Record<string, typeof Package> = {
 
 export function AppSidebar({ navItems, user }: { navItems: NavItem[]; user: { id: string; role: string } }) {
   const pathname = usePathname()
-  const router = useRouter()
-  const [loggingOut, setLoggingOut] = useState(false)
-
-  async function handleLogout() {
-    setLoggingOut(true)
-    try {
-      await fetch("/api/logout", { method: "POST" })
-      router.push("/login")
-    } catch {
-      setLoggingOut(false)
-    }
-  }
 
   return (
-    <Sidebar collapsible="icon" variant="inset">
+    <Sidebar collapsible="icon" variant="sidebar">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -76,6 +64,7 @@ export function AppSidebar({ navItems, user }: { navItems: NavItem[]; user: { id
                   render={<Link href={item.href} />}
                   isActive={isActive}
                   tooltip={item.label}
+                  className="data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground mx-0 w-full rounded-none px-4"
                 >
                   <Icon />
                   <span>{item.label}</span>
@@ -86,14 +75,16 @@ export function AppSidebar({ navItems, user }: { navItems: NavItem[]; user: { id
         </SidebarMenu>
       </SidebarContent>
 
+      <SidebarSeparator />
+
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
-              <DropdownMenuTrigger>
-                <SidebarMenuButton size="lg">
+              <DropdownMenuTrigger className="group/trigger w-full">
+                <SidebarMenuButton size="lg" className="w-full cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
                   <Avatar className="h-8 w-8 rounded-lg">
-                    <AvatarFallback className="rounded-lg text-xs bg-primary text-primary-foreground">
+                    <AvatarFallback className="rounded-lg text-xs font-bold bg-sidebar-primary text-sidebar-primary-foreground">
                       {user.role === "administrador" ? "A" : "U"}
                     </AvatarFallback>
                   </Avatar>
@@ -103,13 +94,11 @@ export function AppSidebar({ navItems, user }: { navItems: NavItem[]; user: { id
                     </span>
                     <span className="truncate text-xs text-muted-foreground capitalize">{user.role}</span>
                   </div>
+                  <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/trigger:rotate-180" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="right" className="w-48 rounded-xl" align="start">
-                <DropdownMenuItem onClick={handleLogout} disabled={loggingOut} className="text-destructive">
-                  {loggingOut ? <Loader2 className="animate-spin" /> : <LogOut />}
-                  <span>Cerrar sesión</span>
-                </DropdownMenuItem>
+                <LogoutButton />
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarMenuItem>
