@@ -3,12 +3,21 @@ import { CheckCircle, Clock, Loader2, XCircle, type LucideIcon } from "lucide-re
 export type BadgeStatus = "running" | "completed" | "pending" | "uploading" | "uploaded" | "failed";
 
 const STATUS_BG: Record<BadgeStatus, string> = {
-  running: "bg-amber-600",
-  uploading: "bg-amber-600",
-  completed: "bg-green-600",
-  uploaded: "bg-green-600",
+  running: "bg-warning",
+  uploading: "bg-warning",
+  completed: "bg-success",
+  uploaded: "bg-success",
   failed: "bg-destructive",
   pending: "bg-muted",
+};
+
+const STATUS_FG: Record<BadgeStatus, string> = {
+  running: "text-warning-foreground",
+  uploading: "text-warning-foreground",
+  completed: "text-success-foreground",
+  uploaded: "text-success-foreground",
+  failed: "text-destructive-foreground",
+  pending: "text-muted-foreground",
 };
 
 const STATUS_ICON: Record<BadgeStatus, LucideIcon> = {
@@ -25,7 +34,7 @@ function isAnimated(status: BadgeStatus): boolean {
 }
 
 export function statusBadgeClassName(status: BadgeStatus): string {
-  return `inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-card-foreground ${STATUS_BG[status]}${isAnimated(status) ? " animate-pulse" : ""}`;
+  return `inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BG[status]} ${STATUS_FG[status]}${isAnimated(status) ? " animate-pulse" : ""}`;
 }
 
 export function StatusBadge({ status, label }: { status: BadgeStatus; label: string }) {
