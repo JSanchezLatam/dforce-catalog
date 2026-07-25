@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import type { PgBoss } from "pg-boss";
 
 import { db } from "@/shared/db/client";
@@ -114,33 +114,51 @@ export async function runSync(
   try {
     await database.transaction(async (tx) => {
       for await (const page of fetchProducts(payload.filters ?? {})) {
+        if (page.length === 0) continue;
+
+        // Dedupe by id within the page (last occurrence wins, matching the
+        // old per-row loop's behavior) — Postgres rejects a multi-row INSERT
+        // that would ON CONFLICT DO UPDATE the same row twice in one
+        // statement ("cannot affect row a second time"), which the old
+        // per-row loop never hit since each row was its own statement.
+        const rowsById = new Map<string, ReturnType<typeof parseProduct>>();
         for (const rawItem of page) {
           const parsed = parseProduct(rawItem as Record<string, unknown>);
-          await tx
-            .insert(producto)
-            .values({
-              id: parsed.id,
-              raw: parsed.raw,
-              name: parsed.name,
-              categoryL1: parsed.categoryL1,
-              categoryL2: parsed.categoryL2,
-              price: parsed.price,
-              stock: parsed.stock,
-            })
-            .onConflictDoUpdate({
-              target: producto.id,
-              set: {
-                raw: parsed.raw,
-                name: parsed.name,
-                categoryL1: parsed.categoryL1,
-                categoryL2: parsed.categoryL2,
-                price: parsed.price,
-                stock: parsed.stock,
-                syncedAt: new Date(),
-              },
-            });
-          productCount++;
+          rowsById.set(parsed.id, parsed);
         }
+        const rows = Array.from(rowsById.values()).map((parsed) => ({
+          id: parsed.id,
+          raw: parsed.raw,
+          name: parsed.name,
+          categoryL1: parsed.categoryL1,
+          categoryL2: parsed.categoryL2,
+          price: parsed.price,
+          stock: parsed.stock,
+        }));
+
+        // Batched multi-row upsert — one round trip per PAGE_SIZE page (see
+        // client.ts) instead of one per product row. Conflict target/updated
+        // columns are unchanged from the per-row version; per-row values in
+        // the UPDATE branch must reference Postgres's `excluded` pseudo-table
+        // (drizzle-orm/guides/upsert.mdx "Upsert Multiple Rows") since a
+        // single multi-row INSERT can't bind a distinct static value per
+        // conflicting row the way the old per-row `.values(parsed)` call did.
+        await tx
+          .insert(producto)
+          .values(rows)
+          .onConflictDoUpdate({
+            target: producto.id,
+            set: {
+              raw: sql.raw(`excluded.${producto.raw.name}`),
+              name: sql.raw(`excluded.${producto.name.name}`),
+              categoryL1: sql.raw(`excluded.${producto.categoryL1.name}`),
+              categoryL2: sql.raw(`excluded.${producto.categoryL2.name}`),
+              price: sql.raw(`excluded.${producto.price.name}`),
+              stock: sql.raw(`excluded.${producto.stock.name}`),
+              syncedAt: new Date(),
+            },
+          });
+        productCount += rows.length;
       }
     });
 
