@@ -143,7 +143,7 @@ export default async function InventoryPage({
           {pageCount > 1 && (
             <Card size="sm">
               <CardContent>
-                <Pagination currentPage={pageWindow.page} pageCount={pageCount} buildHref={(p) => buildPageHref(params, p)} />
+                <Pagination currentPage={pageWindow.page} pageCount={pageCount} hrefPattern={buildPagePattern(params)} />
               </CardContent>
             </Card>
           )}
@@ -153,7 +153,7 @@ export default async function InventoryPage({
   );
 }
 
-function buildPageHref(params: SearchParams, page: number): string {
+function buildPagePattern(params: SearchParams): string {
   const search = new URLSearchParams();
   if (typeof params.categoryL1 === "string" && params.categoryL1) search.set("categoryL1", params.categoryL1);
   if (typeof params.categoryL2 === "string" && params.categoryL2) search.set("categoryL2", params.categoryL2);
@@ -161,6 +161,5 @@ function buildPageHref(params: SearchParams, page: number): string {
   if (typeof params.id === "string" && params.id) search.set("id", params.id);
   if (typeof params.pageSize === "string" && params.pageSize) search.set("pageSize", params.pageSize);
   if (typeof params.stockStatus === "string" && params.stockStatus) search.set("stockStatus", params.stockStatus);
-  search.set("page", String(page));
-  return `/inventory?${search.toString()}`;
+  return `/inventory?${search.toString()}&page={page}`;
 }

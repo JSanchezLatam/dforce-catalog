@@ -6,8 +6,9 @@ type PaginationProps = {
   currentPage: number;
   pageCount: number;
 } & (
-  | { buildHref: (page: number) => string; onPageChange?: undefined }
-  | { buildHref?: undefined; onPageChange: (page: number) => void }
+  | { buildHref: (page: number) => string; onPageChange?: undefined; hrefPattern?: undefined }
+  | { buildHref?: undefined; onPageChange: (page: number) => void; hrefPattern?: undefined }
+  | { buildHref?: undefined; onPageChange?: undefined; hrefPattern: string }
 );
 
 function buildWindow(current: number, total: number): (number | "ellipsis")[] {
@@ -38,6 +39,10 @@ export function Pagination(props: PaginationProps) {
   const { currentPage, pageCount } = props;
   if (pageCount <= 1) return null;
   const pages = buildWindow(currentPage, pageCount);
+  const isHrefPattern = "hrefPattern" in props;
+
+  const pageHref = (page: number) =>
+    isHrefPattern ? props.hrefPattern!.replace("{page}", String(page)) : props.buildHref!(page);
 
   const renderNav = (page: number, label: string) =>
     props.onPageChange ? (
@@ -45,7 +50,7 @@ export function Pagination(props: PaginationProps) {
         {label}
       </button>
     ) : (
-      <Link href={props.buildHref(page)} className={navClassName}>
+      <Link href={pageHref(page)} className={navClassName}>
         {label}
       </Link>
     );
@@ -61,7 +66,7 @@ export function Pagination(props: PaginationProps) {
         {page}
       </button>
     ) : (
-      <Link key={page} href={props.buildHref(page)} className={pageClassName(page === currentPage)}>
+      <Link key={page} href={pageHref(page)} className={pageClassName(page === currentPage)}>
         {page}
       </Link>
     );
