@@ -81,16 +81,20 @@ export async function POST(request: NextRequest) {
       products: body.products,
       productsPerPage: body.productsPerPage,
     });
-    const queuePosition = await getQueuePosition(jobId); // R12.3/12.4 — reported once at enqueue time.
-
-    // R11.3 — CRITICAL fix (sdd-verify): the actual eviction happens later,
-    // asynchronously, inside the decoupled pdf-upload worker (retention.ts),
-    // where there is no request/response to attach a warning to and this app
-    // has no push/email channel (design.md's Real-time decision is
-    // polling-only). This response — to the action that confirms
-    // generation — is the earliest point a warning can be surfaced, so it is
-    // computed from the count BEFORE this job's own upload can complete.
-    const uploadedCount = await countUploadedCatalogsForUser(user.id);
+    // R12.3/12.4 (queuePosition) and R11.3 (uploadedCount, for the eviction
+    // warning below) are independent reads — batch them instead of awaiting
+    // sequentially. R11.3 — CRITICAL fix (sdd-verify): the actual eviction
+    // happens later, asynchronously, inside the decoupled pdf-upload worker
+    // (retention.ts), where there is no request/response to attach a warning
+    // to and this app has no push/email channel (design.md's Real-time
+    // decision is polling-only). This response — to the action that
+    // confirms generation — is the earliest point a warning can be
+    // surfaced, so it is computed from the count BEFORE this job's own
+    // upload can complete.
+    const [queuePosition, uploadedCount] = await Promise.all([
+      getQueuePosition(jobId),
+      countUploadedCatalogsForUser(user.id),
+    ]);
     const evictionWarning = shouldWarnOfEviction(uploadedCount)
       ? "You already have 2 saved catalogs. Your oldest one will be deleted automatically once this one is ready."
       : null;

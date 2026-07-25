@@ -1,19 +1,28 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { CheckIcon } from "lucide-react";
+import { CheckIcon, Search } from "lucide-react";
 
 import { CatalogTemplate } from "@/shared/template/CatalogTemplate";
 import type { TemplateConfig } from "@/shared/db/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { SECTION_HEADING } from "@/shared/ui/styles";
+import { CARD, FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
+import { Pagination } from "@/shared/ui/Pagination";
 
 import type { CategoryPair } from "./queries";
 import {
@@ -74,7 +83,6 @@ export function CatalogBuilderForm({
   const [productsPerPage, setProductsPerPage] = useState(10);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirmed, setConfirmed] = useState(false);
-  const [generateStatus, setGenerateStatus] = useState<"idle" | "submitting" | "queued">("idle");
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
   const [evictionWarning, setEvictionWarning] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
@@ -132,9 +140,12 @@ export function CatalogBuilderForm({
   const safePage = Math.min(page, pageCount);
   const paginatedProducts = filteredCandidates.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  const finalProducts = candidates.filter((p) => selectedProductIds.has(p.id));
-  const sections = buildIndexSections(finalProducts);
-  const title = deriveCatalogTitle(uniqueL1s(categoryRefs));
+  const finalProducts = useMemo(
+    () => candidates.filter((p) => selectedProductIds.has(p.id)),
+    [candidates, selectedProductIds],
+  );
+  const sections = useMemo(() => buildIndexSections(finalProducts), [finalProducts]);
+  const title = useMemo(() => deriveCatalogTitle(uniqueL1s(categoryRefs)), [categoryRefs]);
 
   const allVisibleSelected = paginatedProducts.length > 0 && paginatedProducts.every((p) => selectedProductIds.has(p.id));
   const someVisibleSelected = paginatedProducts.some((p) => selectedProductIds.has(p.id));
@@ -166,38 +177,7 @@ export function CatalogBuilderForm({
     setConfirmed(false);
   }
 
-  function renderPageNumbers() {
-    const pages: (number | "ellipsis")[] = [];
-    if (pageCount <= 7) {
-      for (let i = 1; i <= pageCount; i++) pages.push(i);
-    } else {
-      pages.push(1);
-      if (safePage > 3) pages.push("ellipsis");
-      for (let i = Math.max(2, safePage - 1); i <= Math.min(pageCount - 1, safePage + 1); i++) pages.push(i);
-      if (safePage < pageCount - 2) pages.push("ellipsis");
-      pages.push(pageCount);
-    }
-    return pages.map((p, idx) =>
-      p === "ellipsis" ? (
-        <span key={`e-${idx}`} className="px-2 text-muted-foreground">
-          \u2026
-        </span>
-      ) : (
-        <button
-          key={p}
-          type="button"
-          onClick={() => setPage(p)}
-          className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
-            p === safePage
-              ? "bg-primary text-primary-foreground"
-              : "text-foreground hover:bg-muted"
-          }`}
-        >
-          {p}
-        </button>
-      ),
-    );
-  }
+
 
   function handleStartGenerate() {
     try {
@@ -249,7 +229,6 @@ export function CatalogBuilderForm({
       const body = await response.json();
       setQueuePosition(body.queuePosition ?? null);
       setEvictionWarning(body.evictionWarning ?? null);
-      setGenerateStatus("queued");
       setShowConfirmDialog(false);
       setShowSuccessAlert(true);
     } finally {
@@ -257,11 +236,10 @@ export function CatalogBuilderForm({
     }
   }
 
-  const buttonDisabled = generateStatus === "submitting" || candidates.length === 0;
+  const buttonDisabled = candidates.length === 0;
   const queueFullBtn = queueDepth !== null && queueDepth >= 2;
 
   let buttonLabel = "Empezar a generar";
-  if (generateStatus === "submitting") buttonLabel = "Encargando\u2026";
   if (queueFullBtn) buttonLabel = `${queueDepth} en cola — esperar`;
 
   const categoryTree = useMemo(
@@ -285,7 +263,7 @@ export function CatalogBuilderForm({
               }}
             />
             {errors.categories && (
-              <p role="alert" className="mt-1 text-sm text-destructive">
+              <p role="alert" className={`mt-1 ${FIELD_ERROR}`}>
                 {errors.categories}
               </p>
             )}
@@ -302,17 +280,20 @@ export function CatalogBuilderForm({
                   Products ({finalProducts.length} of {candidates.length} selected)
                 </h2>
                 <div className="mb-3 flex items-center gap-2">
-                  <Input
-                    ref={tableSearchRef}
-                    type="search"
-                    placeholder="Search products..."
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setPage(1);
-                    }}
-                    className="flex-1"
-                  />
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      ref={tableSearchRef}
+                      type="search"
+                      placeholder="Search products..."
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setPage(1);
+                      }}
+                      className="pl-9"
+                    />
+                  </div>
                   <div className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
                     <Label>Rows per page</Label>
                     <Select
@@ -340,7 +321,7 @@ export function CatalogBuilderForm({
                       <TableRow>
                         <TableHead className="w-10">
                           <Checkbox
-                            checked={allVisibleSelected || (someVisibleSelected ? true : false)}
+                            checked={allVisibleSelected || someVisibleSelected}
                             onCheckedChange={toggleAllVisible}
                           />
                         </TableHead>
@@ -412,29 +393,7 @@ export function CatalogBuilderForm({
                   {Math.min(safePage * pageSize, filteredCandidates.length)} of{" "}
                   {filteredCandidates.length} items
                 </span>
-                {pageCount > 1 && (
-                  <nav className="flex items-center gap-1">
-                    {safePage > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => setPage(safePage - 1)}
-                        className="rounded-lg px-3 py-1.5 text-sm text-primary hover:bg-muted transition-colors"
-                      >
-                        Previous
-                      </button>
-                    )}
-                    {renderPageNumbers()}
-                    {safePage < pageCount && (
-                      <button
-                        type="button"
-                        onClick={() => setPage(safePage + 1)}
-                        className="rounded-lg px-3 py-1.5 text-sm text-primary hover:bg-muted transition-colors"
-                      >
-                        Next
-                      </button>
-                    )}
-                  </nav>
-                )}
+                <Pagination currentPage={safePage} pageCount={pageCount} onPageChange={setPage} />
               </div>
             </CardContent>
           </Card>
@@ -442,7 +401,7 @@ export function CatalogBuilderForm({
       )}
 
       {errors.total && (
-        <p role="alert" className="mb-4 text-sm text-destructive">
+        <p role="alert" className={`mb-4 ${FIELD_ERROR}`}>
           {errors.total}
         </p>
       )}
@@ -466,7 +425,7 @@ export function CatalogBuilderForm({
                 />
               </label>
               {errors.productsPerPage && (
-                <p role="alert" className="text-sm text-destructive">
+                <p role="alert" className={FIELD_ERROR}>
                   {errors.productsPerPage}
                 </p>
               )}
@@ -498,22 +457,24 @@ export function CatalogBuilderForm({
 
       <Card size="sm">
         <CardContent>
-          <section aria-label="Live preview">
+            <section aria-label="Live preview">
             <h2 className={SECTION_HEADING}>Preview</h2>
-            <CatalogTemplate
-              title={title}
-              sections={sections}
-              branding={
-                templateConfig
-                  ? {
-                      logoUrl: templateConfig.logoUrl,
-                      primaryColors: templateConfig.primaryColors,
-                      font: templateConfig.font,
-                      coverText: templateConfig.coverText,
-                    }
-                  : null
-              }
-            />
+            <div className={CARD}>
+              <CatalogTemplate
+                title={title}
+                sections={sections}
+                branding={
+                  templateConfig
+                    ? {
+                        logoUrl: templateConfig.logoUrl,
+                        primaryColors: templateConfig.primaryColors,
+                        font: templateConfig.font,
+                        coverText: templateConfig.coverText,
+                      }
+                    : null
+                }
+              />
+            </div>
           </section>
         </CardContent>
       </Card>
@@ -526,39 +487,34 @@ export function CatalogBuilderForm({
         />
       )}
 
-      <DialogPrimitive.Root open={showSuccessAlert} onOpenChange={(o) => { if (!o) setShowSuccessAlert(false); }}>
-        <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/80 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0" />
-        <DialogPrimitive.Portal>
-          <DialogPrimitive.Popup className="fixed inset-0 z-50 flex items-center justify-center p-4 outline-hidden">
-            <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-xl bg-background p-6 text-center shadow-2xl">
-              <div className="flex size-12 items-center justify-center rounded-full bg-green-100">
-                <CheckIcon className="size-6 text-green-600" />
-              </div>
-              <DialogPrimitive.Title className="text-lg font-semibold text-foreground">
-                Catálogo en proceso
-              </DialogPrimitive.Title>
-              <p className="text-sm text-muted-foreground">
-                El catálogo empezó a generarse{queuePosition != null ? ` (posición ${queuePosition} en la cola)` : ""}.
-                {evictionWarning ? " El más antiguo se eliminará cuando esté listo." : ""}
-              </p>
-              <div className="flex gap-3">
-                <DialogPrimitive.Close render={<Button variant="outline" />}>
-                  Cerrar
-                </DialogPrimitive.Close>
-                <DialogPrimitive.Close
-                  render={
-                    <Button
-                      onClick={() => { window.location.href = "/catalogs"; }}
-                    />
-                  }
-                >
-                  Ver catálogos
-                </DialogPrimitive.Close>
-              </div>
-            </div>
-          </DialogPrimitive.Popup>
-        </DialogPrimitive.Portal>
-      </DialogPrimitive.Root>
+      <Dialog open={showSuccessAlert} onOpenChange={(o) => { if (!o) setShowSuccessAlert(false); }}>
+        <DialogContent showCloseButton={false} className="max-w-sm items-center gap-4 text-center">
+          <div className="flex size-12 items-center justify-center rounded-full bg-green-100">
+            <CheckIcon className="size-6 text-green-600" />
+          </div>
+          <DialogHeader className="items-center text-center">
+            <DialogTitle>Catálogo en proceso</DialogTitle>
+            <DialogDescription>
+              El catálogo empezó a generarse{queuePosition != null ? ` (posición ${queuePosition} en la cola)` : ""}.
+              {evictionWarning ? " El más antiguo se eliminará cuando esté listo." : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-row justify-center gap-3 sm:justify-center">
+            <DialogClose render={<Button variant="outline" />}>
+              Cerrar
+            </DialogClose>
+            <DialogClose
+              render={
+                <Button
+                  onClick={() => { window.location.href = "/catalogs"; }}
+                />
+              }
+            >
+              Ver catálogos
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

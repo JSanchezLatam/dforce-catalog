@@ -56,7 +56,7 @@ export function TreeSelect({
     };
   }, [open]);
 
-  const sel = new Set(selected);
+  const sel = useMemo(() => new Set(selected), [selected]);
 
   const filteredItems = useMemo(
     () =>
