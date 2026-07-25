@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PackageSearch } from "lucide-react";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
@@ -16,6 +17,7 @@ import {
   parsePageSize,
 } from "@/modules/inventory-view/queries";
 import { ManualSyncButton } from "@/modules/inventory-sync/ManualSyncButton";
+import { Pagination } from "@/shared/ui/Pagination";
 import { PAGE_HEADING } from "@/shared/ui/styles";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -91,12 +93,16 @@ export default async function InventoryPage({
       {items.length === 0 ? (
         <Card size="sm">
           <CardContent>
-            <p className="text-sm text-muted-foreground">
-              No products match the selected filters.{" "}
-              <Link href="/inventory" className="text-primary hover:underline">
-                Clear filters
-              </Link>
-            </p>
+            <div className="flex flex-col items-center gap-2 py-12 text-center">
+              <PackageSearch className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
+              <h2 className="text-lg font-semibold text-foreground">No products found</h2>
+              <p className="text-sm text-muted-foreground">
+                No products match the selected filters.{" "}
+                <Link href="/inventory" className="text-primary hover:underline">
+                  Clear filters
+                </Link>
+              </p>
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -137,62 +143,13 @@ export default async function InventoryPage({
           {pageCount > 1 && (
             <Card size="sm">
               <CardContent>
-                <nav className="flex items-center gap-1 text-sm text-muted-foreground">
-                  {pageWindow.page > 1 && (
-                    <Link href={buildPageHref(params, pageWindow.page - 1)} className="rounded-lg px-3 py-1.5 text-primary hover:bg-muted transition-colors">
-                      Previous
-                    </Link>
-                  )}
-                  {renderPageNumbers(pageWindow.page, pageCount, params)}
-                  {pageWindow.page < pageCount && (
-                    <Link href={buildPageHref(params, pageWindow.page + 1)} className="rounded-lg px-3 py-1.5 text-primary hover:bg-muted transition-colors">
-                      Next
-                    </Link>
-                  )}
-                  <span className="ml-4 text-muted-foreground">
-                    Page {pageWindow.page} of {pageCount} ({total} items)
-                  </span>
-                </nav>
+                <Pagination currentPage={pageWindow.page} pageCount={pageCount} buildHref={(p) => buildPageHref(params, p)} />
               </CardContent>
             </Card>
           )}
         </>
       )}
     </div>
-  );
-}
-
-function renderPageNumbers(current: number, total: number, params: SearchParams) {
-  const pages: (number | "ellipsis")[] = [];
-
-  if (total <= 7) {
-    for (let i = 1; i <= total; i++) pages.push(i);
-  } else {
-    pages.push(1);
-    if (current > 3) pages.push("ellipsis");
-    for (let i = Math.max(2, current - 1); i <= Math.min(total - 1, current + 1); i++) {
-      pages.push(i);
-    }
-    if (current < total - 2) pages.push("ellipsis");
-    pages.push(total);
-  }
-
-  return pages.map((p, idx) =>
-    p === "ellipsis" ? (
-      <span key={`e-${idx}`} className="px-2 text-muted-foreground">…</span>
-    ) : (
-      <Link
-        key={p}
-        href={buildPageHref(params, p)}
-        className={`rounded-lg px-3 py-1.5 transition-colors ${
-          p === current
-            ? "bg-primary text-primary-foreground"
-            : "text-foreground hover:bg-muted"
-        }`}
-      >
-        {p}
-      </Link>
-    ),
   );
 }
 

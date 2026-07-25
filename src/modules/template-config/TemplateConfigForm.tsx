@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SECTION_HEADING } from "@/shared/ui/styles";
+import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
 
 type FormState = {
   logoUrl: string;
@@ -89,7 +89,7 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
             <Input id="logoUrl" value={form.logoUrl} onChange={(e) => update("logoUrl", e.target.value)} />
           </div>
           {errors.logoUrl && (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className={FIELD_ERROR}>
               {errors.logoUrl}
             </p>
           )}
@@ -105,7 +105,7 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
             />
           </div>
           {errors.primaryColor && (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className={FIELD_ERROR}>
               {errors.primaryColor}
             </p>
           )}
@@ -121,7 +121,7 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
             />
           </div>
           {errors.secondaryColor && (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className={FIELD_ERROR}>
               {errors.secondaryColor}
             </p>
           )}
@@ -136,7 +136,7 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
             />
           </div>
           {errors.font && (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className={FIELD_ERROR}>
               {errors.font}
             </p>
           )}
@@ -152,13 +152,13 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
             />
           </div>
           {errors.coverText && (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className={FIELD_ERROR}>
               {errors.coverText}
             </p>
           )}
 
           {errors.form && (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className={FIELD_ERROR}>
               {errors.form}
             </p>
           )}
