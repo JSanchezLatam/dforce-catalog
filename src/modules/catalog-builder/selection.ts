@@ -18,6 +18,7 @@ export type ProductRef = {
   categoryL1: string | null;
   categoryL2: string | null;
   image?: string | null;
+  imageType?: "transparent" | "opaque" | "low_res" | null;
 };
 
 export const MIN_PRODUCTS_PER_PAGE = 1;

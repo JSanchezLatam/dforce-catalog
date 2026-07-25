@@ -16,6 +16,7 @@ export type TemplateConfigInput = {
   primaryColors: { primary: string; secondary: string };
   font: string;
   coverText: string;
+  defaultImageHandling?: "strict" | "adaptive" | null;
 };
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
@@ -67,11 +68,14 @@ export function validateTemplateConfigInput(input: unknown): TemplateConfigInput
     errors.coverText = `Cover text must be 1-${MAX_COVER_TEXT_LENGTH} characters`;
   }
 
+  const rawHandling = (value as Record<string, unknown>).defaultImageHandling;
+  const defaultImageHandling = rawHandling === "strict" || rawHandling === "adaptive" ? rawHandling : null;
+
   if (Object.keys(errors).length > 0) {
     throw new TemplateConfigValidationError(errors);
   }
 
-  return { logoUrl, primaryColors: { primary, secondary }, font, coverText };
+  return { logoUrl, primaryColors: { primary, secondary }, font, coverText, defaultImageHandling };
 }
 
 /** Returns null when the admin has never saved a config yet (page renders a blank form). */

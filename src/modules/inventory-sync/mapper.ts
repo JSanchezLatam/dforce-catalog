@@ -23,7 +23,25 @@ export type Producto = {
   categoryL2: string | null;
   price: number | null;
   stock: number | null;
+  imageType: "transparent" | "opaque" | "low_res" | null;
 };
+
+/** Heuristic image-type classification based on available image URL patterns.
+ *  No pixel analysis — purely URL-based to keep sync fast (R12 from adaptive-catalog-layouts spec).
+ *  - No Images array or empty → 'low_res'
+ *  - URL includes '.png' with transparent-domain prefixes → 'transparent'
+ *  - URL includes 'thumb' or 'mini' → 'low_res'
+ *  - Default → 'opaque' */
+export function classifyImageType(images: unknown): "transparent" | "opaque" | "low_res" | null {
+  if (!Array.isArray(images) || images.length === 0) return "low_res";
+  const first = images[0] as Record<string, unknown> | undefined;
+  const src = typeof first?.src === "string" ? first.src : null;
+  if (!src) return "low_res";
+  const lower = src.toLowerCase();
+  if (lower.includes("thumb") || lower.includes("mini")) return "low_res";
+  if (lower.endsWith(".png") && (lower.includes("transparent") || lower.includes("sin-fondo") || lower.includes("alpha"))) return "transparent";
+  return "opaque";
+}
 
 type InStockRow = { Available?: unknown };
 
@@ -96,6 +114,7 @@ export function parseProduct(raw: Record<string, unknown>): Producto {
     categoryL2,
     price: safeNumber(producto.Precio_Venta, null),
     stock: sumStock(raw.InStock),
+    imageType: classifyImageType(raw.Images),
   };
 }
 

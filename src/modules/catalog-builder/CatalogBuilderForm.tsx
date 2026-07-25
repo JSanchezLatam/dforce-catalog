@@ -38,6 +38,7 @@ import {
 import { TreeSelect, type TreeItem } from "./TreeSelect";
 import { ImagePreviewDialog } from "./ImagePreviewDialog";
 import { ConfirmGenerateDialog } from "./ConfirmGenerateDialog";
+import { ProductLayoutTuner } from "./ProductLayoutTuner";
 
 function makeCategoryTree(l1Options: string[], pairs: CategoryPair[]): TreeItem[] {
   return l1Options.map((l1) => ({
@@ -86,6 +87,8 @@ export function CatalogBuilderForm({
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
   const [evictionWarning, setEvictionWarning] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
+  const [step, setStep] = useState<"select" | "review">("select");
+  const [overrides, setOverrides] = useState<Record<string, "transparent" | "opaque" | "low_res" | null>>({});
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
@@ -145,6 +148,10 @@ export function CatalogBuilderForm({
     [candidates, selectedProductIds],
   );
   const sections = useMemo(() => buildIndexSections(finalProducts), [finalProducts]);
+  const reviewedProducts = useMemo(
+    () => finalProducts.map((p) => ({ ...p, imageType: overrides[p.id] ?? p.imageType })),
+    [finalProducts, overrides],
+  );
   const title = useMemo(() => deriveCatalogTitle(uniqueL1s(categoryRefs)), [categoryRefs]);
 
   const allVisibleSelected = paginatedProducts.length > 0 && paginatedProducts.every((p) => selectedProductIds.has(p.id));
@@ -179,7 +186,7 @@ export function CatalogBuilderForm({
 
 
 
-  function handleStartGenerate() {
+  function handleContinue() {
     try {
       validateCatalogSelection({
         includedCategoryCount: categoryRefs.length,
@@ -187,12 +194,10 @@ export function CatalogBuilderForm({
         productsPerPage,
       });
       setErrors({});
-      setConfirmed(false);
-      setShowConfirmDialog(true);
+      setStep("review");
     } catch (err) {
       if (err instanceof CatalogSelectionValidationError) {
         setErrors(err.errors);
-        setConfirmed(false);
         return;
       }
       throw err;
@@ -208,7 +213,7 @@ export function CatalogBuilderForm({
         body: JSON.stringify({
           title,
           sections,
-          products: finalProducts,
+          products: reviewedProducts,
           productsPerPage,
           includedCategoryCount: categoryRefs.length,
         }),
@@ -271,7 +276,7 @@ export function CatalogBuilderForm({
         </CardContent>
       </Card>
 
-      {candidates.length > 0 && (
+      {candidates.length > 0 && step === "select" && (
         <>
           <Card size="sm" className="mb-4">
             <CardContent>
@@ -400,46 +405,83 @@ export function CatalogBuilderForm({
         </>
       )}
 
+      {candidates.length > 0 && step === "review" && (
+        <ProductLayoutTuner
+          products={finalProducts}
+          overrides={overrides}
+          onOverride={(id, value) =>
+            setOverrides((prev) => ({ ...prev, [id]: value }))
+          }
+          onBulkFrame={() =>
+            setOverrides(
+              Object.fromEntries(finalProducts.map((p) => [p.id, "opaque" as const])),
+            )
+          }
+        />
+      )}
+
       {errors.total && (
         <p role="alert" className={`mb-4 ${FIELD_ERROR}`}>
           {errors.total}
         </p>
       )}
 
-      <Card size="sm" className="mb-4">
-        <CardContent>
-          <div className="flex flex-wrap items-end gap-4">
-            <section aria-label="Page density">
-              <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
-                Products per page
-                <Input
-                  type="number"
-                  min={MIN_PRODUCTS_PER_PAGE}
-                  max={MAX_PRODUCTS_PER_PAGE}
-                  value={productsPerPage}
-                  onChange={(e) => {
-                    setProductsPerPage(Number(e.target.value));
-                    setConfirmed(false);
-                  }}
-                  className="w-24"
-                />
-              </label>
-              {errors.productsPerPage && (
-                <p role="alert" className={FIELD_ERROR}>
-                  {errors.productsPerPage}
-                </p>
-              )}
-            </section>
-            <Button
-              type="button"
-              onClick={handleStartGenerate}
-              disabled={buttonDisabled || queueFullBtn}
-            >
-              {buttonLabel}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {step === "select" && (
+        <Card size="sm" className="mb-4">
+          <CardContent>
+            <div className="flex flex-wrap items-end gap-4">
+              <section aria-label="Page density">
+                <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
+                  Products per page
+                  <Input
+                    type="number"
+                    min={MIN_PRODUCTS_PER_PAGE}
+                    max={MAX_PRODUCTS_PER_PAGE}
+                    value={productsPerPage}
+                    onChange={(e) => {
+                      setProductsPerPage(Number(e.target.value));
+                    }}
+                    className="w-24"
+                  />
+                </label>
+                {errors.productsPerPage && (
+                  <p role="alert" className={FIELD_ERROR}>
+                    {errors.productsPerPage}
+                  </p>
+                )}
+              </section>
+              <Button
+                type="button"
+                onClick={handleContinue}
+                disabled={buttonDisabled || queueFullBtn}
+              >
+                {buttonLabel}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === "review" && (
+        <Card size="sm" className="mb-4">
+          <CardContent>
+            <div className="flex flex-wrap items-center justify-between">
+              <Button type="button" variant="outline" onClick={() => setStep("select")}>
+                Back to selection
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  setErrors({});
+                  setShowConfirmDialog(true);
+                }}
+              >
+                Empezar a generar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <ConfirmGenerateDialog
         open={showConfirmDialog}
@@ -449,7 +491,7 @@ export function CatalogBuilderForm({
         }}
         categories={categoryRefs}
         title={title}
-        productCount={finalProducts.length}
+        productCount={reviewedProducts.length}
         catalogCount={catalogCount}
         isSubmitting={isSubmitting}
         onConfirm={handleConfirmGenerate}

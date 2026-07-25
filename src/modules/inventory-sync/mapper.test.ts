@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { parseProduct, serializeProduct } from "./mapper";
+import { classifyImageType, parseProduct, serializeProduct } from "./mapper";
 
 /** A representative real-shape fixture (per design.md's live smoke test):
  * five top-level keys, trailing whitespace on categories, string numerics. */
@@ -159,5 +159,69 @@ describe("unknown/malformed-item warning logic (R10.4, reconsidered for the nest
     const raw = wrapperFixture();
     (raw.Producto as Record<string, unknown>).id = 123;
     expect(parseProduct(raw).id).toBe("123");
+  });
+});
+
+describe("classifyImageType — heuristic (R12)", () => {
+  const opaqueJpg = [{ src: "https://example.com/img.jpg" }];
+  const transparentPng = [{ src: "https://example.com/-transparent.png" }];
+  const thumbUrl = [{ src: "https://example.com/thumb_123.jpg" }];
+  const alphaPng = [{ src: "https://example.com/product-alpha.png" }];
+  const sinFondo = [{ src: "https://example.com/sin-fondo.png" }];
+
+  it("returns 'low_res' when Images array is empty", () => {
+    expect(classifyImageType([])).toBe("low_res");
+  });
+
+  it("returns 'low_res' when Images is not an array", () => {
+    expect(classifyImageType(null)).toBe("low_res");
+    expect(classifyImageType(undefined)).toBe("low_res");
+    expect(classifyImageType("not-an-array")).toBe("low_res");
+  });
+
+  it("returns 'low_res' when the first image has no src", () => {
+    expect(classifyImageType([{}])).toBe("low_res");
+  });
+
+  it("returns 'low_res' for URLs containing 'thumb'", () => {
+    expect(classifyImageType(thumbUrl)).toBe("low_res");
+  });
+
+  it("returns 'low_res' for URLs containing 'mini'", () => {
+    expect(classifyImageType([{ src: "https://example.com/mini_001.jpg" }])).toBe("low_res");
+  });
+
+  it("returns 'transparent' for .png URLs with 'transparent' prefix", () => {
+    expect(classifyImageType(transparentPng)).toBe("transparent");
+  });
+
+  it("returns 'transparent' for URLs with 'alpha' in the path", () => {
+    expect(classifyImageType(alphaPng)).toBe("transparent");
+  });
+
+  it("returns 'transparent' for URLs with 'sin-fondo' in the path", () => {
+    expect(classifyImageType(sinFondo)).toBe("transparent");
+  });
+
+  it("returns 'opaque' for plain .jpg URLs", () => {
+    expect(classifyImageType(opaqueJpg)).toBe("opaque");
+  });
+
+  it("returns 'opaque' for .png URLs without transparent prefix", () => {
+    expect(classifyImageType([{ src: "https://example.com/product.png" }])).toBe("opaque");
+  });
+
+  it("returns 'opaque' for .webp URLs", () => {
+    expect(classifyImageType([{ src: "https://example.com/product.webp" }])).toBe("opaque");
+  });
+
+  it("sets imageType on parseProduct output", () => {
+    const producto = parseProduct(wrapperFixture());
+    expect(producto.imageType).toBe("opaque");
+  });
+
+  it("sets imageType to 'low_res' when no Images in fixture", () => {
+    const producto = parseProduct(wrapperFixture({ Images: [] }));
+    expect(producto.imageType).toBe("low_res");
   });
 });
