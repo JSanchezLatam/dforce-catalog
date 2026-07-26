@@ -23,23 +23,23 @@ const IMAGE_TYPE_VARIANTS: Record<string, "default" | "secondary" | "destructive
 export function ProductLayoutTuner({
   products,
   overrides,
+  bulkFramed,
   onOverride,
   onBulkFrame,
 }: {
   products: ProductRef[];
   overrides: Record<string, "transparent" | "opaque" | "low_res" | null>;
+  bulkFramed: boolean;
   onOverride: (id: string, value: "transparent" | "opaque" | "low_res" | null) => void;
   onBulkFrame: () => void;
 }) {
-  const hasFrameOverride = Object.values(overrides).some((v) => v === "opaque");
-
   return (
     <Card size="sm">
       <CardContent>
         <div className="flex items-center justify-between mb-4">
           <h2 className={SECTION_HEADING}>Review image layouts ({products.length} products)</h2>
           <Button type="button" variant="outline" size="sm" onClick={onBulkFrame}>
-            {hasFrameOverride ? "Reset individual overrides" : "Enmarcar todos"}
+            {bulkFramed ? "Reset individual overrides" : "Enmarcar todos"}
           </Button>
         </div>
         <div className="flex flex-col gap-2">

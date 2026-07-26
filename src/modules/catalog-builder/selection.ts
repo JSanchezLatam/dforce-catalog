@@ -92,6 +92,10 @@ export function validateCatalogSelection(check: CatalogSelectionCheck): void {
     errors.categories = "Select at least one category"; // R5.7
   }
 
+  if (check.totalProductCount === 0) {
+    errors.total = "No products selected"; // R13 scenario 3
+  }
+
   if (check.totalProductCount > MAX_TOTAL_PRODUCTS) {
     errors.total = `${check.totalProductCount} selected, max ${MAX_TOTAL_PRODUCTS}`; // R5.8/5.9
   }

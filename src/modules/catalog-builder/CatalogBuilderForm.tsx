@@ -89,6 +89,8 @@ export function CatalogBuilderForm({
   const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
   const [step, setStep] = useState<"select" | "review">("select");
   const [overrides, setOverrides] = useState<Record<string, "transparent" | "opaque" | "low_res" | null>>({});
+  const [bulkFramed, setBulkFramed] = useState(false);
+  const overridesBeforeBulkFrameRef = useRef<Record<string, "transparent" | "opaque" | "low_res" | null>>({});
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
@@ -409,14 +411,22 @@ export function CatalogBuilderForm({
         <ProductLayoutTuner
           products={finalProducts}
           overrides={overrides}
+          bulkFramed={bulkFramed}
           onOverride={(id, value) =>
             setOverrides((prev) => ({ ...prev, [id]: value }))
           }
-          onBulkFrame={() =>
-            setOverrides(
-              Object.fromEntries(finalProducts.map((p) => [p.id, "opaque" as const])),
-            )
-          }
+          onBulkFrame={() => {
+            if (bulkFramed) {
+              setOverrides(overridesBeforeBulkFrameRef.current);
+              setBulkFramed(false);
+            } else {
+              overridesBeforeBulkFrameRef.current = overrides;
+              setOverrides(
+                Object.fromEntries(finalProducts.map((p) => [p.id, "opaque" as const])),
+              );
+              setBulkFramed(true);
+            }
+          }}
         />
       )}
 
@@ -471,6 +481,7 @@ export function CatalogBuilderForm({
               </Button>
               <Button
                 type="button"
+                disabled={reviewedProducts.length === 0}
                 onClick={() => {
                   setErrors({});
                   setShowConfirmDialog(true);
@@ -479,6 +490,11 @@ export function CatalogBuilderForm({
                 Empezar a generar
               </Button>
             </div>
+            {reviewedProducts.length === 0 && (
+              <p role="alert" className={`mt-2 ${FIELD_ERROR}`}>
+                No products selected
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
