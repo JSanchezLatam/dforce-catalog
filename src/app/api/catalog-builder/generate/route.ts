@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
       sections: body.sections,
       products: body.products,
       productsPerPage: body.productsPerPage,
+      defaultImageHandling: (template?.defaultImageHandling ?? null) as "strict" | "adaptive" | null,
     });
     // R12.3/12.4 (queuePosition) and R11.3 (uploadedCount, for the eviction
     // warning below) are independent reads — batch them instead of awaiting

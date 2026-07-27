@@ -1,6 +1,6 @@
 CREATE TYPE "public"."order_status" AS ENUM('open', 'in_progress', 'done', 'cancelled');--> statement-breakpoint
 CREATE TYPE "public"."reminder_channel" AS ENUM('email', 'whatsapp');--> statement-breakpoint
-CREATE TYPE "public"."reminder_status" AS ENUM('scheduled', 'sent', 'failed', 'cancelled', 'skipped');--> statement-breakpoint
+CREATE TYPE "public"."reminder_status" AS ENUM('scheduled', 'sent', 'failed', 'cancelled', 'skipped', 'opted_out');--> statement-breakpoint
 CREATE TYPE "public"."reminder_type" AS ENUM('service_due', 'appointment');--> statement-breakpoint
 CREATE TABLE "cliente" (
 	"id" text PRIMARY KEY NOT NULL,

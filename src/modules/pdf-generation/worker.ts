@@ -72,6 +72,7 @@ export async function renderPdfBuffer(payload: PdfGeneratePayload): Promise<Buff
     branding: payload.branding,
     sections: payload.sections.length > 0 ? payload.sections : buildIndexSections(payload.products),
     productPages,
+    defaultImageHandling: payload.defaultImageHandling,
   });
 
   const browser = await chromium.launch();

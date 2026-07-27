@@ -19,9 +19,11 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { LogoutButton } from "@/modules/layout/LogoutButton"
+import { ThemeToggle } from "@/modules/layout/ThemeToggle"
 
 type NavItem = { href: string; label: string; icon: string }
 
@@ -100,6 +102,8 @@ export function AppSidebar({ navItems, user }: { navItems: NavItem[]; user: { id
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="right" className="w-48 rounded-xl" align="start">
+                <ThemeToggle />
+                <DropdownMenuSeparator />
                 <LogoutButton />
               </DropdownMenuContent>
             </DropdownMenu>

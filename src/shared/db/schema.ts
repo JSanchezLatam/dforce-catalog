@@ -65,6 +65,8 @@ export const producto = pgTable(
      * interfuerza-api-contract-fix design.md.
      */
     stock: real("stock"),
+    /** 'transparent' | 'opaque' | 'low_res' | null — classified at sync time by inventory-sync/mapper.ts heuristic. Null means unclassified/no image available. */
+    imageType: text("image_type"),
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -112,6 +114,8 @@ export const templateConfig = pgTable("template_config", {
   primaryColors: jsonb("primary_colors").notNull().$type<{ primary: string; secondary: string }>(),
   font: text("font").notNull(),
   coverText: text("cover_text").notNull(),
+  /** 'strict' | 'adaptive' — strict forces all products to OpaqueProductCard; adaptive selects card based on each product's image_type. Null defaults to 'strict' (backward compat). */
+  defaultImageHandling: text("default_image_handling"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

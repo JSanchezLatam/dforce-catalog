@@ -1,5 +1,21 @@
 # Tasks: crm-workshop-management
 
+## ⚠ Migration renumbering at merge time (2026-07-27)
+
+When merging this change's tracker into `main`, both `adaptive-catalog-layouts`
+(merged first) and this change had independently generated a migration numbered
+`0005` — each branch started from a point before the other existed. Resolved
+by deleting this change's `0005_legal_spot.sql` and the follow-up
+`0006_add_opted_out_reminder_status.sql` (neither was ever applied to any real
+database — both were still on unmerged feature branches) and regenerating a
+single fresh migration, `0006_shiny_dazzler.sql`, from `main`'s actual settled
+state. It collapses the original schema migration and the `opted_out` fix into
+one: `reminder_status` is created with `opted_out` already in its value list
+from the start, rather than added via a later `ALTER TYPE`. Functionally
+identical end state; the two-step history described below (tasks 1.6 and the
+Phase 4 follow-up note) is preserved for narrative accuracy but the actual
+merged migration file numbers/names differ from what's described there.
+
 ## Review Workload Forecast
 
 | Field | Value |

@@ -18,6 +18,7 @@ export type ProductRef = {
   categoryL1: string | null;
   categoryL2: string | null;
   image?: string | null;
+  imageType?: "transparent" | "opaque" | "low_res" | null;
 };
 
 export const MIN_PRODUCTS_PER_PAGE = 1;
@@ -89,6 +90,10 @@ export function validateCatalogSelection(check: CatalogSelectionCheck): void {
 
   if (check.includedCategoryCount === 0) {
     errors.categories = "Select at least one category"; // R5.7
+  }
+
+  if (check.totalProductCount === 0) {
+    errors.total = "No products selected"; // R13 scenario 3
   }
 
   if (check.totalProductCount > MAX_TOTAL_PRODUCTS) {

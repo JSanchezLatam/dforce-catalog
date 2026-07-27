@@ -1,6 +1,6 @@
 {
-  "id": "8b3a2fbf-3507-4d3a-b366-f6bf39287cc3",
-  "prevId": "67cd3bd3-992c-4138-9438-2148d080e228",
+  "id": "faf3cd55-41e5-48ff-a2a8-3d1ebcf57b5f",
+  "prevId": "38149e09-b8aa-4ddb-8cfd-1674b91fb838",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -519,6 +519,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "image_type": {
+          "name": "image_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "synced_at": {
           "name": "synced_at",
           "type": "timestamp with time zone",
@@ -863,6 +869,12 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "default_image_handling": {
+          "name": "default_image_handling",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "updated_at": {
           "name": "updated_at",

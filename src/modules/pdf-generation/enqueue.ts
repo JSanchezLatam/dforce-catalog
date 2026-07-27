@@ -37,6 +37,7 @@ export type PdfGeneratePayload = {
   sections: CatalogIndexSection[];
   products: ProductPrintRef[];
   productsPerPage: number;
+  defaultImageHandling?: "strict" | "adaptive" | null;
 };
 
 /** R12.6 — thrown when the queue already holds MAX_QUEUE_DEPTH jobs. */
