@@ -5,18 +5,65 @@ import { users } from "@/shared/db/schema";
 import { revokeOtherSessions } from "@/modules/auth/session";
 import { hashPassword, verifyPassword } from "@/modules/auth/password";
 
+/** Mirrors customers/validation.ts's EMAIL_FORMAT convention. */
+const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export type ProfileInput = {
   name?: string | null;
   email?: string | null;
+};
+
+export class ProfileValidationError extends Error {
+  constructor(public readonly errors: Record<string, string>) {
+    super("Invalid profile input");
+  }
+}
+
+/** Spec: `user-account` "Email Validation" — duplicate email across users. */
+export class DuplicateEmailError extends Error {
+  constructor() {
+    super("Email is already in use by another account");
+  }
+}
+
+export type UpdateProfileDeps = {
+  getCurrentEmail?: (uid: string) => Promise<string | null>;
+  findByEmail?: (email: string) => Promise<{ id: string } | null>;
 };
 
 export async function updateProfile(
   userId: string,
   data: ProfileInput,
   updateFn?: (uid: string, d: ProfileInput) => Promise<void>,
+  deps?: UpdateProfileDeps,
 ): Promise<void> {
+  const email = data.email ?? null;
+
+  if (email !== null && email !== "") {
+    if (!EMAIL_FORMAT.test(email)) {
+      throw new ProfileValidationError({ email: "Email must be a valid email address" });
+    }
+
+    const getCurrentEmail =
+      deps?.getCurrentEmail ??
+      (async (uid: string) =>
+        (await db.select({ email: users.email }).from(users).where(eq(users.id, uid)).limit(1))[0]?.email ?? null);
+    const currentEmail = await getCurrentEmail(userId);
+
+    if (email !== currentEmail) {
+      const findByEmail =
+        deps?.findByEmail ??
+        (async (e: string) =>
+          (await db.select({ id: users.id }).from(users).where(eq(users.email, e)).limit(1))[0] ?? null);
+      const existing = await findByEmail(email);
+      if (existing && existing.id !== userId) {
+        throw new DuplicateEmailError();
+      }
+    }
+  }
+
   if (updateFn) return updateFn(userId, data);
-  await db.update(users).set({ name: data.name ?? null, email: data.email ?? null }).where(eq(users.id, userId));
+  await db.update(users).set({ name: data.name ?? null, email }).where(eq(users.id, userId));
 }
 
 export async function changePassword(

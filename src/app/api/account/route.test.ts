@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GET, PATCH } from "./route";
+import { ProfileValidationError, DuplicateEmailError } from "@/modules/account/service";
 
 const mockGetProfile = vi.fn();
 const mockUpdateProfile = vi.fn();
@@ -10,9 +11,13 @@ vi.mock("@/modules/account/queries", () => ({
   getUserProfile: (...args: unknown[]) => mockGetProfile(...args),
 }));
 
-vi.mock("@/modules/account/service", () => ({
-  updateProfile: (...args: unknown[]) => mockUpdateProfile(...args),
-}));
+vi.mock("@/modules/account/service", async () => {
+  const actual = await vi.importActual<typeof import("@/modules/account/service")>("@/modules/account/service");
+  return {
+    ...actual,
+    updateProfile: (...args: unknown[]) => mockUpdateProfile(...args),
+  };
+});
 
 function req(role: string, options?: { method?: string; body?: string }) {
   return new NextRequest("http://localhost/api/account", {
@@ -45,5 +50,19 @@ describe("PATCH /api/account", () => {
     const res = await PATCH(req("tecnico", { method: "PATCH", body: JSON.stringify({ name: "Juan Updated" }) }));
     expect(res.status).toBe(200);
     expect(mockUpdateProfile).toHaveBeenCalledWith("user-1", { email: null, name: "Juan Updated" });
+  });
+
+  it("returns 400 with a validation error body when the email format is invalid", async () => {
+    mockUpdateProfile.mockRejectedValue(new ProfileValidationError({ email: "Email must be a valid email address" }));
+    const res = await PATCH(req("tecnico", { method: "PATCH", body: JSON.stringify({ email: "not-an-email" }) }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).errors).toEqual({ email: "Email must be a valid email address" });
+  });
+
+  it("returns 409 when the email is already used by another account", async () => {
+    mockUpdateProfile.mockRejectedValue(new DuplicateEmailError());
+    const res = await PATCH(req("tecnico", { method: "PATCH", body: JSON.stringify({ email: "a@b.com" }) }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("duplicate_email");
   });
 });
