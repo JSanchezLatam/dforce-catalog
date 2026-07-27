@@ -221,13 +221,18 @@ describe("transitionOrder (R21)", () => {
       getById: async () => current,
       db: database as unknown as typeof import("@/shared/db/client").db,
       now: () => fixedNow,
+      // No cliente found for this fixture's clienteId (undefined) — the
+      // service_due reminder wiring below no-ops gracefully; this test only
+      // asserts the completedAt behavior, not the reminder wiring (see the
+      // "reminder wiring (R23, Phase 4 task 4.5)" describe block below).
+      getClienteById: async () => null,
     });
 
     expect(result.status).toBe("done");
     expect(result.completedAt).toEqual(fixedNow);
   });
 
-  it("calls the onTransitioned seam after persisting (Phase 4 hook point), without importing any reminder logic", async () => {
+  it("calls the onTransitioned seam after persisting (Phase 4 hook point)", async () => {
     const current = { orden: { id: "o1", status: "in_progress" } as unknown as OrdenServicio, items: [] };
     const database = {
       update: () => ({
@@ -237,13 +242,169 @@ describe("transitionOrder (R21)", () => {
       }),
     };
     const onTransitioned = vi.fn();
+    const cancelRemindersForOrder = vi.fn().mockResolvedValue(undefined);
 
     await transitionOrder("o1", "cancelled", {
       getById: async () => current,
       db: database as unknown as typeof import("@/shared/db/client").db,
       onTransitioned,
+      cancelRemindersForOrder,
     });
 
     expect(onTransitioned).toHaveBeenCalledWith(expect.objectContaining({ status: "cancelled" }), "in_progress", "cancelled");
+  });
+});
+
+describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no real DB/pg-boss", () => {
+  const clienteRow = {
+    id: "c1",
+    name: "Juan Perez",
+    phone: "+5491122334455",
+    email: "juan@example.com",
+    whatsappOptOut: false,
+    emailOptOut: false,
+  } as unknown as import("@/shared/db/schema").Cliente;
+
+  it("createOrder schedules an appointment reminder when appointmentAt is given", async () => {
+    const { tx } = makeFakeTx();
+    const database = {
+      transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(tx),
+      insert: () => ({ values: () => ({ returning: async () => [{ id: "rem-1" }] }) }),
+    };
+    const scheduleReminder = vi.fn().mockResolvedValue("job-1");
+
+    await createOrder(
+      { clienteId: "c1", appointmentAt: new Date("2026-08-01T10:00:00.000Z") },
+      {
+        getClienteById: async () => ({ cliente: clienteRow, orders: [] }),
+        db: database as unknown as typeof import("@/shared/db/client").db,
+        now: () => new Date("2026-07-26T12:00:00.000Z"),
+        scheduleReminder,
+      },
+    );
+
+    expect(scheduleReminder).toHaveBeenCalled();
+  });
+
+  it("createOrder does NOT schedule any reminder when no appointmentAt is given", async () => {
+    const { tx } = makeFakeTx();
+    const database = { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(tx) };
+    const scheduleReminder = vi.fn();
+
+    await createOrder(
+      { clienteId: "c1" },
+      {
+        getClienteById: async () => ({ cliente: clienteRow, orders: [] }),
+        db: database as unknown as typeof import("@/shared/db/client").db,
+        scheduleReminder,
+      },
+    );
+
+    expect(scheduleReminder).not.toHaveBeenCalled();
+  });
+
+  it("transitionOrder -> done schedules a service_due reminder", async () => {
+    const current = { orden: { id: "o1", clienteId: "c1", status: "in_progress" } as unknown as OrdenServicio, items: [] };
+    const database = {
+      update: () => ({
+        set: (patch: Record<string, unknown>) => ({
+          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
+        }),
+      }),
+      insert: () => ({ values: () => ({ returning: async () => [{ id: "rem-2" }] }) }),
+    };
+    const scheduleReminder = vi.fn().mockResolvedValue("job-2");
+
+    await transitionOrder("o1", "done", {
+      getById: async () => current,
+      db: database as unknown as typeof import("@/shared/db/client").db,
+      now: () => new Date("2026-07-26T12:00:00.000Z"),
+      getClienteById: async () => ({ cliente: clienteRow, orders: [] }),
+      scheduleReminder,
+    });
+
+    expect(scheduleReminder).toHaveBeenCalled();
+  });
+
+  it("transitionOrder -> cancelled cancels all pending reminders for the order", async () => {
+    const current = { orden: { id: "o1", clienteId: "c1", status: "open" } as unknown as OrdenServicio, items: [] };
+    const database = {
+      update: () => ({
+        set: (patch: Record<string, unknown>) => ({
+          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
+        }),
+      }),
+    };
+    const cancelRemindersForOrder = vi.fn().mockResolvedValue(undefined);
+
+    await transitionOrder("o1", "cancelled", {
+      getById: async () => current,
+      db: database as unknown as typeof import("@/shared/db/client").db,
+      cancelRemindersForOrder,
+    });
+
+    expect(cancelRemindersForOrder).toHaveBeenCalledWith("o1", undefined, expect.anything());
+  });
+
+  it("updateOrder reschedules the appointment reminder when appointmentAt changes: cancels the old one, schedules a new one", async () => {
+    const current = {
+      orden: { id: "o1", clienteId: "c1", appointmentAt: new Date("2026-08-01T10:00:00.000Z") } as unknown as OrdenServicio,
+      items: [],
+    };
+    const newAppointmentAt = new Date("2026-08-05T10:00:00.000Z");
+    const database = {
+      update: () => ({
+        set: (patch: Record<string, unknown>) => ({
+          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
+        }),
+      }),
+      insert: () => ({ values: () => ({ returning: async () => [{ id: "rem-3" }] }) }),
+    };
+    const cancelRemindersForOrder = vi.fn().mockResolvedValue(undefined);
+    const scheduleReminder = vi.fn().mockResolvedValue("job-3");
+
+    await updateOrder(
+      "o1",
+      { appointmentAt: newAppointmentAt },
+      {
+        getById: async () => current,
+        db: database as unknown as typeof import("@/shared/db/client").db,
+        now: () => new Date("2026-07-26T12:00:00.000Z"),
+        getClienteById: async () => ({ cliente: clienteRow, orders: [] }),
+        cancelRemindersForOrder,
+        scheduleReminder,
+      },
+    );
+
+    expect(cancelRemindersForOrder).toHaveBeenCalledWith("o1", "appointment", expect.anything());
+    expect(scheduleReminder).toHaveBeenCalled();
+  });
+
+  it("updateOrder does NOT touch reminders when appointmentAt is unchanged", async () => {
+    const appointmentAt = new Date("2026-08-01T10:00:00.000Z");
+    const current = { orden: { id: "o1", clienteId: "c1", appointmentAt } as unknown as OrdenServicio, items: [] };
+    const database = {
+      update: () => ({
+        set: (patch: Record<string, unknown>) => ({
+          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
+        }),
+      }),
+    };
+    const cancelRemindersForOrder = vi.fn();
+    const scheduleReminder = vi.fn();
+
+    await updateOrder(
+      "o1",
+      { description: "solo cambio de nota" },
+      {
+        getById: async () => current,
+        db: database as unknown as typeof import("@/shared/db/client").db,
+        cancelRemindersForOrder,
+        scheduleReminder,
+      },
+    );
+
+    expect(cancelRemindersForOrder).not.toHaveBeenCalled();
+    expect(scheduleReminder).not.toHaveBeenCalled();
   });
 });
