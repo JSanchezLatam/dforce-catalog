@@ -177,12 +177,122 @@ touched (`CatalogBuilderForm.tsx`, `TreeSelect.tsx`, `InventoryFilters.tsx`,
 
 ## Phase 7: Provider Wiring
 
-- [ ] 7.1 `shared/config/env.ts` (edit) — add `RESEND_API_KEY`/`RESEND_FROM`/`KAPSO_API_KEY`/`KAPSO_PHONE_NUMBER_ID`/2 template env vars (all `optional`); add both API keys to `SENSITIVE_ENV_KEYS`.
-- [ ] 7.2 RED `modules/reminders/providers/email.test.ts` — sends via Resend SDK with `from`/`to`/`subject`/`html`; no-ops gracefully (marks reminder `failed`/`skipped` with reason) when `RESEND_API_KEY` is absent.
-- [ ] 7.3 GREEN `modules/reminders/providers/email.ts` — implement with `resend` npm SDK (ADR-4); add `resend` dependency.
-- [ ] 7.4 RED `modules/reminders/providers/whatsapp.test.ts` — sends via Kapso **template** (not `sendText`, ADR-3); graceful no-op when Kapso env is missing.
-- [ ] 7.5 GREEN `modules/reminders/providers/whatsapp.ts` — implement with `@kapso/whatsapp-cloud-api` `WhatsAppClient`, named-param template send.
-- [ ] 7.6 `instrumentation-node.ts` (edit) — add `registerReminderWorker()` to `registerNodeWorkers()`.
+- [x] 7.1 `shared/config/env.ts` (edit) — add `RESEND_API_KEY`/`RESEND_FROM`/`KAPSO_API_KEY`/`KAPSO_PHONE_NUMBER_ID`/2 template env vars (all `optional`); add both API keys to `SENSITIVE_ENV_KEYS`.
+- [x] 7.2 RED `modules/reminders/providers/email.test.ts` — sends via Resend SDK with `from`/`to`/`subject`/`html`; no-ops gracefully (marks reminder `failed`/`skipped` with reason) when `RESEND_API_KEY` is absent.
+- [x] 7.3 GREEN `modules/reminders/providers/email.ts` — implement with `resend` npm SDK (ADR-4); add `resend` dependency.
+- [x] 7.4 RED `modules/reminders/providers/whatsapp.test.ts` — sends via Kapso **template** (not `sendText`, ADR-3); graceful no-op when Kapso env is missing.
+- [x] 7.5 GREEN `modules/reminders/providers/whatsapp.ts` — implement with `@kapso/whatsapp-cloud-api` `WhatsAppClient`, named-param template send.
+- [x] 7.6 `instrumentation-node.ts` (edit) — add `registerReminderWorker()` to `registerNodeWorkers()`.
+
+**Notes (Phase 7, branch `crm-workshop/pr7-providers`, base = `crm-workshop/pr6-pages-nav` @ `18c3bce`) — LAST phase, 41/41 tasks now complete:**
+
+Both SDKs were installed from npm (`resend@6.18.0`, `@kapso/whatsapp-cloud-api@0.2.3`)
+and their **shipped `.d.ts`/`.d.cts` type declarations were read directly**
+(not guessed) before writing any code:
+- `resend`: `Emails.send(payload): Promise<Response<CreateEmailResponseSuccess>>`
+  where `Response<T> = ({ data: T; error: null } | { data: null; error:
+  ErrorResponse }) & { headers }` — the SDK does **not** throw for API-level
+  errors (invalid `from`, quota, etc.), it returns `{ error }`; only network-
+  level failures would throw. `providers/email.ts` handles both: reads
+  `error.message` when present, and (implicitly, since nothing catches it) a
+  thrown network error would propagate up through `sendEmail` unhandled —
+  acceptable since job.ts's `runReminder` already wraps the whole
+  `sendViaChannel` dispatch call in try/catch and marks `failed`+rethrows
+  either way (R25).
+- `@kapso/whatsapp-cloud-api`: `messages.sendTemplate({ phoneNumberId, to,
+  template: { name, language: { code }, components } })` **matched the
+  `integrate-whatsapp` skill's documented example exactly** — no adaptation
+  needed. One thing the skill's prose doesn't spell out but the type
+  declarations confirmed: `GraphApiError extends Error` — the SDK **throws**
+  on a real send failure (unlike Resend's `{ error }` return), so
+  `providers/whatsapp.ts` wraps the `sendTemplate` call in try/catch and
+  converts it to the same `{ ok: false, reason }` shape `providers/email.ts`
+  returns, so `reminders/job.ts`'s dispatch wiring can treat both providers
+  uniformly regardless of which failure convention each SDK uses natively.
+
+**Provider DI design (deviation from the "inject an env-shaped config" idea
+implied by the apply prompt):** rather than mocking `@/shared/config/env`
+(the module's `env` object is built once from `process.env` at first import —
+fragile to fake per-test, and no precedent for `vi.mock`-ing it exists in this
+repo), both `sendEmail`/`sendWhatsAppTemplate` accept optional `deps.apiKey`/
+`deps.from`/`deps.phoneNumberId` overrides that take precedence over
+`env.*` when provided (even `""`, which deliberately forces the
+not-configured path deterministically in a test regardless of the ambient
+shell's real env). This mirrors this codebase's established `deps`-seam
+convention (`job.ts`, `customers/queries.ts`) rather than introducing a new
+env-mocking pattern. Same reasoning extended to `runReminder`'s new
+`deps.kapsoTemplates` override (for the `appointment`/`service_due` template
+name, otherwise read from `env.KAPSO_TEMPLATE_APPOINTMENT`/
+`KAPSO_TEMPLATE_SERVICE_DUE`) — needed because `env.ts`'s module-singleton
+values are captured at first import, before any in-test `process.env`
+mutation could take effect.
+
+**Wiring `runReminder`'s `sendViaChannel` seam:** `job.ts`'s Phase-4 stand-in
+(`defaultSendViaChannel`, which unconditionally threw `"no provider wired for
+this channel yet (Phase 7)"`) is replaced by `buildDefaultSendViaChannel(
+kapsoTemplates?)`, used as `deps.sendViaChannel ?? buildDefaultSendViaChannel(
+deps.kapsoTemplates)` — the DI seam itself (`RunReminderDeps.sendViaChannel`)
+is unchanged and still fully overridable by tests (all of Phase 4's existing
+`job.test.ts` assertions keep injecting a fake `sendViaChannel` and pass
+unmodified). The new default routes by `ctx.reminder.channel`: `email` builds
+a `{ to: cliente.email, subject, html }` from the reminder `type` and calls
+`providers/email.ts`; `whatsapp` picks the type-specific template name and
+calls `providers/whatsapp.ts` with a single NAMED body param
+(`customer_name`). Either provider's `{ ok: false, reason }` is converted to
+a thrown `Error` here — that throw is what makes `runReminder`'s existing
+catch-and-rethrow-for-pg-boss-retry logic (R25, unchanged since Phase 4) also
+cover "provider not configured" and "no Kapso template configured for this
+reminder's type" as just another failure mode landing in the DLQ after
+`retryLimit` attempts, with no new failure-handling branch needed in
+`runReminder` itself.
+
+**E.164 phone format** — confirmed, not re-implemented: `customers/
+validation.ts`'s `normalizePhone()` (Phase 2) already strips separators and
+preserves a leading `+` on write, so `cliente.phone` read by `job.ts` is
+already in the shape Kapso's `to` field expects. `providers/whatsapp.ts`'s
+own header comment states this explicitly as a cross-reference rather than
+silently assuming it.
+
+**`instrumentation-node.ts``** — confirmed via reading the file that Phase 4
+did NOT register the reminder worker (its own header comment said "Starts
+all **three** pg-boss workers eagerly at boot" and `registerNodeWorkers()`
+only imported/called `registerInventorySyncWorker`, `scheduleWeeklySync`,
+`registerPdfGenerateWorker`, `registerPdfUploadWorker` — reminders were
+missing). Added a 4th dynamic import + call for `registerReminderWorker` from
+`@/modules/reminders/job`, matching the existing dynamic-import style (kept
+for consistency, not because reminders/job.ts has pdf-generation's
+build-graph problem). No `schedule()`/cron call added for reminders — matches
+design.md §5's explicit note that reminders are enqueued on demand by
+`service-orders/service.ts`, not on a recurring schedule. No test file exists
+for `instrumentation-node.ts` (no prior test existed for it either — pure
+bootstrap wiring, same untested-file convention as `catalog-storage/r2.ts`).
+
+**Verification**: `npx tsc --noEmit` clean (zero errors). Full `npx vitest
+run`: **294/294 tests passing, 35/35 files** (was 280/33 after Phase 6 —
++14 tests/+2 files: 4 new `providers/email.test.ts`, 4 new
+`providers/whatsapp.test.ts`, +6 new tests appended to the existing
+`job.test.ts` for the real-dispatch wiring — routes to the right provider by
+channel, uses the type-specific Kapso template, and marks `failed`+rethrows
+on any provider/config failure). `npx eslint` on every new/touched Phase 7
+file: 0 errors; 1 pre-existing warning in `job.test.ts` (`'table' is defined
+but never used` in the Phase-4 `makeFakeDb` helper, confirmed unmodified by
+this phase via `git show HEAD:...`) — zero new lint issues introduced.
+
+**Where**: `src/shared/config/env.ts` (edit), `src/modules/reminders/job.ts`
+(edit), `src/modules/reminders/job.test.ts` (edit, +6 tests),
+`src/modules/reminders/providers/email.ts` + `email.test.ts` (new),
+`src/modules/reminders/providers/whatsapp.ts` + `whatsapp.test.ts` (new),
+`src/instrumentation-node.ts` (edit), `package.json`/`package-lock.json`
+(added `resend`, `@kapso/whatsapp-cloud-api` dependencies).
+
+### Status — ALL 7 PHASES COMPLETE (41/41 tasks)
+This closes out `crm-workshop-management`. 7 chained PR-slice branches exist,
+none pushed/merged, all local on top of tracker `feature/crm-workshop-management`
+(feature-branch-chain): `crm-workshop/pr1-schema` → `pr2-customers` →
+`pr3-service-orders` → `pr4-reminders-core` → `pr5-routes-forms` →
+`pr6-pages-nav` → `pr7-providers` (this phase, HEAD). Ready for review/
+`sdd-verify` across the chain, then sequential merge per `feature-branch-chain`
+strategy.
 
 ## Key estimates
 
