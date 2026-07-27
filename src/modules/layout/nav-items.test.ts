@@ -5,7 +5,7 @@ import type { SessionUser } from "@/modules/auth/session";
 import { getNavItems } from "./nav-items";
 
 const admin: SessionUser = { id: "admin-1", role: "administrador" };
-const user: SessionUser = { id: "user-1", role: "usuario" };
+const user: SessionUser = { id: "user-1", role: "tecnico" };
 
 describe("getNavItems() — Sidebar nav visibility (confirmed mockup: gate, don't just hide)", () => {
   it("shows all 6 items to an administrador, including Configuración de Template", () => {
