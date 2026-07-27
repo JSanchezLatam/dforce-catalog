@@ -6,15 +6,15 @@ import { randomUUID } from "node:crypto";
 import bcrypt from "bcrypt";
 import pg from "pg";
 
-const [username, password, role = "usuario"] = process.argv.slice(2);
+const [username, password, role = "tecnico"] = process.argv.slice(2);
 
 if (!username || !password) {
-  console.error("Usage: node scripts/seed-user.mjs <username> <password> [usuario|administrador]");
+  console.error("Usage: node scripts/seed-user.mjs <username> <password> [tecnico|administrador]");
   process.exit(1);
 }
 
-if (role !== "usuario" && role !== "administrador") {
-  console.error(`Invalid role "${role}" — must be "usuario" or "administrador".`);
+if (role !== "tecnico" && role !== "administrador") {
+  console.error(`Invalid role "${role}" — must be "tecnico" or "administrador".`);
   process.exit(1);
 }
 

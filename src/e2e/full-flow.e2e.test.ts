@@ -64,11 +64,11 @@ import { GET as filePOST } from "../app/api/catalogs/[id]/file/route";
 
 const PASSWORD = "Sup3rSecret!1";
 
-function headersFor(user: { id: string; role: "usuario" | "administrador" }) {
+function headersFor(user: { id: string; role: "tecnico" | "administrador" }) {
   return { "x-user-id": user.id, "x-user-role": user.role };
 }
 
-async function loginAs(username: string): Promise<{ id: string; role: "usuario" | "administrador" }> {
+async function loginAs(username: string): Promise<{ id: string; role: "tecnico" | "administrador" }> {
   const response = await loginPOST(
     new NextRequest("http://localhost/api/login", { method: "POST", body: JSON.stringify({ username, password: PASSWORD }) }),
   );
@@ -81,9 +81,9 @@ async function loginAs(username: string): Promise<{ id: string; role: "usuario" 
 }
 
 describe("full catalog-generation flow (E2E)", () => {
-  let regularUser: { id: string; role: "usuario" | "administrador" };
-  let adminUser: { id: string; role: "usuario" | "administrador" };
-  let otherUser: { id: string; role: "usuario" | "administrador" };
+  let regularUser: { id: string; role: "tecnico" | "administrador" };
+  let adminUser: { id: string; role: "tecnico" | "administrador" };
+  let otherUser: { id: string; role: "tecnico" | "administrador" };
 
   beforeAll(async () => {
     // Real migrations against whatever DATABASE_URL points at (README:
@@ -92,9 +92,9 @@ describe("full catalog-generation flow (E2E)", () => {
 
     const passwordHash = await hashPassword(PASSWORD);
     await db.insert(users).values([
-      { username: "e2e-user", passwordHash, role: "usuario" },
+      { username: "e2e-user", passwordHash, role: "tecnico" },
       { username: "e2e-admin", passwordHash, role: "administrador" },
-      { username: "e2e-other", passwordHash, role: "usuario" },
+      { username: "e2e-other", passwordHash, role: "tecnico" },
     ]);
 
     // Real pg-boss workers — the same functions instrumentation.ts registers

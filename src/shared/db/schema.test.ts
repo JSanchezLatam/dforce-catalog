@@ -10,6 +10,9 @@ import {
   reminderChannelEnum,
   reminderStatusEnum,
   reminderTypeEnum,
+  roleEnum,
+  users,
+  workshopConfig,
 } from "./schema";
 
 /** Find a column in a `getTableConfig(...)` result by its DB column name (snake_case). */
@@ -25,6 +28,61 @@ function findIndex(indexes: ReturnType<typeof getTableConfig>["indexes"], name: 
   if (!found) throw new Error(`Index "${name}" not found`);
   return found;
 }
+
+describe("schema — role enum (renamed in crm-shell-settings-rbac WU1)", () => {
+  it("roleEnum has exactly the 2 renamed values (usuario → tecnico)", () => {
+    expect(roleEnum.enumValues).toEqual(["tecnico", "administrador"]);
+  });
+});
+
+describe("schema — users extended columns (crm-shell-settings-rbac WU1)", () => {
+  const config = getTableConfig(users);
+
+  it("name is nullable (added for display name)", () => {
+    expect(findColumn(config.columns, "name").notNull).toBe(false);
+  });
+
+  it("email is nullable but unique", () => {
+    const email = findColumn(config.columns, "email");
+    expect(email.notNull).toBe(false);
+    expect(email.isUnique).toBe(true);
+  });
+
+  it("deactivatedAt is nullable (reserved for follow-up)", () => {
+    expect(findColumn(config.columns, "deactivated_at").notNull).toBe(false);
+  });
+
+  it("mustChangePassword is notNull with default false (reserved for follow-up)", () => {
+    const col = findColumn(config.columns, "must_change_password");
+    expect(col.notNull).toBe(true);
+    expect(col.default).toBe(false);
+  });
+});
+
+describe("schema — workshop_config singleton table", () => {
+  const config = getTableConfig(workshopConfig);
+
+  it("is named 'workshop_config'", () => {
+    expect(config.name).toBe("workshop_config");
+  });
+
+  it("has an id column (singleton key)", () => {
+    const id = findColumn(config.columns, "id");
+    expect(id.notNull).toBe(true);
+  });
+
+  it("has nullable name, logoR2Key, logoContentType", () => {
+    expect(findColumn(config.columns, "name").notNull).toBe(false);
+    expect(findColumn(config.columns, "logo_r2_key").notNull).toBe(false);
+    expect(findColumn(config.columns, "logo_content_type").notNull).toBe(false);
+  });
+
+  it("has updatedAt with default now", () => {
+    const col = findColumn(config.columns, "updated_at");
+    expect(col.notNull).toBe(true);
+    expect(col.default).toBeDefined();
+  });
+});
 
 describe("schema — crm-workshop-management enums (Phase 1, task 1.1)", () => {
   it("order_status enum has exactly the 4 lifecycle values", () => {

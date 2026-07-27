@@ -49,7 +49,7 @@ from.
    (Runs against the `migrate` service's `builder`-stage image, since it has
    the full source — the `app` image doesn't. Outside Docker: `npm run
    db:seed-user -- admin "a-real-password" administrador`, with
-   `DATABASE_URL` pointed at a reachable Postgres.) Role is `usuario` or
+   `DATABASE_URL` pointed at a reachable Postgres.) Role is `tecnico` or
    `administrador`; log in at `/login`.
 
 ### Running without Docker

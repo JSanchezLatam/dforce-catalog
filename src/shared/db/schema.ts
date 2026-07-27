@@ -9,7 +9,7 @@
 import { boolean, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp } from "drizzle-orm/pg-core";
 
 /** R9.6 / NFR-8 — single `role` column, extensible without an RBAC library. */
-export const roleEnum = pgEnum("role", ["usuario", "administrador"]);
+export const roleEnum = pgEnum("role", ["tecnico", "administrador"]);
 
 export const users = pgTable("users", {
   id: text("id")
@@ -18,9 +18,17 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   /** bcrypt hash, cost >= 12 (R9.5) — see modules/auth/password.ts. */
   passwordHash: text("password_hash").notNull(),
-  role: roleEnum("role").notNull().default("usuario"),
+  role: roleEnum("role").notNull().default("tecnico"),
+  name: text("name"),
+  email: text("email").unique(),
+  // reserved for the crm-shell-settings-rbac user-management follow-up — no v1 code path reads or writes this
+  deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
+  // reserved for the crm-shell-settings-rbac user-management follow-up — no v1 code path reads or writes this
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export type User = typeof users.$inferSelect;
 
 export const sessions = pgTable("sessions", {
   /** Opaque random token — see modules/auth/session.ts. Not a JWT (design.md). */
@@ -34,8 +42,22 @@ export const sessions = pgTable("sessions", {
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
 
-export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
+
+/**
+ * `workshop_config` — singleton row holding the workshop display name and
+ * logo (uploaded to R2, served through /api/workshop-config/logo).
+ * Created in crm-shell-settings-rbac WU1.
+ */
+export const workshopConfig = pgTable("workshop_config", {
+  id: text("id").primaryKey().default("singleton"),
+  name: text("name"),
+  logoR2Key: text("logo_r2_key"),
+  logoContentType: text("logo_content_type"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type WorkshopConfig = typeof workshopConfig.$inferSelect;
 
 /**
  * `producto` — JSONB raw + typed-projection hybrid (design.md → "Database

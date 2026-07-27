@@ -1,10 +1,6 @@
-import type { SessionUser } from "@/modules/auth/session";
 import { Card, CardContent } from "@/components/ui/card";
-
-const ROLE_LABELS: Record<SessionUser["role"], string> = {
-  administrador: "Administrador",
-  usuario: "Usuario",
-};
+import { ROLE_LABELS } from "@/modules/auth/roles";
+import type { SessionUser } from "@/modules/auth/session";
 
 /**
  * PR10 — greeting/avatar topbar row + a single stat card summarizing the
