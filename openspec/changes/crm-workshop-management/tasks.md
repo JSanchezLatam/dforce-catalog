@@ -65,12 +65,12 @@ task 4.3 below (RED test should cover this no-op-on-already-sent case).
 
 ## Phase 3: Service-Orders Module
 
-- [ ] 3.1 RED `modules/service-orders/transitions.test.ts` — allowed/rejected transitions per R21 (all 7 scenarios); `done`/`cancelled` terminal.
-- [ ] 3.2 GREEN `modules/service-orders/transitions.ts` — `assertTransition()` + `OrderTransitionError`.
-- [ ] 3.3 RED `modules/service-orders/queries.test.ts` — list w/ status filter+pagination, get-by-id w/ line items, count.
-- [ ] 3.4 GREEN `modules/service-orders/queries.ts`.
-- [ ] 3.5 RED `modules/service-orders/service.test.ts` — create order+items in one tx (R20); duplicate-producto merge-or-append (pick one, test it); reject unknown `clienteId`; `-> done` sets `completedAt`; no `producto.stock` mutation (R22).
-- [ ] 3.6 GREEN `modules/service-orders/service.ts` — `createOrder`, `updateOrder`/`transitionOrder` (calls transitions.ts; reminder side-effects wired in Phase 4).
+- [x] 3.1 RED `modules/service-orders/transitions.test.ts` — allowed/rejected transitions per R21 (all 7 scenarios); `done`/`cancelled` terminal.
+- [x] 3.2 GREEN `modules/service-orders/transitions.ts` — `assertTransition()` + `OrderTransitionError`. `OrderStatus` derived from `orderStatusEnum.enumValues` (no separate type existed in schema.ts).
+- [x] 3.3 RED `modules/service-orders/queries.test.ts` — list w/ status filter+pagination, get-by-id w/ line items, count.
+- [x] 3.4 GREEN `modules/service-orders/queries.ts`.
+- [x] 3.5 RED `modules/service-orders/service.test.ts` — create order+items in one tx (R20); duplicate-producto merge-or-append (pick one, test it); reject unknown `clienteId`; `-> done` sets `completedAt`; no `producto.stock` mutation (R22).
+- [x] 3.6 GREEN `modules/service-orders/service.ts` — `createOrder`, `updateOrder`/`transitionOrder` (calls transitions.ts; reminder side-effects wired in Phase 4). **Note**: duplicate-`productoId` policy chosen = MERGE quantities (not append) — see service.ts's `normalizeOrderItems` doc comment for rationale. `transitionOrder` exposes an optional `onTransitioned` DI hook (no-op unless a caller supplies it) as the clean seam for Phase 4's reminder wiring — this PR does not import or call anything from a `reminders` module, which doesn't exist yet. `createOrder` validates `clienteId` via `customers/queries.ts`'s existing `getClienteById` (cross-module read, no new query duplicated); it does NOT validate `productoId` against the `producto` table (out of this task's explicit scope — only "reject unknown `clienteId`" was required).
 
 ## Phase 4: Reminders Module
 
