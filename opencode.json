@@ -1,3 +1,4 @@
 {
-  "plugin": ["@dietrichgebert/ponytail"]
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["@dietrichgebert/ponytail", "@warp-dot-dev/opencode-warp"]
 }
