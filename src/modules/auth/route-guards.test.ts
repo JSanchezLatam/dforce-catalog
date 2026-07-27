@@ -33,6 +33,7 @@ export const ROUTE_GUARDS: Record<string, Partial<Record<"GET" | "POST" | "PATCH
   "/catalogs": { GET: "catalogs.read" },
   "/builder": { GET: "catalogs.generate" },
   "/template-config": { GET: "template.edit" },
+  "/workshop-config": { GET: "workshop.edit" },
 };
 
 const APP_DIR = path.resolve(import.meta.dirname, "../../app");
