@@ -15,9 +15,12 @@
 import { and, eq } from "drizzle-orm";
 import type { PgBoss } from "pg-boss";
 
+import { env } from "@/shared/config/env";
 import { db } from "@/shared/db/client";
 import { cliente, ordenServicio, reminder, type Cliente, type OrdenServicio, type Reminder } from "@/shared/db/schema";
 import { getBoss } from "@/shared/jobs/boss";
+import { sendEmail } from "./providers/email";
+import { sendWhatsAppTemplate } from "./providers/whatsapp";
 import type { ReminderType } from "./schedule";
 
 export const REMINDER_SEND_JOB = "reminder-send";
@@ -95,16 +98,73 @@ export type RunReminderDeps = {
   /** Full override of the loader — receives just the reminder id. Defaults to `loadReminderContextFrom(id, deps.db ?? db)`. */
   loadReminderContext?: (id: string) => Promise<ReminderContext | null>;
   /**
-   * Phase 7 seam: dispatches to providers/email.ts or providers/whatsapp.ts
-   * by `ctx.reminder.channel`. This PR (Phase 4) does not implement the real
-   * provider calls yet — see the default below.
+   * Dispatches to providers/email.ts or providers/whatsapp.ts by
+   * `ctx.reminder.channel`. Defaults to `buildDefaultSendViaChannel` (Phase
+   * 7's real Resend/Kapso wiring) — override in tests to inject a fake
+   * without touching the provider modules.
    */
   sendViaChannel?: SendViaChannel;
+  /** Phase 7 — overrides `env.KAPSO_TEMPLATE_APPOINTMENT`/`KAPSO_TEMPLATE_SERVICE_DUE` for the default `sendViaChannel`. Ignored when `sendViaChannel` is itself overridden. */
+  kapsoTemplates?: KapsoTemplateNames;
 };
 
-/** Phase 4 stand-in until Phase 7 wires the real Resend/Kapso calls (ADR-3/ADR-4). */
-async function defaultSendViaChannel(): Promise<void> {
-  throw new Error("reminders: no provider wired for this channel yet (Phase 7)");
+/** Which Kapso template to use for each reminder `type` — defaults to `env.KAPSO_TEMPLATE_APPOINTMENT`/`KAPSO_TEMPLATE_SERVICE_DUE` (ADR-3's two recommended UTILITY templates). Overridable so tests don't depend on ambient env-at-import-time. */
+export type KapsoTemplateNames = { appointment?: string; service_due?: string };
+
+function emailSubject(ctx: ReminderContext): string {
+  return ctx.reminder.type === "appointment" ? "Recordatorio de cita de servicio" : "Recordatorio de servicio pendiente";
+}
+
+function emailHtml(ctx: ReminderContext): string {
+  if (ctx.reminder.type === "appointment") {
+    const when = ctx.orden.appointmentAt ? ctx.orden.appointmentAt.toLocaleString() : "próximamente";
+    return `<p>Hola ${ctx.cliente.name},</p><p>Te recordamos tu cita de servicio programada para ${when}.</p>`;
+  }
+  return `<p>Hola ${ctx.cliente.name},</p><p>Ya pasaron 90 días desde tu último servicio — es un buen momento para agendar el próximo mantenimiento.</p>`;
+}
+
+/**
+ * Phase 7 — real dispatch, replacing the Phase 4 stand-in. Routes by
+ * `ctx.reminder.channel` to providers/email.ts (Resend, ADR-4) or
+ * providers/whatsapp.ts (Kapso template, ADR-3), building the reminder
+ * copy/template params from the reloaded `ctx`. Providers themselves never
+ * throw for a graceful "not configured"/SDK-error outcome (they return
+ * `{ ok: false, reason }`) — THIS function is the seam that converts that
+ * into a throw, preserving runReminder's existing "mark failed + rethrow so
+ * pg-boss retries" contract (R25) for every failure mode, config-missing
+ * included (retrying won't fix a missing credential, but it does land the
+ * reminder in the DLQ after `retryLimit` attempts instead of silently
+ * dropping it — same DLQ safety net as any other failure).
+ */
+function buildDefaultSendViaChannel(kapsoTemplates?: KapsoTemplateNames): SendViaChannel {
+  return async (ctx: ReminderContext): Promise<void> => {
+    if (ctx.reminder.channel === "email") {
+      if (!ctx.cliente.email) {
+        throw new Error("reminders: cliente has no email address for an email reminder");
+      }
+      const result = await sendEmail({ to: ctx.cliente.email, subject: emailSubject(ctx), html: emailHtml(ctx) });
+      if (!result.ok) throw new Error(`reminders: email send failed — ${result.reason}`);
+      return;
+    }
+
+    // whatsapp
+    if (!ctx.cliente.phone) {
+      throw new Error("reminders: cliente has no phone number for a whatsapp reminder");
+    }
+    const templateName =
+      ctx.reminder.type === "appointment"
+        ? (kapsoTemplates?.appointment ?? env.KAPSO_TEMPLATE_APPOINTMENT)
+        : (kapsoTemplates?.service_due ?? env.KAPSO_TEMPLATE_SERVICE_DUE);
+    if (!templateName) {
+      throw new Error(`reminders: no Kapso template configured for reminder type "${ctx.reminder.type}"`);
+    }
+    const result = await sendWhatsAppTemplate({
+      to: ctx.cliente.phone, // already E.164 — customers/validation.ts's normalizePhone enforces this on write (Phase 2)
+      templateName,
+      bodyParams: [{ parameterName: "customer_name", text: ctx.cliente.name }],
+    });
+    if (!result.ok) throw new Error(`reminders: whatsapp send failed — ${result.reason}`);
+  };
 }
 
 /**
@@ -153,7 +213,7 @@ export async function runReminder(reminderId: string, deps: RunReminderDeps = {}
     return;
   }
 
-  const dispatch = deps.sendViaChannel ?? defaultSendViaChannel;
+  const dispatch = deps.sendViaChannel ?? buildDefaultSendViaChannel(deps.kapsoTemplates);
   try {
     await dispatch(ctx);
     await database.update(reminder).set({ status: "sent", sentAt: now() }).where(eq(reminder.id, reminderId));

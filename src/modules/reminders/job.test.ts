@@ -1,5 +1,5 @@
 import type { PgBoss } from "pg-boss";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { db } from "@/shared/db/client";
 import type { Cliente, OrdenServicio, Reminder } from "@/shared/db/schema";
@@ -12,6 +12,16 @@ import {
   runReminder,
   scheduleReminder,
 } from "./job";
+import { sendEmail } from "./providers/email";
+import { sendWhatsAppTemplate } from "./providers/whatsapp";
+
+// Phase 7 — job.ts's real default `sendViaChannel` dispatches to these two
+// provider modules; mock them here (no real network calls) so these tests
+// exercise ONLY the routing/content-building wiring in job.ts, not the
+// providers themselves (covered by providers/email.test.ts and
+// providers/whatsapp.test.ts).
+vi.mock("./providers/email", () => ({ sendEmail: vi.fn() }));
+vi.mock("./providers/whatsapp", () => ({ sendWhatsAppTemplate: vi.fn() }));
 
 const NOW = new Date("2026-07-26T12:00:00.000Z");
 
@@ -272,6 +282,132 @@ describe("runReminder — R23/R26 re-check at fire time", () => {
 
     expect(state.reminder.status).toBe("failed");
     expect(state.reminder.error).toContain("Kapso 500");
+  });
+});
+
+describe("runReminder — Phase 7 real provider wiring (default sendViaChannel, no override injected)", () => {
+  beforeEach(() => {
+    vi.mocked(sendEmail).mockReset();
+    vi.mocked(sendWhatsAppTemplate).mockReset();
+  });
+
+  it("dispatches an email-channel reminder to sendEmail using the cliente's email address", async () => {
+    vi.mocked(sendEmail).mockResolvedValue({ ok: true });
+    const state = {
+      reminder: makeReminder({ status: "scheduled", channel: "email" }),
+      orden: makeOrden(),
+      cliente: makeCliente(),
+    };
+    const { fakeDb, refillSelectQueue } = makeFakeDb(state);
+
+    refillSelectQueue();
+    await runReminder("reminder-1", { db: fakeDb as unknown as typeof db, now: () => NOW });
+
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: state.cliente.email, subject: expect.any(String), html: expect.any(String) }),
+    );
+    expect(sendWhatsAppTemplate).not.toHaveBeenCalled();
+    expect(state.reminder.status).toBe("sent");
+  });
+
+  it("dispatches a whatsapp-channel reminder to sendWhatsAppTemplate using the cliente's phone and the type-specific template name", async () => {
+    vi.mocked(sendWhatsAppTemplate).mockReset().mockResolvedValue({ ok: true });
+    const state = {
+      reminder: makeReminder({ status: "scheduled", channel: "whatsapp", type: "appointment" }),
+      orden: makeOrden(),
+      cliente: makeCliente(),
+    };
+    const { fakeDb, refillSelectQueue } = makeFakeDb(state);
+
+    refillSelectQueue();
+    await runReminder("reminder-1", {
+      db: fakeDb as unknown as typeof db,
+      now: () => NOW,
+      kapsoTemplates: { appointment: "appointment_reminder", service_due: "service_due_reminder" },
+    });
+
+    expect(sendWhatsAppTemplate).toHaveBeenCalledTimes(1);
+    expect(sendWhatsAppTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({ to: state.cliente.phone, templateName: "appointment_reminder" }),
+    );
+    expect(sendEmail).not.toHaveBeenCalled();
+    expect(state.reminder.status).toBe("sent");
+  });
+
+  it("uses the service_due template name for a service_due-type whatsapp reminder", async () => {
+    vi.mocked(sendWhatsAppTemplate).mockReset().mockResolvedValue({ ok: true });
+    const state = {
+      reminder: makeReminder({ status: "scheduled", channel: "whatsapp", type: "service_due" }),
+      orden: makeOrden({ completedAt: NOW }),
+      cliente: makeCliente(),
+    };
+    const { fakeDb, refillSelectQueue } = makeFakeDb(state);
+
+    refillSelectQueue();
+    await runReminder("reminder-1", {
+      db: fakeDb as unknown as typeof db,
+      now: () => NOW,
+      kapsoTemplates: { appointment: "appointment_reminder", service_due: "service_due_reminder" },
+    });
+
+    expect(sendWhatsAppTemplate).toHaveBeenCalledWith(expect.objectContaining({ templateName: "service_due_reminder" }));
+  });
+
+  it("marks failed and rethrows (so pg-boss retries) when the email provider reports ok:false", async () => {
+    vi.mocked(sendEmail).mockReset().mockResolvedValue({ ok: false, reason: "RESEND_API_KEY/RESEND_FROM not configured" });
+    const state = {
+      reminder: makeReminder({ status: "scheduled", channel: "email" }),
+      orden: makeOrden(),
+      cliente: makeCliente(),
+    };
+    const { fakeDb, refillSelectQueue } = makeFakeDb(state);
+
+    refillSelectQueue();
+    await expect(
+      runReminder("reminder-1", { db: fakeDb as unknown as typeof db, now: () => NOW }),
+    ).rejects.toThrow(/not configured/);
+
+    expect(state.reminder.status).toBe("failed");
+    expect(state.reminder.error).toContain("not configured");
+  });
+
+  it("marks failed and rethrows when the whatsapp provider reports ok:false", async () => {
+    vi.mocked(sendWhatsAppTemplate).mockReset().mockResolvedValue({ ok: false, reason: "KAPSO_API_KEY/KAPSO_PHONE_NUMBER_ID not configured" });
+    const state = {
+      reminder: makeReminder({ status: "scheduled", channel: "whatsapp" }),
+      orden: makeOrden(),
+      cliente: makeCliente(),
+    };
+    const { fakeDb, refillSelectQueue } = makeFakeDb(state);
+
+    refillSelectQueue();
+    await expect(
+      runReminder("reminder-1", {
+        db: fakeDb as unknown as typeof db,
+        now: () => NOW,
+        kapsoTemplates: { appointment: "appointment_reminder", service_due: "service_due_reminder" },
+      }),
+    ).rejects.toThrow(/not configured/);
+
+    expect(state.reminder.status).toBe("failed");
+  });
+
+  it("marks failed and rethrows when no Kapso template is configured for the reminder's type", async () => {
+    const state = {
+      reminder: makeReminder({ status: "scheduled", channel: "whatsapp", type: "appointment" }),
+      orden: makeOrden(),
+      cliente: makeCliente(),
+    };
+    const { fakeDb, refillSelectQueue } = makeFakeDb(state);
+
+    refillSelectQueue();
+    await expect(
+      runReminder("reminder-1", { db: fakeDb as unknown as typeof db, now: () => NOW, kapsoTemplates: {} }),
+    ).rejects.toThrow(/no Kapso template configured/);
+
+    expect(state.reminder.status).toBe("failed");
+    expect(sendWhatsAppTemplate).not.toHaveBeenCalled();
   });
 });
 
