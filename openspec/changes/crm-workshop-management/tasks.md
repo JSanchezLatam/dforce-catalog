@@ -96,11 +96,84 @@ task 4.3 below (RED test should cover this no-op-on-already-sent case).
 
 ## Phase 6: Pages & Navigation
 
-- [ ] 6.1 `app/(app)/customers/page.tsx` — server component, `searchParams`, `Promise.all([listCustomers,countCustomers])`, name/phone/plate filter card, `Pagination`, empty-state (R16, R19).
-- [ ] 6.2 `app/(app)/customers/[id]/page.tsx` — customer info Card + service-history Table, empty-state when zero orders (R16).
-- [ ] 6.3 `app/(app)/service-orders/page.tsx` — list + status-filter Select + Pagination (R21).
-- [ ] 6.4 `app/(app)/service-orders/[id]/page.tsx` — order header, line-items table, status-transition controls, scheduled/sent reminders list (R24, R25).
-- [ ] 6.5 `components/app-sidebar.tsx` (edit) — add "Clientes"/"Órdenes de servicio" nav entries.
+- [x] 6.1 `app/(app)/customers/page.tsx` — server component, `searchParams`, `Promise.all([listCustomers,countCustomers])`, name/phone/plate filter card, `Pagination`, empty-state (R16, R19).
+- [x] 6.2 `app/(app)/customers/[id]/page.tsx` — customer info Card + service-history Table, empty-state when zero orders (R16).
+- [x] 6.3 `app/(app)/service-orders/page.tsx` — list + status-filter Select + Pagination (R21).
+- [x] 6.4 `app/(app)/service-orders/[id]/page.tsx` — order header, line-items table, status-transition controls, scheduled/sent reminders list (R24, R25).
+- [x] 6.5 `components/app-sidebar.tsx` (edit) — add "Clientes"/"Órdenes de servicio" nav entries.
+
+**Notes (Phase 6, branch `crm-workshop/pr6-pages-nav`)**: Nav items are NOT
+defined directly in `app-sidebar.tsx` — `src/modules/layout/nav-items.ts`'s
+`getNavItems()` is the actual source of truth (confirmed via
+`nav-items.test.ts` before editing); `app-sidebar.tsx` only holds the
+`ICON_MAP` lookup from icon-key string to a lucide-react component (RSC
+boundary: a Server Component can't hand a function/component reference to a
+Client Component). Added `"Clientes"` (`/customers`, icon `Users`) and
+`"Órdenes de servicio"` (`/service-orders`, icon `Wrench`) to
+`BASE_NAV_ITEMS` — both staff-only via the blanket `requireSession` guard,
+same as the 3 existing base items, per design.md §7's explicit "no new
+`customers.manage`/`orders.manage` policy action for v1" — NOT gated by
+`can()`, so they always render regardless of role (unlike
+"Configuración de Template", which stays admin-gated). `nav-items.test.ts`
+updated to expect 5/6 items instead of 3/4.
+
+3 small grounded deviations from the literal task wording, all pure/tested
+additions rather than freelanced UI:
+1. **Customer filter is ONE search field, not three.** `customers/queries.ts`'s
+   `buildClienteSearchWhere` (Phase 2) already ORs a single search term across
+   name/phone/plate (R19's literal wording: "a partial, case-insensitive match
+   against name, phone, or vehicle plate") — there is no separate per-field
+   filter in the query layer, so three independent inputs would misrepresent
+   how the page actually filters. `CustomerFilters.tsx` renders one combined
+   search box instead.
+2. **New `getAllowedTransitions()` in `transitions.ts`** (RED/GREEN,
+   `transitions.test.ts`) — the order-detail page's status-transition buttons
+   need to know which next-states are legal for a given order without
+   duplicating `ALLOWED_TRANSITIONS`' table on the UI side; this pure getter
+   is the seam, covered by 3 new tests.
+3. **New `reminders/queries.ts`** (RED/GREEN, `queries.test.ts`) — Phase 4 had
+   no "list all reminders for an order" read function (only
+   `cancelRemindersForOrder`'s internal, status-filtered select). Added
+   `listRemindersForOrder(ordenId, queryFn)`, DI-testable via the same
+   injected-`queryFn` convention as `customers/queries.ts`/
+   `service-orders/queries.ts`, for the order-detail page's reminders list.
+
+`StatusBadge.tsx`'s `BadgeStatus` union + its 3 lookup `Record`s were extended
+(RED/GREEN, `StatusBadge.test.ts`) to cover `order_status`
+(open/in_progress/done/cancelled) and `reminder_status`
+(scheduled/sent/skipped/opted_out) — design.md §8 explicitly says to reuse
+`StatusBadge` for "order + reminder status pills", so this is additive
+coverage of an already-tested shared component, not a new one.
+
+Server pages cannot pass plain functions as props to Client Components across
+the RSC boundary, so `CustomerForm`/`ServiceOrderForm`'s `onSaved` callback
+(Phase 5) needed a small client-side composition seam:
+`CustomerFormTrigger.tsx`/`ServiceOrderFormTrigger.tsx` each own `useRouter()`
+internally and supply `onSaved={() => router.refresh()}` themselves, so the
+server-rendered list/detail data refreshes after a successful create/edit
+without a full page reload. `OrderStatusControls.tsx` (client) follows the
+same shape for the order-detail page's status-transition buttons, PATCHing
+`/api/service-orders/[id]` with `{ status }` (Phase 5's route) then calling
+`router.refresh()`.
+
+`ServiceOrderForm`'s customer-select and parts-picker (Phase 5) need an
+already-fetched list — `service-orders/page.tsx` fetches both
+`listClientes({}, {offset:0, limit:1000})` and
+`listInventory({}, {offset:0, limit:1000})` up front. Known limitation
+(flagged, not fixed here): a 1000-row cap with no dedicated search route for
+either list — acceptable for v1 shop-scale data, same tradeoff Phase 5's notes
+already accepted for the parts picker.
+
+`npx tsc --noEmit` clean; full `npx vitest run`: **280/280 tests passing,
+33/33 files** (was 273/32 after Phase 5 — +7 tests/+1 file: 3 new
+`getAllowedTransitions` tests, 2 new `listRemindersForOrder` tests in a new
+file, 2 new `StatusBadge` mapping tests; `nav-items.test.ts`'s existing 3
+tests were edited in place, not added to). `npx eslint` on every new/touched
+Phase 6 file: 0 errors, 0 warnings — the 14 pre-existing problems (4 errors/10
+warnings) from a full `npx eslint src` run are all in files this phase never
+touched (`CatalogBuilderForm.tsx`, `TreeSelect.tsx`, `InventoryFilters.tsx`,
+`reminders/job.test.ts`, `service-orders/service.test.ts`,
+`TemplateConfigForm.tsx`, `CatalogTemplate.tsx`, `LazyImage.tsx`).
 
 ## Phase 7: Provider Wiring
 

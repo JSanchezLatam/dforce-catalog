@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { assertTransition, OrderTransitionError } from "./transitions";
+import { assertTransition, getAllowedTransitions, OrderTransitionError } from "./transitions";
 
 describe("assertTransition (R21)", () => {
   it("allows open -> in_progress", () => {
@@ -49,5 +49,20 @@ describe("assertTransition (R21)", () => {
       expect(transitionError.from).toBe("open");
       expect(transitionError.to).toBe("done");
     }
+  });
+});
+
+describe("getAllowedTransitions (R21 — Phase 6 status-transition controls)", () => {
+  it("returns the two legal next states for open", () => {
+    expect(getAllowedTransitions("open")).toEqual(["in_progress", "cancelled"]);
+  });
+
+  it("returns the two legal next states for in_progress", () => {
+    expect(getAllowedTransitions("in_progress")).toEqual(["done", "cancelled"]);
+  });
+
+  it("returns an empty array for the terminal states (done, cancelled)", () => {
+    expect(getAllowedTransitions("done")).toEqual([]);
+    expect(getAllowedTransitions("cancelled")).toEqual([]);
   });
 });
