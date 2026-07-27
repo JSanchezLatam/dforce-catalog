@@ -1,21 +1,61 @@
-import type { SessionUser } from "./session";
-
-/**
- * Single policy seam (R9.6, NFR-8) — hand-rolled, no RBAC library. Callers
- * never branch on `user.role` directly; adding a role/action means editing
- * only this file.
- */
-export type Action = "sync.manual" | "template.edit" | "catalogs.listAll";
-
-const ADMIN_ONLY_ACTIONS: ReadonlySet<Action> = new Set([
-  "sync.manual",
-  "template.edit",
+export const ACTIONS = [
+  "customers.read",
+  "customers.write",
+  "service-orders.read",
+  "service-orders.write",
+  "inventory.read",
+  "catalogs.read",
+  "catalogs.download",
+  "catalogs.generate",
   "catalogs.listAll",
-]);
+  "template.edit",
+  "workshop.edit",
+  "users.manage",
+  "sync.manual",
+  "account.self",
+] as const;
 
-export function can(user: SessionUser, action: Action): boolean {
-  if (ADMIN_ONLY_ACTIONS.has(action)) {
-    return user.role === "administrador";
-  }
-  return true;
+export type Action = (typeof ACTIONS)[number];
+
+export type Grants = { readonly [A in Action]: boolean };
+
+export const MATRIX: { readonly [R in "tecnico" | "administrador"]: Grants } = {
+  tecnico: {
+    "customers.read": true,
+    "customers.write": true,
+    "service-orders.read": true,
+    "service-orders.write": true,
+    "inventory.read": true,
+    "catalogs.read": true,
+    "catalogs.download": true,
+    "catalogs.generate": false,
+    "catalogs.listAll": false,
+    "template.edit": false,
+    "workshop.edit": false,
+    "users.manage": false,
+    "sync.manual": false,
+    "account.self": true,
+  },
+  administrador: {
+    "customers.read": true,
+    "customers.write": true,
+    "service-orders.read": true,
+    "service-orders.write": true,
+    "inventory.read": true,
+    "catalogs.read": true,
+    "catalogs.download": true,
+    "catalogs.generate": true,
+    "catalogs.listAll": true,
+    "template.edit": true,
+    "workshop.edit": true,
+    "users.manage": true,
+    "sync.manual": true,
+    "account.self": true,
+  },
+};
+
+export function can(user: { role: string }, action: Action): boolean {
+  const grants = MATRIX[user.role as keyof typeof MATRIX];
+  if (!grants) return false;
+  return grants[action];
 }
