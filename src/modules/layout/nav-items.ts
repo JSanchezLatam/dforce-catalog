@@ -1,38 +1,68 @@
-import { can } from "@/modules/auth/policy";
+import { can, type Action } from "@/modules/auth/policy";
 import type { SessionUser } from "@/modules/auth/session";
 
-// ponytail: icon *key*, not the lucide-react component itself — `Sidebar`
-// (server component) can't hand a component/function reference to `NavItem`
-// (client component) across the RSC boundary (React throws "Functions cannot
-// be passed directly to Client Components"). `NavItem` resolves the key to
-// the real icon locally instead.
 export type NavIconKey = "inventory" | "builder" | "catalogs" | "template-config" | "customers" | "service-orders";
-export type NavLink = { href: string; label: string; icon: NavIconKey };
 
-// Sync stays embedded in /inventory (ManualSyncButton) — not a nav item (design.md).
-// Clientes/Órdenes de servicio (Phase 6, design.md §7): staff-only via the
-// blanket requireSession guard, same as the other 3 base items — NOT gated by
-// can(), so they always appear regardless of role (design.md explicitly
-// decided against a new customers.manage/orders.manage policy action for v1).
-const BASE_NAV_ITEMS: NavLink[] = [
-  { href: "/inventory", label: "Inventario", icon: "inventory" },
-  { href: "/builder", label: "Generar Catálogo", icon: "builder" },
-  { href: "/catalogs", label: "Catálogos", icon: "catalogs" },
-  { href: "/customers", label: "Clientes", icon: "customers" },
-  { href: "/service-orders", label: "Órdenes de servicio", icon: "service-orders" },
-];
+export type NavLink = { kind: "link"; href: string; label: string; icon: NavIconKey; action?: Action };
 
-const TEMPLATE_CONFIG_ITEM: NavLink = {
-  href: "/template-config",
-  label: "Configuración de Template",
-  icon: "template-config",
+export type NavParent = { kind: "parent"; label: string; icon: NavIconKey; children: NavLink[]; action?: Action };
+
+export type NavGroup = {
+  label: string;
+  items: (NavLink | NavParent)[];
+  pinBottom?: boolean;
 };
 
-/**
- * Sidebar's only real conditional logic — reuses the existing `can()` policy
- * seam so "Configuración de Template" is absent from the array entirely for
- * non-admins (not rendered-then-hidden via CSS).
- */
-export function getNavItems(user: SessionUser): NavLink[] {
-  return can(user, "template.edit") ? [...BASE_NAV_ITEMS, TEMPLATE_CONFIG_ITEM] : BASE_NAV_ITEMS;
+const CRM_ITEMS: (NavLink | NavParent)[] = [
+  { kind: "link", href: "/customers", label: "Clientes", icon: "customers", action: "customers.read" },
+  { kind: "link", href: "/service-orders", label: "Órdenes de servicio", icon: "service-orders", action: "service-orders.read" },
+];
+
+const CATALOGO_ITEMS: (NavLink | NavParent)[] = [
+  { kind: "link", href: "/inventory", label: "Inventario", icon: "inventory", action: "inventory.read" },
+  { kind: "link", href: "/builder", label: "Generar Catálogo", icon: "builder", action: "catalogs.generate" },
+  { kind: "link", href: "/catalogs", label: "Catálogos", icon: "catalogs", action: "catalogs.read" },
+];
+
+const CONFIGURACION_ITEMS: (NavLink | NavParent)[] = [
+  { kind: "link", href: "/workshop-config", label: "Config. del CRM", icon: "template-config", action: "workshop.edit" },
+  {
+    kind: "parent",
+    label: "Config. de catálogos",
+    icon: "template-config",
+    action: "template.edit",
+    children: [
+      { kind: "link", href: "/template-config", label: "Configuración de template", icon: "template-config", action: "template.edit" },
+    ],
+  },
+];
+
+const GROUPS: NavGroup[] = [
+  { label: "CRM", items: CRM_ITEMS },
+  { label: "Catálogo", items: CATALOGO_ITEMS },
+  { label: "Configuración", items: CONFIGURACION_ITEMS, pinBottom: true },
+];
+
+function itemVisible(user: SessionUser, item: NavLink | NavParent): boolean {
+  if (!item.action) return true;
+  return can(user, item.action);
+}
+
+function filterItem(user: SessionUser, item: NavLink | NavParent): NavLink | NavParent | null {
+  if (!itemVisible(user, item)) return null;
+  if (item.kind === "parent") {
+    const visible = item.children.filter((c) => itemVisible(user, c));
+    if (visible.length === 0) return null;
+    return { ...item, children: visible };
+  }
+  return item;
+}
+
+export function getNavGroups(user: SessionUser): NavGroup[] {
+  const result: NavGroup[] = [];
+  for (const group of GROUPS) {
+    const items = group.items.map((item) => filterItem(user, item)).filter((i): i is NavLink | NavParent => i !== null);
+    if (items.length > 0) result.push({ ...group, items });
+  }
+  return result;
 }
