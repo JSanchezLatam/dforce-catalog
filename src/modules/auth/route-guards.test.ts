@@ -34,6 +34,9 @@ export const ROUTE_GUARDS: Record<string, Partial<Record<"GET" | "POST" | "PATCH
   "/builder": { GET: "catalogs.generate" },
   "/template-config": { GET: "template.edit" },
   "/workshop-config": { GET: "workshop.edit" },
+  "/account": { GET: "account.self" },
+  "/api/account": { GET: "account.self", PATCH: "account.self" },
+  "/api/account/password": { POST: "account.self" },
 };
 
 const APP_DIR = path.resolve(import.meta.dirname, "../../app");
@@ -85,7 +88,7 @@ describe("ROUTE_GUARDS completeness", () => {
     // Four actions have no route in v1 — they get their own route in later WUs:
     // users.manage (deferred follow-up), workshop.edit (WU3b),
     // catalogs.listAll (no dedicated route), account.self (WU5b).
-    const exempt: readonly Action[] = ["users.manage", "catalogs.listAll", "account.self"];
+    const exempt: readonly Action[] = ["users.manage", "catalogs.listAll"];
 
     for (const action of ACTIONS) {
       if ((exempt as readonly string[]).includes(action)) continue;
