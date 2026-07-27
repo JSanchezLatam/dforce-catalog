@@ -39,8 +39,8 @@ describe("schema — crm-workshop-management enums (Phase 1, task 1.1)", () => {
     expect(reminderChannelEnum.enumValues).toEqual(["email", "whatsapp"]);
   });
 
-  it("reminder_status enum has exactly the 5 lifecycle values", () => {
-    expect(reminderStatusEnum.enumValues).toEqual(["scheduled", "sent", "failed", "cancelled", "skipped"]);
+  it("reminder_status enum has exactly the 6 lifecycle values (opted_out added post-Phase-4 for R26)", () => {
+    expect(reminderStatusEnum.enumValues).toEqual(["scheduled", "sent", "failed", "cancelled", "skipped", "opted_out"]);
   });
 });
 

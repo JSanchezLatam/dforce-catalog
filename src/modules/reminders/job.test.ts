@@ -207,7 +207,7 @@ describe("runReminder — R23/R26 re-check at fire time", () => {
     expect(state.reminder.status).toBe("skipped");
   });
 
-  it("skips a whatsapp reminder when the cliente has whatsappOptOut=true", async () => {
+  it("records opted_out (distinct from skipped) for a whatsapp reminder when the cliente has whatsappOptOut=true", async () => {
     const state = {
       reminder: makeReminder({ status: "scheduled", channel: "whatsapp" }),
       orden: makeOrden(),
@@ -220,10 +220,10 @@ describe("runReminder — R23/R26 re-check at fire time", () => {
     await runReminder("reminder-1", { db: fakeDb as unknown as typeof db, now: () => NOW, sendViaChannel });
 
     expect(sendViaChannel).not.toHaveBeenCalled();
-    expect(state.reminder.status).toBe("skipped");
+    expect(state.reminder.status).toBe("opted_out");
   });
 
-  it("skips an email reminder when the cliente has emailOptOut=true, independent of whatsappOptOut", async () => {
+  it("records opted_out (distinct from skipped) for an email reminder when the cliente has emailOptOut=true, independent of whatsappOptOut", async () => {
     const state = {
       reminder: makeReminder({ status: "scheduled", channel: "email" }),
       orden: makeOrden(),
@@ -236,7 +236,7 @@ describe("runReminder — R23/R26 re-check at fire time", () => {
     await runReminder("reminder-1", { db: fakeDb as unknown as typeof db, now: () => NOW, sendViaChannel });
 
     expect(sendViaChannel).not.toHaveBeenCalled();
-    expect(state.reminder.status).toBe("skipped");
+    expect(state.reminder.status).toBe("opted_out");
   });
 
   it("dispatches and marks sent when nothing blocks delivery", async () => {

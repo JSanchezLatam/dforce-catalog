@@ -114,8 +114,10 @@ async function defaultSendViaChannel(): Promise<void> {
  *    failure (provider send succeeded, the `sent` write didn't) safe against
  *    re-sending the same message.
  * 2. ADR-5/R23/R26: re-check order-cancelled / stale-timing / per-channel
- *    opt-out AT FIRE TIME (not schedule time) — mark `skipped` and stop if
- *    any apply.
+ *    opt-out AT FIRE TIME (not schedule time) — mark `skipped` (cancelled
+ *    order, stale timing) or `opted_out` (per-channel opt-out, R26 — a
+ *    distinct outcome so it is never conflated with an operational skip or
+ *    a delivery `failed`) and stop if any apply.
  * 3. Dispatch via the injectable `sendViaChannel` seam; mark `sent` on
  *    success, `failed`(+error) and RETHROW on failure so pg-boss's native
  *    retry (retryLimit:3, backoff, DLQ) takes over (R25).
@@ -132,6 +134,10 @@ export async function runReminder(reminderId: string, deps: RunReminderDeps = {}
   if (ctx.reminder.status !== "scheduled") return;
 
   const markSkipped = () => database.update(reminder).set({ status: "skipped" }).where(eq(reminder.id, reminderId));
+  // R26 — distinct from `skipped`: a per-channel opt-out is a customer
+  // consent decision, not an operational skip reason (cancelled order,
+  // stale timing), so it gets its own status.
+  const markOptedOut = () => database.update(reminder).set({ status: "opted_out" }).where(eq(reminder.id, reminderId));
 
   if (ctx.orden.status === "cancelled") {
     await markSkipped();
@@ -143,7 +149,7 @@ export async function runReminder(reminderId: string, deps: RunReminderDeps = {}
   }
   const optedOut = ctx.reminder.channel === "whatsapp" ? ctx.cliente.whatsappOptOut : ctx.cliente.emailOptOut;
   if (optedOut) {
-    await markSkipped();
+    await markOptedOut();
     return;
   }
 

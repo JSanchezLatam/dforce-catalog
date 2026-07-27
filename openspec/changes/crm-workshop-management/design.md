@@ -45,7 +45,10 @@ New import needed in `schema.ts`: add `boolean` to the existing
 export const orderStatusEnum   = pgEnum("order_status",   ["open", "in_progress", "done", "cancelled"]);
 export const reminderTypeEnum  = pgEnum("reminder_type",  ["service_due", "appointment"]);
 export const reminderChannelEnum = pgEnum("reminder_channel", ["email", "whatsapp"]);
-export const reminderStatusEnum  = pgEnum("reminder_status",  ["scheduled", "sent", "failed", "cancelled", "skipped"]);
+export const reminderStatusEnum  = pgEnum("reminder_status",  ["scheduled", "sent", "failed", "cancelled", "skipped", "opted_out"]);
+// `opted_out` was added post-Phase-4 (migration 0006, additive ALTER TYPE ...
+// ADD VALUE) once the R26 spec/schema gap flagged during Phase 4 apply was
+// triaged and fixed — see ADR-5.
 ```
 
 ### 2.2 `cliente` — customer + inline single vehicle (v1)
@@ -201,10 +204,12 @@ view. "DB row is truth, queue is transport" is already this codebase's rule.
 **Decision:** `runReminder(reminderId)` reloads `reminder` + its `orden_servicio`
 + `cliente`, and checks the channel-specific flag for the reminder's own
 `channel` (`cliente.whatsappOptOut` for a WhatsApp reminder, `cliente.emailOptOut`
-for an email one) — **skipping** (marks `skipped`) if that channel's flag is
-true, the order is `cancelled`, or the milestone no longer applies (e.g.
-appointment moved). Only then does it send. A customer opted out of WhatsApp
-still receives email reminders and vice versa.
+for an email one) — records the status as `opted_out` (R26 — distinct from the
+generic `skipped` used for the order-cancelled/stale-timing cases below) if
+that channel's flag is true; marks `skipped` if the order is `cancelled` or
+the milestone no longer applies (e.g. appointment moved). Only then does it
+send. A customer opted out of WhatsApp still receives email reminders and
+vice versa.
 
 **Why:** reminders are scheduled days in advance. Opt-out or order changes
 between schedule time and fire time are the norm, not the exception. Deciding at
@@ -289,8 +294,9 @@ export async function scheduleReminder(row: Reminder, deps = {}) {
 export async function runReminder(reminderId: string, deps = {}) {
   // load reminder + orden + cliente; ADR-5 re-check (opt-out / cancelled / stale);
   // dispatch to providers/email.ts or providers/whatsapp.ts by row.channel;
-  // update row -> sent | skipped | failed(+error). Throw on transient failure so
-  // pg-boss retries (retryLimit above); terminal failures set status=failed and return.
+  // update row -> sent | skipped | opted_out (R26, distinct from skipped) | failed(+error).
+  // Throw on transient failure so pg-boss retries (retryLimit above); terminal
+  // failures set status=failed and return.
 }
 
 export async function cancelReminder(reminderId: string) {
@@ -441,7 +447,8 @@ Staff creates order (ServiceOrderForm)
 pg-boss worker (registerReminderWorker, boot)
   → runReminder(reminderId)
     → reload reminder + orden + cliente
-    → ADR-5 re-check: opt-out? cancelled? stale? → status=skipped, stop
+    → ADR-5 re-check: opt-out? → status=opted_out, stop (R26)
+                      cancelled? stale? → status=skipped, stop
     → dispatch by channel:
         email    → providers/email.ts  (Resend SDK)      [ADR-4]
         whatsapp → providers/whatsapp.ts (Kapso template) [ADR-3]
@@ -461,7 +468,7 @@ Staff moves order → cancelled → cancelReminder() for all pending rows
 | 2 | `reminder` table = truth, pg-boss = transport | trusting pg-boss job rows (opaque, pruned, uncancellable-by-us) |
 | 3 | WhatsApp via approved **templates** | `sendText` (blocked outside 24h session window) |
 | 4 | Resend **npm SDK** in-process | shelling to `resend` CLI (fragile process boundary) |
-| 5 | Opt-out/order-state re-check at **fire time**, per channel (`whatsappOptOut`/`emailOptOut` independent) | deciding at schedule time (sends stale/unwanted msgs); single combined opt-out flag (spec R26 requires per-channel) |
+| 5 | Opt-out/order-state re-check at **fire time**, per channel (`whatsappOptOut`/`emailOptOut` independent); opt-out records `opted_out`, distinct from `skipped` (R26) | deciding at schedule time (sends stale/unwanted msgs); single combined opt-out flag (spec R26 requires per-channel); conflating opt-out with generic `skipped` |
 | 6 | Inline single vehicle on `cliente`; FK `restrict` on order→cliente | separate `vehiculo` table now (YAGNI v1; seam noted) |
 | 7 | `orden_servicio_item` line-item table + **price/name snapshot** | JSONB parts blob (loses "which orders used part X"); live FK w/o snapshot (re-sync rewrites history) |
 | 8 | `runReminder` re-checks row status before acting (idempotent against pg-boss retry) | trusting `retryLimit` alone (retry-after-partial-failure can re-send a message the customer already received) |

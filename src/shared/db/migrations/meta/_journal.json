@@ -43,6 +43,13 @@
       "when": 1785124181394,
       "tag": "0005_legal_spot",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785126113658,
+      "tag": "0006_add_opted_out_reminder_status",
+      "breakpoints": true
     }
   ]
 }
