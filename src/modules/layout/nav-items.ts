@@ -6,14 +6,20 @@ import type { SessionUser } from "@/modules/auth/session";
 // (client component) across the RSC boundary (React throws "Functions cannot
 // be passed directly to Client Components"). `NavItem` resolves the key to
 // the real icon locally instead.
-export type NavIconKey = "inventory" | "builder" | "catalogs" | "template-config";
+export type NavIconKey = "inventory" | "builder" | "catalogs" | "template-config" | "customers" | "service-orders";
 export type NavLink = { href: string; label: string; icon: NavIconKey };
 
 // Sync stays embedded in /inventory (ManualSyncButton) — not a nav item (design.md).
+// Clientes/Órdenes de servicio (Phase 6, design.md §7): staff-only via the
+// blanket requireSession guard, same as the other 3 base items — NOT gated by
+// can(), so they always appear regardless of role (design.md explicitly
+// decided against a new customers.manage/orders.manage policy action for v1).
 const BASE_NAV_ITEMS: NavLink[] = [
   { href: "/inventory", label: "Inventario", icon: "inventory" },
   { href: "/builder", label: "Generar Catálogo", icon: "builder" },
   { href: "/catalogs", label: "Catálogos", icon: "catalogs" },
+  { href: "/customers", label: "Clientes", icon: "customers" },
+  { href: "/service-orders", label: "Órdenes de servicio", icon: "service-orders" },
 ];
 
 const TEMPLATE_CONFIG_ITEM: NavLink = {

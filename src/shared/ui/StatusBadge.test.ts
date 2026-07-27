@@ -22,4 +22,18 @@ describe("statusBadgeClassName() — confirmed shadcn status mapping", () => {
     expect(running).toContain("items-center");
     expect(running).toContain("gap-1");
   });
+
+  it("maps order_status (R21, Phase 6): open/in_progress/done/cancelled", () => {
+    expect(statusBadgeClassName("open")).toContain("bg-muted");
+    expect(statusBadgeClassName("in_progress")).toContain("bg-warning");
+    expect(statusBadgeClassName("done")).toContain("bg-success");
+    expect(statusBadgeClassName("cancelled")).toContain("bg-muted");
+  });
+
+  it("maps reminder_status (R24/R25/R26, Phase 6): scheduled/sent/skipped/opted_out", () => {
+    expect(statusBadgeClassName("scheduled")).toContain("bg-muted");
+    expect(statusBadgeClassName("sent")).toContain("bg-success");
+    expect(statusBadgeClassName("skipped")).toContain("bg-muted");
+    expect(statusBadgeClassName("opted_out")).toContain("bg-muted");
+  });
 });
