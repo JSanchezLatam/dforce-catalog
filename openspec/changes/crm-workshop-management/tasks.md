@@ -47,12 +47,12 @@ task 4.3 below (RED test should cover this no-op-on-already-sent case).
 
 ## Phase 1: Schema & Migration
 
-- [ ] 1.1 `shared/db/schema.ts` — add `boolean` to the `drizzle-orm/pg-core` import; add 4 `pgEnum`s (`order_status`, `reminder_type`, `reminder_channel`, `reminder_status`).
-- [ ] 1.2 `shared/db/schema.ts` — add `cliente` table: name/phone/email/vehicle fields + **`whatsappOptOut`/`emailOptOut`** booleans (R26, design ADR-5) + name/plate/createdAt indexes.
-- [ ] 1.3 `shared/db/schema.ts` — add `ordenServicio` table (clienteId FK restrict, status, description, appointmentAt, completedAt, createdBy FK) + (clienteId,createdAt)+status indexes.
-- [ ] 1.4 `shared/db/schema.ts` — add `ordenServicioItem` table (ordenId FK cascade, productoId FK set-null, productName+unitPrice snapshot, quantity) + ordenId index.
-- [ ] 1.5 `shared/db/schema.ts` — add `reminder` table (ordenId/clienteId FK cascade, type/channel/status, scheduledFor, sentAt, jobId, error) + indexes; export `$inferSelect` types for all 4 tables.
-- [ ] 1.6 Run `npx drizzle-kit generate` → verify `0006_*.sql` is additive-only (new enums+tables, zero diff to existing tables).
+- [x] 1.1 `shared/db/schema.ts` — add `boolean` to the `drizzle-orm/pg-core` import; add 4 `pgEnum`s (`order_status`, `reminder_type`, `reminder_channel`, `reminder_status`).
+- [x] 1.2 `shared/db/schema.ts` — add `cliente` table: name/phone/email/vehicle fields + **`whatsappOptOut`/`emailOptOut`** booleans (R26, design ADR-5) + name/plate/createdAt indexes.
+- [x] 1.3 `shared/db/schema.ts` — add `ordenServicio` table (clienteId FK restrict, status, description, appointmentAt, completedAt, createdBy FK) + (clienteId,createdAt)+status indexes.
+- [x] 1.4 `shared/db/schema.ts` — add `ordenServicioItem` table (ordenId FK cascade, productoId FK set-null, productName+unitPrice snapshot, quantity) + ordenId index.
+- [x] 1.5 `shared/db/schema.ts` — add `reminder` table (ordenId/clienteId FK cascade, type/channel/status, scheduledFor, sentAt, jobId, error) + indexes; export `$inferSelect` types for all 4 tables.
+- [x] 1.6 Run `npx drizzle-kit generate` → verify `0005_legal_spot.sql` is additive-only (new enums+tables, zero diff to existing tables). **Note**: file is `0005_*`, not `0006_*` as design.md assumed — this branch's history does not yet include adaptive-catalog-layouts' migration (that change lives on a separate `feature/adaptive-layouts` branch not merged into this one), so `0004_stock_to_real.sql` was still the max on this branch. Purely a filename/numbering difference; content and additivity match design exactly.
 
 ## Phase 2: Customers Module
 
