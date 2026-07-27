@@ -24,11 +24,15 @@ vi.mock("@/modules/catalog-storage/r2", () => ({
 
 
 
-function req(role: string, options?: { method?: string; body?: BodyInit }) {
+function req(role: string, options?: { method?: string; body?: BodyInit; contentLength?: string }) {
   return new NextRequest("http://localhost/api/workshop-config/logo", {
     method: options?.method,
     body: options?.body,
-    headers: { "x-user-id": "user-1", "x-user-role": role },
+    headers: {
+      "x-user-id": "user-1",
+      "x-user-role": role,
+      ...(options?.contentLength ? { "content-length": options.contentLength } : {}),
+    },
   });
 }
 
@@ -70,6 +74,23 @@ describe("workshop-config logo route", () => {
       const form = new FormData();
       const res = await POST(req("administrador", { method: "POST", body: form }));
       expect(res.status).toBe(400);
+    });
+
+    it("rejects a declared Content-Length over the 2MB cap with 413, BEFORE buffering the body (form.formData/arrayBuffer must never be reached)", async () => {
+      // The actual body here is tiny — only the declared Content-Length is
+      // huge. If the route buffered the whole request before checking size,
+      // this would still succeed (or hang trying to parse formData on a
+      // mismatched body); a real pre-buffer check must reject on the header
+      // alone, without ever calling request.formData().
+      const form = new FormData();
+      form.append("file", new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])]), "logo.png");
+
+      const res = await POST(
+        req("administrador", { method: "POST", body: form, contentLength: String(3 * 1024 * 1024) }),
+      );
+
+      expect(res.status).toBe(413);
+      expect(mockPutObject).not.toHaveBeenCalled();
     });
 
     it("deletes the previous logo when replacing", async () => {
