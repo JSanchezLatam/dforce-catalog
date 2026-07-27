@@ -27,6 +27,25 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/*": ["node_modules/playwright-core/**/*"],
   },
+  // Baseline security headers — this app had none. CSP is deliberately NOT
+  // included here: it needs to allowlist the R2/Interfuerza image hosts
+  // LazyImage loads from, and getting that wrong silently breaks product
+  // images app-wide, so it needs its own scoped follow-up rather than a
+  // guessed policy bundled into this pass.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
