@@ -85,12 +85,14 @@ task 4.3 below (RED test should cover this no-op-on-already-sent case).
 
 ## Phase 5: API Routes & Forms
 
-- [ ] 5.1 `app/api/customers/route.ts` — `POST`, `requireSession`+DI handle split (mirrors manual-sync route), calls `customers/service.ts`.
-- [ ] 5.2 `app/api/customers/[id]/route.ts` — `PATCH` edit / opt-out toggle.
-- [ ] 5.3 `app/api/service-orders/route.ts` — `POST` create order+items.
-- [ ] 5.4 `app/api/service-orders/[id]/route.ts` — `PATCH` field update / status transition.
-- [ ] 5.5 `modules/customers/CustomerForm.tsx` — client form (Dialog+Input+Label+Button, `FIELD_ERROR` pattern), both opt-out Checkboxes, POST/PATCH to 5.1/5.2.
-- [ ] 5.6 `modules/service-orders/ServiceOrderForm.tsx` — customer select, parts picker (reuse builder search/Table idiom), appointment date, submit to 5.3/5.4.
+- [x] 5.1 `app/api/customers/route.ts` — `POST`, `requireSession`+DI handle split (mirrors manual-sync route), calls `customers/service.ts`.
+- [x] 5.2 `app/api/customers/[id]/route.ts` — `PATCH` edit / opt-out toggle.
+- [x] 5.3 `app/api/service-orders/route.ts` — `POST` create order+items.
+- [x] 5.4 `app/api/service-orders/[id]/route.ts` — `PATCH` field update / status transition.
+- [x] 5.5 `modules/customers/CustomerForm.tsx` — client form (Dialog+Input+Label+Button, `FIELD_ERROR` pattern), both opt-out Checkboxes, POST/PATCH to 5.1/5.2.
+- [x] 5.6 `modules/service-orders/ServiceOrderForm.tsx` — customer select, parts picker (reuse builder search/Table idiom), appointment date, submit to 5.3/5.4.
+
+**Notes (Phase 5, branch `crm-workshop/pr5-routes-forms`)**: design.md §7 explicitly specifies API Route Handlers (not Server Actions) for these four routes — used routes to match, despite this same session's earlier, unrelated migration of `/login` to a Server Action (that precedent was not extended here since design.md's plan is explicit). All four routes follow `manual/route.ts`'s exact `requireSession()` → `handleX(request, ..., deps)` → thin exported `POST`/`PATCH` split, with no `can()` gate (design.md §7: "do NOT add new `policy.ts` actions for v1"). `service-orders/[id]/route.ts`'s single `PATCH` branches on `typeof body.status === "string"` to either call `transitionOrder` (R21, also carries R23's reminder scheduling/cancellation) or `updateOrder` (plain `description`/`appointmentAt` edit) — one route serving both per the route table's "field update / status transition" wording. Client forms have no test files, matching this repo's existing convention (`CatalogBuilderForm.tsx`/`TemplateConfigForm.tsx` are untested; no `@testing-library` dependency exists). `ServiceOrderForm.tsx`'s parts picker reuses `CatalogBuilderForm.tsx`'s client-side search+Table idiom over an already-fetched `products` list (no new search route) since `updateOrder`'s patch type only supports `description`/`appointmentAt` — customer/parts are immutable post-creation, so edit mode of the form hides the customer-select and parts sections. `npx tsc --noEmit` clean; full `npx vitest run`: 273/273 tests passing, 32/32 files (was 255/28 after Phase 4 + opted_out fix; +18 tests / +4 files, all new route tests — no existing test modified).
 
 ## Phase 6: Pages & Navigation
 
