@@ -28,6 +28,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
+  // ROUTE_GUARDS registers this route as requiring "catalogs.download" —
+  // that action must actually be evaluated somewhere, on top of the
+  // ownership/listAll override above (which only decides WHOSE catalogs are
+  // visible, not whether downloading them is permitted at all).
+  if (!can(user, "catalogs.download")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   if (catalog.uploadStatus !== "uploaded" || !catalog.r2Key) {
     // "pending"/"uploading" (still in flight) or "failed" (retries exhausted, R11.5).
     return NextResponse.json({ error: "not_available", uploadStatus: catalog.uploadStatus }, { status: 409 });

@@ -11,6 +11,15 @@ import { Card, CardContent } from "@/components/ui/card";
 
 export default async function CatalogsPage() {
   const user = await requireSessionFromHeaders();
+
+  if (!can(user, "catalogs.read")) {
+    return (
+      <div className="p-8">
+        <p className="text-sm text-foreground">No tenés permiso para ver esta página.</p>
+      </div>
+    );
+  }
+
   const catalogs = can(user, "catalogs.listAll") ? await listAllCatalogs() : await listCatalogsForUser(user.id);
 
   return (
