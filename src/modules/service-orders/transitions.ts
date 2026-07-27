@@ -38,3 +38,13 @@ export function assertTransition(from: OrderStatus, to: OrderStatus): void {
     throw new OrderTransitionError(from, to);
   }
 }
+
+/**
+ * Phase 6 — read-only lookup of the legal next states for `from`, so the
+ * order-detail page's status-transition controls can render only the
+ * buttons/options that would actually pass `assertTransition` (no duplicated
+ * transition table on the UI side; terminal states return `[]`).
+ */
+export function getAllowedTransitions(from: OrderStatus): OrderStatus[] {
+  return ALLOWED_TRANSITIONS[from];
+}
