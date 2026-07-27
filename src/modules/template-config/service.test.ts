@@ -7,6 +7,7 @@ const validInput = {
   primaryColors: { primary: "#112233", secondary: "#445566" },
   font: "Arial, sans-serif",
   coverText: "Dforce Car — Catalogo 2026",
+  defaultImageHandling: null,
 };
 
 describe("validateTemplateConfigInput (R8.1)", () => {
@@ -71,5 +72,27 @@ describe("validateTemplateConfigInput (R8.1)", () => {
         ["coverText", "font", "logoUrl", "primaryColor", "secondaryColor"].sort(),
       );
     }
+  });
+});
+
+describe("defaultImageHandling validation", () => {
+  it("accepts strict", () => {
+    const result = validateTemplateConfigInput({ ...validInput, defaultImageHandling: "strict" });
+    expect(result.defaultImageHandling).toBe("strict");
+  });
+
+  it("accepts adaptive", () => {
+    const result = validateTemplateConfigInput({ ...validInput, defaultImageHandling: "adaptive" });
+    expect(result.defaultImageHandling).toBe("adaptive");
+  });
+
+  it("defaults to null when omitted (backward compat)", () => {
+    const result = validateTemplateConfigInput(validInput);
+    expect(result.defaultImageHandling).toBeNull();
+  });
+
+  it("defaults to null when value is invalid", () => {
+    const result = validateTemplateConfigInput({ ...validInput, defaultImageHandling: "invalid" });
+    expect(result.defaultImageHandling).toBeNull();
   });
 });

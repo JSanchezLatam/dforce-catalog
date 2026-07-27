@@ -40,6 +40,7 @@ export async function listProductsInCategories(categories: CategoryRef[]): Promi
       categoryL1: producto.categoryL1,
       categoryL2: producto.categoryL2,
       image: sql<string>`trim(nullif(${producto.raw}->'Images'->0->>'src', ''))`,
+      imageType: sql<"transparent" | "opaque" | "low_res" | null>`${producto.imageType}`,
     })
     .from(producto)
     .where(or(...conditions));

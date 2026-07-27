@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
 
 type FormState = {
@@ -15,6 +16,7 @@ type FormState = {
   secondary: string;
   font: string;
   coverText: string;
+  defaultImageHandling: "strict" | "adaptive";
 };
 
 function toFormState(config: TemplateConfig | null): FormState {
@@ -24,6 +26,7 @@ function toFormState(config: TemplateConfig | null): FormState {
     secondary: config?.primaryColors.secondary ?? "#ffffff",
     font: config?.font ?? "",
     coverText: config?.coverText ?? "",
+    defaultImageHandling: config?.defaultImageHandling === "adaptive" ? "adaptive" : "strict",
   };
 }
 
@@ -56,6 +59,7 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
         primaryColors: { primary: form.primary, secondary: form.secondary },
         font: form.font,
         coverText: form.coverText,
+        defaultImageHandling: form.defaultImageHandling,
       }),
     });
 
@@ -156,6 +160,22 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
               {errors.coverText}
             </p>
           )}
+
+          <div className="grid gap-2">
+            <Label htmlFor="defaultImageHandling">Image handling</Label>
+            <Select
+              value={form.defaultImageHandling}
+              onValueChange={(v) => update("defaultImageHandling", v as "strict" | "adaptive")}
+            >
+              <SelectTrigger id="defaultImageHandling" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="strict">Strict (all products framed)</SelectItem>
+                <SelectItem value="adaptive">Adaptive (per-image layout)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           {errors.form && (
             <p role="alert" className={FIELD_ERROR}>

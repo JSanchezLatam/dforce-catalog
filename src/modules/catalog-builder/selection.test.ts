@@ -84,6 +84,16 @@ describe("validateCatalogSelection (R5.4/5.7/5.8-9)", () => {
     );
   });
 
+  it("rejects zero products selected even when categories are selected (R13 scenario 3)", () => {
+    try {
+      validateCatalogSelection({ ...valid, totalProductCount: 0 });
+      expect.fail("expected validation to throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(CatalogSelectionValidationError);
+      expect((err as CatalogSelectionValidationError).errors.total).toBe("No products selected");
+    }
+  });
+
   it("rejects a total over the 200-product cap with the current total in the message", () => {
     try {
       validateCatalogSelection({ ...valid, totalProductCount: MAX_TOTAL_PRODUCTS + 35 });

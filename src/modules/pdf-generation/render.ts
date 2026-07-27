@@ -48,6 +48,16 @@ export async function renderCatalogHtml(props: CatalogTemplateProps): Promise<st
       @page { margin: 20mm; }
       body { font-family: ${props.branding?.font ?? "sans-serif"}, sans-serif; margin: 0; }
       img { max-width: 100%; }
+      .card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+      .card-fullbleed { break-inside: avoid; display: flex; flex-direction: column; }
+      .card-fullbleed img { width: 100%; height: 180px; object-fit: cover; }
+      .card-polaroid { break-inside: avoid; display: flex; flex-direction: column; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+      .card-polaroid img { width: 100%; height: 160px; object-fit: contain; }
+      .card-placeholder { width: 100%; height: 180px; background: #f3f4f6; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 14px; }
+      .card-label { padding: 0.5rem 0; }
+      .card-label p { margin: 0; }
+      .card-name { font-weight: 600; font-size: 13px; }
+      .card-cat { font-size: 11px; color: #6b7280; }
     </style>
   </head>
   <body>${body}</body>

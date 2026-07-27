@@ -59,4 +59,62 @@ describe("renderCatalogHtml — R6.1 (shares CatalogTemplate with the builder's 
     expect(html).toContain("Empty catalog");
     expect(html).not.toContain("Product page");
   });
+
+  it("renders transparent imageType with full-bleed card (height 180px inline)", async () => {
+    const html = await renderCatalogHtml({
+      title: "Test",
+      branding: null,
+      sections: [],
+      defaultImageHandling: "adaptive",
+      productPages: [[{ id: "1", name: "P1", categoryL1: "Motor", categoryL2: null, image: "https://x/img.png", imageType: "transparent" }]],
+    });
+    expect(html).toContain("height:180px");
+    expect(html).not.toContain("border:1px solid");
+  });
+
+  it("renders opaque imageType with polaroid card (height 160px inline)", async () => {
+    const html = await renderCatalogHtml({
+      title: "Test",
+      branding: null,
+      sections: [],
+      defaultImageHandling: "adaptive",
+      productPages: [[{ id: "1", name: "P1", categoryL1: "Motor", categoryL2: null, image: "https://x/img.jpg", imageType: "opaque" }]],
+    });
+    expect(html).toContain("height:160px");
+    expect(html).toContain("border:1px solid");
+  });
+
+  it("defaults null imageType to opaque (polaroid card)", async () => {
+    const html = await renderCatalogHtml({
+      title: "Test",
+      branding: null,
+      sections: [],
+      defaultImageHandling: "adaptive",
+      productPages: [[{ id: "1", name: "P1", categoryL1: "Motor", categoryL2: null, image: "https://x/img.jpg", imageType: null }]],
+    });
+    expect(html).toContain("height:160px");
+  });
+
+  it("strict mode uses opaque card regardless of imageType", async () => {
+    const html = await renderCatalogHtml({
+      title: "Test",
+      branding: null,
+      sections: [],
+      defaultImageHandling: "strict",
+      productPages: [[{ id: "1", name: "P1", categoryL1: "Motor", categoryL2: null, image: "https://x/img.png", imageType: "transparent" }]],
+    });
+    expect(html).toContain("height:160px");
+    expect(html).not.toContain("height:180px");
+  });
+
+  it("default (null) handling is strict for backward compat", async () => {
+    const html = await renderCatalogHtml({
+      title: "Test",
+      branding: null,
+      sections: [],
+      productPages: [[{ id: "1", name: "P1", categoryL1: "Motor", categoryL2: null, image: "https://x/img.png", imageType: "transparent" }]],
+    });
+    expect(html).toContain("height:160px");
+    expect(html).not.toContain("height:180px");
+  });
 });

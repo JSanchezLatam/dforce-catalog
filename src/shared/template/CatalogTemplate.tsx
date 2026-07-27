@@ -1,3 +1,5 @@
+import { TransparentProductCard, OpaqueProductCard } from "./AdaptiveCards";
+
 /**
  * Risk-5 (design.md "New Risks Flagged" #5 — "live preview and final PDF
  * MUST share one template renderer, else layouts drift silently").
@@ -19,6 +21,9 @@
  * per-product pages) rather than a second template — see `productPages`
  * below. Still additive/optional so PR6b's `CatalogBuilderForm` preview
  * (cover+index only, R5.5/5.6) needs no changes.
+ *
+ * adaptive-catalog-layouts update: extended with `defaultImageHandling` prop
+ * and conditional rendering via TransparentProductCard / OpaqueProductCard.
  */
 export type CatalogTemplateBranding = {
   logoUrl: string;
@@ -33,12 +38,14 @@ export type CatalogIndexSection = {
   productCount: number;
 };
 
-/** R6.1 — minimal per-product print fields; reuses catalog-builder's `ProductRef` shape (no new product data-fetching added this phase). */
+/** R6.1 — per-product print fields; extended for adaptive layouts with image + imageType. */
 export type ProductPrintRef = {
   id: string;
   name: string;
   categoryL1: string | null;
   categoryL2: string | null;
+  image?: string | null;
+  imageType?: "transparent" | "opaque" | "low_res" | null;
 };
 
 export type CatalogTemplateProps = {
@@ -47,14 +54,23 @@ export type CatalogTemplateProps = {
   sections: CatalogIndexSection[];
   /** R6.1 — one array per printed page (already chunked to `productsPerPage` by `pdf-generation/render.ts`'s `chunkProducts`). Omitted for the builder's cover+index-only live preview. */
   productPages?: ProductPrintRef[][];
+  /** 'strict' forces all products to OpaqueProductCard; 'adaptive' selects card based on imageType (default: 'strict' for backward compat). */
+  defaultImageHandling?: "strict" | "adaptive" | null;
 };
 
-export function CatalogTemplate({ title, branding, sections, productPages = [] }: CatalogTemplateProps) {
-  // R6.3 — index only ever lists sections with >=1 product. `buildIndexSections`
-  // (catalog-builder/selection.ts) already guarantees this, but filtering here
-  // too keeps the shared renderer correct for any future caller that passes
-  // sections some other way.
+export function CatalogTemplate({ title, branding, sections, productPages = [], defaultImageHandling }: CatalogTemplateProps) {
   const visibleSections = sections.filter((section) => section.productCount > 0);
+  const isStrict = defaultImageHandling === "strict" || !defaultImageHandling;
+
+  function pickCard(product: ProductPrintRef, style?: React.CSSProperties) {
+    if (isStrict) {
+      return <OpaqueProductCard product={product} style={style} />;
+    }
+    if (product.imageType === "transparent") {
+      return <TransparentProductCard product={product} style={style} />;
+    }
+    return <OpaqueProductCard product={product} style={style} />;
+  }
 
   return (
     <article>
@@ -94,16 +110,17 @@ export function CatalogTemplate({ title, branding, sections, productPages = [] }
           aria-label={`Product page ${pageIndex + 1}`}
           style={{ padding: "1rem", pageBreakBefore: "always" }}
         >
-          <ul>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, 1fr)",
+              gap: 16,
+            }}
+          >
             {page.map((product) => (
-              <li key={product.id}>
-                {product.name}
-                {product.categoryL1
-                  ? ` — ${product.categoryL1}${product.categoryL2 ? ` / ${product.categoryL2}` : ""}`
-                  : ""}
-              </li>
+              <div key={product.id}>{pickCard(product)}</div>
             ))}
-          </ul>
+          </div>
         </section>
       ))}
     </article>

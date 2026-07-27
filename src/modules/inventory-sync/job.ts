@@ -134,6 +134,7 @@ export async function runSync(
           categoryL2: parsed.categoryL2,
           price: parsed.price,
           stock: parsed.stock,
+          imageType: parsed.imageType,
         }));
 
         // Batched multi-row upsert — one round trip per PAGE_SIZE page (see
@@ -155,6 +156,7 @@ export async function runSync(
               categoryL2: sql.raw(`excluded.${producto.categoryL2.name}`),
               price: sql.raw(`excluded.${producto.price.name}`),
               stock: sql.raw(`excluded.${producto.stock.name}`),
+              imageType: sql.raw(`excluded.${producto.imageType.name}`),
               syncedAt: new Date(),
             },
           });
