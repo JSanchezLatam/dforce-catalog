@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 
 import { db } from "@/shared/db/client";
@@ -62,6 +62,19 @@ export async function validateSession(token: string): Promise<SessionUser | null
 
 export async function revokeSession(token: string): Promise<void> {
   await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.id, token));
+}
+
+export async function revokeOtherSessions(
+  userId: string,
+  keepTokenId: string | null,
+  queryFn?: (uid: string, keep: string | null) => Promise<void>,
+): Promise<void> {
+  if (queryFn) return queryFn(userId, keepTokenId);
+  const now = new Date();
+  const where_ = keepTokenId
+    ? sql`user_id = ${userId} AND revoked_at IS NULL AND id <> ${keepTokenId}`
+    : sql`user_id = ${userId} AND revoked_at IS NULL`;
+  await db.execute(sql`UPDATE sessions SET revoked_at = ${now} WHERE ${where_}`);
 }
 
 function parseSessionUser(getHeader: (name: string) => string | null): SessionUser {
