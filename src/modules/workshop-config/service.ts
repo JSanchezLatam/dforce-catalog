@@ -1,5 +1,4 @@
 import { eq } from "drizzle-orm";
-import type { PgTableWithColumns } from "drizzle-orm/pg-core";
 
 import { db as defaultDb } from "@/shared/db/client";
 import { workshopConfig, type WorkshopConfig } from "@/shared/db/schema";
@@ -9,6 +8,12 @@ const MAX_NAME_LENGTH = 100;
 
 export type WorkshopConfigInput = {
   name: string | null;
+  // `undefined` (key absent) means "leave untouched" — a name-only save must
+  // NOT clobber an existing logo. `null` means "explicitly clear" (DELETE
+  // flow). Only `logoR2Key`/`logoContentType` present on `input` are ever
+  // written to the update `set` clause — see saveWorkshopConfig below.
+  logoR2Key?: string | null;
+  logoContentType?: string | null;
 };
 
 export class WorkshopConfigValidationError extends Error {
@@ -30,7 +35,14 @@ export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput
     throw new WorkshopConfigValidationError(errors);
   }
 
-  return { name };
+  const result: WorkshopConfigInput = { name };
+  if ("logoR2Key" in value) {
+    result.logoR2Key = value.logoR2Key === null ? null : String(value.logoR2Key);
+  }
+  if ("logoContentType" in value) {
+    result.logoContentType = value.logoContentType === null ? null : String(value.logoContentType);
+  }
+  return result;
 }
 
 export async function getWorkshopConfig(
@@ -44,12 +56,28 @@ export async function saveWorkshopConfig(
   input: unknown,
   db: { insert: typeof defaultDb.insert } = defaultDb,
 ): Promise<WorkshopConfig> {
-  const { name } = validateWorkshopConfigInput(input);
+  const parsed = validateWorkshopConfigInput(input);
   const updatedAt = new Date();
+
+  const insertValues: typeof workshopConfig.$inferInsert = { id: SINGLETON_ID, name: parsed.name, updatedAt };
+  const updateSet: Partial<typeof workshopConfig.$inferInsert> = { name: parsed.name, updatedAt };
+
+  // Only touch logoR2Key/logoContentType when the caller explicitly provided
+  // them — a name-only save (e.g. the workshop-settings form) must not send
+  // a NULL that wipes out a logo uploaded through the separate logo route.
+  if ("logoR2Key" in parsed) {
+    insertValues.logoR2Key = parsed.logoR2Key ?? null;
+    updateSet.logoR2Key = parsed.logoR2Key ?? null;
+  }
+  if ("logoContentType" in parsed) {
+    insertValues.logoContentType = parsed.logoContentType ?? null;
+    updateSet.logoContentType = parsed.logoContentType ?? null;
+  }
+
   const [row] = await db
     .insert(workshopConfig)
-    .values({ id: SINGLETON_ID, name, updatedAt })
-    .onConflictDoUpdate({ target: workshopConfig.id, set: { name, updatedAt } })
+    .values(insertValues)
+    .onConflictDoUpdate({ target: workshopConfig.id, set: updateSet })
     .returning();
   return row;
 }
