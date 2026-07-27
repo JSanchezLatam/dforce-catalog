@@ -9,10 +9,11 @@ import { PAGE_HEADING } from "@/shared/ui/styles";
 
 /**
  * R5 — catalog builder: category/product selection with a live title/index
- * preview (Risk-5's shared `CatalogTemplate`). Any authenticated user may
- * build a catalog — not in the admin-only `can()` list — so `proxy.ts`'s
- * blanket session guard is the only auth check this page needs, same as
- * `inventory-view`'s page.
+ * preview (Risk-5's shared `CatalogTemplate`). Building a catalog is
+ * admin-only (`catalogs.generate` in the permission matrix, checked three
+ * lines below) — this page is NOT open to every authenticated user; the
+ * denial branch below is the actual gate, not just `proxy.ts`'s session
+ * check.
  *
  * `force-dynamic`: unlike `/inventory` (reads `searchParams`) or
  * `/template-config` (reads `headers()`), this page uses no dynamic Next.js
