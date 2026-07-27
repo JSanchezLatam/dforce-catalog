@@ -32,7 +32,7 @@ services:
       db:
         condition: service_healthy
     profiles: ["tools"]
-    command: ["npx", "drizzle-kit", "migrate"]
+    command: ["node", "scripts/migrate.mjs"]
 
   db:
     image: postgres:17-alpine

@@ -11,7 +11,7 @@
     "test:watch": "vitest",
     "test:e2e": "vitest run -c vitest.e2e.config.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "node scripts/migrate.mjs",
     "db:studio": "drizzle-kit studio",
     "db:seed-user": "node scripts/seed-user.mjs"
   },
