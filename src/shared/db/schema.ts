@@ -6,7 +6,7 @@
  * here in PR8 (catalog-storage) — see design.md → "Database Schema Outline".
  * Each table is added alongside the code that first needs it.
  */
-import { index, integer, jsonb, pgEnum, pgTable, real, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp } from "drizzle-orm/pg-core";
 
 /** R9.6 / NFR-8 — single `role` column, extensible without an RBAC library. */
 export const roleEnum = pgEnum("role", ["usuario", "administrador"]);
@@ -160,3 +160,146 @@ export const catalogs = pgTable(
 );
 
 export type Catalog = typeof catalogs.$inferSelect;
+
+/**
+ * crm-workshop-management — customers, service orders, line items, reminders.
+ * See openspec/changes/crm-workshop-management/design.md → "Data Model" for
+ * the full rationale (ADR-5 opt-out re-check, ADR-6 inline vehicle + FK
+ * restrict, ADR-7 line-item snapshot, ADR-8 retry idempotency).
+ */
+export const orderStatusEnum = pgEnum("order_status", ["open", "in_progress", "done", "cancelled"]);
+export const reminderTypeEnum = pgEnum("reminder_type", ["service_due", "appointment"]);
+export const reminderChannelEnum = pgEnum("reminder_channel", ["email", "whatsapp"]);
+export const reminderStatusEnum = pgEnum("reminder_status", [
+  "scheduled",
+  "sent",
+  "failed",
+  "cancelled",
+  "skipped",
+]);
+
+/**
+ * `cliente` — customer + inline single vehicle (v1, ADR-6). A separate
+ * `vehiculo` table is deferred until a customer needs more than one vehicle
+ * (YAGNI — see design.md ADR-6).
+ */
+export const cliente = pgTable(
+  "cliente",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    name: text("name").notNull(),
+    /** E.164 preferred (WhatsApp needs it); validated in modules/customers/validation.ts. */
+    phone: text("phone"),
+    email: text("email"),
+    vehicleMake: text("vehicle_make"),
+    vehicleModel: text("vehicle_model"),
+    vehicleYear: integer("vehicle_year"),
+    vehiclePlate: text("vehicle_plate"),
+    /**
+     * Two INDEPENDENT opt-out flags (R26, design ADR-5) — WhatsApp and email
+     * are legally distinct consent regimes, so a customer can decline one
+     * channel without losing the other. Re-checked at reminder fire time,
+     * not schedule time.
+     */
+    whatsappOptOut: boolean("whatsapp_opt_out").notNull().default(false),
+    emailOptOut: boolean("email_opt_out").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("cliente_name_idx").on(table.name), // list search by name
+    index("cliente_plate_idx").on(table.vehiclePlate), // lookup by plate
+    index("cliente_created_idx").on(table.createdAt), // newest-first listing
+  ],
+);
+
+export type Cliente = typeof cliente.$inferSelect;
+
+/** `orden_servicio` — service order. */
+export const ordenServicio = pgTable(
+  "orden_servicio",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    clienteId: text("cliente_id")
+      .notNull()
+      .references(() => cliente.id, { onDelete: "restrict" }), // protect history (ADR-6)
+    status: orderStatusEnum("status").notNull().default("open"),
+    description: text("description"),
+    appointmentAt: timestamp("appointment_at", { withTimezone: true }), // basis for "appointment" reminders
+    completedAt: timestamp("completed_at", { withTimezone: true }), // set on -> done; basis for "service_due"
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // per-customer history, mirrors catalogs_user_created_idx
+    index("orden_cliente_created_idx").on(table.clienteId, table.createdAt),
+    index("orden_status_idx").on(table.status),
+  ],
+);
+
+export type OrdenServicio = typeof ordenServicio.$inferSelect;
+
+/**
+ * `orden_servicio_item` — parts used on a service order (ADR-7). `productName`
+ * and `unitPrice` are a snapshot at time of use so a later inventory sync
+ * that renames/reprices a part does NOT rewrite historical orders (same
+ * philosophy as `catalogs.categories` / `producto.raw`). No stock deduction
+ * (explicitly out of scope in the proposal).
+ */
+export const ordenServicioItem = pgTable(
+  "orden_servicio_item",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    ordenId: text("orden_id")
+      .notNull()
+      .references(() => ordenServicio.id, { onDelete: "cascade" }), // items die with the order
+    productoId: text("producto_id").references(() => producto.id, { onDelete: "set null" }), // soft ref — re-sync must not delete history
+    productName: text("product_name").notNull(), // snapshot at time of use
+    unitPrice: real("unit_price"), // snapshot; `real` per producto.price convention
+    quantity: integer("quantity").notNull().default(1),
+  },
+  (table) => [index("orden_item_orden_idx").on(table.ordenId)],
+);
+
+export type OrdenServicioItem = typeof ordenServicioItem.$inferSelect;
+
+/**
+ * `reminder` — source of truth for scheduled reminders (ADR-2); the pg-boss
+ * `sendAfter` job is transport only, carrying `{ reminderId }`. `jobId` is
+ * stored for later cancellation/correlation (design.md → pg-boss Job Design).
+ */
+export const reminder = pgTable(
+  "reminder",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    ordenId: text("orden_id")
+      .notNull()
+      .references(() => ordenServicio.id, { onDelete: "cascade" }),
+    clienteId: text("cliente_id")
+      .notNull()
+      .references(() => cliente.id, { onDelete: "cascade" }),
+    type: reminderTypeEnum("type").notNull(),
+    channel: reminderChannelEnum("channel").notNull(),
+    status: reminderStatusEnum("status").notNull().default("scheduled"),
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true }).notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    jobId: text("job_id"), // pg-boss job id returned by sendAfter() — for correlation + cancellation
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("reminder_orden_idx").on(table.ordenId),
+    index("reminder_status_sched_idx").on(table.status, table.scheduledFor),
+  ],
+);
+
+export type Reminder = typeof reminder.$inferSelect;
