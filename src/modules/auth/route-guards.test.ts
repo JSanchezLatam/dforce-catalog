@@ -18,6 +18,8 @@ export const ROUTE_GUARDS: Record<string, Partial<Record<"GET" | "POST" | "PATCH
   "/api/service-orders/[id]": { GET: "service-orders.read", PATCH: "service-orders.write" },
   "/api/inventory-sync/manual": { GET: "sync.manual", POST: "sync.manual" },
   "/api/template-config": { GET: "template.edit", POST: "template.edit" },
+  "/api/workshop-config": { GET: "workshop.read", POST: "workshop.edit" },
+  "/api/workshop-config/logo": { GET: "workshop.read", POST: "workshop.edit", DELETE: "workshop.edit" },
   "/api/catalog-builder/products": { POST: "catalogs.read" },
   "/api/catalog-builder/generate": { POST: "catalogs.generate" },
   "/api/catalog-builder/queue-depth": { GET: "catalogs.read" },
@@ -82,7 +84,7 @@ describe("ROUTE_GUARDS completeness", () => {
     // Four actions have no route in v1 — they get their own route in later WUs:
     // users.manage (deferred follow-up), workshop.edit (WU3b),
     // catalogs.listAll (no dedicated route), account.self (WU5b).
-    const exempt: readonly Action[] = ["users.manage", "workshop.edit", "catalogs.listAll", "account.self"];
+    const exempt: readonly Action[] = ["users.manage", "catalogs.listAll", "account.self"];
 
     for (const action of ACTIONS) {
       if ((exempt as readonly string[]).includes(action)) continue;

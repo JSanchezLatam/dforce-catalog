@@ -26,9 +26,9 @@ const client = new S3Client({
 });
 
 /** R11.1 — uploads the PDF buffer; returns a display-only URL (see env.ts's `R2_PUBLIC_URL` note — never used to serve downloads directly). */
-export async function putObject(key: string, body: Buffer): Promise<string> {
+export async function putObject(key: string, body: Buffer, contentType = "application/pdf"): Promise<string> {
   await client.send(
-    new PutObjectCommand({ Bucket: env.R2_BUCKET, Key: key, Body: body, ContentType: "application/pdf" }),
+    new PutObjectCommand({ Bucket: env.R2_BUCKET, Key: key, Body: body, ContentType: contentType }),
   );
   return `${env.R2_PUBLIC_URL ?? ""}/${key}`;
 }
