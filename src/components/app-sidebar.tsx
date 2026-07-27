@@ -1,5 +1,6 @@
 "use client"
 
+import { Fragment } from "react"
 import { FileSpreadsheet, Package, BookOpen, Settings, GalleryVerticalEnd, ChevronDown, ChevronRight, Users, Wrench } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -167,8 +168,11 @@ export function AppSidebar({
       </SidebarHeader>
 
       <SidebarContent>
-        {navGroups.map((group) => (
-          <NavGroupSection key={group.label} group={group} collapsed={collapsed} />
+        {navGroups.map((group, i) => (
+          <Fragment key={group.label}>
+            {i > 0 && <SidebarSeparator />}
+            <NavGroupSection group={group} collapsed={collapsed} />
+          </Fragment>
         ))}
       </SidebarContent>
 
