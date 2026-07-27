@@ -56,12 +56,12 @@ task 4.3 below (RED test should cover this no-op-on-already-sent case).
 
 ## Phase 2: Customers Module
 
-- [ ] 2.1 RED `modules/customers/validation.test.ts` — required name/phone (R17), phone format regex, email format, vehicle-requires-plate rule, E.164 phone normalization.
-- [ ] 2.2 GREEN `modules/customers/validation.ts` — implement `validateClienteInput()` satisfying 2.1.
-- [ ] 2.3 RED `modules/customers/queries.test.ts` — list w/ pagination+name/phone/plate search (R19), get-by-id w/ service-order history join (R16), `findByPhone` for duplicate check (R18).
-- [ ] 2.4 GREEN `modules/customers/queries.ts` — implement against 2.3 with DI `deps` seam.
-- [ ] 2.5 RED `modules/customers/service.test.ts` — create rejects duplicate phone w/ link to existing (R18); edit persists only the changed field (R16); create/edit reject on validation errors.
-- [ ] 2.6 GREEN `modules/customers/service.ts` — implement `createCliente`/`updateCliente` calling validation.ts + queries.ts.
+- [x] 2.1 RED `modules/customers/validation.test.ts` — required name/phone (R17), phone format regex, email format, vehicle-requires-plate rule, E.164 phone normalization.
+- [x] 2.2 GREEN `modules/customers/validation.ts` — implement `validateClienteInput()` satisfying 2.1.
+- [x] 2.3 RED `modules/customers/queries.test.ts` — list w/ pagination+name/phone/plate search (R19), get-by-id w/ service-order history join (R16), `findByPhone` for duplicate check (R18).
+- [x] 2.4 GREEN `modules/customers/queries.ts` — implement against 2.3 with DI `deps` seam.
+- [x] 2.5 RED `modules/customers/service.test.ts` — create rejects duplicate phone w/ link to existing (R18); edit persists only the changed field (R16); create/edit reject on validation errors.
+- [x] 2.6 GREEN `modules/customers/service.ts` — implement `createCliente`/`updateCliente` calling validation.ts + queries.ts. **Note**: `cliente.phone` has NO DB-level unique constraint (Phase 1's schema/migration never added `.unique()` on that column) — duplicate detection (R18) is enforced entirely at the application layer via `findClienteByPhone`, not a DB constraint violation. Flagging since the apply prompt assumed a DB-level constraint existed; it does not, and adding one now is out of scope for this PR (would require a Phase 1 schema/migration change). App-layer enforcement is race-condition-prone under concurrent creates with the same phone — acceptable for v1 staff-only usage, but worth a follow-up ADR if concurrent double-booking becomes a real issue.
 
 ## Phase 3: Service-Orders Module
 
