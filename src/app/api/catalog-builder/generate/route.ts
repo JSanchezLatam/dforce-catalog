@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { can } from "@/modules/auth/policy";
 import { CatalogSelectionValidationError, validateCatalogSelection, type ProductRef } from "@/modules/catalog-builder/selection";
 import { requireSession } from "@/modules/auth/session";
 import { countUploadedCatalogsForUser } from "@/modules/catalog-storage/queries";
@@ -44,6 +45,10 @@ function isGenerateBody(value: unknown): value is GenerateBody {
 
 export async function POST(request: NextRequest) {
   const user = requireSession(request);
+  if (!can(user, "catalogs.generate")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const body = await request.json().catch(() => null);
   if (!isGenerateBody(body)) {
     return NextResponse.json({ errors: { form: "Invalid request body" } }, { status: 400 });

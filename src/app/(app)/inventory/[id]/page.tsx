@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+
+import { can } from "@/modules/auth/policy";
+import { requireSessionFromHeaders } from "@/modules/auth/session";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -26,6 +29,11 @@ export default async function ProductDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const user = await requireSessionFromHeaders();
+  if (!can(user, "inventory.read")) {
+    return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
+  }
+
   const product = await getProductById(id);
 
   if (!product) notFound();

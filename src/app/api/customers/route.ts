@@ -1,20 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import { createCliente, DuplicatePhoneError, type CreateClienteDeps } from "@/modules/customers/service";
 import { ClienteValidationError } from "@/modules/customers/validation";
 
-/**
- * R16 — create a `cliente`. Staff-only via the blanket `requireSession` guard
- * (design.md §7 — no `can()` sub-gate for v1, same as `inventory-view`).
- * DI via optional `deps`, same `handleX` split as `manual/route.ts` so
- * `route.test.ts` can inject fakes instead of hitting a real DB.
- */
 export async function handleCreateCliente(
   request: NextRequest,
   deps: CreateClienteDeps = {},
 ): Promise<NextResponse> {
-  requireSession(request);
+  const user = requireSession(request);
+  if (!can(user, "customers.write")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const body = await request.json();
   try {

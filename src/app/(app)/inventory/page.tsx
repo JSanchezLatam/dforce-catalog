@@ -43,6 +43,9 @@ export default async function InventoryPage({
   const pageSize = parsePageSize(params.pageSize);
   const pageWindow = computePageWindow(params.page, pageSize);
   const user = await requireSessionFromHeaders();
+  if (!can(user, "inventory.read")) {
+    return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
+  }
   const canTriggerSync = can(user, "sync.manual"); // R2 — admin-only manual sync trigger
 
   const [{ items, total }, categoryL1Options, categoryL2Options, grandTotal] = await Promise.all([

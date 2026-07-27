@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import {
   ClienteNotFoundError,
@@ -9,20 +10,15 @@ import {
 } from "@/modules/customers/service";
 import { ClienteValidationError } from "@/modules/customers/validation";
 
-/**
- * R16 — edit a `cliente` (also the R26 opt-out toggle path: `whatsappOptOut`
- * / `emailOptOut` are just two more patchable fields, checked independently
- * per channel at reminder fire time — see reminders/job.ts's `runReminder`).
- * `handleUpdateCliente` takes the already-resolved `id` so `route.test.ts`
- * doesn't need to await Next's `params` Promise to call it directly (mirrors
- * `manual/route.ts`'s `handleX` DI split).
- */
 export async function handleUpdateCliente(
   request: NextRequest,
   id: string,
   deps: UpdateClienteDeps = {},
 ): Promise<NextResponse> {
-  requireSession(request);
+  const user = requireSession(request);
+  if (!can(user, "customers.write")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const body = await request.json();
   try {

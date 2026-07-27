@@ -1,6 +1,7 @@
 import { CatalogBuilderForm } from "@/modules/catalog-builder/CatalogBuilderForm";
 import { listCategoryPairs } from "@/modules/catalog-builder/queries";
 import { countUploadedCatalogsForUser } from "@/modules/catalog-storage/queries";
+import { can } from "@/modules/auth/policy";
 import { listCategoryL1Options } from "@/modules/inventory-view/queries";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getTemplateConfig } from "@/modules/template-config/service";
@@ -22,8 +23,12 @@ import { PAGE_HEADING } from "@/shared/ui/styles";
 export const dynamic = "force-dynamic";
 
 export default async function CatalogBuilderPage() {
-  const [user, categoryL1Options, categoryPairs, templateConfig] = await Promise.all([
-    requireSessionFromHeaders(),
+  const user = await requireSessionFromHeaders();
+  if (!can(user, "catalogs.generate")) {
+    return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
+  }
+
+  const [categoryL1Options, categoryPairs, templateConfig] = await Promise.all([
     listCategoryL1Options(),
     listCategoryPairs(),
     getTemplateConfig(),

@@ -7,7 +7,7 @@ import { handleUpdateOrdenServicio, PATCH } from "./route";
 function requestWith(body: unknown) {
   return new NextRequest("http://localhost/api/service-orders/o1", {
     method: "PATCH",
-    headers: { "x-user-id": "user-1", "x-user-role": "usuario", "Content-Type": "application/json" },
+    headers: { "x-user-id": "user-1", "x-user-role": "tecnico", "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }

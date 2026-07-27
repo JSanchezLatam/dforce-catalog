@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Wrench } from "lucide-react";
 
+import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { listClientes } from "@/modules/customers/queries";
 import { computePageWindow, listInventory, parsePageSize } from "@/modules/inventory-view/queries";
@@ -57,7 +58,10 @@ export default async function ServiceOrdersPage({
   const pageSize = parsePageSize(params.pageSize);
   const pageWindow = computePageWindow(params.page, pageSize);
 
-  await requireSessionFromHeaders();
+  const user = await requireSessionFromHeaders();
+  if (!can(user, "service-orders.read")) {
+    return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
+  }
 
   const [items, total, customers, products] = await Promise.all([
     listOrdenesServicio(filters, pageWindow),

@@ -13,6 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
+import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
 import { getClienteById } from "@/modules/customers/queries";
@@ -51,7 +52,11 @@ export default async function CustomerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  await requireSessionFromHeaders();
+  const user = await requireSessionFromHeaders();
+  if (!can(user, "customers.read")) {
+    return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
+  }
+
   const detail = await getClienteById(id);
 
   if (!detail) notFound();

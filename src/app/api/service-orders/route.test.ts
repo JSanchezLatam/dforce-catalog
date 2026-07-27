@@ -6,7 +6,7 @@ import { handleCreateOrdenServicio, POST } from "./route";
 function requestWith(body: unknown) {
   return new NextRequest("http://localhost/api/service-orders", {
     method: "POST",
-    headers: { "x-user-id": "user-1", "x-user-role": "usuario", "Content-Type": "application/json" },
+    headers: { "x-user-id": "user-1", "x-user-role": "tecnico", "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }

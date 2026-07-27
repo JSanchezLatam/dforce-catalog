@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Users } from "lucide-react";
 
+import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { CustomerFilters } from "@/modules/customers/CustomerFilters";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
@@ -40,7 +41,10 @@ export default async function CustomersPage({
   const pageSize = parsePageSize(params.pageSize);
   const pageWindow = computePageWindow(params.page, pageSize);
 
-  await requireSessionFromHeaders();
+  const user = await requireSessionFromHeaders();
+  if (!can(user, "customers.read")) {
+    return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
+  }
 
   const [items, total] = await Promise.all([listClientes(filters, pageWindow), countClientes(filters)]);
 

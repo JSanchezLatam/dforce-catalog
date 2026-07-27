@@ -9,7 +9,7 @@ const validInput = { name: "Juan Pérez", phone: "+52 55 1234 5678" };
 function requestWith(body: unknown) {
   return new NextRequest("http://localhost/api/customers", {
     method: "POST",
-    headers: { "x-user-id": "user-1", "x-user-role": "usuario", "Content-Type": "application/json" },
+    headers: { "x-user-id": "user-1", "x-user-role": "tecnico", "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }

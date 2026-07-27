@@ -1,19 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import { createOrder, type CreateOrdenServicioDeps, UnknownClienteError } from "@/modules/service-orders/service";
 
-/**
- * R20 — create an `orden_servicio` + its line items. `createOrder` (Phase 3)
- * already does the all-or-nothing transaction and the R23 (Phase 4) reminder
- * scheduling side effect when `appointmentAt` is set; this route is a thin
- * auth+DI shell, same `handleX` split as `manual/route.ts`.
- */
 export async function handleCreateOrdenServicio(
   request: NextRequest,
   deps: CreateOrdenServicioDeps = {},
 ): Promise<NextResponse> {
-  requireSession(request);
+  const user = requireSession(request);
+  if (!can(user, "service-orders.write")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const body = await request.json();
   try {

@@ -13,6 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
+import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getClienteById } from "@/modules/customers/queries";
 import { listRemindersForOrder } from "@/modules/reminders/queries";
@@ -71,7 +72,10 @@ export default async function ServiceOrderDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  await requireSessionFromHeaders();
+  const user = await requireSessionFromHeaders();
+  if (!can(user, "service-orders.read")) {
+    return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
+  }
 
   const detail = await getOrdenServicioById(id);
   if (!detail) notFound();

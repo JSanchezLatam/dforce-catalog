@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import {
   OrdenServicioNotFoundError,
@@ -13,20 +14,15 @@ import { OrderTransitionError, type OrderStatus } from "@/modules/service-orders
 
 export type UpdateOrdenServicioRouteDeps = UpdateOrdenServicioDeps & TransitionOrdenServicioDeps;
 
-/**
- * R21 — update a service order. A `status` field in the body drives a
- * transition (delegates to `transitionOrder`, which also handles R23's
- * reminder scheduling/cancellation); any other body drives a plain field
- * edit (`description`/`appointmentAt`) via `updateOrder`. One PATCH route,
- * per design.md §7's route table — same `handleX` DI split as the customer
- * routes and `manual/route.ts`.
- */
 export async function handleUpdateOrdenServicio(
   request: NextRequest,
   id: string,
   deps: UpdateOrdenServicioRouteDeps = {},
 ): Promise<NextResponse> {
-  requireSession(request);
+  const user = requireSession(request);
+  if (!can(user, "service-orders.write")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const body = await request.json();
   try {
