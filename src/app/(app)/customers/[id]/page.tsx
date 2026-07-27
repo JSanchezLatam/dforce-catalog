@@ -1,0 +1,141 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { ClipboardList } from "lucide-react";
+
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+import { requireSessionFromHeaders } from "@/modules/auth/session";
+import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
+import { getClienteById } from "@/modules/customers/queries";
+import { StatusBadge } from "@/shared/ui/StatusBadge";
+
+export const dynamic = "force-dynamic";
+
+const ORDER_STATUS_LABEL: Record<string, string> = {
+  open: "Abierta",
+  in_progress: "En progreso",
+  done: "Completada",
+  cancelled: "Cancelada",
+};
+
+function field(label: string, value: unknown) {
+  if (value == null || value === "") return null;
+  return (
+    <div className="grid grid-cols-3 gap-2 py-2 border-b border-border last:border-0">
+      <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
+      <dd className="col-span-2 text-sm text-foreground">{String(value)}</dd>
+    </div>
+  );
+}
+
+/**
+ * R16 — customer detail: info Card (incl. the two R26 opt-out flags' current
+ * state, read-only + an "Editar" trigger into `CustomerForm`) + service
+ * history Table (this customer's `orden_servicio` rows, most-recent first —
+ * `getClienteById`'s queryFn contract), empty-state when zero orders.
+ * Mirrors `inventory/[id]/page.tsx`'s Breadcrumb + Card + `field()` pattern
+ * (design.md §8).
+ */
+export default async function CustomerDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  await requireSessionFromHeaders();
+  const detail = await getClienteById(id);
+
+  if (!detail) notFound();
+
+  const { cliente, orders } = detail;
+  const vehicle = [cliente.vehicleMake, cliente.vehicleModel, cliente.vehicleYear].filter(Boolean).join(" ");
+
+  return (
+    <div className="p-8">
+      <Breadcrumb className="mb-6">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink render={<Link href="/customers" />}>Clientes</BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>{cliente.name}</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
+      <Card className="mb-6">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>{cliente.name}</CardTitle>
+          <CustomerFormTrigger cliente={cliente} triggerLabel="Editar" />
+        </CardHeader>
+        <CardContent>
+          <dl>
+            {field("Teléfono", cliente.phone)}
+            {field("Email", cliente.email)}
+            {field("Vehículo", vehicle || null)}
+            {field("Placa", cliente.vehiclePlate)}
+            {field("Recordatorios WhatsApp", cliente.whatsappOptOut ? "Desactivados" : "Activos")}
+            {field("Recordatorios email", cliente.emailOptOut ? "Desactivados" : "Activos")}
+          </dl>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Historial de órdenes de servicio</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {orders.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-12 text-center">
+              <ClipboardList className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
+              <h2 className="text-base font-semibold text-foreground">Sin órdenes de servicio</h2>
+              <p className="text-sm text-muted-foreground">Este cliente todavía no tiene órdenes registradas.</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>Cita</TableHead>
+                  <TableHead>Creada</TableHead>
+                  <TableHead className="w-24">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {orders.map((orden) => (
+                  <TableRow key={orden.id}>
+                    <TableCell>
+                      <StatusBadge status={orden.status} label={ORDER_STATUS_LABEL[orden.status]} />
+                    </TableCell>
+                    <TableCell>{orden.description ?? "—"}</TableCell>
+                    <TableCell>{orden.appointmentAt ? orden.appointmentAt.toLocaleString() : "—"}</TableCell>
+                    <TableCell>{orden.createdAt.toLocaleString()}</TableCell>
+                    <TableCell>
+                      <Link
+                        href={`/service-orders/${orden.id}`}
+                        className="inline-flex h-7 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-xs font-medium whitespace-nowrap text-foreground transition-colors hover:bg-muted"
+                      >
+                        Ver
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

@@ -1,6 +1,6 @@
 "use client"
 
-import { FileSpreadsheet, Package, BookOpen, Settings, GalleryVerticalEnd, ChevronDown } from "lucide-react"
+import { FileSpreadsheet, Package, BookOpen, Settings, GalleryVerticalEnd, ChevronDown, Users, Wrench } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -32,6 +32,8 @@ const ICON_MAP: Record<string, typeof Package> = {
   builder: FileSpreadsheet,
   catalogs: BookOpen,
   "template-config": Settings,
+  customers: Users,
+  "service-orders": Wrench,
 }
 
 export function AppSidebar({ navItems, user }: { navItems: NavItem[]; user: { id: string; role: string } }) {

@@ -46,6 +46,24 @@ export const env = {
    * first (R11.1 — bucket is private, not public).
    */
   R2_PUBLIC_URL: optional("R2_PUBLIC_URL"),
+  /**
+   * Reminders — Resend (email, ADR-4) + Kapso (WhatsApp templates, ADR-3).
+   * All `optional`: the app must boot and the reminder worker must run fine
+   * with zero CRM-provider credentials configured — a missing/incomplete set
+   * simply means that channel's reminders fail gracefully (see
+   * reminders/providers/email.ts and whatsapp.ts) instead of crashing boot.
+   */
+  RESEND_API_KEY: optional("RESEND_API_KEY"),
+  /** Verified Resend sending domain address, e.g. "Taller <no-reply@taller.example>". */
+  RESEND_FROM: optional("RESEND_FROM"),
+  /** Kapso platform API key — server-only, never log or expose (NFR-4, same bar as IFX_TOKEN). */
+  KAPSO_API_KEY: optional("KAPSO_API_KEY"),
+  /** Connected WhatsApp number's Meta phone_number_id (see integrate-whatsapp skill). */
+  KAPSO_PHONE_NUMBER_ID: optional("KAPSO_PHONE_NUMBER_ID"),
+  /** Approved UTILITY template name for `type: "appointment"` reminders (ADR-3). */
+  KAPSO_TEMPLATE_APPOINTMENT: optional("KAPSO_TEMPLATE_APPOINTMENT"),
+  /** Approved UTILITY template name for `type: "service_due"` reminders (ADR-3). */
+  KAPSO_TEMPLATE_SERVICE_DUE: optional("KAPSO_TEMPLATE_SERVICE_DUE"),
 } as const;
 
 /** Keys that must never be included in logs, error messages, or responses. */
@@ -54,4 +72,6 @@ export const SENSITIVE_ENV_KEYS = [
   "DATABASE_URL",
   "R2_ACCESS_KEY_ID",
   "R2_SECRET_ACCESS_KEY",
+  "RESEND_API_KEY",
+  "KAPSO_API_KEY",
 ] as const;
