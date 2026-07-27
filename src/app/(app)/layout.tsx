@@ -1,25 +1,24 @@
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
-import { getNavItems } from "@/modules/layout/nav-items";
+import { getNavGroups } from "@/modules/layout/nav-items";
+import { getUserProfile } from "@/modules/account/queries";
+import { getWorkshopConfig } from "@/modules/workshop-config/service";
 
-/**
- * Route group — does not affect the URL path (/inventory, /builder,
- * /catalogs, /template-config keep working identically), only which pages
- * get the sidebar shell. `/login` and the root `/` redirect live outside
- * this group and render with no sidebar (design.md).
- *
- * ToastProvider is intentionally NOT mounted here — the root layout
- * (src/app/layout.tsx) already wraps every route including this group,
- * so a second instance here would create a duplicate context/portal.
- */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireSessionFromHeaders();
-  const navItems = getNavItems(user);
+  const navGroups = getNavGroups(user);
+  const profile = await getUserProfile(user.id);
+  const config = await getWorkshopConfig();
 
   return (
     <SidebarProvider>
-      <AppSidebar navItems={navItems} user={user} />
+      <AppSidebar
+        navGroups={navGroups}
+        user={{ id: user.id, role: user.role, name: profile?.name, username: profile?.username }}
+        workshopName={config?.name ?? null}
+        logoR2Key={config?.logoR2Key ?? null}
+      />
       <SidebarInset>
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
