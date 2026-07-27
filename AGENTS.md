@@ -7,16 +7,39 @@ conventions and decisions, not a session log. For stack/API/DB reference see
 `openspec/changes/<name>/design.md` — do not assume this file has the full
 story.
 
-## Cross-tool memory note
+## Cross-tool memory and task sharing (Claude Code ↔ OpenCode)
 
-This project has been worked on via both Claude Code and OpenCode.
-Claude Code sessions also persist decisions/history to an MCP memory server
-("Engram") that OpenCode cannot read. **Anything a future agent needs
-regardless of tool must live in a committed file** — this AGENTS.md,
-`STACK.md`, or an `openspec/changes/*/` change's own docs — not only in
-Engram. If you're an OpenCode agent and a decision here references "see
-Engram", treat this file's summary as the durable source and don't expect to
-recover more detail than what's written here.
+This project is worked on from both Claude Code and OpenCode on the same
+machine. Two things carry state between them automatically — verified
+2026-07-27, don't re-litigate this without checking again first:
+
+1. **Engram memory is ALREADY shared, not tool-specific.** Both tools talk to
+   the same local `engram serve` process (a Homebrew-installed Go binary,
+   HTTP on `127.0.0.1:7437`, SQLite-backed) — Claude Code via its Engram MCP
+   plugin, OpenCode via `~/.config/opencode/plugins/engram.ts` (a global
+   plugin, loaded for every OpenCode project automatically — it does NOT
+   need to be listed in this repo's `opencode.json`). Both resolve the same
+   project key (`dforce-catalog`, from `git remote get-url origin`), so a
+   `mem_save` from either tool is visible to the other with zero extra
+   config. If cross-tool recall ever seems to fail, the fix is almost
+   certainly "the engram server isn't running" (`curl
+   http://127.0.0.1:7437/health` should return `{"status":"ok"}`), not
+   "wire up a bridge" — the bridge already exists.
+2. **SDD task/plan state lives in committed files**, not just in Engram:
+   `openspec/changes/<name>/{proposal,spec,design,tasks}.md`. OpenCode has a
+   mirrored SDD skill/command set installed
+   (`~/.config/opencode/skills/sdd-*`, `~/.config/opencode/commands/sdd-*.md`)
+   that reads/writes these same files, so a change proposed/planned in one
+   tool can be picked up and implemented in the other by pointing it at the
+   change's `tasks.md` checklist.
+
+**What this does NOT guarantee**: whether a given agent persona *actually
+calls* `mem_save`/`mem_search` proactively depends on that session's own
+system prompt including the memory instructions (both tools inject this by
+default, but a custom persona/plugin — e.g. ponytail's "lazy" mode — can
+still choose not to be proactive about it). If a past session's decisions
+don't show up in memory, check whether that session was likely to have
+skipped saving, not just assume the plumbing is broken.
 
 ## SDD workflow
 
