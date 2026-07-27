@@ -176,6 +176,12 @@ export const reminderStatusEnum = pgEnum("reminder_status", [
   "failed",
   "cancelled",
   "skipped",
+  // R26 — per-channel opt-out is a distinct outcome from the generic
+  // `skipped` (cancelled order, stale timing) so staff never conflate
+  // "customer declined this channel" with an operational skip reason.
+  // Added additively in migration 0006 (Postgres ALTER TYPE ... ADD VALUE) —
+  // the enum's first 5 values already have committed rows via 0005_legal_spot.sql.
+  "opted_out",
 ]);
 
 /**
