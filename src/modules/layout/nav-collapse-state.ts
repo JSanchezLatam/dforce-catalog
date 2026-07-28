@@ -37,8 +37,20 @@ export const DEFAULT_NAV_COLLAPSE_STATE: NavCollapseState = {
 /** Guards against corrupted/oversized cookie payloads (e.g. tampering). */
 const MAX_COOKIE_LENGTH = 512;
 
-function isNavCollapseKey(key: string): key is NavCollapseKey {
+/** Exported so callers (the sidebar UI) can guard arbitrary group/parent ids. */
+export function isNavCollapseKey(key: string): key is NavCollapseKey {
   return KEY_SET.has(key);
+}
+
+/**
+ * Resilient per-id lookup for the UI layer: `NavGroup.id` / `NavParent.id`
+ * are plain strings (not the `NavCollapseKey` union), so a future
+ * renamed/removed/added group id that has no matching cookie key must not
+ * crash the render — it simply falls back to "expanded" (Requirement 3's
+ * default), same as any other unknown key.
+ */
+export function getGroupOpen(state: NavCollapseState, id: string): boolean {
+  return isNavCollapseKey(id) ? state[id] : true;
 }
 
 /**

@@ -5,6 +5,8 @@ import {
   decodeNavCollapseState,
   encodeNavCollapseState,
   extractCookieValue,
+  getGroupOpen,
+  isNavCollapseKey,
   NAV_COLLAPSE_COOKIE_MAX_AGE,
   NAV_COLLAPSE_COOKIE_NAME,
 } from "./nav-collapse-state";
@@ -143,6 +145,37 @@ describe("extractCookieValue() — pure document.cookie-style parser", () => {
     for (const input of inputs) {
       expect(() => extractCookieValue(input, NAV_COLLAPSE_COOKIE_NAME)).not.toThrow();
     }
+  });
+});
+
+describe("isNavCollapseKey() — key guard used by UI lookups", () => {
+  it("returns true for every known key", () => {
+    for (const key of ["crm", "catalogo", "configuracion", "config-catalogos"]) {
+      expect(isNavCollapseKey(key)).toBe(true);
+    }
+  });
+
+  it("returns false for an unknown/stale/renamed key", () => {
+    expect(isNavCollapseKey("some-removed-group")).toBe(false);
+  });
+
+  it("returns false for an empty string", () => {
+    expect(isNavCollapseKey("")).toBe(false);
+  });
+});
+
+describe("getGroupOpen() — resilient per-id lookup for the UI layer", () => {
+  it("returns the stored value for a known, closed key", () => {
+    const state = { ...DEFAULT_NAV_COLLAPSE_STATE, crm: false };
+    expect(getGroupOpen(state, "crm")).toBe(false);
+  });
+
+  it("returns the stored value for a known, open key", () => {
+    expect(getGroupOpen(DEFAULT_NAV_COLLAPSE_STATE, "catalogo")).toBe(true);
+  });
+
+  it("falls back to open (true) for an id that is not a recognized collapse key (renamed/removed group at the UI layer)", () => {
+    expect(getGroupOpen(DEFAULT_NAV_COLLAPSE_STATE, "some-future-group-id")).toBe(true);
   });
 });
 
