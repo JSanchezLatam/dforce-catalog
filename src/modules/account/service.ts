@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { users } from "@/shared/db/schema";
@@ -143,4 +143,83 @@ export class AdminSafetyError extends Error {
   constructor(public readonly reason: AdminSafetyViolation) {
     super(`Admin safety violation: ${reason}`);
   }
+}
+
+/**
+ * Raw-SQL `TxLike` seam — same convention as pdf-generation/enqueue.ts and
+ * catalog-storage/retention.ts's transaction-scoped queries: keeps the
+ * transaction dependency mockable with a minimal execute-only fake in unit
+ * tests, no real Postgres needed.
+ */
+type TxLike = { execute: (query: ReturnType<typeof sql>) => Promise<{ rows: Record<string, unknown>[] }> };
+
+async function listActiveAdminIdsTx(tx: TxLike): Promise<string[]> {
+  const result = await tx.execute(
+    sql`SELECT id FROM users WHERE role = 'administrador' AND deactivated_at IS NULL`,
+  );
+  return result.rows.map((row) => String(row.id));
+}
+
+async function setDeactivatedAtTx(tx: TxLike, targetId: string, deactivatedAt: Date): Promise<void> {
+  await tx.execute(sql`UPDATE users SET deactivated_at = ${deactivatedAt} WHERE id = ${targetId}`);
+}
+
+/**
+ * Soft-deactivate only — never deletes the `users` row (design.md Decision 7
+ * / spec "Deactivation Is Soft, Never Delete"), so `orden_servicio.createdBy`
+ * keeps referencing this user unchanged on every historical record.
+ *
+ * The active-admin count READ and the `deactivated_at` WRITE run inside ONE
+ * `db.transaction()` — required so two admins concurrently demoting/
+ * deactivating each other cannot both observe a stale count and both land on
+ * zero active administrators (design.md Decision 7's documented race).
+ * `revokeOtherSessions()` runs AFTER the transaction commits, mirroring the
+ * already-designed `deactivateUser()`/`changePassword()` pattern elsewhere in
+ * this module — the session table has no bearing on the admin-count
+ * invariant the transaction protects, so it does not need to share it.
+ */
+export async function deactivateUser(
+  actorId: string,
+  targetId: string,
+  deps: {
+    database?: { transaction: <T>(fn: (tx: TxLike) => Promise<T>) => Promise<T> };
+    listActiveAdminIds?: (tx: TxLike) => Promise<string[]>;
+    setDeactivatedAt?: (tx: TxLike, targetId: string, deactivatedAt: Date) => Promise<void>;
+    revokeOtherSessions?: typeof revokeOtherSessions;
+  } = {},
+): Promise<void> {
+  const database = deps.database ?? db;
+  const getActiveAdminIds = deps.listActiveAdminIds ?? listActiveAdminIdsTx;
+  const setDeactivatedAt = deps.setDeactivatedAt ?? setDeactivatedAtTx;
+
+  await database.transaction(async (tx) => {
+    const activeAdminIds = await getActiveAdminIds(tx);
+    const violation = checkAdminSafety({ actorId, targetId, operation: "deactivate", activeAdminIds });
+    if (violation) {
+      throw new AdminSafetyError(violation);
+    }
+    await setDeactivatedAt(tx, targetId, new Date());
+  });
+
+  const revoke = deps.revokeOtherSessions ?? revokeOtherSessions;
+  await revoke(targetId, null);
+}
+
+/**
+ * Inverse of `deactivateUser()` (design-r4 decision — reactivation is in
+ * scope). Never calls `checkAdminSafety()`: increasing the active-admin
+ * count can never violate the last-active-admin floor, so no transaction is
+ * needed either. No session revocation — a deactivated user has no live
+ * session to revoke (validateSession() already refuses one, and
+ * deactivateUser() already revoked whatever existed at deactivation time).
+ */
+export async function reactivateUser(
+  targetId: string,
+  deps: { setDeactivatedAt?: (targetId: string, deactivatedAt: null) => Promise<void> } = {},
+): Promise<void> {
+  if (deps.setDeactivatedAt) {
+    await deps.setDeactivatedAt(targetId, null);
+    return;
+  }
+  await db.update(users).set({ deactivatedAt: null }).where(eq(users.id, targetId));
 }

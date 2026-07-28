@@ -67,8 +67,10 @@ Files: `src/modules/account/service.ts`(+test), `src/modules/account/queries.ts`
 - [x] 2.2 GREEN `queries.ts`.
 - [x] 2.3 RED `service.test.ts` — `checkAdminSafety()` truth table: self-role-change, self-deactivate, last-active-admin, deactivated-admin excluded from floor, demoting an already-deactivated admin is a no-op.
 - [x] 2.4 GREEN `service.ts` — `checkAdminSafety(input): "self_role_change"|"self_deactivate"|"last_active_admin"|null` per design Decision 7.
-- [ ] 2.5 RED `service.test.ts` — `deactivateUser()`/`reactivateUser()` call `revokeOtherSessions(targetId, null)` on deactivate only; count-read + write happen inside one injected transaction (assert via mock).
-- [ ] 2.6 GREEN `service.ts` — wrap in `db.transaction()`; reactivate never invokes `checkAdminSafety`.
+- [x] 2.5 RED `service.test.ts` — `deactivateUser()`/`reactivateUser()` call `revokeOtherSessions(targetId, null)` on deactivate only; count-read + write happen inside one injected transaction (assert via mock).
+- [x] 2.6 GREEN `service.ts` — wrap in `db.transaction()`; reactivate never invokes `checkAdminSafety`.
+
+**WU2 status: DONE** (commits `e99c4f8`, `1fded37`, and the deactivate/reactivate commit below, on `user-lifecycle/wu2-admin-safety`, based on WU1). Not pushed, no PR opened per instructions — stopped cleanly at the WU2 boundary.
 
 ## Work Unit 3 — Forced Password Change Flow
 
