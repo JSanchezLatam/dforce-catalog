@@ -39,10 +39,10 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     expect(crm.items.map((i) => i.label)).toEqual(["Clientes", "Órdenes de servicio", "Inventario"]);
   });
 
-  it("admin sees Catálogo items WITHOUT Inventario (Generar Catálogo, Catálogos only)", () => {
+  it("admin sees Catálogo items WITHOUT Inventario (Generar Catálogos, Catálogos Generados only)", () => {
     const groups = getNavGroups(admin);
     const cat = groups.find((g) => g.label === "Catálogo")!;
-    expect(cat.items.map((i) => i.label)).toEqual(["Generar Catálogo", "Catálogos"]);
+    expect(cat.items.map((i) => i.label)).toEqual(["Generar Catálogos", "Catálogos Generados"]);
   });
 
   it("Inventario is NOT present anywhere under the Catálogo group", () => {
@@ -65,10 +65,10 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     }
   });
 
-  it("técnico does NOT see Generar Catálogo (catalogs.generate denied), and Catálogo only has Catálogos", () => {
+  it("técnico does NOT see Generar Catálogos (catalogs.generate denied), and Catálogo only has Catálogos Generados", () => {
     const groups = getNavGroups(tecnico);
     const cat = groups.find((g) => g.label === "Catálogo")!;
-    expect(cat.items.map((i) => i.label)).toEqual(["Catálogos"]);
+    expect(cat.items.map((i) => i.label)).toEqual(["Catálogos Generados"]);
   });
 
   it("técnico sees Inventario under CRM, not under Catálogo", () => {
@@ -92,5 +92,27 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     const groups = getNavGroups(admin);
     const totalItems = groups.reduce((s, g) => s + g.items.length, 0);
     expect(totalItems).toBe(7);
+  });
+
+  // Stable ids decouple sidebar-group-collapse cookie state from display
+  // labels — renaming a label (see the Generar Catálogos/Catálogos
+  // Generados fix above) must not invalidate a user's saved collapse state.
+  it("every top-level group exposes a stable id independent from its label", () => {
+    const groups = getNavGroups(admin);
+    expect(groups.map((g) => ({ label: g.label, id: g.id }))).toEqual([
+      { label: "CRM", id: "crm" },
+      { label: "Catálogo", id: "catalogo" },
+      { label: "Configuración", id: "configuracion" },
+    ]);
+  });
+
+  it("the nested 'Config. de catálogos' parent exposes a stable id for its own collapse state", () => {
+    const groups = getNavGroups(admin);
+    const cfg = groups.find((g) => g.label === "Configuración")!;
+    const parent = cfg.items[1];
+    expect(parent.kind).toBe("parent");
+    if (parent.kind === "parent") {
+      expect(parent.id).toBe("config-catalogos");
+    }
   });
 });

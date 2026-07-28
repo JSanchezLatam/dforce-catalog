@@ -5,9 +5,10 @@ export type NavIconKey = "inventory" | "builder" | "catalogs" | "template-config
 
 export type NavLink = { kind: "link"; href: string; label: string; icon: NavIconKey; action?: Action };
 
-export type NavParent = { kind: "parent"; label: string; icon: NavIconKey; children: NavLink[]; action?: Action };
+export type NavParent = { kind: "parent"; id: string; label: string; icon: NavIconKey; children: NavLink[]; action?: Action };
 
 export type NavGroup = {
+  id: string;
   label: string;
   items: (NavLink | NavParent)[];
   pinBottom?: boolean;
@@ -20,14 +21,15 @@ const CRM_ITEMS: (NavLink | NavParent)[] = [
 ];
 
 const CATALOGO_ITEMS: (NavLink | NavParent)[] = [
-  { kind: "link", href: "/builder", label: "Generar Catálogo", icon: "builder", action: "catalogs.generate" },
-  { kind: "link", href: "/catalogs", label: "Catálogos", icon: "catalogs", action: "catalogs.read" },
+  { kind: "link", href: "/builder", label: "Generar Catálogos", icon: "builder", action: "catalogs.generate" },
+  { kind: "link", href: "/catalogs", label: "Catálogos Generados", icon: "catalogs", action: "catalogs.read" },
 ];
 
 const CONFIGURACION_ITEMS: (NavLink | NavParent)[] = [
   { kind: "link", href: "/workshop-config", label: "Config. del CRM", icon: "template-config", action: "workshop.edit" },
   {
     kind: "parent",
+    id: "config-catalogos",
     label: "Config. de catálogos",
     icon: "template-config",
     action: "template.edit",
@@ -38,9 +40,9 @@ const CONFIGURACION_ITEMS: (NavLink | NavParent)[] = [
 ];
 
 const GROUPS: NavGroup[] = [
-  { label: "CRM", items: CRM_ITEMS },
-  { label: "Catálogo", items: CATALOGO_ITEMS },
-  { label: "Configuración", items: CONFIGURACION_ITEMS, pinBottom: true },
+  { id: "crm", label: "CRM", items: CRM_ITEMS },
+  { id: "catalogo", label: "Catálogo", items: CATALOGO_ITEMS },
+  { id: "configuracion", label: "Configuración", items: CONFIGURACION_ITEMS, pinBottom: true },
 ];
 
 function itemVisible(user: SessionUser, item: NavLink | NavParent): boolean {
