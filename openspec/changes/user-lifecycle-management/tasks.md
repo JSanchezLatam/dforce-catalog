@@ -49,13 +49,15 @@ Chain strategy: feature-branch-chain
 
 Files: `src/modules/auth/session.ts`(+test), `src/modules/auth/authenticate.ts`(+new test), `src/proxy.ts`(+new test).
 
-- [ ] 1.1 RED `session.test.ts` — `isUserActive({deactivatedAt})` truth table; `validateSession` (via new injectable query fn) returns `null` for a deactivated user's row.
-- [ ] 1.2 GREEN `session.ts` — add `deactivatedAt`/`mustChangePassword` to the `validateSession` projection + `SessionUser` type; add `isUserActive()`; add optional `queryFn` param for DB-free testing.
-- [ ] 1.3 RED `authenticate.test.ts` (new file) — deactivated user gets the same generic failure as wrong password; active user unaffected.
-- [ ] 1.4 GREEN `authenticate.ts` — call `isUserActive()`, same `{ok:false}` path, no enumeration.
-- [ ] 1.5 RED `proxy.test.ts` (new file) — no-token: page redirect / API 401 (existing); invalid session (incl. deactivated): page redirect **and** API 401 (currently missing); valid session forwards `x-user-*` headers.
-- [ ] 1.6 GREEN `proxy.ts` — mirror the `isApiRoute` branch from the `!token` block onto the `!user` block.
-- [ ] 1.7 Verify: `can()`/`policy.ts`/`policy.test.ts` untouched — deactivation stays out of the matrix (architecture guard, no code change expected).
+- [x] 1.1 RED `session.test.ts` — `isUserActive({deactivatedAt})` truth table; `validateSession` (via new injectable query fn) returns `null` for a deactivated user's row.
+- [x] 1.2 GREEN `session.ts` — add `deactivatedAt`/`mustChangePassword` to the `validateSession` projection + `SessionUser` type; add `isUserActive()`; add optional `queryFn` param for DB-free testing.
+- [x] 1.3 RED `authenticate.test.ts` (new file) — deactivated user gets the same generic failure as wrong password; active user unaffected.
+- [x] 1.4 GREEN `authenticate.ts` — call `isUserActive()`, same `{ok:false}` path, no enumeration.
+- [x] 1.5 RED `proxy.test.ts` (new file) — no-token: page redirect / API 401 (existing); invalid session (incl. deactivated): page redirect **and** API 401 (currently missing); valid session forwards `x-user-*` headers.
+- [x] 1.6 GREEN `proxy.ts` — mirror the `isApiRoute` branch from the `!token` block onto the `!user` block.
+- [x] 1.7 Verify: `can()`/`policy.ts`/`policy.test.ts` untouched — deactivation stays out of the matrix (architecture guard, no code change expected).
+
+**WU1 status: DONE** (commits `b282b60`, `e7e29fb`, `df1133f` on `user-lifecycle/wu1-session-enforcement`, based on tracker `feature/user-lifecycle-management`). Not pushed, no PR opened per instructions — stopped cleanly at the WU1 boundary.
 
 ## Work Unit 2 — Admin-Safety Guards + Deactivate/Reactivate Service
 
