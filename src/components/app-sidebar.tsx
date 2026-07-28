@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment } from "react"
+import * as React from "react"
 import { FileSpreadsheet, Package, BookOpen, Settings, GalleryVerticalEnd, ChevronDown, ChevronRight, Users, Wrench, User } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -23,6 +23,7 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -36,6 +37,15 @@ import { ThemeToggle } from "@/modules/layout/ThemeToggle"
 import { WorkshopLogo } from "./WorkshopLogo"
 import { ROLE_LABELS } from "@/modules/auth/roles"
 import type { NavGroup, NavLink, NavParent } from "@/modules/layout/nav-items"
+import {
+  decodeNavCollapseState,
+  encodeNavCollapseState,
+  extractCookieValue,
+  getGroupOpen,
+  NAV_COLLAPSE_COOKIE_MAX_AGE,
+  NAV_COLLAPSE_COOKIE_NAME,
+  type NavCollapseState,
+} from "@/modules/layout/nav-collapse-state"
 
 const ICON_MAP: Record<string, typeof Package> = {
   inventory: Package,
@@ -61,29 +71,44 @@ function NavLinkItem({ item }: { item: NavLink }) {
   )
 }
 
-function NavParentExpanded({ parent }: { parent: NavParent }) {
+function NavParentExpanded({
+  parent,
+  open,
+  onOpenChange,
+}: {
+  parent: NavParent
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
   const Icon = ICON_MAP[parent.icon] || Package
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton tooltip={parent.label}>
-        <Icon />
-        <span>{parent.label}</span>
-        <ChevronDown className="ml-auto" />
-      </SidebarMenuButton>
-      <SidebarMenuSub>
-        {parent.children.map((child) => {
-          const ChildIcon = ICON_MAP[child.icon] || Package
-          return (
-            <SidebarMenuSubItem key={child.href}>
-              <SidebarMenuSubButton render={<Link href={child.href} />}>
-                <ChildIcon />
-                <span>{child.label}</span>
-              </SidebarMenuSubButton>
-            </SidebarMenuSubItem>
-          )
-        })}
-      </SidebarMenuSub>
+      <Collapsible open={open} onOpenChange={onOpenChange}>
+        <CollapsibleTrigger render={<SidebarMenuButton tooltip={parent.label} />} className="w-full cursor-pointer">
+          <Icon aria-hidden="true" />
+          <span>{parent.label}</span>
+          <ChevronDown
+            aria-hidden="true"
+            className="ml-auto size-4 shrink-0 transition-transform duration-200 ease-linear motion-reduce:transition-none data-panel-open:rotate-180"
+          />
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <SidebarMenuSub>
+            {parent.children.map((child) => {
+              const ChildIcon = ICON_MAP[child.icon] || Package
+              return (
+                <SidebarMenuSubItem key={child.href}>
+                  <SidebarMenuSubButton render={<Link href={child.href} />}>
+                    <ChildIcon />
+                    <span>{child.label}</span>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              )
+            })}
+          </SidebarMenuSub>
+        </CollapsibleContent>
+      </Collapsible>
     </SidebarMenuItem>
   )
 }
@@ -120,20 +145,76 @@ function NavParentCollapsed({ parent }: { parent: NavParent }) {
   )
 }
 
-function NavGroupSection({ group, collapsed }: { group: NavGroup; collapsed: boolean }) {
+function NavGroupSection({
+  group,
+  collapsed,
+  collapseState,
+  onToggleGroup,
+}: {
+  group: NavGroup
+  collapsed: boolean
+  collapseState: NavCollapseState
+  onToggleGroup: (id: string, open: boolean) => void
+}) {
+  const labelId = React.useId()
+
+  function renderItems() {
+    return group.items.map((item) => {
+      if (item.kind === "parent") {
+        return collapsed ? (
+          <NavParentCollapsed key={item.id} parent={item} />
+        ) : (
+          <NavParentExpanded
+            key={item.id}
+            parent={item}
+            open={getGroupOpen(collapseState, item.id)}
+            onOpenChange={(open) => onToggleGroup(item.id, open)}
+          />
+        )
+      }
+      return <NavLinkItem key={item.href} item={item} />
+    })
+  }
+
+  // Icon-rail mode: the group header is not rendered as an interactive
+  // trigger at all. Its persisted collapsed state is ignored so the
+  // group's icons stay visible — a saved "closed" group must not hide an
+  // entire icon column once the sidebar itself rail-collapses. This also
+  // avoids leaving an invisible-but-focusable button in the DOM (the
+  // label is only visually hidden by CSS in `sidebar.tsx`, not removed).
+  if (collapsed) {
+    return (
+      <SidebarGroup className={group.pinBottom ? "mt-auto" : ""} role="group" aria-labelledby={labelId}>
+        <SidebarGroupLabel id={labelId}>{group.label}</SidebarGroupLabel>
+        <SidebarGroupContent>
+          <SidebarMenu>{renderItems()}</SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    )
+  }
+
+  const open = getGroupOpen(collapseState, group.id)
+
   return (
-    <SidebarGroup className={group.pinBottom ? "mt-auto" : ""}>
-      <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-      <SidebarGroupContent>
-        <SidebarMenu>
-          {group.items.map((item) => {
-            if (item.kind === "parent") {
-              return collapsed ? <NavParentCollapsed key={item.label} parent={item} /> : <NavParentExpanded key={item.label} parent={item} />
-            }
-            return <NavLinkItem key={item.href} item={item} />
-          })}
-        </SidebarMenu>
-      </SidebarGroupContent>
+    <SidebarGroup className={group.pinBottom ? "mt-auto" : ""} role="group" aria-labelledby={labelId}>
+      <Collapsible open={open} onOpenChange={(next) => onToggleGroup(group.id, next)}>
+        <CollapsibleTrigger
+          id={labelId}
+          render={<SidebarGroupLabel render={<button type="button" />} />}
+          className="w-full cursor-pointer justify-between gap-1 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        >
+          <span>{group.label}</span>
+          <ChevronDown
+            aria-hidden="true"
+            className="size-4 shrink-0 transition-transform duration-200 ease-linear motion-reduce:transition-none data-panel-open:rotate-180"
+          />
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <SidebarGroupContent>
+            <SidebarMenu>{renderItems()}</SidebarMenu>
+          </SidebarGroupContent>
+        </CollapsibleContent>
+      </Collapsible>
     </SidebarGroup>
   )
 }
@@ -143,14 +224,31 @@ export function AppSidebar({
   user,
   workshopName,
   logoR2Key,
+  initialCollapseState,
 }: {
   navGroups: NavGroup[]
   user: { id: string; role: string; name?: string | null; username?: string }
   workshopName: string | null
   logoR2Key: string | null
+  initialCollapseState: NavCollapseState
 }) {
   const { state } = useSidebar()
   const collapsed = state === "collapsed"
+
+  // Lifted so every group/parent collapsible writes into the SAME
+  // `sidebar_group_state` cookie value without clobbering each other's
+  // saved state — each key toggles independently (not an accordion).
+  const [collapseState, setCollapseState] = React.useState<NavCollapseState>(initialCollapseState)
+
+  const handleToggleGroup = React.useCallback((id: string, open: boolean) => {
+    // Re-read the cookie right before writing (rather than trusting a
+    // possibly-stale React closure) so a second tab that toggled a
+    // different group in the meantime doesn't get silently clobbered.
+    const current = decodeNavCollapseState(extractCookieValue(document.cookie, NAV_COLLAPSE_COOKIE_NAME))
+    const next: NavCollapseState = { ...current, [id]: open }
+    document.cookie = `${NAV_COLLAPSE_COOKIE_NAME}=${encodeNavCollapseState(next)}; path=/; max-age=${NAV_COLLAPSE_COOKIE_MAX_AGE}`
+    setCollapseState(next)
+  }, [])
 
   return (
     <Sidebar collapsible="icon" variant="sidebar">
@@ -169,10 +267,15 @@ export function AppSidebar({
 
       <SidebarContent>
         {navGroups.map((group, i) => (
-          <Fragment key={group.label}>
+          <React.Fragment key={group.id}>
             {i > 0 && <SidebarSeparator />}
-            <NavGroupSection group={group} collapsed={collapsed} />
-          </Fragment>
+            <NavGroupSection
+              group={group}
+              collapsed={collapsed}
+              collapseState={collapseState}
+              onToggleGroup={handleToggleGroup}
+            />
+          </React.Fragment>
         ))}
       </SidebarContent>
 
