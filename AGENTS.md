@@ -86,18 +86,41 @@ Forecast for the template this repo uses to decide when a change needs this.
   only ever overwritten wholesale by the weekly/manual inventory sync. Don't
   add stock-decrementing logic to a new feature (e.g. service orders) unless
   explicitly asked; it would be new scope, not a bug fix.
-- **No component-testing harness** — `vitest.config.ts` runs `environment:
-  "node"`, no `@testing-library/react`/jsdom/happy-dom. Pure logic
-  (validation, transitions, scheduling) is unit-tested; pages/forms/client
-  components are not, by existing convention. Adding one is a real infra
-  change, not a quick add.
+- **Component testing** — `vitest.config.ts` uses `test.projects` (Vitest 4;
+  `environmentMatchGlobs` was removed, this is the supported replacement) to
+  split ONE `npm test` run into two projects:
+  - `node` — everything except `*.test.tsx`. Same DB-free unit tests as
+    always, unchanged `environment: "node"`.
+  - `jsdom` — only `*.test.tsx` files, `environment: "jsdom"`, loads
+    `vitest.setup.ts` (jest-dom matchers via `@testing-library/jest-dom/vitest`,
+    a `window.matchMedia` shim for `use-mobile.ts`, and manual RTL `cleanup()`
+    registered via `afterEach` from `"vitest"` — NOT automatic, because this
+    repo does not set `test.globals: true`; `@testing-library/react`'s
+    built-in auto-cleanup only registers when `afterEach` exists as an
+    ambient global).
+  - **Naming convention**: give a component test the `.test.tsx` extension
+    (not `.test.ts`) to route it to the `jsdom` project. Everything else
+    (`.test.ts`) stays on `node`.
+  - To write one: `render()` from `@testing-library/react` inside a
+    `<SidebarProvider>` (or whatever context the component needs), query
+    with `screen`/`within` by role, interact with `@testing-library/user-event`.
+    See `src/components/app-sidebar.test.tsx` for a full example (collapsible
+    sidebar groups — aria-expanded, aria-controls, keyboard activation,
+    independent group state).
+  - Deps: `jsdom`, `@testing-library/react`, `@testing-library/user-event`,
+    `@testing-library/jest-dom` (devDependencies).
 - **Security headers** are set in `next.config.ts`. CSP is deliberately not
   configured yet — it needs the actual R2/Interfuerza image hosts allowlisted
   first, or it silently breaks product images app-wide.
 
 ## Testing
 
-`npm test` (`vitest run`) — DB-free unit tests, safe to run anywhere.
-`src/e2e/**` needs a real reachable Postgres (see `README.md`) and is
-excluded from the default run. Strict TDD is the norm in this repo: RED test
-first (confirm it fails), then GREEN implementation.
+`npm test` (`vitest run`) — runs BOTH the `node` project (DB-free unit
+tests) and the `jsdom` project (component tests, see "Component testing"
+above) in one command; safe to run anywhere. `src/e2e/**` needs a real
+reachable Postgres (see `README.md`) and is excluded from the default run.
+Strict TDD is the norm in this repo: RED test first (confirm it fails), then
+GREEN implementation — for a retrofit test on already-shipped code where a
+real RED phase isn't possible, verify the test is meaningful instead by
+temporarily breaking the implementation and confirming the test fails, then
+reverting.
