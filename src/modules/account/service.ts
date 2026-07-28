@@ -99,3 +99,48 @@ export async function changePassword(
     await revokeOtherSessions(userId, currentTokenId);
   }
 }
+
+export type AdminSafetyOperation = "change-role" | "deactivate";
+export type AdminSafetyViolation = "self_role_change" | "self_deactivate" | "last_active_admin";
+
+/**
+ * design.md Decision 7 — pure, no DB. Covers three dangerous admin mutations
+ * (self-role-change, self-deactivate, last-active-admin) with ONE function so
+ * `deactivateUser()` and the future WU4a `updateUser()` role-change path
+ * share a single source of truth.
+ *
+ * Rules, in order:
+ * 1. An actor may never change or deactivate their OWN account through this
+ *    admin-management surface, regardless of how many other active admins
+ *    remain — self-service edits go through `/account`, not `/users`.
+ * 2. No operation may reduce the active-administrador count to zero.
+ *    "Active administrador" = role=administrador AND deactivatedAt IS NULL
+ *    (`activeAdminIds`, from `listActiveAdminIds()`) — an already-deactivated
+ *    admin does not count toward this floor, so demoting one is a no-op.
+ */
+export function checkAdminSafety(input: {
+  actorId: string;
+  targetId: string;
+  operation: AdminSafetyOperation;
+  activeAdminIds: readonly string[];
+}): AdminSafetyViolation | null {
+  const { actorId, targetId, operation, activeAdminIds } = input;
+
+  if (actorId === targetId) {
+    return operation === "change-role" ? "self_role_change" : "self_deactivate";
+  }
+
+  const targetIsLastActiveAdmin = activeAdminIds.includes(targetId) && activeAdminIds.length <= 1;
+  if (targetIsLastActiveAdmin) {
+    return "last_active_admin";
+  }
+
+  return null;
+}
+
+/** Thrown by `deactivateUser()`/(WU4a's) `updateUser()` when `checkAdminSafety()` rejects the mutation. */
+export class AdminSafetyError extends Error {
+  constructor(public readonly reason: AdminSafetyViolation) {
+    super(`Admin safety violation: ${reason}`);
+  }
+}
