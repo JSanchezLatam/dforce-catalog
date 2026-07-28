@@ -16,6 +16,24 @@ export type { Role };
 export type SessionUser = {
   id: string;
   role: Role;
+  /**
+   * Only ever set by `validateSession()` (design.md Decision 8 — zero-cost
+   * ride on the existing `users` join). Absent (not `false`) when built from
+   * forwarded proxy headers via `parseSessionUser()`, since the proxy does
+   * not forward it and no route handler reads it yet — the forced-change
+   * interception itself is WU3 scope, not this one.
+   */
+  mustChangePassword?: boolean;
+};
+
+/** Row shape `validateSession()`'s default query returns — the DB-free test seam's contract. */
+export type SessionRow = {
+  userId: string;
+  role: Role;
+  expiresAt: Date;
+  revokedAt: Date | null;
+  deactivatedAt: Date | null;
+  mustChangePassword: boolean;
 };
 
 // ponytail: fixed 7-day session lifetime — no per-session TTL requirement exists yet;
@@ -31,6 +49,16 @@ export function isSessionActive(session: { expiresAt: Date; revokedAt: Date | nu
   return session.revokedAt === null && session.expiresAt.getTime() > Date.now();
 }
 
+/**
+ * Pure — no DB access (design.md Decision 7). A deactivated user — INCLUDING
+ * a deactivated administrador — has no valid session regardless of role;
+ * this predicate is deliberately kept out of `policy.ts`'s `can()`, which
+ * gates by role only.
+ */
+export function isUserActive(user: { deactivatedAt: Date | null }): boolean {
+  return user.deactivatedAt === null;
+}
+
 export async function issueSession(userId: string): Promise<{ token: string; expiresAt: Date }> {
   const token = generateToken();
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
@@ -38,26 +66,44 @@ export async function issueSession(userId: string): Promise<{ token: string; exp
   return { token, expiresAt };
 }
 
-/** DB-backed session lookup (design.md — not a JWT). Returns null for any invalid/expired/revoked token. */
-export async function validateSession(token: string): Promise<SessionUser | null> {
+async function queryDefaultSessionRow(token: string): Promise<SessionRow | undefined> {
   const rows = await db
     .select({
       userId: users.id,
       role: users.role,
       expiresAt: sessions.expiresAt,
       revokedAt: sessions.revokedAt,
+      deactivatedAt: users.deactivatedAt,
+      mustChangePassword: users.mustChangePassword,
     })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
     .where(eq(sessions.id, token))
     .limit(1);
 
-  const row = rows[0];
-  if (!row || !isSessionActive(row)) {
+  return rows[0];
+}
+
+/**
+ * DB-backed session lookup (design.md — not a JWT). Returns null for any
+ * invalid/expired/revoked token, and — design.md Decision 7 — for a
+ * deactivated user's otherwise-valid session, reusing the exact same
+ * "no valid session" path a browser/API client already handles.
+ *
+ * `queryFn` is an injectable seam (mirrors `revokeOtherSessions()`'s own
+ * `queryFn` param) so this is testable without a live Postgres connection —
+ * `vitest.config.ts` pins a fake `DATABASE_URL` and there is no DB in CI.
+ */
+export async function validateSession(
+  token: string,
+  queryFn: (token: string) => Promise<SessionRow | undefined> = queryDefaultSessionRow,
+): Promise<SessionUser | null> {
+  const row = await queryFn(token);
+  if (!row || !isSessionActive(row) || !isUserActive(row)) {
     return null;
   }
 
-  return { id: row.userId, role: row.role };
+  return { id: row.userId, role: row.role, mustChangePassword: row.mustChangePassword };
 }
 
 export async function revokeSession(token: string): Promise<void> {
