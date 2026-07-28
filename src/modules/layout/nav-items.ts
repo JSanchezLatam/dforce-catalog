@@ -16,10 +16,10 @@ export type NavGroup = {
 const CRM_ITEMS: (NavLink | NavParent)[] = [
   { kind: "link", href: "/customers", label: "Clientes", icon: "customers", action: "customers.read" },
   { kind: "link", href: "/service-orders", label: "Órdenes de servicio", icon: "service-orders", action: "service-orders.read" },
+  { kind: "link", href: "/inventory", label: "Inventario", icon: "inventory", action: "inventory.read" },
 ];
 
 const CATALOGO_ITEMS: (NavLink | NavParent)[] = [
-  { kind: "link", href: "/inventory", label: "Inventario", icon: "inventory", action: "inventory.read" },
   { kind: "link", href: "/builder", label: "Generar Catálogo", icon: "builder", action: "catalogs.generate" },
   { kind: "link", href: "/catalogs", label: "Catálogos", icon: "catalogs", action: "catalogs.read" },
 ];

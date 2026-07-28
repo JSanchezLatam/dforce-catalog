@@ -60,6 +60,21 @@ function findRouteFiles(dir: string, suffix: string): string[] {
     .map((f) => f.replace(/\\/g, "/"));
 }
 
+/**
+ * Maps every registered URL back to the absolute source file that implements
+ * it, reusing the same enumeration as the completeness test above.
+ */
+function buildUrlToFileMap(): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const f of findRouteFiles(API_DIR, "/route.ts")) {
+    map.set(filePathToUrl(`src/app/api/${f}`), path.join(API_DIR, f));
+  }
+  for (const f of findRouteFiles(APP_GROUP_DIR, "/page.tsx")) {
+    map.set(filePathToUrl(`src/app/(app)/${f}`), path.join(APP_GROUP_DIR, f));
+  }
+  return map;
+}
+
 describe("ROUTE_GUARDS completeness", () => {
   it("every existing API route and page has a ROUTE_GUARDS entry", () => {
     const relApiDir = "src/app/api";
@@ -94,5 +109,83 @@ describe("ROUTE_GUARDS completeness", () => {
       if ((exempt as readonly string[]).includes(action)) continue;
       expect(usedActions.has(action as Action)).toBe(true);
     }
+  });
+});
+
+/**
+ * design.md Decision 1b's item #2 ("invoke with forged tecnico headers,
+ * assert 403 whenever MATRIX.tecnico[action] === false") was never built,
+ * and would not have caught C1/C2 of the apply-review anyway: both
+ * mis-registered actions here (`catalogs.read`, `catalogs.download`) are
+ * `true` for every role today, so a behavioral 403-assertion test would
+ * pass regardless of which action string the route actually evaluates.
+ *
+ * This is the practical replacement design.md 1b explicitly disclaimed as
+ * uncatchable ("a registry entry that names the wrong action"): a static
+ * source-text cross-reference between the DECLARED action in ROUTE_GUARDS
+ * and the action string(s) actually passed to `can(user, ...)` inside the
+ * route/page file.
+ *
+ * What this test CANNOT catch (stated plainly, not papered over):
+ * - It is a textual match, not semantic — a `can(user, "x")` call inside a
+ *   comment, a dead branch, or a string that is never reached would still
+ *   count as "evaluated."
+ * - It does not distinguish between HTTP methods in the same file — if a
+ *   file exports both GET and POST with different required actions, the
+ *   test only proves the declared action string appears SOMEWHERE in the
+ *   file, not that it gates the correct handler.
+ * - It cannot verify the check actually GATES access (returns 403/404 on
+ *   failure) versus being read for an unrelated UI decision.
+ * - It does not follow re-exported/aliased `can` wrappers (e.g. a
+ *   route that imports a helper which itself calls `can()`).
+ * - Ownership-override control flow (e.g. `catalogs/[id]/file/route.ts`'s
+ *   `isOwner` branch) remains hand-written and hand-tested, same
+ *   limitation design.md already stated for the registry-completeness test.
+ * - A registered HTTP method with NO exported handler function of that name
+ *   in the file at all (a different, pre-existing gap — a declared method
+ *   nothing implements) is skipped here, not flagged: that is out of scope
+ *   for "the declared action is evaluated with the wrong name" and is a
+ *   distinct defect class this test does not claim to cover.
+ */
+describe("ROUTE_GUARDS declared actions are actually evaluated", () => {
+  const urlToFile = buildUrlToFileMap();
+
+  it("every non-session-only registry entry's declared Action appears as a can(user, \"<action>\") call in its source file", () => {
+    const failures: string[] = [];
+
+    for (const [urlPath, methods] of Object.entries(ROUTE_GUARDS)) {
+      const file = urlToFile.get(urlPath);
+      if (!file || !fs.existsSync(file)) continue; // covered separately by the completeness test
+      const source = fs.readFileSync(file, "utf8");
+      const isPage = file.endsWith("page.tsx");
+      // Matches a quoted action string in call-argument position: either
+      // immediately after `(` (e.g. `authorize("workshop.read", req)`) or
+      // after `identifier,` (e.g. `can(user, "customers.write")`). This
+      // follows local wrapper functions like this file's own `authorize()`
+      // without hardcoding its name, while skipping bare type-union
+      // declarations such as `action: "workshop.read" | "workshop.edit"`
+      // (no comma/open-paren immediately precedes the quoted string there).
+      const evaluatedActions = new Set(
+        [...source.matchAll(/\(\s*(?:\w+\s*,\s*)?"([^"]+)"/g)].map((m) => m[1]),
+      );
+
+      for (const [method, action] of Object.entries(methods)) {
+        if (action === "session-only") continue;
+        // Pages have no exported HTTP method function — the whole file IS
+        // the GET handler. API routes must actually export that method;
+        // otherwise the declared method has no implementation at all,
+        // which is a different (out-of-scope) defect class — skip it.
+        if (!isPage && !new RegExp(`export\\s+(async\\s+)?function\\s+${method}\\b`).test(source)) {
+          continue;
+        }
+        if (!evaluatedActions.has(action as Action)) {
+          failures.push(
+            `${urlPath} [${method}] declares "${action}" but ${file} only evaluates can(user, ...) for [${[...evaluatedActions].join(", ") || "nothing"}]`,
+          );
+        }
+      }
+    }
+
+    expect(failures).toEqual([]);
   });
 });

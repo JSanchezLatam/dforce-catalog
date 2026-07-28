@@ -4,7 +4,7 @@ import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import { getObject, putObject, deleteObject } from "@/modules/catalog-storage/r2";
 import { getWorkshopConfig, saveWorkshopConfig } from "@/modules/workshop-config/service";
-import { validateLogo } from "@/modules/workshop-config/logo";
+import { validateLogo, MAX_UPLOAD_BYTES } from "@/modules/workshop-config/logo";
 
 function authorize(action: "workshop.read" | "workshop.edit", request: NextRequest) {
   const user = requireSession(request);
@@ -29,7 +29,12 @@ export async function GET(request: NextRequest) {
   }
 
   return new NextResponse(new Uint8Array(buffer), {
-    // ponytail: Buffer → Uint8Array for Next.js edge runtime compat
+    // Route Handlers run on the Node.js runtime by default (this file
+    // declares no `export const runtime = "edge"`, and couldn't use one —
+    // it needs DB and R2 access). `Buffer` is a `Uint8Array` subclass but
+    // `NextResponse`'s body type wants a plain `Uint8Array`/`BodyInit`, so
+    // this wrapping is just satisfying that type, not an edge-runtime
+    // requirement.
     status: 200,
     headers: {
       "Content-Type": config.logoContentType ?? "application/octet-stream",
@@ -45,6 +50,19 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const denied = authorize("workshop.edit", request);
   if (denied) return denied;
+
+  // Reject BEFORE buffering: on a single-process standalone Node deployment,
+  // request.formData() reads the entire body into memory. The exact format
+  // (and its tighter SVG cap) can only be known after sniffing magic bytes,
+  // which needs the body already read — so this checks the declared
+  // Content-Length against the largest of the two caps first. A client that
+  // lies about (or omits) Content-Length still hits validateLogo()'s
+  // per-format size check below, after the body is read; that residual gap
+  // is unavoidable without a streaming multipart parser.
+  const contentLength = Number(request.headers.get("content-length") ?? "0");
+  if (contentLength > MAX_UPLOAD_BYTES) {
+    return NextResponse.json({ error: "File too large" }, { status: 413 });
+  }
 
   const form = await request.formData();
   const file = form.get("file");

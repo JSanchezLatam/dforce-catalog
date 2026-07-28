@@ -33,16 +33,22 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     expect(configGroup.pinBottom).toBe(true);
   });
 
-  it("admin sees all CRM items", () => {
+  it("admin sees all CRM items, including Inventario per binding decision #2 (Clientes, Órdenes de servicio, Inventario)", () => {
     const groups = getNavGroups(admin);
     const crm = groups.find((g) => g.label === "CRM")!;
-    expect(crm.items.map((i) => i.label)).toEqual(["Clientes", "Órdenes de servicio"]);
+    expect(crm.items.map((i) => i.label)).toEqual(["Clientes", "Órdenes de servicio", "Inventario"]);
   });
 
-  it("admin sees all Catálogo items including Generar Catálogo", () => {
+  it("admin sees Catálogo items WITHOUT Inventario (Generar Catálogo, Catálogos only)", () => {
     const groups = getNavGroups(admin);
     const cat = groups.find((g) => g.label === "Catálogo")!;
-    expect(cat.items.map((i) => i.label)).toEqual(["Inventario", "Generar Catálogo", "Catálogos"]);
+    expect(cat.items.map((i) => i.label)).toEqual(["Generar Catálogo", "Catálogos"]);
+  });
+
+  it("Inventario is NOT present anywhere under the Catálogo group", () => {
+    const groups = getNavGroups(admin);
+    const cat = groups.find((g) => g.label === "Catálogo")!;
+    expect(cat.items.map((i) => i.label)).not.toContain("Inventario");
   });
 
   it("admin sees Configuración with two children: Config. del CRM + Config. de catálogos (with nested Configuración de template)", () => {
@@ -59,12 +65,23 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     }
   });
 
-  it("técnico does NOT see Generar Catálogo (catalogs.generate denied)", () => {
+  it("técnico does NOT see Generar Catálogo (catalogs.generate denied), and Catálogo only has Catálogos", () => {
     const groups = getNavGroups(tecnico);
     const cat = groups.find((g) => g.label === "Catálogo")!;
-    expect(cat.items.map((i) => i.label)).toEqual(["Inventario", "Catálogos"]);
+    expect(cat.items.map((i) => i.label)).toEqual(["Catálogos"]);
   });
 
+  it("técnico sees Inventario under CRM, not under Catálogo", () => {
+    const groups = getNavGroups(tecnico);
+    const crm = groups.find((g) => g.label === "CRM")!;
+    expect(crm.items.map((i) => i.label)).toContain("Inventario");
+  });
+
+  // Total-item-count assertions are supplementary, NOT a substitute for the
+  // placement assertions above — a swapped grouping between CRM/Catálogo
+  // keeps these totals identical (that coincidence is exactly what let the
+  // wrong grouping slip through review previously). Do not rely on these
+  // alone to prove correct placement.
   it("técnico sees only 4 total items across 2 groups", () => {
     const groups = getNavGroups(tecnico);
     const totalItems = groups.reduce((s, g) => s + g.items.length, 0);

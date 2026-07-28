@@ -4,8 +4,13 @@ export type LogoResult = {
   ext: string;
 };
 
-const RASTER_SIZE_LIMIT = 2 * 1024 * 1024;
-const SVG_SIZE_LIMIT = 512 * 1024;
+export const RASTER_SIZE_LIMIT = 2 * 1024 * 1024;
+export const SVG_SIZE_LIMIT = 512 * 1024;
+/** Largest of the two per-format caps — the route enforces this against
+ * `Content-Length` BEFORE buffering the request body, since the exact
+ * format (and therefore the tighter SVG cap) is only known after sniffing
+ * magic bytes, which requires having read some of the body already. */
+export const MAX_UPLOAD_BYTES = RASTER_SIZE_LIMIT;
 
 function detectWebP(buffer: Buffer): boolean {
   return (

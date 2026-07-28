@@ -43,4 +43,42 @@ describe("saveWorkshopConfig", () => {
     const result = await saveWorkshopConfig({ name: "Taller" }, db);
     expect(result).toEqual(row);
   });
+
+  it("persists logoR2Key and logoContentType on both the insert values and the onConflictDoUpdate set clause", async () => {
+    const row = { id: "singleton", name: "Taller", logoR2Key: "logos/abc.png", logoContentType: "image/png", updatedAt: new Date() };
+    const onConflictDoUpdate = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([row]) });
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    const db = { insert: vi.fn().mockReturnValue({ values } as never) } as never;
+
+    await saveWorkshopConfig({ name: "Taller", logoR2Key: "logos/abc.png", logoContentType: "image/png" }, db);
+
+    expect(values).toHaveBeenCalledWith(expect.objectContaining({ logoR2Key: "logos/abc.png", logoContentType: "image/png" }));
+    const onConflictArg = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
+    expect(onConflictArg.set).toEqual(expect.objectContaining({ logoR2Key: "logos/abc.png", logoContentType: "image/png" }));
+  });
+
+  it("does NOT include logoR2Key/logoContentType in the update set when saving name only, so an existing logo is never clobbered", async () => {
+    const row = { id: "singleton", name: "Taller Nuevo", logoR2Key: "logos/existing.png", logoContentType: "image/png", updatedAt: new Date() };
+    const onConflictDoUpdate = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([row]) });
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    const db = { insert: vi.fn().mockReturnValue({ values } as never) } as never;
+
+    await saveWorkshopConfig({ name: "Taller Nuevo" }, db);
+
+    const onConflictArg = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
+    expect(onConflictArg.set).not.toHaveProperty("logoR2Key");
+    expect(onConflictArg.set).not.toHaveProperty("logoContentType");
+  });
+
+  it("explicitly clears logoR2Key/logoContentType when null is passed (DELETE flow)", async () => {
+    const row = { id: "singleton", name: "Taller", logoR2Key: null, logoContentType: null, updatedAt: new Date() };
+    const onConflictDoUpdate = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([row]) });
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    const db = { insert: vi.fn().mockReturnValue({ values } as never) } as never;
+
+    await saveWorkshopConfig({ name: "Taller", logoR2Key: null, logoContentType: null }, db);
+
+    const onConflictArg = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
+    expect(onConflictArg.set).toEqual(expect.objectContaining({ logoR2Key: null, logoContentType: null }));
+  });
 });

@@ -1,7 +1,7 @@
 "use client"
 
 import { Fragment } from "react"
-import { FileSpreadsheet, Package, BookOpen, Settings, GalleryVerticalEnd, ChevronDown, ChevronRight, Users, Wrench } from "lucide-react"
+import { FileSpreadsheet, Package, BookOpen, Settings, GalleryVerticalEnd, ChevronDown, ChevronRight, Users, Wrench, User } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -197,6 +197,13 @@ export function AppSidebar({
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="right" className="w-48 rounded-xl" align="start">
+                <DropdownMenuItem>
+                  <Link href="/account" className="flex items-center gap-2">
+                    <User className="size-4" />
+                    <span>Mi cuenta</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <ThemeToggle />
                 <DropdownMenuSeparator />
                 <LogoutButton />
