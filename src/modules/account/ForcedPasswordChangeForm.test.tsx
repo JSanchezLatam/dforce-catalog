@@ -69,6 +69,21 @@ describe("ForcedPasswordChangeForm — server rejections", () => {
   });
 });
 
+describe("ForcedPasswordChangeForm — network failure", () => {
+  it("recovers from a rejected fetch instead of hanging on the disabled button", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+
+    render(<ForcedPasswordChangeForm />);
+    await fillAndSubmit(user, { current: "temp-pass", next: "a-new-password" });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo conectar");
+    // Re-enabled: a flagged user is blocked from every other surface, so a
+    // permanently disabled submit button strands them with no unlock path.
+    expect(screen.getByRole("button", { name: "Cambiar contraseña" })).toBeEnabled();
+  });
+});
+
 describe("ForcedPasswordChangeForm — client-side validation", () => {
   it("rejects a mismatched confirmation without calling the API", async () => {
     const user = userEvent.setup();

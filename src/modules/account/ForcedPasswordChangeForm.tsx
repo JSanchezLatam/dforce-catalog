@@ -54,11 +54,23 @@ export function ForcedPasswordChangeForm() {
 
     setStatus("saving");
 
-    const res = await fetch("/api/account/password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ currentPassword, newPassword }),
-    });
+    // A rejected fetch (offline, DNS failure, connection reset) must land back
+    // on "idle" with a visible message. Without this the button stays disabled
+    // forever on a transient network blip — and since a flagged user is blocked
+    // from every other surface, that hangs the account's only unlock path until
+    // they think to reload the page.
+    let res: Response;
+    try {
+      res = await fetch("/api/account/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+    } catch {
+      setError("No se pudo conectar. Revisa tu conexión e intenta de nuevo.");
+      setStatus("idle");
+      return;
+    }
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
