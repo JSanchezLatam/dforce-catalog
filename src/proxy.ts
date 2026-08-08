@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { CHANGE_PASSWORD_PATH, isPasswordChangeExempt } from "@/modules/auth/forced-change";
 import { SESSION_COOKIE, validateSession } from "@/modules/auth/session";
 
 /**
@@ -56,6 +57,19 @@ export async function handleProxy(
   // for API" requirement depends on fixing.
   if (!user) {
     return denyAccess(request, isApiRoute);
+  }
+
+  // Forced password change (design.md Decision 8). Runs AFTER the session gate
+  // above — order matters: an invalid or deactivated session must be denied
+  // outright, never handed the change-password screen. Runs BEFORE any role
+  // check, because the block ignores what the matrix would otherwise allow.
+  // The API-vs-page split is the same one denyAccess() already makes, for the
+  // same reason: fetch() cannot usefully follow a redirect, and a browser tab
+  // cannot render a JSON body.
+  if (user.mustChangePassword && !isPasswordChangeExempt(request.nextUrl.pathname)) {
+    return isApiRoute
+      ? NextResponse.json({ error: "password_change_required" }, { status: 403 })
+      : NextResponse.redirect(new URL(CHANGE_PASSWORD_PATH, request.url));
   }
 
   // Forward the resolved identity so route handlers can call can(requireSession(req), action)
