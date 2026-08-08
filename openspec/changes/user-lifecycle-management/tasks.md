@@ -94,12 +94,17 @@ Files: `src/modules/auth/forced-change.ts`(new+test), `src/proxy.ts`(+test), `sr
 
 Files: `src/modules/account/queries.ts`(+test), `src/modules/account/service.ts`(+test).
 
-- [ ] 4a.1 RED `queries.test.ts` — `listUsers({ includeInactive })` active-only by default.
-- [ ] 4a.2 GREEN `queries.ts`.
-- [ ] 4a.3 RED `service.test.ts` — `createUser()` sets `mustChangePassword: true`, reuses `DuplicateEmailError` (username/email validation, initial password uses same rules as self-service).
-- [ ] 4a.4 GREEN `service.ts` — `createUser()`.
-- [ ] 4a.5 RED `service.test.ts` — `updateUser()`: name/email/role edits; role→tecnico and deactivate route through `checkAdminSafety` (400 on violation); admin password reset re-arms `mustChangePassword` + calls `revokeOtherSessions(targetId, null)`.
-- [ ] 4a.6 GREEN `service.ts` — `updateUser()`.
+- [x] 4a.1 RED `queries.test.ts` — `listUsers({ includeInactive })` active-only by default.
+- [x] 4a.2 GREEN `queries.ts`.
+- [x] 4a.3 RED `service.test.ts` — `createUser()` sets `mustChangePassword: true`, reuses `DuplicateEmailError` (username/email validation, initial password uses same rules as self-service).
+- [x] 4a.4 GREEN `service.ts` — `createUser()`.
+- [x] 4a.5 RED `service.test.ts` — `updateUser()`: name/email/role edits; role→tecnico and deactivate route through `checkAdminSafety` (400 on violation); admin password reset re-arms `mustChangePassword` + calls `revokeOtherSessions(targetId, null)`.
+- [x] 4a.6 GREEN `service.ts` — `updateUser()`.
+
+**WU4a status: DONE** (branch `user-lifecycle/wu4a-admin-user-service`, based on WU3). Two additions beyond the task text, both forced by reality:
+- **`DuplicateUsernameError`** — the task text only names `DuplicateEmailError`, but `users.username` is UNIQUE in the schema and is the login identifier. Without a typed error a routine admin collision surfaces as a raw Postgres constraint violation, i.e. a 500 instead of a 409.
+- **`password-policy.ts`** (new leaf module) — `MIN_PASSWORD_LENGTH` now has one home, shared by `createUser`, `updateUser`, `PasswordForm` and `ForcedPasswordChangeForm`. It cannot live in `service.ts`: that imports the Drizzle client, and both forms are `"use client"`, so the import would pull the database driver into the browser bundle. Closes the R2 review finding from WU3 about the floor existing as two sources of truth.
+- **`UserNotFoundError`** — needed so WU4b's `PATCH` can answer 404 instead of silently updating zero rows.
 
 ## Work Unit 4b — Admin User Management Routes
 
