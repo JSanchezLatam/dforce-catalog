@@ -288,8 +288,153 @@ async function listActiveAdminIdsTx(tx: TxLike): Promise<string[]> {
   return result.rows.map((row) => String(row.id));
 }
 
+/**
+ * Builds the SET clause from only the keys the caller actually supplied, so an
+ * edit that touches one field cannot silently null out the others.
+ *
+ * `role` needs the explicit `::role` cast: the column is a Postgres enum and a
+ * bound text parameter is not implicitly coercible to it.
+ */
+async function applyUserPatchTx(tx: TxLike, targetId: string, patch: UserPatch): Promise<void> {
+  const assignments = [];
+  if (patch.name !== undefined) assignments.push(sql`name = ${patch.name}`);
+  if (patch.email !== undefined) assignments.push(sql`email = ${patch.email}`);
+  if (patch.role !== undefined) assignments.push(sql`role = ${patch.role}::role`);
+  if (patch.passwordHash !== undefined) assignments.push(sql`password_hash = ${patch.passwordHash}`);
+  if (patch.mustChangePassword !== undefined) {
+    assignments.push(sql`must_change_password = ${patch.mustChangePassword}`);
+  }
+  if (assignments.length === 0) return;
+
+  await tx.execute(sql`UPDATE users SET ${sql.join(assignments, sql`, `)} WHERE id = ${targetId}`);
+}
+
 async function setDeactivatedAtTx(tx: TxLike, targetId: string, deactivatedAt: Date): Promise<void> {
   await tx.execute(sql`UPDATE users SET deactivated_at = ${deactivatedAt} WHERE id = ${targetId}`);
+}
+
+/** Thrown when the target of an admin edit does not exist — the route maps it to 404 rather than writing blind. */
+export class UserNotFoundError extends Error {
+  constructor() {
+    super("User not found");
+  }
+}
+
+export type UpdateUserInput = {
+  name?: string | null;
+  email?: string | null;
+  role?: Role;
+  /** Present only on an admin password reset — absent means "leave the password alone". */
+  password?: string;
+};
+
+type UserPatch = {
+  name?: string | null;
+  email?: string | null;
+  role?: Role;
+  passwordHash?: string;
+  mustChangePassword?: boolean;
+};
+
+export type UpdateUserDeps = {
+  database?: { transaction: <T>(fn: (tx: TxLike) => Promise<T>) => Promise<T> };
+  getTarget?: (tx: TxLike, targetId: string) => Promise<{ role: Role; email: string | null } | null>;
+  listActiveAdminIds?: (tx: TxLike) => Promise<string[]>;
+  findByEmail?: (email: string) => Promise<{ id: string } | null>;
+  applyUpdate?: (tx: TxLike, targetId: string, patch: UserPatch) => Promise<void>;
+  revokeOtherSessions?: typeof revokeOtherSessions;
+};
+
+async function getTargetTx(tx: TxLike, targetId: string) {
+  const result = await tx.execute(sql`SELECT role, email FROM users WHERE id = ${targetId} LIMIT 1`);
+  const row = result.rows[0];
+  return row ? { role: String(row.role) as Role, email: row.email === null ? null : String(row.email) } : null;
+}
+
+/**
+ * Spec `user-management` — admin edits another user's name, email, role, and
+ * optionally resets their password.
+ *
+ * The active-admin read and the write share ONE transaction, same as
+ * `deactivateUser()`: without it two admins concurrently demoting each other
+ * both read a stale count and both succeed, leaving zero administrators.
+ *
+ * The safety guard runs ONLY when the role actually changes. An admin editing
+ * their own name through this surface is not a self-role-change and must not
+ * be blocked by it.
+ */
+export async function updateUser(
+  actorId: string,
+  targetId: string,
+  input: UpdateUserInput,
+  deps: UpdateUserDeps = {},
+): Promise<void> {
+  const email = input.email?.trim() ?? undefined;
+  const errors: Record<string, string> = {};
+
+  if (input.role !== undefined && !isRole(input.role)) {
+    errors.role = "Role must be tecnico or administrador";
+  }
+  if (input.password !== undefined && input.password.length < MIN_PASSWORD_LENGTH) {
+    errors.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
+  }
+  if (email !== undefined && email !== "" && !EMAIL_FORMAT.test(email)) {
+    errors.email = "Email must be a valid email address";
+  }
+  if (Object.keys(errors).length > 0) throw new ProfileValidationError(errors);
+
+  // Hash outside the transaction: bcrypt at cost >= 12 is deliberately slow,
+  // and holding a row lock for its duration would serialise unrelated admin
+  // edits behind it.
+  const passwordHash = input.password !== undefined ? await hashPassword(input.password) : undefined;
+
+  const database = deps.database ?? db;
+  const getTarget = deps.getTarget ?? getTargetTx;
+  const getActiveAdminIds = deps.listActiveAdminIds ?? listActiveAdminIdsTx;
+  const applyUpdate = deps.applyUpdate ?? applyUserPatchTx;
+
+  await database.transaction(async (tx) => {
+    const target = await getTarget(tx, targetId);
+    if (!target) throw new UserNotFoundError();
+
+    if (input.role !== undefined && input.role !== target.role) {
+      const activeAdminIds = await getActiveAdminIds(tx);
+      const violation = checkAdminSafety({ actorId, targetId, operation: "change-role", activeAdminIds });
+      if (violation) throw new AdminSafetyError(violation);
+    }
+
+    if (email !== undefined && email !== "" && email !== target.email) {
+      const findByEmail =
+        deps.findByEmail ??
+        (async (e: string) =>
+          (await db.select({ id: users.id }).from(users).where(eq(users.email, e)).limit(1))[0] ?? null);
+      const existing = await findByEmail(email);
+      if (existing && existing.id !== targetId) throw new DuplicateEmailError();
+    }
+
+    const patch: UserPatch = {};
+    if (input.name !== undefined) patch.name = input.name?.trim() || null;
+    if (email !== undefined) patch.email = email || null;
+    if (input.role !== undefined) patch.role = input.role;
+    if (passwordHash !== undefined) {
+      patch.passwordHash = passwordHash;
+      // Spec "Admin Password Reset Re-Arms Forced Change" — unconditionally
+      // true, regardless of its prior value: the admin now knows this user's
+      // password, which is exactly what the forced rotation exists to close.
+      patch.mustChangePassword = true;
+    }
+
+    await applyUpdate(tx, targetId, patch);
+  });
+
+  // After commit, and only for a reset: keepTokenId is null because the admin
+  // is resetting SOMEONE ELSE's password, so none of the target's sessions may
+  // survive. A plain edit revokes nothing — a role change takes effect on the
+  // next request evaluation, per the spec.
+  if (passwordHash !== undefined) {
+    const revoke = deps.revokeOtherSessions ?? revokeOtherSessions;
+    await revoke(targetId, null);
+  }
 }
 
 /**
