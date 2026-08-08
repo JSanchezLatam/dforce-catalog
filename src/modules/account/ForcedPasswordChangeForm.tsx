@@ -7,8 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FIELD_ERROR } from "@/shared/ui/styles";
-
-const MIN_PASSWORD_LENGTH = 6;
+import { MIN_PASSWORD_LENGTH } from "./password-policy";
 
 /**
  * The forced-rotation screen (design.md Decision 8). Deliberately NOT the

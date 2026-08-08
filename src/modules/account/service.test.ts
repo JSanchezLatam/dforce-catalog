@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   changePassword,
+  createUser,
+  DuplicateUsernameError,
   SamePasswordError,
   updateProfile,
   ProfileValidationError,
@@ -193,6 +195,119 @@ describe("changePassword", () => {
 
       expect(updatePassword).toHaveBeenCalledOnce();
     });
+  });
+});
+
+/**
+ * Spec `user-management` — "User Creation with Role Assignment" and "Initial
+ * Password — Admin-Entered, Forced Change on First Login".
+ */
+describe("createUser", () => {
+  function deps(overrides: Record<string, unknown> = {}) {
+    return {
+      findByUsername: async () => null,
+      findByEmail: async () => null,
+      insert: vi.fn().mockResolvedValue({ id: "new-user" }),
+      ...overrides,
+    };
+  }
+
+  it("always flags the new account for a forced password change", async () => {
+    const d = deps();
+
+    await createUser({ username: "ana", password: "temporal1", role: "tecnico" }, d);
+
+    expect(d.insert).toHaveBeenCalledOnce();
+    expect(d.insert.mock.calls[0][0]).toMatchObject({ username: "ana", role: "tecnico", mustChangePassword: true });
+  });
+
+  it("stores a hash, never the admin-entered plaintext", async () => {
+    const d = deps();
+
+    await createUser({ username: "ana", password: "temporal1", role: "tecnico" }, d);
+
+    const written = d.insert.mock.calls[0][0] as { passwordHash: string };
+    expect(written.passwordHash).not.toBe("temporal1");
+    expect(written.passwordHash).toMatch(/^\$2[aby]\$/);
+  });
+
+  it("creates with name and email when supplied", async () => {
+    const d = deps();
+
+    await createUser(
+      { username: "ana", password: "temporal1", role: "administrador", name: "Ana Ruiz", email: "ana@taller.com" },
+      d,
+    );
+
+    expect(d.insert.mock.calls[0][0]).toMatchObject({
+      name: "Ana Ruiz",
+      email: "ana@taller.com",
+      role: "administrador",
+    });
+  });
+
+  it("creates with name and email left unset when omitted", async () => {
+    const d = deps();
+
+    await createUser({ username: "ana", password: "temporal1", role: "tecnico" }, d);
+
+    expect(d.insert.mock.calls[0][0]).toMatchObject({ name: null, email: null });
+  });
+
+  it("rejects a duplicate username and writes nothing", async () => {
+    const d = deps({ findByUsername: async () => ({ id: "existing" }) });
+
+    await expect(
+      createUser({ username: "ana", password: "temporal1", role: "tecnico" }, d),
+    ).rejects.toThrow(DuplicateUsernameError);
+    expect(d.insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects a duplicate email and writes nothing", async () => {
+    const d = deps({ findByEmail: async () => ({ id: "existing" }) });
+
+    await expect(
+      createUser({ username: "ana", password: "temporal1", role: "tecnico", email: "taken@taller.com" }, d),
+    ).rejects.toThrow(DuplicateEmailError);
+    expect(d.insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty username", async () => {
+    const d = deps();
+
+    await expect(
+      createUser({ username: "   ", password: "temporal1", role: "tecnico" }, d),
+    ).rejects.toThrow(ProfileValidationError);
+    expect(d.insert).not.toHaveBeenCalled();
+  });
+
+  // Same floor as the self-service change, sourced from one exported constant
+  // so the admin-create path cannot drift below what users must meet later.
+  it("rejects an initial password shorter than the self-service minimum", async () => {
+    const d = deps();
+
+    await expect(
+      createUser({ username: "ana", password: "abc", role: "tecnico" }, d),
+    ).rejects.toThrow(ProfileValidationError);
+    expect(d.insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unknown role rather than trusting the caller", async () => {
+    const d = deps();
+
+    await expect(
+      createUser({ username: "ana", password: "temporal1", role: "superadmin" as never }, d),
+    ).rejects.toThrow(ProfileValidationError);
+    expect(d.insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed email", async () => {
+    const d = deps();
+
+    await expect(
+      createUser({ username: "ana", password: "temporal1", role: "tecnico", email: "not-an-email" }, d),
+    ).rejects.toThrow(ProfileValidationError);
+    expect(d.insert).not.toHaveBeenCalled();
   });
 });
 

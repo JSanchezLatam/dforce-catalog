@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FIELD_ERROR } from "@/shared/ui/styles";
+import { MIN_PASSWORD_LENGTH } from "./password-policy";
 
 export function PasswordForm() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -24,8 +25,8 @@ export function PasswordForm() {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setErrors({ newPassword: "La contraseña debe tener al menos 6 caracteres." });
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      setErrors({ newPassword: `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.` });
       return;
     }
 

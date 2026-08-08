@@ -3,6 +3,8 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/shared/db/client";
 import { users } from "@/shared/db/schema";
 import { revokeOtherSessions } from "@/modules/auth/session";
+import { isRole, type Role } from "@/modules/auth/roles";
+import { MIN_PASSWORD_LENGTH } from "./password-policy";
 import { hashPassword, verifyPassword } from "@/modules/auth/password";
 
 /** Mirrors customers/validation.ts's EMAIL_FORMAT convention. */
@@ -25,6 +27,19 @@ export class DuplicateEmailError extends Error {
     super("Email is already in use by another account");
   }
 }
+
+/**
+ * `users.username` is UNIQUE in the schema and is the login identifier, so a
+ * collision is a routine admin mistake, not an exceptional one. Without this
+ * the insert surfaces a raw Postgres constraint violation as a 500.
+ */
+export class DuplicateUsernameError extends Error {
+  constructor() {
+    super("Username is already taken");
+  }
+}
+
+export { MIN_PASSWORD_LENGTH };
 
 export type UpdateProfileDeps = {
   getCurrentEmail?: (uid: string) => Promise<string | null>;
@@ -137,6 +152,80 @@ export async function changePassword(
   } else {
     await revokeOtherSessions(userId, currentTokenId);
   }
+}
+
+export type CreateUserInput = {
+  username: string;
+  password: string;
+  role: Role;
+  name?: string | null;
+  email?: string | null;
+};
+
+export type CreateUserDeps = {
+  findByUsername?: (username: string) => Promise<{ id: string } | null>;
+  findByEmail?: (email: string) => Promise<{ id: string } | null>;
+  insert?: (row: {
+    username: string;
+    passwordHash: string;
+    role: Role;
+    name: string | null;
+    email: string | null;
+    mustChangePassword: boolean;
+  }) => Promise<{ id: string }>;
+};
+
+/**
+ * Spec `user-management` — admin creates a user with an admin-entered initial
+ * password. `mustChangePassword` is set unconditionally at creation (design.md
+ * Decision 8): the admin necessarily knows the password they just typed, and
+ * that is exactly the exposure the forced rotation closes.
+ *
+ * Every validation runs BEFORE the hash is computed and before any write, so a
+ * rejected create costs no bcrypt round and leaves nothing behind.
+ */
+export async function createUser(input: CreateUserInput, deps: CreateUserDeps = {}): Promise<{ id: string }> {
+  const username = input.username?.trim() ?? "";
+  const email = input.email?.trim() || null;
+  const errors: Record<string, string> = {};
+
+  if (!username) errors.username = "Username is required";
+  if (!isRole(input.role)) errors.role = "Role must be tecnico or administrador";
+  if (!input.password || input.password.length < MIN_PASSWORD_LENGTH) {
+    errors.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
+  }
+  if (email !== null && !EMAIL_FORMAT.test(email)) {
+    errors.email = "Email must be a valid email address";
+  }
+  if (Object.keys(errors).length > 0) throw new ProfileValidationError(errors);
+
+  const findByUsername =
+    deps.findByUsername ??
+    (async (u: string) =>
+      (await db.select({ id: users.id }).from(users).where(eq(users.username, u)).limit(1))[0] ?? null);
+  if (await findByUsername(username)) throw new DuplicateUsernameError();
+
+  if (email !== null) {
+    const findByEmail =
+      deps.findByEmail ??
+      (async (e: string) =>
+        (await db.select({ id: users.id }).from(users).where(eq(users.email, e)).limit(1))[0] ?? null);
+    if (await findByEmail(email)) throw new DuplicateEmailError();
+  }
+
+  const row = {
+    username,
+    passwordHash: await hashPassword(input.password),
+    role: input.role,
+    name: input.name?.trim() || null,
+    email,
+    mustChangePassword: true,
+  };
+
+  const insert =
+    deps.insert ??
+    (async (r: typeof row) => (await db.insert(users).values(r).returning({ id: users.id }))[0]);
+  return insert(row);
 }
 
 export type AdminSafetyOperation = "change-role" | "deactivate";
