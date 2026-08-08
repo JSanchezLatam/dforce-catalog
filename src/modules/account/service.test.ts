@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   changePassword,
+  SamePasswordError,
   updateProfile,
   ProfileValidationError,
   DuplicateEmailError,
@@ -87,32 +88,111 @@ describe("updateProfile", () => {
 });
 
 describe("changePassword", () => {
-  it("rejects wrong current password and does NOT call updateHash", async () => {
-    const updateHash = vi.fn();
+  it("rejects wrong current password and does NOT call updatePassword", async () => {
+    const updatePassword = vi.fn();
     await expect(
       changePassword("user-1", "wrong", "new-pass", "token-1", {
-        getHash: async () => "$2b$12$hash_of_correct_password",
-        updateHash,
+        getCredentials: async () => ({ passwordHash: "$2b$12$hash_of_correct_password", mustChangePassword: false }),
+        updatePassword,
         revoke: vi.fn(),
       }),
     ).rejects.toThrow("Invalid current password");
-    expect(updateHash).not.toHaveBeenCalled();
+    expect(updatePassword).not.toHaveBeenCalled();
   });
 
-  it("updates hash and revokes other sessions on correct password", async () => {
-    const updateHash = vi.fn();
+  it("updates the password and revokes other sessions on correct password", async () => {
+    const updatePassword = vi.fn();
     const revoke = vi.fn();
     const { hashPassword } = await import("@/modules/auth/password");
     const realHash = await hashPassword("correct-pass");
 
     await changePassword("user-1", "correct-pass", "new-pass", "token-1", {
-      getHash: async () => realHash,
-      updateHash,
+      getCredentials: async () => ({ passwordHash: realHash, mustChangePassword: false }),
+      updatePassword,
       revoke,
     });
 
-    expect(updateHash).toHaveBeenCalledOnce();
+    expect(updatePassword).toHaveBeenCalledOnce();
     expect(revoke).toHaveBeenCalledWith("user-1", "token-1");
+  });
+
+  /**
+   * Spec `user-account` — "New Password Must Differ From the Temporary One".
+   * The requirement is derived from the flag the same query already reads, NOT
+   * from a caller-supplied argument: `parseSessionUser()` deliberately does not
+   * forward `mustChangePassword` to route handlers (session.ts), so a caller
+   * has no way to pass it, and a rule that can be silently omitted by a caller
+   * is not a rule.
+   */
+  describe("forced rotation — new password must differ from the temporary one", () => {
+    it("rejects an unchanged password for a flagged user and writes nothing", async () => {
+      const updatePassword = vi.fn();
+      const revoke = vi.fn();
+      const { hashPassword } = await import("@/modules/auth/password");
+      const realHash = await hashPassword("temp-pass");
+
+      await expect(
+        changePassword("user-1", "temp-pass", "temp-pass", "token-1", {
+          getCredentials: async () => ({ passwordHash: realHash, mustChangePassword: true }),
+          updatePassword,
+          revoke,
+        }),
+      ).rejects.toThrow(SamePasswordError);
+
+      // The flag must survive a rejected attempt — otherwise a user clears the
+      // forced rotation by submitting the temporary password back at it.
+      expect(updatePassword).not.toHaveBeenCalled();
+      expect(revoke).not.toHaveBeenCalled();
+    });
+
+    it("still rejects a wrong current password before the same-password check runs", async () => {
+      const updatePassword = vi.fn();
+      const { hashPassword } = await import("@/modules/auth/password");
+      const realHash = await hashPassword("temp-pass");
+
+      await expect(
+        changePassword("user-1", "wrong", "wrong", "token-1", {
+          getCredentials: async () => ({ passwordHash: realHash, mustChangePassword: true }),
+          updatePassword,
+          revoke: vi.fn(),
+        }),
+      ).rejects.toThrow("Invalid current password");
+      expect(updatePassword).not.toHaveBeenCalled();
+    });
+
+    it("accepts a genuinely different password for a flagged user", async () => {
+      const updatePassword = vi.fn();
+      const revoke = vi.fn();
+      const { hashPassword } = await import("@/modules/auth/password");
+      const realHash = await hashPassword("temp-pass");
+
+      await changePassword("user-1", "temp-pass", "a-real-password", "token-1", {
+        getCredentials: async () => ({ passwordHash: realHash, mustChangePassword: true }),
+        updatePassword,
+        revoke,
+      });
+
+      // One write, not two: the hash and the cleared flag land in the SAME
+      // UPDATE, so a flagged user can never end up with a rotated password and
+      // a still-set flag (which would lock them out of the app they just
+      // unlocked).
+      expect(updatePassword).toHaveBeenCalledOnce();
+      expect(revoke).toHaveBeenCalledWith("user-1", "token-1");
+    });
+
+    it("leaves self-service untouched — an unflagged user may reuse their current password", async () => {
+      const updatePassword = vi.fn();
+      const { hashPassword } = await import("@/modules/auth/password");
+      const realHash = await hashPassword("same-pass");
+
+      await changePassword("user-1", "same-pass", "same-pass", "token-1", {
+        getCredentials: async () => ({ passwordHash: realHash, mustChangePassword: false }),
+        updatePassword,
+        revoke: vi.fn(),
+      });
+
+      expect(updatePassword).toHaveBeenCalledOnce();
+    });
   });
 });
 
