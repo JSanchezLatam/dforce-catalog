@@ -36,7 +36,12 @@ export const ROUTE_GUARDS: Record<string, Partial<Record<"GET" | "POST" | "PATCH
   "/workshop-config": { GET: "workshop.edit" },
   "/account": { GET: "account.self" },
   "/api/account": { GET: "account.self", PATCH: "account.self" },
-  "/api/account/password": { POST: "account.self" },
+  // session-only, never Action-gated: this is the only route that can clear a
+  // `mustChangePassword` flag, so gating it by the matrix would make one matrix
+  // mistake an unrecoverable lockout (design.md Decision 8). It is safe without
+  // an Action because it only ever rewrites the CALLER's own password —
+  // `changePassword()` takes the id from the session, never from the body.
+  "/api/account/password": { POST: "session-only" },
 };
 
 const APP_DIR = path.resolve(import.meta.dirname, "../../app");
@@ -108,6 +113,33 @@ describe("ROUTE_GUARDS completeness", () => {
     for (const action of ACTIONS) {
       if ((exempt as readonly string[]).includes(action)) continue;
       expect(usedActions.has(action as Action)).toBe(true);
+    }
+  });
+});
+
+/**
+ * Closes verify-report W3. design.md Decision 8: if the screen that unlocks a
+ * locked-out user ever required an `Action`, one matrix mistake becomes an
+ * unrecoverable lockout — the user cannot reach the only surface that would
+ * clear their flag. These entries are therefore permanently `"session-only"`,
+ * and this test exists to fail loudly the day someone "tightens" them.
+ */
+describe("lockout safety — the unlock path is never Action-gated", () => {
+  const NEVER_ACTION_GATED: readonly [string, "GET" | "POST" | "PATCH" | "DELETE"][] = [
+    ["/api/login", "POST"],
+    ["/api/logout", "POST"],
+    ["/api/account/password", "POST"],
+  ];
+
+  it.each(NEVER_ACTION_GATED)("%s [%s] stays session-only", (urlPath, method) => {
+    expect(ROUTE_GUARDS[urlPath]?.[method]).toBe("session-only");
+  });
+
+  it("no entry on the unlock path carries an Action under any method", () => {
+    for (const [urlPath] of NEVER_ACTION_GATED) {
+      for (const value of Object.values(ROUTE_GUARDS[urlPath] ?? {})) {
+        expect(value).toBe("session-only");
+      }
     }
   });
 });

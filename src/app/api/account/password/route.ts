@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import { changePassword } from "@/modules/account/service";
 
@@ -9,9 +8,15 @@ function getTokenId(request: NextRequest): string | null {
   return cookie?.value ?? null;
 }
 
+/**
+ * Deliberately session-only, NOT `can(user, "account.self")` — design.md
+ * Decision 8. This is the only route that can clear a `mustChangePassword`
+ * flag, so an Action gate here turns one matrix mistake into an unrecoverable
+ * lockout. Authentication still applies (`requireSession` throws without it),
+ * and the write is scoped to `user.id` from the session, never from the body.
+ */
 export async function POST(request: NextRequest) {
   const user = requireSession(request);
-  if (!can(user, "account.self")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json();
 
