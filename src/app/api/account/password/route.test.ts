@@ -5,7 +5,11 @@ import { POST } from "./route";
 
 const mockChangePassword = vi.fn();
 
-vi.mock("@/modules/account/service", () => ({
+// Partial mock: `SamePasswordError` must stay the REAL class, or the route's
+// `instanceof` branch silently stops matching and every same-password
+// rejection falls through to an unhandled 500.
+vi.mock("@/modules/account/service", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/modules/account/service")>()),
   changePassword: (...args: unknown[]) => mockChangePassword(...args),
 }));
 
@@ -31,5 +35,26 @@ describe("POST /api/account/password", () => {
     mockChangePassword.mockRejectedValue(new Error("Invalid current password"));
     const res = await POST(req("tecnico", JSON.stringify({ currentPassword: "wrong", newPassword: "new" })));
     expect(res.status).toBe(400);
+  });
+
+  it("returns 400 with a distinct message when the new password repeats the temporary one", async () => {
+    const { SamePasswordError } = await import("@/modules/account/service");
+    mockChangePassword.mockRejectedValue(new SamePasswordError());
+
+    const res = await POST(req("tecnico", JSON.stringify({ currentPassword: "temp", newPassword: "temp" })));
+
+    expect(res.status).toBe(400);
+    // Distinct from "Contraseña actual incorrecta." — a user told their correct
+    // password is wrong has no idea what to do next.
+    expect((await res.json()).error).toBe("La nueva contraseña debe ser distinta de la actual.");
+  });
+
+  // The route is registered "session-only" (design.md Decision 8): a técnico is
+  // NOT forbidden here, because this is the only route that can clear a forced
+  // rotation. Pinned so nobody re-adds an Action gate.
+  it("serves a técnico — the unlock path is never role-gated", async () => {
+    mockChangePassword.mockResolvedValue(undefined);
+    const res = await POST(req("tecnico", JSON.stringify({ currentPassword: "old", newPassword: "new" })));
+    expect(res.status).toBe(200);
   });
 });

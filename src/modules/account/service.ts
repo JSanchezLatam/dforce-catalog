@@ -66,31 +66,70 @@ export async function updateProfile(
   await db.update(users).set({ name: data.name ?? null, email }).where(eq(users.id, userId));
 }
 
+/** Spec `user-account` — "New Password Must Differ From the Temporary One". */
+export class SamePasswordError extends Error {
+  constructor() {
+    super("New password must differ from the current one");
+  }
+}
+
+/** What the single credential read returns — the DB-free test seam's contract. */
+export type Credentials = { passwordHash: string; mustChangePassword: boolean };
+
+/**
+ * `mustChangePassword` rides along on the SELECT that already fetches the hash
+ * — zero extra queries, the same free ride design.md Decision 8 takes in
+ * `validateSession()`.
+ *
+ * The forced-rotation rule is derived from that flag rather than passed in by
+ * the caller on purpose: `parseSessionUser()` does not forward the flag to
+ * route handlers, so no caller could supply it, and a rule a caller can forget
+ * to pass is not a rule. Self-service behaviour is unchanged — an unflagged
+ * user may still "change" their password to the same value.
+ */
 export async function changePassword(
   userId: string,
   currentPassword: string,
   newPassword: string,
   currentTokenId: string,
   deps?: {
-    getHash?: (uid: string) => Promise<string | null>;
-    updateHash?: (uid: string, hash: string) => Promise<void>;
+    getCredentials?: (uid: string) => Promise<Credentials | null>;
+    updatePassword?: (uid: string, hash: string) => Promise<void>;
     revoke?: (uid: string, keep: string | null) => Promise<void>;
   },
 ): Promise<void> {
-  const hash = deps?.getHash
-    ? await deps.getHash(userId)
-    : (await db.select({ passwordHash: users.passwordHash }).from(users).where(eq(users.id, userId)).limit(1))[0]?.passwordHash ?? null;
+  const credentials = deps?.getCredentials
+    ? await deps.getCredentials(userId)
+    : (await db
+        .select({ passwordHash: users.passwordHash, mustChangePassword: users.mustChangePassword })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1))[0] ?? null;
 
-  if (!hash || !(await verifyPassword(currentPassword, hash))) {
+  // Current-password verification runs FIRST, before the same-password check,
+  // so an attacker cannot use the "must differ" error to probe whether a
+  // guessed password is the account's current one.
+  if (!credentials || !(await verifyPassword(currentPassword, credentials.passwordHash))) {
     throw new Error("Invalid current password");
+  }
+
+  if (credentials.mustChangePassword && newPassword === currentPassword) {
+    throw new SamePasswordError();
   }
 
   const newHash = await hashPassword(newPassword);
 
-  if (deps?.updateHash) {
-    await deps.updateHash(userId, newHash);
+  if (deps?.updatePassword) {
+    await deps.updatePassword(userId, newHash);
   } else {
-    await db.update(users).set({ passwordHash: newHash }).where(eq(users.id, userId));
+    // One UPDATE, both columns: a rotated password can never commit while the
+    // flag stays set, which would lock the user out of the app they just
+    // unlocked. Clearing the flag for an already-unflagged user is a harmless
+    // no-op, so this needs no conditional.
+    await db
+      .update(users)
+      .set({ passwordHash: newHash, mustChangePassword: false })
+      .where(eq(users.id, userId));
   }
 
   if (deps?.revoke) {

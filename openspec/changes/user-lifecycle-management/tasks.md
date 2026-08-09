@@ -14,6 +14,9 @@ Specs (unchanged, already correct): `openspec/changes/crm-shell-settings-rbac/sp
 - Component testing (Vitest jsdom + RTL) **did not exist** when WU7b was originally sized as "no UI coverage possible." It now does (PR #14) — every interactive surface below gets a real `*.test.tsx`, which is the single biggest reason totals exceed the old ~1,175-line estimate.
 - `nav-items.ts`'s `Configuración` group already has the 2-child shape from PR #13; adding "Gestión de usuarios" is a 1-line array entry, not a data-model change.
 - Spec `user-account` has a "New Password Must Differ From the Temporary One" requirement **not covered by any current design decision** — added as an explicit task (WU3).
+- **Corrected during WU3 apply**: task 3.7/3.8's prescribed `changePassword(..., { requireDifferentFromCurrent: true })` **has no caller that could supply it**. `parseSessionUser()` deliberately does not forward `mustChangePassword` to route handlers (`session.ts`), so `POST /api/account/password` cannot know the flag. Shipped instead as a flag **derived inside `changePassword()`**, riding along on the `SELECT` that already fetches the password hash (zero extra queries, same free ride Decision 8 takes in `validateSession()`). Strictly safer: the rule cannot be bypassed by a caller omitting an optional argument.
+- **Also corrected during WU3 apply**: `/login` and `/` had **no `ROUTE_GUARDS` entry at all** — the completeness test only enumerated pages under `(app)`, so any page outside that group was invisible to the registry. Enumeration now covers every `page.tsx` under `src/app`, and the registry gained a `"public"` value for the genuinely session-less `/login` (distinct from `"session-only"`, which still requires a valid session).
+- **Also corrected during WU3 apply**: `POST /api/account/password` was `can(user, "account.self")`-gated, contradicting Decision 8's requirement that the unlock path never be Action-gated. Gate removed; route is now `"session-only"` and pinned by the new lockout-safety test (closes verify-report W3).
 
 ## Review Workload Forecast
 
@@ -76,16 +79,16 @@ Files: `src/modules/account/service.ts`(+test), `src/modules/account/queries.ts`
 
 Files: `src/modules/auth/forced-change.ts`(new+test), `src/proxy.ts`(+test), `src/modules/account/service.ts`(+test), `src/app/(app)/change-password/page.tsx`(new), `src/modules/account/ForcedPasswordChangeForm.tsx`(new+test), `src/modules/auth/route-guards.test.ts`.
 
-- [ ] 3.1 RED `forced-change.test.ts` — `isPasswordChangeExempt()` true for `CHANGE_PASSWORD_PATH`, `/api/account/password`, `/api/logout`; false otherwise.
-- [ ] 3.2 GREEN `forced-change.ts` — one exported `CHANGE_PASSWORD_PATH`, `isPasswordChangeExempt()`.
-- [ ] 3.3 RED `proxy.test.ts` — `mustChangePassword && !exempt`: page → redirect to `CHANGE_PASSWORD_PATH`; API → 403 `password_change_required`; exempt path passes through; gate-precedence test (invalid session never reaches this branch).
-- [ ] 3.4 GREEN `proxy.ts` — add interception after the existing `!user` check, importing `CHANGE_PASSWORD_PATH`/`isPasswordChangeExempt` (no duplicate constant).
-- [ ] 3.5 RED `route-guards.test.ts` — regression-pin `/login`, `/api/logout`, `/api/account/password`, `/change-password` as permanently `"session-only"` (closes v1 verify-report W3); register `/change-password`.
-- [ ] 3.6 GREEN — update `ROUTE_GUARDS`.
-- [ ] 3.7 RED `service.test.ts` — `changePassword(..., { requireDifferentFromCurrent: true })` rejects `newPassword === currentPassword`, does not clear `mustChangePassword`; unaffected when the flag is unset (self-service unchanged).
-- [ ] 3.8 GREEN `service.ts` — add optional param; clear `mustChangePassword` in the SAME `UPDATE` as the hash write.
-- [ ] 3.9 RED `ForcedPasswordChangeForm.test.tsx` (jsdom) — wrong current password shows error; new password equal to temporary shows error; success submits and both fields cleared; logout link present and reachable.
-- [ ] 3.10 GREEN `ForcedPasswordChangeForm.tsx` + `change-password/page.tsx` (thin RSC wrapper, `"session-only"`).
+- [x] 3.1 RED `forced-change.test.ts` — `isPasswordChangeExempt()` true for `CHANGE_PASSWORD_PATH`, `/api/account/password`, `/api/logout`; false otherwise.
+- [x] 3.2 GREEN `forced-change.ts` — one exported `CHANGE_PASSWORD_PATH`, `isPasswordChangeExempt()`.
+- [x] 3.3 RED `proxy.test.ts` — `mustChangePassword && !exempt`: page → redirect to `CHANGE_PASSWORD_PATH`; API → 403 `password_change_required`; exempt path passes through; gate-precedence test (invalid session never reaches this branch).
+- [x] 3.4 GREEN `proxy.ts` — add interception after the existing `!user` check, importing `CHANGE_PASSWORD_PATH`/`isPasswordChangeExempt` (no duplicate constant).
+- [x] 3.5 RED `route-guards.test.ts` — regression-pin `/login`, `/api/logout`, `/api/account/password`, `/change-password` as permanently `"session-only"` (closes v1 verify-report W3); register `/change-password`.
+- [x] 3.6 GREEN — update `ROUTE_GUARDS`.
+- [x] 3.7 RED `service.test.ts` — `changePassword(..., { requireDifferentFromCurrent: true })` rejects `newPassword === currentPassword`, does not clear `mustChangePassword`; unaffected when the flag is unset (self-service unchanged).
+- [x] 3.8 GREEN `service.ts` — add optional param; clear `mustChangePassword` in the SAME `UPDATE` as the hash write.
+- [x] 3.9 RED `ForcedPasswordChangeForm.test.tsx` (jsdom) — wrong current password shows error; new password equal to temporary shows error; success submits and both fields cleared; logout link present and reachable.
+- [x] 3.10 GREEN `ForcedPasswordChangeForm.tsx` + `change-password/page.tsx` (thin RSC wrapper, `"session-only"`).
 
 ## Work Unit 4a — Admin User Queries + Service
 
