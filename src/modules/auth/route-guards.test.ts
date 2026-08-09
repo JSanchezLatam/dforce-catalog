@@ -44,6 +44,8 @@ export const ROUTE_GUARDS: Record<string, Partial<Record<"GET" | "POST" | "PATCH
   "/workshop-config": { GET: "workshop.edit" },
   "/account": { GET: "account.self" },
   "/api/account": { GET: "account.self", PATCH: "account.self" },
+  "/api/users": { GET: "users.manage", POST: "users.manage" },
+  "/api/users/[id]": { PATCH: "users.manage" },
   // session-only, never Action-gated: this is the only route that can clear a
   // `mustChangePassword` flag, so gating it by the matrix would make one matrix
   // mistake an unrecoverable lockout (design.md Decision 8). It is safe without
@@ -123,10 +125,10 @@ describe("ROUTE_GUARDS completeness", () => {
         .filter((v): v is Action => v !== "session-only" && v !== "public"),
     );
 
-    // Four actions have no route in v1 — they get their own route in later WUs:
-    // users.manage (deferred follow-up), workshop.edit (WU3b),
-    // catalogs.listAll (no dedicated route), account.self (WU5b).
-    const exempt: readonly Action[] = ["users.manage", "catalogs.listAll"];
+    // `users.manage` came off this list once /api/users landed — it now has a
+    // real route and must stay reachable. `catalogs.listAll` has no dedicated
+    // route of its own by design.
+    const exempt: readonly Action[] = ["catalogs.listAll"];
 
     for (const action of ACTIONS) {
       if ((exempt as readonly string[]).includes(action)) continue;
