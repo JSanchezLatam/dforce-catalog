@@ -110,11 +110,15 @@ Files: `src/modules/account/queries.ts`(+test), `src/modules/account/service.ts`
 
 Files: `src/app/api/users/route.ts`(new+test), `src/app/api/users/[id]/route.ts`(new+test), `src/modules/auth/route-guards.test.ts`.
 
-- [ ] 4b.1 RED `route.test.ts` — técnico 403 on GET/POST (no business logic runs); admin GET lists, POST creates, 400 on validation, 409 on duplicate email.
-- [ ] 4b.2 GREEN `route.ts` gated `users.manage`.
-- [ ] 4b.3 RED `[id]/route.test.ts` — PATCH edit/deactivate/reactivate/password-reset; 400 with the safety-guard reason on last-admin/self violations; 404 on missing user.
-- [ ] 4b.4 GREEN `[id]/route.ts`.
-- [ ] 4b.5 Register `/api/users`, `/api/users/[id]` in `ROUTE_GUARDS`.
+- [x] 4b.1 RED `route.test.ts` — técnico 403 on GET/POST (no business logic runs); admin GET lists, POST creates, 400 on validation, 409 on duplicate email.
+- [x] 4b.2 GREEN `route.ts` gated `users.manage`.
+- [x] 4b.3 RED `[id]/route.test.ts` — PATCH edit/deactivate/reactivate/password-reset; 400 with the safety-guard reason on last-admin/self violations; 404 on missing user.
+- [x] 4b.4 GREEN `[id]/route.ts`.
+- [x] 4b.5 Register `/api/users`, `/api/users/[id]` in `ROUTE_GUARDS`.
+
+**WU4b status: DONE** (branch `user-lifecycle/wu4b-user-management-routes`, based on the tracker — WU3 and WU4a were merged first, so the chain reset here). Two notes:
+- **Body fields are whitelisted, not spread.** The first draft did `const { active, ...fields } = body`, which forwarded arbitrary keys into `updateUser()`. Harmless today (the service reads only four keys) but it would silently widen the moment `updateUser` learns a new column, and it is what let a `body.actorId` reach the service at all. A test pins that the actor comes from the session and the body key is dropped.
+- **`users.manage` came off the reachability exemption list** in `route-guards.test.ts` — it now has a real route, so the "every Action is reachable" test covers it for real instead of skipping it.
 
 ## Work Unit 5a — `/users` Page, Nav Entry, `UsersTable`
 
