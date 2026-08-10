@@ -1,7 +1,7 @@
 import { can, type Action } from "@/modules/auth/policy";
 import type { SessionUser } from "@/modules/auth/session";
 
-export type NavIconKey = "inventory" | "builder" | "catalogs" | "template-config" | "customers" | "service-orders";
+export type NavIconKey = "inventory" | "builder" | "catalogs" | "template-config" | "customers" | "service-orders" | "users";
 
 export type NavLink = { kind: "link"; href: string; label: string; icon: NavIconKey; action?: Action };
 
@@ -37,6 +37,11 @@ const CONFIGURACION_ITEMS: (NavLink | NavParent)[] = [
       { kind: "link", href: "/template-config", label: "Configuración de template", icon: "template-config", action: "template.edit" },
     ],
   },
+  // Gated on the same `users.manage` action that /users and /api/users
+  // enforce, so the link can never render for someone who would get a 403 on
+  // arrival. Its own icon key — reusing `customers` (the Clientes icon) would
+  // put the same glyph on two unrelated entries.
+  { kind: "link", href: "/users", label: "Gestión de usuarios", icon: "users", action: "users.manage" },
 ];
 
 const GROUPS: NavGroup[] = [
