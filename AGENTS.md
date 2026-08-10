@@ -113,6 +113,35 @@ Forecast for the template this repo uses to decide when a change needs this.
   configured yet — it needs the actual R2/Interfuerza image hosts allowlisted
   first, or it silently breaks product images app-wide.
 
+## Simplicity & scope discipline
+
+This repo enforces "smallest change that solves the actual ask" as a standing
+rule, not a style preference — see the "no real-time stock deduction" decision
+above for the canonical example.
+
+Before adding code, check in this order:
+
+1. Does an existing module already do this? Look in `src/modules/*` first —
+   `auth/session.ts` and `reminders/job.ts` are the reference patterns for
+   injectable seams and idempotent job handling respectively.
+2. Does the stdlib, or a dependency already in `package.json`, solve it? Read
+   `package.json` before adding anything new.
+3. Is this solving the actual change scope, or a speculative future need? If
+   speculative — skip it and note it in the PR description instead of
+   building it.
+
+**Do not expand scope silently.** If implementing a change surfaces a tempting
+related improvement ("while I'm here, let's also refactor X"), it goes in the
+change's `tasks.md` as a follow-up and in the PR description, not into the
+current PR. This applies doubly to chained-PR features (see
+"feature-branch-chain strategy" above) — each child PR stays scoped to its own
+`tasks.md` entry.
+
+This is tool-agnostic: it describes what the repo expects, not a setting in
+any particular agent harness. Note the one standing exception — Strict TDD
+(below) is not scaffolding to be trimmed. A change is not smaller for having
+skipped its RED test.
+
 ## Testing
 
 `npm test` (`vitest run`) — runs BOTH the `node` project (DB-free unit
@@ -124,3 +153,36 @@ GREEN implementation — for a retrofit test on already-shipped code where a
 real RED phase isn't possible, verify the test is meaningful instead by
 temporarily breaking the implementation and confirming the test fails, then
 reverting.
+
+**Known coverage limit — do not mistake a green run for verified SQL.** Most
+of `src/modules/*/service.ts` uses an injected-dependency seam
+(`deps?.thing ?? realDbCall`). Every unit test supplies the dep, so the
+`else` branch — the one holding the actual column names, `WHERE` clauses and
+casts — never executes. `vitest.config.ts` points `DATABASE_URL` at a
+nonexistent database, so any test that did reach a real branch would fail
+loudly; a fully green suite therefore *proves* zero real-SQL coverage. Hand-
+built SQL (e.g. `applyUserPatchTx`'s dynamic `SET` and its `::role` enum
+cast) is the risky case: it compiles, the suite passes, and it can still be
+wrong at runtime. Until a Postgres testcontainer exists, verify those paths
+with a live smoke test against a throwaway database before merging.
+
+## Code quality gate
+
+Nothing is enforced automatically on commit today — there is no pre-commit
+hook in this repo. What actually gates work:
+
+- `npm test` and `npx tsc --noEmit` must be clean before a PR.
+- Substantial changes go through the gentle-ai review flow
+  (`gentle-ai review status --contract gentle-ai.review-integration/v2
+  --agent <runtime> --next-transition`), which selects lenses by risk and
+  produces a receipt. It found a merge-blocking defect in
+  `user-lifecycle-management` WU3 that the full test suite passed over.
+- `npm run lint` currently reports 5 pre-existing errors (`use-mobile`,
+  `CatalogBuilderForm` ×2, `TreeSelect`, `ThemeToggle` — all
+  `react-hooks/set-state-in-effect`). Don't add to them; fixing them is its
+  own change.
+
+If an automated reviewer (GGA or similar) is installed later, document its
+actual config path and what it checks here — not before. A gate described in
+this file that does not run is worse than no gate: every agent will assume a
+review happened that never did.
