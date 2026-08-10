@@ -124,10 +124,17 @@ Files: `src/app/api/users/route.ts`(new+test), `src/app/api/users/[id]/route.ts`
 
 Files: `src/modules/layout/nav-items.ts`(+test), `src/app/(app)/users/page.tsx`(new), `src/modules/account/UsersTable.tsx`(new+test).
 
-- [ ] 5a.1 RED `nav-items.test.ts` — admin's `Configuración` group gains "Gestión de usuarios" (`/users`, `users.manage`) as the third child; técnico tree unchanged.
-- [ ] 5a.2 GREEN `nav-items.ts` — add the entry; land in the SAME unit as the `/users` route (4b already merged) so no admin ever sees a 404.
-- [ ] 5a.3 RED `UsersTable.test.tsx` (jsdom) — "Mostrar inactivos" toggle shows/hides greyed inactive rows with "Reactivar"; active rows show "Desactivar"; last-admin 400 surfaces an inline error, row stays active.
-- [ ] 5a.4 GREEN `UsersTable.tsx` — client component, thin `page.tsx` RSC fetches via `listUsers`/`can` and passes props (mirrors `customers/page.tsx`).
+- [x] 5a.1 RED `nav-items.test.ts` — admin's `Configuración` group gains "Gestión de usuarios" (`/users`, `users.manage`) as the third child; técnico tree unchanged.
+- [x] 5a.2 GREEN `nav-items.ts` — add the entry; land in the SAME unit as the `/users` route (4b already merged) so no admin ever sees a 404.
+- [x] 5a.3 RED `UsersTable.test.tsx` (jsdom) — "Mostrar inactivos" toggle shows/hides greyed inactive rows with "Reactivar"; active rows show "Desactivar"; last-admin 400 surfaces an inline error, row stays active.
+- [x] 5a.4 GREEN `UsersTable.tsx` — client component, thin `page.tsx` RSC fetches via `listUsers`/`can` and passes props (mirrors `customers/page.tsx`).
+
+**WU5a status: DONE** (branch `user-lifecycle/wu5a-users-page`, based on the tracker). Three deviations from the task text, all deliberate:
+- **A text `Inactivo` badge, not just a greyed row.** The task says "greyed inactive rows"; colour alone is not an accessible status signal and is not assertable in a test. The row still mutes its colour, but the badge is what carries the meaning.
+- **A new `users` `NavIconKey`** rather than reusing `customers` — that key maps to the `Users` glyph already shown for Clientes, and two unrelated nav entries sharing one icon reads as a bug.
+- **The page fetches `includeInactive: true` and the table filters client-side.** A workshop has a handful of users, so one query beats a refetch on every toggle flip. The API's active-only default still protects direct API callers.
+
+Also: nothing in the table flips optimistically. When `checkAdminSafety` refuses, the row stays as it was, the action stays available, and the machine reason (`last_active_admin` etc.) is translated rather than echoed raw.
 
 ## Work Unit 5b — `UserForm` Create/Edit Dialog
 
