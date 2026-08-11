@@ -48,9 +48,17 @@ export async function listProductsInCategories(categories: CategoryRef[]): Promi
       // `resolvePrice` trims again so hand-built maps behave too. Values stay
       // strings, exactly as the ERP sends them, and are parsed in TS where it
       // is testable without a database.
+      // The jsonb_typeof guard is not defensive noise: `jsonb_array_elements`
+      // RAISES on an object or scalar, and this subquery runs for every row —
+      // so ONE malformed `PriceLists` would abort the whole category listing
+      // for every user, not just skip that product. A missing key is already
+      // safe (SRF over SQL NULL yields no rows), a wrong TYPE is not. The
+      // sibling `image` expression above defends itself the same way.
       priceLists: sql<PriceListMap | null>`(
-        select jsonb_object_agg(trim(pl->>'Name'), pl->>'Precio')
-        from jsonb_array_elements(${producto.raw}->'PriceLists') pl
+        case when jsonb_typeof(${producto.raw}->'PriceLists') = 'array' then (
+          select jsonb_object_agg(trim(pl->>'Name'), pl->>'Precio')
+          from jsonb_array_elements(${producto.raw}->'PriceLists') pl
+        ) end
       )`,
     })
     .from(producto)

@@ -2,14 +2,13 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { can } from "@/modules/auth/policy";
 import { CatalogSelectionValidationError, validateCatalogSelection } from "@/modules/catalog-builder/selection";
-import type { ProductPrintRef } from "@/shared/template/CatalogTemplate";
 import { requireSession } from "@/modules/auth/session";
 import { countUploadedCatalogsForUser } from "@/modules/catalog-storage/queries";
 import { shouldWarnOfEviction } from "@/modules/catalog-storage/retention";
 import { enqueueCatalogPdf, QueueFullError } from "@/modules/pdf-generation/enqueue";
 import { getQueuePosition } from "@/modules/pdf-generation/position";
 import { getTemplateConfig } from "@/modules/template-config/service";
-import type { CatalogIndexSection } from "@/shared/template/CatalogTemplate";
+import type { CatalogIndexSection, ProductPrintRef } from "@/shared/template/CatalogTemplate";
 
 /**
  * R5/R6/R12 — the missing link flagged since PR8: `CatalogBuilderForm`'s
@@ -34,13 +33,37 @@ type GenerateBody = {
   includedCategoryCount: number;
 };
 
-function isGenerateBody(value: unknown): value is GenerateBody {
+function isPrintProduct(value: unknown): value is ProductPrintRef {
+  if (typeof value !== "object" || value === null) return false;
+  const p = value as Partial<ProductPrintRef>;
+  // `price` is the field worth being strict about: it reaches the worker and
+  // gets `.toFixed(2)` called on it. A string here does not fail the request,
+  // it throws inside a background job with no caller left to tell.
+  if (p.price != null && (typeof p.price !== "number" || !Number.isFinite(p.price))) return false;
+  return typeof p.id === "string" && typeof p.name === "string";
+}
+
+function isIndexSection(value: unknown): value is CatalogIndexSection {
+  if (typeof value !== "object" || value === null) return false;
+  const s = value as Partial<CatalogIndexSection>;
+  return typeof s.categoryL1 === "string" && typeof s.productCount === "number";
+}
+
+/**
+ * Element shape is checked, not just `Array.isArray`. This body does not get
+ * consumed by the request that posts it — it becomes a pg-boss payload that a
+ * Playwright worker renders minutes later, so a bad field surfaces as a crash
+ * in a decoupled job instead of a 400 anyone sees. Exported for its test.
+ */
+export function isGenerateBody(value: unknown): value is GenerateBody {
   if (typeof value !== "object" || value === null) return false;
   const body = value as Partial<GenerateBody>;
   return (
     typeof body.title === "string" &&
     Array.isArray(body.sections) &&
+    body.sections.every(isIndexSection) &&
     Array.isArray(body.products) &&
+    body.products.every(isPrintProduct) &&
     typeof body.productsPerPage === "number" &&
     typeof body.includedCategoryCount === "number"
   );
