@@ -140,5 +140,13 @@ Also: nothing in the table flips optimistically. When `checkAdminSafety` refuses
 
 Files: `src/modules/account/UserForm.tsx`(new+test), `src/modules/account/UserFormTrigger.tsx`(new).
 
-- [ ] 5b.1 RED `UserForm.test.tsx` (jsdom) — create: username/role required, password field validated client-side (mirrors `PasswordForm.tsx`'s min-length rule); posts `POST /api/users`; 409 duplicate email surfaces inline; edit prefills name/email/role, no password field unless "reset password" is checked.
-- [ ] 5b.2 GREEN `UserForm.tsx` (mirrors `CustomerForm.tsx`'s Dialog/state shape) + `UserFormTrigger.tsx` (mirrors `CustomerFormTrigger.tsx`, `router.refresh()` on save).
+- [x] 5b.1 RED `UserForm.test.tsx` (jsdom) — create: username/role required, password field validated client-side (mirrors `PasswordForm.tsx`'s min-length rule); posts `POST /api/users`; 409 duplicate email surfaces inline; edit prefills name/email/role, no password field unless "reset password" is checked.
+- [x] 5b.2 GREEN `UserForm.tsx` (mirrors `CustomerForm.tsx`'s Dialog/state shape) + `UserFormTrigger.tsx` (mirrors `CustomerFormTrigger.tsx`, `router.refresh()` on save).
+
+**WU5b status: DONE** (branch `user-lifecycle/wu5b-user-form`, based on the tracker). 17 new `UserForm` tests + 2 added to `UsersTable`; 616 green, `tsc` clean. Five deviations from the task text, all deliberate:
+
+- **The username is read-only in edit mode.** The task text does not mention it, but `updateUser()`'s patch builder has no username branch — an editable field would accept the admin's typing and silently discard it.
+- **A cleared email is sent as `""`, not omitted.** `updateUser()` only patches the keys it receives, so omitting a blanked field would leave the old address in place and make the deletion a no-op. Pinned by a test.
+- **Two files beyond the task's list were touched to actually wire it up**: `users/page.tsx` (a "Nuevo usuario" trigger beside the heading) and `UsersTable.tsx` (an "Editar" trigger per row). A dialog no route renders is not shipped. Edit is offered only on ACTIVE rows — reactivate first, so a row's state is never ambiguous mid-save.
+- **`ROLE_LABELS` is imported from `auth/roles.ts`** instead of re-declared. Note that `UsersTable.tsx` still carries its own divergent copy (`"Técnico de taller"` vs `roles.ts`'s `"Técnico"`); left untouched as out of scope, but the two disagree on screen.
+- **The reset-password checkbox uses `id` + `<Label htmlFor>`, not `CustomerForm.tsx`'s wrapping `<label>`.** The base-ui `Checkbox` renders an `aria-hidden` input carrying the `id` plus a visible control labelled via `aria-labelledby`, so a wrapping label points at both and `getByLabelText` throws on the ambiguity. Tests query it with `getByRole("checkbox", { name })` — worth knowing before the next base-ui control gets a jsdom test.
