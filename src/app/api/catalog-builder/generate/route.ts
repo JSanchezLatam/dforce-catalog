@@ -33,20 +33,42 @@ type GenerateBody = {
   includedCategoryCount: number;
 };
 
+const IMAGE_TYPES = ["transparent", "opaque", "low_res"];
+
+/** `undefined` and `null` are both legitimate for the optional fields — only a wrong TYPE is rejected. */
+function isNullableString(value: unknown): boolean {
+  return value == null || typeof value === "string";
+}
+
+/**
+ * Every field of `ProductPrintRef`, not just the crashing one.
+ *
+ * `price` is the only field that throws (`.toFixed(2)` in `AdaptiveCards`),
+ * but a junk `image` renders a broken `<img>` and a junk `imageType` silently
+ * picks the wrong card — a degraded PDF nobody notices is its own failure.
+ * Validating three fields under a comment promising "element shape" was a
+ * contract wider than the code.
+ */
 function isPrintProduct(value: unknown): value is ProductPrintRef {
   if (typeof value !== "object" || value === null) return false;
   const p = value as Partial<ProductPrintRef>;
-  // `price` is the field worth being strict about: it reaches the worker and
-  // gets `.toFixed(2)` called on it. A string here does not fail the request,
-  // it throws inside a background job with no caller left to tell.
   if (p.price != null && (typeof p.price !== "number" || !Number.isFinite(p.price))) return false;
-  return typeof p.id === "string" && typeof p.name === "string";
+  if (p.imageType != null && !IMAGE_TYPES.includes(p.imageType)) return false;
+  return (
+    typeof p.id === "string" &&
+    typeof p.name === "string" &&
+    isNullableString(p.categoryL1) &&
+    isNullableString(p.categoryL2) &&
+    isNullableString(p.image)
+  );
 }
 
 function isIndexSection(value: unknown): value is CatalogIndexSection {
   if (typeof value !== "object" || value === null) return false;
   const s = value as Partial<CatalogIndexSection>;
-  return typeof s.categoryL1 === "string" && typeof s.productCount === "number";
+  return (
+    typeof s.categoryL1 === "string" && isNullableString(s.categoryL2) && typeof s.productCount === "number"
+  );
 }
 
 /**

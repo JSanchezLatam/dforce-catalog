@@ -85,3 +85,37 @@ describe("isGenerateBody — section element shape", () => {
     );
   });
 });
+
+/**
+ * The remaining `ProductPrintRef` fields. None of these crash the worker the
+ * way a string `price` does — a junk `image` renders a broken `<img>`, a junk
+ * `imageType` silently picks the wrong card. A degraded PDF that nobody
+ * notices is still a failure, and the guard's comment promised element shape,
+ * not three fields of it.
+ */
+describe("isGenerateBody — the rest of the product shape", () => {
+  it("rejects a non-string category", () => {
+    expect(isGenerateBody({ ...VALID, products: [{ ...VALID.products[0], categoryL1: 7 }] })).toBe(false);
+    expect(isGenerateBody({ ...VALID, products: [{ ...VALID.products[0], categoryL2: {} }] })).toBe(false);
+  });
+
+  it("rejects a non-string image", () => {
+    expect(isGenerateBody({ ...VALID, products: [{ ...VALID.products[0], image: 12 }] })).toBe(false);
+  });
+
+  it("rejects an imageType outside the known set", () => {
+    expect(isGenerateBody({ ...VALID, products: [{ ...VALID.products[0], imageType: "blurry" }] })).toBe(false);
+  });
+
+  it("accepts the known imageTypes and a null one", () => {
+    for (const imageType of ["transparent", "opaque", "low_res", null]) {
+      expect(isGenerateBody({ ...VALID, products: [{ ...VALID.products[0], imageType }] })).toBe(true);
+    }
+  });
+
+  it("rejects a section whose categoryL2 is neither string nor null", () => {
+    expect(
+      isGenerateBody({ ...VALID, sections: [{ categoryL1: "AUDIO", categoryL2: 3, productCount: 1 }] }),
+    ).toBe(false);
+  });
+});

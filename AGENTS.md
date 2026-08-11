@@ -168,8 +168,7 @@ with a live smoke test against a throwaway database before merging.
 
 ## Code quality gate
 
-Nothing is enforced automatically on commit today — there is no pre-commit
-hook in this repo. What actually gates work:
+What actually gates work:
 
 - `npm test` and `npx tsc --noEmit` must be clean before a PR.
 - Substantial changes go through the gentle-ai review flow
@@ -182,7 +181,33 @@ hook in this repo. What actually gates work:
   `react-hooks/set-state-in-effect`). Don't add to them; fixing them is its
   own change.
 
-If an automated reviewer (GGA or similar) is installed later, document its
-actual config path and what it checks here — not before. A gate described in
-this file that does not run is worse than no gate: every agent will assume a
-review happened that never did.
+### GGA — the pre-commit reviewer
+
+Configured in `.gga` at the repo root (Gentleman Guardian Angel v2.10.1):
+
+| Setting | Value |
+|---|---|
+| `PROVIDER` | `claude` |
+| `FILE_PATTERNS` | `*.ts,*.tsx,*.js,*.jsx` |
+| `EXCLUDE_PATTERNS` | `*.d.ts` only |
+| `RULES_FILE` | this file |
+| `STRICT_MODE` | `true` |
+
+**Tests are deliberately NOT excluded.** This repo runs strict TDD and whole
+work units ship as test-only commits — excluding `*.test.ts` would mean the
+reviewer sees nothing at all on those. A test asserting the wrong thing is a
+real defect, and this project has already shipped one.
+
+GGA reads THIS file as its rulebook, so a rule written here is a rule it
+enforces. It reviews staged files on commit; `gga run --ci` reviews the last
+commit and `gga run --pr-mode` the whole branch.
+
+**Known defect (v2.10.1):** `gga` does not read `PROVIDER` from `.gga` or from
+`~/.config/gga/config` — `gga config` reports "Not configured" even when both
+files set it. The `GGA_PROVIDER=claude` environment variable does work. Until
+that is fixed upstream, the variable must be set for the reviewer to run at
+all.
+
+This runs *in addition to* the gentle-ai receipt flow above — GGA on commit,
+RDD before delivery. Two AI reviews per change is deliberate, not an accident
+of configuration.
