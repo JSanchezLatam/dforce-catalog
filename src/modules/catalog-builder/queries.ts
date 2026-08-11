@@ -48,9 +48,24 @@ export async function listProductsInCategories(categories: CategoryRef[]): Promi
       // `resolvePrice` trims again so hand-built maps behave too. Values stay
       // strings, exactly as the ERP sends them, and are parsed in TS where it
       // is testable without a database.
+      // TWO guards, because there are two distinct ways one bad row aborts
+      // this query for EVERY user — the subquery runs per row, so the blast
+      // radius is the whole category listing, not one product.
+      //   1. `jsonb_array_elements` RAISES on an object or scalar container.
+      //   2. `jsonb_object_agg` RAISES on a NULL key, and `->>'Name'` yields
+      //      NULL for any element that is not an object with a string Name.
+      //      `->>` does not raise on a non-object, so this one hides until
+      //      the aggregate blows up.
+      // Verified live against Postgres: `["oops"]` and `[{"Name":null}]` both
+      // gave `field name must not be null` before the filter, and a mixed
+      // array still yields its good entries after it. A missing key was
+      // always safe (an SRF over SQL NULL yields no rows).
       priceLists: sql<PriceListMap | null>`(
-        select jsonb_object_agg(trim(pl->>'Name'), pl->>'Precio')
-        from jsonb_array_elements(${producto.raw}->'PriceLists') pl
+        case when jsonb_typeof(${producto.raw}->'PriceLists') = 'array' then (
+          select jsonb_object_agg(trim(pl->>'Name'), pl->>'Precio')
+                 filter (where jsonb_typeof(pl->'Name') = 'string')
+          from jsonb_array_elements(${producto.raw}->'PriceLists') pl
+        ) end
       )`,
     })
     .from(producto)

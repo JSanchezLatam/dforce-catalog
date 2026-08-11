@@ -45,10 +45,6 @@ export const IFX_PRICE_LIST_NAMES: Record<PriceList, string> = {
 /** List name → price, as the query returns it: ERP names, values still strings. */
 export type PriceListMap = Record<string, string | null>;
 
-export function isPriceList(value: unknown): value is PriceList {
-  return PRICE_LISTS.includes(value as PriceList);
-}
-
 /**
  * Resolves one tier out of a product's price map, or `null` when that tier has
  * no usable price.
