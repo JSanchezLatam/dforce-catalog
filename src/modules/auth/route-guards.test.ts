@@ -18,12 +18,12 @@ export const ROUTE_GUARDS: Record<string, Partial<Record<"GET" | "POST" | "PATCH
   // The forced-rotation screen. session-only by design (Decision 8): gating the
   // only screen that can clear a lockout would make the lockout unrecoverable.
   "/change-password": { GET: "session-only" },
-  "/api/login": { GET: "session-only", POST: "session-only" },
+  "/api/login": { POST: "session-only" },
   "/api/logout": { POST: "session-only" },
-  "/api/customers": { GET: "customers.read", POST: "customers.write" },
-  "/api/customers/[id]": { GET: "customers.read", PATCH: "customers.write", DELETE: "customers.write" },
-  "/api/service-orders": { GET: "service-orders.read", POST: "service-orders.write" },
-  "/api/service-orders/[id]": { GET: "service-orders.read", PATCH: "service-orders.write" },
+  "/api/customers": { POST: "customers.write" },
+  "/api/customers/[id]": { PATCH: "customers.write" },
+  "/api/service-orders": { POST: "service-orders.write" },
+  "/api/service-orders/[id]": { PATCH: "service-orders.write" },
   "/api/inventory-sync/manual": { GET: "sync.manual", POST: "sync.manual" },
   "/api/template-config": { GET: "template.edit", POST: "template.edit" },
   "/api/workshop-config": { GET: "workshop.read", POST: "workshop.edit" },
@@ -241,5 +241,56 @@ describe("ROUTE_GUARDS declared actions are actually evaluated", () => {
     }
 
     expect(failures).toEqual([]);
+  });
+});
+
+/**
+ * The completeness test above matches URLs, not methods — so a registry entry
+ * could declare a `DELETE` no route exports (a permission decision recorded
+ * for code that does not exist), or a route could export one the registry
+ * never mentions (a real endpoint shipping with no declared permission at
+ * all). Both passed until now; the second is the dangerous one.
+ *
+ * Pages are excluded: they export `default`, and a page is a GET by
+ * construction.
+ */
+describe("ROUTE_GUARDS methods match what each route actually exports", () => {
+  const HTTP_METHODS = ["GET", "POST", "PATCH", "DELETE"] as const;
+
+  function exportedMethods(file: string): string[] {
+    const src = fs.readFileSync(file, "utf8");
+    return HTTP_METHODS.filter((m) =>
+      new RegExp(`export\\s+(async\\s+)?function\\s+${m}\\s*\\(`).test(src),
+    );
+  }
+
+  function apiEntries(): Array<{ url: string; file: string; declared: string[]; exported: string[] }> {
+    const urlToFile = buildUrlToFileMap();
+    return Object.entries(ROUTE_GUARDS)
+      .map(([url, methods]) => ({ url, file: urlToFile.get(url) ?? "", declared: Object.keys(methods) }))
+      .filter((e) => e.file.endsWith("/route.ts"))
+      .map((e) => ({ ...e, exported: exportedMethods(e.file) }));
+  }
+
+  it("declares no method the route does not export", () => {
+    const phantom = apiEntries()
+      .flatMap(({ url, declared, exported }) =>
+        declared.filter((m) => !exported.includes(m)).map((m) => `${m} ${url}`),
+      )
+      .sort();
+
+    expect(phantom).toEqual([]);
+  });
+
+  // The one that matters: ship a DELETE and forget to say who may call it,
+  // and this fails. That is the guarantee — not a convention anyone can skip.
+  it("declares every method the route exports", () => {
+    const undeclared = apiEntries()
+      .flatMap(({ url, declared, exported }) =>
+        exported.filter((m) => !declared.includes(m)).map((m) => `${m} ${url}`),
+      )
+      .sort();
+
+    expect(undeclared).toEqual([]);
   });
 });
