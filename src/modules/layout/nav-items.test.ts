@@ -51,10 +51,10 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     expect(cat.items.map((i) => i.label)).not.toContain("Inventario");
   });
 
-  it("admin sees Configuración with two children: Config. del CRM + Config. de catálogos (with nested Configuración de template)", () => {
+  it("admin sees Configuración with three children: Config. del CRM + Config. de catálogos (with nested Configuración de template) + Gestión de usuarios", () => {
     const groups = getNavGroups(admin);
     const cfg = groups.find((g) => g.label === "Configuración")!;
-    expect(cfg.items).toHaveLength(2);
+    expect(cfg.items).toHaveLength(3);
     expect(cfg.items[0]).toEqual({ kind: "link", href: "/workshop-config", label: "Config. del CRM", icon: "template-config", action: "workshop.edit" });
     const parent = cfg.items[1];
     expect(parent.kind).toBe("parent");
@@ -63,6 +63,20 @@ describe("getNavGroups() — grouped sidebar nav", () => {
       expect(parent.children).toHaveLength(1);
       expect(parent.children[0].label).toBe("Configuración de template");
     }
+    expect(cfg.items[2]).toEqual({ kind: "link", href: "/users", label: "Gestión de usuarios", icon: "users", action: "users.manage" });
+  });
+
+  // The entry is gated on `users.manage`, the same action /api/users and
+  // /users enforce — so the link can never render for someone who would get a
+  // 403 on arrival.
+  it("técnico sees no Gestión de usuarios anywhere in the tree", () => {
+    const labels = Object.values(labelTree(getNavGroups(tecnico))).flat().join(" ");
+    expect(labels).not.toContain("Gestión de usuarios");
+  });
+
+  it("técnico's tree is unchanged by the new entry — still 2 groups, no Configuración", () => {
+    const groups = getNavGroups(tecnico);
+    expect(groups.map((g) => g.label)).toEqual(["CRM", "Catálogo"]);
   });
 
   it("técnico does NOT see Generar Catálogos (catalogs.generate denied), and Catálogo only has Catálogos Generados", () => {
@@ -88,10 +102,10 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     expect(totalItems).toBe(4);
   });
 
-  it("admin sees 7 total items across 3 groups", () => {
+  it("admin sees 8 total items across 3 groups", () => {
     const groups = getNavGroups(admin);
     const totalItems = groups.reduce((s, g) => s + g.items.length, 0);
-    expect(totalItems).toBe(7);
+    expect(totalItems).toBe(8);
   });
 
   // Stable ids decouple sidebar-group-collapse cookie state from display

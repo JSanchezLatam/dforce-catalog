@@ -9,7 +9,15 @@ import { ACTIONS, type Action } from "./policy";
  * just a valid session), mapped by URL path to the HTTP methods it handles
  * and the Action it requires.
  */
-export const ROUTE_GUARDS: Record<string, Partial<Record<"GET" | "POST" | "PATCH" | "DELETE", Action | "session-only">>> = {
+export const ROUTE_GUARDS: Record<string, Partial<Record<"GET" | "POST" | "PATCH" | "DELETE", Action | "session-only" | "public">>> = {
+  // "public" = reachable with NO session at all (excluded by proxy.ts's
+  // config.matcher). Distinct from "session-only", which still requires a
+  // valid session and only skips the permission matrix.
+  "/login": { GET: "public" },
+  "/": { GET: "session-only" },
+  // The forced-rotation screen. session-only by design (Decision 8): gating the
+  // only screen that can clear a lockout would make the lockout unrecoverable.
+  "/change-password": { GET: "session-only" },
   "/api/login": { GET: "session-only", POST: "session-only" },
   "/api/logout": { POST: "session-only" },
   "/api/customers": { GET: "customers.read", POST: "customers.write" },
@@ -35,13 +43,20 @@ export const ROUTE_GUARDS: Record<string, Partial<Record<"GET" | "POST" | "PATCH
   "/template-config": { GET: "template.edit" },
   "/workshop-config": { GET: "workshop.edit" },
   "/account": { GET: "account.self" },
+  "/users": { GET: "users.manage" },
   "/api/account": { GET: "account.self", PATCH: "account.self" },
-  "/api/account/password": { POST: "account.self" },
+  "/api/users": { GET: "users.manage", POST: "users.manage" },
+  "/api/users/[id]": { PATCH: "users.manage" },
+  // session-only, never Action-gated: this is the only route that can clear a
+  // `mustChangePassword` flag, so gating it by the matrix would make one matrix
+  // mistake an unrecoverable lockout (design.md Decision 8). It is safe without
+  // an Action because it only ever rewrites the CALLER's own password —
+  // `changePassword()` takes the id from the session, never from the body.
+  "/api/account/password": { POST: "session-only" },
 };
 
 const APP_DIR = path.resolve(import.meta.dirname, "../../app");
 const API_DIR = path.join(APP_DIR, "api");
-const APP_GROUP_DIR = path.join(APP_DIR, "(app)");
 
 function filePathToUrl(file: string): string {
   let url = file
@@ -61,6 +76,20 @@ function findRouteFiles(dir: string, suffix: string): string[] {
 }
 
 /**
+ * Every `page.tsx` under `src/app`, including the ones OUTSIDE the `(app)`
+ * route group (`/login`, `/`, `/change-password`). Those used to be invisible
+ * to the registry entirely — a page could ship with no guard declaration at
+ * all and nothing would notice. `endsWith("/page.tsx")` cannot be used here
+ * because the root page's relative path is bare `page.tsx`.
+ */
+function findPageFiles(): string[] {
+  if (!fs.existsSync(APP_DIR)) return [];
+  return (fs.readdirSync(APP_DIR, { recursive: true }) as string[])
+    .map((f) => f.replace(/\\/g, "/"))
+    .filter((f) => /(^|\/)page\.tsx$/.test(f));
+}
+
+/**
  * Maps every registered URL back to the absolute source file that implements
  * it, reusing the same enumeration as the completeness test above.
  */
@@ -69,8 +98,8 @@ function buildUrlToFileMap(): Map<string, string> {
   for (const f of findRouteFiles(API_DIR, "/route.ts")) {
     map.set(filePathToUrl(`src/app/api/${f}`), path.join(API_DIR, f));
   }
-  for (const f of findRouteFiles(APP_GROUP_DIR, "/page.tsx")) {
-    map.set(filePathToUrl(`src/app/(app)/${f}`), path.join(APP_GROUP_DIR, f));
+  for (const f of findPageFiles()) {
+    map.set(filePathToUrl(`src/app/${f}`), path.join(APP_DIR, f));
   }
   return map;
 }
@@ -78,14 +107,11 @@ function buildUrlToFileMap(): Map<string, string> {
 describe("ROUTE_GUARDS completeness", () => {
   it("every existing API route and page has a ROUTE_GUARDS entry", () => {
     const relApiDir = "src/app/api";
-    const relAppDir = "src/app/(app)";
 
     const apiRoutes = findRouteFiles(API_DIR, "/route.ts").map((f) =>
       filePathToUrl(`${relApiDir}/${f}`),
     );
-    const pages = findRouteFiles(APP_GROUP_DIR, "/page.tsx").map((f) =>
-      filePathToUrl(`${relAppDir}/${f}`),
-    );
+    const pages = findPageFiles().map((f) => filePathToUrl(`src/app/${f}`));
 
     const allUrls = [...apiRoutes, ...pages].sort();
     const guardedUrls = Object.keys(ROUTE_GUARDS).sort();
@@ -97,17 +123,45 @@ describe("ROUTE_GUARDS completeness", () => {
     const usedActions = new Set(
       Object.values(ROUTE_GUARDS)
         .flatMap((methods) => Object.values(methods))
-        .filter((v): v is Action => v !== "session-only"),
+        .filter((v): v is Action => v !== "session-only" && v !== "public"),
     );
 
-    // Four actions have no route in v1 — they get their own route in later WUs:
-    // users.manage (deferred follow-up), workshop.edit (WU3b),
-    // catalogs.listAll (no dedicated route), account.self (WU5b).
-    const exempt: readonly Action[] = ["users.manage", "catalogs.listAll"];
+    // `users.manage` came off this list once /api/users landed — it now has a
+    // real route and must stay reachable. `catalogs.listAll` has no dedicated
+    // route of its own by design.
+    const exempt: readonly Action[] = ["catalogs.listAll"];
 
     for (const action of ACTIONS) {
       if ((exempt as readonly string[]).includes(action)) continue;
       expect(usedActions.has(action as Action)).toBe(true);
+    }
+  });
+});
+
+/**
+ * Closes verify-report W3. design.md Decision 8: if the screen that unlocks a
+ * locked-out user ever required an `Action`, one matrix mistake becomes an
+ * unrecoverable lockout — the user cannot reach the only surface that would
+ * clear their flag. These entries are therefore permanently `"session-only"`,
+ * and this test exists to fail loudly the day someone "tightens" them.
+ */
+describe("lockout safety — the unlock path is never Action-gated", () => {
+  const NEVER_ACTION_GATED: readonly [string, "GET" | "POST" | "PATCH" | "DELETE"][] = [
+    ["/api/login", "POST"],
+    ["/api/logout", "POST"],
+    ["/api/account/password", "POST"],
+    ["/change-password", "GET"],
+  ];
+
+  it.each(NEVER_ACTION_GATED)("%s [%s] stays session-only", (urlPath, method) => {
+    expect(ROUTE_GUARDS[urlPath]?.[method]).toBe("session-only");
+  });
+
+  it("no entry on the unlock path carries an Action under any method", () => {
+    for (const [urlPath] of NEVER_ACTION_GATED) {
+      for (const value of Object.values(ROUTE_GUARDS[urlPath] ?? {})) {
+        expect(value).toBe("session-only");
+      }
     }
   });
 });
@@ -170,7 +224,7 @@ describe("ROUTE_GUARDS declared actions are actually evaluated", () => {
       );
 
       for (const [method, action] of Object.entries(methods)) {
-        if (action === "session-only") continue;
+        if (action === "session-only" || action === "public") continue;
         // Pages have no exported HTTP method function — the whole file IS
         // the GET handler. API routes must actually export that method;
         // otherwise the declared method has no implementation at all,
