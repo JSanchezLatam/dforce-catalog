@@ -36,6 +36,13 @@ services:
 
   db:
     image: postgres:17-alpine
+    # Published so host-side `npm run dev` / `npm run db:migrate` can reach it —
+    # without this the documented DATABASE_URL only ever resolved for the
+    # in-network `app`/`migrate` services. 5433, not 5432: a Homebrew Postgres
+    # commonly holds 5432 on a dev machine and the clash is silent until the
+    # first query hits the wrong database.
+    ports:
+      - "5433:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-dforce}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dforce}
