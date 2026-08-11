@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { can } from "@/modules/auth/policy";
-import { CatalogSelectionValidationError, validateCatalogSelection, type ProductRef } from "@/modules/catalog-builder/selection";
+import { CatalogSelectionValidationError, validateCatalogSelection } from "@/modules/catalog-builder/selection";
+import type { ProductPrintRef } from "@/shared/template/CatalogTemplate";
 import { requireSession } from "@/modules/auth/session";
 import { countUploadedCatalogsForUser } from "@/modules/catalog-storage/queries";
 import { shouldWarnOfEviction } from "@/modules/catalog-storage/retention";
@@ -26,7 +27,9 @@ import type { CatalogIndexSection } from "@/shared/template/CatalogTemplate";
 type GenerateBody = {
   title: string;
   sections: CatalogIndexSection[];
-  products: ProductRef[];
+  // Print-ready, not selection-shaped: the builder has already resolved the
+  // chosen price tier and dropped the other two before POSTing.
+  products: ProductPrintRef[];
   productsPerPage: number;
   includedCategoryCount: number;
 };

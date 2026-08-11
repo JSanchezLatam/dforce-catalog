@@ -5,6 +5,17 @@ type CardProps = {
   style?: React.CSSProperties;
 };
 
+/**
+ * Shared by both cards so a transparent product and a framed one never format
+ * money differently on the same page. Renders nothing at all when there is no
+ * usable price — `resolvePrice` already collapses the ERP's "0.00" to null,
+ * and printing "$0.00" beside a product reads as free.
+ */
+function ProductPrice({ price }: { price?: number | null }) {
+  if (price == null) return null;
+  return <p style={{ margin: "2px 0 0", fontWeight: 600, fontSize: 13 }}>${price.toFixed(2)}</p>;
+}
+
 export function TransparentProductCard({ product, style }: CardProps) {
   return (
     <div
@@ -44,6 +55,7 @@ export function TransparentProductCard({ product, style }: CardProps) {
             {product.categoryL1}{product.categoryL2 ? ` / ${product.categoryL2}` : ""}
           </p>
         )}
+        <ProductPrice price={product.price} />
       </div>
     </div>
   );
@@ -93,6 +105,7 @@ export function OpaqueProductCard({ product, style }: CardProps) {
             {product.categoryL1}{product.categoryL2 ? ` / ${product.categoryL2}` : ""}
           </p>
         )}
+        <ProductPrice price={product.price} />
       </div>
     </div>
   );

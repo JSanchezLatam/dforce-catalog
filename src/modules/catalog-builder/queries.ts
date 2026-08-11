@@ -8,6 +8,7 @@ import { and, eq, isNotNull, or, sql } from "drizzle-orm";
 import { db } from "@/shared/db/client";
 import { producto } from "@/shared/db/schema";
 
+import type { PriceListMap } from "./price-lists";
 import type { CategoryRef, ProductRef } from "./selection";
 
 export type CategoryPair = { categoryL1: string; categoryL2: string };
@@ -41,6 +42,16 @@ export async function listProductsInCategories(categories: CategoryRef[]): Promi
       categoryL2: producto.categoryL2,
       image: sql<string>`trim(nullif(${producto.raw}->'Images'->0->>'src', ''))`,
       imageType: sql<"transparent" | "opaque" | "low_res" | null>`${producto.imageType}`,
+      // All three tiers in one pass, same read-from-raw approach `image`
+      // already uses — no projected column and no migration. Names are
+      // trimmed here because Interfuerza's carry trailing whitespace;
+      // `resolvePrice` trims again so hand-built maps behave too. Values stay
+      // strings, exactly as the ERP sends them, and are parsed in TS where it
+      // is testable without a database.
+      priceLists: sql<PriceListMap | null>`(
+        select jsonb_object_agg(trim(pl->>'Name'), pl->>'Precio')
+        from jsonb_array_elements(${producto.raw}->'PriceLists') pl
+      )`,
     })
     .from(producto)
     .where(or(...conditions));
