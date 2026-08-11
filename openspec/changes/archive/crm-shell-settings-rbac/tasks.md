@@ -329,6 +329,11 @@ Target files: `src/app/api/account/route.ts` (+ test),
 The following work units are explicitly DEFERRED. They are documented here
 for the follow-up change's planning, NOT for v1 implementation.
 
+> **All four shipped** as `user-lifecycle-management` (40/40, merged to `main`
+> in PR #25, archived alongside this change): WU6 → its WU1/WU2, WU7a → WU4b,
+> WU7b → WU5a/5b, WU7c → WU3. The boxes below stay unchecked on purpose — they
+> are this change's deferral register, not open work. v1 scope here is 46/46.
+
 ### Work Unit 6 — Deactivation Enforcement
 
 - [ ] 6.1...

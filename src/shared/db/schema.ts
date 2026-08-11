@@ -189,7 +189,7 @@ export type Catalog = typeof catalogs.$inferSelect;
 
 /**
  * crm-workshop-management — customers, service orders, line items, reminders.
- * See openspec/changes/crm-workshop-management/design.md → "Data Model" for
+ * See openspec/changes/archive/crm-workshop-management/design.md → "Data Model" for
  * the full rationale (ADR-5 opt-out re-check, ADR-6 inline vehicle + FK
  * restrict, ADR-7 line-item snapshot, ADR-8 retry idempotency).
  */

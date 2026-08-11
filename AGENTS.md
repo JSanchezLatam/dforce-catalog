@@ -56,7 +56,7 @@ before assuming a feature was never planned.
 strategy): a draft tracker branch/PR off `main` accumulates the full
 feature; each work-unit PR targets the previous PR's branch, in order; only
 the tracker merges to `main` once every child PR has landed. See
-`openspec/changes/crm-workshop-management/tasks.md`'s Review Workload
+`openspec/changes/archive/crm-workshop-management/tasks.md`'s Review Workload
 Forecast for the template this repo uses to decide when a change needs this.
 
 ## Standing architectural decisions
@@ -74,7 +74,7 @@ Forecast for the template this repo uses to decide when a change needs this.
 - **CRM/workshop features are built natively**, not by integrating the
   separate `github.com/Hainrixz/auto-crm` repo — that project runs on SQLite
   (this app is Postgres) and is a generic sales-CRM, not workshop-shaped.
-  `openspec/changes/crm-workshop-management/` documents the customer
+  `openspec/changes/archive/crm-workshop-management/` documents the customer
   (`cliente`), service-order (`orden_servicio`), and reminder (`reminder`,
   pg-boss `sendAfter` + Resend/Kapso) modules built instead.
 - **Reminders**: WhatsApp and email opt-out are two independent booleans on
