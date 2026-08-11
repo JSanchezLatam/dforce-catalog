@@ -1,6 +1,7 @@
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { listUsers } from "@/modules/account/queries";
+import { UserFormTrigger } from "@/modules/account/UserFormTrigger";
 import { UsersTable } from "@/modules/account/UsersTable";
 import { PAGE_HEADING } from "@/shared/ui/styles";
 
@@ -28,7 +29,10 @@ export default async function UsersPage() {
 
   return (
     <div className="flex flex-col gap-6 p-8">
-      <h1 className={PAGE_HEADING}>Gestión de usuarios</h1>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className={PAGE_HEADING}>Gestión de usuarios</h1>
+        <UserFormTrigger />
+      </div>
       <UsersTable
         // Dates do not survive the RSC boundary as Date instances — serialise
         // here so the client component's prop type is honest about what it gets.

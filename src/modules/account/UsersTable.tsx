@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FIELD_ERROR } from "@/shared/ui/styles";
+import { UserFormTrigger } from "./UserFormTrigger";
 
 export type UserRow = {
   id: string;
@@ -120,14 +121,19 @@ export function UsersTable({ users }: { users: UserRow[] }) {
                   {inactive ? "Inactivo" : "Activo"}
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button
-                    variant={inactive ? "outline" : "ghost"}
-                    size="sm"
-                    disabled={pendingId === user.id}
-                    onClick={() => toggleActive(user)}
-                  >
-                    {inactive ? "Reactivar" : "Desactivar"}
-                  </Button>
+                  <div className="flex justify-end gap-2">
+                    {/* Editing a deactivated user is not offered: reactivate
+                        first, so the row's state stays unambiguous. */}
+                    {!inactive && <UserFormTrigger user={user} />}
+                    <Button
+                      variant={inactive ? "outline" : "ghost"}
+                      size="sm"
+                      disabled={pendingId === user.id}
+                      onClick={() => toggleActive(user)}
+                    >
+                      {inactive ? "Reactivar" : "Desactivar"}
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             );

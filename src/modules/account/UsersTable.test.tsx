@@ -103,6 +103,22 @@ describe("UsersTable — the action each row offers", () => {
     expect(within(rowFor("beto")).getByRole("button", { name: "Reactivar" })).toBeInTheDocument();
   });
 
+  it("offers Editar on an active row", () => {
+    render(<UsersTable users={[ACTIVE]} />);
+
+    expect(within(rowFor("ana")).getByRole("button", { name: "Editar" })).toBeInTheDocument();
+  });
+
+  // Reactivate first: editing a row whose state is "inactive" leaves it
+  // ambiguous whether the save was supposed to bring the user back.
+  it("does not offer Editar on a deactivated row", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    await user.click(screen.getByLabelText("Mostrar inactivos"));
+
+    expect(within(rowFor("beto")).queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
+  });
+
   it("sends active:false and refreshes on a successful deactivate", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({ status: 200, body: { success: true } });
