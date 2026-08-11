@@ -78,6 +78,41 @@ export function deriveCatalogTitle(includedCategoryL1Names: string[]): string {
   return includedCategoryL1Names.length > 0 ? `Catalog: ${includedCategoryL1Names.join(", ")}` : "Catalog";
 }
 
+export type ImageTypeOverride = "transparent" | "opaque" | "low_res" | null;
+
+export type BulkFrameState = {
+  /** Per-product image-type overrides currently in effect. */
+  overrides: Record<string, ImageTypeOverride>;
+  bulkFramed: boolean;
+  /** The overrides as they were the moment bulk framing was switched ON. */
+  snapshot: Record<string, ImageTypeOverride>;
+};
+
+/**
+ * The "Enmarcar todos" toggle, as a pure transition.
+ *
+ * It lives here and not in `ProductLayoutTuner.tsx` because that component is
+ * presentational — it owns none of this state, so no test mounted against it
+ * could ever have covered the rule that matters. `CatalogBuilderForm.tsx`
+ * holds the three values and calls this.
+ *
+ * Switching ON forces every product opaque, but first snapshots whatever the
+ * user had chosen by hand. Switching OFF restores that snapshot verbatim.
+ * The original one-way version skipped the snapshot and silently discarded
+ * every per-product choice the moment the toggle came back off.
+ */
+export function toggleBulkFrame(state: BulkFrameState, products: ProductRef[]): BulkFrameState {
+  if (state.bulkFramed) {
+    return { overrides: { ...state.snapshot }, bulkFramed: false, snapshot: {} };
+  }
+
+  return {
+    overrides: Object.fromEntries(products.map((product) => [product.id, "opaque" as const])),
+    bulkFramed: true,
+    snapshot: { ...state.overrides },
+  };
+}
+
 export type CatalogSelectionCheck = {
   includedCategoryCount: number;
   totalProductCount: number;

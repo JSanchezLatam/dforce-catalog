@@ -31,6 +31,7 @@ import {
   deriveCatalogTitle,
   MAX_PRODUCTS_PER_PAGE,
   MIN_PRODUCTS_PER_PAGE,
+  toggleBulkFrame,
   validateCatalogSelection,
   type CategoryRef,
   type ProductRef,
@@ -416,16 +417,16 @@ export function CatalogBuilderForm({
             setOverrides((prev) => ({ ...prev, [id]: value }))
           }
           onBulkFrame={() => {
-            if (bulkFramed) {
-              setOverrides(overridesBeforeBulkFrameRef.current);
-              setBulkFramed(false);
-            } else {
-              overridesBeforeBulkFrameRef.current = overrides;
-              setOverrides(
-                Object.fromEntries(finalProducts.map((p) => [p.id, "opaque" as const])),
-              );
-              setBulkFramed(true);
-            }
+            // The transition itself is a pure function in selection.ts so the
+            // restore-on-toggle-off rule can be tested without mounting this
+            // form; here we only project the result onto React state.
+            const next = toggleBulkFrame(
+              { overrides, bulkFramed, snapshot: overridesBeforeBulkFrameRef.current },
+              finalProducts,
+            );
+            overridesBeforeBulkFrameRef.current = next.snapshot;
+            setOverrides(next.overrides);
+            setBulkFramed(next.bulkFramed);
           }}
         />
       )}
