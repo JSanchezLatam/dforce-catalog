@@ -9,6 +9,7 @@
  * `template-config/service.ts`'s `validateTemplateConfigInput`.
  */
 import type { CatalogIndexSection } from "@/shared/template/CatalogTemplate";
+import type { PriceListMap } from "./price-lists";
 
 export type CategoryRef = { categoryL1: string; categoryL2?: string | null };
 
@@ -19,6 +20,13 @@ export type ProductRef = {
   categoryL2: string | null;
   image?: string | null;
   imageType?: "transparent" | "opaque" | "low_res" | null;
+  /**
+   * All three ERP price tiers, unparsed. The builder holds every tier so the
+   * generate-step selector can switch between them without a refetch; only the
+   * ONE chosen price is resolved into the print payload, so a trade or member
+   * price never travels with a retail catalog.
+   */
+  priceLists?: PriceListMap | null;
 };
 
 export const MIN_PRODUCTS_PER_PAGE = 1;

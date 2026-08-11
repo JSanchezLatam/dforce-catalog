@@ -118,3 +118,67 @@ describe("renderCatalogHtml — R6.1 (shares CatalogTemplate with the builder's 
     expect(html).not.toContain("height:180px");
   });
 });
+
+/**
+ * A catalog carries exactly ONE price tier — whichever the admin picked at
+ * generation time — already resolved into `price` by the builder. The template
+ * never sees the other two, so a trade or member price cannot leak into a
+ * retail catalog through the payload.
+ */
+describe("renderCatalogHtml — product prices", () => {
+  const priced = (price: number | null): ProductPrintRef[][] => [
+    [{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null, price }],
+  ];
+
+  it("prints the resolved price on the card", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [],
+      productPages: priced(45),
+    });
+
+    expect(html).toContain("45.00");
+  });
+
+  it("formats a whole number to two decimals rather than bare", async () => {
+    const html = await renderCatalogHtml({ title: "C", branding: null, sections: [], productPages: priced(38) });
+
+    expect(html).toContain("38.00");
+    expect(html).not.toContain(">38<");
+  });
+
+  // 32 of 694 real products have no retail price. Printing "$0.00" beside one
+  // in a document handed to a customer is worse than printing nothing.
+  it("prints nothing at all when the product has no price", async () => {
+    const html = await renderCatalogHtml({ title: "C", branding: null, sections: [], productPages: priced(null) });
+
+    expect(html).not.toContain("0.00");
+    expect(html).not.toContain("$");
+  });
+
+  it("omits the price when the field is absent entirely", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [],
+      productPages: [[{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null }]],
+    });
+
+    expect(html).not.toContain("$");
+  });
+
+  it("prints the price on the transparent card too, not just the framed one", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [],
+      defaultImageHandling: "adaptive",
+      productPages: [
+        [{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null, imageType: "transparent", price: 45 }],
+      ],
+    });
+
+    expect(html).toContain("45.00");
+  });
+});
