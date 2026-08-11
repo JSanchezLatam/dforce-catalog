@@ -53,9 +53,18 @@ Chain strategy: feature-branch-chain
 ## Phase 5: Tests
 
 - [x] 5.1 `pdf-generation/render.test.ts` covers adaptive card selection by `imageType`.
-- [ ] 5.2 **Still missing.** No test file exists for `ProductLayoutTuner.tsx` — the project's Vitest setup (`vitest.config.ts`) runs in a `node` environment with no `@testing-library/react`/jsdom/happy-dom, so component-level tests aren't supported yet. Added a regression test for the zero-products validation at the `validateCatalogSelection` level instead (`selection.test.ts`), which covers the "no products disables generate" rule that actually matters end-to-end, but the bulk "frame all" restore behavior (fixed in 3.1) still has no automated regression test. Adding one requires first adding a component-testing harness to the project.
+- [x] 5.2 **Done.** The original blocker ("no jsdom harness exists") died with the `component-testing-infra` work — `vitest.config.ts` now has a `jsdom` project. Closed with two test files, because the task's own premise was wrong in a second way:
+  - **`selection.test.ts` — `toggleBulkFrame` (6 tests).** The bulk frame/restore rule from 3.1 was never testable through `ProductLayoutTuner` at all: that component is presentational and owns none of this state. The transition was an inline arrow inside `CatalogBuilderForm.tsx`, so it was extracted into `selection.ts` as a pure function and the form now calls it. Pins snapshot-on-enter, exact restore-on-exit, lossless round-trip, and no mutation of the caller's state.
+  - **`ProductLayoutTuner.test.tsx` (jsdom, 10 tests).** Covers what this component genuinely decides: the classified badge gives way to an `Override:` badge (never both), an unclassified product gets no badge, a product with no image gets the placeholder, the bulk button's label flips to signal that toggling again restores, and the `__auto__` sentinel is emitted to the parent as `null` rather than as the literal string.
 - [x] 5.3 `render.test.ts` covers strict mode forcing `OpaqueProductCard` regardless of `imageType`.
-- [x] 5.4 163/163 tests passing (162 from the original PR3 commit + 1 new regression test for the zero-products guard).
+- [x] 5.4 163/163 tests passing (162 from the original PR3 commit + 1 new regression test for the zero-products guard). At close: 632/632 across the whole suite.
+
+## Change status: COMPLETE
+
+All 19 tasks done. Closed on 2026-08-11, after `component-testing-infra` removed 5.2's blocker. Two corrections landed with the close:
+
+- **`toggleBulkFrame` extracted from `CatalogBuilderForm.tsx` into `selection.ts`.** Not a refactor for taste — the rule 3.1 fixed lived in an inline JSX arrow, which is why 5.2 could never have covered it from the component it named.
+- **`design.md`'s NULL-fallback line was wrong** and is now marked with an erratum. It said NULL → `'adaptive'`; the shipped code does NULL → `'strict'`. The code is correct: adaptive-on-NULL would have silently restyled every pre-existing catalog on deploy.
 
 ## Key estimates
 

@@ -68,6 +68,7 @@ type ProductPrintRef = {
 - **TransparentProductCard**: full-bleed image, `object-fit: cover`, no border/shadow, no background.
 - **OpaqueProductCard**: white border + `border-radius`, `object-fit: contain`, `box-shadow` polaroid effect, white background.
 - **Print layout**: CSS Grid with `break-inside: avoid` per card, `@page { margin: 20mm }` from existing render.ts.
-- **Default fallback**: if `default_image_handling` is NULL (pre-migration rows) → treat as `'adaptive'`.
+- **Default fallback**: if `default_image_handling` is NULL (pre-migration rows) → treat as ~~`'adaptive'`~~ **`'strict'`**.
+  **ERRATUM (closing the change).** This line originally said `'adaptive'` and the shipped code does the opposite: `CatalogTemplate.tsx` computes `isStrict = defaultImageHandling === "strict" || !defaultImageHandling`, so NULL renders strict. The code is right and the doc was wrong — NULL → adaptive would have silently changed the appearance of every pre-existing catalog the moment this deployed, which is exactly what the backward-compatibility note on the next line exists to prevent. Recorded rather than "fixed" in code, because the behaviour under test is the correct one.
 - **Strict mode**: when `default_image_handling = 'strict'`, ignore `imageType` — all cards render as opaque/polaroid (backward-compatible behavior).
 - **ProductLayoutTuner**: shows product grid with imageType indicator badge; per-product dropdown to override; bulk "set all X to Y" rule.

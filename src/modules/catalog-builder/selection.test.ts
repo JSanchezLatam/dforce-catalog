@@ -7,6 +7,7 @@ import {
   deriveCatalogTitle,
   MAX_TOTAL_PRODUCTS,
   matchesAnyCategory,
+  toggleBulkFrame,
   validateCatalogSelection,
   type ProductRef,
 } from "./selection";
@@ -130,5 +131,74 @@ describe("validateCatalogSelection (R5.4/5.7/5.8-9)", () => {
         ["categories", "productsPerPage", "total"].sort(),
       );
     }
+  });
+});
+
+/**
+ * The bulk "frame all" toggle. Its one-way version — force every product
+ * opaque, never restore — is the regression `tasks.md` 3.1 fixed and 5.2 could
+ * never pin, because the fix lives in state the presentational
+ * `ProductLayoutTuner` does not own.
+ */
+describe("toggleBulkFrame", () => {
+  const PRODUCTS: ProductRef[] = [
+    { id: "p1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null, imageType: "transparent" },
+    { id: "p2", name: "Tweeter", categoryL1: "AUDIO", categoryL2: null, imageType: "low_res" },
+  ];
+
+  it("forces every product opaque when switched on", () => {
+    const next = toggleBulkFrame({ overrides: {}, bulkFramed: false, snapshot: {} }, PRODUCTS);
+
+    expect(next.bulkFramed).toBe(true);
+    expect(next.overrides).toEqual({ p1: "opaque", p2: "opaque" });
+  });
+
+  it("snapshots the pre-bulk overrides on the way in", () => {
+    const before = { p1: "transparent" as const };
+
+    const next = toggleBulkFrame({ overrides: before, bulkFramed: false, snapshot: {} }, PRODUCTS);
+
+    expect(next.snapshot).toEqual(before);
+  });
+
+  // The actual defect: toggling off used to leave every product forced opaque,
+  // silently discarding per-product choices the user had made by hand.
+  it("restores the exact pre-bulk overrides when switched off", () => {
+    const before = { p1: "transparent" as const, p2: null };
+
+    const on = toggleBulkFrame({ overrides: before, bulkFramed: false, snapshot: {} }, PRODUCTS);
+    const off = toggleBulkFrame(on, PRODUCTS);
+
+    expect(off.bulkFramed).toBe(false);
+    expect(off.overrides).toEqual(before);
+  });
+
+  it("round-trips to the same state, so on/off is not lossy", () => {
+    const before = { p1: "low_res" as const };
+    const start = { overrides: before, bulkFramed: false, snapshot: {} };
+
+    const after = toggleBulkFrame(toggleBulkFrame(start, PRODUCTS), PRODUCTS);
+
+    expect(after.overrides).toEqual(start.overrides);
+    expect(after.bulkFramed).toBe(start.bulkFramed);
+  });
+
+  it("restores an empty override map rather than leaving products framed", () => {
+    const on = toggleBulkFrame({ overrides: {}, bulkFramed: false, snapshot: {} }, PRODUCTS);
+    const off = toggleBulkFrame(on, PRODUCTS);
+
+    expect(off.overrides).toEqual({});
+  });
+
+  // Mutating the caller's object would make the snapshot alias live state and
+  // quietly defeat the restore it exists for.
+  it("does not mutate the state it is given", () => {
+    const overrides = { p1: "transparent" as const };
+    const state = { overrides, bulkFramed: false, snapshot: {} };
+
+    toggleBulkFrame(state, PRODUCTS);
+
+    expect(state.overrides).toEqual({ p1: "transparent" });
+    expect(state.bulkFramed).toBe(false);
   });
 });
