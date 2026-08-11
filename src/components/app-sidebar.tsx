@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { FileSpreadsheet, Package, BookOpen, Settings, GalleryVerticalEnd, ChevronDown, ChevronRight, Users, Wrench, User } from "lucide-react"
+import { FileSpreadsheet, Package, BookOpen, Settings, GalleryVerticalEnd, ChevronDown, ChevronRight, Users, Wrench, User, UserCog } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -54,6 +54,7 @@ const ICON_MAP: Record<string, typeof Package> = {
   "template-config": Settings,
   customers: Users,
   "service-orders": Wrench,
+  users: UserCog,
 }
 
 function NavLinkItem({ item }: { item: NavLink }) {

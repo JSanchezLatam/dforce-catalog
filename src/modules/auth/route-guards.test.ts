@@ -43,6 +43,7 @@ export const ROUTE_GUARDS: Record<string, Partial<Record<"GET" | "POST" | "PATCH
   "/template-config": { GET: "template.edit" },
   "/workshop-config": { GET: "workshop.edit" },
   "/account": { GET: "account.self" },
+  "/users": { GET: "users.manage" },
   "/api/account": { GET: "account.self", PATCH: "account.self" },
   "/api/users": { GET: "users.manage", POST: "users.manage" },
   "/api/users/[id]": { PATCH: "users.manage" },
