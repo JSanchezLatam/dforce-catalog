@@ -51,6 +51,11 @@ describe("TemplateConfigForm — gallery picker", () => {
     expect(container.querySelector("#font")).toBeInTheDocument();
   });
 
+  // The registry has exactly one entry (spec: "Single-entry gallery"), and
+  // it's pre-selected — clicking it fires no onChange, so this test cannot
+  // honestly exercise `update("selectedTemplateId", …)`. It passes on the
+  // form's initial state alone. Spec scenario "Selecting a template" (radio
+  // switches selection) is unverified until a second template exists.
   it("submits the selected template id alongside the existing branding fields", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({ status: 200, body: { config: { id: "singleton" } } });
