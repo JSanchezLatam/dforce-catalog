@@ -20,8 +20,8 @@ describe("validateWorkshopConfigInput", () => {
     expect(() => validateWorkshopConfigInput({ name: "x".repeat(101) })).toThrow();
   });
 
-  it("accepts an empty input (no name)", () => {
-    expect(validateWorkshopConfigInput({})).toEqual({ name: null });
+  it("omits name from the parsed result when the caller didn't send it (partial-touch, like every other field)", () => {
+    expect(validateWorkshopConfigInput({})).toEqual({});
   });
 
   it.each(["phone", "whatsapp", "email", "address", "hours", "website", "coverText"])(
@@ -192,6 +192,18 @@ describe("saveWorkshopConfig", () => {
     expect(onConflictArg.set).not.toHaveProperty("email");
     expect(onConflictArg.set).not.toHaveProperty("coverText");
     expect(onConflictArg.set).not.toHaveProperty("socialHandles");
+  });
+
+  it("does not touch name when a partial update omits it, so the workshop name survives a phone-only save", async () => {
+    const row = { id: "singleton", name: "Taller Existente", phone: "555-1234", updatedAt: new Date() };
+    const onConflictDoUpdate = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([row]) });
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    const db = { insert: vi.fn().mockReturnValue({ values } as never) } as never;
+
+    await saveWorkshopConfig({ phone: "555-1234" }, db);
+
+    const onConflictArg = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
+    expect(onConflictArg.set).not.toHaveProperty("name");
   });
 
   it("explicitly clears logoR2Key/logoContentType when null is passed (DELETE flow)", async () => {

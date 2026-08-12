@@ -22,11 +22,11 @@ const CONTACT_FIELD_LABELS: Record<string, string> = {
 };
 
 export type WorkshopConfigInput = {
-  name: string | null;
-  // `undefined` (key absent) means "leave untouched" — a name-only save must
-  // NOT clobber an existing logo. `null` means "explicitly clear" (DELETE
-  // flow). Only fields present on `input` are ever written to the update
-  // `set` clause — see saveWorkshopConfig below.
+  // `undefined` (key absent) means "leave untouched" — a partial save must
+  // NOT clobber an existing name/logo/contact field. `null` means
+  // "explicitly clear" (DELETE flow). Only fields present on `input` are
+  // ever written to the update `set` clause — see saveWorkshopConfig below.
+  name?: string | null;
   logoR2Key?: string | null;
   logoContentType?: string | null;
   phone?: string | null;
@@ -116,8 +116,8 @@ export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput
   const errors: Record<string, string> = {};
   const value = (input ?? {}) as Record<string, unknown>;
 
-  const name = typeof value.name === "string" ? value.name.trim() : null;
-  if (name !== null && name.length > MAX_NAME_LENGTH) {
+  const name = "name" in value ? (typeof value.name === "string" ? value.name.trim() : null) : undefined;
+  if (name !== undefined && name !== null && name.length > MAX_NAME_LENGTH) {
     errors.name = `El nombre debe tener ${MAX_NAME_LENGTH} caracteres o menos`;
   }
 
@@ -145,7 +145,8 @@ export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput
     throw new WorkshopConfigValidationError(errors);
   }
 
-  const result: WorkshopConfigInput = { name };
+  const result: WorkshopConfigInput = {};
+  if (name !== undefined) result.name = name;
   if ("logoR2Key" in value) {
     result.logoR2Key = value.logoR2Key === null ? null : String(value.logoR2Key);
   }
@@ -177,12 +178,16 @@ export async function saveWorkshopConfig(
   const parsed = validateWorkshopConfigInput(input);
   const updatedAt = new Date();
 
-  const insertValues: typeof workshopConfig.$inferInsert = { id: SINGLETON_ID, name: parsed.name, updatedAt };
-  const updateSet: Partial<typeof workshopConfig.$inferInsert> = { name: parsed.name, updatedAt };
+  const insertValues: typeof workshopConfig.$inferInsert = { id: SINGLETON_ID, updatedAt };
+  const updateSet: Partial<typeof workshopConfig.$inferInsert> = { updatedAt };
 
-  // Only touch logoR2Key/logoContentType when the caller explicitly provided
-  // them — a name-only save (e.g. the workshop-settings form) must not send
-  // a NULL that wipes out a logo uploaded through the separate logo route.
+  // Only touch fields the caller explicitly provided — e.g. a phone-only
+  // save (a partial POST) must not send a NULL that wipes out the name, or
+  // a logo uploaded through the separate logo route.
+  if ("name" in parsed) {
+    insertValues.name = parsed.name ?? null;
+    updateSet.name = parsed.name ?? null;
+  }
   if ("logoR2Key" in parsed) {
     insertValues.logoR2Key = parsed.logoR2Key ?? null;
     updateSet.logoR2Key = parsed.logoR2Key ?? null;

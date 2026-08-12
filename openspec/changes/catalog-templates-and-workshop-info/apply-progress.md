@@ -26,6 +26,10 @@ All ten Phase 1 tasks complete — see `tasks.md` for per-task checkmarks.
   with the 8 new fields; `validateWorkshopConfigInput` and
   `saveWorkshopConfig` reuse the existing `"field" in value` /
   `"field" in parsed` partial-touch guards (no new upsert pattern invented).
+  Pre-existing `name` handling was pulled into the same discipline
+  (`"name" in parsed`, not always-set) — an RDD review pass caught that
+  `name` was the one field the module's own partial-touch pattern didn't
+  cover, so a partial POST omitting `name` would have nulled it.
 - `src/modules/workshop-config/WorkshopConfigForm.tsx` — added contact
   fields (Teléfono, WhatsApp, Email, Dirección, Horario, Sitio web), a
   Texto de portada textarea, and a dynamic social-handle key/value row
@@ -79,7 +83,7 @@ individual fields instead.
 
 ### Verification
 
-- `npm test` — 711/711 passing (full suite, not just this module).
+- `npm test` — 714/714 passing (full suite, not just this module).
 - `npx tsc --noEmit` — clean.
 - `npm run lint` — 0 errors, 17 pre-existing warnings (none introduced by
   this change).
@@ -105,6 +109,17 @@ individual fields instead.
   hash for migration `8` was updated to match the corrected file content —
   confirmed a subsequent `db:migrate` run against it is a clean no-op that
   does not attempt to re-run the (already-applied) `ADD COLUMN` statements.
+- Third live smoke, same scratch-DB technique: a follow-up review pass
+  correctly pointed out `template_config.id` has no DB-level singleton
+  constraint, so the migration's `ORDER BY "id" LIMIT 1` picked an
+  arbitrary row rather than the one the app actually reads
+  (`template-config/service.ts` always keys by the literal id
+  `'singleton'`). Reproduced with a second, abandoned `template_config` row
+  ordering *before* `'singleton'` lexicographically, confirmed the ordered
+  version copied the wrong row's cover text, then fixed the subquery to
+  `WHERE "id" = 'singleton'` (matching the app's own key exactly, not a
+  guess) and confirmed it now picks the right row regardless of any extra
+  rows present. Dev DB's migration `8` hash updated again to match.
 
 ### Next
 

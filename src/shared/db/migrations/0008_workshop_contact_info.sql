@@ -18,5 +18,10 @@ ALTER TABLE "workshop_config" ADD COLUMN "social_handles" jsonb;--> statement-br
 -- without ever touching workshop settings — the UPDATE below would then
 -- match zero rows and migration 0009 would drop template_config.cover_text
 -- with nothing to show for it. Ensure the singleton exists first.
+-- `template_config.id` has no DB-level default or singleton constraint —
+-- app code (template-config/service.ts) always reads/writes the literal id
+-- 'singleton'. `ORDER BY ... LIMIT 1` would pick an arbitrary row if an
+-- abandoned second row ever existed; matching the app's own key exactly is
+-- both simpler and correct regardless of how many rows the table holds.
 INSERT INTO "workshop_config" ("id") VALUES ('singleton') ON CONFLICT ("id") DO NOTHING;--> statement-breakpoint
-UPDATE "workshop_config" SET "cover_text" = (SELECT "cover_text" FROM "template_config" ORDER BY "id" LIMIT 1) WHERE "cover_text" IS NULL;
+UPDATE "workshop_config" SET "cover_text" = (SELECT "cover_text" FROM "template_config" WHERE "id" = 'singleton') WHERE "cover_text" IS NULL;
