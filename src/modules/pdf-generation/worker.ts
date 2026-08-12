@@ -119,8 +119,12 @@ export async function resolveBranding(
  * measures shorter than it prints.
  */
 const MM_TO_PX = 96 / 25.4;
-export const PRINT_WIDTH_PX = Math.round((210 - 2 * PAGE_MARGIN_MM) * MM_TO_PX);
-export const PRINT_HEIGHT_PX = (297 - 2 * PAGE_MARGIN_MM) * MM_TO_PX;
+// `floor`, not `round`: 170mm is 642.52px, and measuring in a column even half
+// a pixel WIDER than the printed one wraps the name less, so the card measures
+// shorter than it prints. Under-measuring the width over-estimates the height,
+// and over-estimating only costs an emptier page.
+const PRINT_WIDTH_PX = Math.floor((210 - 2 * PAGE_MARGIN_MM) * MM_TO_PX);
+const PRINT_HEIGHT_PX = (297 - 2 * PAGE_MARGIN_MM) * MM_TO_PX;
 
 /**
  * Archive gap #1 — asks the browser how tall each card is instead of
@@ -135,8 +139,13 @@ export const PRINT_HEIGHT_PX = (297 - 2 * PAGE_MARGIN_MM) * MM_TO_PX;
  * overflowing is the bug, a slightly emptier page is not. `chrome` is the
  * product section's own vertical padding, which eats into the page before
  * any card does.
+ *
+ * A miss on the selector must not fail a job that already holds one of
+ * `MAX_QUEUE_DEPTH` slots (`resolveBranding`'s null-not-throw precedent), but
+ * it does degrade the split back to fixed-count chunking — archive gap #1
+ * restored. That is worth a line in the log rather than silence.
  */
-export async function measureCardHeights(page: Page): Promise<{ cardHeights: number[]; chrome: number }> {
+async function measureCardHeights(page: Page): Promise<{ cardHeights: number[]; chrome: number }> {
   return page.evaluate(() => {
     const grid = document.querySelector('[aria-label^="Product page"] > div');
     if (!(grid instanceof HTMLElement) || !grid.parentElement) return { cardHeights: [], chrome: 0 };
@@ -194,6 +203,13 @@ export async function renderPdfBuffer(
       waitUntil: "domcontentloaded",
     });
     const { cardHeights, chrome } = await measureCardHeights(page);
+    // Warned here, in Node — a `console.warn` inside `page.evaluate` goes to
+    // the browser's console, which nothing is listening to.
+    if (cardHeights.length < payload.products.length) {
+      console.warn(
+        `[pdf-generation] measured ${cardHeights.length} of ${payload.products.length} cards for catalog ${payload.catalogId} — unmeasured cards count as 0-tall, so those pages fall back to count-only splitting and may overflow`,
+      );
+    }
 
     const productPages = chunkProducts(payload.products, payload.productsPerPage, cardHeights, PRINT_HEIGHT_PX - chrome);
     await page.setContent(await renderCatalogHtml({ ...props, productPages }), { waitUntil: "load" });

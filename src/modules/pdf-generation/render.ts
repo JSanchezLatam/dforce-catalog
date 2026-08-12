@@ -4,14 +4,11 @@
  * without a browser or a database. `worker.ts` is the only file in this
  * module that imports Playwright.
  */
-import { CatalogTemplate, type CatalogTemplateProps, type ProductPrintRef } from "@/shared/template/CatalogTemplate";
+import { CatalogTemplate, GRID_COLUMNS, type CatalogTemplateProps, type ProductPrintRef } from "@/shared/template/CatalogTemplate";
 import { getTemplate } from "@/shared/template/registry";
 
 /** The `@page` margin below, in mm — `worker.ts` subtracts it from A4 to get the height one printed page can actually hold. Keep the two in sync by importing, never by retyping the number. */
 export const PAGE_MARGIN_MM = 20;
-
-/** `CatalogTemplate`'s product grid is `repeat(2, 1fr)`: the unit that occupies vertical space is a ROW of two cards, and a row is as tall as its taller card. */
-export const GRID_COLUMNS = 2;
 
 /**
  * R6.1/R5.4 — splits the final (post-exclusion) product set into printed pages.
@@ -98,6 +95,10 @@ export function chunkProducts(
  * imports of it.
  */
 export async function renderCatalogHtml(props: CatalogTemplateProps): Promise<string> {
+  // The `.card-*` rules this stylesheet used to carry were dead — `AdaptiveCards`
+  // styles every card inline and no markup has referenced those classes since.
+  // One of them was a second `repeat(2, 1fr)` grid definition: exactly the kind
+  // of quiet duplicate the packing above must not end up measuring against.
   const { renderToStaticMarkup } = await import("react-dom/server");
   const body = renderToStaticMarkup(CatalogTemplate(props));
   return `<!DOCTYPE html>
@@ -110,16 +111,6 @@ export async function renderCatalogHtml(props: CatalogTemplateProps): Promise<st
          so appending another one produced "..., sans-serif, sans-serif". */
       body { font-family: ${props.branding ? getTemplate(props.branding.templateId).font : "sans-serif"}; margin: 0; }
       img { max-width: 100%; }
-      .card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-      .card-fullbleed { break-inside: avoid; display: flex; flex-direction: column; }
-      .card-fullbleed img { width: 100%; height: 180px; object-fit: cover; }
-      .card-polaroid { break-inside: avoid; display: flex; flex-direction: column; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-      .card-polaroid img { width: 100%; height: 160px; object-fit: contain; }
-      .card-placeholder { width: 100%; height: 180px; background: #f3f4f6; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 14px; }
-      .card-label { padding: 0.5rem 0; }
-      .card-label p { margin: 0; }
-      .card-name { font-weight: 600; font-size: 13px; }
-      .card-cat { font-size: 11px; color: #6b7280; }
     </style>
   </head>
   <body>${body}</body>
