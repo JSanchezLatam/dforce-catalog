@@ -1,4 +1,4 @@
-import type { CatalogTemplateDef } from "../registry";
+import type { CatalogTemplateDef } from "../registry-types";
 import { DEFAULT_TEMPLATE_ID } from "../template-ids";
 import { OpaqueProductCard, TransparentProductCard } from "../AdaptiveCards";
 

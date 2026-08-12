@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { templateConfig } from "@/shared/db/schema";
 import { getTemplateConfig, saveTemplateConfig, TemplateConfigValidationError, validateTemplateConfigInput } from "./service";
 
 const validInput = {
@@ -151,12 +152,17 @@ describe("selectedTemplateId persistence (R8.4)", () => {
     expect(onConflictArg.set).toEqual(expect.objectContaining({ selectedTemplateId: "dforce-classic" }));
   });
 
-  it("getTemplateConfig returns whatever row the injected select chain yields", async () => {
+  it("getTemplateConfig queries the template_config table with limit 1 and returns its row", async () => {
     const row = { id: "singleton", selectedTemplateId: "dforce-classic" };
-    const db = { select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([row]) }) }) }) };
+    const limit = vi.fn().mockResolvedValue([row]);
+    const where = vi.fn().mockReturnValue({ limit });
+    const from = vi.fn().mockReturnValue({ where });
+    const db = { select: vi.fn().mockReturnValue({ from }) };
 
     const result = await getTemplateConfig(db as never);
 
+    expect(from).toHaveBeenCalledWith(templateConfig);
+    expect(limit).toHaveBeenCalledWith(1);
     expect(result).toEqual(row);
   });
 });

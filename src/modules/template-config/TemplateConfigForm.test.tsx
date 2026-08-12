@@ -64,7 +64,10 @@ describe("TemplateConfigForm — gallery picker", () => {
     await user.type(container.querySelector("#logoUrl") as HTMLElement, "https://example.com/logo.png");
     await user.type(container.querySelector("#font") as HTMLElement, "Arial, sans-serif");
     await user.type(container.querySelector("#coverText") as HTMLElement, "Catalogo 2026");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    // Queries by type, not the pre-existing "Save" label text — the button
+    // survives WU3 (only the branding inputs are deleted), but nothing
+    // guarantees its English copy does, and this test must not pin it.
+    await user.click(container.querySelector('button[type="submit"]') as HTMLElement);
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(bodyOf(fetchMock).selectedTemplateId).toBe(DEFAULT_TEMPLATE_ID);
