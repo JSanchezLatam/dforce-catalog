@@ -126,6 +126,8 @@ describe("WorkshopConfigForm — contact fields", () => {
       name: "Mi Taller",
       logoR2Key: null,
       logoContentType: null,
+      coverImageR2Key: null,
+      coverImageContentType: null,
       phone: "555-1234",
       whatsapp: null,
       email: "taller@ejemplo.com",
@@ -170,6 +172,8 @@ describe("WorkshopConfigForm — contact fields", () => {
       name: "Mi Taller",
       logoR2Key: null,
       logoContentType: null,
+      coverImageR2Key: null,
+      coverImageContentType: null,
       phone: "555-1234",
       whatsapp: null,
       email: "taller@ejemplo.com",
@@ -200,6 +204,8 @@ describe("WorkshopConfigForm — contact fields", () => {
       name: "Mi Taller",
       logoR2Key: null,
       logoContentType: null,
+      coverImageR2Key: null,
+      coverImageContentType: null,
       phone: "555-1234",
       whatsapp: null,
       email: null,
@@ -228,6 +234,8 @@ describe("WorkshopConfigForm — contact fields", () => {
       name: null,
       logoR2Key: null,
       logoContentType: null,
+      coverImageR2Key: null,
+      coverImageContentType: null,
       phone: null,
       whatsapp: null,
       email: null,
@@ -241,6 +249,28 @@ describe("WorkshopConfigForm — contact fields", () => {
     render(<WorkshopConfigForm initialConfig={initialConfig} />);
 
     expect(screen.getByRole("button", { name: "Agregar red social" })).toBeDisabled();
+  });
+
+  // WU5 (design D6, task 6.6) — the cover-image field is a second
+  // LogoUploadField instance pointed at the cover-image route; it must not
+  // be confused with the logo field.
+  it("renders the cover-image upload field alongside the logo field", () => {
+    render(<WorkshopConfigForm initialConfig={null} />);
+
+    expect(screen.getByLabelText("Logo del taller")).toBeInTheDocument();
+    expect(screen.getByLabelText("Imagen de portada")).toBeInTheDocument();
+  });
+
+  it("uploads a cover image to the dedicated cover-image route, not the logo route", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { key: "covers/1.png" } });
+    render(<WorkshopConfigForm initialConfig={null} />);
+
+    const png = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "cover.png", { type: "image/png" });
+    await user.upload(screen.getByLabelText("Imagen de portada"), png);
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(fetchMock).toHaveBeenCalledWith("/api/workshop-config/cover-image", expect.objectContaining({ method: "POST" }));
   });
 
   it("removes the correct social handle row when a middle row is deleted", async () => {

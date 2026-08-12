@@ -809,3 +809,162 @@ WU4). PR targets `feature/catalog-templates-and-workshop-info` (the
 tracker), not `main`. Cross-cutting task 5.1 (confirm the `template-config`
 delta spec is what `sdd-verify` checks against) is unassigned to this WU and
 left for the tracker-level close-out.
+
+## Phase 5 — WU5: Workshop Contact Block + Cover Image
+
+Added after `sdd-verify` failed the change on a CRITICAL finding (spec's ADDED
+"Workshop Contact Block on Cover" requirement was never implemented — see
+design D6). Branch `catalog-tpl/wu5-contact-block-cover`, cut from the merged
+tracker (WU1–WU4). Implemented all 13 code/test tasks (6.1–6.14); stopped
+before 6.15 (GGA) and opening the PR — see "Budget stop" below.
+
+### What was built
+
+- Migration `0010_workshop_cover_image.sql` (additive only): `workshop_config`
+  gains `coverImageR2Key`/`coverImageContentType`. Generated via
+  `drizzle-kit generate`, applied to the real dev Postgres (5433) and
+  confirmed recorded in `drizzle.__drizzle_migrations` (per the hard
+  constraint about the past session that lost hours to the wrong table).
+- `service.ts`/`service.test.ts` — the two new fields follow the exact same
+  `"field" in parsed` partial-touch discipline as every other column.
+- `api/workshop-config/cover-image/route.ts` (new) — mirrors `logo/route.ts`
+  exactly (GET/POST/DELETE, same admin gating, same `MAX_UPLOAD_BYTES`
+  pre-buffer check, same "don't resend name" partial-touch discipline). A new
+  `ROUTE_GUARDS` entry was required in `route-guards.test.ts` (a pre-existing
+  completeness test caught the missing registration immediately).
+- `LogoUploadField.tsx` parametrized (`label`/`endpoint`/`helpText`, all with
+  defaults matching the pre-WU5 logo behaviour) and reused for the cover-image
+  field in `WorkshopConfigForm.tsx`, instead of a near-duplicate second
+  component.
+- `CatalogTemplate.tsx` — added `WorkshopContact` type; `CatalogTemplateBranding`
+  gained `contact` and `coverImageUrl` (both optional, see deviation below).
+  New cover markup (hero photo w/ multiply blend, black wedge via `clip-path`,
+  red diagonal accent, logo placard, brand name, claim), translated from
+  `Insumos/Templates/Portada_DForce_v1.html`. New contact page (icon-circle
+  rows per set field, social-handle pills iterating `socialHandles` entries
+  generically), translated from `Template_Catalogo.op`'s page "3 · Contacto y
+  redes" — placed LAST in the document, matching that file's own page order
+  (`0 · Portada, 1 · Índice, 2 · Productos, 3 · Contacto y redes`, confirmed
+  by reading the `.op` file's page names rather than assumed).
+- `enqueue.ts`'s `PdfBranding` gained `coverImageR2Key`/`coverImageContentType`/
+  `contact` (optional, same reasoning). `worker.ts`'s `resolveBranding()`
+  extended via a small shared `resolveImageDataUri()` helper (used for both
+  logo and cover image); `contact` passes through verbatim — no R2 read, it is
+  plain text (worker stays a pure function of its payload).
+- `generate/route.ts` assembles `contact`/cover-image fields from
+  `getWorkshopConfig()`. `CatalogBuilderForm.tsx`'s live preview builds the
+  identical branding shape (Risk-5). Both call the new
+  `src/modules/workshop-config/contact.ts`'s `buildWorkshopContact()` — one
+  shared `WorkshopConfig` → `WorkshopContact` mapping instead of two that
+  could drift.
+
+### Deviations from the literal task text
+
+1. **`CatalogTemplateBranding.coverImageUrl` is new, not in design D6's own
+   code block.** D6 lists only `contact` on `CatalogTemplateBranding`, but the
+   renderer cannot show the cover photo without carrying its resolved URL —
+   same http-path(preview)/data-URI(worker) split `logoUrl` already uses. This
+   was an omission in D6 itself (the same class of gap that caused this WU to
+   exist), not a re-interpretation of it.
+2. **`coverImageUrl`/`contact` are optional (`?:`) on both `CatalogTemplateBranding`
+   and `PdfBranding`**, not the design's literal required fields. Making them
+   optional kept every pre-WU5 branding/`PdfBranding` object literal in
+   `render.test.ts`/`worker.test.ts` (pricing, image-handling, font-resolution
+   tests — none of them about the contact block) compiling unchanged instead
+   of needing a mechanical edit across files unrelated to this WU's actual
+   work. The real call sites (`generate/route.ts`, `worker.ts`'s
+   `resolveBranding`, `CatalogBuilderForm.tsx`) always populate both fields.
+3. **`LogoUploadField.tsx` was generalized instead of adding a second
+   component** for task 6.6. Same upload/preview/delete logic either way; one
+   file instead of ~90 duplicated lines, with defaults preserving the pre-WU5
+   logo behaviour exactly (no test needed updating).
+4. **`buildWorkshopContact()` (new file) instead of inlining the mapping
+   twice.** `generate/route.ts` (server) and `CatalogBuilderForm.tsx` (client
+   preview, `"use client"`) both need the identical `WorkshopConfig` →
+   `WorkshopContact` mapping — Risk-5 means they must never drift. The helper
+   is typed structurally (no `@/shared/db` import), matching `limits.ts`'s
+   established "safe for a use-client import" convention.
+
+### Bug found and fixed during the live smoke
+
+The cover section's container background was `black` (matching the fallback
+red/black block), with the hero photo layered on top using
+`mix-blend-mode: multiply` (copied from `Portada_DForce_v1.html`, whose own
+comment says this "melts the photo's white background into the page"). That
+trick only works against a **white** page — multiplying any colour with black
+is always black, so the uploaded photo was completely invisible in the first
+smoke render. Fixed by making the container background white only when a
+cover photo is actually set; the black/red fallback (hard constraint #4) is
+unchanged when it is not. Re-ran the smoke after the fix and confirmed the
+photo renders correctly (see below). Caught by literally looking at the
+rendered PDF — the unit tests (which only assert the `<img>` element and its
+`src` are present, correctly, per task 6.8) could not have caught a blend-mode
+visibility bug; this is exactly why the live smoke is a required, not
+optional, step.
+
+### Live smoke (task 6.14, required — both states)
+
+Ran a throwaway `src/e2e/wu5-smoke.e2e.test.ts` (`vitest.e2e.config.ts`,
+`node --env-file=.env`) against the real dev Postgres (already migrated
+through `0010`), the real R2 bucket, and a real Playwright Chromium render via
+`renderPdfBuffer` directly. The pre-existing dev `workshop_config` row (real
+hand-entered data from earlier sessions: name "DForce Car Audio" + a real
+logo) was snapshotted in `beforeAll` and restored exactly in `afterAll` — this
+script must not leave the dev DB mutated. Script and both generated PDFs
+deleted after the run, not part of the PR.
+
+- **State 1 (every field set + 2 social handles + a real cover image).** Used
+  `Insumos/Templates/DFORCE CAR AUDIO.png` as the logo and the repo's existing
+  `portada.png` as the cover photo (both real, already-present image assets —
+  not synthesized). Rendered PDF, page 1 (cover): the car photo renders
+  correctly behind the black wedge and red diagonal accent, logo placard
+  top-left, "Dforce Car Audio" brand name and the cover-text claim bottom-left,
+  "Catálogo: Audio" title bottom-right — matches
+  `Portada_DForce_v1.html`'s layout. Page 3 (contact, last page, after the one
+  product page): logo + brand name centered, all six rows present (TELÉFONO,
+  WHATSAPP, CORREO, DIRECCIÓN, HORARIO, SITIO WEB) each with a red icon circle
+  and the correct value, "SEGUINOS EN REDES" heading with two pills
+  (`instagram: @dforcecaraudio`, `facebook: @dforcecaraudio`) — matches
+  `Template_Catalogo.op` page "3 · Contacto y redes"'s layout. (Note: the
+  `portada.png` fixture itself has a pre-existing grey rectangle baked into
+  its right edge from an earlier, unrelated dev session — visible in the
+  rendered cover but not a defect in this WU's rendering code, confirmed by
+  inspecting the source PNG directly.)
+- **State 2 (half the fields unset, cover image removed).** Cleared
+  `whatsapp`/`address`/`website`/`socialHandles`/`coverImageR2Key`/
+  `coverImageContentType`, re-rendered. Cover: degraded cleanly to the plain
+  red/black block (no `<img>`, no empty gap, no broken image). Contact page:
+  only TELÉFONO, CORREO, and HORARIO rows remain — WHATSAPP, DIRECCIÓN, SITIO
+  WEB, and the entire "SEGUINOS EN REDES" section are omitted outright, no
+  empty labels or empty rows left behind.
+
+Both states confirmed the spec's "omitted, never an empty label" requirement
+and hard constraint #4's cover-image fallback, visually, not just via unit
+assertions.
+
+### Budget stop
+
+`git diff --cached --stat FETCH_HEAD -- . ':!src/shared/db/migrations/meta/0010_snapshot.json'`
+(FETCH_HEAD = `origin/feature/catalog-templates-and-workshop-info`, excluding
+the auto-generated migration snapshot per the same convention WU3 used):
+**920 insertions + 34 deletions = 954** real changed lines — well past the
+700-line ledger cap. New code breaks down roughly as: `CatalogTemplate.tsx`
++172 (cover/contact markup + types), `cover-image/route.test.ts` +173 (new,
+mirrors `logo/route.test.ts`), `cover-image/route.ts` +100 (new, mirrors
+`logo/route.ts`), `render.test.ts` +110, `worker.test.ts` +77,
+`generate/route.test.ts` +61, `LogoUploadField.tsx` +48 (net, parametrization),
+`worker.ts` +34, `contact.ts` +35 (new), `service.test.ts` +40,
+`WorkshopConfigForm.test.tsx` +30, `service.ts` +17, `enqueue.ts` +14,
+`schema.ts` +9, `generate/route.ts`/`CatalogBuilderForm.tsx`/
+`route-guards.test.ts` small additions each. The overrun is driven by
+mirroring an entire second upload route (route + test, ~273 lines) plus
+substantial new render markup and its tests — not scope creep beyond the
+assigned 6.1–6.14 task list.
+
+Per the explicit instruction not to self-grant a size exception (same
+discipline WU3 followed at 797/500 lines), task 6.15's GGA review and
+PR-opening were **NOT run**. All 13 code/test tasks (6.1–6.14) are done and
+verified: `npm test` 789/789, `npx tsc --noEmit` clean, `npm run lint` 0
+errors, both required live-smoke states passed and are documented above.
+Work committed locally on `catalog-tpl/wu5-contact-block-cover`, not pushed,
+no PR opened — stopped here to report the overrun rather than push through.

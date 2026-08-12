@@ -73,7 +73,22 @@ export async function handoffPdfBuffer(catalogId: string, buffer: Buffer): Promi
  * `<img>`. Extracted as its own injectable-dep function (this repo's
  * standing `deps?.thing ?? real` seam) so this — the actual crux of this work
  * unit — gets real unit coverage without mocking Playwright's Chromium.
+ *
+ * WU5 (design D6) reuses the exact same seam for `coverImageR2Key` — one
+ * more R2 read before `renderCatalogHtml`, same null-not-throw contract.
+ * `contact` needs no R2 read at all (plain text) and travels through as-is.
  */
+async function resolveImageDataUri(
+  key: string | null | undefined,
+  contentType: string | null | undefined,
+  fetchObject: typeof getObject,
+): Promise<string | null> {
+  if (!key) return null;
+  const buffer = await fetchObject(key);
+  if (!buffer) return null;
+  return `data:${contentType ?? "image/png"};base64,${buffer.toString("base64")}`;
+}
+
 export async function resolveBranding(
   branding: PdfBranding | null,
   deps: { getObject?: typeof getObject } = {},
@@ -81,15 +96,18 @@ export async function resolveBranding(
   if (!branding) return null;
   const fetchObject = deps.getObject ?? getObject;
 
-  let logoUrl: string | null = null;
-  if (branding.logoR2Key) {
-    const buffer = await fetchObject(branding.logoR2Key);
-    if (buffer) {
-      logoUrl = `data:${branding.logoContentType ?? "image/png"};base64,${buffer.toString("base64")}`;
-    }
-  }
+  const [logoUrl, coverImageUrl] = await Promise.all([
+    resolveImageDataUri(branding.logoR2Key, branding.logoContentType, fetchObject),
+    resolveImageDataUri(branding.coverImageR2Key, branding.coverImageContentType, fetchObject),
+  ]);
 
-  return { templateId: branding.templateId, logoUrl, coverText: branding.coverText };
+  return {
+    templateId: branding.templateId,
+    logoUrl,
+    coverImageUrl,
+    coverText: branding.coverText,
+    contact: branding.contact ?? null,
+  };
 }
 
 /**

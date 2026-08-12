@@ -217,6 +217,46 @@ describe("saveWorkshopConfig", () => {
     expect(onConflictArg.set).not.toHaveProperty("socialHandles");
   });
 
+  // WU5 (design D6) — coverImageR2Key/coverImageContentType follow the exact
+  // same partial-touch discipline as logoR2Key/logoContentType above.
+  it("persists coverImageR2Key and coverImageContentType on both the insert values and the onConflictDoUpdate set clause", async () => {
+    const row = { id: "singleton", name: "Taller", coverImageR2Key: "covers/abc.jpg", coverImageContentType: "image/jpeg", updatedAt: new Date() };
+    const onConflictDoUpdate = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([row]) });
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    const db = { insert: vi.fn().mockReturnValue({ values } as never) } as never;
+
+    await saveWorkshopConfig({ name: "Taller", coverImageR2Key: "covers/abc.jpg", coverImageContentType: "image/jpeg" }, db);
+
+    expect(values).toHaveBeenCalledWith(expect.objectContaining({ coverImageR2Key: "covers/abc.jpg", coverImageContentType: "image/jpeg" }));
+    const onConflictArg = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
+    expect(onConflictArg.set).toEqual(expect.objectContaining({ coverImageR2Key: "covers/abc.jpg", coverImageContentType: "image/jpeg" }));
+  });
+
+  it("does NOT include coverImageR2Key/coverImageContentType in the update set when saving name only, so an existing cover image is never clobbered", async () => {
+    const row = { id: "singleton", name: "Taller Nuevo", coverImageR2Key: "covers/existing.jpg", coverImageContentType: "image/jpeg", updatedAt: new Date() };
+    const onConflictDoUpdate = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([row]) });
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    const db = { insert: vi.fn().mockReturnValue({ values } as never) } as never;
+
+    await saveWorkshopConfig({ name: "Taller Nuevo" }, db);
+
+    const onConflictArg = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
+    expect(onConflictArg.set).not.toHaveProperty("coverImageR2Key");
+    expect(onConflictArg.set).not.toHaveProperty("coverImageContentType");
+  });
+
+  it("explicitly clears coverImageR2Key/coverImageContentType when null is passed (DELETE flow)", async () => {
+    const row = { id: "singleton", name: "Taller", coverImageR2Key: null, coverImageContentType: null, updatedAt: new Date() };
+    const onConflictDoUpdate = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([row]) });
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    const db = { insert: vi.fn().mockReturnValue({ values } as never) } as never;
+
+    await saveWorkshopConfig({ name: "Taller", coverImageR2Key: null, coverImageContentType: null }, db);
+
+    const onConflictArg = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
+    expect(onConflictArg.set).toEqual(expect.objectContaining({ coverImageR2Key: null, coverImageContentType: null }));
+  });
+
   it("does not touch name when a partial update omits it, so the workshop name survives a phone-only save", async () => {
     const row = { id: "singleton", name: "Taller Existente", phone: "555-1234", updatedAt: new Date() };
     const onConflictDoUpdate = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([row]) });

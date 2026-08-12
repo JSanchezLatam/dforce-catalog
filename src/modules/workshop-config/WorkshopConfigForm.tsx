@@ -52,6 +52,8 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
   const [name, setName] = useState(initialConfig?.name ?? "");
   const [logoKey, setLogoKey] = useState<string | null>(initialConfig?.logoR2Key ?? null);
   const [logoType, setLogoType] = useState<string | null>(initialConfig?.logoContentType ?? null);
+  const [coverImageKey, setCoverImageKey] = useState<string | null>(initialConfig?.coverImageR2Key ?? null);
+  const [coverImageType, setCoverImageType] = useState<string | null>(initialConfig?.coverImageContentType ?? null);
   const [phone, setPhone] = useState(initialConfig?.phone ?? "");
   const [whatsapp, setWhatsapp] = useState(initialConfig?.whatsapp ?? "");
   const [email, setEmail] = useState(initialConfig?.email ?? "");
@@ -141,6 +143,14 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
       <CardContent>
         <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           <LogoUploadField currentKey={logoKey} currentType={logoType} onUpdate={(k, t) => { setLogoKey(k); setLogoType(t); }} />
+          <LogoUploadField
+            currentKey={coverImageKey}
+            currentType={coverImageType}
+            onUpdate={(k, t) => { setCoverImageKey(k); setCoverImageType(t); }}
+            label="Imagen de portada"
+            endpoint="/api/workshop-config/cover-image"
+            helpText="La foto de portada se guarda inmediatamente al subirla. Formatos: PNG, JPEG, WebP o SVG (máx. 2MB, SVG: 512KB)."
+          />
 
           <div className="grid gap-2">
             <Label htmlFor="name">Nombre del taller</Label>

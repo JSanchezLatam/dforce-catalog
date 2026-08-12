@@ -220,7 +220,17 @@ describe("POST — branding assembly (design D2/D3)", () => {
 
     expect(mockEnqueue).toHaveBeenCalledWith(
       expect.objectContaining({
-        branding: { templateId: "dforce-classic", logoR2Key: "logos/1.png", logoContentType: "image/png", coverText: "Bienvenido" },
+        branding: {
+          templateId: "dforce-classic",
+          logoR2Key: "logos/1.png",
+          logoContentType: "image/png",
+          coverText: "Bienvenido",
+          coverImageR2Key: null,
+          coverImageContentType: null,
+          contact: {
+            name: null, phone: null, whatsapp: null, email: null, address: null, hours: null, website: null, socialHandles: null,
+          },
+        },
       }),
     );
   });
@@ -233,7 +243,15 @@ describe("POST — branding assembly (design D2/D3)", () => {
 
     expect(mockEnqueue).toHaveBeenCalledWith(
       expect.objectContaining({
-        branding: { templateId: DEFAULT_TEMPLATE_ID, logoR2Key: null, logoContentType: null, coverText: null },
+        branding: {
+          templateId: DEFAULT_TEMPLATE_ID,
+          logoR2Key: null,
+          logoContentType: null,
+          coverText: null,
+          coverImageR2Key: null,
+          coverImageContentType: null,
+          contact: null,
+        },
       }),
     );
   });
@@ -250,8 +268,45 @@ describe("POST — branding assembly (design D2/D3)", () => {
     expect(res.status).toBe(200);
     expect(mockEnqueue).toHaveBeenCalledWith(
       expect.objectContaining({
-        branding: { templateId: DEFAULT_TEMPLATE_ID, logoR2Key: null, logoContentType: null, coverText: null },
+        branding: expect.objectContaining({ templateId: DEFAULT_TEMPLATE_ID, logoR2Key: null, logoContentType: null, coverText: null }),
       }),
     );
+  });
+
+  // WU5 (design D6, task 6.12) — the cover-image fields and the contact
+  // block travel in PdfBranding the same way logo/coverText already do.
+  it("carries the cover-image fields and every contact column from getWorkshopConfig()", async () => {
+    mockGetTemplateConfig.mockResolvedValue({ selectedTemplateId: "dforce-classic" });
+    mockGetWorkshopConfig.mockResolvedValue({
+      name: "Dforce Car Audio",
+      logoR2Key: null,
+      logoContentType: null,
+      coverText: null,
+      coverImageR2Key: "covers/1.jpg",
+      coverImageContentType: "image/jpeg",
+      phone: "555-1234",
+      whatsapp: null,
+      email: "taller@ejemplo.com",
+      address: null,
+      hours: null,
+      website: null,
+      socialHandles: { instagram: "@taller" },
+    });
+
+    await POST(generateRequest());
+
+    const branding = mockEnqueue.mock.calls[0][0].branding;
+    expect(branding.coverImageR2Key).toBe("covers/1.jpg");
+    expect(branding.coverImageContentType).toBe("image/jpeg");
+    expect(branding.contact).toEqual({
+      name: "Dforce Car Audio",
+      phone: "555-1234",
+      whatsapp: null,
+      email: "taller@ejemplo.com",
+      address: null,
+      hours: null,
+      website: null,
+      socialHandles: { instagram: "@taller" },
+    });
   });
 });

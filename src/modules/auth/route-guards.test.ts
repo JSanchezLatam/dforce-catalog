@@ -28,6 +28,7 @@ export const ROUTE_GUARDS: Record<string, Partial<Record<"GET" | "POST" | "PATCH
   "/api/template-config": { GET: "template.edit", POST: "template.edit" },
   "/api/workshop-config": { GET: "workshop.read", POST: "workshop.edit" },
   "/api/workshop-config/logo": { GET: "workshop.read", POST: "workshop.edit", DELETE: "workshop.edit" },
+  "/api/workshop-config/cover-image": { GET: "workshop.read", POST: "workshop.edit", DELETE: "workshop.edit" },
   "/api/catalog-builder/products": { POST: "catalogs.read" },
   "/api/catalog-builder/generate": { POST: "catalogs.generate" },
   "/api/catalog-builder/queue-depth": { GET: "catalogs.read" },
