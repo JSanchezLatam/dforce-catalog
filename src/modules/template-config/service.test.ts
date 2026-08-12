@@ -92,6 +92,11 @@ describe("selectedTemplateId validation (R8.1/R8.4 — additive, unwired until W
     expect(result.selectedTemplateId).toBeNull();
   });
 
+  it("defaults to null for an id not in the registry, instead of persisting it verbatim", () => {
+    const result = validateTemplateConfigInput({ ...validInput, selectedTemplateId: "not-a-real-template" });
+    expect(result.selectedTemplateId).toBeNull();
+  });
+
   it("still rejects a missing logoUrl even when selectedTemplateId is present (columns are NOT NULL until migration 0009)", () => {
     expect(() =>
       validateTemplateConfigInput({ ...validInput, selectedTemplateId: "dforce-classic", logoUrl: "" }),

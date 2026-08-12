@@ -41,22 +41,25 @@ describe("TemplateConfigForm — gallery picker", () => {
     expect(screen.getAllByRole("radio")).toHaveLength(1);
   });
 
+  // Queries by id, not label text: the legacy branding inputs' English copy
+  // is pre-existing and out of WU2's scope (WU3 deletes the inputs entirely
+  // per task 3.12) — these tests must not pin that copy in place.
   it("still renders the legacy branding inputs (columns stay NOT NULL until WU3's migration 0009)", () => {
-    render(<TemplateConfigForm initialConfig={null} />);
+    const { container } = render(<TemplateConfigForm initialConfig={null} />);
 
-    expect(screen.getByLabelText("Logo URL")).toBeInTheDocument();
-    expect(screen.getByLabelText("Typography")).toBeInTheDocument();
+    expect(container.querySelector("#logoUrl")).toBeInTheDocument();
+    expect(container.querySelector("#font")).toBeInTheDocument();
   });
 
   it("submits the selected template id alongside the existing branding fields", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({ status: 200, body: { config: { id: "singleton" } } });
-    render(<TemplateConfigForm initialConfig={null} />);
+    const { container } = render(<TemplateConfigForm initialConfig={null} />);
 
-    await user.type(screen.getByLabelText("Logo URL"), "https://example.com/logo.png");
-    await user.type(screen.getByLabelText("Typography"), "Arial, sans-serif");
-    await user.type(screen.getByLabelText("Cover text"), "Catalogo 2026");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.type(container.querySelector("#logoUrl") as HTMLElement, "https://example.com/logo.png");
+    await user.type(container.querySelector("#font") as HTMLElement, "Arial, sans-serif");
+    await user.type(container.querySelector("#coverText") as HTMLElement, "Catalogo 2026");
+    await user.click(screen.getByRole("button") as HTMLElement);
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(bodyOf(fetchMock).selectedTemplateId).toBe(DEFAULT_TEMPLATE_ID);

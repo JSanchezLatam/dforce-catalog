@@ -115,7 +115,23 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
                     checked={form.selectedTemplateId === template.id}
                     onChange={() => update("selectedTemplateId", template.id)}
                   />
-                  <img src={template.thumbnail} alt={template.name} style={{ width: 96, height: 124, objectFit: "cover" }} />
+                  {/*
+                    A real thumbnail asset (`template.thumbnail`, e.g.
+                    "/templates/dforce-classic.png") does not exist yet — no
+                    design tool produced one for this PR. A swatch avoids
+                    shipping a broken <img>; swap it for a real thumbnail
+                    once one exists.
+                  */}
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      width: 96,
+                      height: 124,
+                      background: template.primaryColors.secondary,
+                      border: `2px solid ${template.primaryColors.primary}`,
+                      borderRadius: 4,
+                    }}
+                  />
                   <span className="text-sm">{template.name}</span>
                 </label>
               ))}

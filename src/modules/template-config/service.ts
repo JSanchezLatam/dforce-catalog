@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 
 import { db as defaultDb } from "@/shared/db/client";
 import { templateConfig, type TemplateConfig } from "@/shared/db/schema";
+import { CATALOG_TEMPLATES } from "@/shared/template/registry";
 
 const SINGLETON_ID = "singleton";
 
@@ -79,8 +80,15 @@ export function validateTemplateConfigInput(input: unknown): TemplateConfigInput
   const rawHandling = (value as Record<string, unknown>).defaultImageHandling;
   const defaultImageHandling = rawHandling === "strict" || rawHandling === "adaptive" ? rawHandling : null;
 
+  // Unknown-but-valid-shape ids fall back to null (→ getTemplate(null) →
+  // the default) rather than an error: R8.4's "orphaned id falls back"
+  // scenario also covers a stale client posting an id a registry edit
+  // removed, not just a corrupted DB row.
   const rawTemplateId = value.selectedTemplateId;
-  const selectedTemplateId = typeof rawTemplateId === "string" ? rawTemplateId : null;
+  const selectedTemplateId =
+    typeof rawTemplateId === "string" && CATALOG_TEMPLATES.some((template) => template.id === rawTemplateId)
+      ? rawTemplateId
+      : null;
 
   if (Object.keys(errors).length > 0) {
     throw new TemplateConfigValidationError(errors);
