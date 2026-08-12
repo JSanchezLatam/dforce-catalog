@@ -216,7 +216,147 @@ describe("renderCatalogHtml — product prices", () => {
     expect(html).not.toContain("$0.00");
     expect(html).toContain("Taller: $100.00");
   });
+});
 
+/**
+ * catalog-templates-and-workshop-info WU5 (design D6, spec: "Workshop
+ * Contact Block on Cover") — closes the CRITICAL sdd-verify finding: the
+ * contact columns and the cover image WU1/WU5 store had no render path.
+ * Tested through `renderCatalogHtml` (not a separate `CatalogTemplate.test.tsx`),
+ * same precedent as WU3's task 3.1 — `CatalogTemplate` is a plain function
+ * component already exercised here via `renderToStaticMarkup`.
+ */
+describe("renderCatalogHtml — workshop contact page (design D6)", () => {
+  const fullContact = {
+    name: "Dforce Car Audio",
+    phone: "+507 6123-4567",
+    whatsapp: "+507 6987-6543",
+    email: "ventas@dforcecaraudio.com",
+    address: "Vía España, Local 12",
+    hours: "Lunes a sábado · 8:00 a 18:00",
+    website: "www.dforcecaraudio.com",
+    socialHandles: { instagram: "@dforcecaraudio", facebook: "@dforcecaraudio" },
+  };
+
+  it("renders every set contact field", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: { templateId: "dforce-classic", logoUrl: null, coverText: null, contact: fullContact },
+      sections: [],
+    });
+
+    expect(html).toContain("+507 6123-4567");
+    expect(html).toContain("+507 6987-6543");
+    expect(html).toContain("ventas@dforcecaraudio.com");
+    expect(html).toContain("Vía España, Local 12");
+    expect(html).toContain("Lunes a sábado · 8:00 a 18:00");
+    expect(html).toContain("www.dforcecaraudio.com");
+    expect(html).toContain("Dforce Car Audio");
+  });
+
+  // spec, verbatim: "A field left unset by the Administrador MUST simply be
+  // omitted from the block, never rendered as an empty label."
+  it("omits the label entirely for an unset field, never an empty label", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: {
+        templateId: "dforce-classic",
+        logoUrl: null,
+        coverText: null,
+        contact: { ...fullContact, whatsapp: null, address: null, website: null, socialHandles: null },
+      },
+      sections: [],
+    });
+
+    expect(html).toContain("+507 6123-4567");
+    expect(html).not.toContain("WHATSAPP");
+    expect(html).not.toContain("DIRECCIÓN");
+    expect(html).not.toContain("SITIO WEB");
+    expect(html).not.toContain("SEGUINOS EN REDES");
+  });
+
+  it("iterates socialHandles entries generically, never hardcoding a platform name", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: {
+        templateId: "dforce-classic",
+        logoUrl: null,
+        coverText: null,
+        contact: { ...fullContact, socialHandles: { unKnownPlatform: "@handle" } },
+      },
+      sections: [],
+    });
+
+    expect(html).toContain("unKnownPlatform");
+    expect(html).toContain("@handle");
+  });
+
+  /**
+   * `workshop_config` is a singleton row that WU1's migration guarantees
+   * exists, so `buildWorkshopContact` returns an OBJECT OF NULLS — never
+   * `null` — for a workshop that simply has not filled contact info in yet.
+   * Guarding on `contact != null` alone therefore appended a blank black page
+   * to every catalog from such a workshop.
+   */
+  it("renders no contact page when every contact field is null, not a blank page", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      sections: [],
+      branding: {
+        templateId: "dforce-classic",
+        logoUrl: null,
+        coverText: null,
+        contact: {
+          name: null,
+          phone: null,
+          whatsapp: null,
+          email: null,
+          address: null,
+          hours: null,
+          website: null,
+          socialHandles: null,
+        },
+      },
+    });
+    expect(html).not.toContain('aria-label="Contact"');
+  });
+
+  it("renders no contact page at all when contact is null, not an empty one", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: { templateId: "dforce-classic", logoUrl: null, coverText: null, contact: null },
+      sections: [],
+    });
+
+    expect(html).not.toContain("SEGUINOS EN REDES");
+    expect(html).not.toContain("TELÉFONO");
+  });
+
+  it("renders the cover image when coverImageUrl is set", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: { templateId: "dforce-classic", logoUrl: null, coverText: null, coverImageUrl: "data:image/jpeg;base64,Zm9v" },
+      sections: [],
+    });
+
+    expect(html).toContain("data:image/jpeg;base64,Zm9v");
+  });
+
+  // Hard constraint #4 — a missing cover image degrades to the template's
+  // red/black block; never a broken <img>, never an empty page.
+  it("renders no <img> for the cover photo when coverImageUrl is null, degrading to the red/black block", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: { templateId: "dforce-classic", logoUrl: null, coverText: null, coverImageUrl: null },
+      sections: [],
+    });
+
+    expect(html).toContain('aria-label="Cover"');
+    expect(html).not.toMatch(/<img[^>]*alt=""/);
+  });
+});
+
+describe("renderCatalogHtml — product prices", () => {
   it("prints the prices on the transparent card too, not just the framed one", async () => {
     const html = await renderCatalogHtml({
       title: "C",

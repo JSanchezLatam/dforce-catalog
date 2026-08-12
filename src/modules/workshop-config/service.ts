@@ -39,6 +39,9 @@ export type WorkshopConfigInput = {
   coverText?: string | null;
   /** Open-ended platform → handle map — a new platform needs no schema change. */
   socialHandles?: Record<string, string> | null;
+  /** WU5 (design D6) — catalog cover photo, same key/content-type pair discipline as logoR2Key/logoContentType. */
+  coverImageR2Key?: string | null;
+  coverImageContentType?: string | null;
 };
 
 export class WorkshopConfigValidationError extends Error {
@@ -162,6 +165,12 @@ export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput
   if ("logoContentType" in value) {
     result.logoContentType = value.logoContentType === null ? null : String(value.logoContentType);
   }
+  if ("coverImageR2Key" in value) {
+    result.coverImageR2Key = value.coverImageR2Key === null ? null : String(value.coverImageR2Key);
+  }
+  if ("coverImageContentType" in value) {
+    result.coverImageContentType = value.coverImageContentType === null ? null : String(value.coverImageContentType);
+  }
   if (phone !== undefined) result.phone = phone;
   if (whatsapp !== undefined) result.whatsapp = whatsapp;
   if (email !== undefined) result.email = email;
@@ -204,6 +213,14 @@ export async function saveWorkshopConfig(
   if ("logoContentType" in parsed) {
     insertValues.logoContentType = parsed.logoContentType ?? null;
     updateSet.logoContentType = parsed.logoContentType ?? null;
+  }
+  if ("coverImageR2Key" in parsed) {
+    insertValues.coverImageR2Key = parsed.coverImageR2Key ?? null;
+    updateSet.coverImageR2Key = parsed.coverImageR2Key ?? null;
+  }
+  if ("coverImageContentType" in parsed) {
+    insertValues.coverImageContentType = parsed.coverImageContentType ?? null;
+    updateSet.coverImageContentType = parsed.coverImageContentType ?? null;
   }
   if ("phone" in parsed) {
     insertValues.phone = parsed.phone ?? null;

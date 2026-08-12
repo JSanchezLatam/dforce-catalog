@@ -5,6 +5,7 @@ import { CheckIcon, Search } from "lucide-react";
 
 import { CatalogTemplate } from "@/shared/template/CatalogTemplate";
 import { getTemplate } from "@/shared/template/registry";
+import { buildWorkshopContact } from "@/modules/workshop-config/contact";
 import type { TemplateConfig, WorkshopConfig } from "@/shared/db/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -555,6 +556,12 @@ export function CatalogBuilderForm({
                   // broken one (matches the worker's per-key null handling).
                   logoUrl: workshopConfig?.logoR2Key ? "/api/workshop-config/logo" : null,
                   coverText: workshopConfig?.coverText ?? null,
+                  // WU5 (design D6) — same gating as logoUrl above, mirrors
+                  // the cover-image route; buildWorkshopContact is the one
+                  // shared mapping generate/route.ts also uses (Risk-5: the
+                  // preview must show the same contact block the PDF does).
+                  coverImageUrl: workshopConfig?.coverImageR2Key ? "/api/workshop-config/cover-image" : null,
+                  contact: buildWorkshopContact(workshopConfig ?? null),
                 }}
               />
             </div>

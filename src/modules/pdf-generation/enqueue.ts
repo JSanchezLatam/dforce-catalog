@@ -17,7 +17,7 @@ import { sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { getBoss } from "@/shared/jobs/boss";
-import type { CatalogIndexSection, ProductPrintRef } from "@/shared/template/CatalogTemplate";
+import type { CatalogIndexSection, ProductPrintRef, WorkshopContact } from "@/shared/template/CatalogTemplate";
 
 export const PDF_GENERATE_JOB = "pdf-generate";
 export const PDF_UPLOAD_JOB = "pdf-upload";
@@ -41,6 +41,18 @@ export type PdfBranding = {
   logoR2Key: string | null;
   logoContentType: string | null;
   coverText: string | null;
+  /**
+   * WU5 (design D6) — same R2-key pair as `logoR2Key`/`logoContentType`,
+   * resolved into a `data:` URI by `worker.ts`'s `resolveBranding` (same
+   * server-side R2 read WU3 built for the logo — Playwright cannot
+   * authenticate against the session-gated cover-image route). `contact`
+   * travels verbatim — no R2 read, it is plain text. Both optional (not
+   * `design.md`'s literal required fields) so the pre-WU5 `worker.test.ts`
+   * literals keep compiling unchanged.
+   */
+  coverImageR2Key?: string | null;
+  coverImageContentType?: string | null;
+  contact?: WorkshopContact | null;
 };
 
 export type PdfGeneratePayload = {

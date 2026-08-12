@@ -64,27 +64,42 @@ that single tier had no usable price.)
 
 ## ADDED Requirements
 
-### Requirement: Workshop Contact Block on Cover
+### Requirement: Workshop Contact Block
 
 THE PDF_Generator SHALL render the workshop's contact information — phone,
 WhatsApp, email, address, hours (single free-text field), website, and any
-configured social handles — on the catalog cover, sourced from
-`workshop_config`. A field left unset by the Administrador MUST simply be
-omitted from the block, never rendered as an empty label.
+configured social handles — on a dedicated contact page at the end of the
+catalog, sourced from `workshop_config`. A field left unset by the
+Administrador MUST simply be omitted from the block, never rendered as an
+empty label.
+
+(This requirement originally read "on Cover". Corrected during WU5: six
+contact rows plus the social pills do not fit on a cover that already carries
+a hero photo, the logo plate and the diagonal cut, and the owner-approved
+layout — `Insumos/Templates/Template_Catalogo.op`, page `3 · Contacto y
+redes` — puts them on their own page. The spec text predated that layout, so
+the spec was the stale artifact, not the code.)
 
 #### Scenario: Full contact info
 
 - GIVEN `workshop_config` has phone, email, and two social handles set
-- WHEN a catalog cover renders
-- THEN all three MUST appear on the cover, plus any other set fields
+- WHEN the catalog's contact page renders
+- THEN all three MUST appear, plus any other set fields
 
 #### Scenario: Partial contact info
 
 - GIVEN `workshop_config` has only `phone` set (all other contact fields
   null)
-- WHEN a catalog cover renders
+- WHEN the catalog's contact page renders
 - THEN only the phone line MUST appear; no empty placeholders for the
   unset fields
+
+#### Scenario: No contact information at all
+
+- GIVEN every contact field and `socialHandles` are null
+- WHEN the catalog renders
+- THEN no contact page MUST be produced at all, rather than a page of
+  empty labels
 
 #### Scenario: Logo matches the live preview
 

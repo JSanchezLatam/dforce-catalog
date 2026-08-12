@@ -9,6 +9,7 @@ import { enqueueCatalogPdf, QueueFullError } from "@/modules/pdf-generation/enqu
 import { getQueuePosition } from "@/modules/pdf-generation/position";
 import { getTemplateConfig } from "@/modules/template-config/service";
 import { getWorkshopConfig } from "@/modules/workshop-config/service";
+import { buildWorkshopContact } from "@/modules/workshop-config/contact";
 import { getTemplate } from "@/shared/template/registry";
 import type { CatalogIndexSection, ProductPrices, ProductPrintRef } from "@/shared/template/CatalogTemplate";
 
@@ -150,6 +151,12 @@ export async function POST(request: NextRequest) {
         logoR2Key: workshop?.logoR2Key ?? null,
         logoContentType: workshop?.logoContentType ?? null,
         coverText: workshop?.coverText ?? null,
+        // WU5 (design D6) — same optional-in-a-non-null-row nullability as
+        // the fields above; `buildWorkshopContact` is the one shared mapping
+        // this route and the builder's live preview both use (Risk-5).
+        coverImageR2Key: workshop?.coverImageR2Key ?? null,
+        coverImageContentType: workshop?.coverImageContentType ?? null,
+        contact: buildWorkshopContact(workshop ?? null),
       },
       sections: body.sections,
       products: body.products,

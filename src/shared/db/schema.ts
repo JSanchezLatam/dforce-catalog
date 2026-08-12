@@ -68,6 +68,15 @@ export const workshopConfig = pgTable("workshop_config", {
   coverText: text("cover_text"),
   /** Open-ended platform → handle map (e.g. `{instagram: "@..."}`) — a new platform needs no migration. */
   socialHandles: jsonb("social_handles").$type<Record<string, string>>(),
+  /**
+   * Catalog cover photo (catalog-templates-and-workshop-info WU5, design D6)
+   * — same R2-key + content-type pair as `logoR2Key`/`logoContentType`,
+   * uploaded through the same route pattern (`api/workshop-config/cover-image/
+   * route.ts`, mirrors `logo/route.ts`). Null renders no cover photo — the
+   * cover degrades to the template's red/black block, never a broken `<img>`.
+   */
+  coverImageR2Key: text("cover_image_r2_key"),
+  coverImageContentType: text("cover_image_content_type"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
