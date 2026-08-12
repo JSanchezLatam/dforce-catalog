@@ -17,7 +17,7 @@ export function TreeSelect({
   items,
   selected,
   onSelectionChange,
-  placeholder = "Select categories...",
+  placeholder = "Seleccioná categorías...",
 }: {
   items: TreeItem[];
   selected: string[];
@@ -30,21 +30,25 @@ export function TreeSelect({
   const containerRef = useRef<HTMLDivElement>(null);
   const id = useId();
 
-  useEffect(() => {
-    if (!open) {
-      setSearchQuery("");
-      setExpanded(new Set());
-    }
-  }, [open]);
+  /**
+   * Closing IS discarding the transient search and expansion — one action, so
+   * one function. It used to be an effect watching `open` go false, which ran
+   * a render late and fired on the initial mount too.
+   */
+  function close() {
+    setOpen(false);
+    setSearchQuery("");
+    setExpanded(new Set());
+  }
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
+        close();
       }
     }
     function handleEscape(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") close();
     }
     if (open) {
       document.addEventListener("mousedown", handleClickOutside);
@@ -131,7 +135,7 @@ export function TreeSelect({
     <div ref={containerRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={() => (open ? close() : setOpen(true))}
         className={cn(
           "flex h-9 w-full items-center justify-between rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-xs",
           "focus-visible:outline-hidden focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-ring",
@@ -141,7 +145,7 @@ export function TreeSelect({
       >
         <span className={cn(selectedCount === 0 && "text-muted-foreground")}>
           {selectedCount > 0
-            ? `${selectedCount} categor${selectedCount === 1 ? "y" : "ies"} selected`
+            ? `${selectedCount} categoría${selectedCount === 1 ? "" : "s"} seleccionada${selectedCount === 1 ? "" : "s"}`
             : placeholder}
         </span>
         <svg
@@ -163,7 +167,7 @@ export function TreeSelect({
           <div className="border-b border-border p-2">
             <Input
               type="search"
-              placeholder="Search categories..."
+              placeholder="Buscar categorías..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="h-8 text-xs"
@@ -191,7 +195,7 @@ export function TreeSelect({
                           type="button"
                           onClick={() => toggleCollapse(item.value)}
                           className="flex size-5 shrink-0 items-center justify-center rounded hover:bg-accent-foreground/10"
-                          aria-label={isExpanded ? "Collapse" : "Expand"}
+                          aria-label={isExpanded ? "Contraer" : "Expandir"}
                         >
                           <ChevronRight
                             className={cn("size-3.5 text-muted-foreground transition-transform", isExpanded && "rotate-90")}

@@ -18,8 +18,9 @@ import { sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { deleteObject } from "./r2";
+import { RETENTION_LIMIT } from "./retention-policy";
 
-export const RETENTION_LIMIT = 2; // R11.2 — max catalogs kept per user
+export { RETENTION_LIMIT };
 
 /**
  * R11.3 — pure predicate for "will the next successful upload evict the

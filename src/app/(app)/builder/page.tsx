@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic";
 export default async function CatalogBuilderPage() {
   const user = await requireSessionFromHeaders();
   if (!can(user, "catalogs.generate")) {
-    return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
+    return <div className="p-8"><p className="text-sm text-foreground">No tienes permiso para ver esta página.</p></div>;
   }
 
   const [categoryL1Options, categoryPairs, templateConfig] = await Promise.all([
@@ -39,7 +39,7 @@ export default async function CatalogBuilderPage() {
 
   return (
     <div className="p-8">
-      <h1 className={PAGE_HEADING}>Build a catalog</h1>
+      <h1 className={PAGE_HEADING}>Generar catálogo</h1>
       <CatalogBuilderForm
         categoryL1Options={categoryL1Options}
         categoryPairs={categoryPairs}

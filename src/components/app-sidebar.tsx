@@ -121,12 +121,12 @@ function NavParentCollapsed({ parent }: { parent: NavParent }) {
   return (
     <SidebarMenuItem>
       <DropdownMenu>
-        <DropdownMenuTrigger>
-          <SidebarMenuButton tooltip={parent.label} className="cursor-pointer">
-            <Icon />
-            <span>{parent.label}</span>
-            <ChevronRight className="ml-auto" />
-          </SidebarMenuButton>
+        <DropdownMenuTrigger
+          render={<SidebarMenuButton tooltip={parent.label} className="cursor-pointer" />}
+        >
+          <Icon />
+          <span>{parent.label}</span>
+          <ChevronRight className="ml-auto" />
         </DropdownMenuTrigger>
         <DropdownMenuContent side="right" align="start" className="w-48 rounded-xl">
           {parent.children.map((child) => {
@@ -286,8 +286,15 @@ export function AppSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
-              <DropdownMenuTrigger className="group/trigger w-full">
-                <SidebarMenuButton size="lg" className="w-full cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
+              <DropdownMenuTrigger
+                className="group/trigger w-full"
+                render={
+                  <SidebarMenuButton
+                    size="lg"
+                    className="w-full cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                  />
+                }
+              >
                   <Avatar className="h-8 w-8 rounded-lg">
                     <AvatarFallback className="rounded-lg text-xs font-bold bg-sidebar-primary text-sidebar-primary-foreground">
                       {(user.name ?? user.username ?? user.role).charAt(0).toUpperCase()}
@@ -298,7 +305,6 @@ export function AppSidebar({
                     <span className="truncate text-xs text-muted-foreground">{ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] ?? user.role}</span>
                   </div>
                   <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/trigger:rotate-180" />
-                </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="right" className="w-48 rounded-xl" align="start">
                 <DropdownMenuItem>
