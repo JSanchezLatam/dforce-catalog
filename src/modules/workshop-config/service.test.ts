@@ -84,6 +84,18 @@ describe("validateWorkshopConfigInput", () => {
     });
     expect(result.socialHandles).toEqual({ instagram: "@mitaller" });
   });
+
+  it("drops a socialHandles entry left blank instead of persisting an empty handle", () => {
+    const result = validateWorkshopConfigInput({ socialHandles: { instagram: "@mitaller", facebook: "" } });
+    expect(result.socialHandles).toEqual({ instagram: "@mitaller" });
+  });
+
+  it.each(["phone", "whatsapp", "email", "address", "hours", "website"])(
+    "rejects %s over the shared contact-field length cap",
+    (field) => {
+      expect(() => validateWorkshopConfigInput({ [field]: "x".repeat(201) })).toThrow();
+    },
+  );
 });
 
 describe("getWorkshopConfig", () => {

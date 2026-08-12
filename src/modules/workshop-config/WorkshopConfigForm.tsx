@@ -11,6 +11,7 @@ import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
 import { LogoUploadField } from "./LogoUploadField";
 
 const MAX_COVER_TEXT_LENGTH = 500;
+const MAX_CONTACT_FIELD_LENGTH = 200;
 
 type Props = {
   initialConfig: WorkshopConfig | null;
@@ -112,23 +113,64 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
 
           <div className="grid gap-2">
             <Label htmlFor="phone">Teléfono</Label>
-            <Input id="phone" value={phone} onChange={(e) => { setPhone(e.target.value); setStatus("idle"); }} />
+            <Input
+              id="phone"
+              value={phone}
+              maxLength={MAX_CONTACT_FIELD_LENGTH}
+              onChange={(e) => { setPhone(e.target.value); setStatus("idle"); }}
+            />
           </div>
+          {errors.phone && (
+            <p role="alert" className={FIELD_ERROR}>
+              {errors.phone}
+            </p>
+          )}
 
           <div className="grid gap-2">
             <Label htmlFor="whatsapp">WhatsApp</Label>
-            <Input id="whatsapp" value={whatsapp} onChange={(e) => { setWhatsapp(e.target.value); setStatus("idle"); }} />
+            <Input
+              id="whatsapp"
+              value={whatsapp}
+              maxLength={MAX_CONTACT_FIELD_LENGTH}
+              onChange={(e) => { setWhatsapp(e.target.value); setStatus("idle"); }}
+            />
           </div>
+          {errors.whatsapp && (
+            <p role="alert" className={FIELD_ERROR}>
+              {errors.whatsapp}
+            </p>
+          )}
 
           <div className="grid gap-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" value={email} onChange={(e) => { setEmail(e.target.value); setStatus("idle"); }} />
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              maxLength={MAX_CONTACT_FIELD_LENGTH}
+              onChange={(e) => { setEmail(e.target.value); setStatus("idle"); }}
+            />
           </div>
+          {errors.email && (
+            <p role="alert" className={FIELD_ERROR}>
+              {errors.email}
+            </p>
+          )}
 
           <div className="grid gap-2">
             <Label htmlFor="address">Dirección</Label>
-            <Input id="address" value={address} onChange={(e) => { setAddress(e.target.value); setStatus("idle"); }} />
+            <Input
+              id="address"
+              value={address}
+              maxLength={MAX_CONTACT_FIELD_LENGTH}
+              onChange={(e) => { setAddress(e.target.value); setStatus("idle"); }}
+            />
           </div>
+          {errors.address && (
+            <p role="alert" className={FIELD_ERROR}>
+              {errors.address}
+            </p>
+          )}
 
           <div className="grid gap-2">
             <Label htmlFor="hours">Horario</Label>
@@ -136,16 +178,32 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
               id="hours"
               className={TEXTAREA_CLASS}
               rows={2}
+              maxLength={MAX_CONTACT_FIELD_LENGTH}
               placeholder="Ej. Lun-Vie 9-18, Sáb 9-13"
               value={hours}
               onChange={(e) => { setHours(e.target.value); setStatus("idle"); }}
             />
           </div>
+          {errors.hours && (
+            <p role="alert" className={FIELD_ERROR}>
+              {errors.hours}
+            </p>
+          )}
 
           <div className="grid gap-2">
             <Label htmlFor="website">Sitio web</Label>
-            <Input id="website" value={website} onChange={(e) => { setWebsite(e.target.value); setStatus("idle"); }} />
+            <Input
+              id="website"
+              value={website}
+              maxLength={MAX_CONTACT_FIELD_LENGTH}
+              onChange={(e) => { setWebsite(e.target.value); setStatus("idle"); }}
+            />
           </div>
+          {errors.website && (
+            <p role="alert" className={FIELD_ERROR}>
+              {errors.website}
+            </p>
+          )}
 
           <div className="grid gap-2">
             <Label htmlFor="coverText">Texto de portada</Label>

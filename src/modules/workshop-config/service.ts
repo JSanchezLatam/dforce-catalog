@@ -6,6 +6,17 @@ import { workshopConfig, type WorkshopConfig } from "@/shared/db/schema";
 const SINGLETON_ID = "singleton";
 const MAX_NAME_LENGTH = 100;
 const MAX_COVER_TEXT_LENGTH = 500;
+const MAX_CONTACT_FIELD_LENGTH = 200;
+const MAX_HANDLE_LENGTH = 100;
+
+const CONTACT_FIELD_LABELS: Record<string, string> = {
+  phone: "El teléfono",
+  whatsapp: "El WhatsApp",
+  email: "El email",
+  address: "La dirección",
+  hours: "El horario",
+  website: "El sitio web",
+};
 
 export type WorkshopConfigInput = {
   name: string | null;
@@ -58,7 +69,9 @@ function readTextField(value: Record<string, unknown>, field: string): string | 
  * jsonb field: reject anything that is not a plain object (a bare string or
  * an array would otherwise sail through `Object.entries()` in the form and
  * render bogus rows), then drop individual entries whose value is not a
- * string rather than rejecting the whole map for one bad entry.
+ * non-empty string within the length cap — a blank handle is the same
+ * "empty label" bug an empty top-level contact field would be, and an
+ * unbounded key/value would otherwise bypass every other field's cap.
  */
 function readHandleMap(value: Record<string, unknown>): Record<string, string> | null | undefined {
   if (!("socialHandles" in value)) return undefined;
@@ -66,7 +79,11 @@ function readHandleMap(value: Record<string, unknown>): Record<string, string> |
   if (raw === null) return null;
   if (typeof raw !== "object" || Array.isArray(raw)) return undefined;
   const entries = Object.entries(raw as Record<string, unknown>).filter(
-    (entry): entry is [string, string] => typeof entry[1] === "string",
+    (entry): entry is [string, string] =>
+      typeof entry[1] === "string" &&
+      entry[1].trim() !== "" &&
+      entry[0].length <= MAX_HANDLE_LENGTH &&
+      entry[1].length <= MAX_HANDLE_LENGTH,
   );
   return Object.fromEntries(entries);
 }
@@ -80,7 +97,19 @@ export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput
     errors.name = `Name must be ${MAX_NAME_LENGTH} characters or less`;
   }
 
+  const phone = readTextField(value, "phone");
+  const whatsapp = readTextField(value, "whatsapp");
+  const email = readTextField(value, "email");
+  const address = readTextField(value, "address");
+  const hours = readTextField(value, "hours");
+  const website = readTextField(value, "website");
   const coverText = readTextField(value, "coverText");
+
+  for (const [field, parsedValue] of Object.entries({ phone, whatsapp, email, address, hours, website })) {
+    if (parsedValue !== undefined && parsedValue !== null && parsedValue.length > MAX_CONTACT_FIELD_LENGTH) {
+      errors[field] = `${CONTACT_FIELD_LABELS[field]} debe tener ${MAX_CONTACT_FIELD_LENGTH} caracteres o menos`;
+    }
+  }
   if (coverText !== undefined && coverText !== null && coverText.length > MAX_COVER_TEXT_LENGTH) {
     errors.coverText = `El texto de portada debe tener ${MAX_COVER_TEXT_LENGTH} caracteres o menos`;
   }
@@ -96,17 +125,11 @@ export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput
   if ("logoContentType" in value) {
     result.logoContentType = value.logoContentType === null ? null : String(value.logoContentType);
   }
-  const phone = readTextField(value, "phone");
   if (phone !== undefined) result.phone = phone;
-  const whatsapp = readTextField(value, "whatsapp");
   if (whatsapp !== undefined) result.whatsapp = whatsapp;
-  const email = readTextField(value, "email");
   if (email !== undefined) result.email = email;
-  const address = readTextField(value, "address");
   if (address !== undefined) result.address = address;
-  const hours = readTextField(value, "hours");
   if (hours !== undefined) result.hours = hours;
-  const website = readTextField(value, "website");
   if (website !== undefined) result.website = website;
   if (coverText !== undefined) result.coverText = coverText;
   const socialHandles = readHandleMap(value);

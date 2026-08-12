@@ -93,6 +93,21 @@ describe("WorkshopConfigForm — contact fields", () => {
     expect(await screen.findByText("El texto de portada debe tener 500 caracteres o menos")).toBeInTheDocument();
   });
 
+  it("surfaces a phone validation error returned by the server", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({
+      status: 400,
+      body: { errors: { phone: "El teléfono debe tener 200 caracteres o menos" } },
+    });
+    render(<WorkshopConfigForm initialConfig={null} />);
+
+    await user.type(screen.getByLabelText("Teléfono"), "555-1234");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(await screen.findByText("El teléfono debe tener 200 caracteres o menos")).toBeInTheDocument();
+  });
+
   it("adds a social handle row and submits it under an arbitrary platform key", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({ status: 200, body: { config: { id: "singleton" } } });
