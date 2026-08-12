@@ -41,13 +41,30 @@ along capability lines — both are judgment calls, and a half-correct baseline 
 worse than this pointer, because the next change would plan against it and
 believe it.
 
-Ten capabilities are involved. Three have more than one contributing delta and
-must be applied in order:
+**Policy**: consolidate a capability the first time a change touches it (see
+`catalog-templates-and-workshop-info` below for the first application of this
+policy). Once consolidated, `openspec/specs/<capability>/spec.md` is the FULL
+current state and no longer needs the two-source read.
 
-- `catalog-generation` — adaptive-catalog-layouts, then crm-shell-settings-rbac
+### Consolidated capabilities
+
+- `catalog-generation` — consolidated 2026-08-12 by `catalog-templates-and-workshop-info`.
+  Built from: `.kiro` R5/R6 → `adaptive-catalog-layouts` →
+  `crm-shell-settings-rbac` → `catalog-templates-and-workshop-info`. See
+  `openspec/specs/catalog-generation/spec.md`.
+- `template-config` — consolidated 2026-08-12 by `catalog-templates-and-workshop-info`.
+  Built from: `.kiro` R8 → `adaptive-catalog-layouts` →
+  `catalog-templates-and-workshop-info` (supersedes R8.1). See
+  `openspec/specs/template-config/spec.md`.
+
+### Still two-source (unconsolidated)
+
+Eight capabilities still require reading BOTH `.kiro/specs/dforce-catalog/requirements.md`
+AND the relevant change(s) below, applied in order where more than one
+contributes:
+
 - `customer-management` — crm-workshop-management, then crm-shell-settings-rbac
 - `service-orders` — crm-workshop-management, then crm-shell-settings-rbac
-
-The other seven are single-source: `app-navigation`, `role-permissions`,
-`template-config`, `user-account`, `user-management`, `workshop-reminders`,
-`workshop-settings`.
+- `app-navigation`, `role-permissions`, `user-account`, `user-management`,
+  `workshop-reminders`, `workshop-settings` — single-source (see the table
+  above for which change)
