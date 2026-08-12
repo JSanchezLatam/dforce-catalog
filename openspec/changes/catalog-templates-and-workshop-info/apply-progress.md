@@ -42,10 +42,35 @@ per design D5, even though task 1.1 only mentions `workshopConfig` fields —
 task 1.2 and design.md's migration table both require it here so WU2 has a
 column to persist into.
 
+An RDD review during apply caught the PR shipping a premature
+`openspec/specs/` consolidation of `catalog-generation` and
+`template-config` (not authorized by any WU1 task) that asserted "FULL
+current state" facts not yet true on this branch. Reverted both files and
+the `archive/README.md` policy change back to their pre-PR state; the
+change-folder delta specs under `specs/` stay, since those are correctly
+scoped deltas.
+
+### Risk carried into WU2/WU3
+
+**Duplicate live `coverText` editor.** `WorkshopConfigForm.tsx`'s new
+"Texto de portada" field writes to `workshop_config.coverText`, but the PDF
+renderer still reads `template_config.coverText` (via
+`TemplateConfigForm.tsx`, untouched in WU1) until WU3 wires the registry
+and drops the legacy branding columns. Between this PR merging and WU3
+landing, an Administrador who edits the new field sees "Configuración
+guardada." with **no effect on any generated catalog** — the old field
+is still the one that renders. Not a WU1 defect (design.md's New Risk #3
+already covers the `NOT NULL` constraint driving this sequencing), but
+WU2/WU3's tasks should close this window deliberately rather than by
+sequencing luck — e.g. hide or label the new field as "not yet active"
+until WU3 wires it, or land WU3 promptly after this merges.
+
 ### Verification
 
-- `npm test` — 685/685 passing (full suite, not just this module).
+- `npm test` — 709/709 passing (full suite, not just this module).
 - `npx tsc --noEmit` — clean.
+- `npm run lint` — 0 errors, 17 pre-existing warnings (none introduced by
+  this change).
 - Live smoke (task 1.10): ran `npm run db:migrate` against the real dev
   Postgres (`postgres://dforce:dforce@localhost:5433/dforce_catalog`).
   Confirmed via `psql`:
