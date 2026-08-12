@@ -1,0 +1,117 @@
+/**
+ * Component tests for the workshop-settings form (catalog-templates-and-
+ * workshop-info WU1). Covers the new contact fields + coverText + social
+ * handles added alongside the existing name/logo fields.
+ */
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+import { WorkshopConfigForm } from "./WorkshopConfigForm";
+
+function mockFetch(response: { status: number; body?: unknown }) {
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: response.status >= 200 && response.status < 300,
+    status: response.status,
+    json: async () => response.body ?? {},
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+function bodyOf(fetchMock: ReturnType<typeof vi.fn>, call = 0) {
+  return JSON.parse(fetchMock.mock.calls[call][1].body);
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.unstubAllGlobals();
+});
+
+describe("WorkshopConfigForm — contact fields", () => {
+  it("renders and submits every new contact field", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { config: { id: "singleton" } } });
+    render(<WorkshopConfigForm initialConfig={null} />);
+
+    await user.type(screen.getByLabelText("Teléfono"), "555-1234");
+    await user.type(screen.getByLabelText("WhatsApp"), "555-5678");
+    await user.type(screen.getByLabelText("Email"), "taller@ejemplo.com");
+    await user.type(screen.getByLabelText("Dirección"), "Av. Siempre Viva 123");
+    await user.type(screen.getByLabelText("Sitio web"), "https://taller.com");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = bodyOf(fetchMock);
+    expect(body).toMatchObject({
+      phone: "555-1234",
+      whatsapp: "555-5678",
+      email: "taller@ejemplo.com",
+      address: "Av. Siempre Viva 123",
+      website: "https://taller.com",
+    });
+  });
+
+  it("stores hours as one free-text field with no per-day parsing", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { config: { id: "singleton" } } });
+    render(<WorkshopConfigForm initialConfig={null} />);
+
+    const hoursValue = "Lun-Vie 9-18, Sáb 9-13";
+    await user.type(screen.getByLabelText("Horario"), hoursValue);
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(bodyOf(fetchMock).hours).toBe(hoursValue);
+  });
+
+  it("submits the cover text", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { config: { id: "singleton" } } });
+    render(<WorkshopConfigForm initialConfig={null} />);
+
+    await user.type(screen.getByLabelText("Texto de portada"), "Bienvenido a nuestro catálogo");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(bodyOf(fetchMock).coverText).toBe("Bienvenido a nuestro catálogo");
+  });
+
+  it("adds a social handle row and submits it under an arbitrary platform key", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { config: { id: "singleton" } } });
+    render(<WorkshopConfigForm initialConfig={null} />);
+
+    await user.click(screen.getByRole("button", { name: "Agregar red social" }));
+    await user.type(screen.getByLabelText("Plataforma"), "instagram");
+    await user.type(screen.getByLabelText("Usuario o enlace"), "@mitaller");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(bodyOf(fetchMock).socialHandles).toEqual({ instagram: "@mitaller" });
+  });
+
+  it("prefills existing contact values", () => {
+    const initialConfig = {
+      id: "singleton",
+      name: "Mi Taller",
+      logoR2Key: null,
+      logoContentType: null,
+      phone: "555-1234",
+      whatsapp: null,
+      email: "taller@ejemplo.com",
+      address: null,
+      hours: null,
+      website: null,
+      coverText: "Bienvenido",
+      socialHandles: null,
+      selectedTemplateId: null,
+      updatedAt: new Date(),
+    };
+    render(<WorkshopConfigForm initialConfig={initialConfig as never} />);
+
+    expect(screen.getByLabelText("Teléfono")).toHaveValue("555-1234");
+    expect(screen.getByLabelText("Email")).toHaveValue("taller@ejemplo.com");
+    expect(screen.getByLabelText("Texto de portada")).toHaveValue("Bienvenido");
+  });
+});
