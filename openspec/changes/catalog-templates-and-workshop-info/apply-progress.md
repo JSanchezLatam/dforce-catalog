@@ -185,3 +185,145 @@ it).
 WU2 (template registry + gallery picker) can start once this PR merges to
 the tracker branch — it depends on `template_config.selected_template_id`
 existing, which is now in place.
+
+## WU2 — Template Registry + Gallery Picker (Phase 2, tasks 2.1–2.8)
+
+Status: **done**. Branch `catalog-tpl/wu2-template-registry`, cut from
+`catalog-tpl/wu1-workshop-info` (WU1's PR #33 not yet merged). PR targets
+WU1's branch, not the tracker and not `main`.
+
+All eight Phase 2 tasks complete — see `tasks.md` for per-task checkmarks.
+~361 changed lines (347 insertions, 14 deletions across nine files), against
+an estimate of ~280 — over budget but well under the ledger cap of 700 and
+the ~500-line stop-and-report threshold; the overrun is mostly two GGA
+review rounds' worth of hardening (below), not scope growth.
+
+### What shipped
+
+- `src/shared/template/registry.ts` (new) — `CatalogTemplateDef` type,
+  `CATALOG_TEMPLATES` array, `getTemplate(id?)` with a never-null fallback
+  to the default template, per design D1.
+- `src/shared/template/template-ids.ts` (new) — `KNOWN_TEMPLATE_IDS` and
+  `DEFAULT_TEMPLATE_ID`, split out of `registry.ts` with zero JSX/component
+  imports so a server-only module (`template-config/service.ts`, which
+  imports `@/shared/db/client`) can validate an id without pulling in
+  `registry.ts`'s Card-bearing entries — mirrors the
+  `workshop-config/limits.ts` precedent from WU1. `registry.test.ts` has a
+  drift-guard test asserting `CATALOG_TEMPLATES`' ids exactly match this
+  list.
+- `src/shared/template/templates/dforce-classic.tsx` (new) — the one
+  registry entry: `font: "Arial, sans-serif"`,
+  `primaryColors: { primary: "#D42027", secondary: "#000000" }` (red band /
+  black stripe from the mockup), `thumbnail: "/templates/dforce-classic.png"`
+  (asset does not exist yet — see Deviations), and a `Card` component that
+  is today's `CatalogTemplate.pickCard` strict/adaptive branch, moved here
+  per design D1. **Additive and unwired**: `CatalogTemplate.tsx` was not
+  touched; nothing calls `getTemplate()` or `template.Card` yet. WU3 wires
+  it.
+- `src/modules/template-config/service.ts` — `TemplateConfigInput` gains
+  `selectedTemplateId?: string | null`; `validateTemplateConfigInput`
+  validates it against `KNOWN_TEMPLATE_IDS` (any unknown/non-string value
+  falls back to `null`, matching R8.4's "orphaned id falls back" scenario).
+  `getTemplateConfig`/`saveTemplateConfig` gained an injectable `db` param
+  (defaulting to the real client), matching `workshop-config/service.ts`'s
+  DI pattern, so the persistence tests below can spy on the query builder.
+- `src/modules/template-config/TemplateConfigForm.tsx` — added a gallery
+  picker (native radio inputs, `role="radiogroup"`, Spanish label "Plantilla
+  del catálogo") over `CATALOG_TEMPLATES`, pre-selected via
+  `getTemplate(config?.selectedTemplateId).id`. On save, POST body includes
+  `selectedTemplateId` alongside the existing branding fields.
+- New/extended tests: `registry.test.ts` (new), `service.test.ts` (extended:
+  `selectedTemplateId` validation + registry-membership + DI-based
+  persistence assertions), `TemplateConfigForm.test.tsx` (new).
+
+### Deviations from tasks.md
+
+**The gallery EXTENDS the branding form; it does not replace it.** Tasks
+2.6/2.7 read literally as "no color/font/logo/cover-text input present" /
+"replace branding inputs with a gallery picker" — which is also the delta
+spec's (`specs/template-config/spec.md`) end-state language ("MUST NOT show
+any color, font, logo, or cover-text input"). That end state is WU3's,
+not WU2's: `template_config.logo_url/primary_colors/font/cover_text` stay
+`NOT NULL` until migration `0009` (WU3), so `saveTemplateConfig` must keep
+receiving values for all four or the upsert fails (design.md Risk #3,
+explicitly flagged there as "WU2's picker cannot delete the branding
+inputs — WU3 does"). This was confirmed as the correct reading before
+implementation (not discovered via review) — task 2.5's "internally
+supplies placeholder values… they are no longer form inputs" framing is
+what's superseded here, not the NOT-NULL constraint itself. The gallery
+picker was built as an addition alongside the existing Logo URL / colors /
+Typography / Cover text inputs; WU3's task 3.12 is what deletes them, once
+migration `0009` drops the columns they write to. `tasks.md` 2.5/2.6 are
+annotated with this deviation.
+
+**Thumbnail asset does not exist.** `registry.ts`'s `thumbnail` field
+documents `/public/templates/<id>.png`; `dforce-classic.tsx` sets
+`/templates/dforce-classic.png`. No `public/templates/` PNG was added in
+this PR — no design tool was available to produce real artwork from the
+proprietary `.op` mockup within this work unit. `TemplateConfigForm.tsx`
+renders a colored swatch (`template.primaryColors`) in the gallery instead
+of an `<img>`, so nothing ships broken; swap it for a real thumbnail once
+one exists (follow-up, not blocking).
+
+**Selection-switch path (spec: "Selecting a template") is unverified.**
+With exactly one registry entry, pre-selected, clicking the radio fires no
+`onChange` — `TemplateConfigForm.test.tsx`'s submit test passes on the
+form's initial state alone, not on an actual selection change. Noted in
+the test file itself. Closes once a second template exists (out of this
+change's scope — proposal.md: "A second template is an additive PR").
+
+### Verification
+
+- `npm test` — 739/739 passing (full suite).
+- `npx tsc --noEmit` — clean.
+- `npm run lint` — 0 errors, 17 pre-existing warnings (same count as WU1;
+  none introduced by WU2 — the one new gallery `<img>` from an earlier
+  draft was replaced by a colored `<div>` swatch during review, see
+  Deviations).
+- `GGA_PROVIDER=claude gga run --pr-mode --diff-only`: three rounds. Note
+  `PR_BASE_BRANCH` in `.gga` does not take effect for this gga version/repo
+  combination (verified: `gga config` reports `auto-detect` even after
+  editing `.gga`, and `bash -x` traces show the project config's `source
+  <(...)` executing but the exported variable not landing in the review
+  process) — every round therefore reviewed `main...HEAD`, which includes
+  WU1's unmerged commits alongside WU2's. Findings scoped to WU1-only files
+  were treated as out of WU2's authority and left alone; every WU2-scoped
+  finding was fixed:
+  - Round 1: `selectedTemplateId` had no validation against the registry's
+    known ids (any string persisted verbatim) — fixed by validating against
+    `KNOWN_TEMPLATE_IDS`. The round-trip persistence test was flagged as
+    tautological (a fake db that echoes back its own writes) — fixed with a
+    live smoke against the real dev Postgres (see below) plus a spy-based
+    unit test. Gallery thumbnail referenced a non-existent asset — replaced
+    with a swatch. New tests pinned pre-existing English label text on
+    fields WU3 deletes — switched to id-based queries.
+  - Round 2: `service.ts` importing the Card-bearing `registry.ts` risked
+    pulling client-component code into a server module (and vice versa,
+    a "use client" form importing a module one hop from `@/shared/db`) —
+    fixed by extracting `template-ids.ts` as a DB-free/JSX-free id source
+    both sides import instead. `React.ReactElement` relied on the ambient
+    global — made explicit. The unassociated `<Label>` gallery heading —
+    changed to `<h2>`. Submit-button test query was unqualified
+    (`getByRole("button")`) — name-qualified.
+  - Round 3 (spy-based rewrite still tautological per a closer read): the
+    round-trip test's fake `select` chain ignored its arguments entirely
+    (any table/column/where would still pass) — replaced with assertions on
+    the actual `insert().values()` / `onConflictDoUpdate({set})` call
+    arguments, matching `workshop-config/service.test.ts`'s own pattern.
+    Final round: clean.
+- Live smoke (task 2.8, closing the round-trip gap the unit tests cannot
+  honestly claim): ran a throwaway `tsx` script against the real dev
+  Postgres (`postgres://dforce:dforce@localhost:5433/dforce_catalog`),
+  calling the real `saveTemplateConfig`/`getTemplateConfig` (not mocked).
+  Saved `selectedTemplateId: "dforce-classic"`, confirmed a **fresh**
+  `getTemplateConfig()` call (a new `select`, not the same in-memory value)
+  returned it, then restored the row's prior `selectedTemplateId` (`null`)
+  so the dev DB was left unmutated. Script deleted after the run — not part
+  of the PR.
+
+### Next
+
+WU3 (wire registry into renderer; branding split; logo data URI;
+migration `0009`) can start once this PR merges to WU1's branch. It should
+also decide the thumbnail-asset follow-up and, per design.md's own New
+Risk #2, drain the pg-boss `pdf-generate` queue before deploying.
