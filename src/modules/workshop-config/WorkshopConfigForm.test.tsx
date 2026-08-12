@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import type { WorkshopConfig } from "@/shared/db/schema";
 import { WorkshopConfigForm } from "./WorkshopConfigForm";
 
 function mockFetch(response: { status: number; body?: unknown }) {
@@ -92,7 +93,7 @@ describe("WorkshopConfigForm — contact fields", () => {
   });
 
   it("prefills existing contact values", () => {
-    const initialConfig = {
+    const initialConfig: WorkshopConfig = {
       id: "singleton",
       name: "Mi Taller",
       logoR2Key: null,
@@ -105,13 +106,48 @@ describe("WorkshopConfigForm — contact fields", () => {
       website: null,
       coverText: "Bienvenido",
       socialHandles: null,
-      selectedTemplateId: null,
       updatedAt: new Date(),
     };
-    render(<WorkshopConfigForm initialConfig={initialConfig as never} />);
+    render(<WorkshopConfigForm initialConfig={initialConfig} />);
 
     expect(screen.getByLabelText("Teléfono")).toHaveValue("555-1234");
     expect(screen.getByLabelText("Email")).toHaveValue("taller@ejemplo.com");
     expect(screen.getByLabelText("Texto de portada")).toHaveValue("Bienvenido");
+  });
+
+  it("submits an untouched optional field as an empty string, which the API layer collapses to null", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { config: { id: "singleton" } } });
+    render(<WorkshopConfigForm initialConfig={null} />);
+
+    await user.type(screen.getByLabelText("Teléfono"), "555-1234");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    // Untouched fields still travel as "" (this form owns the whole contact
+    // block, unlike LogoUploadField's separate route) — validateWorkshopConfigInput
+    // is the layer responsible for collapsing "" to NULL (service.test.ts).
+    expect(bodyOf(fetchMock).website).toBe("");
+  });
+
+  it("removes the correct social handle row when a middle row is deleted", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { config: { id: "singleton" } } });
+    render(<WorkshopConfigForm initialConfig={null} />);
+
+    await user.click(screen.getByRole("button", { name: "Agregar red social" }));
+    await user.type(screen.getAllByLabelText("Plataforma")[0], "instagram");
+    await user.type(screen.getAllByLabelText("Usuario o enlace")[0], "@a");
+    await user.click(screen.getByRole("button", { name: "Agregar red social" }));
+    await user.type(screen.getAllByLabelText("Plataforma")[1], "facebook");
+    await user.type(screen.getAllByLabelText("Usuario o enlace")[1], "@b");
+
+    await user.click(screen.getAllByRole("button", { name: "Eliminar" })[0]);
+    expect(screen.getAllByLabelText("Plataforma")).toHaveLength(1);
+    expect(screen.getByLabelText("Plataforma")).toHaveValue("facebook");
+
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(bodyOf(fetchMock).socialHandles).toEqual({ facebook: "@b" });
   });
 });

@@ -5,9 +5,7 @@ import { workshopConfig, type WorkshopConfig } from "@/shared/db/schema";
 
 const SINGLETON_ID = "singleton";
 const MAX_NAME_LENGTH = 100;
-
-/** Plain-string contact fields, stored verbatim (no trimming) — "hours" must never be reshaped per the free-text spec. */
-const TEXT_FIELDS = ["phone", "whatsapp", "email", "address", "hours", "website", "coverText"] as const;
+const MAX_COVER_TEXT_LENGTH = 500;
 
 export type WorkshopConfigInput = {
   name: string | null;
@@ -35,6 +33,26 @@ export class WorkshopConfigValidationError extends Error {
   }
 }
 
+/**
+ * Reads one optional text field off the raw request body. Returns `undefined`
+ * when the key is absent OR its value is neither a string nor `null` — a
+ * malformed field (e.g. an object where the route.ts trust boundary expects
+ * a string) is silently treated as "not provided", never coerced via
+ * `String()` (that turned `{}` into the literal text `"[object Object]"`).
+ * An empty/whitespace-only string collapses to `null` so an untouched field
+ * persists as NULL, not `""` — the catalog render must be able to tell
+ * "not set" from "set to nothing" (spec: fields left unset are omitted, not
+ * rendered blank). Non-empty values are returned verbatim, unmodified —
+ * `hours` in particular must never be reshaped.
+ */
+function readTextField(value: Record<string, unknown>, field: string): string | null | undefined {
+  if (!(field in value)) return undefined;
+  const raw = value[field];
+  if (raw === null) return null;
+  if (typeof raw !== "string") return undefined;
+  return raw.trim() === "" ? null : raw;
+}
+
 export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput {
   const errors: Record<string, string> = {};
   const value = (input ?? {}) as Record<string, unknown>;
@@ -42,6 +60,11 @@ export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput
   const name = typeof value.name === "string" ? value.name.trim() : null;
   if (name !== null && name.length > MAX_NAME_LENGTH) {
     errors.name = `Name must be ${MAX_NAME_LENGTH} characters or less`;
+  }
+
+  const coverText = readTextField(value, "coverText");
+  if (coverText !== undefined && coverText !== null && coverText.length > MAX_COVER_TEXT_LENGTH) {
+    errors.coverText = `Cover text must be ${MAX_COVER_TEXT_LENGTH} characters or less`;
   }
 
   if (Object.keys(errors).length > 0) {
@@ -55,11 +78,19 @@ export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput
   if ("logoContentType" in value) {
     result.logoContentType = value.logoContentType === null ? null : String(value.logoContentType);
   }
-  for (const field of TEXT_FIELDS) {
-    if (field in value) {
-      result[field] = value[field] === null ? null : String(value[field]);
-    }
-  }
+  const phone = readTextField(value, "phone");
+  if (phone !== undefined) result.phone = phone;
+  const whatsapp = readTextField(value, "whatsapp");
+  if (whatsapp !== undefined) result.whatsapp = whatsapp;
+  const email = readTextField(value, "email");
+  if (email !== undefined) result.email = email;
+  const address = readTextField(value, "address");
+  if (address !== undefined) result.address = address;
+  const hours = readTextField(value, "hours");
+  if (hours !== undefined) result.hours = hours;
+  const website = readTextField(value, "website");
+  if (website !== undefined) result.website = website;
+  if (coverText !== undefined) result.coverText = coverText;
   if ("socialHandles" in value) {
     result.socialHandles = value.socialHandles === null ? null : (value.socialHandles as Record<string, string>);
   }
@@ -94,11 +125,33 @@ export async function saveWorkshopConfig(
     insertValues.logoContentType = parsed.logoContentType ?? null;
     updateSet.logoContentType = parsed.logoContentType ?? null;
   }
-  for (const field of TEXT_FIELDS) {
-    if (field in parsed) {
-      insertValues[field] = parsed[field] ?? null;
-      updateSet[field] = parsed[field] ?? null;
-    }
+  if ("phone" in parsed) {
+    insertValues.phone = parsed.phone ?? null;
+    updateSet.phone = parsed.phone ?? null;
+  }
+  if ("whatsapp" in parsed) {
+    insertValues.whatsapp = parsed.whatsapp ?? null;
+    updateSet.whatsapp = parsed.whatsapp ?? null;
+  }
+  if ("email" in parsed) {
+    insertValues.email = parsed.email ?? null;
+    updateSet.email = parsed.email ?? null;
+  }
+  if ("address" in parsed) {
+    insertValues.address = parsed.address ?? null;
+    updateSet.address = parsed.address ?? null;
+  }
+  if ("hours" in parsed) {
+    insertValues.hours = parsed.hours ?? null;
+    updateSet.hours = parsed.hours ?? null;
+  }
+  if ("website" in parsed) {
+    insertValues.website = parsed.website ?? null;
+    updateSet.website = parsed.website ?? null;
+  }
+  if ("coverText" in parsed) {
+    insertValues.coverText = parsed.coverText ?? null;
+    updateSet.coverText = parsed.coverText ?? null;
   }
   if ("socialHandles" in parsed) {
     insertValues.socialHandles = parsed.socialHandles ?? null;

@@ -36,6 +36,23 @@ describe("validateWorkshopConfigInput", () => {
     const result = validateWorkshopConfigInput({ socialHandles: { instagram: "@mitaller", tiktok: "@mitaller" } });
     expect(result.socialHandles).toEqual({ instagram: "@mitaller", tiktok: "@mitaller" });
   });
+
+  it.each(["phone", "whatsapp", "email", "address", "hours", "website", "coverText"])(
+    "collapses an empty %s to null instead of persisting an empty string",
+    (field) => {
+      const result = validateWorkshopConfigInput({ [field]: "" }) as Record<string, unknown>;
+      expect(result[field]).toBeNull();
+    },
+  );
+
+  it("ignores a non-string contact field instead of coercing it with String()", () => {
+    const result = validateWorkshopConfigInput({ phone: { not: "a string" } }) as Record<string, unknown>;
+    expect(result).not.toHaveProperty("phone");
+  });
+
+  it("rejects a coverText over the length cap", () => {
+    expect(() => validateWorkshopConfigInput({ coverText: "x".repeat(501) })).toThrow();
+  });
 });
 
 describe("getWorkshopConfig", () => {

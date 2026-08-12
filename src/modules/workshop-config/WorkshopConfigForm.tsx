@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 
 import type { WorkshopConfig } from "@/shared/db/schema";
 import { Button } from "@/components/ui/button";
@@ -17,11 +17,14 @@ type Props = {
 const TEXTAREA_CLASS =
   "flex min-h-[60px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm dark:bg-input/30";
 
-type SocialHandleRow = { platform: string; handle: string };
+/** `id` is a stable per-row key independent of array position — rows are removable, and an
+ * index-based key would let React reuse a deleted row's DOM node (and its focus/cursor state)
+ * for the next row that shifts into its slot. */
+type SocialHandleRow = { id: number; platform: string; handle: string };
 
 function toSocialRows(socialHandles: Record<string, string> | null | undefined): SocialHandleRow[] {
   if (!socialHandles) return [];
-  return Object.entries(socialHandles).map(([platform, handle]) => ({ platform, handle }));
+  return Object.entries(socialHandles).map(([platform, handle], id) => ({ id, platform, handle }));
 }
 
 export function WorkshopConfigForm({ initialConfig }: Props) {
@@ -36,16 +39,22 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
   const [website, setWebsite] = useState(initialConfig?.website ?? "");
   const [coverText, setCoverText] = useState(initialConfig?.coverText ?? "");
   const [socialRows, setSocialRows] = useState<SocialHandleRow[]>(() => toSocialRows(initialConfig?.socialHandles));
+  const nextSocialRowId = useRef(socialRows.length);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
 
-  function updateSocialRow(index: number, field: keyof SocialHandleRow, value: string) {
-    setSocialRows((rows) => rows.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
+  function addSocialRow() {
+    setSocialRows((rows) => [...rows, { id: nextSocialRowId.current++, platform: "", handle: "" }]);
     setStatus("idle");
   }
 
-  function removeSocialRow(index: number) {
-    setSocialRows((rows) => rows.filter((_, i) => i !== index));
+  function updateSocialRow(id: number, field: "platform" | "handle", value: string) {
+    setSocialRows((rows) => rows.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
+    setStatus("idle");
+  }
+
+  function removeSocialRow(id: number) {
+    setSocialRows((rows) => rows.filter((row) => row.id !== id));
     setStatus("idle");
   }
 
@@ -149,36 +158,30 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
 
           <h2 className={SECTION_HEADING}>Redes sociales</h2>
           <div className="flex flex-col gap-3">
-            {socialRows.map((row, index) => (
-              <div key={index} className="flex items-end gap-2">
+            {socialRows.map((row) => (
+              <div key={row.id} className="flex items-end gap-2">
                 <div className="grid flex-1 gap-2">
-                  <Label htmlFor={`social-platform-${index}`}>Plataforma</Label>
+                  <Label htmlFor={`social-platform-${row.id}`}>Plataforma</Label>
                   <Input
-                    id={`social-platform-${index}`}
+                    id={`social-platform-${row.id}`}
                     value={row.platform}
-                    onChange={(e) => updateSocialRow(index, "platform", e.target.value)}
+                    onChange={(e) => updateSocialRow(row.id, "platform", e.target.value)}
                   />
                 </div>
                 <div className="grid flex-1 gap-2">
-                  <Label htmlFor={`social-handle-${index}`}>Usuario o enlace</Label>
+                  <Label htmlFor={`social-handle-${row.id}`}>Usuario o enlace</Label>
                   <Input
-                    id={`social-handle-${index}`}
+                    id={`social-handle-${row.id}`}
                     value={row.handle}
-                    onChange={(e) => updateSocialRow(index, "handle", e.target.value)}
+                    onChange={(e) => updateSocialRow(row.id, "handle", e.target.value)}
                   />
                 </div>
-                <Button type="button" variant="outline" size="sm" onClick={() => removeSocialRow(index)}>
+                <Button type="button" variant="outline" size="sm" onClick={() => removeSocialRow(row.id)}>
                   Eliminar
                 </Button>
               </div>
             ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="self-start"
-              onClick={() => setSocialRows((rows) => [...rows, { platform: "", handle: "" }])}
-            >
+            <Button type="button" variant="outline" size="sm" className="self-start" onClick={addSocialRow}>
               Agregar red social
             </Button>
           </div>
