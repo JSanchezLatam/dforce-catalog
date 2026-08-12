@@ -51,11 +51,15 @@ These gaps are real, documented in design.md, and remain unresolved. They surviv
 
 1. **chunkProducts split by fixed count, not height**: `DEFAULT_PRODUCTS_PER_PAGE = 6` mitigates but does not fix the real issue. Design.md notes: "pages may overflow" when three-tier rows raise card height. WU4's live smoke confirmed a 10-product section spilling across two pages. The fix (measured-height chunking) is out of scope.
 
+   > **CLOSED 2026-08-12** by branch `pdf/measured-page-chunking`. `productsPerPage` is now a maximum and the worker measures real card heights in its own Chromium before splitting. Annotated rather than rewritten: the paragraph above is the record of what was true at archive time, but leaving it unqualified tells a reader at HEAD the wrong thing about live code.
+
 2. **Production pg-boss queue drain not executed**: Task 3.14 is checked (code path verified in design), but the actual production drain is deploy-time work, not development. Three migrations (0008, 0009, 0010) ship with the payload-shape changes, and the drain must precede the deploy. This is recorded as a pre-deploy checklist item in the PR descriptions but is not part of this SDD cycle.
 
 3. **service.ts String() coercion on four upload-key fields**: Four upload-key fields use `String()` coercion instead of type-safe handling. This scoped out in WU1 and carries forward. Known limitation, not a blocking issue.
 
 4. **Cover-photo blend-mode fix provable only via recorded live-smoke**: The mix-blend-mode:multiply bug fix (white background only when coverImageUrl is set) is covered by WU5's recorded live-smoke transcript but not by any re-runnable unit test. A future regression would pass the suite silently. Design.md discloses this as a real coverage gap.
+
+   > **CLOSED 2026-08-12** by branch `pdf/measured-page-chunking`. The testable invariant — a cover carrying a photo must not be painted the template's dark colour — is now pinned in `render.test.ts` (same annotate-don't-rewrite reasoning as gap #1).
 
 ## Final State Authority
 

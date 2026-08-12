@@ -140,6 +140,14 @@ const PRINT_HEIGHT_PX = (297 - 2 * PAGE_MARGIN_MM) * MM_TO_PX;
  * product section's own vertical padding, which eats into the page before
  * any card does.
  *
+ * Read these as row heights, not as precise per-card ones: grid items default
+ * to `align-items: stretch`, so both wrappers in a row already report the
+ * height of the taller one. The packer's own `Math.max` is therefore usually
+ * confirming rather than correcting, and on a row re-phased by an odd
+ * `productsPerPage` it maxes two already-maxed values and over-estimates.
+ * Over-estimating breaks the page early — the same safe direction as the
+ * extra gap above.
+ *
  * A miss on the selector must not fail a job that already holds one of
  * `MAX_QUEUE_DEPTH` slots (`resolveBranding`'s null-not-throw precedent), but
  * it does degrade the split back to fixed-count chunking — archive gap #1
