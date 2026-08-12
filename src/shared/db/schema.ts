@@ -136,7 +136,12 @@ export type Producto = typeof producto.$inferSelect;
 export type SyncRun = typeof syncRuns.$inferSelect;
 
 /**
- * `template_config` — branding persisted across restarts (R8.1,8.2,8.4).
+ * `template_config` — R8.1/8.2/8.4. Shrunk by catalog-templates-and-workshop-info
+ * WU3's migration `0009`: font/colours/logo/cover-text are no longer here —
+ * font and colours are template-FIXED (the code registry, `shared/template/
+ * registry.ts`), and logo/cover-text are workshop-OWNED (`workshop_config`,
+ * see that table's comment). This table now holds only the admin's
+ * SELECTION among templates plus the one remaining per-generation toggle.
  *
  * ponytail: singleton-row-no-history — R8 only asks the system to remember
  * "the config that applies going forward" (the last saved one), not an audit
@@ -146,19 +151,9 @@ export type SyncRun = typeof syncRuns.$inferSelect;
  */
 export const templateConfig = pgTable("template_config", {
   id: text("id").primaryKey(),
-  logoUrl: text("logo_url").notNull(),
-  primaryColors: jsonb("primary_colors").notNull().$type<{ primary: string; secondary: string }>(),
-  font: text("font").notNull(),
-  coverText: text("cover_text").notNull(),
   /** 'strict' | 'adaptive' — strict forces all products to OpaqueProductCard; adaptive selects card based on each product's image_type. Null defaults to 'strict' (backward compat). */
   defaultImageHandling: text("default_image_handling"),
-  /**
-   * Registry template id (catalog-templates-and-workshop-info WU2+) — NULL
-   * resolves to the default template via `getTemplate(null)`. Added in WU1's
-   * migration so WU2's gallery picker has a column to persist into; the
-   * `logoUrl`/`primaryColors`/`font`/`coverText` columns above stay NOT NULL
-   * and unused-by-the-form until migration `0009` (WU3) drops them.
-   */
+  /** Registry template id (WU2+) — NULL resolves to the default template via `getTemplate(null)`. */
   selectedTemplateId: text("selected_template_id"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

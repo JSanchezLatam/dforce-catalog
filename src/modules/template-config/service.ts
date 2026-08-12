@@ -1,5 +1,11 @@
 /**
- * template-config — persisted catalog branding (R8.1,8.2,8.4).
+ * template-config — persisted template selection (R8.1,8.2,8.4).
+ *
+ * catalog-templates-and-workshop-info WU3 (task 3.12, migration `0009`):
+ * font/colours/logo/cover-text are no longer validated or persisted here —
+ * font and colours are template-fixed (the registry); logo and cover-text
+ * are workshop-owned (`workshop-config/service.ts`). This module now only
+ * validates the two fields `template_config` still has.
  *
  * ponytail: singleton-row-no-history (see schema.ts comment on
  * `templateConfig`) — one row, keyed by `SINGLETON_ID`, upserted in place.
@@ -13,24 +19,10 @@ import { KNOWN_TEMPLATE_IDS } from "@/shared/template/template-ids";
 const SINGLETON_ID = "singleton";
 
 export type TemplateConfigInput = {
-  logoUrl: string;
-  primaryColors: { primary: string; secondary: string };
-  font: string;
-  coverText: string;
   defaultImageHandling?: "strict" | "adaptive" | null;
-  /**
-   * Registry template id (catalog-templates-and-workshop-info WU2) — additive
-   * and unwired: nothing reads it yet (WU3 wires `getTemplate()` into the
-   * renderer). The four legacy branding fields above stay required here
-   * because `template_config`'s columns are still `NOT NULL` until
-   * migration `0009` — see design.md Risk #3.
-   */
+  /** Registry template id — NULL/unknown falls back to the default (R8.4). */
   selectedTemplateId?: string | null;
 };
-
-const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
-const MAX_FONT_LENGTH = 100;
-const MAX_COVER_TEXT_LENGTH = 300;
 
 export class TemplateConfigValidationError extends Error {
   constructor(public readonly errors: Record<string, string>) {
@@ -38,46 +30,11 @@ export class TemplateConfigValidationError extends Error {
   }
 }
 
-function isValidUrl(value: string): boolean {
-  try {
-    new URL(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Pure — no DB access — R8.1's "at least logo, primary colors, typography, cover text". */
+/** Pure — no DB access. Neither remaining field can fail validation; an invalid value falls back to null rather than erroring. */
 export function validateTemplateConfigInput(input: unknown): TemplateConfigInput {
-  const errors: Record<string, string> = {};
   const value = (input ?? {}) as Partial<Record<string, unknown>>;
 
-  const logoUrl = typeof value.logoUrl === "string" ? value.logoUrl : "";
-  if (!logoUrl || !isValidUrl(logoUrl)) {
-    errors.logoUrl = "Logo must be a valid URL";
-  }
-
-  const colors = (value.primaryColors ?? {}) as Partial<Record<string, unknown>>;
-  const primary = typeof colors.primary === "string" ? colors.primary : "";
-  const secondary = typeof colors.secondary === "string" ? colors.secondary : "";
-  if (!HEX_COLOR.test(primary)) {
-    errors.primaryColor = "Primary color must be a hex value like #1a2b3c";
-  }
-  if (!HEX_COLOR.test(secondary)) {
-    errors.secondaryColor = "Secondary color must be a hex value like #1a2b3c";
-  }
-
-  const font = typeof value.font === "string" ? value.font.trim() : "";
-  if (!font || font.length > MAX_FONT_LENGTH) {
-    errors.font = `Font must be 1-${MAX_FONT_LENGTH} characters`;
-  }
-
-  const coverText = typeof value.coverText === "string" ? value.coverText.trim() : "";
-  if (!coverText || coverText.length > MAX_COVER_TEXT_LENGTH) {
-    errors.coverText = `Cover text must be 1-${MAX_COVER_TEXT_LENGTH} characters`;
-  }
-
-  const rawHandling = (value as Record<string, unknown>).defaultImageHandling;
+  const rawHandling = value.defaultImageHandling;
   const defaultImageHandling = rawHandling === "strict" || rawHandling === "adaptive" ? rawHandling : null;
 
   // Unknown-but-valid-shape ids fall back to null (→ getTemplate(null) →
@@ -90,11 +47,7 @@ export function validateTemplateConfigInput(input: unknown): TemplateConfigInput
       ? rawTemplateId
       : null;
 
-  if (Object.keys(errors).length > 0) {
-    throw new TemplateConfigValidationError(errors);
-  }
-
-  return { logoUrl, primaryColors: { primary, secondary }, font, coverText, defaultImageHandling, selectedTemplateId };
+  return { defaultImageHandling, selectedTemplateId };
 }
 
 /** Returns null when the admin has never saved a config yet (page renders a blank form). */

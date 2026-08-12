@@ -64,6 +64,13 @@
       "when": 1786521244030,
       "tag": "0008_workshop_contact_info",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786551813532,
+      "tag": "0009_template_config_branding_split",
+      "breakpoints": true
     }
   ]
 }

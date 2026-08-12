@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckIcon, Search } from "lucide-react";
 
 import { CatalogTemplate } from "@/shared/template/CatalogTemplate";
-import type { TemplateConfig } from "@/shared/db/schema";
+import { getTemplate } from "@/shared/template/registry";
+import type { TemplateConfig, WorkshopConfig } from "@/shared/db/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -71,11 +72,13 @@ export function CatalogBuilderForm({
   categoryL1Options,
   categoryPairs,
   templateConfig,
+  workshopConfig,
   catalogCount,
 }: {
   categoryL1Options: string[];
   categoryPairs: CategoryPair[];
   templateConfig: TemplateConfig | null;
+  workshopConfig: WorkshopConfig | null;
   catalogCount: number;
 }) {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -578,16 +581,15 @@ export function CatalogBuilderForm({
               <CatalogTemplate
                 title={title}
                 sections={sections}
-                branding={
-                  templateConfig
-                    ? {
-                        logoUrl: templateConfig.logoUrl,
-                        primaryColors: templateConfig.primaryColors,
-                        font: templateConfig.font,
-                        coverText: templateConfig.coverText,
-                      }
-                    : null
-                }
+                branding={{
+                  templateId: getTemplate(templateConfig?.selectedTemplateId).id,
+                  // The logo route is session-authenticated (the browser sends
+                  // its cookie) — only supply the URL when a logo actually
+                  // exists, so an unset logo renders no <img> instead of a
+                  // broken one (matches the worker's per-key null handling).
+                  logoUrl: workshopConfig?.logoR2Key ? "/api/workshop-config/logo" : null,
+                  coverText: workshopConfig?.coverText ?? null,
+                }}
               />
             </div>
           </section>

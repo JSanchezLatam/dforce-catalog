@@ -2,142 +2,46 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 
 import { templateConfig } from "@/shared/db/schema";
-import { getTemplateConfig, saveTemplateConfig, TemplateConfigValidationError, validateTemplateConfigInput } from "./service";
+import { getTemplateConfig, saveTemplateConfig, validateTemplateConfigInput } from "./service";
 
-const validInput = {
-  logoUrl: "https://example.com/logo.png",
-  primaryColors: { primary: "#112233", secondary: "#445566" },
-  font: "Arial, sans-serif",
-  coverText: "Dforce Car — Catalogo 2026",
-  defaultImageHandling: null,
-  selectedTemplateId: null,
-};
-
-describe("validateTemplateConfigInput (R8.1)", () => {
-  it("accepts a fully valid input and returns it unchanged", () => {
-    expect(validateTemplateConfigInput(validInput)).toEqual(validInput);
+/**
+ * catalog-templates-and-workshop-info WU3 (design D2, task 3.12) —
+ * `template_config.logo_url/primary_colors/font/cover_text` are dropped by
+ * migration `0009`. Font/colours are now template-fixed (the registry, see
+ * `registry.test.ts`); logo/cover-text are workshop-owned
+ * (`workshop-config/service.test.ts`). This module's input shrinks to only
+ * what still lives in `template_config`: `selectedTemplateId` and
+ * `defaultImageHandling`.
+ */
+describe("validateTemplateConfigInput — post-migration-0009 shape", () => {
+  it("accepts an empty input — neither remaining field is required", () => {
+    expect(validateTemplateConfigInput({})).toEqual({ defaultImageHandling: null, selectedTemplateId: null });
   });
 
-  it("rejects a non-URL logoUrl", () => {
-    expect(() => validateTemplateConfigInput({ ...validInput, logoUrl: "not-a-url" })).toThrow(
-      TemplateConfigValidationError,
+  it("accepts a known selectedTemplateId", () => {
+    expect(validateTemplateConfigInput({ selectedTemplateId: "dforce-classic" }).selectedTemplateId).toBe(
+      "dforce-classic",
     );
   });
 
-  it("rejects a missing logoUrl", () => {
-    expect(() => validateTemplateConfigInput({ ...validInput, logoUrl: "" })).toThrow(
-      TemplateConfigValidationError,
-    );
+  it("falls back to null for an id not in the registry (R8.4)", () => {
+    expect(validateTemplateConfigInput({ selectedTemplateId: "not-a-real-template" }).selectedTemplateId).toBeNull();
   });
 
-  it("rejects a non-hex primary color", () => {
-    expect(() =>
-      validateTemplateConfigInput({ ...validInput, primaryColors: { primary: "blue", secondary: "#445566" } }),
-    ).toThrow(TemplateConfigValidationError);
+  it("falls back to null for a non-string selectedTemplateId", () => {
+    expect(validateTemplateConfigInput({ selectedTemplateId: 42 }).selectedTemplateId).toBeNull();
   });
 
-  it("rejects a non-hex secondary color", () => {
-    expect(() =>
-      validateTemplateConfigInput({ ...validInput, primaryColors: { primary: "#112233", secondary: "red" } }),
-    ).toThrow(TemplateConfigValidationError);
-  });
-
-  it("rejects an empty font", () => {
-    expect(() => validateTemplateConfigInput({ ...validInput, font: "  " })).toThrow(TemplateConfigValidationError);
-  });
-
-  it("rejects a font over the max length", () => {
-    expect(() => validateTemplateConfigInput({ ...validInput, font: "a".repeat(101) })).toThrow(
-      TemplateConfigValidationError,
-    );
-  });
-
-  it("rejects an empty cover text", () => {
-    expect(() => validateTemplateConfigInput({ ...validInput, coverText: "" })).toThrow(
-      TemplateConfigValidationError,
-    );
-  });
-
-  it("rejects cover text over the max length", () => {
-    expect(() => validateTemplateConfigInput({ ...validInput, coverText: "a".repeat(301) })).toThrow(
-      TemplateConfigValidationError,
-    );
-  });
-
-  it("collects all field errors on the thrown error, not just the first", () => {
-    try {
-      validateTemplateConfigInput({});
-      expect.fail("expected validation to throw");
-    } catch (err) {
-      expect(err).toBeInstanceOf(TemplateConfigValidationError);
-      const validationError = err as TemplateConfigValidationError;
-      expect(Object.keys(validationError.errors).sort()).toEqual(
-        ["coverText", "font", "logoUrl", "primaryColor", "secondaryColor"].sort(),
-      );
-    }
-  });
-});
-
-describe("selectedTemplateId validation (R8.1/R8.4 — additive, unwired until WU3)", () => {
-  it("accepts a selectedTemplateId alongside the still-required legacy branding fields", () => {
-    const result = validateTemplateConfigInput({ ...validInput, selectedTemplateId: "dforce-classic" });
-    expect(result.selectedTemplateId).toBe("dforce-classic");
-  });
-
-  it("defaults to null when omitted", () => {
-    const result = validateTemplateConfigInput(validInput);
-    expect(result.selectedTemplateId).toBeNull();
-  });
-
-  it("defaults to null when not a string", () => {
-    const result = validateTemplateConfigInput({ ...validInput, selectedTemplateId: 42 });
-    expect(result.selectedTemplateId).toBeNull();
-  });
-
-  it("defaults to null for an id not in the registry, instead of persisting it verbatim", () => {
-    const result = validateTemplateConfigInput({ ...validInput, selectedTemplateId: "not-a-real-template" });
-    expect(result.selectedTemplateId).toBeNull();
-  });
-
-  it("still rejects a missing logoUrl even when selectedTemplateId is present (columns are NOT NULL until migration 0009)", () => {
-    expect(() =>
-      validateTemplateConfigInput({ ...validInput, selectedTemplateId: "dforce-classic", logoUrl: "" }),
-    ).toThrow(TemplateConfigValidationError);
-  });
-});
-
-describe("defaultImageHandling validation", () => {
-  it("accepts strict", () => {
-    const result = validateTemplateConfigInput({ ...validInput, defaultImageHandling: "strict" });
-    expect(result.defaultImageHandling).toBe("strict");
-  });
-
-  it("accepts adaptive", () => {
-    const result = validateTemplateConfigInput({ ...validInput, defaultImageHandling: "adaptive" });
-    expect(result.defaultImageHandling).toBe("adaptive");
-  });
-
-  it("defaults to null when omitted (backward compat)", () => {
-    const result = validateTemplateConfigInput(validInput);
-    expect(result.defaultImageHandling).toBeNull();
-  });
-
-  it("defaults to null when value is invalid", () => {
-    const result = validateTemplateConfigInput({ ...validInput, defaultImageHandling: "invalid" });
-    expect(result.defaultImageHandling).toBeNull();
+  it("accepts strict/adaptive defaultImageHandling and defaults invalid values to null", () => {
+    expect(validateTemplateConfigInput({ defaultImageHandling: "strict" }).defaultImageHandling).toBe("strict");
+    expect(validateTemplateConfigInput({ defaultImageHandling: "adaptive" }).defaultImageHandling).toBe("adaptive");
+    expect(validateTemplateConfigInput({ defaultImageHandling: "bogus" }).defaultImageHandling).toBeNull();
   });
 });
 
 /**
- * Injected-dep unit tests, not proof of real persistence — a mock can only
- * show the value reaches the query builder's arguments, not that Postgres
- * round-trips it (AGENTS.md's coverage-limit rule: the `db` seam means the
- * real `select`/`insert` branch never executes here). Same pattern as
- * `workshop-config/service.test.ts`'s `saveWorkshopConfig` tests — assert on
- * what was passed to `values`/`onConflictDoUpdate`, not on a fake that
- * echoes its own input back. The actual round-trip claim (spec: "Selection
- * survives a restart") was verified with a live smoke against the real dev
- * Postgres — see apply-progress.md.
+ * Injected-dep unit tests, not proof of real persistence (AGENTS.md's
+ * coverage-limit rule) — same pattern as WU2's persistence tests.
  */
 describe("selectedTemplateId persistence (R8.4)", () => {
   it("passes selectedTemplateId to both the insert values and the onConflictDoUpdate set clause", async () => {
@@ -146,7 +50,7 @@ describe("selectedTemplateId persistence (R8.4)", () => {
     const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
     const db = { insert: vi.fn().mockReturnValue({ values }) };
 
-    await saveTemplateConfig({ ...validInput, selectedTemplateId: "dforce-classic" }, db as never);
+    await saveTemplateConfig({ selectedTemplateId: "dforce-classic" }, db as never);
 
     expect(values.mock.calls[0][0]).toEqual(expect.objectContaining({ selectedTemplateId: "dforce-classic" }));
     const onConflictArg = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
@@ -163,10 +67,6 @@ describe("selectedTemplateId persistence (R8.4)", () => {
     const result = await getTemplateConfig(db as never);
 
     expect(from).toHaveBeenCalledWith(templateConfig);
-    // Not just "some filter was applied" — the exact singleton-id condition,
-    // so a refactor that drops it or keys off the wrong column fails here
-    // instead of silently reading an arbitrary row (the class of bug the
-    // WU1 live smoke caught in migration 0008's ORDER BY ... LIMIT 1).
     expect(where).toHaveBeenCalledWith(eq(templateConfig.id, "singleton"));
     expect(limit).toHaveBeenCalledWith(1);
     expect(result).toEqual(row);

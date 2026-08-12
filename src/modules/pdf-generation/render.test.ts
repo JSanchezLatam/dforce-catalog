@@ -42,7 +42,7 @@ describe("renderCatalogHtml — R6.1 (shares CatalogTemplate with the builder's 
   it("produces a full HTML document containing the title, index, and every product page", async () => {
     const html = await renderCatalogHtml({
       title: "Catalog: Motor",
-      branding: { logoUrl: "https://x/logo.png", primaryColors: { primary: "#111111", secondary: "#eeeeee" }, font: "Arial", coverText: "Welcome" },
+      branding: { templateId: "dforce-classic", logoUrl: "https://x/logo.png", coverText: "Welcome" },
       sections: [{ categoryL1: "Motor", categoryL2: null, productCount: 2 }],
       productPages: [["1", "2"].map(product)],
     });
@@ -58,6 +58,24 @@ describe("renderCatalogHtml — R6.1 (shares CatalogTemplate with the builder's 
     const html = await renderCatalogHtml({ title: "Empty catalog", branding: null, sections: [] });
     expect(html).toContain("Empty catalog");
     expect(html).not.toContain("Product page");
+  });
+
+  // design.md's New Risk #1 — this body `<style>` tag previously read
+  // `branding.font` directly and fell back to plain "sans-serif" once that
+  // field moved into the registry (D1/D2); it must resolve the SAME font the
+  // cover uses, via getTemplate(branding.templateId), not silently drift.
+  it("resolves the body font from the registry, not a literal branding.font", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: { templateId: "dforce-classic", logoUrl: null, coverText: null },
+      sections: [],
+    });
+    expect(html).toContain("font-family: Arial, sans-serif,");
+  });
+
+  it("falls back to sans-serif when there is no branding at all", async () => {
+    const html = await renderCatalogHtml({ title: "C", branding: null, sections: [] });
+    expect(html).toContain("font-family: sans-serif,");
   });
 
   it("renders transparent imageType with full-bleed card (height 180px inline)", async () => {
