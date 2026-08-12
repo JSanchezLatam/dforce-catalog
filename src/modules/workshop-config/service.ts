@@ -6,14 +6,27 @@ import { workshopConfig, type WorkshopConfig } from "@/shared/db/schema";
 const SINGLETON_ID = "singleton";
 const MAX_NAME_LENGTH = 100;
 
+/** Plain-string contact fields, stored verbatim (no trimming) — "hours" must never be reshaped per the free-text spec. */
+const TEXT_FIELDS = ["phone", "whatsapp", "email", "address", "hours", "website", "coverText"] as const;
+
 export type WorkshopConfigInput = {
   name: string | null;
   // `undefined` (key absent) means "leave untouched" — a name-only save must
   // NOT clobber an existing logo. `null` means "explicitly clear" (DELETE
-  // flow). Only `logoR2Key`/`logoContentType` present on `input` are ever
-  // written to the update `set` clause — see saveWorkshopConfig below.
+  // flow). Only fields present on `input` are ever written to the update
+  // `set` clause — see saveWorkshopConfig below.
   logoR2Key?: string | null;
   logoContentType?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
+  address?: string | null;
+  /** Free-text, e.g. "Lun-Vie 9-18, Sáb 9-13" — stored verbatim, no per-day parsing. */
+  hours?: string | null;
+  website?: string | null;
+  coverText?: string | null;
+  /** Open-ended platform → handle map — a new platform needs no schema change. */
+  socialHandles?: Record<string, string> | null;
 };
 
 export class WorkshopConfigValidationError extends Error {
@@ -41,6 +54,14 @@ export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput
   }
   if ("logoContentType" in value) {
     result.logoContentType = value.logoContentType === null ? null : String(value.logoContentType);
+  }
+  for (const field of TEXT_FIELDS) {
+    if (field in value) {
+      result[field] = value[field] === null ? null : String(value[field]);
+    }
+  }
+  if ("socialHandles" in value) {
+    result.socialHandles = value.socialHandles === null ? null : (value.socialHandles as Record<string, string>);
   }
   return result;
 }
@@ -72,6 +93,16 @@ export async function saveWorkshopConfig(
   if ("logoContentType" in parsed) {
     insertValues.logoContentType = parsed.logoContentType ?? null;
     updateSet.logoContentType = parsed.logoContentType ?? null;
+  }
+  for (const field of TEXT_FIELDS) {
+    if (field in parsed) {
+      insertValues[field] = parsed[field] ?? null;
+      updateSet[field] = parsed[field] ?? null;
+    }
+  }
+  if ("socialHandles" in parsed) {
+    insertValues.socialHandles = parsed.socialHandles ?? null;
+    updateSet.socialHandles = parsed.socialHandles ?? null;
   }
 
   const [row] = await db

@@ -18,6 +18,24 @@ describe("validateWorkshopConfigInput", () => {
   it("accepts an empty input (no name)", () => {
     expect(validateWorkshopConfigInput({})).toEqual({ name: null });
   });
+
+  it.each(["phone", "whatsapp", "email", "address", "hours", "website", "coverText"])(
+    "accepts %s independently",
+    (field) => {
+      const result = validateWorkshopConfigInput({ [field]: "some value" }) as Record<string, unknown>;
+      expect(result[field]).toBe("some value");
+    },
+  );
+
+  it("stores hours verbatim with no per-day parsing", () => {
+    const result = validateWorkshopConfigInput({ hours: "Lun-Vie 9-18, Sáb 9-13" });
+    expect(result.hours).toBe("Lun-Vie 9-18, Sáb 9-13");
+  });
+
+  it("accepts socialHandles with an arbitrary platform key", () => {
+    const result = validateWorkshopConfigInput({ socialHandles: { instagram: "@mitaller", tiktok: "@mitaller" } });
+    expect(result.socialHandles).toEqual({ instagram: "@mitaller", tiktok: "@mitaller" });
+  });
 });
 
 describe("getWorkshopConfig", () => {
@@ -68,6 +86,21 @@ describe("saveWorkshopConfig", () => {
     const onConflictArg = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
     expect(onConflictArg.set).not.toHaveProperty("logoR2Key");
     expect(onConflictArg.set).not.toHaveProperty("logoContentType");
+  });
+
+  it("persists a new contact field without touching other already-set fields (partial update)", async () => {
+    const row = { id: "singleton", name: "Taller", phone: "555-1234", email: "old@taller.com", updatedAt: new Date() };
+    const onConflictDoUpdate = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([row]) });
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    const db = { insert: vi.fn().mockReturnValue({ values } as never) } as never;
+
+    await saveWorkshopConfig({ name: "Taller", phone: "555-1234" }, db);
+
+    const onConflictArg = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
+    expect(onConflictArg.set).toEqual(expect.objectContaining({ phone: "555-1234" }));
+    expect(onConflictArg.set).not.toHaveProperty("email");
+    expect(onConflictArg.set).not.toHaveProperty("coverText");
+    expect(onConflictArg.set).not.toHaveProperty("socialHandles");
   });
 
   it("explicitly clears logoR2Key/logoContentType when null is passed (DELETE flow)", async () => {
