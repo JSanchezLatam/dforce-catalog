@@ -6,8 +6,9 @@
  */
 import { eq } from "drizzle-orm";
 
-import { db } from "@/shared/db/client";
+import { db as defaultDb } from "@/shared/db/client";
 import { templateConfig, type TemplateConfig } from "@/shared/db/schema";
+import { KNOWN_TEMPLATE_IDS } from "@/shared/template/template-ids";
 
 const SINGLETON_ID = "singleton";
 
@@ -17,6 +18,14 @@ export type TemplateConfigInput = {
   font: string;
   coverText: string;
   defaultImageHandling?: "strict" | "adaptive" | null;
+  /**
+   * Registry template id (catalog-templates-and-workshop-info WU2) — additive
+   * and unwired: nothing reads it yet (WU3 wires `getTemplate()` into the
+   * renderer). The four legacy branding fields above stay required here
+   * because `template_config`'s columns are still `NOT NULL` until
+   * migration `0009` — see design.md Risk #3.
+   */
+  selectedTemplateId?: string | null;
 };
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
@@ -71,21 +80,36 @@ export function validateTemplateConfigInput(input: unknown): TemplateConfigInput
   const rawHandling = (value as Record<string, unknown>).defaultImageHandling;
   const defaultImageHandling = rawHandling === "strict" || rawHandling === "adaptive" ? rawHandling : null;
 
+  // Unknown-but-valid-shape ids fall back to null (→ getTemplate(null) →
+  // the default) rather than an error: R8.4's "orphaned id falls back"
+  // scenario also covers a stale client posting an id a registry edit
+  // removed, not just a corrupted DB row.
+  const rawTemplateId = value.selectedTemplateId;
+  const selectedTemplateId =
+    typeof rawTemplateId === "string" && (KNOWN_TEMPLATE_IDS as readonly string[]).includes(rawTemplateId)
+      ? rawTemplateId
+      : null;
+
   if (Object.keys(errors).length > 0) {
     throw new TemplateConfigValidationError(errors);
   }
 
-  return { logoUrl, primaryColors: { primary, secondary }, font, coverText, defaultImageHandling };
+  return { logoUrl, primaryColors: { primary, secondary }, font, coverText, defaultImageHandling, selectedTemplateId };
 }
 
 /** Returns null when the admin has never saved a config yet (page renders a blank form). */
-export async function getTemplateConfig(): Promise<TemplateConfig | null> {
+export async function getTemplateConfig(
+  db: { select: typeof defaultDb.select } = defaultDb,
+): Promise<TemplateConfig | null> {
   const rows = await db.select().from(templateConfig).where(eq(templateConfig.id, SINGLETON_ID)).limit(1);
   return rows[0] ?? null;
 }
 
 /** Validates then upserts the singleton row (R8.2 — applies to catalogs generated from now on). */
-export async function saveTemplateConfig(input: unknown): Promise<TemplateConfig> {
+export async function saveTemplateConfig(
+  input: unknown,
+  db: { insert: typeof defaultDb.insert } = defaultDb,
+): Promise<TemplateConfig> {
   const value = validateTemplateConfigInput(input);
   const updatedAt = new Date();
   const [row] = await db

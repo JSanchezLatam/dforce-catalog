@@ -146,6 +146,13 @@ describe("validateWorkshopConfigInput", () => {
 });
 
 describe("getWorkshopConfig", () => {
+  // Tests the function's own zero-rows → null logic in isolation. Not a
+  // claim that a migrated database can produce zero rows: migration 0008's
+  // `INSERT ... ON CONFLICT DO NOTHING` guarantees the singleton row exists
+  // on any install that has run it, so getWorkshopConfig() now always
+  // resolves a row (every field NULL, on a fresh install) rather than null.
+  // Callers must not branch on `config === null` meaning "unconfigured" —
+  // see apply-progress.md's WU1 section and tasks.md task 3.9.
   it("returns null when no config has been saved", async () => {
     const db = { select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([]) }) }) }) };
     const result = await getWorkshopConfig(db as never);

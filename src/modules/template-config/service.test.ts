@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
+import { describe, expect, it, vi } from "vitest";
 
-import { TemplateConfigValidationError, validateTemplateConfigInput } from "./service";
+import { templateConfig } from "@/shared/db/schema";
+import { getTemplateConfig, saveTemplateConfig, TemplateConfigValidationError, validateTemplateConfigInput } from "./service";
 
 const validInput = {
   logoUrl: "https://example.com/logo.png",
@@ -8,6 +10,7 @@ const validInput = {
   font: "Arial, sans-serif",
   coverText: "Dforce Car — Catalogo 2026",
   defaultImageHandling: null,
+  selectedTemplateId: null,
 };
 
 describe("validateTemplateConfigInput (R8.1)", () => {
@@ -75,6 +78,34 @@ describe("validateTemplateConfigInput (R8.1)", () => {
   });
 });
 
+describe("selectedTemplateId validation (R8.1/R8.4 — additive, unwired until WU3)", () => {
+  it("accepts a selectedTemplateId alongside the still-required legacy branding fields", () => {
+    const result = validateTemplateConfigInput({ ...validInput, selectedTemplateId: "dforce-classic" });
+    expect(result.selectedTemplateId).toBe("dforce-classic");
+  });
+
+  it("defaults to null when omitted", () => {
+    const result = validateTemplateConfigInput(validInput);
+    expect(result.selectedTemplateId).toBeNull();
+  });
+
+  it("defaults to null when not a string", () => {
+    const result = validateTemplateConfigInput({ ...validInput, selectedTemplateId: 42 });
+    expect(result.selectedTemplateId).toBeNull();
+  });
+
+  it("defaults to null for an id not in the registry, instead of persisting it verbatim", () => {
+    const result = validateTemplateConfigInput({ ...validInput, selectedTemplateId: "not-a-real-template" });
+    expect(result.selectedTemplateId).toBeNull();
+  });
+
+  it("still rejects a missing logoUrl even when selectedTemplateId is present (columns are NOT NULL until migration 0009)", () => {
+    expect(() =>
+      validateTemplateConfigInput({ ...validInput, selectedTemplateId: "dforce-classic", logoUrl: "" }),
+    ).toThrow(TemplateConfigValidationError);
+  });
+});
+
 describe("defaultImageHandling validation", () => {
   it("accepts strict", () => {
     const result = validateTemplateConfigInput({ ...validInput, defaultImageHandling: "strict" });
@@ -94,5 +125,50 @@ describe("defaultImageHandling validation", () => {
   it("defaults to null when value is invalid", () => {
     const result = validateTemplateConfigInput({ ...validInput, defaultImageHandling: "invalid" });
     expect(result.defaultImageHandling).toBeNull();
+  });
+});
+
+/**
+ * Injected-dep unit tests, not proof of real persistence — a mock can only
+ * show the value reaches the query builder's arguments, not that Postgres
+ * round-trips it (AGENTS.md's coverage-limit rule: the `db` seam means the
+ * real `select`/`insert` branch never executes here). Same pattern as
+ * `workshop-config/service.test.ts`'s `saveWorkshopConfig` tests — assert on
+ * what was passed to `values`/`onConflictDoUpdate`, not on a fake that
+ * echoes its own input back. The actual round-trip claim (spec: "Selection
+ * survives a restart") was verified with a live smoke against the real dev
+ * Postgres — see apply-progress.md.
+ */
+describe("selectedTemplateId persistence (R8.4)", () => {
+  it("passes selectedTemplateId to both the insert values and the onConflictDoUpdate set clause", async () => {
+    const row = { id: "singleton", selectedTemplateId: "dforce-classic" };
+    const onConflictDoUpdate = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([row]) });
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    const db = { insert: vi.fn().mockReturnValue({ values }) };
+
+    await saveTemplateConfig({ ...validInput, selectedTemplateId: "dforce-classic" }, db as never);
+
+    expect(values.mock.calls[0][0]).toEqual(expect.objectContaining({ selectedTemplateId: "dforce-classic" }));
+    const onConflictArg = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
+    expect(onConflictArg.set).toEqual(expect.objectContaining({ selectedTemplateId: "dforce-classic" }));
+  });
+
+  it("getTemplateConfig queries the template_config table with limit 1 and returns its row", async () => {
+    const row = { id: "singleton", selectedTemplateId: "dforce-classic" };
+    const limit = vi.fn().mockResolvedValue([row]);
+    const where = vi.fn().mockReturnValue({ limit });
+    const from = vi.fn().mockReturnValue({ where });
+    const db = { select: vi.fn().mockReturnValue({ from }) };
+
+    const result = await getTemplateConfig(db as never);
+
+    expect(from).toHaveBeenCalledWith(templateConfig);
+    // Not just "some filter was applied" — the exact singleton-id condition,
+    // so a refactor that drops it or keys off the wrong column fails here
+    // instead of silently reading an arbitrary row (the class of bug the
+    // WU1 live smoke caught in migration 0008's ORDER BY ... LIMIT 1).
+    expect(where).toHaveBeenCalledWith(eq(templateConfig.id, "singleton"));
+    expect(limit).toHaveBeenCalledWith(1);
+    expect(result).toEqual(row);
   });
 });
