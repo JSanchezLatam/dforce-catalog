@@ -9,9 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
 import { LogoUploadField } from "./LogoUploadField";
-
-const MAX_COVER_TEXT_LENGTH = 500;
-const MAX_CONTACT_FIELD_LENGTH = 200;
+import { MAX_CONTACT_FIELD_LENGTH, MAX_COVER_TEXT_LENGTH, MAX_HANDLE_LENGTH } from "./limits";
 
 type Props = {
   initialConfig: WorkshopConfig | null;
@@ -231,6 +229,7 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
                   <Input
                     id={`social-platform-${row.id}`}
                     value={row.platform}
+                    maxLength={MAX_HANDLE_LENGTH}
                     onChange={(e) => updateSocialRow(row.id, "platform", e.target.value)}
                   />
                 </div>
@@ -239,6 +238,7 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
                   <Input
                     id={`social-handle-${row.id}`}
                     value={row.handle}
+                    maxLength={MAX_HANDLE_LENGTH}
                     onChange={(e) => updateSocialRow(row.id, "handle", e.target.value)}
                   />
                 </div>
@@ -251,6 +251,11 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
               Agregar red social
             </Button>
           </div>
+          {errors.socialHandles && (
+            <p role="alert" className={FIELD_ERROR}>
+              {errors.socialHandles}
+            </p>
+          )}
 
           {errors.form && (
             <p role="alert" className={FIELD_ERROR}>

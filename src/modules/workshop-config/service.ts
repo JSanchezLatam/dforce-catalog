@@ -2,13 +2,15 @@ import { eq } from "drizzle-orm";
 
 import { db as defaultDb } from "@/shared/db/client";
 import { workshopConfig, type WorkshopConfig } from "@/shared/db/schema";
+import {
+  MAX_NAME_LENGTH,
+  MAX_CONTACT_FIELD_LENGTH,
+  MAX_COVER_TEXT_LENGTH,
+  MAX_HANDLE_LENGTH,
+  MAX_HANDLE_ENTRIES,
+} from "./limits";
 
 const SINGLETON_ID = "singleton";
-const MAX_NAME_LENGTH = 100;
-const MAX_COVER_TEXT_LENGTH = 500;
-const MAX_CONTACT_FIELD_LENGTH = 200;
-const MAX_HANDLE_LENGTH = 100;
-const MAX_HANDLE_ENTRIES = 20;
 
 const CONTACT_FIELD_LABELS: Record<string, string> = {
   phone: "El teléfono",
@@ -69,12 +71,15 @@ function readTextField(value: Record<string, unknown>, field: string): string | 
  * Same trust-boundary discipline as readTextField, for the one open-ended
  * jsonb field: reject anything that is not a plain object (a bare string or
  * an array would otherwise sail through `Object.entries()` in the form and
- * render bogus rows), then drop individual entries whose platform key or
- * handle value is blank/whitespace-only or over the length cap — a blank
- * key or handle is the same "empty label" bug an empty top-level contact
- * field would be. `MAX_HANDLE_ENTRIES` bounds the map itself: the two
- * per-entry caps bound width, but nothing bounded entry *count* until now —
- * this is the one field the form lets an admin grow without limit.
+ * render bogus rows), then drop individual entries that are malformed in a
+ * way no legitimate form submission produces — a non-string value, or a
+ * blank/whitespace-only key or handle (the same "leave it out" collapse
+ * `readTextField` applies to an empty top-level contact field, not data
+ * loss). Length/count limits are a DIFFERENT case: the form's "Agregar red
+ * social" button can reach them through ordinary use, so those are
+ * validated separately (see validateHandleMapLimits) and reported as an
+ * error, never silently dropped or truncated — a save that reports success
+ * while quietly discarding entries is worse than one that refuses to save.
  */
 function readHandleMap(value: Record<string, unknown>): Record<string, string> | null | undefined {
   if (!("socialHandles" in value)) return undefined;
@@ -84,15 +89,27 @@ function readHandleMap(value: Record<string, unknown>): Record<string, string> |
   const entries = Object.entries(raw as Record<string, unknown>)
     .filter(
       (entry): entry is [string, string] =>
-        typeof entry[1] === "string" &&
-        entry[0].trim() !== "" &&
-        entry[1].trim() !== "" &&
-        entry[0].length <= MAX_HANDLE_LENGTH &&
-        entry[1].length <= MAX_HANDLE_LENGTH,
+        typeof entry[1] === "string" && entry[0].trim() !== "" && entry[1].trim() !== "",
     )
-    .map(([platform, handle]): [string, string] => [platform.trim(), handle])
-    .slice(0, MAX_HANDLE_ENTRIES);
+    .map(([platform, handle]): [string, string] => [platform.trim(), handle]);
   return Object.fromEntries(entries);
+}
+
+/** Mutates `errors.socialHandles` when the parsed map exceeds the entry-count or per-entry length cap. */
+function validateHandleMapLimits(
+  handles: Record<string, string> | null | undefined,
+  errors: Record<string, string>,
+): void {
+  if (!handles) return;
+  const entries = Object.entries(handles);
+  if (entries.length > MAX_HANDLE_ENTRIES) {
+    errors.socialHandles = `Puedes guardar hasta ${MAX_HANDLE_ENTRIES} redes sociales`;
+    return;
+  }
+  const tooLong = entries.some(([platform, handle]) => platform.length > MAX_HANDLE_LENGTH || handle.length > MAX_HANDLE_LENGTH);
+  if (tooLong) {
+    errors.socialHandles = `Cada red social debe tener ${MAX_HANDLE_LENGTH} caracteres o menos`;
+  }
 }
 
 export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput {
@@ -121,6 +138,9 @@ export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput
     errors.coverText = `El texto de portada debe tener ${MAX_COVER_TEXT_LENGTH} caracteres o menos`;
   }
 
+  const socialHandles = readHandleMap(value);
+  validateHandleMapLimits(socialHandles, errors);
+
   if (Object.keys(errors).length > 0) {
     throw new WorkshopConfigValidationError(errors);
   }
@@ -139,7 +159,6 @@ export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput
   if (hours !== undefined) result.hours = hours;
   if (website !== undefined) result.website = website;
   if (coverText !== undefined) result.coverText = coverText;
-  const socialHandles = readHandleMap(value);
   if (socialHandles !== undefined) result.socialHandles = socialHandles;
   return result;
 }

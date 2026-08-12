@@ -65,9 +65,21 @@ WU2/WU3's tasks should close this window deliberately rather than by
 sequencing luck — e.g. hide or label the new field as "not yet active"
 until WU3 wires it, or land WU3 promptly after this merges.
 
+**`getWorkshopConfig()` can now return a non-null, all-null-fields row.**
+Migration `0008`'s `INSERT ... ON CONFLICT DO NOTHING` (added to fix the
+cover-text data-loss bug above) means any install that never had a
+`workshop_config` row before this migration now gets one — every field
+`NULL` except `id`/`updatedAt`. Previously `getWorkshopConfig()` returned
+`null` on such an install (`service.test.ts`'s "returns null when no config
+has been saved" test still passes only because it mocks the query, not the
+real migrated schema). No WU1 caller is affected — `WorkshopConfigForm`
+already null-coalesces every field. WU3's `generate/route.ts` must not
+assume `getWorkshopConfig() === null` means "nothing configured"; check
+individual fields instead.
+
 ### Verification
 
-- `npm test` — 709/709 passing (full suite, not just this module).
+- `npm test` — 711/711 passing (full suite, not just this module).
 - `npx tsc --noEmit` — clean.
 - `npm run lint` — 0 errors, 17 pre-existing warnings (none introduced by
   this change).
@@ -79,6 +91,20 @@ until WU3 wires it, or land WU3 promptly after this merges.
   - Every other new `workshop_config` column defaulted to `NULL`.
   - `template_config.selected_template_id` defaulted to `NULL`; the four
     legacy branding columns stayed `NOT NULL` and unchanged.
+- Second live smoke, added after RDD review caught the cover-text data-loss
+  edge case above: created a scratch database on the same Postgres
+  instance, applied migrations `0000`–`0007`, seeded a `template_config`
+  row while leaving `workshop_config` empty (the exact scenario the
+  original `UPDATE`-only migration couldn't handle), and confirmed the
+  unfixed `0008` left `workshop_config` with zero rows — then confirmed the
+  fixed version (`INSERT ... ON CONFLICT DO NOTHING` ahead of the `UPDATE`)
+  correctly created the singleton row with `cover_text` backfilled. Scratch
+  database dropped afterward. Because `0008` had already been applied to
+  the real dev DB before the fix, and drizzle-orm's migrator hashes the
+  full migration file to detect "already applied", the dev DB's recorded
+  hash for migration `8` was updated to match the corrected file content —
+  confirmed a subsequent `db:migrate` run against it is a clean no-op that
+  does not attempt to re-run the (already-applied) `ADD COLUMN` statements.
 
 ### Next
 

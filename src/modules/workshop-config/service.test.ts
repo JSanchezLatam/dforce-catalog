@@ -107,10 +107,25 @@ describe("validateWorkshopConfigInput", () => {
     expect(result.socialHandles).toEqual({ instagram: "@mitaller" });
   });
 
-  it("caps the number of socialHandles entries a single request may set", () => {
+  it("rejects socialHandles over the entry-count cap instead of silently truncating it", () => {
     const many = Object.fromEntries(Array.from({ length: 25 }, (_, i) => [`platform${i}`, `@handle${i}`]));
-    const result = validateWorkshopConfigInput({ socialHandles: many });
-    expect(Object.keys(result.socialHandles ?? {}).length).toBeLessThanOrEqual(20);
+    expect(() => validateWorkshopConfigInput({ socialHandles: many })).toThrow();
+  });
+
+  it("gives a Spanish message when socialHandles is over the entry-count cap", () => {
+    const many = Object.fromEntries(Array.from({ length: 25 }, (_, i) => [`platform${i}`, `@handle${i}`]));
+    try {
+      validateWorkshopConfigInput({ socialHandles: many });
+      expect.unreachable();
+    } catch (err) {
+      expect((err as WorkshopConfigValidationError).errors.socialHandles).toMatch(/20/);
+    }
+  });
+
+  it("rejects a socialHandles entry over the per-entry length cap instead of silently dropping it", () => {
+    expect(() =>
+      validateWorkshopConfigInput({ socialHandles: { instagram: "x".repeat(101) } }),
+    ).toThrow();
   });
 });
 

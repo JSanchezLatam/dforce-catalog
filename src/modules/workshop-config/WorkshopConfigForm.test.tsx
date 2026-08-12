@@ -90,6 +90,7 @@ describe("WorkshopConfigForm — contact fields", () => {
         errors: {
           coverText: "El texto de portada debe tener 500 caracteres o menos",
           phone: "El teléfono debe tener 200 caracteres o menos",
+          socialHandles: "Puedes guardar hasta 20 redes sociales",
         },
       },
     });
@@ -101,6 +102,7 @@ describe("WorkshopConfigForm — contact fields", () => {
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(await screen.findByText("El texto de portada debe tener 500 caracteres o menos")).toBeInTheDocument();
     expect(screen.getByText("El teléfono debe tener 200 caracteres o menos")).toBeInTheDocument();
+    expect(screen.getByText("Puedes guardar hasta 20 redes sociales")).toBeInTheDocument();
   });
 
   it("adds a social handle row and submits it under an arbitrary platform key", async () => {
