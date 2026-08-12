@@ -104,6 +104,23 @@ describe("workshop-config logo route", () => {
       await POST(req("administrador", { method: "POST", body: form }));
       expect(mockDeleteObject).toHaveBeenCalledWith("old-key");
     });
+
+    // saveWorkshopConfig's "name" is now partial-touch (service.test.ts):
+    // resending it here would clobber a name saved concurrently through the
+    // main settings form, on the same singleton row, while a logo upload is
+    // in flight.
+    it("does not resend name when saving the uploaded logo key", async () => {
+      mockGetConfig.mockResolvedValue(mockConfig({ name: "Taller Existente" }));
+      mockPutObject.mockResolvedValue("https://r2.dev/key.png");
+
+      const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      const form = new FormData();
+      form.append("file", new Blob([png], { type: "image/png" }), "logo.png");
+
+      await POST(req("administrador", { method: "POST", body: form }));
+      expect(mockSaveConfig).toHaveBeenCalledOnce();
+      expect(mockSaveConfig.mock.calls[0][0]).not.toHaveProperty("name");
+    });
   });
 
   describe("DELETE — workshop.edit (admin only)", () => {
@@ -113,6 +130,13 @@ describe("workshop-config logo route", () => {
       const res = await DELETE(req("administrador", { method: "DELETE" }));
       expect(res.status).toBe(200);
       expect(mockSaveConfig).toHaveBeenCalled();
+    });
+
+    it("does not resend name when clearing the logo", async () => {
+      mockGetConfig.mockResolvedValue(mockConfig({ name: "Taller Existente", logoR2Key: "some-key" }));
+
+      await DELETE(req("administrador", { method: "DELETE" }));
+      expect(mockSaveConfig.mock.calls[0][0]).not.toHaveProperty("name");
     });
 
     it("rejects tecnico with 403", async () => {

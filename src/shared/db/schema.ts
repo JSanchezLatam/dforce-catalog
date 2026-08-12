@@ -45,15 +45,29 @@ export const sessions = pgTable("sessions", {
 export type Session = typeof sessions.$inferSelect;
 
 /**
- * `workshop_config` — singleton row holding the workshop display name and
- * logo (uploaded to R2, served through /api/workshop-config/logo).
- * Created in crm-shell-settings-rbac WU1.
+ * `workshop_config` — singleton row holding the workshop display name,
+ * logo (uploaded to R2, served through /api/workshop-config/logo), and
+ * contact info shown on generated catalogs (catalog-templates-and-workshop-info
+ * WU1). `coverText` moved here from `template_config` — the template owns the
+ * FORM, the workshop owns the CONTENT (design.md D5/workshop-settings spec).
+ * All contact columns are nullable: the Administrador may set any subset
+ * independently (partial-field-touch upsert, see workshop-config/service.ts).
  */
 export const workshopConfig = pgTable("workshop_config", {
   id: text("id").primaryKey().default("singleton"),
   name: text("name"),
   logoR2Key: text("logo_r2_key"),
   logoContentType: text("logo_content_type"),
+  phone: text("phone"),
+  whatsapp: text("whatsapp"),
+  email: text("email"),
+  address: text("address"),
+  /** Free-text, e.g. "Lun-Vie 9-18, Sáb 9-13" — no structured per-day schedule (spec: "Hours is one free-text field"). */
+  hours: text("hours"),
+  website: text("website"),
+  coverText: text("cover_text"),
+  /** Open-ended platform → handle map (e.g. `{instagram: "@..."}`) — a new platform needs no migration. */
+  socialHandles: jsonb("social_handles").$type<Record<string, string>>(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -138,6 +152,14 @@ export const templateConfig = pgTable("template_config", {
   coverText: text("cover_text").notNull(),
   /** 'strict' | 'adaptive' — strict forces all products to OpaqueProductCard; adaptive selects card based on each product's image_type. Null defaults to 'strict' (backward compat). */
   defaultImageHandling: text("default_image_handling"),
+  /**
+   * Registry template id (catalog-templates-and-workshop-info WU2+) — NULL
+   * resolves to the default template via `getTemplate(null)`. Added in WU1's
+   * migration so WU2's gallery picker has a column to persist into; the
+   * `logoUrl`/`primaryColors`/`font`/`coverText` columns above stay NOT NULL
+   * and unused-by-the-form until migration `0009` (WU3) drops them.
+   */
+  selectedTemplateId: text("selected_template_id"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
