@@ -291,6 +291,36 @@ describe("renderCatalogHtml — workshop contact page (design D6)", () => {
     expect(html).toContain("@handle");
   });
 
+  /**
+   * `workshop_config` is a singleton row that WU1's migration guarantees
+   * exists, so `buildWorkshopContact` returns an OBJECT OF NULLS — never
+   * `null` — for a workshop that simply has not filled contact info in yet.
+   * Guarding on `contact != null` alone therefore appended a blank black page
+   * to every catalog from such a workshop.
+   */
+  it("renders no contact page when every contact field is null, not a blank page", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      sections: [],
+      branding: {
+        templateId: "dforce-classic",
+        logoUrl: null,
+        coverText: null,
+        contact: {
+          name: null,
+          phone: null,
+          whatsapp: null,
+          email: null,
+          address: null,
+          hours: null,
+          website: null,
+          socialHandles: null,
+        },
+      },
+    });
+    expect(html).not.toContain('aria-label="Contact"');
+  });
+
   it("renders no contact page at all when contact is null, not an empty one", async () => {
     const html = await renderCatalogHtml({
       title: "C",

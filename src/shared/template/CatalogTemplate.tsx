@@ -63,6 +63,18 @@ export type CatalogTemplateBranding = {
 };
 
 /** design D6 — one row per contact field; filtered by presence so an unset field renders no label at all (spec, verbatim). */
+/**
+ * True only when there is something worth printing a page for. `name` alone
+ * does not qualify — the brand name already appears on the cover, so a page
+ * carrying nothing else is still a blank page with a heading.
+ */
+function hasContactContent(contact: WorkshopContact | null | undefined): boolean {
+  if (!contact) return false;
+  const hasRow = CONTACT_ROWS.some((row) => contact[row.key]);
+  const hasSocial = !!contact.socialHandles && Object.keys(contact.socialHandles).length > 0;
+  return hasRow || hasSocial;
+}
+
 const CONTACT_ROWS: { key: "phone" | "whatsapp" | "email" | "address" | "hours" | "website"; label: string }[] = [
   { key: "phone", label: "TELÉFONO" },
   { key: "whatsapp", label: "WHATSAPP" },
@@ -236,9 +248,14 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
 
       {/* design D6 / Template_Catalogo.op page "3 · Contacto y redes" — last
           page, after the products, matching that file's own 0/1/2/3 order.
-          `contact === null` (no workshop_config row) renders no page at all,
-          never an empty one. */}
-      {contact && (
+
+          The guard checks for CONTENT, not for a non-null object. Because
+          `workshop_config` is a singleton row WU1's migration guarantees
+          exists, `buildWorkshopContact` returns an object of nulls — never
+          `null` — for a workshop that has not filled contact info in yet.
+          Guarding on `contact != null` alone appended a blank black page to
+          every catalog from such a workshop. */}
+      {hasContactContent(contact) && contact && (
         <section
           aria-label="Contact"
           style={{
