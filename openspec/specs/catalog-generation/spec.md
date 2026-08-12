@@ -30,6 +30,26 @@ The selection flow MUST carry `image` and `image_type` alongside each product fr
 
 The `ProductPrintRef` type MUST be extended with `image?: string | null` and `imageType?: "transparent" | "opaque" | "low_res"`, and with `prices?: {venta, taller, socio}` (all `number | null`). The PDF MUST apply the branding of the template selected in `template-config` (font and colors from the registry) and the workshop's cover text and contact information from `workshop-settings`. Every product card SHALL show all three price tiers (Venta, Taller, Socio) in bold; a tier with no usable price — absent from the payload, or an ERP value `<= 0.00` — SHALL render an em-dash (`—`), never `$0.00` and never a blank line. Image cards are rendered according to their image type (transparent → full-bleed, opaque/low_res → polaroid frame).
 
+`productsPerPage` is a **maximum**, not an exact count: the binding constraint is the printed page's own height. A printed page MUST hold no more than `productsPerPage` products AND no more products than physically fit within A4 minus the page margin. Card heights MUST be measured in the rendering browser at the printed page's content width, never estimated. (Wording corrected here from an exact count: the earlier reading was what allowed archive gap #1 — a 10-product "page" silently spilling onto a second physical sheet once WU4's three-row price table made cards taller. The count never described what the paper could deliver.)
+
+#### Scenario: A page holds fewer products than requested when they do not fit
+
+- GIVEN `productsPerPage = 10` and cards tall enough that only 4 fit on an A4 page
+- WHEN the PDF is rendered
+- THEN each printed page MUST carry at most 4 products, and every logical page MUST occupy exactly one physical page
+
+#### Scenario: The requested count still caps a page that could hold more
+
+- GIVEN `productsPerPage = 6` and cards short enough that 10 would fit
+- WHEN the PDF is rendered
+- THEN each printed page MUST carry at most 6 products
+
+#### Scenario: A product taller than a whole page
+
+- GIVEN a product card taller than the usable height of an A4 page
+- WHEN the PDF is rendered
+- THEN it MUST be placed on a page of its own and the pagination MUST terminate — never retried against a fresh empty page
+
 #### Scenario: Transparent image card
 
 - GIVEN a product with `imageType = "transparent"`

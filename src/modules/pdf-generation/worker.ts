@@ -36,7 +36,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { chromium } from "playwright";
+import { chromium, type Page } from "playwright";
 
 import { getBoss } from "@/shared/jobs/boss";
 import type { CatalogTemplateBranding } from "@/shared/template/CatalogTemplate";
@@ -44,7 +44,7 @@ import { getObject } from "../catalog-storage/r2";
 import { createPendingCatalog } from "../catalog-storage/queries";
 import { buildIndexSections } from "../catalog-builder/selection";
 import { PDF_GENERATE_JOB, PDF_UPLOAD_JOB, type PdfBranding, type PdfGeneratePayload } from "./enqueue";
-import { chunkProducts, renderCatalogHtml } from "./render";
+import { GRID_COLUMNS, PAGE_MARGIN_MM, chunkProducts, renderCatalogHtml } from "./render";
 
 export type PdfUploadPayload = {
   catalogId: string;
@@ -111,30 +111,86 @@ export async function resolveBranding(
 }
 
 /**
- * R6.1/NFR-3 — Playwright render. Not unit-tested in this PR (would require
- * a real Chromium browser process); deferred to integration/E2E coverage,
- * same gap category already flagged for DB/pg-boss integration since PR2/PR3.
- * The logo data-URI resolution it depends on (`resolveBranding`) IS
- * unit-tested — see worker.test.ts.
+ * The printed A4 page, minus `renderCatalogHtml`'s own `@page` margin, in CSS
+ * px — Chromium lays print content out at 96dpi, so 1mm is 96/25.4 px.
+ * Measuring at any other width would measure the wrong card: the product name
+ * wraps differently at 1280px (Playwright's default viewport) than in the
+ * ~643px column the paper actually gives it, and a card that wraps less
+ * measures shorter than it prints.
+ */
+const MM_TO_PX = 96 / 25.4;
+export const PRINT_WIDTH_PX = Math.round((210 - 2 * PAGE_MARGIN_MM) * MM_TO_PX);
+export const PRINT_HEIGHT_PX = (297 - 2 * PAGE_MARGIN_MM) * MM_TO_PX;
+
+/**
+ * Archive gap #1 — asks the browser how tall each grid ROW is instead of
+ * estimating it (an estimate is exactly what this replaces). Runs against a
+ * document holding every product in ONE grid, so every row exists to be
+ * measured; the caller then re-renders with the resulting page split.
+ *
+ * Returns each row's height already including the grid's row gap — one gap
+ * too many per page, which errs towards breaking early. Overflowing is the
+ * bug; a slightly emptier page is not. `chrome` is the product section's own
+ * vertical padding, which eats into the page before any card does.
+ */
+export async function measureRowHeights(page: Page): Promise<{ rowHeights: number[]; chrome: number }> {
+  return page.evaluate((columns) => {
+    const grid = document.querySelector('[aria-label^="Product page"] > div');
+    if (!(grid instanceof HTMLElement) || !grid.parentElement) return { rowHeights: [], chrome: 0 };
+
+    const section = getComputedStyle(grid.parentElement);
+    const chrome = parseFloat(section.paddingTop) + parseFloat(section.paddingBottom);
+    const gap = parseFloat(getComputedStyle(grid).rowGap) || 0;
+    const cards = Array.from(grid.children, (card) => card.getBoundingClientRect().height);
+
+    const rowHeights: number[] = [];
+    for (let i = 0; i < cards.length; i += columns) {
+      rowHeights.push(Math.max(...cards.slice(i, i + columns)) + gap);
+    }
+    return { rowHeights, chrome };
+  }, GRID_COLUMNS);
+}
+
+/**
+ * R6.1/NFR-3 — Playwright render. Not unit-tested (would require a real
+ * Chromium browser process); deferred to integration/E2E coverage, same gap
+ * category already flagged for DB/pg-boss integration since PR2/PR3. The
+ * logo data-URI resolution it depends on (`resolveBranding`) IS unit-tested
+ * (worker.test.ts), and so is the page packing (`chunkProducts`, render.test.ts).
+ *
+ * Two `setContent` calls in the SAME browser — measure, then split, then
+ * render — not two browser launches. The first pass exists only so the split
+ * is made against real measured heights rather than a guess.
  */
 export async function renderPdfBuffer(
   payload: PdfGeneratePayload,
   deps: { getObject?: typeof getObject } = {},
 ): Promise<Buffer> {
-  const productPages = chunkProducts(payload.products, payload.productsPerPage);
   const branding = await resolveBranding(payload.branding, deps);
-  const html = await renderCatalogHtml({
+  const props = {
     title: payload.title,
     branding,
     sections: payload.sections.length > 0 ? payload.sections : buildIndexSections(payload.products),
-    productPages,
     defaultImageHandling: payload.defaultImageHandling,
-  });
+  };
 
   const browser = await chromium.launch();
   try {
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "load" });
+    const page = await browser.newPage({
+      viewport: { width: PRINT_WIDTH_PX, height: Math.round(PRINT_HEIGHT_PX) },
+    });
+    // `page.pdf()` renders under print media; measure under it too, or a
+    // future `@media print` rule would silently invalidate the measurement.
+    await page.emulateMedia({ media: "print" });
+
+    const everythingOnOnePage = payload.products.length > 0 ? [payload.products] : [];
+    await page.setContent(await renderCatalogHtml({ ...props, productPages: everythingOnOnePage }), {
+      waitUntil: "load",
+    });
+    const { rowHeights, chrome } = await measureRowHeights(page);
+
+    const productPages = chunkProducts(payload.products, payload.productsPerPage, rowHeights, PRINT_HEIGHT_PX - chrome);
+    await page.setContent(await renderCatalogHtml({ ...props, productPages }), { waitUntil: "load" });
     return await page.pdf({ format: "A4", printBackground: true });
   } finally {
     await browser.close();
