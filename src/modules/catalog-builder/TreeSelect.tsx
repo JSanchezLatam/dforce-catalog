@@ -17,7 +17,7 @@ export function TreeSelect({
   items,
   selected,
   onSelectionChange,
-  placeholder = "Select categories...",
+  placeholder = "Seleccioná categorías...",
 }: {
   items: TreeItem[];
   selected: string[];
@@ -145,7 +145,7 @@ export function TreeSelect({
       >
         <span className={cn(selectedCount === 0 && "text-muted-foreground")}>
           {selectedCount > 0
-            ? `${selectedCount} categor${selectedCount === 1 ? "y" : "ies"} selected`
+            ? `${selectedCount} categoría${selectedCount === 1 ? "" : "s"} seleccionada${selectedCount === 1 ? "" : "s"}`
             : placeholder}
         </span>
         <svg
@@ -167,7 +167,7 @@ export function TreeSelect({
           <div className="border-b border-border p-2">
             <Input
               type="search"
-              placeholder="Search categories..."
+              placeholder="Buscar categorías..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="h-8 text-xs"
@@ -195,7 +195,7 @@ export function TreeSelect({
                           type="button"
                           onClick={() => toggleCollapse(item.value)}
                           className="flex size-5 shrink-0 items-center justify-center rounded hover:bg-accent-foreground/10"
-                          aria-label={isExpanded ? "Collapse" : "Expand"}
+                          aria-label={isExpanded ? "Contraer" : "Expandir"}
                         >
                           <ChevronRight
                             className={cn("size-3.5 text-muted-foreground transition-transform", isExpanded && "rotate-90")}

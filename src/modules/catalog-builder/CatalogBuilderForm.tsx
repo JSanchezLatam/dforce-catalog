@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CARD, FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
 import { Pagination } from "@/shared/ui/Pagination";
+import { RETENTION_LIMIT } from "@/modules/catalog-storage/retention";
 
 import type { CategoryPair } from "./queries";
 import { PRICE_LIST_LABELS, PRICE_LISTS, resolvePrice, type PriceList } from "./price-lists";
@@ -113,7 +114,13 @@ export function CatalogBuilderForm({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ categories: categoryRefs }),
     })
-      .then((res) => res.json())
+      .then((res) => {
+        // A 403 from this route is valid JSON, so `res.json()` would RESOLVE
+        // and `body.products ?? []` would render the same silent empty table
+        // the catch below exists to prevent. The status has to be checked.
+        if (!res.ok) throw new Error(`products request failed: ${res.status}`);
+        return res.json();
+      })
       .then((body) => {
         if (!cancelled) {
           const products: ProductRef[] = body.products ?? [];
@@ -335,7 +342,7 @@ export function CatalogBuilderForm({
                         <SelectItem value="10">10</SelectItem>
                         <SelectItem value="25">25</SelectItem>
                         <SelectItem value="50">50</SelectItem>
-                        <SelectItem value={String(candidates.length)}>All</SelectItem>
+                        <SelectItem value={String(candidates.length)}>Todos</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -361,7 +368,7 @@ export function CatalogBuilderForm({
                       {paginatedProducts.length === 0 && (
                         <TableRow>
                           <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
-                            No products match your search
+                            Ningún producto coincide con tu búsqueda
                           </TableCell>
                         </TableRow>
                       )}
@@ -416,7 +423,7 @@ export function CatalogBuilderForm({
                   Mostrando {filteredCandidates.length > 0 ? (safePage - 1) * pageSize + 1 : 0}
                   {"\u2013"}
                   {Math.min(safePage * pageSize, filteredCandidates.length)} de{" "}
-                  {filteredCandidates.length} items
+                  {filteredCandidates.length} productos
                 </span>
                 <Pagination currentPage={safePage} pageCount={pageCount} onPageChange={setPage} />
               </div>
@@ -604,7 +611,7 @@ export function CatalogBuilderForm({
             <DialogTitle>Catálogo en proceso</DialogTitle>
             <DialogDescription>
               El catálogo empezó a generarse{queuePosition != null ? ` (posición ${queuePosition} en la cola)` : ""}.
-              {evictionWarning ? " Ya tenés 2 catálogos guardados: el más antiguo se eliminará cuando este esté listo." : ""}
+              {evictionWarning ? ` Ya tenés ${RETENTION_LIMIT} catálogos guardados: el más antiguo se eliminará cuando este esté listo.` : ""}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex-row justify-center gap-3 sm:justify-center">
