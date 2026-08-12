@@ -469,7 +469,7 @@ export function CatalogBuilderForm({
             <div className="flex flex-wrap items-end gap-4">
               <section aria-label="Densidad de página">
                 <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
-                  Productos por página
+                  Máximo de productos por página
                   <Input
                     type="number"
                     min={MIN_PRODUCTS_PER_PAGE}
@@ -481,6 +481,12 @@ export function CatalogBuilderForm({
                     className="w-24"
                   />
                 </label>
+                {/* The PDF fits as many products per page as physically fit and
+                    never more than this number, so an admin who types 10 and
+                    gets 4 is seeing the feature work, not a bug. */}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Pueden salir menos si las tarjetas no entran en la hoja.
+                </p>
                 {errors.productsPerPage && (
                   <p role="alert" className={FIELD_ERROR}>
                     {errors.productsPerPage}

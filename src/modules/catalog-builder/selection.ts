@@ -32,14 +32,15 @@ export type ProductRef = {
 export const MIN_PRODUCTS_PER_PAGE = 1;
 export const MAX_PRODUCTS_PER_PAGE = 20; // R5.4
 /**
- * What actually fits on one Letter page, measured — not a preference.
+ * Where the form starts — a preference, and now only a ceiling.
  *
- * WU4 gave every card a three-row price table (Venta/Taller/Socio), making
- * cards tall enough that the old default of 10 spilled a single logical
- * section across two physical pages (verified: 6 cards landed on the first,
- * 4 on the next). `chunkProducts` splits by a fixed count and never measures
- * height — design's New Risk #4 — so the count itself has to match reality.
- * The user can still raise it; this is only where the form starts.
+ * This used to have to match what physically fits: WU4's three-row price
+ * table (Venta/Taller/Socio) made cards tall enough that the old default of
+ * 10 spilled one logical section across two physical pages, and
+ * `chunkProducts` split by a fixed count without ever measuring height.
+ * `pdf-generation/worker.ts` measures the real card heights in its browser
+ * now and `chunkProducts` packs against them, so the page height binds
+ * whatever the user picks and this number can no longer overflow a page.
  */
 export const DEFAULT_PRODUCTS_PER_PAGE = 6;
 export const MAX_TOTAL_PRODUCTS = 200; // R5.8/5.9

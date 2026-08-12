@@ -4,18 +4,74 @@
  * without a browser or a database. `worker.ts` is the only file in this
  * module that imports Playwright.
  */
-import { CatalogTemplate, type CatalogTemplateProps, type ProductPrintRef } from "@/shared/template/CatalogTemplate";
+import { CatalogTemplate, GRID_COLUMNS, type CatalogTemplateProps, type ProductPrintRef } from "@/shared/template/CatalogTemplate";
 import { getTemplate } from "@/shared/template/registry";
 
-/** R6.1/R5.4 — splits the final (post-exclusion) product set into fixed-size printed pages. */
-export function chunkProducts(products: ProductPrintRef[], productsPerPage: number): ProductPrintRef[][] {
-  if (!Number.isInteger(productsPerPage) || productsPerPage <= 0) {
-    return products.length > 0 ? [products] : [];
-  }
+/** The `@page` margin below, in mm — `worker.ts` subtracts it from A4 to get the height one printed page can actually hold. Keep the two in sync by importing, never by retyping the number. */
+export const PAGE_MARGIN_MM = 20;
+
+/**
+ * R6.1/R5.4 — splits the final (post-exclusion) product set into printed pages.
+ *
+ * `maxProductsPerPage` is a MAXIMUM, not an exact count. Splitting by count
+ * alone promised a page layout the paper could not deliver: WU4's three-row
+ * price table (Venta/Taller/Socio) made cards tall enough that a 10-product
+ * chunk spilled across two physical pages (archive gap #1 of
+ * `2026-08-12-catalog-templates-and-workshop-info`). Chromium was already
+ * paginating by height correctly — the fixed-count split was fighting it.
+ *
+ * So both constraints hold: the user says "no more than N per page", the
+ * browser says "and never more than what fits". `cardHeights` is what the
+ * browser measured (`worker.ts`, which owns the only Playwright import in
+ * this module), each already carrying the grid's row gap so this function
+ * never needs to know it. Pure on purpose, so the packing is unit-testable
+ * without a browser; with no measurement passed every card counts as 0-tall
+ * and only the count binds.
+ *
+ * Heights arrive per CARD but bind per ROW, and the rows are formed HERE
+ * rather than by the measuring pass: an odd `maxProductsPerPage` puts the
+ * next page's first card in a different column than the single-grid
+ * measurement saw, so pre-paired row heights would be measuring one layout
+ * and paginating another — and would quietly round an explicit 3 per page
+ * down to 2.
+ */
+export function chunkProducts(
+  products: ProductPrintRef[],
+  maxProductsPerPage: number,
+  cardHeights: number[] = [],
+  usableHeight: number = Infinity,
+): ProductPrintRef[][] {
+  const maxPerPage =
+    Number.isInteger(maxProductsPerPage) && maxProductsPerPage > 0 ? maxProductsPerPage : Infinity;
+
   const pages: ProductPrintRef[][] = [];
-  for (let i = 0; i < products.length; i += productsPerPage) {
-    pages.push(products.slice(i, i + productsPerPage));
+  let page: ProductPrintRef[] = [];
+  let closedRows = 0; // the rows already complete on this page
+  let openRow = 0; // the row still being filled, as tall as its tallest card so far
+
+  for (const [index, product] of products.entries()) {
+    const card = cardHeights[index] ?? 0;
+    // The card either opens the next row or joins the open one, where the
+    // taller of the two decides how much vertical space that row takes.
+    const opensRow = page.length % GRID_COLUMNS === 0;
+    const closed = opensRow ? closedRows + openRow : closedRows;
+    const open = opensRow ? card : Math.max(openRow, card);
+
+    // `page.length > 0` is what stops a card taller than a whole page from
+    // looping forever: on an empty page it is taken regardless of fit, and
+    // Chromium handles the unavoidable overflow itself.
+    if (page.length > 0 && (page.length + 1 > maxPerPage || closed + open > usableHeight)) {
+      pages.push(page);
+      page = [product];
+      closedRows = 0;
+      openRow = card;
+      continue;
+    }
+    page.push(product);
+    closedRows = closed;
+    openRow = open;
   }
+  if (page.length > 0) pages.push(page);
   return pages;
 }
 
@@ -39,6 +95,10 @@ export function chunkProducts(products: ProductPrintRef[], productsPerPage: numb
  * imports of it.
  */
 export async function renderCatalogHtml(props: CatalogTemplateProps): Promise<string> {
+  // The `.card-*` rules this stylesheet used to carry were dead — `AdaptiveCards`
+  // styles every card inline and no markup has referenced those classes since.
+  // One of them was a second `repeat(2, 1fr)` grid definition: exactly the kind
+  // of quiet duplicate the packing above must not end up measuring against.
   const { renderToStaticMarkup } = await import("react-dom/server");
   const body = renderToStaticMarkup(CatalogTemplate(props));
   return `<!DOCTYPE html>
@@ -46,21 +106,11 @@ export async function renderCatalogHtml(props: CatalogTemplateProps): Promise<st
   <head>
     <meta charset="utf-8" />
     <style>
-      @page { margin: 20mm; }
+      @page { margin: ${PAGE_MARGIN_MM}mm; }
       /* The registry font already carries its own fallback ("Arial, sans-serif"),
          so appending another one produced "..., sans-serif, sans-serif". */
       body { font-family: ${props.branding ? getTemplate(props.branding.templateId).font : "sans-serif"}; margin: 0; }
       img { max-width: 100%; }
-      .card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-      .card-fullbleed { break-inside: avoid; display: flex; flex-direction: column; }
-      .card-fullbleed img { width: 100%; height: 180px; object-fit: cover; }
-      .card-polaroid { break-inside: avoid; display: flex; flex-direction: column; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-      .card-polaroid img { width: 100%; height: 160px; object-fit: contain; }
-      .card-placeholder { width: 100%; height: 180px; background: #f3f4f6; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 14px; }
-      .card-label { padding: 0.5rem 0; }
-      .card-label p { margin: 0; }
-      .card-name { font-weight: 600; font-size: 13px; }
-      .card-cat { font-size: 11px; color: #6b7280; }
     </style>
   </head>
   <body>${body}</body>

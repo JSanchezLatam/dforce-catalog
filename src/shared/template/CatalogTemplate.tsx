@@ -94,6 +94,16 @@ const CONTACT_MUTED = "#8A8A8A";
  */
 export type ProductPrices = { venta: number | null; taller: number | null; socio: number | null };
 
+/**
+ * The product grid's column count. Lives here, with the grid it describes,
+ * because `pdf-generation`'s page packing has to form the same rows this
+ * component renders — a row is as tall as its tallest card, so a packer
+ * pairing cards two-by-two against a three-column grid would sum heights for
+ * a layout that never gets printed. Imported by `pdf-generation/render.ts`,
+ * never retyped there (`shared` may not import from `modules`).
+ */
+export const GRID_COLUMNS = 2;
+
 export type CatalogIndexSection = {
   categoryL1: string;
   categoryL2: string | null;
@@ -235,7 +245,7 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
+              gridTemplateColumns: `repeat(${GRID_COLUMNS}, 1fr)`,
               gap: 16,
             }}
           >
