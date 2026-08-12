@@ -962,9 +962,20 @@ substantial new render markup and its tests — not scope creep beyond the
 assigned 6.1–6.14 task list.
 
 Per the explicit instruction not to self-grant a size exception (same
-discipline WU3 followed at 797/500 lines), task 6.15's GGA review and
-PR-opening were **NOT run**. All 13 code/test tasks (6.1–6.14) are done and
-verified: `npm test` 789/789, `npx tsc --noEmit` clean, `npm run lint` 0
-errors, both required live-smoke states passed and are documented above.
-Work committed locally on `catalog-tpl/wu5-contact-block-cover`, not pushed,
-no PR opened — stopped here to report the overrun rather than push through.
+discipline WU3 followed at 797/500 lines), the apply agent left task 6.15's
+GGA review and the PR unrun. All 13 code/test tasks (6.1–6.14) were done and
+verified at that point: `npm test` 789/789, `npx tsc --noEmit` clean,
+`npm run lint` 0 errors, both required live-smoke states passed and are
+documented above.
+
+**Resolved after that stop.** The owner accepted the size exception. The
+orchestrator ran GGA (**PASSED**, three non-blocking flags), corrected the
+`catalog-generation` spec requirement from "on Cover" to a dedicated contact
+page, and — while writing the new scenario that correction called for — found
+and fixed a real bug in `aa5da24`: `buildWorkshopContact()` returns an
+object-of-nulls rather than `null` for the guaranteed singleton row, so a
+workshop with no contact info got a blank black page appended to every
+catalog. Final state: 790/790 tests, tsc clean, **lint 0 errors / 17
+warnings** (WU5 adds 2 to WU4's 15, both the same `<img>`-element pattern
+already present in this file — an earlier note in this section said +1, which
+undercounted). Merged in PR #38.
