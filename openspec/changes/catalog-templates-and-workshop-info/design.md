@@ -131,16 +131,67 @@ migration is never edited — the split therefore has to be planned now, not dis
 the drop in its own last migration is what makes the proposal's rollback plan true: every revert
 before `0009` is pure code.
 
+### D6 — The contact block and the cover image (added after verify)
+
+**Why this exists.** `sdd-verify` failed the change on a CRITICAL finding: the spec's ADDED
+requirement "Workshop Contact Block on Cover" was never implemented. The gap originates *here* —
+the Data Flow below routed only `coverText` and `logoR2Key` out of `workshop_config`, so the six
+contact columns and `socialHandles` that WU1 built had no path to the renderer, and `tasks.md`
+never assigned a task to give them one. Every downstream gate passed because nothing was asked
+for. Recording the decision now, rather than letting WU5 invent it, is the point of this section.
+
+**Choice.** One `WorkshopContact` object on both branding shapes, not seven flat fields:
+
+```ts
+export type WorkshopContact = {
+  name: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  email: string | null;
+  address: string | null;
+  hours: string | null;
+  website: string | null;
+  socialHandles: Record<string, string> | null;
+};
+
+// both branding shapes gain the same optional block
+CatalogTemplateBranding = { templateId, logoUrl, coverText, contact: WorkshopContact | null }
+PdfBranding             = { templateId, logoR2Key, logoContentType, coverText,
+                            coverImageR2Key, coverImageContentType, contact }
+```
+
+**Cover image.** `workshop_config` gains `coverImageR2Key` + `coverImageContentType`, uploaded
+through the exact route pattern `api/workshop-config/logo/route.ts` already uses. On the render
+side it resolves through `resolveBranding()` — the same server-side R2 read that WU3 built for the
+logo, for the same reason: Playwright cannot authenticate against a session-gated route. This is
+why the cover was deliberately split out of WU3 rather than bundled into it; the hard part was
+solved once and this reuses it.
+
+**Rendering rules.** A field the Administrador left unset is *omitted*, never rendered as an empty
+label (spec, verbatim). `socialHandles` is an open map, so the block iterates its entries rather
+than naming platforms. If `coverImageR2Key` is null the cover degrades to the template's red/black
+block — a missing photo must never produce a broken `<img>` or an empty page.
+
+**Alternatives rejected.** Seven flat fields on each branding type (both shapes balloon, and the
+block is rendered as a unit anyway); a second queue payload just for contact data (two payloads to
+keep in sync across pg-boss for one logical thing); reading `workshop_config` inside the worker
+(the worker must stay a pure function of its payload — `enqueue.ts`'s existing contract).
+
+**Source of truth for the layout.** `Insumos/Templates/Portada_DForce_v1.html`, approved by the
+owner. It is real HTML/CSS rendered by the same Chromium the PDF worker drives, so it is a
+translation target, not a mockup to interpret.
+
 ## Data Flow
 
 ```
                        registry.ts (font, colours, Card)
                               │
-workshop_config ──┬─ coverText ┴──→ CatalogTemplateBranding ──→ CatalogTemplate ──→ AdaptiveCards
-                  │                        ↑            ↑
-                  │        /api/workshop-config/logo    │  (preview: CatalogBuilderForm)
-                  └─ logoR2Key ─→ PdfBranding ─→ pg-boss ─→ renderPdfBuffer
-                                                              └ getObject(key) → data: URI
+workshop_config ──┬─ coverText ─────┴──→ CatalogTemplateBranding ──→ CatalogTemplate ──→ AdaptiveCards
+                  ├─ contact ────────────────→ ↑            ↑
+                  │            /api/workshop-config/logo    │  (preview: CatalogBuilderForm)
+                  ├─ logoR2Key ──────→ PdfBranding ─→ pg-boss ─→ renderPdfBuffer
+                  └─ coverImageR2Key ─→     │                      └ getObject(key) → data: URI
+                                            └── contact (verbatim, no R2 read)
 producto.raw.PriceLists → queries.ts → resolveAllPrices → prices{venta,taller,socio}
 ```
 

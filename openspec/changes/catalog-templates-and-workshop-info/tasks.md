@@ -106,6 +106,37 @@ Files: `src/shared/template/CatalogTemplate.tsx`, `src/shared/template/AdaptiveC
 - [x] 4.15 Live smoke: rendered one real 10-product PDF via `renderPdfBuffer` and visually inspected it — confirmed New Risk #4: the taller three-row cards pushed a `productsPerPage: 10` section across 2 physical PDF pages instead of 1 (clean row break, no card cut in half). See apply-progress.md.
 - [x] 4.16 Ran `GGA_PROVIDER=claude gga run --pr-mode --diff-only` before opening this PR — 3 rounds, every WU4-authored finding fixed; two findings (pre-existing `portada.png`, pre-existing `CatalogTemplate.tsx`/`render.ts` null-branding inconsistency) repeatedly flagged against files this WU never touched — verified via `git show origin/feature/catalog-templates-and-workshop-info:<file>` and left alone per the known `--pr-mode` base-branch defect. See apply-progress.md.
 
+## Phase 5 — WU5: Workshop Contact Block + Cover Image
+
+Added after `sdd-verify` failed the change: the spec's ADDED requirement "Workshop Contact Block on
+Cover" (`specs/catalog-generation/spec.md`) was never implemented, and no task had ever been
+assigned it — the gap originated in `design.md`'s Data Flow, now corrected by D6. WU1 built the
+storage and the admin form; nothing renders it. This unit closes that, and folds in the cover image
+(`coverImageR2Key`) because both live on the same surface and share WU3's R2 → data URI path.
+
+Files: `src/shared/db/schema.ts`, `src/shared/db/migrations/0010_*.sql`(+`meta/`),
+`src/modules/workshop-config/{service.ts,WorkshopConfigForm.tsx}`(+tests),
+`src/app/api/workshop-config/cover-image/route.ts`(new, +test),
+`src/shared/template/CatalogTemplate.tsx`(+test), `src/modules/pdf-generation/{enqueue,worker}.ts`(+tests),
+`src/app/api/catalog-builder/generate/route.ts`(+test), `src/modules/catalog-builder/CatalogBuilderForm.tsx`,
+`src/app/(app)/builder/page.tsx`.
+
+- [ ] 6.1 Add `coverImageR2Key`/`coverImageContentType` (nullable text) to `workshopConfig` in `schema.ts`; generate migration `0010_*` (additive only, no drops).
+- [ ] 6.2 RED `workshop-config/service.test.ts` — the two new fields follow the same `"field" in parsed` partial-touch discipline as every other column; omitting them leaves stored values untouched.
+- [ ] 6.3 GREEN `workshop-config/service.ts` — extend `WorkshopConfigInput` and both upsert builders.
+- [ ] 6.4 RED `cover-image/route.test.ts` (new) — upload is admin-gated (`requireSession` + `can`), rejects a non-image content type, and does NOT clobber `name` or any other field (the exact bug WU1's apply-progress records fixing on the logo route).
+- [ ] 6.5 GREEN `api/workshop-config/cover-image/route.ts` — mirror `logo/route.ts` exactly; do not invent a second upload idiom.
+- [ ] 6.6 RED/GREEN `WorkshopConfigForm.test.tsx` — cover-image upload field renders and submits alongside the logo field.
+- [ ] 6.7 GREEN `design.md` D6 types — add `WorkshopContact`; extend `CatalogTemplateBranding` with `contact`, and `PdfBranding` with `contact` + the two cover-image fields.
+- [ ] 6.8 RED `CatalogTemplate.test.tsx` (new, or extend `render.test.ts`) — the contact block renders every set field; **an unset field is omitted entirely, never an empty label** (spec, verbatim); `socialHandles` iterates its entries rather than naming platforms; a null `contact` renders no block at all rather than an empty section.
+- [ ] 6.9 GREEN `CatalogTemplate.tsx` — cover page and contact page, translated from `Insumos/Templates/Portada_DForce_v1.html` (owner-approved, real HTML/CSS for the same Chromium — a translation target, not a mockup to interpret). Layer names in that file carry their source column, e.g. `Valor · workshop_config.phone`.
+- [ ] 6.10 RED `worker.test.ts` — `resolveBranding()` resolves the cover image through the same server-side `getObject` path as the logo; a null `coverImageR2Key` yields `coverImageUrl: null` without throwing.
+- [ ] 6.11 GREEN `worker.ts` — extend `resolveBranding()`; pass `contact` through verbatim (no R2 read, it is plain text).
+- [ ] 6.12 RED `generate/route.test.ts` — `PdfBranding` assembly carries `contact` and both cover-image fields from `getWorkshopConfig()`.
+- [ ] 6.13 GREEN `generate/route.ts`, `builder/page.tsx`, `CatalogBuilderForm.tsx` — assemble and pass the new branding fields; the live preview shows the same contact block as the PDF (Risk-5: one renderer, never forked).
+- [ ] 6.14 Live smoke (required): set every contact field plus two social handles and a cover image, generate one real PDF, and confirm the cover and contact pages match the approved HTML. Then unset half the fields and re-render — confirm the omitted ones leave no empty labels and a missing cover image degrades to the red/black block, never a broken `<img>`.
+- [ ] 6.15 Before opening this PR: run `GGA_PROVIDER=claude gga run --pr-mode --diff-only`.
+
 ## Cross-cutting
 
 - [x] 5.1 Record R8.1-superseded status: confirmed. `specs/template-config/spec.md` carries R8.1 under `## MODIFIED Requirements` and a `## REMOVED Requirements` block that names both retired requirements with a Reason and a Migration note each ("Per-Generation Font and Color Selection", "Template-Owned Logo URL and Cover Text"). The three change-folder delta specs are the artifacts `sdd-verify` checks. `openspec/specs/` does not exist yet and must not be written here — an earlier attempt to consolidate it during WU1 was reverted in `41d94fb` for asserting full-state facts that were still WU2–WU4 work. Folding the deltas into a consolidated tree is the archive step's job, now that all four units are merged and those facts are finally true.
