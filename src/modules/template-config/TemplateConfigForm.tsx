@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
+import { CATALOG_TEMPLATES, getTemplate } from "@/shared/template/registry";
 
 type FormState = {
   logoUrl: string;
@@ -17,6 +18,7 @@ type FormState = {
   font: string;
   coverText: string;
   defaultImageHandling: "strict" | "adaptive";
+  selectedTemplateId: string;
 };
 
 function toFormState(config: TemplateConfig | null): FormState {
@@ -27,6 +29,7 @@ function toFormState(config: TemplateConfig | null): FormState {
     font: config?.font ?? "",
     coverText: config?.coverText ?? "",
     defaultImageHandling: config?.defaultImageHandling === "adaptive" ? "adaptive" : "strict",
+    selectedTemplateId: getTemplate(config?.selectedTemplateId).id,
   };
 }
 
@@ -60,6 +63,7 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
         font: form.font,
         coverText: form.coverText,
         defaultImageHandling: form.defaultImageHandling,
+        selectedTemplateId: form.selectedTemplateId,
       }),
     });
 
@@ -88,6 +92,36 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
     <Card>
       <CardContent>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {/*
+            Gallery picker (catalog-templates-and-workshop-info WU2, additive
+            and unwired — nothing reads `selectedTemplateId` yet). EXTENDS the
+            branding form below rather than replacing it: `template_config`'s
+            logo/color/font/cover-text columns stay NOT NULL until WU3's
+            migration 0009 drops them, so `saveTemplateConfig` still needs
+            those inputs. WU3 removes them once the columns are gone.
+          */}
+          <div className="grid gap-2">
+            <Label className={SECTION_HEADING}>Plantilla del catálogo</Label>
+            <div role="radiogroup" aria-label="Plantilla del catálogo" className="flex flex-wrap gap-4">
+              {CATALOG_TEMPLATES.map((template) => (
+                <label
+                  key={template.id}
+                  className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-input p-3 has-[:checked]:border-ring"
+                >
+                  <input
+                    type="radio"
+                    name="selectedTemplateId"
+                    value={template.id}
+                    checked={form.selectedTemplateId === template.id}
+                    onChange={() => update("selectedTemplateId", template.id)}
+                  />
+                  <img src={template.thumbnail} alt={template.name} style={{ width: 96, height: 124, objectFit: "cover" }} />
+                  <span className="text-sm">{template.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
           <div className="grid gap-2">
             <Label htmlFor="logoUrl">Logo URL</Label>
             <Input id="logoUrl" value={form.logoUrl} onChange={(e) => update("logoUrl", e.target.value)} />

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { TemplateConfigValidationError, validateTemplateConfigInput } from "./service";
+import { getTemplateConfig, saveTemplateConfig, TemplateConfigValidationError, validateTemplateConfigInput } from "./service";
 
 const validInput = {
   logoUrl: "https://example.com/logo.png",
@@ -8,6 +8,7 @@ const validInput = {
   font: "Arial, sans-serif",
   coverText: "Dforce Car — Catalogo 2026",
   defaultImageHandling: null,
+  selectedTemplateId: null,
 };
 
 describe("validateTemplateConfigInput (R8.1)", () => {
@@ -75,6 +76,29 @@ describe("validateTemplateConfigInput (R8.1)", () => {
   });
 });
 
+describe("selectedTemplateId validation (R8.1/R8.4 — additive, unwired until WU3)", () => {
+  it("accepts a selectedTemplateId alongside the still-required legacy branding fields", () => {
+    const result = validateTemplateConfigInput({ ...validInput, selectedTemplateId: "dforce-classic" });
+    expect(result.selectedTemplateId).toBe("dforce-classic");
+  });
+
+  it("defaults to null when omitted", () => {
+    const result = validateTemplateConfigInput(validInput);
+    expect(result.selectedTemplateId).toBeNull();
+  });
+
+  it("defaults to null when not a string", () => {
+    const result = validateTemplateConfigInput({ ...validInput, selectedTemplateId: 42 });
+    expect(result.selectedTemplateId).toBeNull();
+  });
+
+  it("still rejects a missing logoUrl even when selectedTemplateId is present (columns are NOT NULL until migration 0009)", () => {
+    expect(() =>
+      validateTemplateConfigInput({ ...validInput, selectedTemplateId: "dforce-classic", logoUrl: "" }),
+    ).toThrow(TemplateConfigValidationError);
+  });
+});
+
 describe("defaultImageHandling validation", () => {
   it("accepts strict", () => {
     const result = validateTemplateConfigInput({ ...validInput, defaultImageHandling: "strict" });
@@ -94,5 +118,35 @@ describe("defaultImageHandling validation", () => {
   it("defaults to null when value is invalid", () => {
     const result = validateTemplateConfigInput({ ...validInput, defaultImageHandling: "invalid" });
     expect(result.defaultImageHandling).toBeNull();
+  });
+});
+
+describe("selectedTemplateId persistence (R8.4 — selection survives a restart)", () => {
+  it("round-trips a saved selectedTemplateId through getTemplateConfig", async () => {
+    let row: Record<string, unknown> | undefined;
+    const fakeDb = {
+      insert: () => ({
+        values: (values: Record<string, unknown>) => ({
+          onConflictDoUpdate: ({ set }: { set: Record<string, unknown> }) => ({
+            returning: async () => {
+              row = { ...values, ...set };
+              return [row];
+            },
+          }),
+        }),
+      }),
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => (row ? [row] : []),
+          }),
+        }),
+      }),
+    };
+
+    await saveTemplateConfig({ ...validInput, selectedTemplateId: "dforce-classic" }, fakeDb as never);
+    const result = await getTemplateConfig(fakeDb as never);
+
+    expect(result?.selectedTemplateId).toBe("dforce-classic");
   });
 });
