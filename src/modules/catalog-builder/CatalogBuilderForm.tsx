@@ -23,7 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CARD, FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
 import { Pagination } from "@/shared/ui/Pagination";
-import { RETENTION_LIMIT } from "@/modules/catalog-storage/retention";
+import { RETENTION_LIMIT } from "@/modules/catalog-storage/retention-policy";
 
 import type { CategoryPair } from "./queries";
 import { PRICE_LIST_LABELS, PRICE_LISTS, resolvePrice, type PriceList } from "./price-lists";
