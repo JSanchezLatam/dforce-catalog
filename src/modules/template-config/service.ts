@@ -30,24 +30,47 @@ export class TemplateConfigValidationError extends Error {
   }
 }
 
-/** Pure — no DB access. Neither remaining field can fail validation; an invalid value falls back to null rather than erroring. */
+/**
+ * Pure — no DB access. Returns ONLY the keys the caller actually sent, the
+ * same partial-touch discipline as `workshop-config/service.ts`: an absent
+ * key means "leave it alone", an explicit `null` means "clear it". Returning
+ * both keys unconditionally would make the upsert's `set:` clause below
+ * overwrite a stored `selectedTemplateId` with null on any POST that omits
+ * it — silently losing the selection R8.4 requires to survive.
+ *
+ * R8.4's "unknown id falls back to the default" is a READ rule and lives in
+ * `getTemplate` (proved by `registry.test.ts`). On WRITE this is a trust
+ * boundary — `route.ts` hands us the raw request body — so an id the registry
+ * does not know is rejected, not coerced. Coercing here would answer 200 to a
+ * client whose selection we just threw away.
+ */
 export function validateTemplateConfigInput(input: unknown): TemplateConfigInput {
   const value = (input ?? {}) as Partial<Record<string, unknown>>;
+  const errors: Record<string, string> = {};
+  const parsed: TemplateConfigInput = {};
 
-  const rawHandling = value.defaultImageHandling;
-  const defaultImageHandling = rawHandling === "strict" || rawHandling === "adaptive" ? rawHandling : null;
+  if ("defaultImageHandling" in value) {
+    const raw = value.defaultImageHandling;
+    if (raw === "strict" || raw === "adaptive" || raw === null) {
+      parsed.defaultImageHandling = raw;
+    } else {
+      errors.defaultImageHandling = "Debe ser 'strict' o 'adaptive'.";
+    }
+  }
 
-  // Unknown-but-valid-shape ids fall back to null (→ getTemplate(null) →
-  // the default) rather than an error: R8.4's "orphaned id falls back"
-  // scenario also covers a stale client posting an id a registry edit
-  // removed, not just a corrupted DB row.
-  const rawTemplateId = value.selectedTemplateId;
-  const selectedTemplateId =
-    typeof rawTemplateId === "string" && (KNOWN_TEMPLATE_IDS as readonly string[]).includes(rawTemplateId)
-      ? rawTemplateId
-      : null;
+  if ("selectedTemplateId" in value) {
+    const raw = value.selectedTemplateId;
+    if (raw === null) {
+      parsed.selectedTemplateId = null;
+    } else if (typeof raw === "string" && (KNOWN_TEMPLATE_IDS as readonly string[]).includes(raw)) {
+      parsed.selectedTemplateId = raw;
+    } else {
+      errors.selectedTemplateId = "No existe una plantilla con ese identificador.";
+    }
+  }
 
-  return { defaultImageHandling, selectedTemplateId };
+  if (Object.keys(errors).length > 0) throw new TemplateConfigValidationError(errors);
+  return parsed;
 }
 
 /** Returns null when the admin has never saved a config yet (page renders a blank form). */

@@ -2,7 +2,12 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 
 import { templateConfig } from "@/shared/db/schema";
-import { getTemplateConfig, saveTemplateConfig, validateTemplateConfigInput } from "./service";
+import {
+  getTemplateConfig,
+  saveTemplateConfig,
+  TemplateConfigValidationError,
+  validateTemplateConfigInput,
+} from "./service";
 
 /**
  * catalog-templates-and-workshop-info WU3 (design D2, task 3.12) —
@@ -14,8 +19,8 @@ import { getTemplateConfig, saveTemplateConfig, validateTemplateConfigInput } fr
  * `defaultImageHandling`.
  */
 describe("validateTemplateConfigInput — post-migration-0009 shape", () => {
-  it("accepts an empty input — neither remaining field is required", () => {
-    expect(validateTemplateConfigInput({})).toEqual({ defaultImageHandling: null, selectedTemplateId: null });
+  it("returns no keys for an empty input — absent means untouched, not cleared", () => {
+    expect(validateTemplateConfigInput({})).toEqual({});
   });
 
   it("accepts a known selectedTemplateId", () => {
@@ -24,18 +29,62 @@ describe("validateTemplateConfigInput — post-migration-0009 shape", () => {
     );
   });
 
-  it("falls back to null for an id not in the registry (R8.4)", () => {
-    expect(validateTemplateConfigInput({ selectedTemplateId: "not-a-real-template" }).selectedTemplateId).toBeNull();
+  it("keeps an explicit null — clearing the selection is a real intent, distinct from omitting it", () => {
+    const parsed = validateTemplateConfigInput({ selectedTemplateId: null });
+    expect("selectedTemplateId" in parsed).toBe(true);
+    expect(parsed.selectedTemplateId).toBeNull();
   });
 
-  it("falls back to null for a non-string selectedTemplateId", () => {
-    expect(validateTemplateConfigInput({ selectedTemplateId: 42 }).selectedTemplateId).toBeNull();
+  it("rejects an id not in the registry instead of silently clearing the selection", () => {
+    expect(() => validateTemplateConfigInput({ selectedTemplateId: "not-a-real-template" })).toThrow(
+      TemplateConfigValidationError,
+    );
   });
 
-  it("accepts strict/adaptive defaultImageHandling and defaults invalid values to null", () => {
+  it("rejects a non-string selectedTemplateId", () => {
+    expect(() => validateTemplateConfigInput({ selectedTemplateId: 42 })).toThrow(TemplateConfigValidationError);
+  });
+
+  it("accepts strict/adaptive defaultImageHandling and rejects anything else", () => {
     expect(validateTemplateConfigInput({ defaultImageHandling: "strict" }).defaultImageHandling).toBe("strict");
     expect(validateTemplateConfigInput({ defaultImageHandling: "adaptive" }).defaultImageHandling).toBe("adaptive");
-    expect(validateTemplateConfigInput({ defaultImageHandling: "bogus" }).defaultImageHandling).toBeNull();
+    expect(() => validateTemplateConfigInput({ defaultImageHandling: "bogus" })).toThrow(
+      TemplateConfigValidationError,
+    );
+  });
+});
+
+/**
+ * The partial-touch guard, mirroring `workshop-config/service.ts`'s
+ * `"field" in parsed` discipline. Without it the upsert's `set:` clause
+ * writes every key on every POST, so a caller that omits
+ * `selectedTemplateId` silently clears a selection R8.4 requires to survive.
+ */
+describe("saveTemplateConfig — partial touch", () => {
+  function stubDb() {
+    const onConflictDoUpdate = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([{ id: "singleton" }]) });
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    return { db: { insert: vi.fn().mockReturnValue({ values }) }, values, onConflictDoUpdate };
+  }
+
+  it("does not touch selectedTemplateId when the caller omits it", async () => {
+    const { db, values, onConflictDoUpdate } = stubDb();
+
+    await saveTemplateConfig({ defaultImageHandling: "strict" }, db as never);
+
+    expect(values.mock.calls[0][0]).not.toHaveProperty("selectedTemplateId");
+    const { set } = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
+    expect(set).not.toHaveProperty("selectedTemplateId");
+  });
+
+  it("does not touch defaultImageHandling when the caller omits it", async () => {
+    const { db, values, onConflictDoUpdate } = stubDb();
+
+    await saveTemplateConfig({ selectedTemplateId: "dforce-classic" }, db as never);
+
+    expect(values.mock.calls[0][0]).not.toHaveProperty("defaultImageHandling");
+    const { set } = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
+    expect(set).not.toHaveProperty("defaultImageHandling");
   });
 });
 
