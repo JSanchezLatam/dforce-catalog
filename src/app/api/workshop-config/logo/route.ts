@@ -87,7 +87,10 @@ export async function POST(request: NextRequest) {
     await deleteObject(prev.logoR2Key).catch(() => {});
   }
 
-  await saveWorkshopConfig({ id: "singleton", name: prev?.name ?? null, logoR2Key: key, logoContentType: logo.contentType, updatedAt: new Date() });
+  // Only logoR2Key/logoContentType — name is partial-touch on saveWorkshopConfig
+  // (service.ts), so resending it here would clobber a name saved concurrently
+  // through the main settings form while this upload was in flight.
+  await saveWorkshopConfig({ logoR2Key: key, logoContentType: logo.contentType });
 
   return NextResponse.json({ key });
 }
@@ -96,8 +99,8 @@ export async function DELETE(request: NextRequest) {
   const denied = authorize("workshop.edit", request);
   if (denied) return denied;
 
-  const config = await getWorkshopConfig();
-  await saveWorkshopConfig({ name: config?.name ?? null, logoR2Key: null, logoContentType: null });
+  // Same partial-touch reasoning as POST above — name is not read here at all.
+  await saveWorkshopConfig({ logoR2Key: null, logoContentType: null });
 
   return NextResponse.json({ success: true });
 }

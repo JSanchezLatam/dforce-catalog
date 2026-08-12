@@ -97,9 +97,25 @@ for a deliberate clear" precedent. The snapshot updates after a successful
 save so a second edit in the same session diffs against the just-saved
 state, not the original page load.
 
+**Caveat, not fully closed:** the diff protects every scalar field but NOT
+`socialHandles` — it is one jsonb column, diffed and sent as a whole map.
+If two tabs each add a different platform, the second save still drops the
+first's addition. This is inherent to a single map column, not something
+worth building per-key merge semantics for on a single-admin app, but is
+recorded here so it is not mistaken for fully solved.
+
+**`saveWorkshopConfig` callers audited for the `name` partial-touch change.**
+`app/api/workshop-config/logo/route.ts`'s `POST`/`DELETE` both read the
+current config only to re-supply `name` unconditionally on every logo
+save/clear — the exact clobber this WU's `name` fix was meant to close, now
+made reachable instead of just theoretical. Removed `name` (and the two
+inert `id`/`updatedAt` keys `validateWorkshopConfigInput` was silently
+ignoring) from both calls; `DELETE`'s now-unused `getWorkshopConfig()` call
+was removed entirely.
+
 ### Verification
 
-- `npm test` — 716/716 passing (full suite, not just this module).
+- `npm test` — 719/719 passing (full suite, not just this module).
 - `npx tsc --noEmit` — clean.
 - `npm run lint` — 0 errors, 17 pre-existing warnings (none introduced by
   this change).

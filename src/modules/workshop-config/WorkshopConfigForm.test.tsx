@@ -8,6 +8,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import type { WorkshopConfig } from "@/shared/db/schema";
+import { MAX_HANDLE_ENTRIES } from "./limits";
 import { WorkshopConfigForm } from "./WorkshopConfigForm";
 
 function mockFetch(response: { status: number; body?: unknown }) {
@@ -216,6 +217,30 @@ describe("WorkshopConfigForm — contact fields", () => {
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(bodyOf(fetchMock)).toEqual({ phone: "" });
+  });
+
+  it("disables Agregar red social once the entry-count cap is reached", () => {
+    const socialHandles = Object.fromEntries(
+      Array.from({ length: MAX_HANDLE_ENTRIES }, (_, i) => [`platform${i}`, `@handle${i}`]),
+    );
+    const initialConfig: WorkshopConfig = {
+      id: "singleton",
+      name: null,
+      logoR2Key: null,
+      logoContentType: null,
+      phone: null,
+      whatsapp: null,
+      email: null,
+      address: null,
+      hours: null,
+      website: null,
+      coverText: null,
+      socialHandles,
+      updatedAt: new Date(),
+    };
+    render(<WorkshopConfigForm initialConfig={initialConfig} />);
+
+    expect(screen.getByRole("button", { name: "Agregar red social" })).toBeDisabled();
   });
 
   it("removes the correct social handle row when a middle row is deleted", async () => {

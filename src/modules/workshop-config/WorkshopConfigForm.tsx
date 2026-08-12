@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
 import { LogoUploadField } from "./LogoUploadField";
-import { MAX_CONTACT_FIELD_LENGTH, MAX_COVER_TEXT_LENGTH, MAX_HANDLE_LENGTH } from "./limits";
+import { MAX_CONTACT_FIELD_LENGTH, MAX_COVER_TEXT_LENGTH, MAX_HANDLE_ENTRIES, MAX_HANDLE_LENGTH, MAX_NAME_LENGTH } from "./limits";
 
 type Props = {
   initialConfig: WorkshopConfig | null;
@@ -144,7 +144,7 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
 
           <div className="grid gap-2">
             <Label htmlFor="name">Nombre del taller</Label>
-            <Input id="name" value={name} onChange={(e) => { setName(e.target.value); setStatus("idle"); }} maxLength={100} />
+            <Input id="name" value={name} onChange={(e) => { setName(e.target.value); setStatus("idle"); }} maxLength={MAX_NAME_LENGTH} />
           </div>
           {errors.name && (
             <p role="alert" className={FIELD_ERROR}>
@@ -292,7 +292,14 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
                 </Button>
               </div>
             ))}
-            <Button type="button" variant="outline" size="sm" className="self-start" onClick={addSocialRow}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="self-start"
+              disabled={socialRows.length >= MAX_HANDLE_ENTRIES}
+              onClick={addSocialRow}
+            >
               Agregar red social
             </Button>
           </div>
