@@ -113,6 +113,14 @@ inert `id`/`updatedAt` keys `validateWorkshopConfigInput` was silently
 ignoring) from both calls; `DELETE`'s now-unused `getWorkshopConfig()` call
 was removed entirely.
 
+**Follow-up, out of WU1's scope (GGA final pass, non-blocking):**
+`logoR2Key`/`logoContentType` in `service.ts` still go through
+`String(value.logoR2Key)` — the exact non-string coercion `readTextField`'s
+docstring was written to avoid. Pre-existing code, not touched by any WU1
+task, so hardening it here would be scope creep; noting it so a future
+change (or WU2, which touches this file's neighbor) picks it up
+deliberately rather than by accident.
+
 ### Verification
 
 - `npm test` — 722/722 passing (full suite, not just this module).
