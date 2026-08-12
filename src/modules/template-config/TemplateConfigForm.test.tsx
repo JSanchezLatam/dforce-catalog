@@ -51,12 +51,14 @@ describe("TemplateConfigForm — gallery picker", () => {
     expect(container.querySelector("#font")).toBeInTheDocument();
   });
 
-  // The registry has exactly one entry (spec: "Single-entry gallery"), and
-  // it's pre-selected — clicking it fires no onChange, so this test cannot
-  // honestly exercise `update("selectedTemplateId", …)`. It passes on the
-  // form's initial state alone. Spec scenario "Selecting a template" (radio
-  // switches selection) is unverified until a second template exists.
-  it("submits the selected template id alongside the existing branding fields", async () => {
+  // The registry has exactly one entry (spec: "Single-entry gallery") and a
+  // second is explicitly out of this change's scope (proposal.md: "A second
+  // template is an additive PR"), so this test cannot exercise an actual
+  // selection *change* — clicking the one pre-selected radio fires no
+  // onChange. It proves `toFormState`'s default resolution reaches the POST
+  // body on submit, not that switching selection works. Spec scenario
+  // "Selecting a template" stays unverified until a second template exists.
+  it("includes the default-resolved selectedTemplateId in the POST body on submit", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({ status: 200, body: { config: { id: "singleton" } } });
     const { container } = render(<TemplateConfigForm initialConfig={null} />);

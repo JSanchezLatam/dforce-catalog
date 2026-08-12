@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 
 import { templateConfig } from "@/shared/db/schema";
@@ -162,6 +163,11 @@ describe("selectedTemplateId persistence (R8.4)", () => {
     const result = await getTemplateConfig(db as never);
 
     expect(from).toHaveBeenCalledWith(templateConfig);
+    // Not just "some filter was applied" — the exact singleton-id condition,
+    // so a refactor that drops it or keys off the wrong column fails here
+    // instead of silently reading an arbitrary row (the class of bug the
+    // WU1 live smoke caught in migration 0008's ORDER BY ... LIMIT 1).
+    expect(where).toHaveBeenCalledWith(eq(templateConfig.id, "singleton"));
     expect(limit).toHaveBeenCalledWith(1);
     expect(result).toEqual(row);
   });
