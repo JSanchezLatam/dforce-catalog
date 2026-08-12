@@ -280,23 +280,25 @@ change's scope — proposal.md: "A second template is an additive PR").
   none introduced by WU2 — the one new gallery `<img>` from an earlier
   draft was replaced by a colored `<div>` swatch during review, see
   Deviations).
-- `GGA_PROVIDER=claude gga run --pr-mode --diff-only`: three rounds. Note
+- `GGA_PROVIDER=claude gga run --pr-mode --diff-only`: five rounds, stopped
+  deliberately (rationale below) rather than run to a clean pass. Note
   `PR_BASE_BRANCH` in `.gga` does not take effect for this gga version/repo
   combination (verified: `gga config` reports `auto-detect` even after
   editing `.gga`, and `bash -x` traces show the project config's `source
   <(...)` executing but the exported variable not landing in the review
   process) — every round therefore reviewed `main...HEAD`, which includes
   WU1's unmerged commits alongside WU2's. Findings scoped to WU1-only files
-  were treated as out of WU2's authority and left alone; every WU2-scoped
-  finding was fixed:
+  were treated as out of WU2's authority and left alone; every actionable,
+  non-contradictory WU2-scoped finding was fixed:
   - Round 1: `selectedTemplateId` had no validation against the registry's
     known ids (any string persisted verbatim) — fixed by validating against
-    `KNOWN_TEMPLATE_IDS`. The round-trip persistence test was flagged as
-    tautological (a fake db that echoes back its own writes) — fixed with a
-    live smoke against the real dev Postgres (see below) plus a spy-based
-    unit test. Gallery thumbnail referenced a non-existent asset — replaced
-    with a swatch. New tests pinned pre-existing English label text on
-    fields WU3 deletes — switched to id-based queries.
+    `KNOWN_TEMPLATE_IDS`, falling back to `null` on an unknown id (R8.4). The
+    round-trip persistence test was flagged as tautological (a fake db that
+    echoes back its own writes) — fixed with a live smoke against the real
+    dev Postgres (see below) plus a spy-based unit test. Gallery thumbnail
+    referenced a non-existent asset — replaced with a swatch. New tests
+    pinned pre-existing English label text on fields WU3 deletes — switched
+    to id-based queries.
   - Round 2: `service.ts` importing the Card-bearing `registry.ts` risked
     pulling client-component code into a server module (and vice versa,
     a "use client" form importing a module one hop from `@/shared/db`) —
@@ -305,12 +307,44 @@ change's scope — proposal.md: "A second template is an additive PR").
     global — made explicit. The unassociated `<Label>` gallery heading —
     changed to `<h2>`. Submit-button test query was unqualified
     (`getByRole("button")`) — name-qualified.
-  - Round 3 (spy-based rewrite still tautological per a closer read): the
-    round-trip test's fake `select` chain ignored its arguments entirely
-    (any table/column/where would still pass) — replaced with assertions on
-    the actual `insert().values()` / `onConflictDoUpdate({set})` call
-    arguments, matching `workshop-config/service.test.ts`'s own pattern.
-    Final round: clean.
+  - Round 3: the "fixed" round-trip test's fake `select` chain still
+    ignored its arguments entirely (any table/column/where would still
+    pass) — replaced with assertions on the actual `insert().values()` /
+    `onConflictDoUpdate({set})` call arguments, matching
+    `workshop-config/service.test.ts`'s own pattern. Recorded two decisions
+    in `tasks.md` for WU3 rather than act on them here (translate
+    `TemplateConfigForm`'s surviving English strings; don't assume
+    `getWorkshopConfig() === null` means unconfigured).
+  - Round 4: fixed a real (if type-only) import cycle between `registry.ts`
+    and `dforce-classic.tsx` by extracting `registry-types.ts`; fixed the
+    submit-button test still pinning `"Save"` text (round 2's fix
+    name-qualified it without removing the English-copy pin); rewrote the
+    `getTemplateConfig` persistence test to assert real query-builder
+    arguments (table + `limit(1)`) instead of an empty tautology.
+  - Round 5: asked for `where`'s exact filter argument too, not just
+    `from`/`limit` — fixed (asserts `eq(templateConfig.id, "singleton")`).
+    Renamed the submit test to state what it actually proves. Corrected
+    `registry-types.ts`'s docstring to stop overclaiming the cycle is fully
+    broken. Annotated `workshop-config`'s zero-rows test with the
+    post-migration-0008 caveat.
+  - **Stopped after round 5's second pass**, which re-reviewed round 4's
+    fixes and **reversed two of its own prior blocking demands without
+    acknowledging the reversal**: (a) round 1 required `selectedTemplateId`
+    to fall back to `null` on an unknown id; round 5's new #2 called that
+    same behavior a trust-boundary violation and demanded a hard validation
+    error instead. (b) round 4 required extracting `registry-types.ts` to
+    fix the type cycle; round 5's new #4 called the same file unnecessary
+    and recommended deleting it. Round 5 also re-escalated the
+    already-decided-and-recorded English-copy question (round 3: "record a
+    decision, don't act"; round 5: "blocking, translate now") without a new
+    argument. This is oscillation, not convergence — continuing to chase it
+    risks alternating fixes that undo each other every round. Judgment call:
+    keep the round-1/round-4 code (matches R8.4's documented read-path
+    fallback semantics; the type-cycle fix is real and cheap to keep), leave
+    the English-copy question as the round-3 recorded decision, and stop
+    the loop here rather than push through — flagging the disagreement for
+    the orchestrator/human reviewer rather than resolving it unilaterally
+    by re-litigating the same three points a second or third time.
 - Live smoke (task 2.8, closing the round-trip gap the unit tests cannot
   honestly claim): ran a throwaway `tsx` script against the real dev
   Postgres (`postgres://dforce:dforce@localhost:5433/dforce_catalog`),
