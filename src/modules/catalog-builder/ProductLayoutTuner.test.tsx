@@ -97,7 +97,7 @@ describe("ProductLayoutTuner — the bulk control", () => {
   it("offers the reset once framing is on", () => {
     renderTuner({ bulkFramed: true });
 
-    expect(screen.getByRole("button", { name: "Reset individual overrides" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Restablecer ajustes individuales" })).toBeInTheDocument();
   });
 
   it("reports the toggle to its parent rather than deciding anything itself", async () => {
@@ -112,7 +112,7 @@ describe("ProductLayoutTuner — the bulk control", () => {
   it("counts the products under review in the heading", () => {
     renderTuner();
 
-    expect(screen.getByRole("heading", { name: /2 products/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /2 productos/ })).toBeInTheDocument();
   });
 });
 

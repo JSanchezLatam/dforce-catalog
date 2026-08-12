@@ -85,9 +85,8 @@ export function CatalogBuilderForm({
   const [pageSize, setPageSize] = useState<number>(10);
   const [productsPerPage, setProductsPerPage] = useState(10);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [confirmed, setConfirmed] = useState(false);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
-  const [evictionWarning, setEvictionWarning] = useState<string | null>(null);
+  const [evictionWarning, setEvictionWarning] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
   const [step, setStep] = useState<"select" | "review">("select");
   const [overrides, setOverrides] = useState<Record<string, "transparent" | "opaque" | "low_res" | null>>({});
@@ -99,17 +98,15 @@ export function CatalogBuilderForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
   const [queueDepth, setQueueDepth] = useState<number | null>(null);
-  const tableSearchRef = useRef<HTMLInputElement>(null);
 
   const categoryRefs = useMemo(() => selectedToCategoryRefs(selectedCategories), [selectedCategories]);
 
+  // Only the fetch lives here. Clearing the previous selection is not
+  // something to observe after the fact — it is what changing the categories
+  // MEANS, so it happens in that handler (see `onSelectionChange` below).
   useEffect(() => {
-    if (categoryRefs.length === 0) {
-      setCandidates([]);
-      setSelectedProductIds(new Set());
-      setPage(1);
-      return;
-    }
+    if (categoryRefs.length === 0) return;
+
     let cancelled = false;
     fetch("/api/catalog-builder/products", {
       method: "POST",
@@ -123,6 +120,16 @@ export function CatalogBuilderForm({
           setCandidates(products);
           setSelectedProductIds(new Set(products.map((p) => p.id)));
           setPage(1);
+        }
+      })
+      .catch(() => {
+        // Without this the rejection escaped the effect and the user sat in
+        // front of an empty product table with no idea whether the categories
+        // were empty or the request never landed. The neighbouring
+        // queue-depth effect already swallowed its errors; this one silently
+        // broke the main flow.
+        if (!cancelled) {
+          setErrors({ categories: "No se pudieron cargar los productos. Revisá tu conexión e intentá de nuevo." });
         }
       });
     return () => {
@@ -172,10 +179,6 @@ export function CatalogBuilderForm({
   const allVisibleSelected = paginatedProducts.length > 0 && paginatedProducts.every((p) => selectedProductIds.has(p.id));
   const someVisibleSelected = paginatedProducts.some((p) => selectedProductIds.has(p.id));
 
-  useEffect(() => {
-    if (page > pageCount) setPage(pageCount);
-  }, [page, pageCount]);
-
   function toggleAllVisible() {
     if (allVisibleSelected) {
       const next = new Set(selectedProductIds);
@@ -186,7 +189,6 @@ export function CatalogBuilderForm({
       for (const p of paginatedProducts) next.add(p.id);
       setSelectedProductIds(next);
     }
-    setConfirmed(false);
   }
 
   function toggleProduct(id: string) {
@@ -196,7 +198,6 @@ export function CatalogBuilderForm({
       else next.add(id);
       return next;
     });
-    setConfirmed(false);
   }
 
 
@@ -248,7 +249,7 @@ export function CatalogBuilderForm({
 
       const body = await response.json();
       setQueuePosition(body.queuePosition ?? null);
-      setEvictionWarning(body.evictionWarning ?? null);
+      setEvictionWarning(body.evictionWarning === true);
       setShowConfirmDialog(false);
       setShowSuccessAlert(true);
     } finally {
@@ -271,15 +272,20 @@ export function CatalogBuilderForm({
     <>
       <Card size="sm" className="mb-4 overflow-visible">
         <CardContent>
-          <section aria-label="Category selection">
-            <h2 className={SECTION_HEADING}>Categories</h2>
+          <section aria-label="Selección de categorías">
+            <h2 className={SECTION_HEADING}>Categorías</h2>
             <TreeSelect
               items={categoryTree}
               selected={selectedCategories}
               onSelectionChange={(v) => {
                 setSelectedCategories(v);
+                // The candidate list belongs to the categories that produced
+                // it; clear it here so nothing stale is ever on screen while
+                // the new fetch is in flight.
+                setCandidates([]);
+                setSelectedProductIds(new Set());
+                setPage(1);
                 setErrors({});
-                setConfirmed(false);
               }}
             />
             {errors.categories && (
@@ -295,17 +301,16 @@ export function CatalogBuilderForm({
         <>
           <Card size="sm" className="mb-4">
             <CardContent>
-              <section aria-label="Product selection">
+              <section aria-label="Selección de productos">
                 <h2 className={SECTION_HEADING}>
-                  Products ({finalProducts.length} of {candidates.length} selected)
+                  Productos ({finalProducts.length} de {candidates.length} seleccionados)
                 </h2>
                 <div className="mb-3 flex items-center gap-2">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
                     <Input
-                      ref={tableSearchRef}
                       type="search"
-                      placeholder="Search products..."
+                      placeholder="Buscar productos..."
                       value={searchQuery}
                       onChange={(e) => {
                         setSearchQuery(e.target.value);
@@ -315,7 +320,7 @@ export function CatalogBuilderForm({
                     />
                   </div>
                   <div className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
-                    <Label>Rows per page</Label>
+                    <Label>Filas por página</Label>
                     <Select
                       value={String(pageSize)}
                       onValueChange={(v) => {
@@ -345,11 +350,11 @@ export function CatalogBuilderForm({
                             onCheckedChange={toggleAllVisible}
                           />
                         </TableHead>
-                        <TableHead>Name</TableHead>
+                        <TableHead>Nombre</TableHead>
                         <TableHead>ID</TableHead>
-                        <TableHead className="hidden sm:table-cell">Category L1</TableHead>
-                        <TableHead className="hidden md:table-cell">Category L2</TableHead>
-                        <TableHead className="w-24">Image</TableHead>
+                        <TableHead className="hidden sm:table-cell">Categoría N1</TableHead>
+                        <TableHead className="hidden md:table-cell">Categoría N2</TableHead>
+                        <TableHead className="w-24">Imagen</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -408,9 +413,9 @@ export function CatalogBuilderForm({
             <CardContent>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className="text-sm text-muted-foreground">
-                  Showing {filteredCandidates.length > 0 ? (safePage - 1) * pageSize + 1 : 0}
+                  Mostrando {filteredCandidates.length > 0 ? (safePage - 1) * pageSize + 1 : 0}
                   {"\u2013"}
-                  {Math.min(safePage * pageSize, filteredCandidates.length)} of{" "}
+                  {Math.min(safePage * pageSize, filteredCandidates.length)} de{" "}
                   {filteredCandidates.length} items
                 </span>
                 <Pagination currentPage={safePage} pageCount={pageCount} onPageChange={setPage} />
@@ -485,9 +490,9 @@ export function CatalogBuilderForm({
         <Card size="sm" className="mb-4">
           <CardContent>
             <div className="flex flex-wrap items-end gap-4">
-              <section aria-label="Page density">
+              <section aria-label="Densidad de página">
                 <label className="flex flex-col gap-2 text-sm font-medium text-foreground">
-                  Products per page
+                  Productos por página
                   <Input
                     type="number"
                     min={MIN_PRODUCTS_PER_PAGE}
@@ -522,7 +527,7 @@ export function CatalogBuilderForm({
           <CardContent>
             <div className="flex flex-wrap items-center justify-between">
               <Button type="button" variant="outline" onClick={() => setStep("select")}>
-                Back to selection
+                Volver a la selección
               </Button>
               <Button
                 type="button"
@@ -537,7 +542,7 @@ export function CatalogBuilderForm({
             </div>
             {reviewedProducts.length === 0 && (
               <p role="alert" className={`mt-2 ${FIELD_ERROR}`}>
-                No products selected
+                No hay productos seleccionados
               </p>
             )}
           </CardContent>
@@ -560,8 +565,8 @@ export function CatalogBuilderForm({
 
       <Card size="sm">
         <CardContent>
-            <section aria-label="Live preview">
-            <h2 className={SECTION_HEADING}>Preview</h2>
+            <section aria-label="Vista previa">
+            <h2 className={SECTION_HEADING}>Vista previa</h2>
             <div className={CARD}>
               <CatalogTemplate
                 title={title}
@@ -599,7 +604,7 @@ export function CatalogBuilderForm({
             <DialogTitle>Catálogo en proceso</DialogTitle>
             <DialogDescription>
               El catálogo empezó a generarse{queuePosition != null ? ` (posición ${queuePosition} en la cola)` : ""}.
-              {evictionWarning ? " El más antiguo se eliminará cuando esté listo." : ""}
+              {evictionWarning ? " Ya tenés 2 catálogos guardados: el más antiguo se eliminará cuando este esté listo." : ""}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex-row justify-center gap-3 sm:justify-center">

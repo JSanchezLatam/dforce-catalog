@@ -149,9 +149,11 @@ export async function POST(request: NextRequest) {
       getQueuePosition(jobId),
       countUploadedCatalogsForUser(user.id),
     ]);
-    const evictionWarning = shouldWarnOfEviction(uploadedCount)
-      ? "You already have 2 saved catalogs. Your oldest one will be deleted automatically once this one is ready."
-      : null;
+    // A boolean, not a sentence. The route owns the RULE (does this user have
+    // enough saved catalogs that one will be evicted); the client owns the
+    // wording, in the app's language. Returning English prose from an API the
+    // Spanish UI then ignored is how the two drifted apart.
+    const evictionWarning = shouldWarnOfEviction(uploadedCount);
 
     return NextResponse.json({ jobId, queuePosition, evictionWarning });
   } catch (err) {

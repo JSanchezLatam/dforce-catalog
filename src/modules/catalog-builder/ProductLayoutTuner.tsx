@@ -37,9 +37,9 @@ export function ProductLayoutTuner({
     <Card size="sm">
       <CardContent>
         <div className="flex items-center justify-between mb-4">
-          <h2 className={SECTION_HEADING}>Review image layouts ({products.length} products)</h2>
+          <h2 className={SECTION_HEADING}>Revisar imágenes ({products.length} productos)</h2>
           <Button type="button" variant="outline" size="sm" onClick={onBulkFrame}>
-            {bulkFramed ? "Reset individual overrides" : "Enmarcar todos"}
+            {bulkFramed ? "Restablecer ajustes individuales" : "Enmarcar todos"}
           </Button>
         </div>
         <div className="flex flex-col gap-2">
