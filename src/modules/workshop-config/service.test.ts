@@ -24,6 +24,17 @@ describe("validateWorkshopConfigInput", () => {
     expect(validateWorkshopConfigInput({})).toEqual({});
   });
 
+  it("ignores a non-string name instead of treating it as an explicit clear", () => {
+    const result = validateWorkshopConfigInput({ name: 42, phone: "555" }) as Record<string, unknown>;
+    expect(result).not.toHaveProperty("name");
+    expect(result.phone).toBe("555");
+  });
+
+  it("collapses an empty name to null instead of persisting an empty string", () => {
+    const result = validateWorkshopConfigInput({ name: "" });
+    expect(result.name).toBeNull();
+  });
+
   it.each(["phone", "whatsapp", "email", "address", "hours", "website", "coverText"])(
     "accepts %s independently",
     (field) => {
@@ -104,6 +115,11 @@ describe("validateWorkshopConfigInput", () => {
 
   it("trims a socialHandles platform key before persisting it", () => {
     const result = validateWorkshopConfigInput({ socialHandles: { "  instagram  ": "@mitaller" } });
+    expect(result.socialHandles).toEqual({ instagram: "@mitaller" });
+  });
+
+  it("trims a socialHandles handle value before persisting it, matching the platform key", () => {
+    const result = validateWorkshopConfigInput({ socialHandles: { instagram: "  @mitaller  " } });
     expect(result.socialHandles).toEqual({ instagram: "@mitaller" });
   });
 

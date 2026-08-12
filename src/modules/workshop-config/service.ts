@@ -56,15 +56,21 @@ export class WorkshopConfigValidationError extends Error {
  * An empty/whitespace-only string collapses to `null` so an untouched field
  * persists as NULL, not `""` — the catalog render must be able to tell
  * "not set" from "set to nothing" (spec: fields left unset are omitted, not
- * rendered blank). Non-empty values are returned verbatim, unmodified —
- * `hours` in particular must never be reshaped.
+ * rendered blank). Non-empty values are returned verbatim by default —
+ * `hours` in particular must never be reshaped — except `{ trim: true }`
+ * (used only by `name`, which has always trimmed surrounding whitespace).
  */
-function readTextField(value: Record<string, unknown>, field: string): string | null | undefined {
+function readTextField(
+  value: Record<string, unknown>,
+  field: string,
+  options: { trim?: boolean } = {},
+): string | null | undefined {
   if (!(field in value)) return undefined;
   const raw = value[field];
   if (raw === null) return null;
   if (typeof raw !== "string") return undefined;
-  return raw.trim() === "" ? null : raw;
+  if (raw.trim() === "") return null;
+  return options.trim ? raw.trim() : raw;
 }
 
 /**
@@ -91,7 +97,10 @@ function readHandleMap(value: Record<string, unknown>): Record<string, string> |
       (entry): entry is [string, string] =>
         typeof entry[1] === "string" && entry[0].trim() !== "" && entry[1].trim() !== "",
     )
-    .map(([platform, handle]): [string, string] => [platform.trim(), handle]);
+    // Both trimmed the same way — a handle is a short value like "@usuario",
+    // not free text like `hours`, and validateHandleMapLimits' length cap
+    // must measure the same string that gets persisted, not the raw input.
+    .map(([platform, handle]): [string, string] => [platform.trim(), handle.trim()]);
   return Object.fromEntries(entries);
 }
 
@@ -116,7 +125,7 @@ export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput
   const errors: Record<string, string> = {};
   const value = (input ?? {}) as Record<string, unknown>;
 
-  const name = "name" in value ? (typeof value.name === "string" ? value.name.trim() : null) : undefined;
+  const name = readTextField(value, "name", { trim: true });
   if (name !== undefined && name !== null && name.length > MAX_NAME_LENGTH) {
     errors.name = `El nombre debe tener ${MAX_NAME_LENGTH} caracteres o menos`;
   }

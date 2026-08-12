@@ -115,10 +115,18 @@ was removed entirely.
 
 ### Verification
 
-- `npm test` — 719/719 passing (full suite, not just this module).
+- `npm test` — 722/722 passing (full suite, not just this module).
 - `npx tsc --noEmit` — clean.
 - `npm run lint` — 0 errors, 17 pre-existing warnings (none introduced by
   this change).
+- `GGA_PROVIDER=claude gga run --pr-mode --diff-only` (cross-cutting task
+  5.2), run against `feature/catalog-templates-and-workshop-info` as base:
+  eight rounds total across this apply session, each finding fixed and
+  re-verified before the next run — the fixes above (empty-string/type
+  coercion at the trust boundary, the two migration data-integrity bugs,
+  the stale-tab full-overwrite form, the logo route's `name` clobber, and
+  the `name`/`socialHandles` trimming inconsistencies) all came out of this
+  loop, not the unit-test suite alone. Final round: clean.
 - Live smoke (task 1.10): ran `npm run db:migrate` against the real dev
   Postgres (`postgres://dforce:dforce@localhost:5433/dforce_catalog`).
   Confirmed via `psql`:
