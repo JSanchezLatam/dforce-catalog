@@ -65,6 +65,10 @@ async function reachReviewStep() {
   await user.click(screen.getByRole("button", { name: /Seleccion.* categor.as/ }));
   await user.click(await screen.findByRole("checkbox", { name: "Motor" }));
   await screen.findByText("Woofer");
+  // The select-step "Continue" button and the review-step "open confirm
+  // dialog" button share this exact label but are mutually exclusive by
+  // `step` — only one is ever mounted, so `getByRole` (which throws on a
+  // multi-match) stays the guard if that conditional rendering ever changes.
   await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
   return { fetchMock, user };
 }
