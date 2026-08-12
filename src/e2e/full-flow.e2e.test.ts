@@ -47,6 +47,7 @@ import { hashPassword } from "@/modules/auth/password";
 import { SESSION_COOKIE, validateSession } from "@/modules/auth/session";
 import { resolveAllPrices } from "@/modules/catalog-builder/price-lists";
 import { buildIndexSections } from "@/modules/catalog-builder/selection";
+import { DEFAULT_TEMPLATE_ID } from "@/shared/template/registry";
 import { listCatalogsForUser } from "@/modules/catalog-storage/queries";
 import { registerPdfUploadWorker } from "@/modules/catalog-storage/upload-status";
 import { countAllProducts, listCategoryL1Options, listInventory } from "@/modules/inventory-view/queries";
@@ -202,11 +203,15 @@ describe("full catalog-generation flow (E2E)", () => {
   });
 
   it("configures branding as admin; a non-admin gets 403 (R8, R9.6/NFR-8)", async () => {
+    // Pre-existing, unrelated to WU4: this body carried the four legacy
+    // branding fields WU3's migration 0009 dropped and validateTemplateConfigInput
+    // no longer accepts (service.ts's TemplateConfigInput is `{defaultImageHandling,
+    // selectedTemplateId}`). It parsed to `{}` and still returned 200 — a false
+    // green that configured nothing, caught by GGA while running this WU's
+    // required live smoke. Fixed to the real current shape.
     const templateBody = JSON.stringify({
-      logoUrl: "https://example.com/logo.png",
-      primaryColors: { primary: "#112233", secondary: "#ffffff" },
-      font: "Arial",
-      coverText: "Catálogo Dforce",
+      selectedTemplateId: DEFAULT_TEMPLATE_ID,
+      defaultImageHandling: "strict",
     });
 
     const forbidden = await templateConfigPOST(
@@ -218,6 +223,7 @@ describe("full catalog-generation flow (E2E)", () => {
       new NextRequest("http://localhost/api/template-config", { method: "POST", headers: headersFor(adminUser), body: templateBody }),
     );
     expect(saved.status).toBe(200);
+    expect((await saved.json()).config.selectedTemplateId).toBe(DEFAULT_TEMPLATE_ID);
   });
 
   it("builds a selection, enqueues it, and it reaches uploaded via the real queue+render+upload pipeline (R5, R6, R11, R12)", async () => {
