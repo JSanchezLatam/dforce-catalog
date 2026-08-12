@@ -59,7 +59,7 @@ describe("TemplateConfigForm — gallery picker", () => {
     await user.type(container.querySelector("#logoUrl") as HTMLElement, "https://example.com/logo.png");
     await user.type(container.querySelector("#font") as HTMLElement, "Arial, sans-serif");
     await user.type(container.querySelector("#coverText") as HTMLElement, "Catalogo 2026");
-    await user.click(screen.getByRole("button") as HTMLElement);
+    await user.click(screen.getByRole("button", { name: "Save" }));
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(bodyOf(fetchMock).selectedTemplateId).toBe(DEFAULT_TEMPLATE_ID);

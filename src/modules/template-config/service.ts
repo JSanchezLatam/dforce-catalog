@@ -8,7 +8,7 @@ import { eq } from "drizzle-orm";
 
 import { db as defaultDb } from "@/shared/db/client";
 import { templateConfig, type TemplateConfig } from "@/shared/db/schema";
-import { CATALOG_TEMPLATES } from "@/shared/template/registry";
+import { KNOWN_TEMPLATE_IDS } from "@/shared/template/template-ids";
 
 const SINGLETON_ID = "singleton";
 
@@ -86,7 +86,7 @@ export function validateTemplateConfigInput(input: unknown): TemplateConfigInput
   // removed, not just a corrupted DB row.
   const rawTemplateId = value.selectedTemplateId;
   const selectedTemplateId =
-    typeof rawTemplateId === "string" && CATALOG_TEMPLATES.some((template) => template.id === rawTemplateId)
+    typeof rawTemplateId === "string" && (KNOWN_TEMPLATE_IDS as readonly string[]).includes(rawTemplateId)
       ? rawTemplateId
       : null;
 

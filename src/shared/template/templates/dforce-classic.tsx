@@ -1,19 +1,21 @@
 import type { CatalogTemplateDef } from "../registry";
+import { DEFAULT_TEMPLATE_ID } from "../template-ids";
 import { OpaqueProductCard, TransparentProductCard } from "../AdaptiveCards";
 
 /**
- * First and (currently) only registry entry — hand-translated from the
- * proprietary `Template_Catalogo.op` mockup (Letter 8.5"x11" / 816x1056 @96dpi):
- * a red `#D42027` category band carrying the logo, a 12px black stripe, a
- * body of product rows filling the sheet, and a solid black bottom band with
- * the brand name and a page number in a red circle.
+ * First and (currently) only registry entry. `font`/`primaryColors` are
+ * hand-translated design tokens from the proprietary `Template_Catalogo.op`
+ * mockup (Letter 8.5"x11" / 816x1056 @96dpi, red `#D42027` category band,
+ * black stripe/bottom band). The full page layout the mockup describes
+ * (cover, band, bottom band with page number) is `CatalogTemplate`'s job,
+ * not this file's — WU3 (task 3.2) is what makes `CatalogTemplate` call
+ * `getTemplate()` and render it.
  *
- * `Card` is today's `CatalogTemplate.pickCard` strict/adaptive branch, moved
- * here per design D1 — dead code until WU3 wires `getTemplate()` into
- * `CatalogTemplate`.
+ * `Card` here is only today's `CatalogTemplate.pickCard` strict/adaptive
+ * branch, moved per design D1 — dead code until that WU3 wiring lands.
  */
 export const dforceClassic: CatalogTemplateDef = {
-  id: "dforce-classic",
+  id: DEFAULT_TEMPLATE_ID,
   name: "Dforce Clásico",
   thumbnail: "/templates/dforce-classic.png",
   font: "Arial, sans-serif",

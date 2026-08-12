@@ -101,8 +101,10 @@ export function TemplateConfigForm({ initialConfig }: { initialConfig: TemplateC
             those inputs. WU3 removes them once the columns are gone.
           */}
           <div className="grid gap-2">
-            <Label className={SECTION_HEADING}>Plantilla del catálogo</Label>
-            <div role="radiogroup" aria-label="Plantilla del catálogo" className="flex flex-wrap gap-4">
+            <Label id="template-gallery-heading" className={SECTION_HEADING}>
+              Plantilla del catálogo
+            </Label>
+            <div role="radiogroup" aria-labelledby="template-gallery-heading" className="flex flex-wrap gap-4">
               {CATALOG_TEMPLATES.map((template) => (
                 <label
                   key={template.id}

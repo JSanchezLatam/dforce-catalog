@@ -1,5 +1,10 @@
+import type { ReactElement } from "react";
+
 import type { ProductPrintRef } from "./CatalogTemplate";
 import { dforceClassic } from "./templates/dforce-classic";
+import { DEFAULT_TEMPLATE_ID } from "./template-ids";
+
+export { DEFAULT_TEMPLATE_ID } from "./template-ids";
 
 /**
  * Code registry (design D1) — one entry per catalog template. Page
@@ -17,12 +22,10 @@ export type CatalogTemplateDef = {
   thumbnail: string;
   font: string;
   primaryColors: { primary: string; secondary: string };
-  Card: (props: { product: ProductPrintRef; imageHandling: "strict" | "adaptive" }) => React.ReactElement;
+  Card: (props: { product: ProductPrintRef; imageHandling: "strict" | "adaptive" }) => ReactElement;
 };
 
 export const CATALOG_TEMPLATES: CatalogTemplateDef[] = [dforceClassic];
-
-export const DEFAULT_TEMPLATE_ID = "dforce-classic";
 
 /** R8.4 — an unknown or missing id (never-persisted, or orphaned by a registry edit) falls back to the default; never returns null/throws. */
 export function getTemplate(id?: string | null): CatalogTemplateDef {

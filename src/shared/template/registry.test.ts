@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { CATALOG_TEMPLATES, DEFAULT_TEMPLATE_ID, getTemplate } from "./registry";
+import { KNOWN_TEMPLATE_IDS } from "./template-ids";
 
 describe("getTemplate (R8.4 — orphaned id falls back)", () => {
   it("returns the default template for an unknown id", () => {
@@ -28,5 +29,10 @@ describe("CATALOG_TEMPLATES", () => {
 
   it("includes the default template id", () => {
     expect(CATALOG_TEMPLATES.some((template) => template.id === DEFAULT_TEMPLATE_ID)).toBe(true);
+  });
+
+  it("matches template-ids.ts exactly (the DB-free id list template-config/service.ts validates against)", () => {
+    const ids = CATALOG_TEMPLATES.map((template) => template.id).sort();
+    expect(ids).toEqual([...KNOWN_TEMPLATE_IDS].sort());
   });
 });
