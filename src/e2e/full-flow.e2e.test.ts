@@ -153,11 +153,14 @@ describe("full catalog-generation flow (E2E)", () => {
   it("syncs inventory from a mocked Interfuerza boundary, then filters it (R1, R3, R10)", async () => {
     // catalog-templates-and-workshop-info WU4: the real Interfuerza wrapper is
     // {Producto, InStock, PriceLists, Images, Matrix} (mapper.ts, fixed in
-    // a828759) — a flat {id, name, price} object throws
-    // "missing a usable Producto.id" in parseProduct. `priceLists` below also
-    // carries a real "0.00" tier (p2's socio price) — the production-verified
-    // case R6's em-dash rule exists for (spec: "A zero tier renders an
-    // em-dash").
+    // a828759) — a flat {id, name, price} object throws "missing a usable
+    // Producto.id" in parseProduct. `Matrix` is omitted below: `parseProduct`
+    // and `warnMalformedWrapper` never read it (Producto/InStock/PriceLists
+    // are the only keys the mapper depends on — mapper.ts's own docstring),
+    // so it is pure round-trip passthrough this fixture has no use for.
+    // `priceLists` below also carries a real "0.00" tier (p2's socio price)
+    // — the production-verified case R6's em-dash rule exists for (spec: "A
+    // zero tier renders an em-dash").
     function wrapper(
       id: string,
       nombre: string,
