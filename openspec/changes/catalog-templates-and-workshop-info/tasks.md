@@ -54,14 +54,14 @@ Files: `src/shared/db/schema.ts`, `src/shared/db/migrations/0008_*.sql` (+`meta/
 
 Files: `src/shared/template/registry.ts`(new), `src/shared/template/templates/dforce-classic.tsx`(new), `src/shared/template/registry.test.ts`(new), `src/modules/template-config/service.ts`(+test), `src/modules/template-config/TemplateConfigForm.tsx`(+test).
 
-- [ ] 2.1 RED `registry.test.ts` — `getTemplate(unknownId)` and `getTemplate(null)` both return the entry matching `DEFAULT_TEMPLATE_ID`; `CATALOG_TEMPLATES` ids are unique.
-- [ ] 2.2 GREEN `registry.ts` — `CatalogTemplateDef` type, `CATALOG_TEMPLATES`, `DEFAULT_TEMPLATE_ID`, `getTemplate()` per design D1.
-- [ ] 2.3 GREEN `templates/dforce-classic.tsx` — hand-translated from `Template_Catalogo.op` mockup: `font`, `primaryColors`, `thumbnail`, and a `Card` component (today's `pickCard` strict/adaptive branch moves in here, still wrapping `AdaptiveCards`).
-- [ ] 2.4 RED `service.test.ts` — `validateTemplateConfigInput` accepts `selectedTemplateId`; still requires `logoUrl`/`primaryColors`/`font`/`coverText` (columns are still `NOT NULL` until `0009`).
-- [ ] 2.5 GREEN `service.ts` — `saveTemplateConfig` accepts `selectedTemplateId` and internally supplies placeholder values for the four legacy `NOT NULL` fields (they are no longer form inputs but the insert/update must keep populating them — design Risk #3).
-- [ ] 2.6 RED `TemplateConfigForm.test.tsx` — gallery renders exactly the one registry entry, pre-selected; no color/font/logo/cover-text input present (spec: "Gallery replaces the style editor", "Single-entry gallery").
-- [ ] 2.7 GREEN `TemplateConfigForm.tsx` — replace branding inputs with a gallery picker over `CATALOG_TEMPLATES`; on save, POST `{ selectedTemplateId }`.
-- [ ] 2.8 RED `service.test.ts` — saved `selectedTemplateId` round-trips through `getTemplateConfig()` (spec: "Selection survives a restart").
+- [x] 2.1 RED `registry.test.ts` — `getTemplate(unknownId)` and `getTemplate(null)` both return the entry matching `DEFAULT_TEMPLATE_ID`; `CATALOG_TEMPLATES` ids are unique.
+- [x] 2.2 GREEN `registry.ts` — `CatalogTemplateDef` type, `CATALOG_TEMPLATES`, `DEFAULT_TEMPLATE_ID`, `getTemplate()` per design D1.
+- [x] 2.3 GREEN `templates/dforce-classic.tsx` — hand-translated from `Template_Catalogo.op` mockup: `font`, `primaryColors`, `thumbnail`, and a `Card` component (today's `pickCard` strict/adaptive branch moves in here, still wrapping `AdaptiveCards`).
+- [x] 2.4 RED `service.test.ts` — `validateTemplateConfigInput` accepts `selectedTemplateId`; still requires `logoUrl`/`primaryColors`/`font`/`coverText` (columns are still `NOT NULL` until `0009`).
+- [x] 2.5 GREEN `service.ts` — `saveTemplateConfig` accepts `selectedTemplateId` alongside the still-required four legacy `NOT NULL` fields (deviation — see apply-progress.md: the WU2 execution prompt corrected design Risk #3's "no longer form inputs" framing; the picker EXTENDS the branding form instead of replacing it, so no placeholder synthesis was needed).
+- [x] 2.6 RED `TemplateConfigForm.test.tsx` — gallery renders exactly the one registry entry, pre-selected; the legacy branding inputs still render alongside it (deviation from the literal "no color/font/logo/cover-text input present" wording — see apply-progress.md).
+- [x] 2.7 GREEN `TemplateConfigForm.tsx` — add a gallery picker over `CATALOG_TEMPLATES` alongside the existing branding inputs; on save, POST includes `selectedTemplateId`.
+- [x] 2.8 RED `service.test.ts` — saved `selectedTemplateId` round-trips through `getTemplateConfig()` (spec: "Selection survives a restart").
 
 ## Phase 3 — WU3: Wire Registry Into Renderer; Branding Split; Logo Data URI; Migration `0009`
 
