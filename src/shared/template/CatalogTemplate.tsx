@@ -40,6 +40,14 @@ export type CatalogTemplateBranding = {
   coverText: string | null;
 };
 
+/**
+ * catalog-templates-and-workshop-info WU4 (design D4): the catalog no longer
+ * carries one admin-chosen price tier — every product prints all three
+ * (Venta/Taller/Socio). This is the shape both `price-lists.ts`'s
+ * `resolveAllPrices` and `AdaptiveCards.tsx`'s render-site em-dash guard share.
+ */
+export type ProductPrices = { venta: number | null; taller: number | null; socio: number | null };
+
 export type CatalogIndexSection = {
   categoryL1: string;
   categoryL2: string | null;
@@ -55,12 +63,12 @@ export type ProductPrintRef = {
   image?: string | null;
   imageType?: "transparent" | "opaque" | "low_res" | null;
   /**
-   * The ONE price tier this catalog was generated with, already resolved from
-   * the ERP's three lists by `catalog-builder`. `null`/absent means the tier
-   * had no usable price for this product and the card prints none — never
-   * "$0.00", which on a printed page reads as free.
+   * All three ERP price tiers, already resolved by `catalog-builder`'s
+   * `resolveAllPrices`. A tier that is `null` (absent from the payload, or an
+   * ERP value `<= 0.00`) prints an em-dash — never "$0.00", which on a
+   * printed page reads as free.
    */
-  price?: number | null;
+  prices?: ProductPrices | null;
 };
 
 export type CatalogTemplateProps = {
