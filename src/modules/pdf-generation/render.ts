@@ -24,42 +24,55 @@ export const GRID_COLUMNS = 2;
  * paginating by height correctly — the fixed-count split was fighting it.
  *
  * So both constraints hold: the user says "no more than N per page", the
- * browser says "and never more than what fits". `rowHeights` is what the
+ * browser says "and never more than what fits". `cardHeights` is what the
  * browser measured (`worker.ts`, which owns the only Playwright import in
- * this module); this function stays pure so the packing is unit-testable
- * without one. Callers with no browser — the builder's live preview — pass
- * no measurement, every row then counts as 0-tall, and only the count binds.
+ * this module), each already carrying the grid's row gap so this function
+ * never needs to know it. Pure on purpose, so the packing is unit-testable
+ * without a browser; with no measurement passed every card counts as 0-tall
+ * and only the count binds.
+ *
+ * Heights arrive per CARD but bind per ROW, and the rows are formed HERE
+ * rather than by the measuring pass: an odd `maxProductsPerPage` puts the
+ * next page's first card in a different column than the single-grid
+ * measurement saw, so pre-paired row heights would be measuring one layout
+ * and paginating another — and would quietly round an explicit 3 per page
+ * down to 2.
  */
 export function chunkProducts(
   products: ProductPrintRef[],
   maxProductsPerPage: number,
-  rowHeights: number[] = [],
+  cardHeights: number[] = [],
   usableHeight: number = Infinity,
 ): ProductPrintRef[][] {
   const maxPerPage =
     Number.isInteger(maxProductsPerPage) && maxProductsPerPage > 0 ? maxProductsPerPage : Infinity;
-  // Only `maxPerPage === 1` narrows the row: one card per page cannot share a
-  // row with anything, so the measured two-card heights cannot bind anyway.
-  const columns = Math.min(GRID_COLUMNS, maxPerPage);
 
   const pages: ProductPrintRef[][] = [];
   let page: ProductPrintRef[] = [];
-  let pageHeight = 0;
+  let closedRows = 0; // the rows already complete on this page
+  let openRow = 0; // the row still being filled, as tall as its tallest card so far
 
-  for (let row = 0; row * columns < products.length; row += 1) {
-    const cards = products.slice(row * columns, (row + 1) * columns);
-    const height = rowHeights[row] ?? 0;
-    const fits = page.length + cards.length <= maxPerPage && pageHeight + height <= usableHeight;
-    // `page.length > 0` is what stops a row taller than a whole page from
-    // looping forever: on an empty page the row is taken regardless of fit,
-    // and Chromium handles the unavoidable overflow itself.
-    if (page.length > 0 && !fits) {
+  for (const [index, product] of products.entries()) {
+    const card = cardHeights[index] ?? 0;
+    // The card either opens the next row or joins the open one, where the
+    // taller of the two decides how much vertical space that row takes.
+    const opensRow = page.length % GRID_COLUMNS === 0;
+    const closed = opensRow ? closedRows + openRow : closedRows;
+    const open = opensRow ? card : Math.max(openRow, card);
+
+    // `page.length > 0` is what stops a card taller than a whole page from
+    // looping forever: on an empty page it is taken regardless of fit, and
+    // Chromium handles the unavoidable overflow itself.
+    if (page.length > 0 && (page.length + 1 > maxPerPage || closed + open > usableHeight)) {
       pages.push(page);
-      page = [];
-      pageHeight = 0;
+      page = [product];
+      closedRows = 0;
+      openRow = card;
+      continue;
     }
-    page.push(...cards);
-    pageHeight += height;
+    page.push(product);
+    closedRows = closed;
+    openRow = open;
   }
   if (page.length > 0) pages.push(page);
   return pages;

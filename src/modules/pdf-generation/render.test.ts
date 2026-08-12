@@ -45,28 +45,30 @@ describe("chunkProducts — R6.1/R5.4", () => {
  * table made cards tall enough that a 10-product chunk spilled across two
  * physical pages; the fixed-count split was promising a page layout the paper
  * could not deliver. The browser is the only thing that knows how tall a card
- * really is, so `worker.ts` measures the rows in the Chromium it already
+ * really is, so `worker.ts` measures the cards in the Chromium it already
  * launched and hands the heights in here.
  *
- * Rows, not cards: `CatalogTemplate`'s product grid is `repeat(2, 1fr)`, so
- * two cards share one row and a row is as tall as its TALLER card. Packing
- * cards individually would measure the wrong thing.
+ * Heights come in per CARD but bind per ROW: `CatalogTemplate`'s product grid
+ * is `repeat(2, 1fr)`, so two cards share one row and the TALLER of the two
+ * decides how much vertical space that row takes. Per-card input is what lets
+ * an odd `productsPerPage` still fill its last, half-width slot.
  *
- * With no measurement at all (the live preview has no browser) every row
- * counts as 0-tall and only the count binds — exactly the pre-measurement
- * behaviour the tests above still pin.
+ * With no measurement at all every card counts as 0-tall and only the count
+ * binds — exactly the pre-measurement behaviour the tests above still pin.
  */
 describe("chunkProducts — height-aware packing (archive gap #1)", () => {
   const products = (count: number) => Array.from({ length: count }, (_, i) => product(String(i + 1)));
   const ids = (pages: ProductPrintRef[][]) => pages.map((page) => page.map((p) => p.id));
+  /** Every card the same height — the row height is then that height too. */
+  const flat = (count: number, height: number) => Array.from({ length: count }, () => height);
 
   it("keeps every row that fits within the usable page height on one page", () => {
-    // 3 rows x 100px = 300px into a 300px page: exactly full, no break.
-    expect(ids(chunkProducts(products(6), 20, [100, 100, 100], 300))).toEqual([["1", "2", "3", "4", "5", "6"]]);
+    // 6 cards = 3 rows x 100px = 300px into a 300px page: exactly full, no break.
+    expect(ids(chunkProducts(products(6), 20, flat(6, 100), 300))).toEqual([["1", "2", "3", "4", "5", "6"]]);
   });
 
   it("breaks the page when the next row overflows it by a single pixel", () => {
-    expect(ids(chunkProducts(products(6), 20, [100, 100, 100], 299))).toEqual([
+    expect(ids(chunkProducts(products(6), 20, flat(6, 100), 299))).toEqual([
       ["1", "2", "3", "4"],
       ["5", "6"],
     ]);
@@ -76,35 +78,44 @@ describe("chunkProducts — height-aware packing (archive gap #1)", () => {
     expect(chunkProducts([], 6, [], 900)).toEqual([]);
   });
 
+  it("gives a row the height of its TALLER card, not of its first one", () => {
+    // Row 1 is 300px because of card 2, so row 2 no longer fits in 350px. If
+    // the first card decided the row height this would be a single page.
+    expect(ids(chunkProducts(products(4), 20, [100, 300, 100, 100], 350))).toEqual([
+      ["1", "2"],
+      ["3", "4"],
+    ]);
+  });
+
   /**
-   * The edge that would otherwise hang the worker: a row no page can ever
+   * The edge that would otherwise hang the worker: a card no page can ever
    * hold. It goes on its own page and Chromium handles the unavoidable
    * overflow — the loop must never retry it against a fresh empty page.
    */
-  it("places a row taller than a whole page alone rather than looping forever", () => {
-    expect(ids(chunkProducts(products(4), 20, [5000, 100], 300))).toEqual([
-      ["1", "2"],
-      ["3", "4"],
+  it("places a card taller than a whole page alone rather than looping forever", () => {
+    expect(ids(chunkProducts(products(4), 20, [5000, 100, 100, 100], 300))).toEqual([
+      ["1"],
+      ["2", "3", "4"],
     ]);
   });
 
-  it("places an oversized row that is not the first one on a page of its own too", () => {
-    expect(ids(chunkProducts(products(6), 20, [100, 5000, 100], 300))).toEqual([
+  it("places an oversized card that is not the first one on a page of its own too", () => {
+    expect(ids(chunkProducts(products(6), 20, [100, 100, 5000, 100, 100, 100], 300))).toEqual([
       ["1", "2"],
-      ["3", "4"],
-      ["5", "6"],
+      ["3"],
+      ["4", "5", "6"],
     ]);
   });
 
-  it("lets the count bind first when the rows are short", () => {
-    expect(ids(chunkProducts(products(6), 4, [10, 10, 10], 10_000))).toEqual([
+  it("lets the count bind first when the cards are short", () => {
+    expect(ids(chunkProducts(products(6), 4, flat(6, 10), 10_000))).toEqual([
       ["1", "2", "3", "4"],
       ["5", "6"],
     ]);
   });
 
   it("lets the height bind first when the count would allow more", () => {
-    expect(ids(chunkProducts(products(6), 20, [200, 200, 200], 400))).toEqual([
+    expect(ids(chunkProducts(products(6), 20, flat(6, 200), 400))).toEqual([
       ["1", "2", "3", "4"],
       ["5", "6"],
     ]);
@@ -112,7 +123,7 @@ describe("chunkProducts — height-aware packing (archive gap #1)", () => {
 
   it("splits a trailing half row by height like any other row", () => {
     // 5 products = 2 full rows + 1 half row; the half row still owns a slot.
-    expect(ids(chunkProducts(products(5), 20, [200, 200, 200], 400))).toEqual([
+    expect(ids(chunkProducts(products(5), 20, flat(5, 200), 400))).toEqual([
       ["1", "2", "3", "4"],
       ["5"],
     ]);
@@ -126,7 +137,29 @@ describe("chunkProducts — height-aware packing (archive gap #1)", () => {
   });
 
   it("still honours productsPerPage=1 even though the grid has two columns", () => {
-    expect(ids(chunkProducts(products(3), 1, [100, 100], 10_000))).toEqual([["1"], ["2"], ["3"]]);
+    expect(ids(chunkProducts(products(3), 1, flat(3, 100), 10_000))).toEqual([["1"], ["2"], ["3"]]);
+  });
+
+  /**
+   * `MIN`..`MAX_PRODUCTS_PER_PAGE` is 1..20, so every odd value in between is
+   * legal input from the form. Packing whole two-card rows would quietly round
+   * an explicit 3 down to 2 per page — a 50% page-count increase on a number
+   * the user typed, with the height constraint never even engaging.
+   */
+  it("fills the last odd slot of an odd productsPerPage", () => {
+    expect(ids(chunkProducts(products(6), 3, flat(6, 100), 10_000))).toEqual([
+      ["1", "2", "3"],
+      ["4", "5", "6"],
+    ]);
+  });
+
+  it("keeps measuring correctly when an odd page has left the rows out of phase", () => {
+    // perPage=3 puts card 4 at the start of page 2, so its row is (4,5) — not
+    // the (3,4) pairing the single-grid measurement pass saw.
+    expect(ids(chunkProducts(products(6), 3, [100, 100, 100, 100, 100, 100], 250))).toEqual([
+      ["1", "2", "3"],
+      ["4", "5", "6"],
+    ]);
   });
 });
 

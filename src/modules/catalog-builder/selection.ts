@@ -37,8 +37,9 @@ export const MAX_PRODUCTS_PER_PAGE = 20; // R5.4
  * This used to have to match what physically fits: WU4's three-row price
  * table (Venta/Taller/Socio) made cards tall enough that the old default of
  * 10 spilled one logical section across two physical pages, and
- * `chunkProducts` split by a fixed count without ever measuring height. It
- * measures now (`pdf-generation/render.ts`), so the real page height binds
+ * `chunkProducts` split by a fixed count without ever measuring height.
+ * `pdf-generation/worker.ts` measures the real card heights in its browser
+ * now and `chunkProducts` packs against them, so the page height binds
  * whatever the user picks and this number can no longer overflow a page.
  */
 export const DEFAULT_PRODUCTS_PER_PAGE = 6;
