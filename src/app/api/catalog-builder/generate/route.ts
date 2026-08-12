@@ -10,7 +10,7 @@ import { getQueuePosition } from "@/modules/pdf-generation/position";
 import { getTemplateConfig } from "@/modules/template-config/service";
 import { getWorkshopConfig } from "@/modules/workshop-config/service";
 import { getTemplate } from "@/shared/template/registry";
-import type { CatalogIndexSection, ProductPrintRef } from "@/shared/template/CatalogTemplate";
+import type { CatalogIndexSection, ProductPrices, ProductPrintRef } from "@/shared/template/CatalogTemplate";
 
 /**
  * R5/R6/R12 — the missing link flagged since PR8: `CatalogBuilderForm`'s
@@ -28,8 +28,8 @@ import type { CatalogIndexSection, ProductPrintRef } from "@/shared/template/Cat
 type GenerateBody = {
   title: string;
   sections: CatalogIndexSection[];
-  // Print-ready, not selection-shaped: the builder has already resolved the
-  // chosen price tier and dropped the other two before POSTing.
+  // Print-ready, not selection-shaped: every product carries all three
+  // resolved price tiers (R13 — no admin-chosen collapse before generation).
   products: ProductPrintRef[];
   productsPerPage: number;
   includedCategoryCount: number;
@@ -42,19 +42,35 @@ function isNullableString(value: unknown): boolean {
   return value == null || typeof value === "string";
 }
 
+/** One tier is valid when absent (no usable price) or a finite number. */
+const isTier = (v: unknown): boolean => v == null || (typeof v === "number" && Number.isFinite(v));
+
+/**
+ * design D4 — the only guard between a malformed payload and a `TypeError`
+ * inside a decoupled pg-boss worker with nobody to report to. Each tier is
+ * validated individually: a non-object `prices`, an array `prices`, or a
+ * single bad tier (`NaN`, `Infinity`, wrong type) is rejected on its own,
+ * never folded into one loose check.
+ */
+function isValidPrices(value: unknown): value is Partial<ProductPrices> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const t = value as Partial<ProductPrices>;
+  return isTier(t.venta) && isTier(t.taller) && isTier(t.socio);
+}
+
 /**
  * Every field of `ProductPrintRef`, not just the crashing one.
  *
- * `price` is the only field that throws (`.toFixed(2)` in `AdaptiveCards`),
- * but a junk `image` renders a broken `<img>` and a junk `imageType` silently
- * picks the wrong card — a degraded PDF nobody notices is its own failure.
+ * `prices` is the field that throws (`.toFixed(2)` in `AdaptiveCards`), but a
+ * junk `image` renders a broken `<img>` and a junk `imageType` silently picks
+ * the wrong card — a degraded PDF nobody notices is its own failure.
  * Validating three fields under a comment promising "element shape" was a
  * contract wider than the code.
  */
 function isPrintProduct(value: unknown): value is ProductPrintRef {
   if (typeof value !== "object" || value === null) return false;
   const p = value as Partial<ProductPrintRef>;
-  if (p.price != null && (typeof p.price !== "number" || !Number.isFinite(p.price))) return false;
+  if (p.prices != null && !isValidPrices(p.prices)) return false;
   if (p.imageType != null && !IMAGE_TYPES.includes(p.imageType)) return false;
   return (
     typeof p.id === "string" &&

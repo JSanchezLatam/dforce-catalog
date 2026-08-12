@@ -140,44 +140,59 @@ describe("renderCatalogHtml — R6.1 (shares CatalogTemplate with the builder's 
 });
 
 /**
- * A catalog carries exactly ONE price tier — whichever the admin picked at
- * generation time — already resolved into `price` by the builder. The template
- * never sees the other two, so a trade or member price cannot leak into a
- * retail catalog through the payload.
+ * catalog-templates-and-workshop-info WU4 — a catalog no longer carries one
+ * admin-chosen price tier; every product prints all three (Venta/Taller/
+ * Socio). A tier with no usable price — absent, or an ERP value `<= 0.00` —
+ * renders an em-dash, never "$0.00" (design D4).
  */
 describe("renderCatalogHtml — product prices", () => {
-  const priced = (price: number | null): ProductPrintRef[][] => [
-    [{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null, price }],
+  const priced = (prices: ProductPrintRef["prices"]): ProductPrintRef[][] => [
+    [{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null, prices }],
   ];
 
-  it("prints the resolved price on the card", async () => {
+  it("prints all three resolved tiers on the card", async () => {
     const html = await renderCatalogHtml({
       title: "C",
       branding: null,
       sections: [],
-      productPages: priced(45),
+      productPages: priced({ venta: 120, taller: 100, socio: 90 }),
     });
 
-    expect(html).toContain("45.00");
+    expect(html).toContain("Venta: $120.00");
+    expect(html).toContain("Taller: $100.00");
+    expect(html).toContain("Socio: $90.00");
   });
 
-  it("formats a whole number to two decimals rather than bare", async () => {
-    const html = await renderCatalogHtml({ title: "C", branding: null, sections: [], productPages: priced(38) });
+  it("renders an em-dash for the one tier missing, without touching the others", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [],
+      productPages: priced({ venta: 120, taller: null, socio: 90 }),
+    });
 
-    expect(html).toContain("38.00");
-    expect(html).not.toContain(">38<");
+    expect(html).toContain("Venta: $120.00");
+    expect(html).toContain("Taller: —");
+    expect(html).toContain("Socio: $90.00");
   });
 
   // 32 of 694 real products have no retail price. Printing "$0.00" beside one
   // in a document handed to a customer is worse than printing nothing.
-  it("prints nothing at all when the product has no price", async () => {
-    const html = await renderCatalogHtml({ title: "C", branding: null, sections: [], productPages: priced(null) });
+  it("renders three em-dashes when every tier has no usable price", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [],
+      productPages: priced({ venta: null, taller: null, socio: null }),
+    });
 
-    expect(html).not.toContain("0.00");
     expect(html).not.toContain("$");
+    expect(html).toContain("Venta: —");
+    expect(html).toContain("Taller: —");
+    expect(html).toContain("Socio: —");
   });
 
-  it("omits the price when the field is absent entirely", async () => {
+  it("renders em-dashes when prices is absent entirely", async () => {
     const html = await renderCatalogHtml({
       title: "C",
       branding: null,
@@ -186,19 +201,42 @@ describe("renderCatalogHtml — product prices", () => {
     });
 
     expect(html).not.toContain("$");
+    expect(html).toContain("Venta: —");
   });
 
-  it("prints the price on the transparent card too, not just the framed one", async () => {
+  // A hostile/real ERP "0.00" tier must never render as free.
+  it("renders a zero-value tier as an em-dash, never $0.00", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [],
+      productPages: priced({ venta: 0, taller: 100, socio: 0 }),
+    });
+
+    expect(html).not.toContain("$0.00");
+    expect(html).toContain("Taller: $100.00");
+  });
+
+  it("prints the prices on the transparent card too, not just the framed one", async () => {
     const html = await renderCatalogHtml({
       title: "C",
       branding: null,
       sections: [],
       defaultImageHandling: "adaptive",
       productPages: [
-        [{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null, imageType: "transparent", price: 45 }],
+        [
+          {
+            id: "1",
+            name: "Woofer",
+            categoryL1: "AUDIO",
+            categoryL2: null,
+            imageType: "transparent",
+            prices: { venta: 45, taller: null, socio: null },
+          },
+        ],
       ],
     });
 
-    expect(html).toContain("45.00");
+    expect(html).toContain("Venta: $45.00");
   });
 });

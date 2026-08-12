@@ -550,3 +550,262 @@ Awaiting a decision on how to proceed (accept as one oversized PR with
 `size:exception`, or split 3.1–3.9 from 3.10–3.13) before running task 5.2's
 GGA review and opening the PR against
 `feature/catalog-templates-and-workshop-info`.
+
+**Update (recorded during WU4 apply, not edited above to preserve the
+original record):** this status is stale — `tasks.md` 5.2 confirms WU3's PR
+did open, ran GGA (two rounds, six findings, fixed in `3a1416d`/`af5e8e8`),
+and merged as PR #36 (`main` history: `af5e8e8` → `3a1416d` → `29bd362` →
+merge commit `c4aec74`'s parent). GGA flagged this exact
+apply-progress-vs-tasks.md disagreement during WU4's own review loop (round
+1, finding #6) — noted here rather than silently rewritten, per this file's
+own "not a session log" standard cutting both ways: the historical record
+of what was true when WU3 stopped is itself useful, so it stays as written
+above.
+
+## WU4 — Three-Tier Pricing (Phase 4, tasks 4.1–4.16)
+
+Status: **done.** Branch `catalog-tpl/wu4-three-tier-pricing`, cut from
+tracker `feature/catalog-templates-and-workshop-info` (already containing
+merged WU1, WU2, WU3). Base verified green before starting: `npm test`
+740/740, `npx tsc --noEmit` clean, `npm run lint` 0 errors.
+
+All 16 Phase 4 tasks complete — see `tasks.md` for per-task detail.
+
+### What shipped
+
+- `src/modules/catalog-builder/price-lists.ts` — new `resolveAllPrices`,
+  wrapping the existing `resolvePrice` per tier (`ProductPrices` imported
+  from `CatalogTemplate.tsx`, not redeclared — one canonical shape).
+- `src/shared/template/CatalogTemplate.tsx` — `ProductPrices` type
+  (design D4's own code block) exported here; `ProductPrintRef.price?:
+  number | null` → `prices?: ProductPrices | null`.
+- `src/shared/template/AdaptiveCards.tsx` (+ new `AdaptiveCards.test.tsx`)
+  — `ProductPrice` (single value) replaced by one shared `ProductPrices`
+  component; three labelled rows (`Venta`/`Taller`/`Socio`, a local
+  constant, not imported from `catalog-builder`); em-dash rule `value ==
+  null || value <= 0 → "—"`, re-guarded here even though `resolvePrice`
+  already nulls a hostile `0.00` upstream. Both card variants
+  (`TransparentProductCard`/`OpaqueProductCard`) proven identical via
+  `describe.each`.
+- `src/modules/pdf-generation/render.test.ts` — the "product prices"
+  `describe` block (previously line 128) rewritten for the `prices` shape:
+  all-present, one-missing, all-missing, zero-tier, and both card variants.
+  `render.ts`/`chunkProducts` needed zero code changes (pure pass-through,
+  confirmed by all 20 tests passing on fixture changes alone).
+- `src/app/api/catalog-builder/generate/route.ts` — `isPrintProduct`
+  rewritten: `isValidPrices` validates `prices.venta`/`taller`/`socio`
+  individually via design D4's literal `isTier` guard (`v == null ||
+  (typeof v === "number" && Number.isFinite(v))`) — non-object `prices`,
+  array `prices`, and a `NaN`/`Infinity`/wrong-type single tier are each
+  rejected on their own, never folded into one check.
+- `src/modules/catalog-builder/CatalogBuilderForm.tsx` (+ new
+  `CatalogBuilderForm.test.tsx` — no test file existed before this unit) —
+  removed the `priceList` state and the "Lista de precios" `Select` card
+  entirely; `reviewedProducts` now maps `prices: resolveAllPrices(priceLists)`
+  instead of `price: resolvePrice(priceLists, priceList)`.
+- `src/e2e/full-flow.e2e.test.ts` — three-tier fixtures including a real
+  `0.00` tier (p2's socio price), plus the necessary pre-existing-bug fixes
+  below to get the required live smoke to a genuine green.
+
+### Deviations from tasks.md
+
+**None on the assigned price-shape work itself** — `price` → `prices` was
+not split (per the explicit instruction and design.md's own recommendation:
+"do not split the `price`→`prices` rename"), `ProductPrices` was defined in
+`CatalogTemplate.tsx` per design D4's own code block rather than in
+`price-lists.ts`, and the tier labels are a local constant in
+`AdaptiveCards.tsx` as task 4.5 specifies.
+
+**Task 4.13/4.14 required three pre-existing, unrelated bugs to be fixed to
+get a genuine green live smoke** (not scope creep — each one independently
+blocked `npm run test:e2e` from passing at all, which 4.14 requires):
+
+1. **Stale Interfuerza fixture shape.** The fixture predated `a828759`
+   ("fix: correct inventory-sync mapper to match real Interfuerza 5-key
+   wrapper contract") — a flat `{id, name, category_l1, price}` object threw
+   `"Interfuerza product is missing a usable Producto.id"` in `parseProduct`
+   on the very first live run, independent of any WU4 change. Rebuilt to the
+   real `{Producto, InStock, PriceLists, Images}` wrapper (`Matrix` omitted
+   deliberately — `parseProduct`/`warnMalformedWrapper` never read it; GGA
+   round 1 flagged the fixture/comment mismatch, fixed in round 2's follow-up
+   commit).
+2. **Stale proxy 401 assertion.** `9b789e2` ("fix: redirect unauthenticated
+   page visits to /login instead of raw 401 JSON") changed a page route's
+   no-cookie behavior from 401 to a redirect, after this test was last
+   touched. Rewrote the assertion to match the real, current contract (page
+   route → redirect for both no-cookie and bad-cookie; API route → 401),
+   rather than the stale one. **GGA round 2 called this out-of-scope** (see
+   "GGA review" below for why it was kept).
+3. **`regularUser` (tecnico) used for an admin-only action.**
+   `policy.ts`'s `MATRIX.tecnico["catalogs.generate"]` has been `false`
+   since the very first commit that introduced it (`edd86d7`) — the e2e test
+   generating a catalog as `regularUser` has apparently never actually
+   passed with a real policy check. Swapped to `adminUser` for the
+   generate/poll/file-ownership steps; `otherUser` (still tecnico) stays the
+   denied party for the R7 ownership check.
+
+**Task 4.14's live smoke was also strengthened beyond "update fixtures"**:
+the generate-step now resolves `prices: resolveAllPrices(p.priceLists)`
+against the real Postgres row `listProductsInCategories`'s hand-built jsonb
+SQL just returned, and asserts the real `0.00` socio tier collapses to
+`null` — this is the actual point of a live smoke per `AGENTS.md` ("a green
+unit suite proves zero coverage of the hand-built price SQL"); the original
+e2e test never exercised price content at all (it POSTed the raw
+`ProductRef[]` candidates directly, which never carried a `price`/`prices`
+field either, before or after this change).
+
+### Issues found, not acted on (recorded per AGENTS.md's scope discipline)
+
+- **`isTier` accepts negative finite numbers** (design D4's own literal
+  guard, copied verbatim: `v == null || (typeof v === "number" &&
+  Number.isFinite(v))`). GGA round 4 suggested tightening to `v > 0` since a
+  negative price is nonsense data, not a `TypeError` risk — a reasonable
+  point, but it is a deviation from design D4's literal code block, not a
+  bug in what was implemented. `formatTier`'s render-site `<= 0 → "—"` guard
+  already prevents a negative value from ever printing. Recorded here rather
+  than freelanced, per "ALWAYS follow the design decisions."
+- **`getObject` is mocked in `full-flow.e2e.test.ts`** (pre-existing, WU3-era
+  — the mock itself is untouched by this diff; only import lines shifted its
+  line numbers, which is what GGA's round-4 diff view showed). This means
+  WU3's `resolveBranding` data-URI path is not exercised by Chromium inside
+  the one repeatable e2e run — only by WU3's own throwaway script, which was
+  deleted. Not a WU4 defect or WU4-fixable without changing what R2 boundary
+  this test mocks; recorded as a coverage gap for a future change to decide
+  whether to close.
+- **`specs/template-config/spec.md`'s R8.4 "MUST use the default… not error
+  or crash"** contradicts `service.ts`'s write-path rejection of an unknown
+  `selectedTemplateId`. Not new — WU2's apply-progress section already
+  recorded this exact fallback-vs-reject question as GGA round-5 oscillation
+  deliberately left unresolved (keeping the code, per that section's
+  judgment call). GGA round 4 re-raised it against a spec file this WU never
+  touched (confirmed via `git diff origin/feature/...:HEAD --stat`, empty).
+  Left as WU2's recorded decision, not re-litigated a third time.
+
+### GGA review (task 4.16) — 4 rounds, capped per the instruction
+
+`PR_BASE_BRANCH` does not take effect in this repo/gga version (documented
+defect) — every round reviewed `main...HEAD`, dragging in WU1–WU3's
+already-committed-but-not-yet-`main`-merged code. Every finding was checked
+against the actual base with `git diff origin/feature/catalog-templates-
+and-workshop-info...HEAD -- <file>` before acting.
+
+- **Round 1** — 3 blocking: (1) `portada.png` — verified via `git show
+  origin/feature/...:portada.png` that it already existed on the tracker
+  (added in WU3's `3a1416d`), not touched by this diff; left alone. (2)
+  `full-flow.e2e.test.ts`'s `templateConfigPOST` body still posted the four
+  legacy branding fields WU3's migration `0009` dropped — parsed to `{}`,
+  returned 200 while configuring nothing. This one WAS fixed (real bug,
+  directly blocking a meaningful 4.14 result) — posts
+  `{selectedTemplateId, defaultImageHandling}` now and asserts on the saved
+  value. (3) `registry-types.ts` docstring contradicting the actual gallery
+  swatch rendering — verified pre-existing (WU2), untouched by this diff;
+  left alone.
+- **Round 2** — 1 blocking, real and mine: the WU4-added fixture comment
+  claimed a 5-key wrapper (`...Matrix`) but the fixture built 4 keys.
+  Fixed the comment to explain the omission instead of contradicting the
+  code next to it (`Matrix` is passthrough `parseProduct` never reads).
+- **Round 3** — re-raised `portada.png` (left alone, same verification);
+  called the `proxy` 401→redirect fix "scope creep" distinct from the
+  branding-body and `adminUser` fixes. Disagree and kept the fix: all three
+  equally block a green `npm run test:e2e` run, which 4.14 requires — the
+  proxy test's topic (auth redirect) being unrelated to pricing doesn't
+  change that it's in the same required file and equally blocking. Also
+  flagged a real, cheap issue in the new `CatalogBuilderForm.test.tsx` (two
+  buttons sharing the label "Empezar a generar" across steps) — fixed with
+  a clarifying comment rather than restructuring (they are mutually
+  exclusive by `step`, and RTL's `getByRole` already throws on a genuine
+  multi-match).
+- **Round 4** — re-raised `portada.png` a third time, this time claiming
+  the earlier "pre-existing" verification was itself wrong because `git
+  diff` against `main` shows `new file mode`. That diff is `main...HEAD`,
+  not `tracker...HEAD` — re-verified decisively:
+  `git diff origin/feature/catalog-templates-and-workshop-info...HEAD -- portada.png`
+  is empty, and `git merge-base --is-ancestor 3a1416d HEAD` confirms the
+  commit that added it is an ancestor of this branch. This is the exact
+  `PR_BASE_BRANCH` defect scenario the WU4 instructions warned about — GGA
+  cannot see the tracker, only `main`. Left alone, documented here instead
+  of re-litigated a fifth time. Raised the `isTier`/negative-number and
+  `getObject`-mock/spec-contradiction points recorded above.
+
+**Stopped after round 4** (within the 3–5 round cap): every finding that
+was actually introduced by this diff was fixed; every repeated finding
+against pre-existing, unrelated files was independently verified with `git
+diff`/`git show` against the real base and left alone, consistent with the
+explicit instruction not to fix what this WU did not write.
+
+### Verification
+
+- `npm test` — 759/759 passing (full suite). Base was genuinely 740/740 as
+  the task brief said — confirmed via a scratch `git worktree` checked out
+  at `origin/feature/catalog-templates-and-workshop-info` with its own
+  `npm install`. All +19 net new tests trace to this WU's own RED work
+  (price-lists, `AdaptiveCards`, the trust-boundary block, `render.test.ts`,
+  `CatalogBuilderForm.test.tsx`), not a stale baseline.
+- `npx tsc --noEmit` — clean throughout every round.
+- `npm run lint` — 0 errors, 15 pre-existing warnings (2 fewer than WU3's
+  16 — the removed `priceList`/`Select` code path in `CatalogBuilderForm.tsx`
+  happened to drop two of the warnings; none introduced by WU4).
+- Task 4.14, live smoke (required): ran `full-flow.e2e.test.ts` (5/5
+  passing) against a disposable Postgres
+  (`docker run ... -p 55432:5432 postgres:17-alpine`, per README) + real
+  Playwright Chromium (already installed from WU3's smoke). Confirmed: the
+  hand-built `priceLists` jsonb SQL in `queries.ts` round-trips correctly
+  through real Postgres (`p2`'s real `"0.00"` socio tier resolved to `null`
+  via `resolveAllPrices` against the actual returned row, asserted
+  explicitly); the full real pg-boss + Chromium PDF pipeline still reaches
+  `uploadStatus: "uploaded"` and serves a real `%PDF`-prefixed buffer;
+  ownership (404, not 403) still holds for a non-owning user. Disposable
+  container removed after each run.
+- Task 4.15, live smoke: rendered one real 10-product PDF via
+  `renderPdfBuffer` (throwaway `scripts/wu4-live-smoke.mts`, `npx tsx`,
+  deleted after the run — not part of the PR) with intentionally long
+  product names and a mix of hostile `0` tiers, `productsPerPage: 10`.
+  Visually inspected the output (3 physical PDF pages): confirmed design's
+  New Risk #4 — the taller three-row price table pushed the single logical
+  `productsPerPage: 10` section across **2 physical PDF pages** (6 cards on
+  page 2, 4 on page 3) instead of the 1 page it would have fit at the old
+  single-price-row height. No card was cut in half (`break-inside: avoid`
+  held — the browser broke cleanly between card rows), so this is a page-
+  budget/print-cost planning risk, not a rendering-corruption one. Every
+  price row rendered correctly: three tiers bold, hostile `0` tiers as
+  `—`, never `$0.00`. Not fixed in this WU (task 4.15 is a smoke/verify
+  task, not a remediation task; `chunkProducts` measuring real height
+  instead of a fixed count is design's own noted gap, not assigned here).
+
+### TDD Cycle Evidence
+
+| Task | RED | GREEN | REFACTOR |
+|---|---|---|---|
+| 4.1/4.2 `resolveAllPrices` | 3 new tests failed (`resolveAllPrices is not a function`) | Added function + `ProductPrices` type import; 17/17 pass | — |
+| 4.3 `ProductPrintRef.prices` | N/A (type-only change) | `npx tsc --noEmit` isolated the 2 real call sites needing updates | — |
+| 4.4/4.5 `AdaptiveCards` money rendering | New `AdaptiveCards.test.tsx`, 8/8 failed (`ProductPrices` component did not exist) | Rewrote `AdaptiveCards.tsx`; 8/8 pass | — |
+| 4.6/4.7 `render.test.ts` prices | Rewrote the block against the new shape first | Confirmed `render.ts` needed zero changes — 20/20 pass on fixtures alone | — |
+| 4.8/4.9 `isPrintProduct` trust boundary | 9 new tests, 5 failed (NaN/Infinity/wrong-type tiers wrongly accepted) | `isValidPrices` + `isTier`; 25/25 pass | — |
+| 4.11/4.12 `CatalogBuilderForm` review step | New `CatalogBuilderForm.test.tsx`, both tests failed (`Lista de precios` still rendered; `prices` was `undefined`) | Removed selector, wired `resolveAllPrices`; 2/2 pass | Round-3 GGA comment clarifying the shared-label query |
+
+### Work Unit Evidence
+
+| Evidence | Value |
+|---|---|
+| Focused test command and result | `npx vitest run src/modules/catalog-builder/price-lists.test.ts src/shared/template/AdaptiveCards.test.tsx src/app/api/catalog-builder/generate/route.test.ts src/modules/catalog-builder/CatalogBuilderForm.test.tsx src/modules/pdf-generation/render.test.ts` — all pass (94 tests across 5 files) |
+| Runtime harness command/result | `DATABASE_URL=postgres://dforce:dforce@localhost:55432/dforce_catalog npm run test:e2e` against a disposable `postgres:17-alpine` container — 5/5 passing, real Chromium PDF produced |
+| Rollback boundary | Independent commit chain (`2e317f4` → `0af4677` → `d69e7be` → `54c57e2`) on top of merged WU1–WU3; revert restores the scalar `price` field end to end (renderer, builder, API) with no partial-rename state at any point |
+
+### Changed lines
+
+`git diff origin/feature/catalog-templates-and-workshop-info...HEAD --numstat -- src openspec`:
+494 insertions + 124 deletions = **618** total (586 excluding `tasks.md`'s
+32-line checkbox/note churn). Against the 700-line ledger cap — comfortably
+under; against the ~400-line original estimate — over, driven almost
+entirely by two brand-new test files Strict TDD required
+(`AdaptiveCards.test.tsx` 62 lines, `CatalogBuilderForm.test.tsx` 102
+lines — 164 of the 618 total) plus the required e2e fixture repair (86/14)
+that predates this WU but blocked its required live smoke.
+
+### Next
+
+WU4 is the last work unit (`tasks.md`'s Suggested Work Units: WU1→WU2→WU3→
+WU4). PR targets `feature/catalog-templates-and-workshop-info` (the
+tracker), not `main`. Cross-cutting task 5.1 (confirm the `template-config`
+delta spec is what `sdd-verify` checks against) is unassigned to this WU and
+left for the tracker-level close-out.

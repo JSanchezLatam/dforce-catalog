@@ -16,7 +16,9 @@ import { isGenerateBody, POST } from "./route";
 const VALID = {
   title: "Catálogo",
   sections: [{ categoryL1: "AUDIO", categoryL2: null, productCount: 2 }],
-  products: [{ id: "p1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null, price: 45 }],
+  products: [
+    { id: "p1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null, prices: { venta: 45, taller: 38, socio: 32 } },
+  ],
   productsPerPage: 10,
   includedCategoryCount: 1,
 };
@@ -38,23 +40,59 @@ describe("isGenerateBody — the envelope", () => {
   });
 });
 
+/**
+ * design D4 — the highest-value defect target in this whole change: the only
+ * guard between a malformed payload and a `TypeError` inside a decoupled
+ * pg-boss worker with nobody to report to. Each hostile shape is rejected
+ * individually, never collapsed into one loose check.
+ */
+describe("isGenerateBody — product prices trust boundary (design D4)", () => {
+  const withPrices = (prices: unknown) => ({ ...VALID.products[0], prices });
+
+  it("accepts a well-formed three-tier prices object", () => {
+    expect(isGenerateBody({ ...VALID, products: [withPrices({ venta: 45, taller: 38, socio: 32 })] })).toBe(true);
+  });
+
+  it("accepts null tiers, which mean 'no usable price for this tier'", () => {
+    expect(
+      isGenerateBody({ ...VALID, products: [withPrices({ venta: null, taller: null, socio: null })] }),
+    ).toBe(true);
+  });
+
+  it("accepts a null or entirely absent prices object", () => {
+    expect(isGenerateBody({ ...VALID, products: [withPrices(null)] })).toBe(true);
+    const noPrices: Record<string, unknown> = { ...VALID.products[0] };
+    delete noPrices.prices;
+    expect(isGenerateBody({ ...VALID, products: [noPrices] })).toBe(true);
+  });
+
+  it("rejects a non-object prices value", () => {
+    expect(isGenerateBody({ ...VALID, products: [withPrices("45")] })).toBe(false);
+    expect(isGenerateBody({ ...VALID, products: [withPrices(45)] })).toBe(false);
+  });
+
+  it("rejects an array as prices", () => {
+    expect(isGenerateBody({ ...VALID, products: [withPrices([45, 38, 32])] })).toBe(false);
+  });
+
+  it("rejects NaN in any single tier, the others being valid", () => {
+    expect(isGenerateBody({ ...VALID, products: [withPrices({ venta: Number.NaN, taller: 38, socio: 32 })] })).toBe(false);
+    expect(isGenerateBody({ ...VALID, products: [withPrices({ venta: 45, taller: Number.NaN, socio: 32 })] })).toBe(false);
+    expect(isGenerateBody({ ...VALID, products: [withPrices({ venta: 45, taller: 38, socio: Number.NaN })] })).toBe(false);
+  });
+
+  it("rejects Infinity in any single tier", () => {
+    expect(isGenerateBody({ ...VALID, products: [withPrices({ venta: Infinity, taller: 38, socio: 32 })] })).toBe(false);
+    expect(isGenerateBody({ ...VALID, products: [withPrices({ venta: 45, taller: -Infinity, socio: 32 })] })).toBe(false);
+  });
+
+  it("rejects a string in one tier while the others are valid numbers", () => {
+    expect(isGenerateBody({ ...VALID, products: [withPrices({ venta: "45", taller: 38, socio: 32 })] })).toBe(false);
+    expect(isGenerateBody({ ...VALID, products: [withPrices({ venta: 45, taller: 38, socio: "32" })] })).toBe(false);
+  });
+});
+
 describe("isGenerateBody — product element shape", () => {
-  // The exact failure this guard exists for: `price` arrives as a string, the
-  // job enqueues fine, and `price.toFixed(2)` throws inside the PDF worker.
-  it("rejects a price sent as a string", () => {
-    expect(isGenerateBody({ ...VALID, products: [{ ...VALID.products[0], price: "45" }] })).toBe(false);
-  });
-
-  it("accepts a null or absent price, which means 'no usable price'", () => {
-    expect(isGenerateBody({ ...VALID, products: [{ ...VALID.products[0], price: null }] })).toBe(true);
-    const { price: _price, ...noPrice } = VALID.products[0];
-    expect(isGenerateBody({ ...VALID, products: [noPrice] })).toBe(true);
-  });
-
-  it("rejects a non-finite price rather than printing NaN on a page", () => {
-    expect(isGenerateBody({ ...VALID, products: [{ ...VALID.products[0], price: Number.NaN }] })).toBe(false);
-  });
-
   it("rejects a product whose id or name is not a string", () => {
     expect(isGenerateBody({ ...VALID, products: [{ ...VALID.products[0], id: 7 }] })).toBe(false);
     expect(isGenerateBody({ ...VALID, products: [{ ...VALID.products[0], name: null }] })).toBe(false);

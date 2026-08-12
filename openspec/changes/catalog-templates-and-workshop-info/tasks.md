@@ -89,22 +89,22 @@ Files: `src/shared/template/CatalogTemplate.tsx`, `src/modules/pdf-generation/{e
 
 Files: `src/shared/template/CatalogTemplate.tsx`, `src/shared/template/AdaptiveCards.tsx`(+new test), `src/modules/catalog-builder/{CatalogBuilderForm.tsx,price-lists.ts}`(+test), `src/app/api/catalog-builder/generate/route.ts`(+test), `src/modules/pdf-generation/render.test.ts`, `src/e2e/full-flow.e2e.test.ts`.
 
-- [ ] 4.1 RED `price-lists.test.ts` — `resolveAllPrices(priceLists)` returns `{venta, taller, socio}`, each wrapping the existing `resolvePrice` (`<= 0 → null` preserved per tier).
-- [ ] 4.2 GREEN `price-lists.ts` — add `resolveAllPrices`.
-- [ ] 4.3 GREEN `CatalogTemplate.tsx` — `ProductPrintRef.price?: number | null` → `prices?: ProductPrices | null` (`ProductPrices = {venta, taller, socio}`, all `number | null`).
-- [ ] 4.4 RED `AdaptiveCards.test.tsx` (new file, closes the money-rendering test gap) — all three tiers present render bold; one tier `null` → `—`; all `null` → three `—`; a hostile `0`/`0.00` tier → `—`, never `$0.00`; both card variants (fullbleed/polaroid) render identically.
-- [ ] 4.5 GREEN `AdaptiveCards.tsx` — replace `ProductPrice` with one shared `ProductPrices` component; three labelled rows (`Venta`/`Taller`/`Socio` as a local constant, not imported from `catalog-builder`); em-dash rule `value == null || value <= 0 → "—"`.
-- [ ] 4.6 RED `render.test.ts` — rewrite the "product prices" `describe` block (currently line 128) for the `prices` shape: all-present, one-missing, all-missing, zero-tier fixtures.
-- [ ] 4.7 GREEN — confirm `render.ts`/`chunkProducts` need no change (pure pass-through); update fixtures only.
-- [ ] 4.8 RED `generate/route.test.ts` — per-tier `isPrintProduct` trust-boundary cases: non-object `prices`, array `prices`, `NaN`/`Infinity` in any tier, one tier of wrong type — each rejected individually (design D4; this is the one security-relevant boundary per the threat matrix).
-- [ ] 4.9 GREEN `generate/route.ts` — `isPrintProduct` validates `prices.venta`/`taller`/`socio` individually per design's `isTier` guard.
-- [ ] 4.10 Rewrite the remaining ~10 shape assertions in `generate/route.test.ts` that assert the old scalar `price` field.
-- [ ] 4.11 RED `CatalogBuilderForm.test.tsx` (if one exists, else add) — no "Lista de precios" `Select` renders; `reviewedProducts` carries `prices: resolveAllPrices(priceLists)`.
-- [ ] 4.12 GREEN `CatalogBuilderForm.tsx` — remove `priceList` state + the `Select` (lines ~439-443); `reviewedProducts` maps `prices: resolveAllPrices(priceLists)` instead of `price: resolvePrice(...)`.
-- [ ] 4.13 Update `src/e2e/full-flow.e2e.test.ts` fixtures to three-tier data, including a real `0.00` tier (production-verified case per spec).
-- [ ] 4.14 Live smoke (required): run `full-flow.e2e.test.ts` against real Postgres + Chromium — per `AGENTS.md`, a green unit suite proves zero coverage of the hand-built price SQL in `queries.ts`.
-- [ ] 4.15 Live smoke: render one real multi-product PDF and visually check for page overflow from the taller three-row cards (`chunkProducts` splits by fixed count, not measured height — design New Risk #4).
-- [ ] 4.16 Before opening this PR: run `GGA_PROVIDER=claude gga run --pr-mode --diff-only`.
+- [x] 4.1 RED `price-lists.test.ts` — `resolveAllPrices(priceLists)` returns `{venta, taller, socio}`, each wrapping the existing `resolvePrice` (`<= 0 → null` preserved per tier).
+- [x] 4.2 GREEN `price-lists.ts` — add `resolveAllPrices`.
+- [x] 4.3 GREEN `CatalogTemplate.tsx` — `ProductPrintRef.price?: number | null` → `prices?: ProductPrices | null` (`ProductPrices = {venta, taller, socio}`, all `number | null`). DEVIATION: `ProductPrices` is defined and exported from `CatalogTemplate.tsx` (design D4's own code block), and `price-lists.ts`/`AdaptiveCards.tsx` import the type from there rather than redeclaring it — one canonical shape, no drift risk.
+- [x] 4.4 RED `AdaptiveCards.test.tsx` (new file, closes the money-rendering test gap) — all three tiers present render bold; one tier `null` → `—`; all `null` → three `—`; a hostile `0`/`0.00` tier → `—`, never `$0.00`; both card variants (fullbleed/polaroid) render identically.
+- [x] 4.5 GREEN `AdaptiveCards.tsx` — replace `ProductPrice` with one shared `ProductPrices` component; three labelled rows (`Venta`/`Taller`/`Socio` as a local constant, not imported from `catalog-builder`); em-dash rule `value == null || value <= 0 → "—"`.
+- [x] 4.6 RED `render.test.ts` — rewrite the "product prices" `describe` block (currently line 128) for the `prices` shape: all-present, one-missing, all-missing, zero-tier fixtures.
+- [x] 4.7 GREEN — confirmed `render.ts`/`chunkProducts` needed no change (pure pass-through); fixtures updated only, all 20 tests pass unmodified.
+- [x] 4.8 RED `generate/route.test.ts` — per-tier `isPrintProduct` trust-boundary cases: non-object `prices`, array `prices`, `NaN`/`Infinity` in any tier, one tier of wrong type — each rejected individually (design D4; this is the one security-relevant boundary per the threat matrix).
+- [x] 4.9 GREEN `generate/route.ts` — `isPrintProduct` validates `prices.venta`/`taller`/`socio` individually per design's `isTier` guard (extracted as `isValidPrices`).
+- [x] 4.10 Rewrote the scalar-`price` shape assertions in `generate/route.test.ts` (the `VALID` fixture and the old "rejects a price sent as a string"/"non-finite price" tests, superseded by 4.8's per-tier describe block).
+- [x] 4.11 RED `CatalogBuilderForm.test.tsx` (new file — none existed) — no "Lista de precios" control renders; `reviewedProducts` carries `prices: resolveAllPrices(priceLists)` (verified end-to-end via the real POST body, including a hostile `0.00` socio tier resolving to `null`).
+- [x] 4.12 GREEN `CatalogBuilderForm.tsx` — removed `priceList` state + the "Lista de precios" `Select` card; `reviewedProducts` maps `prices: resolveAllPrices(priceLists)` instead of `price: resolvePrice(...)`.
+- [x] 4.13 Updated `src/e2e/full-flow.e2e.test.ts` fixtures to three-tier data, including a real `0.00` tier. DEVIATION (necessary, not scope creep): the existing fixture used a flat `{id, name, category_l1, ...}` shape that predates `a828759` ("fix: correct inventory-sync mapper to match real Interfuerza 5-key wrapper contract") — `parseProduct` has required the full `{Producto, InStock, PriceLists, Images, Matrix}` wrapper since that commit, so the fixture would have thrown `"Interfuerza product is missing a usable Producto.id"` on the very first live run, regardless of any WU4 change. Fixed to the real wrapper shape as a precondition for running the REQUIRED 4.14 live smoke at all.
+- [x] 4.14 Live smoke (required): ran `full-flow.e2e.test.ts` (5/5 passing) against a disposable Postgres + real Chromium — see apply-progress.md for the two pre-existing, unrelated fixture/policy fixes this required and the real SQL round-trip result.
+- [x] 4.15 Live smoke: rendered one real 10-product PDF via `renderPdfBuffer` and visually inspected it — confirmed New Risk #4: the taller three-row cards pushed a `productsPerPage: 10` section across 2 physical PDF pages instead of 1 (clean row break, no card cut in half). See apply-progress.md.
+- [x] 4.16 Ran `GGA_PROVIDER=claude gga run --pr-mode --diff-only` before opening this PR — 3 rounds, every WU4-authored finding fixed; two findings (pre-existing `portada.png`, pre-existing `CatalogTemplate.tsx`/`render.ts` null-branding inconsistency) repeatedly flagged against files this WU never touched — verified via `git show origin/feature/catalog-templates-and-workshop-info:<file>` and left alone per the known `--pr-mode` base-branch defect. See apply-progress.md.
 
 ## Cross-cutting
 

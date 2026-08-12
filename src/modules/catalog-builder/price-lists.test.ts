@@ -4,6 +4,7 @@ import {
   IFX_PRICE_LIST_NAMES,
   PRICE_LIST_LABELS,
   PRICE_LISTS,
+  resolveAllPrices,
   resolvePrice,
   type PriceListMap,
 } from "./price-lists";
@@ -101,5 +102,30 @@ describe("the price-list vocabulary", () => {
       taller: "PRECIO TALLER",
       socio: "Precio Socio",
     });
+  });
+});
+
+/**
+ * catalog-templates-and-workshop-info WU4 (task 4.1) — the catalog now prints
+ * all three tiers per product instead of collapsing to one admin-chosen list.
+ * `resolveAllPrices` wraps `resolvePrice` per tier, so the `<= 0 → null`
+ * absent-price rule is preserved independently for each one.
+ */
+describe("resolveAllPrices — all three tiers at once", () => {
+  it("resolves venta/taller/socio independently from the same map", () => {
+    expect(resolveAllPrices(REAL)).toEqual({ venta: 45, taller: 38, socio: 32 });
+  });
+
+  it("nulls only the tier with no usable price, leaving the others resolved", () => {
+    expect(resolveAllPrices({ "Precio de venta": "45.00", "PRECIO TALLER": "0.00" })).toEqual({
+      venta: 45,
+      taller: null,
+      socio: null,
+    });
+  });
+
+  it("returns all three tiers null for a null or empty map", () => {
+    expect(resolveAllPrices(null)).toEqual({ venta: null, taller: null, socio: null });
+    expect(resolveAllPrices({})).toEqual({ venta: null, taller: null, socio: null });
   });
 });
