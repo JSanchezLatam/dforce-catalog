@@ -11,4 +11,12 @@ ALTER TABLE "workshop_config" ADD COLUMN "social_handles" jsonb;--> statement-br
 -- (design.md D5). Preserve the owner's already-typed cover text instead of
 -- discarding it — `template_config.cover_text` stays NOT NULL and untouched
 -- until it is dropped in migration 0009 (WU3).
-UPDATE "workshop_config" SET "cover_text" = (SELECT "cover_text" FROM "template_config" LIMIT 1) WHERE "cover_text" IS NULL;
+--
+-- `workshop_config` has no seed row: it only ever gets one through the
+-- app's lazy upsert (saveWorkshopConfig). An Administrador can configure
+-- branding (template_config, NOT NULL columns, so a row means real data)
+-- without ever touching workshop settings — the UPDATE below would then
+-- match zero rows and migration 0009 would drop template_config.cover_text
+-- with nothing to show for it. Ensure the singleton exists first.
+INSERT INTO "workshop_config" ("id") VALUES ('singleton') ON CONFLICT ("id") DO NOTHING;--> statement-breakpoint
+UPDATE "workshop_config" SET "cover_text" = (SELECT "cover_text" FROM "template_config" ORDER BY "id" LIMIT 1) WHERE "cover_text" IS NULL;

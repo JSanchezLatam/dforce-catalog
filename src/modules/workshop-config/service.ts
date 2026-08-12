@@ -8,6 +8,7 @@ const MAX_NAME_LENGTH = 100;
 const MAX_COVER_TEXT_LENGTH = 500;
 const MAX_CONTACT_FIELD_LENGTH = 200;
 const MAX_HANDLE_LENGTH = 100;
+const MAX_HANDLE_ENTRIES = 20;
 
 const CONTACT_FIELD_LABELS: Record<string, string> = {
   phone: "El teléfono",
@@ -68,23 +69,29 @@ function readTextField(value: Record<string, unknown>, field: string): string | 
  * Same trust-boundary discipline as readTextField, for the one open-ended
  * jsonb field: reject anything that is not a plain object (a bare string or
  * an array would otherwise sail through `Object.entries()` in the form and
- * render bogus rows), then drop individual entries whose value is not a
- * non-empty string within the length cap — a blank handle is the same
- * "empty label" bug an empty top-level contact field would be, and an
- * unbounded key/value would otherwise bypass every other field's cap.
+ * render bogus rows), then drop individual entries whose platform key or
+ * handle value is blank/whitespace-only or over the length cap — a blank
+ * key or handle is the same "empty label" bug an empty top-level contact
+ * field would be. `MAX_HANDLE_ENTRIES` bounds the map itself: the two
+ * per-entry caps bound width, but nothing bounded entry *count* until now —
+ * this is the one field the form lets an admin grow without limit.
  */
 function readHandleMap(value: Record<string, unknown>): Record<string, string> | null | undefined {
   if (!("socialHandles" in value)) return undefined;
   const raw = value.socialHandles;
   if (raw === null) return null;
   if (typeof raw !== "object" || Array.isArray(raw)) return undefined;
-  const entries = Object.entries(raw as Record<string, unknown>).filter(
-    (entry): entry is [string, string] =>
-      typeof entry[1] === "string" &&
-      entry[1].trim() !== "" &&
-      entry[0].length <= MAX_HANDLE_LENGTH &&
-      entry[1].length <= MAX_HANDLE_LENGTH,
-  );
+  const entries = Object.entries(raw as Record<string, unknown>)
+    .filter(
+      (entry): entry is [string, string] =>
+        typeof entry[1] === "string" &&
+        entry[0].trim() !== "" &&
+        entry[1].trim() !== "" &&
+        entry[0].length <= MAX_HANDLE_LENGTH &&
+        entry[1].length <= MAX_HANDLE_LENGTH,
+    )
+    .map(([platform, handle]): [string, string] => [platform.trim(), handle])
+    .slice(0, MAX_HANDLE_ENTRIES);
   return Object.fromEntries(entries);
 }
 
@@ -94,7 +101,7 @@ export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput
 
   const name = typeof value.name === "string" ? value.name.trim() : null;
   if (name !== null && name.length > MAX_NAME_LENGTH) {
-    errors.name = `Name must be ${MAX_NAME_LENGTH} characters or less`;
+    errors.name = `El nombre debe tener ${MAX_NAME_LENGTH} caracteres o menos`;
   }
 
   const phone = readTextField(value, "phone");

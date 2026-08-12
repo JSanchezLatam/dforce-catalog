@@ -96,6 +96,22 @@ describe("validateWorkshopConfigInput", () => {
       expect(() => validateWorkshopConfigInput({ [field]: "x".repeat(201) })).toThrow();
     },
   );
+
+  it("drops a socialHandles entry whose platform key is whitespace-only", () => {
+    const result = validateWorkshopConfigInput({ socialHandles: { "   ": "@mitaller", instagram: "@real" } });
+    expect(result.socialHandles).toEqual({ instagram: "@real" });
+  });
+
+  it("trims a socialHandles platform key before persisting it", () => {
+    const result = validateWorkshopConfigInput({ socialHandles: { "  instagram  ": "@mitaller" } });
+    expect(result.socialHandles).toEqual({ instagram: "@mitaller" });
+  });
+
+  it("caps the number of socialHandles entries a single request may set", () => {
+    const many = Object.fromEntries(Array.from({ length: 25 }, (_, i) => [`platform${i}`, `@handle${i}`]));
+    const result = validateWorkshopConfigInput({ socialHandles: many });
+    expect(Object.keys(result.socialHandles ?? {}).length).toBeLessThanOrEqual(20);
+  });
 });
 
 describe("getWorkshopConfig", () => {

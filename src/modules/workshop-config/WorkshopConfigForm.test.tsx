@@ -78,11 +78,20 @@ describe("WorkshopConfigForm — contact fields", () => {
     expect(bodyOf(fetchMock).coverText).toBe("Bienvenido a nuestro catálogo");
   });
 
-  it("surfaces a coverText validation error returned by the server", async () => {
+  // One test covering two of the seven near-identical error slots this PR
+  // added (coverText + phone) — proves the setErrors → per-field <p role="alert">
+  // wiring generalizes across the new JSX blocks without one redundant test
+  // per field (each block is otherwise the same three lines copy-pasted).
+  it("surfaces server-returned field validation errors next to their inputs", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({
       status: 400,
-      body: { errors: { coverText: "El texto de portada debe tener 500 caracteres o menos" } },
+      body: {
+        errors: {
+          coverText: "El texto de portada debe tener 500 caracteres o menos",
+          phone: "El teléfono debe tener 200 caracteres o menos",
+        },
+      },
     });
     render(<WorkshopConfigForm initialConfig={null} />);
 
@@ -91,21 +100,7 @@ describe("WorkshopConfigForm — contact fields", () => {
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(await screen.findByText("El texto de portada debe tener 500 caracteres o menos")).toBeInTheDocument();
-  });
-
-  it("surfaces a phone validation error returned by the server", async () => {
-    const user = userEvent.setup();
-    const fetchMock = mockFetch({
-      status: 400,
-      body: { errors: { phone: "El teléfono debe tener 200 caracteres o menos" } },
-    });
-    render(<WorkshopConfigForm initialConfig={null} />);
-
-    await user.type(screen.getByLabelText("Teléfono"), "555-1234");
-    await user.click(screen.getByRole("button", { name: "Guardar" }));
-
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(await screen.findByText("El teléfono debe tener 200 caracteres o menos")).toBeInTheDocument();
+    expect(screen.getByText("El teléfono debe tener 200 caracteres o menos")).toBeInTheDocument();
   });
 
   it("adds a social handle row and submits it under an arbitrary platform key", async () => {
