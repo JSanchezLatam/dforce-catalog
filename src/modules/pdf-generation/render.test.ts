@@ -70,12 +70,14 @@ describe("renderCatalogHtml — R6.1 (shares CatalogTemplate with the builder's 
       branding: { templateId: "dforce-classic", logoUrl: null, coverText: null },
       sections: [],
     });
-    expect(html).toContain("font-family: Arial, sans-serif,");
+    // Exactly the registry's font string — it already ends in its own
+    // fallback, so a second appended "sans-serif" would be a duplicate.
+    expect(html).toContain("font-family: Arial, sans-serif;");
   });
 
   it("falls back to sans-serif when there is no branding at all", async () => {
     const html = await renderCatalogHtml({ title: "C", branding: null, sections: [] });
-    expect(html).toContain("font-family: sans-serif,");
+    expect(html).toContain("font-family: sans-serif;");
   });
 
   it("renders transparent imageType with full-bleed card (height 180px inline)", async () => {

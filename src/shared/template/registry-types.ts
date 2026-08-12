@@ -19,8 +19,13 @@ export type CatalogTemplateDef = {
   id: string;
   /** Gallery label (Spanish, user-facing). */
   name: string;
-  /** `/public/templates/<id>.png` — gallery thumbnail. */
-  thumbnail: string;
+  /**
+   * `/public/templates/<id>.png` — gallery thumbnail. Optional: no template
+   * ships one yet, and a required field pointing at a file that does not
+   * exist is a broken `<img>` waiting for the first caller that trusts it.
+   * The gallery renders a text placeholder while this is absent.
+   */
+  thumbnail?: string;
   font: string;
   primaryColors: { primary: string; secondary: string };
   Card: (props: { product: ProductPrintRef; imageHandling: "strict" | "adaptive" }) => ReactElement;
