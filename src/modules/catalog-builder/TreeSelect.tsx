@@ -30,21 +30,25 @@ export function TreeSelect({
   const containerRef = useRef<HTMLDivElement>(null);
   const id = useId();
 
-  useEffect(() => {
-    if (!open) {
-      setSearchQuery("");
-      setExpanded(new Set());
-    }
-  }, [open]);
+  /**
+   * Closing IS discarding the transient search and expansion — one action, so
+   * one function. It used to be an effect watching `open` go false, which ran
+   * a render late and fired on the initial mount too.
+   */
+  function close() {
+    setOpen(false);
+    setSearchQuery("");
+    setExpanded(new Set());
+  }
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
+        close();
       }
     }
     function handleEscape(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") close();
     }
     if (open) {
       document.addEventListener("mousedown", handleClickOutside);
@@ -131,7 +135,7 @@ export function TreeSelect({
     <div ref={containerRef} className="relative">
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={() => (open ? close() : setOpen(true))}
         className={cn(
           "flex h-9 w-full items-center justify-between rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-xs",
           "focus-visible:outline-hidden focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-ring",
