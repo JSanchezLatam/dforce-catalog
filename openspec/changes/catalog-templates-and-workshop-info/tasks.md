@@ -109,4 +109,4 @@ Files: `src/shared/template/CatalogTemplate.tsx`, `src/shared/template/AdaptiveC
 ## Cross-cutting
 
 - [ ] 5.1 Record R8.1-superseded status: confirm the `template-config` delta spec (already written) is the artifact `sdd-verify` checks against; no further action if already merged into `openspec/specs/`.
-- [ ] 5.2 Before opening each of WU1-WU3's PRs: run `GGA_PROVIDER=claude gga run --pr-mode --diff-only` (WU4 covered by 4.16). DONE for WU1 and WU2. NOT RUN for WU3 — stopped at the 500-line budget cap (797 real changed lines) before this step; see apply-progress.md's WU3 section.
+- [x] 5.2 Before opening each of WU1-WU3's PRs: run `GGA_PROVIDER=claude gga run --pr-mode --diff-only` (WU4 covered by 4.16). DONE for WU1, WU2 and WU3. The apply agent stopped at the 500-line cap before reaching this step on WU3; the orchestrator ran it after the owner accepted the size exception — two rounds, six findings, all verified against the code and fixed in `3a1416d` and `af5e8e8` (see PR #36).
