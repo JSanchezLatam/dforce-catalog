@@ -113,6 +113,27 @@ Forecast for the template this repo uses to decide when a change needs this.
   configured yet — it needs the actual R2/Interfuerza image hosts allowlisted
   first, or it silently breaks product images app-wide.
 
+## Language: Spanish for the user, English for the code
+
+Decided 2026-08-12, final.
+
+**Everything the user sees is in Spanish.** UI copy, form labels, `aria-label`s,
+validation and error messages, empty states, the generated PDF, and anything
+printed by `scripts/dev.sh`. Rioplatense, matching the rest of the app
+(`Clientes`, `Órdenes de servicio`, `Gestión de usuarios`).
+
+**Everything else stays English.** Identifiers, comments, docstrings, test
+names, commit messages, PR descriptions, this file, and the openspec artifacts.
+The codebase is English today and a mixed-language identifier space is worse
+than either language chosen consistently.
+
+The split is by AUDIENCE, not by file: a `"use client"` component holds Spanish
+strings and English variable names in the same line, and that is correct.
+
+When a test asserts on user-facing copy it asserts the Spanish string — those
+tests are the ones that catch an untranslated screen, so do not loosen them to
+regex-match both languages.
+
 ## Simplicity & scope discipline
 
 This repo enforces "smallest change that solves the actual ask" as a standing
