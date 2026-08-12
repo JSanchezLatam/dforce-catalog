@@ -28,6 +28,26 @@ function toSocialRows(socialHandles: Record<string, string> | null | undefined):
   return Object.entries(socialHandles).map(([platform, handle], id) => ({ id, platform, handle }));
 }
 
+const TEXT_FIELD_KEYS = ["name", "phone", "whatsapp", "email", "address", "hours", "website", "coverText"] as const;
+
+/**
+ * A snapshot of every field this form owns, taken once at load. `socialHandles`
+ * is pre-stringified so it can be diffed with `!==` like every other field.
+ */
+function snapshotFrom(config: WorkshopConfig | null): Record<(typeof TEXT_FIELD_KEYS)[number] | "socialHandles", string> {
+  return {
+    name: config?.name ?? "",
+    phone: config?.phone ?? "",
+    whatsapp: config?.whatsapp ?? "",
+    email: config?.email ?? "",
+    address: config?.address ?? "",
+    hours: config?.hours ?? "",
+    website: config?.website ?? "",
+    coverText: config?.coverText ?? "",
+    socialHandles: JSON.stringify(config?.socialHandles ?? {}),
+  };
+}
+
 export function WorkshopConfigForm({ initialConfig }: Props) {
   const [name, setName] = useState(initialConfig?.name ?? "");
   const [logoKey, setLogoKey] = useState<string | null>(initialConfig?.logoR2Key ?? null);
@@ -41,6 +61,7 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
   const [coverText, setCoverText] = useState(initialConfig?.coverText ?? "");
   const [socialRows, setSocialRows] = useState<SocialHandleRow[]>(() => toSocialRows(initialConfig?.socialHandles));
   const nextSocialRowId = useRef(socialRows.length);
+  const savedSnapshot = useRef(snapshotFrom(initialConfig));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
 
@@ -69,10 +90,33 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
       if (row.platform.trim()) socialHandles[row.platform.trim()] = row.handle;
     }
 
+    // Only send fields that actually changed since load/last save — this
+    // form owns the whole contact block and would otherwise resend every
+    // field on every submit, including ones the admin never touched this
+    // session. A save from a stale tab (loaded before some OTHER field was
+    // set elsewhere) would then silently revert it. Matches UserForm.tsx's
+    // existing "omit unchanged optional fields" precedent.
+    const current: Record<(typeof TEXT_FIELD_KEYS)[number], string> = {
+      name,
+      phone,
+      whatsapp,
+      email,
+      address,
+      hours,
+      website,
+      coverText,
+    };
+    const body: Record<string, unknown> = {};
+    for (const key of TEXT_FIELD_KEYS) {
+      if (current[key] !== savedSnapshot.current[key]) body[key] = current[key];
+    }
+    const socialHandlesJson = JSON.stringify(socialHandles);
+    if (socialHandlesJson !== savedSnapshot.current.socialHandles) body.socialHandles = socialHandles;
+
     const res = await fetch("/api/workshop-config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, phone, whatsapp, email, address, hours, website, coverText, socialHandles }),
+      body: JSON.stringify(body),
     });
 
     if (res.status === 400) {
@@ -88,6 +132,7 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
       return;
     }
 
+    savedSnapshot.current = { ...current, socialHandles: socialHandlesJson };
     setStatus("saved");
   }
 

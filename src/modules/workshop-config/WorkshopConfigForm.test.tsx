@@ -142,7 +142,7 @@ describe("WorkshopConfigForm — contact fields", () => {
     expect(screen.getByLabelText("Texto de portada")).toHaveValue("Bienvenido");
   });
 
-  it("submits an untouched optional field as an empty string, which the API layer collapses to null", async () => {
+  it("omits an untouched optional field from the request instead of resending it", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({ status: 200, body: { config: { id: "singleton" } } });
     render(<WorkshopConfigForm initialConfig={null} />);
@@ -151,10 +151,71 @@ describe("WorkshopConfigForm — contact fields", () => {
     await user.click(screen.getByRole("button", { name: "Guardar" }));
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    // Untouched fields still travel as "" (this form owns the whole contact
-    // block, unlike LogoUploadField's separate route) — validateWorkshopConfigInput
-    // is the layer responsible for collapsing "" to NULL (service.test.ts).
-    expect(bodyOf(fetchMock).website).toBe("");
+    expect(bodyOf(fetchMock)).not.toHaveProperty("website");
+  });
+
+  // Closes the stale-tab data-loss gap an RDD review caught: this form
+  // always owns the whole contact block, so resending every field on every
+  // save — including fields the admin never touched this session — means a
+  // save from a tab that loaded before some OTHER field was set elsewhere
+  // silently reverts it. Only fields that actually changed from what the
+  // form was loaded with are sent, matching UserForm.tsx's existing
+  // "omit unchanged optional fields" precedent.
+  it("omits an already-set field the admin left untouched, protecting it from a stale-tab overwrite", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { config: { id: "singleton" } } });
+    const initialConfig: WorkshopConfig = {
+      id: "singleton",
+      name: "Mi Taller",
+      logoR2Key: null,
+      logoContentType: null,
+      phone: "555-1234",
+      whatsapp: null,
+      email: "taller@ejemplo.com",
+      address: null,
+      hours: null,
+      website: null,
+      coverText: null,
+      socialHandles: null,
+      updatedAt: new Date(),
+    };
+    render(<WorkshopConfigForm initialConfig={initialConfig} />);
+
+    await user.type(screen.getByLabelText("Dirección"), "Av. Siempre Viva 123");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = bodyOf(fetchMock);
+    expect(body).toEqual({ address: "Av. Siempre Viva 123" });
+    expect(body).not.toHaveProperty("phone");
+    expect(body).not.toHaveProperty("email");
+  });
+
+  it("sends an explicit empty value when the admin deliberately clears an already-set field", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { config: { id: "singleton" } } });
+    const initialConfig: WorkshopConfig = {
+      id: "singleton",
+      name: "Mi Taller",
+      logoR2Key: null,
+      logoContentType: null,
+      phone: "555-1234",
+      whatsapp: null,
+      email: null,
+      address: null,
+      hours: null,
+      website: null,
+      coverText: null,
+      socialHandles: null,
+      updatedAt: new Date(),
+    };
+    render(<WorkshopConfigForm initialConfig={initialConfig} />);
+
+    await user.clear(screen.getByLabelText("Teléfono"));
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(bodyOf(fetchMock)).toEqual({ phone: "" });
   });
 
   it("removes the correct social handle row when a middle row is deleted", async () => {

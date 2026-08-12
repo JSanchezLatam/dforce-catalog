@@ -76,14 +76,30 @@ cover-text data-loss bug above) means any install that never had a
 `NULL` except `id`/`updatedAt`. Previously `getWorkshopConfig()` returned
 `null` on such an install (`service.test.ts`'s "returns null when no config
 has been saved" test still passes only because it mocks the query, not the
-real migrated schema). No WU1 caller is affected — `WorkshopConfigForm`
-already null-coalesces every field. WU3's `generate/route.ts` must not
-assume `getWorkshopConfig() === null` means "nothing configured"; check
-individual fields instead.
+real migrated schema). Audited every current caller
+(`app/(app)/layout.tsx`, `app/(app)/workshop-config/page.tsx`,
+`app/api/workshop-config/route.ts`, `app/api/workshop-config/logo/route.ts`)
+— all of them already read through optional chaining (`config?.name`,
+`config?.logoR2Key`) rather than branching on `config === null`, so none is
+affected today. WU3's `generate/route.ts` (not yet written) must follow the
+same discipline and not assume `getWorkshopConfig() === null` means
+"nothing configured".
+
+**Full-overwrite form fixed to a diff-based submit.** `WorkshopConfigForm.tsx`
+originally sent every field on every save. An RDD review pass caught the
+consequence: a save from a browser tab that loaded before some OTHER field
+was set elsewhere would silently revert it (a stale-tab data-loss path,
+same shape whether or not `""` collapses to `NULL`). Fixed by snapshotting
+`initialConfig` on mount and only including a field in the POST body when
+its current value differs from that snapshot — matching `UserForm.tsx`'s
+existing "omit unchanged optional fields, but send an explicit empty value
+for a deliberate clear" precedent. The snapshot updates after a successful
+save so a second edit in the same session diffs against the just-saved
+state, not the original page load.
 
 ### Verification
 
-- `npm test` — 714/714 passing (full suite, not just this module).
+- `npm test` — 716/716 passing (full suite, not just this module).
 - `npx tsc --noEmit` — clean.
 - `npm run lint` — 0 errors, 17 pre-existing warnings (none introduced by
   this change).
@@ -120,6 +136,17 @@ individual fields instead.
   `WHERE "id" = 'singleton'` (matching the app's own key exactly, not a
   guess) and confirmed it now picks the right row regardless of any extra
   rows present. Dev DB's migration `8` hash updated again to match.
+
+**On editing `0008` after applying it locally three times.** `design.md`
+D5's "an applied migration is never edited" targets migrations already
+merged and applied in shared environments (`0000`–`0007`, all on `main`) —
+the whole reason the drop in `0009` is sequenced last. `0008` itself has
+never been pushed, reviewed, or applied anywhere but this local dev
+sandbox; catching and fixing its bugs before the PR opens is what review is
+for, not a violation of the rule the rule exists to protect. Also fixed:
+the file was missing its trailing newline (every other migration in this
+folder has one — drizzle-kit generates it; the hand-append had stripped
+it).
 
 ### Next
 
