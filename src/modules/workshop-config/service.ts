@@ -53,6 +53,24 @@ function readTextField(value: Record<string, unknown>, field: string): string | 
   return raw.trim() === "" ? null : raw;
 }
 
+/**
+ * Same trust-boundary discipline as readTextField, for the one open-ended
+ * jsonb field: reject anything that is not a plain object (a bare string or
+ * an array would otherwise sail through `Object.entries()` in the form and
+ * render bogus rows), then drop individual entries whose value is not a
+ * string rather than rejecting the whole map for one bad entry.
+ */
+function readHandleMap(value: Record<string, unknown>): Record<string, string> | null | undefined {
+  if (!("socialHandles" in value)) return undefined;
+  const raw = value.socialHandles;
+  if (raw === null) return null;
+  if (typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const entries = Object.entries(raw as Record<string, unknown>).filter(
+    (entry): entry is [string, string] => typeof entry[1] === "string",
+  );
+  return Object.fromEntries(entries);
+}
+
 export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput {
   const errors: Record<string, string> = {};
   const value = (input ?? {}) as Record<string, unknown>;
@@ -64,7 +82,7 @@ export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput
 
   const coverText = readTextField(value, "coverText");
   if (coverText !== undefined && coverText !== null && coverText.length > MAX_COVER_TEXT_LENGTH) {
-    errors.coverText = `Cover text must be ${MAX_COVER_TEXT_LENGTH} characters or less`;
+    errors.coverText = `El texto de portada debe tener ${MAX_COVER_TEXT_LENGTH} caracteres o menos`;
   }
 
   if (Object.keys(errors).length > 0) {
@@ -91,9 +109,8 @@ export function validateWorkshopConfigInput(input: unknown): WorkshopConfigInput
   const website = readTextField(value, "website");
   if (website !== undefined) result.website = website;
   if (coverText !== undefined) result.coverText = coverText;
-  if ("socialHandles" in value) {
-    result.socialHandles = value.socialHandles === null ? null : (value.socialHandles as Record<string, string>);
-  }
+  const socialHandles = readHandleMap(value);
+  if (socialHandles !== undefined) result.socialHandles = socialHandles;
   return result;
 }
 

@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { validateWorkshopConfigInput, getWorkshopConfig, saveWorkshopConfig } from "./service";
+import {
+  validateWorkshopConfigInput,
+  getWorkshopConfig,
+  saveWorkshopConfig,
+  WorkshopConfigValidationError,
+} from "./service";
 
 describe("validateWorkshopConfigInput", () => {
   it("accepts a valid name", () => {
@@ -52,6 +57,32 @@ describe("validateWorkshopConfigInput", () => {
 
   it("rejects a coverText over the length cap", () => {
     expect(() => validateWorkshopConfigInput({ coverText: "x".repeat(501) })).toThrow();
+  });
+
+  it("gives a Spanish message when coverText is over the length cap", () => {
+    try {
+      validateWorkshopConfigInput({ coverText: "x".repeat(501) });
+      expect.unreachable();
+    } catch (err) {
+      expect((err as WorkshopConfigValidationError).errors.coverText).toMatch(/500 caracteres/);
+    }
+  });
+
+  it("ignores socialHandles when it is not a plain object (string)", () => {
+    const result = validateWorkshopConfigInput({ socialHandles: "instagram" }) as Record<string, unknown>;
+    expect(result).not.toHaveProperty("socialHandles");
+  });
+
+  it("ignores socialHandles when it is an array", () => {
+    const result = validateWorkshopConfigInput({ socialHandles: [1, 2, 3] }) as Record<string, unknown>;
+    expect(result).not.toHaveProperty("socialHandles");
+  });
+
+  it("drops individual socialHandles entries whose value is not a string", () => {
+    const result = validateWorkshopConfigInput({
+      socialHandles: { instagram: "@mitaller", tiktok: { nested: true } },
+    });
+    expect(result.socialHandles).toEqual({ instagram: "@mitaller" });
   });
 });
 

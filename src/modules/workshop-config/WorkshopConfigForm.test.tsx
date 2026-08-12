@@ -78,6 +78,21 @@ describe("WorkshopConfigForm — contact fields", () => {
     expect(bodyOf(fetchMock).coverText).toBe("Bienvenido a nuestro catálogo");
   });
 
+  it("surfaces a coverText validation error returned by the server", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({
+      status: 400,
+      body: { errors: { coverText: "El texto de portada debe tener 500 caracteres o menos" } },
+    });
+    render(<WorkshopConfigForm initialConfig={null} />);
+
+    await user.type(screen.getByLabelText("Texto de portada"), "algo");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(await screen.findByText("El texto de portada debe tener 500 caracteres o menos")).toBeInTheDocument();
+  });
+
   it("adds a social handle row and submits it under an arbitrary platform key", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({ status: 200, body: { config: { id: "singleton" } } });

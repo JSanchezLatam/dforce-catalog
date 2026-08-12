@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
 import { LogoUploadField } from "./LogoUploadField";
 
+const MAX_COVER_TEXT_LENGTH = 500;
+
 type Props = {
   initialConfig: WorkshopConfig | null;
 };
@@ -151,10 +153,16 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
               id="coverText"
               className={TEXTAREA_CLASS}
               rows={3}
+              maxLength={MAX_COVER_TEXT_LENGTH}
               value={coverText}
               onChange={(e) => { setCoverText(e.target.value); setStatus("idle"); }}
             />
           </div>
+          {errors.coverText && (
+            <p role="alert" className={FIELD_ERROR}>
+              {errors.coverText}
+            </p>
+          )}
 
           <h2 className={SECTION_HEADING}>Redes sociales</h2>
           <div className="flex flex-col gap-3">
