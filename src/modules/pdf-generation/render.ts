@@ -5,6 +5,7 @@
  * module that imports Playwright.
  */
 import { CatalogTemplate, type CatalogTemplateProps, type ProductPrintRef } from "@/shared/template/CatalogTemplate";
+import { getTemplate } from "@/shared/template/registry";
 
 /** R6.1/R5.4 — splits the final (post-exclusion) product set into fixed-size printed pages. */
 export function chunkProducts(products: ProductPrintRef[], productsPerPage: number): ProductPrintRef[][] {
@@ -46,7 +47,9 @@ export async function renderCatalogHtml(props: CatalogTemplateProps): Promise<st
     <meta charset="utf-8" />
     <style>
       @page { margin: 20mm; }
-      body { font-family: ${props.branding?.font ?? "sans-serif"}, sans-serif; margin: 0; }
+      /* The registry font already carries its own fallback ("Arial, sans-serif"),
+         so appending another one produced "..., sans-serif, sans-serif". */
+      body { font-family: ${props.branding ? getTemplate(props.branding.templateId).font : "sans-serif"}; margin: 0; }
       img { max-width: 100%; }
       .card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
       .card-fullbleed { break-inside: avoid; display: flex; flex-direction: column; }

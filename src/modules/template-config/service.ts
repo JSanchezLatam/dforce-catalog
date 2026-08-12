@@ -1,27 +1,28 @@
 /**
- * template-config — persisted catalog branding (R8.1,8.2,8.4).
+ * template-config — persisted template selection (R8.1,8.2,8.4).
+ *
+ * catalog-templates-and-workshop-info WU3 (task 3.12, migration `0009`):
+ * font/colours/logo/cover-text are no longer validated or persisted here —
+ * font and colours are template-fixed (the registry); logo and cover-text
+ * are workshop-owned (`workshop-config/service.ts`). This module now only
+ * validates the two fields `template_config` still has.
  *
  * ponytail: singleton-row-no-history (see schema.ts comment on
  * `templateConfig`) — one row, keyed by `SINGLETON_ID`, upserted in place.
  */
 import { eq } from "drizzle-orm";
 
-import { db } from "@/shared/db/client";
+import { db as defaultDb } from "@/shared/db/client";
 import { templateConfig, type TemplateConfig } from "@/shared/db/schema";
+import { KNOWN_TEMPLATE_IDS } from "@/shared/template/template-ids";
 
 const SINGLETON_ID = "singleton";
 
 export type TemplateConfigInput = {
-  logoUrl: string;
-  primaryColors: { primary: string; secondary: string };
-  font: string;
-  coverText: string;
   defaultImageHandling?: "strict" | "adaptive" | null;
+  /** Registry template id — NULL/unknown falls back to the default (R8.4). */
+  selectedTemplateId?: string | null;
 };
-
-const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
-const MAX_FONT_LENGTH = 100;
-const MAX_COVER_TEXT_LENGTH = 300;
 
 export class TemplateConfigValidationError extends Error {
   constructor(public readonly errors: Record<string, string>) {
@@ -29,63 +30,62 @@ export class TemplateConfigValidationError extends Error {
   }
 }
 
-function isValidUrl(value: string): boolean {
-  try {
-    new URL(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Pure — no DB access — R8.1's "at least logo, primary colors, typography, cover text". */
+/**
+ * Pure — no DB access. Returns ONLY the keys the caller actually sent, the
+ * same partial-touch discipline as `workshop-config/service.ts`: an absent
+ * key means "leave it alone", an explicit `null` means "clear it". Returning
+ * both keys unconditionally would make the upsert's `set:` clause below
+ * overwrite a stored `selectedTemplateId` with null on any POST that omits
+ * it — silently losing the selection R8.4 requires to survive.
+ *
+ * R8.4's "unknown id falls back to the default" is a READ rule and lives in
+ * `getTemplate` (proved by `registry.test.ts`). On WRITE this is a trust
+ * boundary — `route.ts` hands us the raw request body — so an id the registry
+ * does not know is rejected, not coerced. Coercing here would answer 200 to a
+ * client whose selection we just threw away.
+ */
 export function validateTemplateConfigInput(input: unknown): TemplateConfigInput {
-  const errors: Record<string, string> = {};
   const value = (input ?? {}) as Partial<Record<string, unknown>>;
+  const errors: Record<string, string> = {};
+  const parsed: TemplateConfigInput = {};
 
-  const logoUrl = typeof value.logoUrl === "string" ? value.logoUrl : "";
-  if (!logoUrl || !isValidUrl(logoUrl)) {
-    errors.logoUrl = "Logo must be a valid URL";
+  if ("defaultImageHandling" in value) {
+    const raw = value.defaultImageHandling;
+    if (raw === "strict" || raw === "adaptive" || raw === null) {
+      parsed.defaultImageHandling = raw;
+    } else {
+      errors.defaultImageHandling = "Debe ser 'strict' o 'adaptive'.";
+    }
   }
 
-  const colors = (value.primaryColors ?? {}) as Partial<Record<string, unknown>>;
-  const primary = typeof colors.primary === "string" ? colors.primary : "";
-  const secondary = typeof colors.secondary === "string" ? colors.secondary : "";
-  if (!HEX_COLOR.test(primary)) {
-    errors.primaryColor = "Primary color must be a hex value like #1a2b3c";
-  }
-  if (!HEX_COLOR.test(secondary)) {
-    errors.secondaryColor = "Secondary color must be a hex value like #1a2b3c";
-  }
-
-  const font = typeof value.font === "string" ? value.font.trim() : "";
-  if (!font || font.length > MAX_FONT_LENGTH) {
-    errors.font = `Font must be 1-${MAX_FONT_LENGTH} characters`;
+  if ("selectedTemplateId" in value) {
+    const raw = value.selectedTemplateId;
+    if (raw === null) {
+      parsed.selectedTemplateId = null;
+    } else if (typeof raw === "string" && (KNOWN_TEMPLATE_IDS as readonly string[]).includes(raw)) {
+      parsed.selectedTemplateId = raw;
+    } else {
+      errors.selectedTemplateId = "No existe una plantilla con ese identificador.";
+    }
   }
 
-  const coverText = typeof value.coverText === "string" ? value.coverText.trim() : "";
-  if (!coverText || coverText.length > MAX_COVER_TEXT_LENGTH) {
-    errors.coverText = `Cover text must be 1-${MAX_COVER_TEXT_LENGTH} characters`;
-  }
-
-  const rawHandling = (value as Record<string, unknown>).defaultImageHandling;
-  const defaultImageHandling = rawHandling === "strict" || rawHandling === "adaptive" ? rawHandling : null;
-
-  if (Object.keys(errors).length > 0) {
-    throw new TemplateConfigValidationError(errors);
-  }
-
-  return { logoUrl, primaryColors: { primary, secondary }, font, coverText, defaultImageHandling };
+  if (Object.keys(errors).length > 0) throw new TemplateConfigValidationError(errors);
+  return parsed;
 }
 
 /** Returns null when the admin has never saved a config yet (page renders a blank form). */
-export async function getTemplateConfig(): Promise<TemplateConfig | null> {
+export async function getTemplateConfig(
+  db: { select: typeof defaultDb.select } = defaultDb,
+): Promise<TemplateConfig | null> {
   const rows = await db.select().from(templateConfig).where(eq(templateConfig.id, SINGLETON_ID)).limit(1);
   return rows[0] ?? null;
 }
 
 /** Validates then upserts the singleton row (R8.2 — applies to catalogs generated from now on). */
-export async function saveTemplateConfig(input: unknown): Promise<TemplateConfig> {
+export async function saveTemplateConfig(
+  input: unknown,
+  db: { insert: typeof defaultDb.insert } = defaultDb,
+): Promise<TemplateConfig> {
   const value = validateTemplateConfigInput(input);
   const updatedAt = new Date();
   const [row] = await db

@@ -1,4 +1,4 @@
-import type { ProductPrintRef } from "./CatalogTemplate";
+import type { ProductPrices as ProductPricesShape, ProductPrintRef } from "./CatalogTemplate";
 
 type CardProps = {
   product: ProductPrintRef;
@@ -6,14 +6,42 @@ type CardProps = {
 };
 
 /**
- * Shared by both cards so a transparent product and a framed one never format
- * money differently on the same page. Renders nothing at all when there is no
- * usable price — `resolvePrice` already collapses the ERP's "0.00" to null,
- * and printing "$0.00" beside a product reads as free.
+ * Local, not imported from `catalog-builder`'s `PRICE_LIST_LABELS` — that
+ * would invert the `shared ← modules` dependency direction (design D4), and
+ * the card needs shorter labels than the generate-step selector did.
  */
-function ProductPrice({ price }: { price?: number | null }) {
-  if (price == null) return null;
-  return <p style={{ margin: "2px 0 0", fontWeight: 600, fontSize: 13 }}>${price.toFixed(2)}</p>;
+const TIER_LABELS: Record<keyof ProductPricesShape, string> = {
+  venta: "Venta",
+  taller: "Taller",
+  socio: "Socio",
+};
+
+/**
+ * Design D4's em-dash rule, re-guarded at the render site even though
+ * `resolvePrice` already maps a `0.00` ERP value to `null` upstream: a
+ * hostile payload reaching the decoupled PDF worker must never be able to
+ * print "$0.00" next to a product.
+ */
+function formatTier(value: number | null | undefined): string {
+  if (value == null || value <= 0) return "—";
+  return `$${value.toFixed(2)}`;
+}
+
+/**
+ * Shared by both cards so a transparent product and a framed one never format
+ * money differently on the same page. Always renders all three tiers, bold —
+ * never fewer, even when every tier is absent (each just shows an em-dash).
+ */
+function ProductPrices({ prices }: { prices?: ProductPricesShape | null }) {
+  return (
+    <div style={{ margin: "2px 0 0" }}>
+      {(Object.keys(TIER_LABELS) as (keyof ProductPricesShape)[]).map((tier) => (
+        <p key={tier} style={{ margin: 0, fontWeight: 600, fontSize: 13 }}>
+          {TIER_LABELS[tier]}: {formatTier(prices?.[tier])}
+        </p>
+      ))}
+    </div>
+  );
 }
 
 export function TransparentProductCard({ product, style }: CardProps) {
@@ -55,7 +83,7 @@ export function TransparentProductCard({ product, style }: CardProps) {
             {product.categoryL1}{product.categoryL2 ? ` / ${product.categoryL2}` : ""}
           </p>
         )}
-        <ProductPrice price={product.price} />
+        <ProductPrices prices={product.prices} />
       </div>
     </div>
   );
@@ -105,7 +133,7 @@ export function OpaqueProductCard({ product, style }: CardProps) {
             {product.categoryL1}{product.categoryL2 ? ` / ${product.categoryL2}` : ""}
           </p>
         )}
-        <ProductPrice price={product.price} />
+        <ProductPrices prices={product.prices} />
       </div>
     </div>
   );

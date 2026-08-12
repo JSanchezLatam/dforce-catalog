@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { validateWorkshopConfigInput, getWorkshopConfig, saveWorkshopConfig } from "./service";
+import {
+  validateWorkshopConfigInput,
+  getWorkshopConfig,
+  saveWorkshopConfig,
+  WorkshopConfigValidationError,
+} from "./service";
 
 describe("validateWorkshopConfigInput", () => {
   it("accepts a valid name", () => {
@@ -15,12 +20,139 @@ describe("validateWorkshopConfigInput", () => {
     expect(() => validateWorkshopConfigInput({ name: "x".repeat(101) })).toThrow();
   });
 
-  it("accepts an empty input (no name)", () => {
-    expect(validateWorkshopConfigInput({})).toEqual({ name: null });
+  it("omits name from the parsed result when the caller didn't send it (partial-touch, like every other field)", () => {
+    expect(validateWorkshopConfigInput({})).toEqual({});
+  });
+
+  it("ignores a non-string name instead of treating it as an explicit clear", () => {
+    const result = validateWorkshopConfigInput({ name: 42, phone: "555" }) as Record<string, unknown>;
+    expect(result).not.toHaveProperty("name");
+    expect(result.phone).toBe("555");
+  });
+
+  it("collapses an empty name to null instead of persisting an empty string", () => {
+    const result = validateWorkshopConfigInput({ name: "" });
+    expect(result.name).toBeNull();
+  });
+
+  it.each(["phone", "whatsapp", "email", "address", "hours", "website", "coverText"])(
+    "accepts %s independently",
+    (field) => {
+      const result = validateWorkshopConfigInput({ [field]: "some value" }) as Record<string, unknown>;
+      expect(result[field]).toBe("some value");
+    },
+  );
+
+  it("stores hours verbatim with no per-day parsing", () => {
+    const result = validateWorkshopConfigInput({ hours: "Lun-Vie 9-18, Sáb 9-13" });
+    expect(result.hours).toBe("Lun-Vie 9-18, Sáb 9-13");
+  });
+
+  it("accepts socialHandles with an arbitrary platform key", () => {
+    const result = validateWorkshopConfigInput({ socialHandles: { instagram: "@mitaller", tiktok: "@mitaller" } });
+    expect(result.socialHandles).toEqual({ instagram: "@mitaller", tiktok: "@mitaller" });
+  });
+
+  it.each(["phone", "whatsapp", "email", "address", "hours", "website", "coverText"])(
+    "collapses an empty %s to null instead of persisting an empty string",
+    (field) => {
+      const result = validateWorkshopConfigInput({ [field]: "" }) as Record<string, unknown>;
+      expect(result[field]).toBeNull();
+    },
+  );
+
+  it("ignores a non-string contact field instead of coercing it with String()", () => {
+    const result = validateWorkshopConfigInput({ phone: { not: "a string" } }) as Record<string, unknown>;
+    expect(result).not.toHaveProperty("phone");
+  });
+
+  it("rejects a coverText over the length cap", () => {
+    expect(() => validateWorkshopConfigInput({ coverText: "x".repeat(501) })).toThrow();
+  });
+
+  it("gives a Spanish message when coverText is over the length cap", () => {
+    try {
+      validateWorkshopConfigInput({ coverText: "x".repeat(501) });
+      expect.unreachable();
+    } catch (err) {
+      expect((err as WorkshopConfigValidationError).errors.coverText).toMatch(/500 caracteres/);
+    }
+  });
+
+  it("ignores socialHandles when it is not a plain object (string)", () => {
+    const result = validateWorkshopConfigInput({ socialHandles: "instagram" }) as Record<string, unknown>;
+    expect(result).not.toHaveProperty("socialHandles");
+  });
+
+  it("ignores socialHandles when it is an array", () => {
+    const result = validateWorkshopConfigInput({ socialHandles: [1, 2, 3] }) as Record<string, unknown>;
+    expect(result).not.toHaveProperty("socialHandles");
+  });
+
+  it("drops individual socialHandles entries whose value is not a string", () => {
+    const result = validateWorkshopConfigInput({
+      socialHandles: { instagram: "@mitaller", tiktok: { nested: true } },
+    });
+    expect(result.socialHandles).toEqual({ instagram: "@mitaller" });
+  });
+
+  it("drops a socialHandles entry left blank instead of persisting an empty handle", () => {
+    const result = validateWorkshopConfigInput({ socialHandles: { instagram: "@mitaller", facebook: "" } });
+    expect(result.socialHandles).toEqual({ instagram: "@mitaller" });
+  });
+
+  it.each(["phone", "whatsapp", "email", "address", "hours", "website"])(
+    "rejects %s over the shared contact-field length cap",
+    (field) => {
+      expect(() => validateWorkshopConfigInput({ [field]: "x".repeat(201) })).toThrow();
+    },
+  );
+
+  it("drops a socialHandles entry whose platform key is whitespace-only", () => {
+    const result = validateWorkshopConfigInput({ socialHandles: { "   ": "@mitaller", instagram: "@real" } });
+    expect(result.socialHandles).toEqual({ instagram: "@real" });
+  });
+
+  it("trims a socialHandles platform key before persisting it", () => {
+    const result = validateWorkshopConfigInput({ socialHandles: { "  instagram  ": "@mitaller" } });
+    expect(result.socialHandles).toEqual({ instagram: "@mitaller" });
+  });
+
+  it("trims a socialHandles handle value before persisting it, matching the platform key", () => {
+    const result = validateWorkshopConfigInput({ socialHandles: { instagram: "  @mitaller  " } });
+    expect(result.socialHandles).toEqual({ instagram: "@mitaller" });
+  });
+
+  it("rejects socialHandles over the entry-count cap instead of silently truncating it", () => {
+    const many = Object.fromEntries(Array.from({ length: 25 }, (_, i) => [`platform${i}`, `@handle${i}`]));
+    expect(() => validateWorkshopConfigInput({ socialHandles: many })).toThrow();
+  });
+
+  it("gives a Spanish message when socialHandles is over the entry-count cap", () => {
+    const many = Object.fromEntries(Array.from({ length: 25 }, (_, i) => [`platform${i}`, `@handle${i}`]));
+    try {
+      validateWorkshopConfigInput({ socialHandles: many });
+      expect.unreachable();
+    } catch (err) {
+      expect((err as WorkshopConfigValidationError).errors.socialHandles).toMatch(/20/);
+    }
+  });
+
+  it("rejects a socialHandles entry over the per-entry length cap instead of silently dropping it", () => {
+    expect(() =>
+      validateWorkshopConfigInput({ socialHandles: { instagram: "x".repeat(101) } }),
+    ).toThrow();
   });
 });
 
 describe("getWorkshopConfig", () => {
+  // Tests the function's own zero-rows → null logic in isolation. Not a
+  // claim that a migrated database can produce zero rows: migration 0008's
+  // `INSERT ... ON CONFLICT DO NOTHING` guarantees the singleton row exists
+  // on any install that has run it, so getWorkshopConfig() now always
+  // resolves a row (every field NULL, on a fresh install) rather than null.
+  // Callers must not branch on `config === null` meaning "unconfigured" —
+  // see apply-progress.md's WU1 section and tasks.md task 3.9.
   it("returns null when no config has been saved", async () => {
     const db = { select: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue({ where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([]) }) }) }) };
     const result = await getWorkshopConfig(db as never);
@@ -68,6 +200,73 @@ describe("saveWorkshopConfig", () => {
     const onConflictArg = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
     expect(onConflictArg.set).not.toHaveProperty("logoR2Key");
     expect(onConflictArg.set).not.toHaveProperty("logoContentType");
+  });
+
+  it("persists a new contact field without touching other already-set fields (partial update)", async () => {
+    const row = { id: "singleton", name: "Taller", phone: "555-1234", email: "old@taller.com", updatedAt: new Date() };
+    const onConflictDoUpdate = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([row]) });
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    const db = { insert: vi.fn().mockReturnValue({ values } as never) } as never;
+
+    await saveWorkshopConfig({ name: "Taller", phone: "555-1234" }, db);
+
+    const onConflictArg = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
+    expect(onConflictArg.set).toEqual(expect.objectContaining({ phone: "555-1234" }));
+    expect(onConflictArg.set).not.toHaveProperty("email");
+    expect(onConflictArg.set).not.toHaveProperty("coverText");
+    expect(onConflictArg.set).not.toHaveProperty("socialHandles");
+  });
+
+  // WU5 (design D6) — coverImageR2Key/coverImageContentType follow the exact
+  // same partial-touch discipline as logoR2Key/logoContentType above.
+  it("persists coverImageR2Key and coverImageContentType on both the insert values and the onConflictDoUpdate set clause", async () => {
+    const row = { id: "singleton", name: "Taller", coverImageR2Key: "covers/abc.jpg", coverImageContentType: "image/jpeg", updatedAt: new Date() };
+    const onConflictDoUpdate = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([row]) });
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    const db = { insert: vi.fn().mockReturnValue({ values } as never) } as never;
+
+    await saveWorkshopConfig({ name: "Taller", coverImageR2Key: "covers/abc.jpg", coverImageContentType: "image/jpeg" }, db);
+
+    expect(values).toHaveBeenCalledWith(expect.objectContaining({ coverImageR2Key: "covers/abc.jpg", coverImageContentType: "image/jpeg" }));
+    const onConflictArg = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
+    expect(onConflictArg.set).toEqual(expect.objectContaining({ coverImageR2Key: "covers/abc.jpg", coverImageContentType: "image/jpeg" }));
+  });
+
+  it("does NOT include coverImageR2Key/coverImageContentType in the update set when saving name only, so an existing cover image is never clobbered", async () => {
+    const row = { id: "singleton", name: "Taller Nuevo", coverImageR2Key: "covers/existing.jpg", coverImageContentType: "image/jpeg", updatedAt: new Date() };
+    const onConflictDoUpdate = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([row]) });
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    const db = { insert: vi.fn().mockReturnValue({ values } as never) } as never;
+
+    await saveWorkshopConfig({ name: "Taller Nuevo" }, db);
+
+    const onConflictArg = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
+    expect(onConflictArg.set).not.toHaveProperty("coverImageR2Key");
+    expect(onConflictArg.set).not.toHaveProperty("coverImageContentType");
+  });
+
+  it("explicitly clears coverImageR2Key/coverImageContentType when null is passed (DELETE flow)", async () => {
+    const row = { id: "singleton", name: "Taller", coverImageR2Key: null, coverImageContentType: null, updatedAt: new Date() };
+    const onConflictDoUpdate = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([row]) });
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    const db = { insert: vi.fn().mockReturnValue({ values } as never) } as never;
+
+    await saveWorkshopConfig({ name: "Taller", coverImageR2Key: null, coverImageContentType: null }, db);
+
+    const onConflictArg = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
+    expect(onConflictArg.set).toEqual(expect.objectContaining({ coverImageR2Key: null, coverImageContentType: null }));
+  });
+
+  it("does not touch name when a partial update omits it, so the workshop name survives a phone-only save", async () => {
+    const row = { id: "singleton", name: "Taller Existente", phone: "555-1234", updatedAt: new Date() };
+    const onConflictDoUpdate = vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([row]) });
+    const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+    const db = { insert: vi.fn().mockReturnValue({ values } as never) } as never;
+
+    await saveWorkshopConfig({ phone: "555-1234" }, db);
+
+    const onConflictArg = onConflictDoUpdate.mock.calls[0][0] as { set: Record<string, unknown> };
+    expect(onConflictArg.set).not.toHaveProperty("name");
   });
 
   it("explicitly clears logoR2Key/logoContentType when null is passed (DELETE flow)", async () => {

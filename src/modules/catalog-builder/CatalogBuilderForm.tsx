@@ -4,7 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckIcon, Search } from "lucide-react";
 
 import { CatalogTemplate } from "@/shared/template/CatalogTemplate";
-import type { TemplateConfig } from "@/shared/db/schema";
+import { getTemplate } from "@/shared/template/registry";
+import { buildWorkshopContact } from "@/modules/workshop-config/contact";
+import type { TemplateConfig, WorkshopConfig } from "@/shared/db/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,11 +28,12 @@ import { Pagination } from "@/shared/ui/Pagination";
 import { RETENTION_LIMIT } from "@/modules/catalog-storage/retention-policy";
 
 import type { CategoryPair } from "./queries";
-import { PRICE_LIST_LABELS, PRICE_LISTS, resolvePrice, type PriceList } from "./price-lists";
+import { resolveAllPrices } from "./price-lists";
 import {
   buildIndexSections,
   CatalogSelectionValidationError,
   deriveCatalogTitle,
+  DEFAULT_PRODUCTS_PER_PAGE,
   MAX_PRODUCTS_PER_PAGE,
   MIN_PRODUCTS_PER_PAGE,
   toggleBulkFrame,
@@ -71,11 +74,13 @@ export function CatalogBuilderForm({
   categoryL1Options,
   categoryPairs,
   templateConfig,
+  workshopConfig,
   catalogCount,
 }: {
   categoryL1Options: string[];
   categoryPairs: CategoryPair[];
   templateConfig: TemplateConfig | null;
+  workshopConfig: WorkshopConfig | null;
   catalogCount: number;
 }) {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -84,7 +89,7 @@ export function CatalogBuilderForm({
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(10);
-  const [productsPerPage, setProductsPerPage] = useState(10);
+  const [productsPerPage, setProductsPerPage] = useState(DEFAULT_PRODUCTS_PER_PAGE);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
   const [evictionWarning, setEvictionWarning] = useState(false);
@@ -92,8 +97,6 @@ export function CatalogBuilderForm({
   const [step, setStep] = useState<"select" | "review">("select");
   const [overrides, setOverrides] = useState<Record<string, "transparent" | "opaque" | "low_res" | null>>({});
   const [bulkFramed, setBulkFramed] = useState(false);
-  // Retail by default: the safe tier to print if nobody chooses.
-  const [priceList, setPriceList] = useState<PriceList>("venta");
   const overridesBeforeBulkFrameRef = useRef<Record<string, "transparent" | "opaque" | "low_res" | null>>({});
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -168,18 +171,17 @@ export function CatalogBuilderForm({
     [candidates, selectedProductIds],
   );
   const sections = useMemo(() => buildIndexSections(finalProducts), [finalProducts]);
-  // `priceLists` is destructured OFF deliberately: the builder holds all three
-  // ERP tiers so the selector can switch instantly, but only the ONE resolved
-  // price crosses into the generate payload. A retail catalog must not carry
-  // the trade or member price, not even in a job payload nobody prints.
+  // `priceLists` is destructured OFF deliberately: it is the raw ERP map,
+  // never the print payload's shape. R13 — every reviewed product now
+  // carries all three resolved tiers instead of one admin-chosen price.
   const reviewedProducts = useMemo(
     () =>
       finalProducts.map(({ priceLists, ...p }) => ({
         ...p,
         imageType: overrides[p.id] ?? p.imageType,
-        price: resolvePrice(priceLists, priceList),
+        prices: resolveAllPrices(priceLists),
       })),
-    [finalProducts, overrides, priceList],
+    [finalProducts, overrides],
   );
   const title = useMemo(() => deriveCatalogTitle(uniqueL1s(categoryRefs)), [categoryRefs]);
 
@@ -433,38 +435,6 @@ export function CatalogBuilderForm({
       )}
 
       {candidates.length > 0 && step === "review" && (
-        <Card size="sm" className="mb-4">
-          <CardContent>
-            <div className="grid gap-2">
-              <Label htmlFor="catalog-price-list">Lista de precios</Label>
-              <Select
-                items={PRICE_LIST_LABELS}
-                value={priceList}
-                onValueChange={(value) => setPriceList(value as PriceList)}
-              >
-                <SelectTrigger id="catalog-price-list" className="w-64">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PRICE_LISTS.map((list) => (
-                    <SelectItem key={list} value={list}>
-                      {PRICE_LIST_LABELS[list]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {/* Said out loud because the consequence is not recoverable once
-                  the PDF is printed and handed to someone. */}
-              <p className="text-xs text-muted-foreground">
-                El catálogo impreso muestra solo esta lista. Un catálogo con precio taller o socio no debería
-                entregarse a un cliente final.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {candidates.length > 0 && step === "review" && (
         <ProductLayoutTuner
           products={finalProducts}
           overrides={overrides}
@@ -578,16 +548,21 @@ export function CatalogBuilderForm({
               <CatalogTemplate
                 title={title}
                 sections={sections}
-                branding={
-                  templateConfig
-                    ? {
-                        logoUrl: templateConfig.logoUrl,
-                        primaryColors: templateConfig.primaryColors,
-                        font: templateConfig.font,
-                        coverText: templateConfig.coverText,
-                      }
-                    : null
-                }
+                branding={{
+                  templateId: getTemplate(templateConfig?.selectedTemplateId).id,
+                  // The logo route is session-authenticated (the browser sends
+                  // its cookie) — only supply the URL when a logo actually
+                  // exists, so an unset logo renders no <img> instead of a
+                  // broken one (matches the worker's per-key null handling).
+                  logoUrl: workshopConfig?.logoR2Key ? "/api/workshop-config/logo" : null,
+                  coverText: workshopConfig?.coverText ?? null,
+                  // WU5 (design D6) — same gating as logoUrl above, mirrors
+                  // the cover-image route; buildWorkshopContact is the one
+                  // shared mapping generate/route.ts also uses (Risk-5: the
+                  // preview must show the same contact block the PDF does).
+                  coverImageUrl: workshopConfig?.coverImageR2Key ? "/api/workshop-config/cover-image" : null,
+                  contact: buildWorkshopContact(workshopConfig ?? null),
+                }}
               />
             </div>
           </section>

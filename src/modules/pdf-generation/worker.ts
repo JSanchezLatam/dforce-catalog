@@ -39,9 +39,11 @@ import { join } from "node:path";
 import { chromium } from "playwright";
 
 import { getBoss } from "@/shared/jobs/boss";
+import type { CatalogTemplateBranding } from "@/shared/template/CatalogTemplate";
+import { getObject } from "../catalog-storage/r2";
 import { createPendingCatalog } from "../catalog-storage/queries";
 import { buildIndexSections } from "../catalog-builder/selection";
-import { PDF_GENERATE_JOB, PDF_UPLOAD_JOB, type PdfGeneratePayload } from "./enqueue";
+import { PDF_GENERATE_JOB, PDF_UPLOAD_JOB, type PdfBranding, type PdfGeneratePayload } from "./enqueue";
 import { chunkProducts, renderCatalogHtml } from "./render";
 
 export type PdfUploadPayload = {
@@ -61,15 +63,69 @@ export async function handoffPdfBuffer(catalogId: string, buffer: Buffer): Promi
 }
 
 /**
+ * design D3 / explore.md Risk 1 — `templateConfig.logoUrl` used to be
+ * Playwright-fetchable; `workshopConfig.logoR2Key` sits behind an
+ * authenticated route (`api/workshop-config/logo/route.ts`), which Playwright
+ * cannot authenticate against. Reads the R2 object server-side and inlines it
+ * as a `data:` URI instead. `getObject()` returning `null` (missing object)
+ * yields `logoUrl: null` — a missing logo must not fail a job that already
+ * consumed one of `MAX_QUEUE_DEPTH` queue slots; the cover simply renders no
+ * `<img>`. Extracted as its own injectable-dep function (this repo's
+ * standing `deps?.thing ?? real` seam) so this — the actual crux of this work
+ * unit — gets real unit coverage without mocking Playwright's Chromium.
+ *
+ * WU5 (design D6) reuses the exact same seam for `coverImageR2Key` — one
+ * more R2 read before `renderCatalogHtml`, same null-not-throw contract.
+ * `contact` needs no R2 read at all (plain text) and travels through as-is.
+ */
+async function resolveImageDataUri(
+  key: string | null | undefined,
+  contentType: string | null | undefined,
+  fetchObject: typeof getObject,
+): Promise<string | null> {
+  if (!key) return null;
+  const buffer = await fetchObject(key);
+  if (!buffer) return null;
+  return `data:${contentType ?? "image/png"};base64,${buffer.toString("base64")}`;
+}
+
+export async function resolveBranding(
+  branding: PdfBranding | null,
+  deps: { getObject?: typeof getObject } = {},
+): Promise<CatalogTemplateBranding | null> {
+  if (!branding) return null;
+  const fetchObject = deps.getObject ?? getObject;
+
+  const [logoUrl, coverImageUrl] = await Promise.all([
+    resolveImageDataUri(branding.logoR2Key, branding.logoContentType, fetchObject),
+    resolveImageDataUri(branding.coverImageR2Key, branding.coverImageContentType, fetchObject),
+  ]);
+
+  return {
+    templateId: branding.templateId,
+    logoUrl,
+    coverImageUrl,
+    coverText: branding.coverText,
+    contact: branding.contact ?? null,
+  };
+}
+
+/**
  * R6.1/NFR-3 — Playwright render. Not unit-tested in this PR (would require
  * a real Chromium browser process); deferred to integration/E2E coverage,
  * same gap category already flagged for DB/pg-boss integration since PR2/PR3.
+ * The logo data-URI resolution it depends on (`resolveBranding`) IS
+ * unit-tested — see worker.test.ts.
  */
-export async function renderPdfBuffer(payload: PdfGeneratePayload): Promise<Buffer> {
+export async function renderPdfBuffer(
+  payload: PdfGeneratePayload,
+  deps: { getObject?: typeof getObject } = {},
+): Promise<Buffer> {
   const productPages = chunkProducts(payload.products, payload.productsPerPage);
+  const branding = await resolveBranding(payload.branding, deps);
   const html = await renderCatalogHtml({
     title: payload.title,
-    branding: payload.branding,
+    branding,
     sections: payload.sections.length > 0 ? payload.sections : buildIndexSections(payload.products),
     productPages,
     defaultImageHandling: payload.defaultImageHandling,

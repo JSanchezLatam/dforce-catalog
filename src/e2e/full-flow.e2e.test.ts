@@ -45,7 +45,9 @@ vi.mock("@/modules/catalog-storage/r2", () => {
 
 import { hashPassword } from "@/modules/auth/password";
 import { SESSION_COOKIE, validateSession } from "@/modules/auth/session";
+import { resolveAllPrices } from "@/modules/catalog-builder/price-lists";
 import { buildIndexSections } from "@/modules/catalog-builder/selection";
+import { DEFAULT_TEMPLATE_ID } from "@/shared/template/registry";
 import { listCatalogsForUser } from "@/modules/catalog-storage/queries";
 import { registerPdfUploadWorker } from "@/modules/catalog-storage/upload-status";
 import { countAllProducts, listCategoryL1Options, listInventory } from "@/modules/inventory-view/queries";
@@ -110,9 +112,17 @@ describe("full catalog-generation flow (E2E)", () => {
     await db.$client.end();
   });
 
-  it("proxy: 401 with no session cookie, redirect on an invalid one (NFR-5, R9.3)", async () => {
-    const noCookie = await proxy(new NextRequest("http://localhost/inventory"));
-    expect(noCookie.status).toBe(401);
+  // Stale before this fix: written against a proxy.ts behavior superseded by
+  // 9b789e2 ("fix: redirect unauthenticated page visits to /login instead of
+  // raw 401 JSON") — a page route with no cookie now redirects (307), the
+  // same as an invalid one; 401 JSON is API-routes-only (proxy.ts's
+  // `isApiRoute` split). Not a WU4 defect, but blocking for the WU4 live
+  // smoke this test is required to run.
+  it("proxy: redirects an unauthenticated page visit; 401s an unauthenticated API call (NFR-5, R9.3)", async () => {
+    const noCookiePage = await proxy(new NextRequest("http://localhost/inventory"));
+    expect(noCookiePage.status).toBeGreaterThanOrEqual(300);
+    expect(noCookiePage.status).toBeLessThan(400);
+    expect(noCookiePage.headers.get("location")).toContain("/login");
 
     const badCookie = await proxy(
       new NextRequest("http://localhost/inventory", { headers: { cookie: `${SESSION_COOKIE}=not-a-real-token` } }),
@@ -120,6 +130,9 @@ describe("full catalog-generation flow (E2E)", () => {
     expect(badCookie.status).toBeGreaterThanOrEqual(300);
     expect(badCookie.status).toBeLessThan(400);
     expect(badCookie.headers.get("location")).toContain("/login");
+
+    const noCookieApi = await proxy(new NextRequest("http://localhost/api/catalog-builder/generate"));
+    expect(noCookieApi.status).toBe(401);
   });
 
   it("logs in as each seeded user; wrong password is a generic 401 (R9.1/9.2)", async () => {
@@ -138,11 +151,42 @@ describe("full catalog-generation flow (E2E)", () => {
   });
 
   it("syncs inventory from a mocked Interfuerza boundary, then filters it (R1, R3, R10)", async () => {
+    // catalog-templates-and-workshop-info WU4: the real Interfuerza wrapper is
+    // {Producto, InStock, PriceLists, Images, Matrix} (mapper.ts, fixed in
+    // a828759) — a flat {id, name, price} object throws "missing a usable
+    // Producto.id" in parseProduct. `Matrix` is omitted below: `parseProduct`
+    // and `warnMalformedWrapper` never read it (Producto/InStock/PriceLists
+    // are the only keys the mapper depends on — mapper.ts's own docstring),
+    // so it is pure round-trip passthrough this fixture has no use for.
+    // `priceLists` below also carries a real "0.00" tier (p2's socio price)
+    // — the production-verified case R6's em-dash rule exists for (spec: "A
+    // zero tier renders an em-dash").
+    function wrapper(
+      id: string,
+      nombre: string,
+      categoryL1: string,
+      categoryL2: string | null,
+      venta: string,
+      taller: string,
+      socio: string,
+    ) {
+      return {
+        Producto: { id, Nombre: nombre, Category_L1: categoryL1, Category_L2: categoryL2, Precio_Venta: venta },
+        InStock: [{ Available: "5" }],
+        PriceLists: [
+          { Name: "Precio de venta", Precio: venta, Precio_Real: venta },
+          { Name: "PRECIO TALLER ", Precio: taller, Precio_Real: taller },
+          { Name: "Precio Socio", Precio: socio, Precio_Real: socio },
+        ],
+        Images: [],
+      };
+    }
+
     async function* fakeInterfuerzaPage() {
       yield [
-        { id: "p1", name: "Filtro de aceite", category_l1: "Motor", category_l2: "Filtros", price: 10, stock: 5 },
-        { id: "p2", name: "Bujía", category_l1: "Motor", category_l2: "Encendido", price: 5, stock: 20 },
-        { id: "p3", name: "Amortiguador", category_l1: "Suspensión", category_l2: null, price: 80, stock: 3 },
+        wrapper("p1", "Filtro de aceite", "Motor", "Filtros", "10.00", "8.00", "6.00"),
+        wrapper("p2", "Bujía", "Motor", "Encendido", "5.00", "4.00", "0.00"),
+        wrapper("p3", "Amortiguador", "Suspensión", null, "80.00", "70.00", "60.00"),
       ];
     }
 
@@ -162,11 +206,15 @@ describe("full catalog-generation flow (E2E)", () => {
   });
 
   it("configures branding as admin; a non-admin gets 403 (R8, R9.6/NFR-8)", async () => {
+    // Pre-existing, unrelated to WU4: this body carried the four legacy
+    // branding fields WU3's migration 0009 dropped and validateTemplateConfigInput
+    // no longer accepts (service.ts's TemplateConfigInput is `{defaultImageHandling,
+    // selectedTemplateId}`). It parsed to `{}` and still returned 200 — a false
+    // green that configured nothing, caught by GGA while running this WU's
+    // required live smoke. Fixed to the real current shape.
     const templateBody = JSON.stringify({
-      logoUrl: "https://example.com/logo.png",
-      primaryColors: { primary: "#112233", secondary: "#ffffff" },
-      font: "Arial",
-      coverText: "Catálogo Dforce",
+      selectedTemplateId: DEFAULT_TEMPLATE_ID,
+      defaultImageHandling: "strict",
     });
 
     const forbidden = await templateConfigPOST(
@@ -178,6 +226,7 @@ describe("full catalog-generation flow (E2E)", () => {
       new NextRequest("http://localhost/api/template-config", { method: "POST", headers: headersFor(adminUser), body: templateBody }),
     );
     expect(saved.status).toBe(200);
+    expect((await saved.json()).config.selectedTemplateId).toBe(DEFAULT_TEMPLATE_ID);
   });
 
   it("builds a selection, enqueues it, and it reaches uploaded via the real queue+render+upload pipeline (R5, R6, R11, R12)", async () => {
@@ -191,12 +240,35 @@ describe("full catalog-generation flow (E2E)", () => {
     const { products } = await candidatesRes.json();
     expect(products).toHaveLength(2);
 
+    // The only real exercise of queries.ts's hand-built jsonb extraction
+    // (AGENTS.md: the injected-dep seam means a fully green `npm test` run
+    // proves ZERO coverage of it) — same resolution `CatalogBuilderForm`'s
+    // `reviewedProducts` does, against the real Postgres row this query just
+    // read. p2's real "0.00" socio tier (design D4/R6) must collapse to null.
+    const reviewedProducts = products.map((p: (typeof products)[number]) => ({
+      ...p,
+      prices: resolveAllPrices(p.priceLists),
+    }));
+    const bujia = reviewedProducts.find((p: { id: string }) => p.id === "p2");
+    expect(bujia.prices).toEqual({ venta: 5, taller: 4, socio: null });
+
     const sections = buildIndexSections(products);
+    // `catalogs.generate` is admin-only in the real MATRIX (policy.ts) — this
+    // step used `regularUser` (tecnico) before this fix, which the matrix has
+    // always rejected with 403 (verified: `catalogs.generate: false` for
+    // tecnico since the very first commit that introduced it, edd86d7). Not a
+    // WU4 defect, but blocking for this required live smoke.
     const generateRes = await generatePOST(
       new NextRequest("http://localhost/api/catalog-builder/generate", {
         method: "POST",
-        headers: headersFor(regularUser),
-        body: JSON.stringify({ title: "Catalog: Motor", sections, products, productsPerPage: 10, includedCategoryCount: 1 }),
+        headers: headersFor(adminUser),
+        body: JSON.stringify({
+          title: "Catalog: Motor",
+          sections,
+          products: reviewedProducts,
+          productsPerPage: 10,
+          includedCategoryCount: 1,
+        }),
       }),
     );
     expect(generateRes.status).toBe(200);
@@ -208,13 +280,13 @@ describe("full catalog-generation flow (E2E)", () => {
     let catalog;
     const deadline = Date.now() + 45_000;
     while (Date.now() < deadline) {
-      [catalog] = await listCatalogsForUser(regularUser.id);
+      [catalog] = await listCatalogsForUser(adminUser.id);
       if (catalog?.uploadStatus === "uploaded" || catalog?.uploadStatus === "failed") break;
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
     expect(catalog?.uploadStatus).toBe("uploaded");
 
-    const fileRes = await filePOST(new NextRequest(`http://localhost/api/catalogs/${catalog!.id}/file`, { headers: headersFor(regularUser) }), {
+    const fileRes = await filePOST(new NextRequest(`http://localhost/api/catalogs/${catalog!.id}/file`, { headers: headersFor(adminUser) }), {
       params: Promise.resolve({ id: catalog!.id }),
     });
     expect(fileRes.status).toBe(200);

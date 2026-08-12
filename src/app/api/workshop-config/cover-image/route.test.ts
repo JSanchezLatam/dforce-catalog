@@ -22,10 +22,8 @@ vi.mock("@/modules/catalog-storage/r2", () => ({
   deleteObject: (...args: unknown[]) => mockDeleteObject(...args),
 }));
 
-
-
 function req(role: string, options?: { method?: string; body?: BodyInit; contentLength?: string }) {
-  return new NextRequest("http://localhost/api/workshop-config/logo", {
+  return new NextRequest("http://localhost/api/workshop-config/cover-image", {
     method: options?.method,
     body: options?.body,
     headers: {
@@ -37,10 +35,16 @@ function req(role: string, options?: { method?: string; body?: BodyInit; content
 }
 
 const mockConfig = (overrides = {}) => ({
-  id: "singleton", name: "Taller", logoR2Key: null, logoContentType: null, updatedAt: new Date(), ...overrides,
+  id: "singleton", name: "Taller", coverImageR2Key: null, coverImageContentType: null, updatedAt: new Date(), ...overrides,
 });
 
-describe("workshop-config logo route", () => {
+/**
+ * Mirrors logo/route.test.ts exactly (design D6 / task 6.4): same upload
+ * idiom, same admin-gating, same partial-touch discipline. The one test
+ * unique to this route pins the exact bug WU1's apply-progress recorded on
+ * the logo route (resending `name` on every save and clobbering it).
+ */
+describe("workshop-config cover-image route", () => {
   beforeEach(() => vi.clearAllMocks());
 
   describe("POST — workshop.edit (admin only)", () => {
@@ -50,7 +54,7 @@ describe("workshop-config logo route", () => {
 
       const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
       const form = new FormData();
-      form.append("file", new Blob([png], { type: "image/png" }), "logo.png");
+      form.append("file", new Blob([png], { type: "image/png" }), "cover.png");
 
       const res = await POST(req("administrador", { method: "POST", body: form }));
       expect(res.status).toBe(200);
@@ -76,14 +80,9 @@ describe("workshop-config logo route", () => {
       expect(res.status).toBe(400);
     });
 
-    it("rejects a declared Content-Length over the 2MB cap with 413, BEFORE buffering the body (form.formData/arrayBuffer must never be reached)", async () => {
-      // The actual body here is tiny — only the declared Content-Length is
-      // huge. If the route buffered the whole request before checking size,
-      // this would still succeed (or hang trying to parse formData on a
-      // mismatched body); a real pre-buffer check must reject on the header
-      // alone, without ever calling request.formData().
+    it("rejects a declared Content-Length over the 2MB cap with 413, BEFORE buffering the body", async () => {
       const form = new FormData();
-      form.append("file", new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])]), "logo.png");
+      form.append("file", new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47])]), "cover.png");
 
       const res = await POST(
         req("administrador", { method: "POST", body: form, contentLength: String(3 * 1024 * 1024) }),
@@ -93,29 +92,28 @@ describe("workshop-config logo route", () => {
       expect(mockPutObject).not.toHaveBeenCalled();
     });
 
-    it("deletes the previous logo when replacing", async () => {
-      mockGetConfig.mockResolvedValue(mockConfig({ logoR2Key: "old-key", logoContentType: "image/png" }));
+    it("deletes the previous cover image when replacing", async () => {
+      mockGetConfig.mockResolvedValue(mockConfig({ coverImageR2Key: "old-key", coverImageContentType: "image/png" }));
       mockPutObject.mockResolvedValue("https://r2.dev/key.png");
 
       const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
       const form = new FormData();
-      form.append("file", new Blob([png], { type: "image/png" }), "logo.png");
+      form.append("file", new Blob([png], { type: "image/png" }), "cover.png");
 
       await POST(req("administrador", { method: "POST", body: form }));
       expect(mockDeleteObject).toHaveBeenCalledWith("old-key");
     });
 
-    // saveWorkshopConfig's "name" is now partial-touch (service.test.ts):
-    // resending it here would clobber a name saved concurrently through the
-    // main settings form, on the same singleton row, while a logo upload is
-    // in flight.
-    it("does not resend name when saving the uploaded logo key", async () => {
+    // Pins the exact bug WU1's apply-progress recorded on the logo route:
+    // resending `name` on every save clobbered it because saveWorkshopConfig
+    // now treats a present-but-different `name` as an explicit overwrite.
+    it("does not resend name when saving the uploaded cover image key", async () => {
       mockGetConfig.mockResolvedValue(mockConfig({ name: "Taller Existente" }));
       mockPutObject.mockResolvedValue("https://r2.dev/key.png");
 
       const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
       const form = new FormData();
-      form.append("file", new Blob([png], { type: "image/png" }), "logo.png");
+      form.append("file", new Blob([png], { type: "image/png" }), "cover.png");
 
       await POST(req("administrador", { method: "POST", body: form }));
       expect(mockSaveConfig).toHaveBeenCalledOnce();
@@ -124,16 +122,16 @@ describe("workshop-config logo route", () => {
   });
 
   describe("DELETE — workshop.edit (admin only)", () => {
-    it("clears the logo key and content type", async () => {
-      mockGetConfig.mockResolvedValue(mockConfig({ logoR2Key: "some-key" }));
+    it("clears the cover image key and content type", async () => {
+      mockGetConfig.mockResolvedValue(mockConfig({ coverImageR2Key: "some-key" }));
 
       const res = await DELETE(req("administrador", { method: "DELETE" }));
       expect(res.status).toBe(200);
       expect(mockSaveConfig).toHaveBeenCalled();
     });
 
-    it("does not resend name when clearing the logo", async () => {
-      mockGetConfig.mockResolvedValue(mockConfig({ name: "Taller Existente", logoR2Key: "some-key" }));
+    it("does not resend name when clearing the cover image", async () => {
+      mockGetConfig.mockResolvedValue(mockConfig({ name: "Taller Existente", coverImageR2Key: "some-key" }));
 
       await DELETE(req("administrador", { method: "DELETE" }));
       expect(mockSaveConfig.mock.calls[0][0]).not.toHaveProperty("name");
@@ -146,8 +144,8 @@ describe("workshop-config logo route", () => {
   });
 
   describe("GET — workshop.read (both roles)", () => {
-    it("returns the logo with security headers", async () => {
-      mockGetConfig.mockResolvedValue(mockConfig({ logoR2Key: "logos/key.png", logoContentType: "image/png" }));
+    it("returns the cover image with security headers", async () => {
+      mockGetConfig.mockResolvedValue(mockConfig({ coverImageR2Key: "covers/key.png", coverImageContentType: "image/png" }));
       mockGetObject.mockResolvedValue(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
 
       const res = await GET(req("tecnico"));
@@ -157,15 +155,15 @@ describe("workshop-config logo route", () => {
       expect(res.headers.get("Cache-Control")).toMatch(/private/);
     });
 
-    it("returns 404 when no logo is stored", async () => {
-      mockGetConfig.mockResolvedValue(mockConfig({ logoR2Key: null }));
+    it("returns 404 when no cover image is stored", async () => {
+      mockGetConfig.mockResolvedValue(mockConfig({ coverImageR2Key: null }));
 
       const res = await GET(req("administrador"));
       expect(res.status).toBe(404);
     });
 
     it("returns 404 when R2 object is missing", async () => {
-      mockGetConfig.mockResolvedValue(mockConfig({ logoR2Key: "logos/missing.png", logoContentType: "image/png" }));
+      mockGetConfig.mockResolvedValue(mockConfig({ coverImageR2Key: "covers/missing.png", coverImageContentType: "image/png" }));
       mockGetObject.mockResolvedValue(null);
 
       const res = await GET(req("tecnico"));

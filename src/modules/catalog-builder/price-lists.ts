@@ -19,6 +19,7 @@
  *   `Producto.Precio_Venta`, equals `Precio` on 694/694.
  * - Tiers run venta >= taller >= socio (retail, trade, member).
  */
+import type { ProductPrices } from "@/shared/template/CatalogTemplate";
 
 export const PRICE_LISTS = ["venta", "taller", "socio"] as const;
 
@@ -65,4 +66,18 @@ export function resolvePrice(priceLists: PriceListMap | null | undefined, list: 
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
 
   return parsed;
+}
+
+/**
+ * catalog-templates-and-workshop-info WU4 (design D4) — the catalog no longer
+ * collapses to one admin-chosen tier; every product carries all three. Each
+ * tier wraps `resolvePrice` independently, so a hostile/absent "0.00" on one
+ * tier never affects the other two.
+ */
+export function resolveAllPrices(priceLists: PriceListMap | null | undefined): ProductPrices {
+  return {
+    venta: resolvePrice(priceLists, "venta"),
+    taller: resolvePrice(priceLists, "taller"),
+    socio: resolvePrice(priceLists, "socio"),
+  };
 }

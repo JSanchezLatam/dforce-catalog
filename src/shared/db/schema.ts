@@ -45,15 +45,38 @@ export const sessions = pgTable("sessions", {
 export type Session = typeof sessions.$inferSelect;
 
 /**
- * `workshop_config` — singleton row holding the workshop display name and
- * logo (uploaded to R2, served through /api/workshop-config/logo).
- * Created in crm-shell-settings-rbac WU1.
+ * `workshop_config` — singleton row holding the workshop display name,
+ * logo (uploaded to R2, served through /api/workshop-config/logo), and
+ * contact info shown on generated catalogs (catalog-templates-and-workshop-info
+ * WU1). `coverText` moved here from `template_config` — the template owns the
+ * FORM, the workshop owns the CONTENT (design.md D5/workshop-settings spec).
+ * All contact columns are nullable: the Administrador may set any subset
+ * independently (partial-field-touch upsert, see workshop-config/service.ts).
  */
 export const workshopConfig = pgTable("workshop_config", {
   id: text("id").primaryKey().default("singleton"),
   name: text("name"),
   logoR2Key: text("logo_r2_key"),
   logoContentType: text("logo_content_type"),
+  phone: text("phone"),
+  whatsapp: text("whatsapp"),
+  email: text("email"),
+  address: text("address"),
+  /** Free-text, e.g. "Lun-Vie 9-18, Sáb 9-13" — no structured per-day schedule (spec: "Hours is one free-text field"). */
+  hours: text("hours"),
+  website: text("website"),
+  coverText: text("cover_text"),
+  /** Open-ended platform → handle map (e.g. `{instagram: "@..."}`) — a new platform needs no migration. */
+  socialHandles: jsonb("social_handles").$type<Record<string, string>>(),
+  /**
+   * Catalog cover photo (catalog-templates-and-workshop-info WU5, design D6)
+   * — same R2-key + content-type pair as `logoR2Key`/`logoContentType`,
+   * uploaded through the same route pattern (`api/workshop-config/cover-image/
+   * route.ts`, mirrors `logo/route.ts`). Null renders no cover photo — the
+   * cover degrades to the template's red/black block, never a broken `<img>`.
+   */
+  coverImageR2Key: text("cover_image_r2_key"),
+  coverImageContentType: text("cover_image_content_type"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -122,7 +145,12 @@ export type Producto = typeof producto.$inferSelect;
 export type SyncRun = typeof syncRuns.$inferSelect;
 
 /**
- * `template_config` — branding persisted across restarts (R8.1,8.2,8.4).
+ * `template_config` — R8.1/8.2/8.4. Shrunk by catalog-templates-and-workshop-info
+ * WU3's migration `0009`: font/colours/logo/cover-text are no longer here —
+ * font and colours are template-FIXED (the code registry, `shared/template/
+ * registry.ts`), and logo/cover-text are workshop-OWNED (`workshop_config`,
+ * see that table's comment). This table now holds only the admin's
+ * SELECTION among templates plus the one remaining per-generation toggle.
  *
  * ponytail: singleton-row-no-history — R8 only asks the system to remember
  * "the config that applies going forward" (the last saved one), not an audit
@@ -132,12 +160,10 @@ export type SyncRun = typeof syncRuns.$inferSelect;
  */
 export const templateConfig = pgTable("template_config", {
   id: text("id").primaryKey(),
-  logoUrl: text("logo_url").notNull(),
-  primaryColors: jsonb("primary_colors").notNull().$type<{ primary: string; secondary: string }>(),
-  font: text("font").notNull(),
-  coverText: text("cover_text").notNull(),
   /** 'strict' | 'adaptive' — strict forces all products to OpaqueProductCard; adaptive selects card based on each product's image_type. Null defaults to 'strict' (backward compat). */
   defaultImageHandling: text("default_image_handling"),
+  /** Registry template id (WU2+) — NULL resolves to the default template via `getTemplate(null)`. */
+  selectedTemplateId: text("selected_template_id"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
