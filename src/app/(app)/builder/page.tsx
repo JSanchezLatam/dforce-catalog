@@ -5,6 +5,7 @@ import { can } from "@/modules/auth/policy";
 import { listCategoryL1Options } from "@/modules/inventory-view/queries";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getTemplateConfig } from "@/modules/template-config/service";
+import { getWorkshopConfig } from "@/modules/workshop-config/service";
 import { PAGE_HEADING } from "@/shared/ui/styles";
 
 /**
@@ -29,10 +30,11 @@ export default async function CatalogBuilderPage() {
     return <div className="p-8"><p className="text-sm text-foreground">No tienes permiso para ver esta página.</p></div>;
   }
 
-  const [categoryL1Options, categoryPairs, templateConfig] = await Promise.all([
+  const [categoryL1Options, categoryPairs, templateConfig, workshopConfig] = await Promise.all([
     listCategoryL1Options(),
     listCategoryPairs(),
     getTemplateConfig(),
+    getWorkshopConfig(),
   ]);
 
   const catalogCount = await countUploadedCatalogsForUser(user.id);
@@ -44,6 +46,7 @@ export default async function CatalogBuilderPage() {
         categoryL1Options={categoryL1Options}
         categoryPairs={categoryPairs}
         templateConfig={templateConfig}
+        workshopConfig={workshopConfig}
         catalogCount={catalogCount}
       />
     </div>

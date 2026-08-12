@@ -17,7 +17,6 @@ import { OpaqueProductCard, TransparentProductCard } from "../AdaptiveCards";
 export const dforceClassic: CatalogTemplateDef = {
   id: DEFAULT_TEMPLATE_ID,
   name: "Dforce Clásico",
-  thumbnail: "/templates/dforce-classic.png",
   font: "Arial, sans-serif",
   primaryColors: { primary: "#D42027", secondary: "#000000" },
   Card({ product, imageHandling }) {

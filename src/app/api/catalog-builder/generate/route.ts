@@ -8,6 +8,8 @@ import { shouldWarnOfEviction } from "@/modules/catalog-storage/retention";
 import { enqueueCatalogPdf, QueueFullError } from "@/modules/pdf-generation/enqueue";
 import { getQueuePosition } from "@/modules/pdf-generation/position";
 import { getTemplateConfig } from "@/modules/template-config/service";
+import { getWorkshopConfig } from "@/modules/workshop-config/service";
+import { getTemplate } from "@/shared/template/registry";
 import type { CatalogIndexSection, ProductPrintRef } from "@/shared/template/CatalogTemplate";
 
 /**
@@ -115,21 +117,24 @@ export async function POST(request: NextRequest) {
     throw err;
   }
 
-  const template = await getTemplateConfig();
+  // design D2 — the two branding halves live in separate tables: `template`
+  // owns the fixed/selectable template id, `workshop` owns the logo/cover
+  // text content. `getWorkshopConfig()` can return a non-null row with every
+  // field null (migration 0008 seeds a singleton row) — read fields
+  // individually rather than branching on either config being `null`.
+  const [template, workshop] = await Promise.all([getTemplateConfig(), getWorkshopConfig()]);
 
   try {
     const { jobId } = await enqueueCatalogPdf({
       catalogId: crypto.randomUUID(),
       userId: user.id,
       title: body.title,
-      branding: template
-        ? {
-            logoUrl: template.logoUrl,
-            primaryColors: template.primaryColors,
-            font: template.font,
-            coverText: template.coverText,
-          }
-        : null,
+      branding: {
+        templateId: getTemplate(template?.selectedTemplateId).id,
+        logoR2Key: workshop?.logoR2Key ?? null,
+        logoContentType: workshop?.logoContentType ?? null,
+        coverText: workshop?.coverText ?? null,
+      },
       sections: body.sections,
       products: body.products,
       productsPerPage: body.productsPerPage,

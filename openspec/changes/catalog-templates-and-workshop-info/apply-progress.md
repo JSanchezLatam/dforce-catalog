@@ -361,3 +361,192 @@ WU3 (wire registry into renderer; branding split; logo data URI;
 migration `0009`) can start once this PR merges to WU1's branch. It should
 also decide the thumbnail-asset follow-up and, per design.md's own New
 Risk #2, drain the pg-boss `pdf-generate` queue before deploying.
+
+## WU3 — Wire Registry Into Renderer; Branding Split; Logo Data URI;
+Migration `0009` (Phase 3, tasks 3.1–3.15)
+
+Status: **code complete, verified, NOT opened as a PR.** Branch
+`catalog-tpl/wu3-wire-registry`, cut from tracker
+`feature/catalog-templates-and-workshop-info` (which already contains WU1
+and WU2, both merged). Stopped before task 5.2 (GGA review) and before
+opening the PR — see "Budget" below.
+
+All 14 of 15 Phase 3 tasks complete (3.14, draining the pg-boss queue, is a
+deploy-time action not applicable to this dev sandbox — left as an explicit
+checklist item for whoever ships this PR). See `tasks.md` for per-task
+detail and the two recorded deviations (3.11's `logoUrl` gating, 3.6's
+`resolveBranding` extraction).
+
+### What shipped
+
+- `src/shared/template/CatalogTemplate.tsx` — `CatalogTemplateBranding`
+  shrinks to `{templateId, logoUrl, coverText}` (design D2); the renderer
+  resolves font/colors via `getTemplate(branding?.templateId)` and delegates
+  card markup to `template.Card`, removing the duplicated `pickCard` branch
+  WU2 already moved into `dforce-classic.tsx`.
+- `src/modules/pdf-generation/render.ts` — the PDF body's `font-family`
+  resolves through the SAME `getTemplate()` call the cover uses, closing
+  design's New Risk #1 (previously `props.branding?.font ?? "sans-serif"`
+  silently drifted from the cover once font moved into the registry).
+- `src/modules/pdf-generation/enqueue.ts` — new `PdfBranding` type
+  (`{templateId, logoR2Key, logoContentType, coverText}`), the pg-boss
+  payload shape, distinct from what the renderer consumes.
+- `src/modules/pdf-generation/worker.ts` — new exported `resolveBranding()`
+  (D3): reads the R2 object server-side via `getObject()` and inlines it as
+  a `data:` URI, because Playwright cannot authenticate against
+  `/api/workshop-config/logo`'s session-gated route (explore.md Risk 1).
+  `getObject()` returning `null` yields `logoUrl: null` without throwing — a
+  missing object must not fail a job that already consumed a queue slot.
+  `renderPdfBuffer` calls it before `renderCatalogHtml`.
+- `src/app/api/catalog-builder/generate/route.ts` — branding assembly reads
+  `getWorkshopConfig()` alongside `getTemplateConfig()` and builds
+  `PdfBranding` via `getTemplate(template?.selectedTemplateId).id` (never
+  `null` — every field is independently nullable already).
+- `src/app/(app)/builder/page.tsx` — added a `getWorkshopConfig()` read,
+  passed to `CatalogBuilderForm` as a new `workshopConfig` prop.
+- `src/modules/catalog-builder/CatalogBuilderForm.tsx` — the live preview's
+  `branding` prop is now assembled the same way generate/route.ts's is.
+- `src/modules/template-config/{TemplateConfigForm.tsx,service.ts}` — the
+  four legacy branding inputs (logo URL, primary/secondary color,
+  typography, cover text) and the form's own inline preview panel are gone;
+  `TemplateConfigInput` shrinks to `{defaultImageHandling,
+  selectedTemplateId}`. Surviving strings translated to Spanish per
+  `AGENTS.md`'s language rule (`Save`→`Guardar`,
+  `Saving…`→`Guardando…`, `Saved. New catalogs will use this
+  template.`→`Guardado. Los nuevos catálogos usarán esta plantilla.`,
+  `Image handling`→`Manejo de imágenes`).
+- `src/shared/db/schema.ts` +
+  `src/shared/db/migrations/0009_template_config_branding_split.sql` —
+  `template_config` drops `logo_url`/`primary_colors`/`font`/`cover_text`
+  (drizzle-kit generated, matches design D5's literal `DROP COLUMN` list
+  exactly).
+
+### Deviations from tasks.md (both confirmed correct before implementation)
+
+1. **Task 3.6's literal wording** ("RED `worker.test.ts` — `renderPdfBuffer`
+   resolves...") reads as testing `renderPdfBuffer` directly. Instead, the
+   resolution logic was extracted into a new exported `resolveBranding()`
+   and THAT is what `worker.test.ts` covers. Reason: `renderPdfBuffer`
+   launches a real Playwright Chromium browser, and design.md's own Testing
+   Strategy table already says it "has no unit coverage by design — the
+   data-URI path is verifiable only live." Testing the extracted seam
+   instead gives the actual crux of this work unit (R2 bytes → `data:` URI)
+   real, fast, injected-dependency unit coverage — this repo's standing
+   `deps?.thing ?? real` pattern — without mocking Playwright's Chromium,
+   which the design explicitly flags as a live-smoke-only concern.
+2. **Task 3.11's literal snippet** (`{templateId:
+   templateConfig?.selectedTemplateId, logoUrl:
+   "/api/workshop-config/logo", coverText: workshopConfig?.coverText}`)
+   does not type-check against design D2's `CatalogTemplateBranding.
+   templateId: string` (non-nullable) and would render a broken `<img>`
+   when no logo has been uploaded. Implemented instead as
+   `getTemplate(templateConfig?.selectedTemplateId).id` for `templateId`
+   (always resolves to a concrete id) and `workshopConfig?.logoR2Key ?
+   "/api/workshop-config/logo" : null` for `logoUrl` (only supplies the URL
+   when a logo actually exists, preserving the pre-WU3 "no `<img>` at all
+   when unset" behavior). The same `getTemplate(...).id` resolution is used
+   in `generate/route.ts`'s branding assembly for the same type reason.
+
+### Verification
+
+- `npm test` — 737/737 passing (full suite; 10 new tests from RED work
+  minus the ~15 template-config tests that no longer apply after 3.12's
+  shrink, net -12 vs. WU2's 749).
+- `npx tsc --noEmit` — clean.
+- `npm run lint` — 0 errors, 16 pre-existing warnings (one fewer than WU2's
+  17 — no new warning introduced by this WU).
+- Live smoke (task 3.15, required — design.md: "`renderPdfBuffer` has no
+  unit coverage by design"): ran a throwaway `wu3-live-smoke.mts` (`npx tsx
+  -r dotenv/config`) against the real dev Postgres
+  (`postgres://dforce:dforce@localhost:5433/dforce_catalog`) and the real R2
+  bucket already holding a real uploaded logo (`workshop_config.logoR2Key =
+  "logos/1785201079552.png"`, 275,743 bytes). Confirmed:
+  1. `resolveBranding()`'s decoded `data:` URI bytes are byte-for-byte
+     identical to what a direct `getObject()` call (the same call
+     `GET /api/workshop-config/logo` makes) returns — a stronger guarantee
+     than a pixel diff, since identical bytes decode to identical pixels by
+     construction and neither path re-encodes the image.
+  2. The rendered HTML's body `font-family` is `Arial, sans-serif,` (the
+     registry's `dforce-classic.font`), not the `sans-serif` fallback.
+  3. A real Playwright Chromium (`npx playwright install chromium` was
+     needed first — not previously installed in this sandbox) produced a
+     real 329,792-byte PDF from that HTML; visually inspected page 1 — the
+     actual Dforce Car Audio logo, the red-on-black cover band
+     (`#D42027`/`#000000`, the `dforce-classic` template's colors), and the
+     real `workshop_config.coverText` ("Para mas informacion escribenos al
+     6666 6666") all render correctly.
+  4. `0009` applied cleanly to the real dev DB (`node scripts/migrate.mjs`)
+     and confirmed via `\d template_config` (the 4 columns are gone) and a
+     `drizzle.__drizzle_migrations` row count check (10 rows, recorded in
+     the correct schema — not the `public.__drizzle_migrations` mistake a
+     past WU1 session made). Re-ran the migrate script a second time to
+     confirm it is a clean no-op.
+  Script and generated PDF deleted after the run — not part of the PR.
+
+### Budget — stopped before GGA/PR
+
+Real changed lines (`git diff --cached --numstat`, summed insertions +
+deletions, **excluding** the auto-generated
+`src/shared/db/migrations/meta/0009_snapshot.json`, 1134 lines of pure
+drizzle-kit metadata): **797** across 16 hand-written files. The ledger cap
+for this WU was 500; the instruction's own stop-and-report checkpoint was
+~450. Per-file breakdown (insertions/deletions):
+
+| File | +/- |
+|---|---|
+| `generate/route.test.ts` | 100/2 |
+| `worker.test.ts` (new) | 70/0 |
+| `worker.ts` | 41/3 |
+| `TemplateConfigForm.test.tsx` | 32/21 |
+| `service.test.ts` (template-config) | 27/127 |
+| `CatalogTemplate.tsx` | 21/20 |
+| `render.test.ts` | 19/1 |
+| `enqueue.ts` | 16/2 |
+| `TemplateConfigForm.tsx` | 16/132 |
+| `generate/route.ts` | 14/9 |
+| `CatalogBuilderForm.tsx` | 13/11 |
+| `service.ts` (template-config) | 11/58 |
+| `schema.ts` | 7/12 |
+| `builder/page.tsx` | 4/1 |
+| `0009_*.sql` (new) | 4/0 |
+| `render.ts` | 2/1 |
+
+The largest single driver is task 3.12's mandated retirement:
+`TemplateConfigForm.tsx`+`.test.tsx` and `service.ts`+`.test.ts` alone
+account for 86 insertions + 338 deletions = 424 of the 797 — almost all of
+it deleting now-dead branding validation/rendering code and its extensive
+pre-existing test coverage (7 tests asserting the 4 legacy fields' hex/URL/
+length validation, none of which apply once those columns are gone). This
+is not scope creep — every line traces to an explicit tasks.md 3.1–3.13
+item, confirmed against design.md before writing any code, and the WU2
+apply-progress already flagged that WU2's own actual size (361) ran ~30%
+over its 250–300 estimate for the same reason (test-shape retrofit cost
+under-counted at planning time).
+
+Per the explicit instruction "If you cross ~450 and are not clearly
+finishing, stop and report rather than pushing through — do not treat WU1's
+accepted size exception as licence": all 15 code/test tasks are done and
+independently verified (tests/tsc/lint/live-smoke all green), so the coding
+work IS finished, but task 5.2 (GGA review, historically 5-8 rounds each
+adding further hardening lines on WU1/WU2) and PR-opening were deliberately
+NOT run. Continuing into a GGA loop on a diff already 60% over cap risked
+compounding the overrun further before a human had a chance to decide
+whether this is an acceptable `size:exception` (as WU1's was, at a much
+smaller multiple) or whether Phase 3 should be split into two PRs (e.g.
+"wire registry + logo data URI" vs. "retire legacy branding form +
+migration 0009").
+
+**Recommendation for the human/orchestrator decision:** the retirement work
+(3.12) and its test rewrite is the cleanest place to split if a smaller PR
+is required — it is largely independent of the registry-wiring work (3.1–
+3.9) and could land as its own PR immediately after, still ahead of WU4.
+Alternatively, accept `size:exception` (as WU1's larger overrun was
+accepted) given the overrun is entirely deletion-driven code hygiene, not
+added feature surface, and proceed straight to GGA + PR.
+
+### Next
+
+Awaiting a decision on how to proceed (accept as one oversized PR with
+`size:exception`, or split 3.1–3.9 from 3.10–3.13) before running task 5.2's
+GGA review and opening the PR against
+`feature/catalog-templates-and-workshop-info`.

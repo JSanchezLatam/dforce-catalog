@@ -1,10 +1,9 @@
 /**
- * Component tests for the gallery picker (catalog-templates-and-workshop-info
- * WU2 — additive, unwired). `template_config.logo_url/primary_colors/font/
- * cover_text` stay `NOT NULL` until migration `0009` (WU3), so the gallery
- * EXTENDS the existing branding form rather than replacing it — the branding
- * inputs stay so `saveTemplateConfig` keeps a value to persist into those
- * columns (design.md Risk #3). WU3 removes them once the columns are gone.
+ * Component tests for the template-config form after
+ * catalog-templates-and-workshop-info WU3 (task 3.12, migration `0009`):
+ * the legacy logo/color/font/cover-text inputs are gone — font/colours are
+ * template-fixed (the registry) and logo/cover-text are workshop-owned. This
+ * form now only picks a template and the image-handling mode.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
@@ -41,14 +40,22 @@ describe("TemplateConfigForm — gallery picker", () => {
     expect(screen.getAllByRole("radio")).toHaveLength(1);
   });
 
-  // Queries by id, not label text: the legacy branding inputs' English copy
-  // is pre-existing and out of WU2's scope (WU3 deletes the inputs entirely
-  // per task 3.12) — these tests must not pin that copy in place.
-  it("still renders the legacy branding inputs (columns stay NOT NULL until WU3's migration 0009)", () => {
+  // The legacy branding inputs (logo URL, colors, typography, cover text)
+  // no longer exist — font/colours are template-fixed and logo/cover-text
+  // moved to workshop-config, per task 3.12.
+  it("no longer renders the legacy branding inputs", () => {
     const { container } = render(<TemplateConfigForm initialConfig={null} />);
 
-    expect(container.querySelector("#logoUrl")).toBeInTheDocument();
-    expect(container.querySelector("#font")).toBeInTheDocument();
+    expect(container.querySelector("#logoUrl")).not.toBeInTheDocument();
+    expect(container.querySelector("#font")).not.toBeInTheDocument();
+    expect(container.querySelector("#coverText")).not.toBeInTheDocument();
+  });
+
+  it("renders the image-handling select and the Spanish submit button", () => {
+    render(<TemplateConfigForm initialConfig={null} />);
+
+    expect(screen.getByText("Manejo de imágenes")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Guardar" })).toBeInTheDocument();
   });
 
   // The registry has exactly one entry (spec: "Single-entry gallery") and a
@@ -61,17 +68,21 @@ describe("TemplateConfigForm — gallery picker", () => {
   it("includes the default-resolved selectedTemplateId in the POST body on submit", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({ status: 200, body: { config: { id: "singleton" } } });
-    const { container } = render(<TemplateConfigForm initialConfig={null} />);
+    render(<TemplateConfigForm initialConfig={null} />);
 
-    await user.type(container.querySelector("#logoUrl") as HTMLElement, "https://example.com/logo.png");
-    await user.type(container.querySelector("#font") as HTMLElement, "Arial, sans-serif");
-    await user.type(container.querySelector("#coverText") as HTMLElement, "Catalogo 2026");
-    // Queries by type, not the pre-existing "Save" label text — the button
-    // survives WU3 (only the branding inputs are deleted), but nothing
-    // guarantees its English copy does, and this test must not pin it.
-    await user.click(container.querySelector('button[type="submit"]') as HTMLElement);
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(bodyOf(fetchMock).selectedTemplateId).toBe(DEFAULT_TEMPLATE_ID);
+    expect(bodyOf(fetchMock)).toEqual({ defaultImageHandling: "strict", selectedTemplateId: DEFAULT_TEMPLATE_ID });
+  });
+
+  it("shows the Spanish saved confirmation after a successful submit", async () => {
+    const user = userEvent.setup();
+    mockFetch({ status: 200, body: { config: { id: "singleton" } } });
+    render(<TemplateConfigForm initialConfig={null} />);
+
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(await screen.findByText(/Guardado\. Los nuevos catálogos usarán esta plantilla\./)).toBeInTheDocument();
   });
 });

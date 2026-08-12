@@ -1,4 +1,4 @@
-import { TransparentProductCard, OpaqueProductCard } from "./AdaptiveCards";
+import { getTemplate } from "./registry";
 
 /**
  * Risk-5 (design.md "New Risks Flagged" #5 — "live preview and final PDF
@@ -24,12 +24,20 @@ import { TransparentProductCard, OpaqueProductCard } from "./AdaptiveCards";
  *
  * adaptive-catalog-layouts update: extended with `defaultImageHandling` prop
  * and conditional rendering via TransparentProductCard / OpaqueProductCard.
+ *
+ * catalog-templates-and-workshop-info WU3 (design D1/D2): font/colours/card
+ * markup are no longer part of branding — they live in the code registry
+ * (`registry.ts`), keyed by `templateId`. Branding shrinks to what is either
+ * template-fixed-but-selectable (`templateId`) or workshop-owned
+ * (`logoUrl`/`coverText`). `logoUrl` is an http path in the live preview
+ * (browser fetches the authenticated route with its session cookie) and a
+ * `data:` URI in the PDF worker (Playwright cannot authenticate — see
+ * worker.ts's `resolveBranding`).
  */
 export type CatalogTemplateBranding = {
-  logoUrl: string;
-  primaryColors: { primary: string; secondary: string };
-  font: string;
-  coverText: string;
+  templateId: string;
+  logoUrl: string | null;
+  coverText: string | null;
 };
 
 export type CatalogIndexSection = {
@@ -67,26 +75,19 @@ export type CatalogTemplateProps = {
 
 export function CatalogTemplate({ title, branding, sections, productPages = [], defaultImageHandling }: CatalogTemplateProps) {
   const visibleSections = sections.filter((section) => section.productCount > 0);
-  const isStrict = defaultImageHandling === "strict" || !defaultImageHandling;
-
-  function pickCard(product: ProductPrintRef, style?: React.CSSProperties) {
-    if (isStrict) {
-      return <OpaqueProductCard product={product} style={style} />;
-    }
-    if (product.imageType === "transparent") {
-      return <TransparentProductCard product={product} style={style} />;
-    }
-    return <OpaqueProductCard product={product} style={style} />;
-  }
+  // Card markup is a template concern regardless of whether branding is
+  // configured yet (D1) — `getTemplate` always resolves to a real entry.
+  const template = getTemplate(branding?.templateId);
+  const imageHandling: "strict" | "adaptive" = defaultImageHandling === "adaptive" ? "adaptive" : "strict";
 
   return (
     <article>
       <section
         aria-label="Cover"
         style={{
-          fontFamily: branding?.font || undefined,
-          color: branding?.primaryColors.primary,
-          background: branding?.primaryColors.secondary,
+          fontFamily: branding ? template.font : undefined,
+          color: branding ? template.primaryColors.primary : undefined,
+          background: branding ? template.primaryColors.secondary : undefined,
           padding: "2rem",
         }}
       >
@@ -125,7 +126,7 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
             }}
           >
             {page.map((product) => (
-              <div key={product.id}>{pickCard(product)}</div>
+              <div key={product.id}>{template.Card({ product, imageHandling })}</div>
             ))}
           </div>
         </section>

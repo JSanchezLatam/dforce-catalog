@@ -7,9 +7,11 @@
  * `TypeError` in a decoupled background process with nobody to report it to.
  * That is why element shape is checked and not just `Array.isArray`.
  */
-import { describe, expect, it } from "vitest";
+import { NextRequest } from "next/server";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { isGenerateBody } from "./route";
+import { DEFAULT_TEMPLATE_ID } from "@/shared/template/registry";
+import { isGenerateBody, POST } from "./route";
 
 const VALID = {
   title: "Catálogo",
@@ -117,5 +119,101 @@ describe("isGenerateBody — the rest of the product shape", () => {
     expect(
       isGenerateBody({ ...VALID, sections: [{ categoryL1: "AUDIO", categoryL2: 3, productCount: 1 }] }),
     ).toBe(false);
+  });
+});
+
+/**
+ * design D2/D3 — branding assembly builds `PdfBranding` from
+ * `getWorkshopConfig()` (`logoR2Key`/`logoContentType`/`coverText`, the
+ * workshop-owned fields) + `getTemplateConfig()` (`selectedTemplateId`, the
+ * template-fixed choice), not the old four-field `templateConfig` object.
+ */
+const { mockEnqueue, mockGetTemplateConfig, mockGetWorkshopConfig, mockGetQueuePosition, mockCountUploaded } =
+  vi.hoisted(() => ({
+    mockEnqueue: vi.fn(),
+    mockGetTemplateConfig: vi.fn(),
+    mockGetWorkshopConfig: vi.fn(),
+    mockGetQueuePosition: vi.fn(),
+    mockCountUploaded: vi.fn(),
+  }));
+
+vi.mock("@/modules/pdf-generation/enqueue", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/modules/pdf-generation/enqueue")>();
+  return { ...actual, enqueueCatalogPdf: (...args: unknown[]) => mockEnqueue(...args) };
+});
+vi.mock("@/modules/template-config/service", () => ({
+  getTemplateConfig: (...args: unknown[]) => mockGetTemplateConfig(...args),
+}));
+vi.mock("@/modules/workshop-config/service", () => ({
+  getWorkshopConfig: (...args: unknown[]) => mockGetWorkshopConfig(...args),
+}));
+vi.mock("@/modules/pdf-generation/position", () => ({
+  getQueuePosition: (...args: unknown[]) => mockGetQueuePosition(...args),
+}));
+vi.mock("@/modules/catalog-storage/queries", () => ({
+  countUploadedCatalogsForUser: (...args: unknown[]) => mockCountUploaded(...args),
+}));
+
+function generateRequest() {
+  return new NextRequest("http://localhost/api/catalog-builder/generate", {
+    method: "POST",
+    body: JSON.stringify(VALID),
+    headers: { "x-user-id": "user-1", "x-user-role": "administrador", "content-type": "application/json" },
+  });
+}
+
+describe("POST — branding assembly (design D2/D3)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEnqueue.mockResolvedValue({ jobId: "job-1" });
+    mockGetQueuePosition.mockResolvedValue(0);
+    mockCountUploaded.mockResolvedValue(0);
+  });
+
+  it("builds PdfBranding from workshop config (logo/coverText) + template config (selectedTemplateId)", async () => {
+    mockGetTemplateConfig.mockResolvedValue({ selectedTemplateId: "dforce-classic" });
+    mockGetWorkshopConfig.mockResolvedValue({
+      logoR2Key: "logos/1.png",
+      logoContentType: "image/png",
+      coverText: "Bienvenido",
+    });
+
+    await POST(generateRequest());
+
+    expect(mockEnqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        branding: { templateId: "dforce-classic", logoR2Key: "logos/1.png", logoContentType: "image/png", coverText: "Bienvenido" },
+      }),
+    );
+  });
+
+  it("falls back to the default template id and null fields when neither config is set", async () => {
+    mockGetTemplateConfig.mockResolvedValue(null);
+    mockGetWorkshopConfig.mockResolvedValue(null);
+
+    await POST(generateRequest());
+
+    expect(mockEnqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        branding: { templateId: DEFAULT_TEMPLATE_ID, logoR2Key: null, logoContentType: null, coverText: null },
+      }),
+    );
+  });
+
+  // getWorkshopConfig() can return a non-null, all-null-fields row (migration
+  // 0008's ON CONFLICT DO NOTHING seed) — don't treat that as "unconfigured"
+  // and don't crash reading its fields.
+  it("handles a non-null workshop config row with every field null", async () => {
+    mockGetTemplateConfig.mockResolvedValue(null);
+    mockGetWorkshopConfig.mockResolvedValue({ id: "singleton", logoR2Key: null, logoContentType: null, coverText: null });
+
+    const res = await POST(generateRequest());
+
+    expect(res.status).toBe(200);
+    expect(mockEnqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        branding: { templateId: DEFAULT_TEMPLATE_ID, logoR2Key: null, logoContentType: null, coverText: null },
+      }),
+    );
   });
 });
