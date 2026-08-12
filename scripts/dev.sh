@@ -41,14 +41,15 @@ fail() {
 # --------------------------------------------------------------------------
 step "Verificando prerrequisitos"
 
-for cmd in docker npm; do
+for cmd in docker npm git; do
   command -v "$cmd" >/dev/null 2>&1 || fail \
     "No encontré el comando '$cmd' en el PATH." \
     "Instalalo y volvé a correr este script.
 docker → Docker Desktop (https://docker.com)
-npm    → nvm use 22   (o instalá Node 20+)"
+npm    → nvm use 22   (o instalá Node 20+)
+git    → xcode-select --install   (o brew install git)"
 done
-ok "docker y npm disponibles"
+ok "docker, npm y git disponibles"
 
 docker info >/dev/null 2>&1 || fail \
   "Docker está instalado pero el daemon no responde." \

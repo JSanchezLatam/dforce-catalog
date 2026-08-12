@@ -181,7 +181,7 @@ What actually gates work:
   `react-hooks/set-state-in-effect`). Don't add to them; fixing them is its
   own change.
 
-### GGA — the pre-commit reviewer
+### GGA — run it before opening a PR
 
 Configured in `.gga` at the repo root (Gentleman Guardian Angel v2.10.1):
 
@@ -199,14 +199,49 @@ reviewer sees nothing at all on those. A test asserting the wrong thing is a
 real defect, and this project has already shipped one.
 
 GGA reads THIS file as its rulebook, so a rule written here is a rule it
-enforces. It reviews staged files on commit; `gga run --ci` reviews the last
-commit and `gga run --pr-mode` the whole branch.
+enforces.
 
-**Known defect (v2.10.1):** `gga` does not read `PROVIDER` from `.gga` or from
-`~/.config/gga/config` — `gga config` reports "Not configured" even when both
-files set it. The `GGA_PROVIDER=claude` environment variable does work. Until
-that is fixed upstream, the variable must be set for the reviewer to run at
-all.
+**Invoke it manually, before opening a PR:**
+
+```
+GGA_PROVIDER=claude gga run --pr-mode --diff-only
+```
+
+`gga run --ci` reviews just the last commit if that is all you want.
+
+**There is deliberately no git hook.** A pre-commit hook was rejected because a
+run takes two to four minutes and this project commits in small work units —
+it would charge that several times per branch and punish exactly the habit we
+want. A pre-push hook was built, and then abandoned after four review rounds:
+it reached a hundred lines, fifty-six of them guards, and still could not
+reliably scope what it reviewed (see the defects below). Every real finding GGA
+has produced here came from a manual run. Automating the trigger added
+maintenance, not findings.
+
+If the config defect below is fixed upstream so `PR_BASE_BRANCH` can be
+pinned, a hook becomes worth about ten lines. Not before.
+
+**Known defects (v2.10.1)** — all three verified against the installed source
+and its behaviour, not inferred:
+
+1. **Config is not honoured.** `PROVIDER` is read from neither `.gga` nor
+   `~/.config/gga/config`; `gga run` reports "No provider configured" with
+   `PROVIDER="claude"` sitting in both. `GGA_PROVIDER=claude` as an environment
+   variable does work — hence the command above.
+2. **`--pr-mode` can pass green without reviewing anything.**
+   `detect_base_branch()` (`lib/pr_mode.sh:22`) lists LOCAL branches only and
+   matches with `grep -qw`, which hits substrings: a branch named
+   `feat/main-nav` satisfies the check for `main`. On a bogus match the range
+   breaks, `git diff` exits 128, the error is swallowed, zero files are found
+   and gga exits 0.
+3. **The base cannot be pinned to work around #2.** `PR_BASE_BRANCH` has no
+   `GGA_` environment override (only `GGA_PROVIDER`, `GGA_TIMEOUT`,
+   `GGA_OPENCODE_VARIANT`, `GGA_OPENCODE_AGENT` exist), and #1 means the config
+   file cannot supply it either.
+
+Consequence worth knowing: `--pr-mode` always resolves to `main`, but this repo
+uses chained PRs whose base is the parent branch — so a chained branch
+re-reviews every ancestor commit.
 
 This runs *in addition to* the gentle-ai receipt flow above — GGA on commit,
 RDD before delivery. Two AI reviews per change is deliberate, not an accident
