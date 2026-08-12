@@ -31,6 +31,17 @@ export type ProductRef = {
 
 export const MIN_PRODUCTS_PER_PAGE = 1;
 export const MAX_PRODUCTS_PER_PAGE = 20; // R5.4
+/**
+ * What actually fits on one Letter page, measured — not a preference.
+ *
+ * WU4 gave every card a three-row price table (Venta/Taller/Socio), making
+ * cards tall enough that the old default of 10 spilled a single logical
+ * section across two physical pages (verified: 6 cards landed on the first,
+ * 4 on the next). `chunkProducts` splits by a fixed count and never measures
+ * height — design's New Risk #4 — so the count itself has to match reality.
+ * The user can still raise it; this is only where the form starts.
+ */
+export const DEFAULT_PRODUCTS_PER_PAGE = 6;
 export const MAX_TOTAL_PRODUCTS = 200; // R5.8/5.9
 
 export class CatalogSelectionValidationError extends Error {

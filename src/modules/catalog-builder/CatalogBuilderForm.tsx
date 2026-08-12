@@ -32,6 +32,7 @@ import {
   buildIndexSections,
   CatalogSelectionValidationError,
   deriveCatalogTitle,
+  DEFAULT_PRODUCTS_PER_PAGE,
   MAX_PRODUCTS_PER_PAGE,
   MIN_PRODUCTS_PER_PAGE,
   toggleBulkFrame,
@@ -87,7 +88,7 @@ export function CatalogBuilderForm({
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(10);
-  const [productsPerPage, setProductsPerPage] = useState(10);
+  const [productsPerPage, setProductsPerPage] = useState(DEFAULT_PRODUCTS_PER_PAGE);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
   const [evictionWarning, setEvictionWarning] = useState(false);
