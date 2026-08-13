@@ -205,51 +205,64 @@ describe("renderCatalogHtml — R6.1 (shares CatalogTemplate with the builder's 
     expect(html).toContain("font-family: sans-serif;");
   });
 
-  it("renders transparent imageType with full-bleed card (height 180px inline)", async () => {
+  /**
+   * The two card kinds used to differ by a fixed image height (180 vs 160px)
+   * and the presence of a border. Both were properties of the pre-mockup card,
+   * and asserting them was really asserting "which of the two components ran".
+   *
+   * The mockup card gives every product the same footprint, so the ONLY thing
+   * that still legitimately differs is how the photo fills it: a cut-out
+   * product is shown whole (`contain`), a photographed one is cropped to fill
+   * (`cover`). That is the behaviour worth protecting — a cut-out cropped to
+   * fill loses the product, and a photo shown whole letterboxes into grey.
+   */
+  const imageFit = (html: string) => html.match(/object-fit:(contain|cover)/)?.[1];
+  const productPage = (imageType: ProductPrintRef["imageType"]) => [
+    [{ id: "1", name: "P1", categoryL1: "Motor", categoryL2: null, image: "https://x/img.png", imageType }],
+  ];
+
+  it("shows a transparent (cut-out) product whole, never cropped", async () => {
     const html = await renderCatalogHtml({
       title: "Test",
       branding: null,
       sections: [],
       defaultImageHandling: "adaptive",
-      productPages: [[{ id: "1", name: "P1", categoryL1: "Motor", categoryL2: null, image: "https://x/img.png", imageType: "transparent" }]],
+      productPages: productPage("transparent"),
     });
-    expect(html).toContain("height:180px");
-    expect(html).not.toContain("border:1px solid");
+    expect(imageFit(html)).toBe("contain");
   });
 
-  it("renders opaque imageType with polaroid card (height 160px inline)", async () => {
+  it("crops an opaque (photographed) product to fill its column", async () => {
     const html = await renderCatalogHtml({
       title: "Test",
       branding: null,
       sections: [],
       defaultImageHandling: "adaptive",
-      productPages: [[{ id: "1", name: "P1", categoryL1: "Motor", categoryL2: null, image: "https://x/img.jpg", imageType: "opaque" }]],
+      productPages: productPage("opaque"),
     });
-    expect(html).toContain("height:160px");
-    expect(html).toContain("border:1px solid");
+    expect(imageFit(html)).toBe("cover");
   });
 
-  it("defaults null imageType to opaque (polaroid card)", async () => {
+  it("defaults null imageType to opaque", async () => {
     const html = await renderCatalogHtml({
       title: "Test",
       branding: null,
       sections: [],
       defaultImageHandling: "adaptive",
-      productPages: [[{ id: "1", name: "P1", categoryL1: "Motor", categoryL2: null, image: "https://x/img.jpg", imageType: null }]],
+      productPages: productPage(null),
     });
-    expect(html).toContain("height:160px");
+    expect(imageFit(html)).toBe("cover");
   });
 
-  it("strict mode uses opaque card regardless of imageType", async () => {
+  it("strict mode uses the opaque card regardless of imageType", async () => {
     const html = await renderCatalogHtml({
       title: "Test",
       branding: null,
       sections: [],
       defaultImageHandling: "strict",
-      productPages: [[{ id: "1", name: "P1", categoryL1: "Motor", categoryL2: null, image: "https://x/img.png", imageType: "transparent" }]],
+      productPages: productPage("transparent"),
     });
-    expect(html).toContain("height:160px");
-    expect(html).not.toContain("height:180px");
+    expect(imageFit(html)).toBe("cover");
   });
 
   it("default (null) handling is strict for backward compat", async () => {
@@ -257,10 +270,9 @@ describe("renderCatalogHtml — R6.1 (shares CatalogTemplate with the builder's 
       title: "Test",
       branding: null,
       sections: [],
-      productPages: [[{ id: "1", name: "P1", categoryL1: "Motor", categoryL2: null, image: "https://x/img.png", imageType: "transparent" }]],
+      productPages: productPage("transparent"),
     });
-    expect(html).toContain("height:160px");
-    expect(html).not.toContain("height:180px");
+    expect(imageFit(html)).toBe("cover");
   });
 });
 
@@ -275,6 +287,20 @@ describe("renderCatalogHtml — product prices", () => {
     [{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null, prices }],
   ];
 
+  /**
+   * Reads the printed tier -> amount pairs back out of the markup.
+   *
+   * These assertions used to match the literal string "Venta: $120.00", which
+   * only held while a tier was one text node. The mockup card prints the label
+   * and the amount as separate cells of a price table, so the old form asserted
+   * a layout rather than the rule. What must never change is which amount ends
+   * up beside which label — so that is what gets read back.
+   */
+  const tiers = (html: string): Record<string, string> =>
+    Object.fromEntries(
+      Array.from(html.matchAll(/>(Venta|Taller|Socio)<\/span><span[^>]*>([^<]*)</g), (m) => [m[1], m[2]]),
+    );
+
   it("prints all three resolved tiers on the card", async () => {
     const html = await renderCatalogHtml({
       title: "C",
@@ -283,9 +309,7 @@ describe("renderCatalogHtml — product prices", () => {
       productPages: priced({ venta: 120, taller: 100, socio: 90 }),
     });
 
-    expect(html).toContain("Venta: $120.00");
-    expect(html).toContain("Taller: $100.00");
-    expect(html).toContain("Socio: $90.00");
+    expect(tiers(html)).toEqual({ Venta: "$120.00", Taller: "$100.00", Socio: "$90.00" });
   });
 
   it("renders an em-dash for the one tier missing, without touching the others", async () => {
@@ -296,9 +320,7 @@ describe("renderCatalogHtml — product prices", () => {
       productPages: priced({ venta: 120, taller: null, socio: 90 }),
     });
 
-    expect(html).toContain("Venta: $120.00");
-    expect(html).toContain("Taller: —");
-    expect(html).toContain("Socio: $90.00");
+    expect(tiers(html)).toEqual({ Venta: "$120.00", Taller: "—", Socio: "$90.00" });
   });
 
   // 32 of 694 real products have no retail price. Printing "$0.00" beside one
@@ -311,10 +333,8 @@ describe("renderCatalogHtml — product prices", () => {
       productPages: priced({ venta: null, taller: null, socio: null }),
     });
 
+    expect(tiers(html)).toEqual({ Venta: "—", Taller: "—", Socio: "—" });
     expect(html).not.toContain("$");
-    expect(html).toContain("Venta: —");
-    expect(html).toContain("Taller: —");
-    expect(html).toContain("Socio: —");
   });
 
   it("renders em-dashes when prices is absent entirely", async () => {
@@ -325,8 +345,8 @@ describe("renderCatalogHtml — product prices", () => {
       productPages: [[{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null }]],
     });
 
+    expect(tiers(html)).toEqual({ Venta: "—", Taller: "—", Socio: "—" });
     expect(html).not.toContain("$");
-    expect(html).toContain("Venta: —");
   });
 
   // A hostile/real ERP "0.00" tier must never render as free.
@@ -338,8 +358,8 @@ describe("renderCatalogHtml — product prices", () => {
       productPages: priced({ venta: 0, taller: 100, socio: 0 }),
     });
 
+    expect(tiers(html)).toEqual({ Venta: "—", Taller: "$100.00", Socio: "—" });
     expect(html).not.toContain("$0.00");
-    expect(html).toContain("Taller: $100.00");
   });
 });
 
@@ -496,36 +516,48 @@ describe("renderCatalogHtml — workshop contact page (design D6)", () => {
  * registry rather than hardcoded so a palette change cannot make this test
  * pass by accident.
  */
-describe("renderCatalogHtml — cover photo must not be multiplied into black (archive gap #4)", () => {
+describe("renderCatalogHtml — nothing on the cover may be painted its own background (archive gap #4)", () => {
   const dark = getTemplate("dforce-classic").primaryColors.secondary;
   const coverTag = (html: string) => html.match(/<section aria-label="Cover"[^>]*>/)?.[0] ?? "";
-
-  it("does not paint the cover background dark when a cover photo is set", async () => {
-    const html = await renderCatalogHtml({
+  /** The diagonal wedge — found by the clip-path only it has. */
+  const wedgeTag = (html: string) => html.match(/<div style="[^"]*clip-path:polygon[^"]*"/)?.[0] ?? "";
+  const cover = (coverImageUrl: string | null) =>
+    renderCatalogHtml({
       title: "C",
-      branding: {
-        templateId: "dforce-classic",
-        logoUrl: null,
-        coverText: null,
-        coverImageUrl: "data:image/jpeg;base64,Zm9v",
-      },
+      branding: { templateId: "dforce-classic", logoUrl: null, coverText: null, coverImageUrl },
       sections: [],
     });
 
-    const tag = coverTag(html);
-    expect(tag).not.toBe("");
-    expect(tag).not.toContain(`background:${dark}`);
-    expect(tag).toContain("background:#ffffff");
+  /**
+   * ONE rule, because the cover has now produced the same bug twice.
+   *
+   * First (archive gap #4): the cover photo is composited with
+   * `mix-blend-mode: multiply`, and multiplying anything against a BLACK
+   * background is black — the photo was invisible while the tests asserting
+   * the `<img>` and its `src` passed.
+   *
+   * Then, with no photo, the sheet fell back to the template's dark colour and
+   * the diagonal wedge is ALSO that colour: a black page with a red stripe on
+   * it, and again nothing structural to catch it.
+   *
+   * Both are the same defect — a background equal to the colour of the thing
+   * that must contrast against it. So the invariant is stated once and checked
+   * on both paths. The wedge assertion is not decoration: without it, deleting
+   * the wedge entirely would satisfy the contrast check vacuously.
+   */
+  it.each([
+    ["with a cover photo", "data:image/jpeg;base64,Zm9v"],
+    ["with no cover photo", null],
+  ])("keeps the cover sheet a different colour from the wedge %s", async (_case, coverImageUrl) => {
+    const html = await cover(coverImageUrl);
+
+    expect(coverTag(html)).not.toBe("");
+    expect(coverTag(html)).not.toContain(`background:${dark}`);
+    expect(wedgeTag(html)).toContain(`background:${dark}`);
   });
 
-  it("still paints the cover background dark when there is no cover photo (the red/black fallback block)", async () => {
-    const html = await renderCatalogHtml({
-      title: "C",
-      branding: { templateId: "dforce-classic", logoUrl: null, coverText: null, coverImageUrl: null },
-      sections: [],
-    });
-
-    expect(coverTag(html)).toContain(`background:${dark}`);
+  it("degrades to the wedge alone when there is no cover photo — never a broken <img>", async () => {
+    const html = await cover(null);
     expect(html).not.toMatch(/<img[^>]*alt=""/);
   });
 });
@@ -551,6 +583,6 @@ describe("renderCatalogHtml — product prices", () => {
       ],
     });
 
-    expect(html).toContain("Venta: $45.00");
+    expect(html).toMatch(/>Venta<\/span><span[^>]*>\$45\.00</);
   });
 });

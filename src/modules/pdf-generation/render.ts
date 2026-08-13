@@ -7,9 +7,6 @@
 import { CatalogTemplate, GRID_COLUMNS, type CatalogTemplateProps, type ProductPrintRef } from "@/shared/template/CatalogTemplate";
 import { getTemplate } from "@/shared/template/registry";
 
-/** The `@page` margin below, in mm — `worker.ts` subtracts it from A4 to get the height one printed page can actually hold. Keep the two in sync by importing, never by retyping the number. */
-export const PAGE_MARGIN_MM = 20;
-
 /**
  * R6.1/R5.4 — splits the final (post-exclusion) product set into printed pages.
  *
@@ -106,11 +103,21 @@ export async function renderCatalogHtml(props: CatalogTemplateProps): Promise<st
   <head>
     <meta charset="utf-8" />
     <style>
-      @page { margin: ${PAGE_MARGIN_MM}mm; }
+      /* Full-bleed Letter, matching Portada_DForce_v1.html's own @page rule.
+         The margin MUST stay 0: the red header band and black footer band run
+         edge to edge on every approved page, and any page margin insets them
+         behind a white frame the design never had. The inset the content needs
+         is applied inside the sheet instead (see shared/template/page-geometry). */
+      @page { size: 8.5in 11in; margin: 0; }
+      * { box-sizing: border-box; }
       /* The registry font already carries its own fallback ("Arial, sans-serif"),
          so appending another one produced "..., sans-serif, sans-serif". */
-      body { font-family: ${props.branding ? getTemplate(props.branding.templateId).font : "sans-serif"}; margin: 0; }
-      img { max-width: 100%; }
+      body { font-family: ${props.branding ? getTemplate(props.branding.templateId).font : "sans-serif"}; margin: 0; -webkit-font-smoothing: antialiased; }
+      /* Deliberately NO global \`img { max-width: 100% }\`. The cover photo is
+         902px wide on an 816px sheet and hangs off the right edge by design
+         (\`right: -118px\` in the approved file); clamping it to the sheet
+         squeezes the car back into frame and breaks the composition. Every
+         other image already carries its own explicit width or max-width. */
     </style>
   </head>
   <body>${body}</body>

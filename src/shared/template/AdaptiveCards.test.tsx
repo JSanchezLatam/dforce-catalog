@@ -40,7 +40,11 @@ describe.each(CARDS)("%s — three-tier price rendering", (_name, Card) => {
 
     expect(screen.getByText(/\$120\.00/)).toBeInTheDocument();
     expect(screen.getByText(/\$90\.00/)).toBeInTheDocument();
-    expect(screen.getByText(/Taller.*—/)).toBeInTheDocument();
+    // The em-dash has to land in the TALLER row specifically — asserting only
+    // that the card contains one somewhere would pass with it beside the wrong
+    // tier. Label and amount are the two cells of one price row, so the amount
+    // is the label's sibling.
+    expect(screen.getByText("Taller").nextElementSibling).toHaveTextContent("—");
   });
 
   it("renders three em-dashes when prices is entirely absent", () => {

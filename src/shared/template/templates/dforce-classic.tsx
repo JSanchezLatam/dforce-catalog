@@ -18,7 +18,9 @@ export const dforceClassic: CatalogTemplateDef = {
   id: DEFAULT_TEMPLATE_ID,
   name: "Dforce Clásico",
   font: "Arial, sans-serif",
-  primaryColors: { primary: "#D42027", secondary: "#000000" },
+  // `#111111`, not pure black — every approved mockup file paints its wedge,
+  // bands and logo plate `#111`. Pure black reads harsher in print.
+  primaryColors: { primary: "#D42027", secondary: "#111111" },
   Card({ product, imageHandling }) {
     if (imageHandling === "adaptive" && product.imageType === "transparent") {
       return <TransparentProductCard product={product} />;

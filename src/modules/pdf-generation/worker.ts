@@ -43,8 +43,9 @@ import type { CatalogTemplateBranding } from "@/shared/template/CatalogTemplate"
 import { getObject } from "../catalog-storage/r2";
 import { createPendingCatalog } from "../catalog-storage/queries";
 import { buildIndexSections } from "../catalog-builder/selection";
+import { CONTENT_HEIGHT_PX, PAGE_HEIGHT_PX, PAGE_WIDTH_PX } from "@/shared/template/page-geometry";
 import { PDF_GENERATE_JOB, PDF_UPLOAD_JOB, type PdfBranding, type PdfGeneratePayload } from "./enqueue";
-import { PAGE_MARGIN_MM, chunkProducts, renderCatalogHtml } from "./render";
+import { chunkProducts, renderCatalogHtml } from "./render";
 
 export type PdfUploadPayload = {
   catalogId: string;
@@ -111,20 +112,18 @@ export async function resolveBranding(
 }
 
 /**
- * The printed A4 page, minus `renderCatalogHtml`'s own `@page` margin, in CSS
- * px — Chromium lays print content out at 96dpi, so 1mm is 96/25.4 px.
- * Measuring at any other width would measure the wrong card: the product name
- * wraps differently at 1280px (Playwright's default viewport) than in the
- * ~643px column the paper actually gives it, and a card that wraps less
- * measures shorter than it prints.
+ * Measuring at any width other than the printed one measures the wrong card:
+ * the product name wraps differently at 1280px (Playwright's default viewport)
+ * than in the ~353px column the paper actually gives it, and a card that wraps
+ * less measures shorter than it prints.
+ *
+ * The viewport is now the WHOLE sheet rather than a pre-inset content box: the
+ * page's own bands and padding are elements inside it, so laying out at the
+ * full 816x1056 is what puts the grid in its real column. `CONTENT_HEIGHT_PX`
+ * is the height left over once those bands are subtracted — see
+ * `shared/template/page-geometry`, which is the single place any of these
+ * numbers is written down.
  */
-const MM_TO_PX = 96 / 25.4;
-// `floor`, not `round`: 170mm is 642.52px, and measuring in a column even half
-// a pixel WIDER than the printed one wraps the name less, so the card measures
-// shorter than it prints. Under-measuring the width over-estimates the height,
-// and over-estimating only costs an emptier page.
-const PRINT_WIDTH_PX = Math.floor((210 - 2 * PAGE_MARGIN_MM) * MM_TO_PX);
-const PRINT_HEIGHT_PX = (297 - 2 * PAGE_MARGIN_MM) * MM_TO_PX;
 
 /**
  * Archive gap #1 — asks the browser how tall each card is instead of
@@ -152,20 +151,19 @@ const PRINT_HEIGHT_PX = (297 - 2 * PAGE_MARGIN_MM) * MM_TO_PX;
  * `MAX_QUEUE_DEPTH` slots (`resolveBranding`'s null-not-throw precedent), but
  * it does degrade the split back to fixed-count chunking — archive gap #1
  * restored. That is worth a line in the log rather than silence.
+ *
+ * The page's own chrome is no longer measured here. It used to be the product
+ * section's CSS padding, which a computed-style read could find; it is now the
+ * red and black bands, which are elements. `CONTENT_HEIGHT_PX` subtracts them
+ * arithmetically instead — see `shared/template/page-geometry`.
  */
-async function measureCardHeights(page: Page): Promise<{ cardHeights: number[]; chrome: number }> {
+async function measureCardHeights(page: Page): Promise<number[]> {
   return page.evaluate(() => {
-    const grid = document.querySelector('[aria-label^="Product page"] > div');
-    if (!(grid instanceof HTMLElement) || !grid.parentElement) return { cardHeights: [], chrome: 0 };
+    const grid = document.querySelector("[data-product-grid]");
+    if (!(grid instanceof HTMLElement)) return [];
 
-    const section = getComputedStyle(grid.parentElement);
-    const chrome = parseFloat(section.paddingTop) + parseFloat(section.paddingBottom);
     const gap = parseFloat(getComputedStyle(grid).rowGap) || 0;
-
-    return {
-      cardHeights: Array.from(grid.children, (card) => card.getBoundingClientRect().height + gap),
-      chrome,
-    };
+    return Array.from(grid.children, (card) => card.getBoundingClientRect().height + gap);
   });
 }
 
@@ -195,7 +193,7 @@ export async function renderPdfBuffer(
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage({
-      viewport: { width: PRINT_WIDTH_PX, height: Math.round(PRINT_HEIGHT_PX) },
+      viewport: { width: PAGE_WIDTH_PX, height: PAGE_HEIGHT_PX },
     });
     // `page.pdf()` renders under print media; measure under it too, or a
     // future `@media print` rule would silently invalidate the measurement.
@@ -210,7 +208,7 @@ export async function renderPdfBuffer(
     await page.setContent(await renderCatalogHtml({ ...props, productPages: everythingOnOnePage }), {
       waitUntil: "domcontentloaded",
     });
-    const { cardHeights, chrome } = await measureCardHeights(page);
+    const cardHeights = await measureCardHeights(page);
     // Warned here, in Node — a `console.warn` inside `page.evaluate` goes to
     // the browser's console, which nothing is listening to.
     if (cardHeights.length < payload.products.length) {
@@ -219,9 +217,12 @@ export async function renderPdfBuffer(
       );
     }
 
-    const productPages = chunkProducts(payload.products, payload.productsPerPage, cardHeights, PRINT_HEIGHT_PX - chrome);
+    const productPages = chunkProducts(payload.products, payload.productsPerPage, cardHeights, CONTENT_HEIGHT_PX);
     await page.setContent(await renderCatalogHtml({ ...props, productPages }), { waitUntil: "load" });
-    return await page.pdf({ format: "A4", printBackground: true });
+    // Letter, matching the approved mockups' own 816x1056 sheet and the
+    // `@page { size: 8.5in 11in }` rule `renderCatalogHtml` emits. A format
+    // that disagrees with that rule scales every page.
+    return await page.pdf({ format: "Letter", printBackground: true });
   } finally {
     await browser.close();
   }
