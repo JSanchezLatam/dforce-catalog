@@ -342,6 +342,53 @@ describe("renderCatalogHtml — a product page carrying more than one category",
  * products start" sat in different functions — so this checks the sequence end
  * to end, on rendered output, the way the reader meets it.
  */
+/**
+ * `INDEX_ROWS_PER_PAGE` is arithmetic over a fixed row height, and CSS `height`
+ * on a `<tr>` is a MINIMUM. Two lists nobody bounds print into boxes the page
+ * geometry has already committed to — the index row's subcategories and the
+ * product band's categories — and neither box clips. Unclamped, a category
+ * carrying a dozen L2s wraps its subtitle, grows its row, and pushes the tail
+ * of the table over the footer band and off the paper: the exact silent loss
+ * the chunking was added to prevent.
+ *
+ * The clamp is what makes the arithmetic honest, so it is what gets asserted.
+ */
+describe("renderCatalogHtml — unbounded lists cannot grow the box they print into", () => {
+  const manySubcategories = Array.from({ length: 12 }, (_, at) => `Subcategoría ${at}`);
+
+  it("clamps the index row's subcategory list to one line", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: manySubcategories.map((categoryL2) => ({ categoryL1: "ELECTRÓNICA", categoryL2, productCount: 1 })),
+    });
+
+    const subtitle = html.match(/<span style="[^"]*font-size:8px[^"]*">Subcategoría 0[^<]*<\/span>/)?.[0] ?? "";
+    expect(subtitle).toContain("white-space:nowrap");
+    expect(subtitle).toContain("text-overflow:ellipsis");
+  });
+
+  it("clamps the product band's category heading to one line", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [],
+      productPages: [
+        Array.from({ length: 6 }, (_, at) => ({
+          id: String(at),
+          name: `Producto ${at}`,
+          categoryL1: `CATEGORÍA MUY LARGA NÚMERO ${at}`,
+          categoryL2: null,
+        })),
+      ],
+    });
+
+    const band = html.match(/<h2 style="[^"]*"/)?.[0] ?? "";
+    expect(band).toContain("white-space:nowrap");
+    expect(band).toContain("text-overflow:ellipsis");
+  });
+});
+
 describe("renderCatalogHtml — printed page numbers agree from cover to last page", () => {
   /** Every sheet in printed order, as `[label, footerNumber]`. */
   const sheetFooters = (html: string): [string, string | null][] =>

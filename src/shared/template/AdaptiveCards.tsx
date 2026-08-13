@@ -100,8 +100,13 @@ function ProductHeading({ product, colors }: { product: ProductPrintRef; colors:
 /**
  * The image column. `fit` is the only thing that differs between the two card
  * kinds: a cut-out product fills its box without cropping (`contain`), a
- * photographed one is cropped to fill (`cover`). The placeholder keeps the
- * same footprint so a product without a photo does not resize its whole row.
+ * photographed one is cropped to fill (`cover`).
+ *
+ * The placeholder needs no height of its own. The card is a flex row with
+ * `align-items: stretch`, so this column is already as tall as the text column
+ * beside it — a `min-height` here would be a FLOOR, not a match, and a floor
+ * taller than the text column makes the photo-less card the tallest in its
+ * row and drags its neighbour up with it. Exactly backwards.
  */
 function ProductImage({ product, fit }: { product: ProductPrintRef; fit: "cover" | "contain" }) {
   return (
@@ -113,7 +118,6 @@ function ProductImage({ product, fit }: { product: ProductPrintRef; fit: "cover"
           style={{
             width: "100%",
             height: "100%",
-            minHeight: 150,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

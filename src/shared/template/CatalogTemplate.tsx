@@ -95,6 +95,22 @@ const ROW_TINT = "#f2f2f2";
 const HAIRLINE = "#e6e6e6";
 
 /**
+ * Keeps a run of unbounded text to exactly one line.
+ *
+ * Two places print a list nobody bounds — the index row's subcategories and
+ * the product band's categories — into a box whose height the page geometry
+ * has already committed to. CSS `height` on a table row is a MINIMUM, and the
+ * bands do not clip, so an unclamped list does not overflow its own box: it
+ * pushes the rest of the page over the footer band and off the paper. One
+ * elided line is a legible compromise; a lost category is not.
+ */
+const CLAMP_TO_ONE_LINE: React.CSSProperties = {
+  overflow: "hidden",
+  whiteSpace: "nowrap",
+  textOverflow: "ellipsis",
+};
+
+/**
  * True only when there is something worth printing a page for. `name` alone
  * does not qualify — the brand name already appears on the cover, so a page
  * carrying nothing else is still a blank page with a heading.
@@ -360,6 +376,9 @@ function PageChrome({
             fontWeight: 800,
             letterSpacing: -0.5,
             textTransform: "uppercase",
+            // Stops short of the logo plate rather than running under it.
+            maxWidth: PAGE_WIDTH_PX - 2 * CONTENT_PAD_X_PX - 190,
+            ...CLAMP_TO_ONE_LINE,
           }}
         >
           {heading}
@@ -376,6 +395,8 @@ function PageChrome({
               fontWeight: 700,
               letterSpacing: 2.2,
               textTransform: "uppercase",
+              maxWidth: PAGE_WIDTH_PX - 2 * CONTENT_PAD_X_PX - 190,
+              ...CLAMP_TO_ONE_LINE,
             }}
           >
             {subheading}
@@ -611,11 +632,13 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
                       }}
                     >
                       <td style={{ padding: "0 16px" }}>
-                        <span style={{ display: "block", fontSize: 13, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase" }}>
+                        <span
+                          style={{ display: "block", fontSize: 13, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase", ...CLAMP_TO_ONE_LINE }}
+                        >
                           {row.categoryL1}
                         </span>
                         {row.subcategories.length > 0 && (
-                          <span style={{ display: "block", marginTop: 3, fontSize: 8, color: INK_MUTED }}>
+                          <span style={{ display: "block", marginTop: 3, fontSize: 8, color: INK_MUTED, ...CLAMP_TO_ONE_LINE }}>
                             {row.subcategories.join(" · ")}
                           </span>
                         )}

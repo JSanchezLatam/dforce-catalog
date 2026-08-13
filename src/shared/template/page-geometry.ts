@@ -56,32 +56,28 @@ export const COVER_PAGE_NUMBER = 1;
 export const FIRST_INDEX_PAGE_NUMBER = COVER_PAGE_NUMBER + 1;
 
 /**
- * The index table's fixed row height, and what that buys: an exact count of
- * rows per page.
+ * The index table's row height, and what that buys: an exact count of rows per
+ * page.
  *
  * The height is fixed rather than content-driven on purpose. A `Sheet` is an
  * absolutely-positioned box of exactly one page, so page breaking cannot reach
- * inside it to split a long table — a table taller than its box would render
+ * inside it to split a long table — a table taller than its box renders
  * straight over the black footer band and off the bottom of the sheet, losing
- * every category past the twelfth with no error and no failing test. Fixing
- * the row height makes "how many fit" arithmetic instead of a measurement, and
- * the index can then be chunked exactly the way the products are.
+ * every category past the ninth with no error and no failing test.
+ *
+ * "Fixed" is only true if the rows CANNOT grow, and CSS `height` on a `<tr>`
+ * is a minimum, not a cap. The renderer therefore clamps both lines of the
+ * cell to one line each (see `CatalogTemplate`'s `CLAMP_TO_ONE_LINE`). Without
+ * that clamp the arithmetic below is a guess: a category carrying a dozen L2s
+ * wraps its subtitle over several lines and takes the whole page with it.
  *
  * (Product cards are measured rather than fixed because their height is driven
- * by a product name nobody controls. An index row holds a category name and a
- * count, both short.)
+ * by a product name nobody controls, and a truncated product name in a
+ * catalogue is worse than a shorter page.)
  */
 export const INDEX_HEADER_ROW_PX = 40;
 export const INDEX_ROW_HEIGHT_PX = 76;
 export const INDEX_ROWS_PER_PAGE = Math.floor((CONTENT_HEIGHT_PX - INDEX_HEADER_ROW_PX) / INDEX_ROW_HEIGHT_PX);
-
-/**
- * How many sheets the index needs for `rowCount` categories. At least one:
- * an empty index still prints its page, saying so.
- */
-export function indexPageCount(rowCount: number): number {
-  return Math.max(1, Math.ceil(rowCount / INDEX_ROWS_PER_PAGE));
-}
 
 /**
  * Where the products start, given how many pages the index took. Derived

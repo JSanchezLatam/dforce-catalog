@@ -90,7 +90,10 @@ async function main() {
   // imported. A copy of it here would drift from the thing this gate exists
   // to check the moment the grid selector or the gap handling changes.
   const cardHeights = await measureCardHeights(page);
-  console.log(`measured ${cardHeights.length} cards, tallest ${Math.max(...cardHeights).toFixed(0)}px, page holds ${CONTENT_HEIGHT_PX}px`);
+  // `Math.max()` of nothing is -Infinity — the selector-miss path is exactly
+  // when this line matters, so it must not print nonsense on it.
+  const tallest = cardHeights.length > 0 ? `${Math.max(...cardHeights).toFixed(0)}px` : "none measured";
+  console.log(`measured ${cardHeights.length} cards, tallest ${tallest}, page holds ${CONTENT_HEIGHT_PX}px`);
 
   const productPages = chunkProducts(products, 6, cardHeights, CONTENT_HEIGHT_PX);
   console.log(`split into ${productPages.length} product pages: ${productPages.map((p) => p.length).join(" + ")}`);

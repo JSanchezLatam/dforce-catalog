@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildIndex, type CatalogIndexSection, type ProductPrintRef } from "./CatalogTemplate";
-import { INDEX_ROWS_PER_PAGE, firstProductPageNumber, indexPageCount } from "./page-geometry";
+import { INDEX_ROWS_PER_PAGE, firstProductPageNumber } from "./page-geometry";
 
 const FIRST_PRODUCT_PAGE_NUMBER = firstProductPageNumber(1);
 
@@ -26,7 +26,7 @@ const product = (id: string, categoryL1: string | null): ProductPrintRef => ({
  * L1, so the collapse is the only place a category can go missing, get counted
  * twice, or be pointed at the wrong page.
  */
-describe("buildIndexRows — collapsing sections into the printed index", () => {
+describe("buildIndex — collapsing sections into the printed index", () => {
   it("prints one row per L1, summing the counts and listing the L2s beneath it", () => {
     const rows = rowsOf([
       section("ELECTRÓNICA", "Amplificadores", 120),
@@ -127,7 +127,7 @@ describe("buildIndex — an index longer than one sheet", () => {
 
     const rows = rowsOf(sections, [[product("p1", first.categoryL1)]]);
 
-    expect(indexPageCount(sections.length)).toBe(2);
+    expect(buildIndex(sections).pages).toHaveLength(2);
     expect(rows[0]?.pageNumber).toBe(firstProductPageNumber(2));
     expect(rows[0]?.pageNumber).toBe(FIRST_PRODUCT_PAGE_NUMBER + 1);
   });
