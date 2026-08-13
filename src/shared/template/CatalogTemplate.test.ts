@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { buildIndexRows, chunkIndexRows, type CatalogIndexSection, type ProductPrintRef } from "./CatalogTemplate";
+import { buildIndex, type CatalogIndexSection, type ProductPrintRef } from "./CatalogTemplate";
 import { INDEX_ROWS_PER_PAGE, firstProductPageNumber, indexPageCount } from "./page-geometry";
 
 const FIRST_PRODUCT_PAGE_NUMBER = firstProductPageNumber(1);
+
+/** The index's rows, flattened back out of its sheets. */
+const rowsOf = (...args: Parameters<typeof buildIndex>) => buildIndex(...args).pages.flat();
 
 const section = (categoryL1: string, categoryL2: string | null, productCount: number): CatalogIndexSection => ({
   categoryL1,
@@ -25,7 +28,7 @@ const product = (id: string, categoryL1: string | null): ProductPrintRef => ({
  */
 describe("buildIndexRows — collapsing sections into the printed index", () => {
   it("prints one row per L1, summing the counts and listing the L2s beneath it", () => {
-    const rows = buildIndexRows([
+    const rows = rowsOf([
       section("ELECTRÓNICA", "Amplificadores", 120),
       section("ELECTRÓNICA", "Tweeters", 60),
       section("ACCESORIOS", "Forros", 94),
@@ -38,17 +41,17 @@ describe("buildIndexRows — collapsing sections into the printed index", () => 
   });
 
   it("keeps the section order rather than sorting — the index must match the page order", () => {
-    const rows = buildIndexRows([section("ZETA", null, 1), section("ALFA", null, 1)]);
+    const rows = rowsOf([section("ZETA", null, 1), section("ALFA", null, 1)]);
     expect(rows.map((row) => row.categoryL1)).toEqual(["ZETA", "ALFA"]);
   });
 
   it("drops empty sections instead of printing a category with nothing behind it", () => {
-    const rows = buildIndexRows([section("VACÍA", null, 0), section("LLENA", null, 3)]);
+    const rows = rowsOf([section("VACÍA", null, 0), section("LLENA", null, 3)]);
     expect(rows.map((row) => row.categoryL1)).toEqual(["LLENA"]);
   });
 
   it("lists a repeated L2 once", () => {
-    const [row] = buildIndexRows([section("AUDIO", "Bocinas", 2), section("AUDIO", "Bocinas", 3)]);
+    const [row] = rowsOf([section("AUDIO", "Bocinas", 2), section("AUDIO", "Bocinas", 3)]);
     expect(row?.subcategories).toEqual(["Bocinas"]);
   });
 
@@ -58,7 +61,7 @@ describe("buildIndexRows — collapsing sections into the printed index", () => 
    * the pages exist. It has to be read off where the products actually landed.
    */
   it("points each category at the page its first product actually landed on", () => {
-    const rows = buildIndexRows(
+    const rows = rowsOf(
       [section("AUDIO", null, 3), section("LUCES", null, 1)],
       [
         [product("a1", "AUDIO"), product("a2", "AUDIO")],
@@ -71,12 +74,12 @@ describe("buildIndexRows — collapsing sections into the printed index", () => 
   });
 
   it("leaves the page number null when there are no product pages (the builder preview)", () => {
-    const [row] = buildIndexRows([section("AUDIO", null, 3)]);
+    const [row] = rowsOf([section("AUDIO", null, 3)]);
     expect(row?.pageNumber).toBeNull();
   });
 
   it("leaves the page number null for a category no page carries", () => {
-    const [, row] = buildIndexRows(
+    const [, row] = rowsOf(
       [section("AUDIO", null, 1), section("HUÉRFANA", null, 1)],
       [[product("a1", "AUDIO")]],
     );
@@ -91,24 +94,24 @@ describe("buildIndexRows — collapsing sections into the printed index", () => 
  * band and off the bottom of the paper — losing them with no error, no failing
  * test, and nothing visible to whoever generated the catalog.
  */
-describe("chunkIndexRows — an index longer than one sheet", () => {
+describe("buildIndex — an index longer than one sheet", () => {
   const manySections = (count: number) =>
     Array.from({ length: count }, (_, at) => section(`CATEGORÍA ${at}`, null, 1));
 
   it("keeps a full sheet's worth of categories on one sheet", () => {
-    const pages = chunkIndexRows(buildIndexRows(manySections(INDEX_ROWS_PER_PAGE)));
+    const pages = buildIndex(manySections(INDEX_ROWS_PER_PAGE)).pages;
     expect(pages).toHaveLength(1);
     expect(pages[0]).toHaveLength(INDEX_ROWS_PER_PAGE);
   });
 
   it("spills onto a second sheet rather than off the bottom of the first", () => {
-    const pages = chunkIndexRows(buildIndexRows(manySections(INDEX_ROWS_PER_PAGE + 1)));
+    const pages = buildIndex(manySections(INDEX_ROWS_PER_PAGE + 1)).pages;
     expect(pages).toHaveLength(2);
     expect(pages[1]).toHaveLength(1);
   });
 
   it("still prints one sheet when there are no categories at all", () => {
-    expect(chunkIndexRows(buildIndexRows([]))).toEqual([[]]);
+    expect(buildIndex([]).pages).toEqual([[]]);
   });
 
   /**
@@ -122,7 +125,7 @@ describe("chunkIndexRows — an index longer than one sheet", () => {
     const first = sections[0];
     if (!first) throw new Error("fixture");
 
-    const rows = buildIndexRows(sections, [[product("p1", first.categoryL1)]]);
+    const rows = rowsOf(sections, [[product("p1", first.categoryL1)]]);
 
     expect(indexPageCount(sections.length)).toBe(2);
     expect(rows[0]?.pageNumber).toBe(firstProductPageNumber(2));

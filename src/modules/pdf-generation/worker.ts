@@ -134,7 +134,10 @@ export async function resolveBranding(
  * A miss on the selector must not fail a job that already holds one of
  * `MAX_QUEUE_DEPTH` slots (`resolveBranding`'s null-not-throw precedent), but
  * it does degrade the split back to fixed-count chunking — archive gap #1
- * restored. That is worth a line in the log rather than silence.
+ * restored. The caller logs that by comparing counts, which is a proxy: it
+ * detects "fewer heights than products", not "the selector missed". With no
+ * products the two are both zero and nothing is logged, which is right, but by
+ * arithmetic rather than by design.
  *
  * The page's own chrome is no longer measured here. It used to be the product
  * section's CSS padding, which a computed-style read could find; it is now the

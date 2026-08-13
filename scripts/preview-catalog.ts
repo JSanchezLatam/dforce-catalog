@@ -109,21 +109,37 @@ async function main() {
     await sheet.screenshot({ path: join(OUT, `${String(index).padStart(2, "0")}-${label.replace(/\s+/g, "-")}.png`) });
   }
 
-  const pdf = await page.pdf({ format: "Letter", printBackground: true });
-  await writeFile(join(OUT, "catalog.pdf"), pdf);
+  /**
+   * Checks that the sheets TILE the paper — the property that decides the page
+   * count — rather than counting pages in the PDF bytes.
+   *
+   * Counting `/Type /Page` in the output looks like the stronger check and is
+   * the weaker one: Chromium writes compressed object streams, so page objects
+   * are routinely absent from the file as literal ASCII. That check reports
+   * zero pages for a perfectly good PDF, and a gate that can fail falsely is
+   * worse than no gate — it teaches everyone to ignore it. Parsing it properly
+   * means a new dependency for a dev script.
+   *
+   * The document's own height cannot lie the same way: with `@page` margin 0
+   * and each sheet exactly one page tall, total height / page height IS the
+   * page count. A stray margin between sheets, or a sheet that grew past its
+   * box, shows up here as a fractional or oversized total.
+   */
+  const documentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+  const impliedPages = documentHeight / PAGE_HEIGHT_PX;
+  console.log(`\n${sheets.length} sheets, document ${documentHeight}px = ${impliedPages} pages`);
+
+  await writeFile(join(OUT, "catalog.pdf"), await page.pdf({ format: "Letter", printBackground: true }));
   await browser.close();
 
-  // A visual gate that never looks at the PDF is not a gate. Each sheet is
-  // exactly one page tall and carries a forced break, so the counts must
-  // match: a mismatch means either a trailing blank page or a sheet that
-  // overflowed onto one — both invisible in the per-sheet PNGs above.
-  const pdfPages = (pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length;
-  console.log(`\n${sheets.length} sheets -> ${pdfPages} PDF pages -> preview-out/`);
-  if (pdfPages !== sheets.length) {
-    console.error(`FAIL: ${sheets.length} sheets produced ${pdfPages} PDF pages`);
+  if (impliedPages !== sheets.length) {
+    console.error(
+      `FAIL: ${sheets.length} sheets should stack to ${sheets.length * PAGE_HEIGHT_PX}px, got ${documentHeight}px — ` +
+        `a sheet overflowed its box or something adds space between them.`,
+    );
     process.exit(1);
   }
-  process.exit(0);
+  console.log("-> preview-out/");
 }
 
 main().catch((error) => {

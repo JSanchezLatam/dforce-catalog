@@ -14,7 +14,6 @@ import {
   PAGE_HEIGHT_PX,
   PAGE_WIDTH_PX,
   firstProductPageNumber,
-  indexPageCount,
 } from "./page-geometry";
 
 /**
@@ -198,10 +197,22 @@ export type CatalogIndexRow = {
  * category's first product actually landed is the only answer that survives a
  * page break the count cannot predict.
  */
-export function buildIndexRows(
+/** The whole index: its sheets, and where the products start after them. */
+export type CatalogIndex = {
+  pages: CatalogIndexRow[][];
+  /**
+   * The printed number of the first product page. Returned rather than
+   * recomputed by the caller: the number a category shows in the index and the
+   * number that page shows in its own footer come from this one value, so
+   * there is no second derivation to drift out of step with the first.
+   */
+  firstProductPage: number;
+};
+
+export function buildIndex(
   sections: CatalogIndexSection[],
   productPages: ProductPrintRef[][] = [],
-): CatalogIndexRow[] {
+): CatalogIndex {
   const rows: { categoryL1: string; subcategories: string[]; productCount: number }[] = [];
   const rowIndex = new Map<string, number>();
 
@@ -223,12 +234,16 @@ export function buildIndexRows(
     }
   }
 
-  // The index's own length decides where the products start, so this has to be
-  // resolved after the rows are known — a 14-category index takes two sheets
-  // and pushes every product page down by one.
-  const firstProductPage = firstProductPageNumber(indexPageCount(rows.length));
+  // Chunk FIRST, then number: the index's own length decides where the
+  // products start, because an index needing a second sheet pushes every
+  // product page down by one. Deriving that count here and again in the
+  // component would be two derivations of one number — the exact duplication
+  // `page-geometry.ts` exists to prevent — so the count is taken once, from
+  // the pages themselves, and handed back with them.
+  const pages = chunkIndexRows(rows);
+  const firstProductPage = firstProductPageNumber(pages.length);
 
-  return rows.map((row) => {
+  const numbered = rows.map((row) => {
     const pageIndex = productPages.findIndex((page) =>
       page.some((product) => product.categoryL1 === row.categoryL1),
     );
@@ -237,12 +252,14 @@ export function buildIndexRows(
       pageNumber: pageIndex === -1 ? null : firstProductPage + pageIndex,
     };
   });
+
+  return { pages: chunkIndexRows(numbered), firstProductPage };
 }
 
 /** Splits the index into sheets of `INDEX_ROWS_PER_PAGE`. Always at least one. */
-export function chunkIndexRows(rows: CatalogIndexRow[]): CatalogIndexRow[][] {
+function chunkIndexRows<T>(rows: T[]): T[][] {
   if (rows.length === 0) return [[]];
-  const pages: CatalogIndexRow[][] = [];
+  const pages: T[][] = [];
   for (let at = 0; at < rows.length; at += INDEX_ROWS_PER_PAGE) {
     pages.push(rows.slice(at, at + INDEX_ROWS_PER_PAGE));
   }
@@ -459,10 +476,10 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
   const red = branding ? template.primaryColors.primary : "#D42027";
   const black = branding ? template.primaryColors.secondary : "#111111";
   const workshopName = contact?.name ?? null;
-  const indexPages = chunkIndexRows(buildIndexRows(sections, productPages));
-  // Same derivation `buildIndexRows` used to number the categories — the two
-  // must agree, or the index points at a page whose own footer disagrees.
-  const firstProductPage = firstProductPageNumber(indexPages.length);
+  // One value, used both to number the categories inside the index and to
+  // number the product pages' own footers. They cannot disagree because
+  // neither recomputes it.
+  const { pages: indexPages, firstProductPage } = buildIndex(sections, productPages);
 
   return (
     <article style={{ fontFamily: branding ? template.font : undefined }}>

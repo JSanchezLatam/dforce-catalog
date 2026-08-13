@@ -291,8 +291,13 @@ describe("renderCatalogHtml — R6.1 (shares CatalogTemplate with the builder's 
  */
 describe("renderCatalogHtml — a product page carrying more than one category", () => {
   const bandOf = (html: string) => {
-    const page = html.slice(html.indexOf('aria-label="Product page 1"'));
-    return page.match(/<h2[^>]*>([^<]*)<\/h2>/)?.[1] ?? "";
+    // `indexOf` returns -1 when the page is absent and `slice(-1)` would hand
+    // back the LAST CHARACTER of the document — the assertion would then fail
+    // with "the band is empty" when the real cause is "the page never
+    // rendered". Fail on the true reason instead.
+    const at = html.indexOf('aria-label="Product page 1"');
+    if (at === -1) throw new Error("no product page rendered");
+    return html.slice(at).match(/<h2[^>]*>([^<]*)<\/h2>/)?.[1] ?? "";
   };
 
   it("names every category on the page, not just the first", async () => {
@@ -324,6 +329,72 @@ describe("renderCatalogHtml — a product page carrying more than one category",
     });
 
     expect(bandOf(html)).toBe("PRODUCTOS");
+  });
+});
+
+/**
+ * The one assertion that spans the whole document rather than one function.
+ *
+ * The index prints a page number beside each category; that page prints its own
+ * number in its footer. Those two come from separate places in the markup, and
+ * a reader holding the paper is the only one who notices when they disagree.
+ * Every unit test around this passed while the two derivations of "where do the
+ * products start" sat in different functions — so this checks the sequence end
+ * to end, on rendered output, the way the reader meets it.
+ */
+describe("renderCatalogHtml — printed page numbers agree from cover to last page", () => {
+  /** Every sheet in printed order, as `[label, footerNumber]`. */
+  const sheetFooters = (html: string): [string, string | null][] =>
+    Array.from(html.matchAll(/<section aria-label="([^"]+)"[\s\S]*?(?=<section aria-label=|<\/article>)/g), (m) => [
+      m[1] ?? "",
+      m[0].match(/border-radius:50%[^"]*"[^>]*>(\d+)</)?.[1] ?? null,
+    ]);
+
+  it("numbers the sheets consecutively, with the cover unnumbered", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [
+        { categoryL1: "AUDIO", categoryL2: null, productCount: 1 },
+        { categoryL1: "LUCES", categoryL2: null, productCount: 1 },
+      ],
+      productPages: [
+        [{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null }],
+        [{ id: "2", name: "Barra", categoryL1: "LUCES", categoryL2: null }],
+      ],
+    });
+
+    expect(sheetFooters(html)).toEqual([
+      ["Cover", null],
+      ["Index", "2"],
+      ["Product page 1", "3"],
+      ["Product page 2", "4"],
+    ]);
+  });
+
+  it("prints, beside each category in the index, the number that category's own page prints", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [
+        { categoryL1: "AUDIO", categoryL2: null, productCount: 1 },
+        { categoryL1: "LUCES", categoryL2: null, productCount: 1 },
+      ],
+      productPages: [
+        [{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null }],
+        [{ id: "2", name: "Barra", categoryL1: "LUCES", categoryL2: null }],
+      ],
+    });
+
+    const indexNumbers = Array.from(
+      html.matchAll(/font-size:20px;font-weight:800;color:#D42027">([^<]*)</g),
+      (m) => m[1],
+    );
+    const productFooters = sheetFooters(html)
+      .filter(([label]) => label.startsWith("Product page"))
+      .map(([, number]) => number);
+
+    expect(indexNumbers).toEqual(productFooters);
   });
 });
 

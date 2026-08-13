@@ -93,13 +93,10 @@ describe.each(CARDS)("%s — printed copy", (_name, Card) => {
     expect(screen.getByText("SIN IMAGEN")).toBeInTheDocument();
   });
 
-  /**
-   * The placeholder holds the image column open on its own. Without a floor it
-   * collapses to nothing, the card gets shorter than its neighbour, and the
-   * whole grid row it shares resizes around one product that has no photo.
-   */
-  it("keeps the placeholder's footprint so a photo-less product does not resize its row", () => {
-    render(<Card colors={COLORS} product={withImage(null)} />);
-    expect(screen.getByText("SIN IMAGEN")).toHaveStyle({ minHeight: "150px" });
-  });
+  // The placeholder also has to HOLD the image column open, or the card gets
+  // shorter than its neighbour and the grid row resizes around one product
+  // that has no photo. That is a layout property, and jsdom does no layout —
+  // asserting the CSS pixel value here would only restate the source. It is
+  // checked where it is observable: `scripts/preview-catalog.ts`, against a
+  // real Chromium.
 });
