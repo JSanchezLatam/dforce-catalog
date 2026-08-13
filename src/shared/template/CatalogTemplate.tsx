@@ -1,7 +1,6 @@
 import { getTemplate } from "./registry";
 import {
   CONTENT_HEIGHT_PX,
-  CONTENT_PAD_BOTTOM_PX,
   CONTENT_PAD_TOP_PX,
   CONTENT_PAD_X_PX,
   FIRST_INDEX_PAGE_NUMBER,
@@ -259,26 +258,29 @@ export function buildIndex(
     }
   }
 
-  // Chunk FIRST, then number: the index's own length decides where the
-  // products start, because an index needing a second sheet pushes every
-  // product page down by one. Deriving that count here and again in the
-  // component would be two derivations of one number — the exact duplication
-  // `page-geometry.ts` exists to prevent — so the count is taken once, from
-  // the pages themselves, and handed back with them.
+  // Chunk ONCE, then number inside the pages. The index's own length decides
+  // where the products start — an index needing a second sheet pushes every
+  // product page down by one — so the count has to come from the pages
+  // themselves. Chunking a second time to produce the return value would work
+  // only while `chunkIndexRows` stays length-preserving, which is a property
+  // nothing asserts: two derivations of one number, the exact duplication
+  // `page-geometry.ts` exists to prevent.
   const pages = chunkIndexRows(rows);
   const firstProductPage = firstProductPageNumber(pages.length);
 
-  const numbered = rows.map((row) => {
-    const pageIndex = productPages.findIndex((page) =>
-      page.some((product) => product.categoryL1 === row.categoryL1),
-    );
-    return {
-      ...row,
-      pageNumber: pageIndex === -1 ? null : firstProductPage + pageIndex,
-    };
-  });
+  const numbered = pages.map((page) =>
+    page.map((row) => {
+      const pageIndex = productPages.findIndex((productPage) =>
+        productPage.some((product) => product.categoryL1 === row.categoryL1),
+      );
+      return {
+        ...row,
+        pageNumber: pageIndex === -1 ? null : firstProductPage + pageIndex,
+      };
+    }),
+  );
 
-  return { pages: chunkIndexRows(numbered), firstProductPage };
+  return { pages: numbered, firstProductPage };
 }
 
 /** Splits the index into sheets of `INDEX_ROWS_PER_PAGE`. Always at least one. */
@@ -293,6 +295,12 @@ function chunkIndexRows<T>(rows: T[]): T[][] {
 
 /**
  * The red band's heading for one product page.
+ *
+ * ponytail: lists every L1 and lets the clamp elide the overflow. A page
+ * holding six categories prints "AUDIO · LUCES · SUSPENSIÓN · FRE…", which
+ * tells the reader less than it looks like it does. Upgrade to "first two
+ * + N más" if pages routinely carry more than three categories — the fix is
+ * in this function alone, and the clamp keeps it safe meanwhile.
  *
  * Lists EVERY L1 on the page, not just the first. `chunkProducts` splits by
  * count and measured height and has no concept of a category boundary, so

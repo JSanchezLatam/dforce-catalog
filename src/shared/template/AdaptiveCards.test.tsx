@@ -13,13 +13,17 @@ import { render, screen } from "@testing-library/react";
 
 import type { ProductPrintRef } from "./CatalogTemplate";
 import { OpaqueProductCard, TransparentProductCard } from "./AdaptiveCards";
+import { getTemplate } from "./registry";
+import { DEFAULT_TEMPLATE_ID } from "./template-ids";
 
 function product(prices: ProductPrintRef["prices"]): ProductPrintRef {
   return { id: "p1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null, prices };
 }
 
-/** The registry pair the real template hands its cards (design D1/D2). */
-const COLORS = { primary: "#D42027", secondary: "#111111" };
+/** The registry pair the real template hands its cards (design D1/D2) — taken
+ * FROM the registry, not retyped, or it is a third copy of a palette this very
+ * branch already moved once. */
+const COLORS = getTemplate(DEFAULT_TEMPLATE_ID).primaryColors;
 
 const CARDS = [
   ["TransparentProductCard", TransparentProductCard],

@@ -51,8 +51,9 @@ export const CONTENT_PAD_BOTTOM_PX = 24;
 export const CONTENT_HEIGHT_PX =
   PAGE_HEIGHT_PX - HEADER_BAND_PX - HEADER_STRIPE_PX - FOOTER_BAND_PX - CONTENT_PAD_TOP_PX - CONTENT_PAD_BOTTOM_PX;
 
-/** The cover is always the first printed page; the index starts right after. */
-export const COVER_PAGE_NUMBER = 1;
+/** The cover is always the first printed page; the index starts right after.
+ * `COVER_PAGE_NUMBER` stays private — one consumer, in this file. */
+const COVER_PAGE_NUMBER = 1;
 export const FIRST_INDEX_PAGE_NUMBER = COVER_PAGE_NUMBER + 1;
 
 /**

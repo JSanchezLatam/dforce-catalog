@@ -482,8 +482,11 @@ describe("renderCatalogHtml — printed page numbers agree from cover to last pa
       ],
     });
 
+    // Read from the registry, never a literal: a palette change must not be
+    // able to turn this into "the index printed no page numbers".
+    const red = getTemplate("dforce-classic").primaryColors.primary;
     const indexNumbers = Array.from(
-      html.matchAll(/font-size:20px;font-weight:800;color:#D42027">([^<]*)</g),
+      html.matchAll(new RegExp(`font-size:20px;font-weight:800;color:${red}">([^<]*)<`, "g")),
       (m) => m[1],
     );
     const productFooters = sheetFooters(html)

@@ -132,15 +132,19 @@ async function main() {
    * box, shows up here as a fractional or oversized total.
    */
   const documentHeight = await page.evaluate(() => document.documentElement.scrollHeight);
-  const impliedPages = documentHeight / PAGE_HEIGHT_PX;
-  console.log(`\n${sheets.length} sheets, document ${documentHeight}px = ${impliedPages} pages`);
+  const expectedHeight = sheets.length * PAGE_HEIGHT_PX;
+  console.log(`\n${sheets.length} sheets, document ${documentHeight}px (expected ${expectedHeight}px)`);
 
   await writeFile(join(OUT, "catalog.pdf"), await page.pdf({ format: "Letter", printBackground: true }));
   await browser.close();
 
-  if (impliedPages !== sheets.length) {
+  // One pixel of tolerance per sheet: `scrollHeight` is a rounded integer, so
+  // sub-pixel layout accumulates. Exact equality here would contradict the
+  // paragraph above it — a gate that goes red on a document that prints fine
+  // is the false failure this check was rewritten to avoid.
+  if (Math.abs(documentHeight - expectedHeight) > sheets.length) {
     console.error(
-      `FAIL: ${sheets.length} sheets should stack to ${sheets.length * PAGE_HEIGHT_PX}px, got ${documentHeight}px — ` +
+      `FAIL: ${sheets.length} sheets should stack to ${expectedHeight}px, got ${documentHeight}px — ` +
         `a sheet overflowed its box or something adds space between them.`,
     );
     process.exit(1);
