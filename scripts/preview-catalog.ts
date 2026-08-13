@@ -9,7 +9,7 @@
  * Run: npx tsx scripts/preview-catalog.ts
  * Output: preview-out/ (gitignored) — one PNG per printed page, plus the PDF.
  */
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { chromium } from "playwright";
@@ -18,18 +18,15 @@ import { resolveAllPrices } from "@/modules/catalog-builder/price-lists";
 import { listCategoryPairs, listProductsInCategories } from "@/modules/catalog-builder/queries";
 import { buildIndexSections } from "@/modules/catalog-builder/selection";
 import { chunkProducts, renderCatalogHtml } from "@/modules/pdf-generation/render";
-import { measureCardHeights } from "@/modules/pdf-generation/worker";
+import { measureCardHeights, resolveBranding } from "@/modules/pdf-generation/worker";
+import { getTemplateConfig } from "@/modules/template-config/service";
+import { buildWorkshopContact } from "@/modules/workshop-config/contact";
+import { getWorkshopConfig } from "@/modules/workshop-config/service";
+import { getTemplate } from "@/shared/template/registry";
 import type { ProductPrintRef } from "@/shared/template/CatalogTemplate";
 import { CONTENT_HEIGHT_PX, PAGE_HEIGHT_PX, PAGE_WIDTH_PX } from "@/shared/template/page-geometry";
 
-/** The approved assets live beside the repo, not in it (they are the owner's
- * source files). `workshop_config` is where they belong once loaded. */
-const INSUMOS = join(process.cwd(), "..", "Insumos", "Templates");
 const OUT = join(process.cwd(), "preview-out");
-
-async function dataUri(file: string, mime: string): Promise<string> {
-  return `data:${mime};base64,${(await readFile(join(INSUMOS, file))).toString("base64")}`;
-}
 
 async function main() {
   // The SAME query the generate step runs — deliberately not a hand-written
@@ -52,29 +49,35 @@ async function main() {
   const priced = products.filter((p) => p.prices && (p.prices.venta ?? 0) > 0).length;
   console.log(`${products.length} products (${priced} with a retail price), categories: ${[...new Set(products.map((p) => p.categoryL1))].join(", ")}`);
 
-  // workshop_config is still empty in this database (retrospectiva, pending 2),
-  // so the approved assets are fed in directly — the point here is to judge the
-  // LAYOUT, and an empty workshop hides half of it.
+  // The branding is assembled exactly as `api/catalog-builder/generate` does
+  // it, then resolved exactly as the worker does — real `workshop_config` row,
+  // real R2 objects inlined as data URIs. This script used to hardcode invented
+  // contact details and read the logo off disk, which made it a preview of
+  // something nobody generates: a catalog is mostly workshop-owned content, so
+  // faking that half hides half the failures.
+  const [template, workshop] = await Promise.all([getTemplateConfig(), getWorkshopConfig()]);
+  const branding = await resolveBranding({
+    templateId: getTemplate(template?.selectedTemplateId).id,
+    logoR2Key: workshop?.logoR2Key ?? null,
+    logoContentType: workshop?.logoContentType ?? null,
+    coverText: workshop?.coverText ?? null,
+    coverImageR2Key: workshop?.coverImageR2Key ?? null,
+    coverImageContentType: workshop?.coverImageContentType ?? null,
+    contact: buildWorkshopContact(workshop ?? null),
+  });
+
+  // `resolveBranding` returns null for an R2 object it cannot read rather than
+  // failing the job. That is right in production and misleading here — a blank
+  // cover in the PNGs would look like a layout bug.
+  console.log(
+    `workshop: ${workshop?.name ?? "(sin nombre)"} · logo ${branding?.logoUrl ? "ok" : "NO RESUELTO"} · portada ${branding?.coverImageUrl ? "ok" : "NO RESUELTA"}`,
+  );
+
   const props = {
     title: "Catálogo de productos",
-    branding: {
-      templateId: "dforce-classic",
-      logoUrl: await dataUri("DFORCE CAR AUDIO.png", "image/png"),
-      coverText: "Precios vigentes al momento de la generación",
-      coverImageUrl: await dataUri("Auto_portada.jpg", "image/jpeg"),
-      contact: {
-        name: "DForce Car Audio",
-        phone: "+507 6000-0000",
-        whatsapp: "+507 6000-0000",
-        email: "ventas@dforce.com",
-        address: "Vía España, Ciudad de Panamá",
-        hours: "Lun a Sáb · 8:00 - 18:00",
-        website: "dforcecaraudio.com",
-        socialHandles: { Instagram: "@dforcecaraudio", Facebook: "DForce Car Audio" },
-      },
-    },
+    branding,
     sections: buildIndexSections(products),
-    defaultImageHandling: "adaptive" as const,
+    defaultImageHandling: (template?.defaultImageHandling ?? null) as "strict" | "adaptive" | null,
   };
 
   const browser = await chromium.launch();
