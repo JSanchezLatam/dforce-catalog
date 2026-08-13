@@ -353,6 +353,55 @@ describe("renderCatalogHtml — a product page carrying more than one category",
  *
  * The clamp is what makes the arithmetic honest, so it is what gets asserted.
  */
+/**
+ * The contact page is the one sheet whose content length varies with how much
+ * the workshop has filled in, so it is the one most able to print a page that
+ * is mostly empty. Its two red bands are what stop it reading as a slab of
+ * black, and the disclaimer is template copy the workshop does not supply.
+ */
+describe("renderCatalogHtml — contact page chrome (Template_Catalogo.op, page 3)", () => {
+  const contactPage = (socialHandles: Record<string, string> | null) =>
+    renderCatalogHtml({
+      title: "C",
+      branding: {
+        templateId: "dforce-classic",
+        logoUrl: null,
+        coverText: null,
+        contact: {
+          name: "DForce",
+          phone: "203-7212",
+          whatsapp: null,
+          email: null,
+          address: null,
+          hours: null,
+          website: null,
+          socialHandles,
+        },
+      },
+      sections: [],
+    });
+
+  it("prints the disclaimer band in Spanish", async () => {
+    expect(await contactPage(null)).toContain("Precios sujetos a cambio sin previo aviso");
+  });
+
+  it("frames the page with the brand red at both edges", async () => {
+    const html = await contactPage(null);
+    const page = html.slice(html.indexOf('aria-label="Contact"'));
+    const red = getTemplate("dforce-classic").primaryColors.primary;
+
+    // Top rule and bottom note band — both full-width, both brand red.
+    expect(page).toContain(`height:12px;background:${red}`);
+    expect(page).toContain(`height:48px;background:${red}`);
+  });
+
+  it("names the network beside each handle so two pills cannot read alike", async () => {
+    const html = await contactPage({ Instagram: "@dforce", Facebook: "@dforce" });
+    expect(html).toContain("Instagram: @dforce");
+    expect(html).toContain("Facebook: @dforce");
+  });
+});
+
 describe("renderCatalogHtml — unbounded lists cannot grow the box they print into", () => {
   const manySubcategories = Array.from({ length: 12 }, (_, at) => `Subcategoría ${at}`);
 

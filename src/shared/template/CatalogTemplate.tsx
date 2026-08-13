@@ -86,6 +86,15 @@ const CONTACT_ROWS: { key: "phone" | "whatsapp" | "email" | "address" | "hours" 
 ];
 
 const CONTACT_MUTED = "#8A8A8A";
+const CONTACT_PILL_BORDER = "#3A3A3A";
+/**
+ * The contact page's own two bands (`Template_Catalogo.op`, page "3 · Contacto
+ * y redes"). Private rather than in `page-geometry.ts` for the same reason
+ * `GRID_GAP_PX` is: that module exists for numbers MORE THAN ONE consumer must
+ * agree on, and nothing outside this page draws these.
+ */
+const CONTACT_TOP_BAND_PX = 12;
+const CONTACT_FOOTER_BAND_PX = 48;
 
 /** Mockup neutrals. Not registry tokens: they are layout ink shared by every
  * template's chrome, not the per-template brand pair the registry keys on. */
@@ -465,7 +474,11 @@ function LogoPlate({ logoUrl, style }: { logoUrl: string | null; style?: React.C
         ...style,
       }}
     >
-      {logoUrl && <img src={logoUrl} alt="Logo" style={{ maxHeight: 40, maxWidth: 132 }} />}
+      {/* Sized as a FRACTION of the plate, not in pixels: the same component
+          draws a 160x60 plate in the page band and a 300x115 one on the
+          contact page, and a fixed cap left the logo marooned in the middle of
+          the larger one. */}
+      {logoUrl && <img src={logoUrl} alt="Logo" style={{ maxHeight: "70%", maxWidth: "80%" }} />}
     </div>
   );
 }
@@ -497,6 +510,7 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
   const red = branding ? template.primaryColors.primary : "#D42027";
   const black = branding ? template.primaryColors.secondary : "#111111";
   const workshopName = contact?.name ?? null;
+  const hasSocial = !!contact?.socialHandles && Object.keys(contact.socialHandles).length > 0;
   // One value, used both to number the categories inside the index and to
   // number the product pages' own footers. They cannot disagree because
   // neither recomputes it.
@@ -706,55 +720,140 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
           every catalog from such a workshop. */}
       {hasContactContent(contact) && contact && (
         <Sheet label="Contact" style={{ background: black }}>
+          {/* Thin red rule across the top, and the red note band across the
+              bottom — the two marks that stop the page reading as a slab of
+              black. Both bleed edge to edge, like every other band. */}
+          <div style={{ position: "absolute", left: 0, top: 0, width: "100%", height: CONTACT_TOP_BAND_PX, background: red }} />
+
           <div
             style={{
               position: "absolute",
-              inset: 0,
-              padding: `${CONTENT_PAD_TOP_PX + 40}px ${CONTENT_PAD_X_PX}px ${CONTENT_PAD_BOTTOM_PX}px`,
-              color: "#fff",
+              left: CONTENT_PAD_X_PX,
+              right: CONTENT_PAD_X_PX,
+              top: CONTACT_TOP_BAND_PX + 52,
               display: "flex",
               flexDirection: "column",
-              gap: 40,
+              alignItems: "center",
+              gap: 16,
+              color: "#fff",
             }}
           >
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-              <LogoPlate logoUrl={branding?.logoUrl ?? null} style={{ background: "#1c1c1c" }} />
-              {contact.name && (
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 800, letterSpacing: 2.5, textTransform: "uppercase" }}>
-                  {contact.name}
-                </p>
-              )}
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-              {CONTACT_ROWS.filter((row) => contact[row.key]).map((row) => (
-                <div key={row.key} style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                  <span style={{ width: 34, height: 34, borderRadius: "50%", background: red, flexShrink: 0 }} />
-                  <span>
-                    <span style={{ display: "block", fontSize: 8, fontWeight: 800, letterSpacing: 1.5, color: CONTACT_MUTED }}>
-                      {row.label}
-                    </span>
-                    <span style={{ display: "block", fontSize: 14, fontWeight: 700 }}>{contact[row.key]}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {contact.socialHandles && Object.keys(contact.socialHandles).length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 3, color: CONTACT_MUTED }}>SEGUINOS EN REDES</span>
-                <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 8 }}>
-                  {Object.entries(contact.socialHandles).map(([platform, handle]) => (
-                    <span
-                      key={platform}
-                      style={{ border: "1px solid #3A3A3A", borderRadius: 16, padding: "0.4rem 0.9rem", fontSize: 9, fontWeight: 600 }}
-                    >
-                      {platform}: {handle}
-                    </span>
-                  ))}
-                </div>
-              </div>
+            <LogoPlate
+              logoUrl={branding?.logoUrl ?? null}
+              style={{ width: 300, height: 115, background: "#1c1c1c", borderRadius: 6 }}
+            />
+            {contact.name && (
+              <p style={{ margin: 0, fontSize: 14, fontWeight: 800, letterSpacing: 2.5, textTransform: "uppercase" }}>
+                {contact.name}
+              </p>
             )}
+          </div>
+
+          {/* The rows fill the page rather than stacking at a fixed pitch. The
+              mockup draws six; a workshop that has left two fields empty prints
+              four, and a fixed pitch would leave the bottom third of an
+              already-dark page empty. `space-evenly` keeps any number of rows
+              looking deliberate. */}
+          <div
+            style={{
+              position: "absolute",
+              left: CONTENT_PAD_X_PX + 12,
+              right: CONTENT_PAD_X_PX,
+              top: 300,
+              // Only reserve room for the social block when there IS one.
+              // `workshop_config.social_handles` is empty for this workshop, and
+              // holding its space open left a sixth of an already-dark page
+              // blank under the last row.
+              bottom: CONTACT_FOOTER_BAND_PX + (hasSocial ? 150 : 40),
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-evenly",
+              color: "#fff",
+            }}
+          >
+            {CONTACT_ROWS.filter((row) => contact[row.key]).map((row) => (
+              <div key={row.key} style={{ display: "flex", alignItems: "center", gap: 22 }}>
+                <span
+                  style={{
+                    width: 46,
+                    height: 46,
+                    borderRadius: "50%",
+                    background: red,
+                    flexShrink: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#fff" }} />
+                </span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 8, fontWeight: 800, letterSpacing: 1.5, color: CONTACT_MUTED }}>
+                    {row.label}
+                  </span>
+                  <span style={{ display: "block", fontSize: 15, fontWeight: 700, ...CLAMP_TO_ONE_LINE }}>
+                    {contact[row.key]}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {contact.socialHandles && Object.keys(contact.socialHandles).length > 0 && (
+            <div
+              style={{
+                position: "absolute",
+                left: CONTENT_PAD_X_PX,
+                right: CONTENT_PAD_X_PX,
+                bottom: CONTACT_FOOTER_BAND_PX + 30,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 14,
+                color: "#fff",
+              }}
+            >
+              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 3, color: CONTACT_MUTED }}>SEGUINOS EN REDES</span>
+              <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 14 }}>
+                {Object.entries(contact.socialHandles).map(([platform, handle]) => (
+                  <span
+                    key={platform}
+                    style={{
+                      border: `1px solid ${CONTACT_PILL_BORDER}`,
+                      borderRadius: 999,
+                      padding: "10px 22px",
+                      fontSize: 10,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {/* The mockup's pills show the handle alone — but its three
+                        pills all carry the SAME placeholder handle, so nothing
+                        there distinguishes Instagram from Facebook. With real
+                        handles a customer needs to know which network each one
+                        is, so the platform stays. */}
+                    {platform}: {handle}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              bottom: 0,
+              width: "100%",
+              height: CONTACT_FOOTER_BAND_PX,
+              background: red,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <span style={{ color: "#fff", fontSize: 9, fontWeight: 600, letterSpacing: 0.4 }}>
+              Precios sujetos a cambio sin previo aviso
+            </span>
           </div>
         </Sheet>
       )}
