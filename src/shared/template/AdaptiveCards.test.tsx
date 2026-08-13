@@ -18,6 +18,9 @@ function product(prices: ProductPrintRef["prices"]): ProductPrintRef {
   return { id: "p1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null, prices };
 }
 
+/** The registry pair the real template hands its cards (design D1/D2). */
+const COLORS = { primary: "#D42027", secondary: "#111111" };
+
 const CARDS = [
   ["TransparentProductCard", TransparentProductCard],
   ["OpaqueProductCard", OpaqueProductCard],
@@ -25,7 +28,7 @@ const CARDS = [
 
 describe.each(CARDS)("%s — three-tier price rendering", (_name, Card) => {
   it("renders all three tiers, bold, labeled Venta/Taller/Socio", () => {
-    render(<Card product={product({ venta: 120, taller: 100, socio: 90 })} />);
+    render(<Card colors={COLORS} product={product({ venta: 120, taller: 100, socio: 90 })} />);
 
     expect(screen.getByText(/Venta/)).toBeInTheDocument();
     expect(screen.getByText(/\$120\.00/)).toBeInTheDocument();
@@ -36,7 +39,7 @@ describe.each(CARDS)("%s — three-tier price rendering", (_name, Card) => {
   });
 
   it("renders an em-dash for one missing tier, without touching the other two", () => {
-    render(<Card product={product({ venta: 120, taller: null, socio: 90 })} />);
+    render(<Card colors={COLORS} product={product({ venta: 120, taller: null, socio: 90 })} />);
 
     expect(screen.getByText(/\$120\.00/)).toBeInTheDocument();
     expect(screen.getByText(/\$90\.00/)).toBeInTheDocument();
@@ -48,7 +51,7 @@ describe.each(CARDS)("%s — three-tier price rendering", (_name, Card) => {
   });
 
   it("renders three em-dashes when prices is entirely absent", () => {
-    render(<Card product={product(null)} />);
+    render(<Card colors={COLORS} product={product(null)} />);
 
     expect(screen.getAllByText(/—/)).toHaveLength(3);
     expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
@@ -57,7 +60,7 @@ describe.each(CARDS)("%s — three-tier price rendering", (_name, Card) => {
   // The exact defect this em-dash rule exists to prevent: a hostile/real ERP
   // "0.00" tier must never render as "$0.00" in a customer-facing catalog.
   it("renders a hostile 0 tier as an em-dash, never $0.00", () => {
-    render(<Card product={product({ venta: 0, taller: 100, socio: 0 })} />);
+    render(<Card colors={COLORS} product={product({ venta: 0, taller: 100, socio: 0 })} />);
 
     expect(screen.queryByText(/\$0\.00/)).not.toBeInTheDocument();
     expect(screen.getAllByText(/—/)).toHaveLength(2);
@@ -81,12 +84,12 @@ describe.each(CARDS)("%s — printed copy", (_name, Card) => {
   });
 
   it("prints the ERP id as the product code", () => {
-    render(<Card product={withImage("https://x/img.png")} />);
+    render(<Card colors={COLORS} product={withImage("https://x/img.png")} />);
     expect(screen.getByText("Cód. PS0000570")).toBeInTheDocument();
   });
 
   it("labels a product with no photo in Spanish rather than leaving a blank column", () => {
-    render(<Card product={withImage(null)} />);
+    render(<Card colors={COLORS} product={withImage(null)} />);
     expect(screen.getByText("SIN IMAGEN")).toBeInTheDocument();
   });
 
@@ -96,7 +99,7 @@ describe.each(CARDS)("%s — printed copy", (_name, Card) => {
    * whole grid row it shares resizes around one product that has no photo.
    */
   it("keeps the placeholder's footprint so a photo-less product does not resize its row", () => {
-    render(<Card product={withImage(null)} />);
+    render(<Card colors={COLORS} product={withImage(null)} />);
     expect(screen.getByText("SIN IMAGEN")).toHaveStyle({ minHeight: "150px" });
   });
 });

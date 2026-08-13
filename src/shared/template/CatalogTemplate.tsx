@@ -4,13 +4,17 @@ import {
   CONTENT_PAD_BOTTOM_PX,
   CONTENT_PAD_TOP_PX,
   CONTENT_PAD_X_PX,
-  FIRST_PRODUCT_PAGE_NUMBER,
+  FIRST_INDEX_PAGE_NUMBER,
   FOOTER_BAND_PX,
   HEADER_BAND_PX,
   HEADER_STRIPE_PX,
-  INDEX_PAGE_NUMBER,
+  INDEX_HEADER_ROW_PX,
+  INDEX_ROWS_PER_PAGE,
+  INDEX_ROW_HEIGHT_PX,
   PAGE_HEIGHT_PX,
   PAGE_WIDTH_PX,
+  firstProductPageNumber,
+  indexPageCount,
 } from "./page-geometry";
 
 /**
@@ -219,27 +223,58 @@ export function buildIndexRows(
     }
   }
 
+  // The index's own length decides where the products start, so this has to be
+  // resolved after the rows are known — a 14-category index takes two sheets
+  // and pushes every product page down by one.
+  const firstProductPage = firstProductPageNumber(indexPageCount(rows.length));
+
   return rows.map((row) => {
     const pageIndex = productPages.findIndex((page) =>
       page.some((product) => product.categoryL1 === row.categoryL1),
     );
     return {
       ...row,
-      pageNumber: pageIndex === -1 ? null : FIRST_PRODUCT_PAGE_NUMBER + pageIndex,
+      pageNumber: pageIndex === -1 ? null : firstProductPage + pageIndex,
     };
   });
 }
 
-/** The red band's heading for one product page: the category its products belong to. */
+/** Splits the index into sheets of `INDEX_ROWS_PER_PAGE`. Always at least one. */
+export function chunkIndexRows(rows: CatalogIndexRow[]): CatalogIndexRow[][] {
+  if (rows.length === 0) return [[]];
+  const pages: CatalogIndexRow[][] = [];
+  for (let at = 0; at < rows.length; at += INDEX_ROWS_PER_PAGE) {
+    pages.push(rows.slice(at, at + INDEX_ROWS_PER_PAGE));
+  }
+  return pages;
+}
+
+/**
+ * The red band's heading for one product page.
+ *
+ * Lists EVERY L1 on the page, not just the first. `chunkProducts` splits by
+ * count and measured height and has no concept of a category boundary, so
+ * every category transition lands mid-page: a page routinely holds the tail of
+ * one category and the head of the next. Naming only the first made the band
+ * deny that the second was there — while the index pointed the reader at that
+ * exact page to find it. Two printed pages contradicting each other is worse
+ * than a longer heading.
+ */
 function pageHeading(page: ProductPrintRef[]): { title: string; subtitle: string } {
-  const title = page.find((product) => product.categoryL1)?.categoryL1 ?? "PRODUCTOS";
+  const categories: string[] = [];
   const subcategories: string[] = [];
   for (const product of page) {
+    if (product.categoryL1 && !categories.includes(product.categoryL1)) {
+      categories.push(product.categoryL1);
+    }
     if (product.categoryL2 && !subcategories.includes(product.categoryL2)) {
       subcategories.push(product.categoryL2);
     }
   }
-  return { title, subtitle: subcategories.join(" · ") };
+  return {
+    title: categories.length > 0 ? categories.join(" · ") : "PRODUCTOS",
+    subtitle: subcategories.join(" · "),
+  };
 }
 
 /**
@@ -424,7 +459,10 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
   const red = branding ? template.primaryColors.primary : "#D42027";
   const black = branding ? template.primaryColors.secondary : "#111111";
   const workshopName = contact?.name ?? null;
-  const indexRows = buildIndexRows(sections, productPages);
+  const indexPages = chunkIndexRows(buildIndexRows(sections, productPages));
+  // Same derivation `buildIndexRows` used to number the categories — the two
+  // must agree, or the index points at a page whose own footer disagrees.
+  const firstProductPage = firstProductPageNumber(indexPages.length);
 
   return (
     <article style={{ fontFamily: branding ? template.font : undefined }}>
@@ -513,62 +551,70 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
       {/* Template_Catalogo.op, page "1 · Índice" — a table with a dark header
           row, tinted alternating rows, the count in grey and the page number
           in red. In Spanish, as the mockup writes it. */}
-      <Sheet label="Index">
-        <PageChrome
-          heading="Índice"
-          subheading={title}
-          logoUrl={branding?.logoUrl ?? null}
-          workshopName={workshopName}
-          footerNote="Lista de precios · Venta · Taller · Socio"
-          pageNumber={INDEX_PAGE_NUMBER}
-          red={red}
-          black={black}
-        />
-        <ContentBox>
-          {indexRows.length === 0 ? (
-            <p style={{ margin: 0, fontSize: 12, color: INK_MUTED }}>No hay categorías seleccionadas.</p>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-              <thead>
-                <tr style={{ background: black, color: "#fff" }}>
-                  <th style={{ textAlign: "left", padding: "12px 16px", fontSize: 8, fontWeight: 800, letterSpacing: 1.8 }}>
-                    CATEGORÍA
-                  </th>
-                  <th style={{ width: 110, textAlign: "right", padding: "12px 16px", fontSize: 8, fontWeight: 800, letterSpacing: 1.8 }}>
-                    PRODUCTOS
-                  </th>
-                  <th style={{ width: 78, textAlign: "right", padding: "12px 16px", fontSize: 8, fontWeight: 800, letterSpacing: 1.8 }}>
-                    PÁG.
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {indexRows.map((row, rowIndex) => (
-                  <tr
-                    key={row.categoryL1}
-                    style={{ background: rowIndex % 2 === 0 ? ROW_TINT : "#ffffff", borderBottom: `1px solid ${HAIRLINE}` }}
-                  >
-                    <td style={{ padding: "16px 16px" }}>
-                      <span style={{ display: "block", fontSize: 13, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase" }}>
-                        {row.categoryL1}
-                      </span>
-                      {row.subcategories.length > 0 && (
-                        <span style={{ display: "block", marginTop: 3, fontSize: 8, color: INK_MUTED }}>
-                          {row.subcategories.join(" · ")}
-                        </span>
-                      )}
-                    </td>
-                    <td style={{ textAlign: "right", padding: "16px 16px", fontSize: 11, color: INK_MUTED }}>{row.productCount}</td>
-                    <td style={{ textAlign: "right", padding: "16px 16px", fontSize: 20, fontWeight: 800, color: red }}>
-                      {row.pageNumber ?? "—"}
-                    </td>
+      {indexPages.map((pageRows, pageIndex) => (
+        <Sheet key={pageIndex} label={pageIndex === 0 ? "Index" : `Index page ${pageIndex + 1}`}>
+          <PageChrome
+            heading="Índice"
+            subheading={title}
+            logoUrl={branding?.logoUrl ?? null}
+            workshopName={workshopName}
+            footerNote="Lista de precios · Venta · Taller · Socio"
+            pageNumber={FIRST_INDEX_PAGE_NUMBER + pageIndex}
+            red={red}
+            black={black}
+          />
+          <ContentBox>
+            {pageRows.length === 0 ? (
+              <p style={{ margin: 0, fontSize: 12, color: INK_MUTED }}>No hay categorías seleccionadas.</p>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+                <thead>
+                  <tr style={{ background: black, color: "#fff", height: INDEX_HEADER_ROW_PX }}>
+                    <th style={{ textAlign: "left", padding: "0 16px", fontSize: 8, fontWeight: 800, letterSpacing: 1.8 }}>
+                      CATEGORÍA
+                    </th>
+                    <th style={{ width: 110, textAlign: "right", padding: "0 16px", fontSize: 8, fontWeight: 800, letterSpacing: 1.8 }}>
+                      PRODUCTOS
+                    </th>
+                    <th style={{ width: 78, textAlign: "right", padding: "0 16px", fontSize: 8, fontWeight: 800, letterSpacing: 1.8 }}>
+                      PÁG.
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </ContentBox>
-      </Sheet>
+                </thead>
+                <tbody>
+                  {pageRows.map((row, rowIndex) => (
+                    <tr
+                      key={row.categoryL1}
+                      // Fixed height, so `INDEX_ROWS_PER_PAGE` is arithmetic
+                      // rather than a guess about how tall a row turned out.
+                      style={{
+                        height: INDEX_ROW_HEIGHT_PX,
+                        background: rowIndex % 2 === 0 ? ROW_TINT : "#ffffff",
+                        borderBottom: `1px solid ${HAIRLINE}`,
+                      }}
+                    >
+                      <td style={{ padding: "0 16px" }}>
+                        <span style={{ display: "block", fontSize: 13, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase" }}>
+                          {row.categoryL1}
+                        </span>
+                        {row.subcategories.length > 0 && (
+                          <span style={{ display: "block", marginTop: 3, fontSize: 8, color: INK_MUTED }}>
+                            {row.subcategories.join(" · ")}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ textAlign: "right", padding: "0 16px", fontSize: 11, color: INK_MUTED }}>{row.productCount}</td>
+                      <td style={{ textAlign: "right", padding: "0 16px", fontSize: 20, fontWeight: 800, color: red }}>
+                        {row.pageNumber ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </ContentBox>
+        </Sheet>
+      ))}
 
       {/* Template_Catalogo.op, page "2 · Productos" — the red band carries the
           category the page holds, so the reader can find it without the index. */}
@@ -582,7 +628,7 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
               logoUrl={branding?.logoUrl ?? null}
               workshopName={workshopName}
               footerNote="Venta · Taller · Socio"
-              pageNumber={FIRST_PRODUCT_PAGE_NUMBER + pageIndex}
+              pageNumber={firstProductPage + pageIndex}
               red={red}
               black={black}
             />

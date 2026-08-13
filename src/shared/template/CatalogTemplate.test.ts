@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { buildIndexRows, type CatalogIndexSection, type ProductPrintRef } from "./CatalogTemplate";
-import { FIRST_PRODUCT_PAGE_NUMBER } from "./page-geometry";
+import { buildIndexRows, chunkIndexRows, type CatalogIndexSection, type ProductPrintRef } from "./CatalogTemplate";
+import { INDEX_ROWS_PER_PAGE, firstProductPageNumber, indexPageCount } from "./page-geometry";
+
+const FIRST_PRODUCT_PAGE_NUMBER = firstProductPageNumber(1);
 
 const section = (categoryL1: string, categoryL2: string | null, productCount: number): CatalogIndexSection => ({
   categoryL1,
@@ -79,5 +81,51 @@ describe("buildIndexRows — collapsing sections into the printed index", () => 
       [[product("a1", "AUDIO")]],
     );
     expect(row?.pageNumber).toBeNull();
+  });
+});
+
+/**
+ * A `Sheet` is an absolutely-positioned box of exactly one page, so page
+ * breaking cannot reach inside it to split a long table. An index longer than
+ * one sheet has to be chunked, or its extra categories render over the footer
+ * band and off the bottom of the paper — losing them with no error, no failing
+ * test, and nothing visible to whoever generated the catalog.
+ */
+describe("chunkIndexRows — an index longer than one sheet", () => {
+  const manySections = (count: number) =>
+    Array.from({ length: count }, (_, at) => section(`CATEGORÍA ${at}`, null, 1));
+
+  it("keeps a full sheet's worth of categories on one sheet", () => {
+    const pages = chunkIndexRows(buildIndexRows(manySections(INDEX_ROWS_PER_PAGE)));
+    expect(pages).toHaveLength(1);
+    expect(pages[0]).toHaveLength(INDEX_ROWS_PER_PAGE);
+  });
+
+  it("spills onto a second sheet rather than off the bottom of the first", () => {
+    const pages = chunkIndexRows(buildIndexRows(manySections(INDEX_ROWS_PER_PAGE + 1)));
+    expect(pages).toHaveLength(2);
+    expect(pages[1]).toHaveLength(1);
+  });
+
+  it("still prints one sheet when there are no categories at all", () => {
+    expect(chunkIndexRows(buildIndexRows([]))).toEqual([[]]);
+  });
+
+  /**
+   * The number the index PRINTS beside a category has to be the number that
+   * category's page prints in its own footer. A second index sheet pushes every
+   * product page down by one, so a page number counted as a constant `3` would
+   * send the reader one page short of what they are looking for.
+   */
+  it("shifts the product page numbers down when the index itself needs a second sheet", () => {
+    const sections = manySections(INDEX_ROWS_PER_PAGE + 1);
+    const first = sections[0];
+    if (!first) throw new Error("fixture");
+
+    const rows = buildIndexRows(sections, [[product("p1", first.categoryL1)]]);
+
+    expect(indexPageCount(sections.length)).toBe(2);
+    expect(rows[0]?.pageNumber).toBe(firstProductPageNumber(2));
+    expect(rows[0]?.pageNumber).toBe(FIRST_PRODUCT_PAGE_NUMBER + 1);
   });
 });

@@ -282,6 +282,51 @@ describe("renderCatalogHtml — R6.1 (shares CatalogTemplate with the builder's 
  * Socio). A tier with no usable price — absent, or an ERP value `<= 0.00` —
  * renders an em-dash, never "$0.00" (design D4).
  */
+/**
+ * `chunkProducts` splits by count and measured height and knows nothing about
+ * category boundaries, so every category transition lands mid-page. The red
+ * band naming only the page's FIRST category made the page deny that the
+ * second was on it — while the index pointed the reader at that exact page to
+ * find it. Two printed pages contradicting each other is the defect.
+ */
+describe("renderCatalogHtml — a product page carrying more than one category", () => {
+  const bandOf = (html: string) => {
+    const page = html.slice(html.indexOf('aria-label="Product page 1"'));
+    return page.match(/<h2[^>]*>([^<]*)<\/h2>/)?.[1] ?? "";
+  };
+
+  it("names every category on the page, not just the first", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [
+        { categoryL1: "AUDIO", categoryL2: null, productCount: 1 },
+        { categoryL1: "LUCES", categoryL2: null, productCount: 1 },
+      ],
+      productPages: [
+        [
+          { id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null },
+          { id: "2", name: "Barra", categoryL1: "LUCES", categoryL2: null },
+        ],
+      ],
+    });
+
+    expect(bandOf(html)).toContain("AUDIO");
+    expect(bandOf(html)).toContain("LUCES");
+  });
+
+  it("falls back to a Spanish heading when no product carries a category", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [],
+      productPages: [[{ id: "1", name: "Woofer", categoryL1: null, categoryL2: null }]],
+    });
+
+    expect(bandOf(html)).toBe("PRODUCTOS");
+  });
+});
+
 describe("renderCatalogHtml — product prices", () => {
   const priced = (prices: ProductPrintRef["prices"]): ProductPrintRef[][] => [
     [{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null, prices }],

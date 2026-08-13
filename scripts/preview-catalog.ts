@@ -109,9 +109,20 @@ async function main() {
     await sheet.screenshot({ path: join(OUT, `${String(index).padStart(2, "0")}-${label.replace(/\s+/g, "-")}.png`) });
   }
 
-  await writeFile(join(OUT, "catalog.pdf"), await page.pdf({ format: "Letter", printBackground: true }));
+  const pdf = await page.pdf({ format: "Letter", printBackground: true });
+  await writeFile(join(OUT, "catalog.pdf"), pdf);
   await browser.close();
-  console.log(`\n${sheets.length} sheets -> preview-out/`);
+
+  // A visual gate that never looks at the PDF is not a gate. Each sheet is
+  // exactly one page tall and carries a forced break, so the counts must
+  // match: a mismatch means either a trailing blank page or a sheet that
+  // overflowed onto one — both invisible in the per-sheet PNGs above.
+  const pdfPages = (pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+  console.log(`\n${sheets.length} sheets -> ${pdfPages} PDF pages -> preview-out/`);
+  if (pdfPages !== sheets.length) {
+    console.error(`FAIL: ${sheets.length} sheets produced ${pdfPages} PDF pages`);
+    process.exit(1);
+  }
   process.exit(0);
 }
 
