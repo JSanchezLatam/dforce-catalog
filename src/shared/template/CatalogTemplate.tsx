@@ -8,6 +8,7 @@ import {
   FOOTER_BAND_PX,
   HEADER_BAND_PX,
   HEADER_STRIPE_PX,
+  INDEX_PAGE_NUMBER,
   PAGE_HEIGHT_PX,
   PAGE_WIDTH_PX,
 } from "./page-geometry";
@@ -119,8 +120,17 @@ export type ProductPrices = { venta: number | null; taller: number | null; socio
  * never retyped there (`shared` may not import from `modules`).
  */
 export const GRID_COLUMNS = 2;
-/** Grid gutter, in px. `worker.ts` reads it back off the rendered grid rather
- * than importing it, so it stays a private layout detail. */
+/**
+ * Grid gutter, in px — private, unlike its sibling `GRID_COLUMNS`, and the
+ * asymmetry is deliberate rather than an oversight.
+ *
+ * The rule `page-geometry.ts` states is "never retype a number in two places".
+ * Reading it back off the rendered grid is not a second copy — it is the same
+ * number, measured. `worker.ts` folds the gap into every card height by asking
+ * the browser for the grid's computed `rowGap`, so changing it here cannot
+ * desynchronise anything. The column count has no such measurement available:
+ * the packer must form rows BEFORE the split exists, so it has to be told.
+ */
 const GRID_GAP_PX = 14;
 
 export type CatalogIndexSection = {
@@ -235,8 +245,16 @@ function pageHeading(page: ProductPrintRef[]): { title: string; subtitle: string
 /**
  * One full-bleed sheet. Every page in the catalog is one of these, so the
  * `@page { margin: 0 }` rule in `render.ts` has an element of exactly the
- * paper's size to fill. `breakAfter: always` rather than `breakBefore` on the
- * next page, so the LAST page does not emit a trailing blank sheet.
+ * paper's size to fill.
+ *
+ * Deliberately NOT `overflow: hidden`. Only the cover needs clipping (its
+ * photo is wider than the sheet on purpose), and it asks for it by hand.
+ * Clipping every sheet would make an overflowing product page fail SILENTLY:
+ * `chunkProducts` knowingly places a card taller than a whole page alone and
+ * leaves the overflow to the browser, so a hidden overflow turns that case
+ * into a card sliced off mid-price in a document a customer reads. A page that
+ * visibly runs long is a bug someone reports; a page that quietly loses its
+ * last row is not.
  */
 function Sheet({ label, children, style }: { label: string; children: React.ReactNode; style?: React.CSSProperties }) {
   return (
@@ -246,7 +264,6 @@ function Sheet({ label, children, style }: { label: string; children: React.Reac
         position: "relative",
         width: PAGE_WIDTH_PX,
         height: PAGE_HEIGHT_PX,
-        overflow: "hidden",
         background: "#ffffff",
         breakAfter: "page",
         ...style,
@@ -419,7 +436,9 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
           also hid the dark wedge that is supposed to contrast against it.
           A fallback colour equal to the colour it must contrast with is
           invisible — so the sheet never wears the wedge's colour. */}
-      <Sheet label="Cover">
+      {/* The one sheet that clips: the cover photo is 902px wide on an 816px
+          sheet and hangs off the right edge by design. */}
+      <Sheet label="Cover" style={{ overflow: "hidden" }}>
         {coverImageUrl && (
           <img
             src={coverImageUrl}
@@ -501,7 +520,7 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
           logoUrl={branding?.logoUrl ?? null}
           workshopName={workshopName}
           footerNote="Lista de precios · Venta · Taller · Socio"
-          pageNumber={2}
+          pageNumber={INDEX_PAGE_NUMBER}
           red={red}
           black={black}
         />

@@ -35,9 +35,6 @@ export const CONTENT_PAD_X_PX = 48;
 export const CONTENT_PAD_TOP_PX = 38;
 export const CONTENT_PAD_BOTTOM_PX = 24;
 
-/** Width one content page actually gives its grid. */
-export const CONTENT_WIDTH_PX = PAGE_WIDTH_PX - 2 * CONTENT_PAD_X_PX;
-
 /**
  * Height one content page actually gives its grid — what `chunkProducts`
  * splits against.
@@ -61,3 +58,5 @@ export const CONTENT_HEIGHT_PX =
  * disagree about where the products start.
  */
 export const FIRST_PRODUCT_PAGE_NUMBER = 3;
+/** The index's own printed number — derived, so the two cannot drift apart. */
+export const INDEX_PAGE_NUMBER = FIRST_PRODUCT_PAGE_NUMBER - 1;

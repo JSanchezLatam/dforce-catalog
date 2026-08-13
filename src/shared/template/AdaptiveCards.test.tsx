@@ -64,3 +64,39 @@ describe.each(CARDS)("%s — three-tier price rendering", (_name, Card) => {
     expect(screen.getByText(/\$100\.00/)).toBeInTheDocument();
   });
 });
+
+/**
+ * The card's Spanish copy. This document is printed and handed to a customer,
+ * so an untranslated string is not a cosmetic slip — and the copy is exactly
+ * the kind of thing a refactor drops without failing anything else.
+ */
+describe.each(CARDS)("%s — printed copy", (_name, Card) => {
+  const withImage = (image: string | null): ProductPrintRef => ({
+    id: "PS0000570",
+    name: "Woofer",
+    categoryL1: "AUDIO",
+    categoryL2: null,
+    image,
+    prices: null,
+  });
+
+  it("prints the ERP id as the product code", () => {
+    render(<Card product={withImage("https://x/img.png")} />);
+    expect(screen.getByText("Cód. PS0000570")).toBeInTheDocument();
+  });
+
+  it("labels a product with no photo in Spanish rather than leaving a blank column", () => {
+    render(<Card product={withImage(null)} />);
+    expect(screen.getByText("SIN IMAGEN")).toBeInTheDocument();
+  });
+
+  /**
+   * The placeholder holds the image column open on its own. Without a floor it
+   * collapses to nothing, the card gets shorter than its neighbour, and the
+   * whole grid row it shares resizes around one product that has no photo.
+   */
+  it("keeps the placeholder's footprint so a photo-less product does not resize its row", () => {
+    render(<Card product={withImage(null)} />);
+    expect(screen.getByText("SIN IMAGEN")).toHaveStyle({ minHeight: "150px" });
+  });
+});

@@ -18,6 +18,7 @@ import { resolveAllPrices } from "@/modules/catalog-builder/price-lists";
 import { listCategoryPairs, listProductsInCategories } from "@/modules/catalog-builder/queries";
 import { buildIndexSections } from "@/modules/catalog-builder/selection";
 import { chunkProducts, renderCatalogHtml } from "@/modules/pdf-generation/render";
+import { measureCardHeights } from "@/modules/pdf-generation/worker";
 import type { ProductPrintRef } from "@/shared/template/CatalogTemplate";
 import { CONTENT_HEIGHT_PX, PAGE_HEIGHT_PX, PAGE_WIDTH_PX } from "@/shared/template/page-geometry";
 
@@ -85,12 +86,10 @@ async function main() {
   await page.setContent(await renderCatalogHtml({ ...props, productPages: [products] }), {
     waitUntil: "domcontentloaded",
   });
-  const cardHeights = await page.evaluate(() => {
-    const grid = document.querySelector("[data-product-grid]");
-    if (!(grid instanceof HTMLElement)) return [];
-    const gap = parseFloat(getComputedStyle(grid).rowGap) || 0;
-    return Array.from(grid.children, (card) => card.getBoundingClientRect().height + gap);
-  });
+  // The worker's own measurement, imported — same reason the query above is
+  // imported. A copy of it here would drift from the thing this gate exists
+  // to check the moment the grid selector or the gap handling changes.
+  const cardHeights = await measureCardHeights(page);
   console.log(`measured ${cardHeights.length} cards, tallest ${Math.max(...cardHeights).toFixed(0)}px, page holds ${CONTENT_HEIGHT_PX}px`);
 
   const productPages = chunkProducts(products, 6, cardHeights, CONTENT_HEIGHT_PX);

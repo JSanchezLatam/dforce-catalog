@@ -112,20 +112,6 @@ export async function resolveBranding(
 }
 
 /**
- * Measuring at any width other than the printed one measures the wrong card:
- * the product name wraps differently at 1280px (Playwright's default viewport)
- * than in the ~353px column the paper actually gives it, and a card that wraps
- * less measures shorter than it prints.
- *
- * The viewport is now the WHOLE sheet rather than a pre-inset content box: the
- * page's own bands and padding are elements inside it, so laying out at the
- * full 816x1056 is what puts the grid in its real column. `CONTENT_HEIGHT_PX`
- * is the height left over once those bands are subtracted — see
- * `shared/template/page-geometry`, which is the single place any of these
- * numbers is written down.
- */
-
-/**
  * Archive gap #1 — asks the browser how tall each card is instead of
  * estimating it (an estimate is exactly what this replaces). Runs against a
  * document holding every product in ONE grid, so every card exists to be
@@ -135,9 +121,7 @@ export async function resolveBranding(
  * The grid's row gap is folded into every card height, so a row works out to
  * `max(card) + gap` without the packer knowing the grid's gap at all. That
  * counts one gap too many per page, which errs towards breaking early —
- * overflowing is the bug, a slightly emptier page is not. `chrome` is the
- * product section's own vertical padding, which eats into the page before
- * any card does.
+ * overflowing is the bug, a slightly emptier page is not.
  *
  * Read these as row heights, not as precise per-card ones: grid items default
  * to `align-items: stretch`, so both wrappers in a row already report the
@@ -157,7 +141,7 @@ export async function resolveBranding(
  * red and black bands, which are elements. `CONTENT_HEIGHT_PX` subtracts them
  * arithmetically instead — see `shared/template/page-geometry`.
  */
-async function measureCardHeights(page: Page): Promise<number[]> {
+export async function measureCardHeights(page: Page): Promise<number[]> {
   return page.evaluate(() => {
     const grid = document.querySelector("[data-product-grid]");
     if (!(grid instanceof HTMLElement)) return [];
@@ -192,6 +176,13 @@ export async function renderPdfBuffer(
 
   const browser = await chromium.launch();
   try {
+    // The viewport is the WHOLE sheet, not a pre-inset content box: the page's
+    // bands and padding are elements inside it, so laying out at the full
+    // 816x1056 is what puts the grid in its real ~353px column. Measuring at
+    // any other width measures the wrong card — a product name wraps
+    // differently at Playwright's default 1280px, and a card that wraps less
+    // measures shorter than it prints. `shared/template/page-geometry` is the
+    // single place any of these numbers is written down.
     const page = await browser.newPage({
       viewport: { width: PAGE_WIDTH_PX, height: PAGE_HEIGHT_PX },
     });
@@ -200,11 +191,20 @@ export async function renderPdfBuffer(
     await page.emulateMedia({ media: "print" });
 
     const everythingOnOnePage = payload.products.length > 0 ? [payload.products] : [];
-    // `domcontentloaded`, not `load`: every product image has a CSS-fixed
-    // height (160/180px, image or placeholder alike), so no measured height
-    // waits on a byte arriving. Blocking on `load` here would download all
-    // 200 images purely to throw the document away — the render pass below
-    // fetches them again, and this job holds the single queue slot meanwhile.
+    // `domcontentloaded`, not `load`: no measured height waits on a byte
+    // arriving, so the split is the same either way.
+    //
+    // That used to hold because every card gave its image a fixed 160/180px
+    // height. The mockup card has no such height — so the reason is now the
+    // card's shape instead. It is a flex row with `align-items: stretch`: the
+    // text column decides the height, the image column is stretched to match,
+    // and the `<img>` inside is `height: 100%` of a box that is already
+    // settled. An image that has not loaded contributes nothing, and a product
+    // with no image gets a placeholder `<div>` whose floor is CSS, not bytes.
+    //
+    // Blocking on `load` here would download all 200 images purely to throw
+    // the document away — the render pass below fetches them again, and this
+    // job holds the single queue slot meanwhile.
     await page.setContent(await renderCatalogHtml({ ...props, productPages: everythingOnOnePage }), {
       waitUntil: "domcontentloaded",
     });
