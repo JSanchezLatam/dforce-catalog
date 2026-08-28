@@ -47,12 +47,12 @@ Chain strategy: pending
 
 ## Phase 4: `CustomerPicker` component
 
-- [ ] 4.1 RED — `CustomerPicker.test.tsx`: one `fetch` per debounced typing burst (jsdom + mocked `fetch` + fake timers).
-- [ ] 4.2 RED — `CustomerPicker.test.tsx`: a `selectedCustomer` prop renders as selected even when a later search excludes it.
-- [ ] 4.3 RED — `CustomerPicker.test.tsx`: zero exact matches → near matches render before "create customer", never beside it (highest-risk behaviour, proposal.md).
-- [ ] 4.4 RED — `CustomerPicker.test.tsx`: create action absent when `canCreateCustomer` is false.
-- [ ] 4.5 RED — `CustomerPicker.test.tsx`: zero exact and zero near matches → only the create affordance renders.
-- [ ] 4.6 GREEN — `src/modules/service-orders/CustomerPicker.tsx`: debounced `fetch` (300 ms, `CustomerFilters.tsx`'s `debounceRef` idiom, no `router.push`); row takes `plates: string[]`; identifier precedence plates → phone → email → "Registrado el {createdAt}"; ordered empty state gated by `canCreateCustomer`.
+- [x] 4.1 RED — `CustomerPicker.test.tsx`: one `fetch` per debounced typing burst (jsdom + mocked `fetch` + fake timers).
+- [x] 4.2 RED — `CustomerPicker.test.tsx`: a `selectedCustomer` prop renders as selected even when a later search excludes it.
+- [x] 4.3 RED — `CustomerPicker.test.tsx`: zero exact matches → near matches render before "create customer", never beside it (highest-risk behaviour, proposal.md).
+- [x] 4.4 RED — `CustomerPicker.test.tsx`: create action absent when `canCreateCustomer` is false.
+- [x] 4.5 RED — `CustomerPicker.test.tsx`: zero exact and zero near matches → only the create affordance renders.
+- [x] 4.6 GREEN — `src/modules/service-orders/CustomerPicker.tsx`: debounced `fetch` (300 ms, `CustomerFilters.tsx`'s `debounceRef` idiom, no `router.push`); row takes `plates: string[]`; identifier precedence plates → phone → email → "Registrado el {createdAt}"; ordered empty state gated by `canCreateCustomer`.
 
 ## Phase 5: Wire into the order form
 
