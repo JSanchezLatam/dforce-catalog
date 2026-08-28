@@ -55,7 +55,7 @@ import { runSync } from "@/modules/inventory-sync/job";
 import { registerPdfGenerateWorker } from "@/modules/pdf-generation/worker";
 import { proxy } from "@/proxy";
 import { db } from "@/shared/db/client";
-import { users } from "@/shared/db/schema";
+import { cliente, users } from "@/shared/db/schema";
 import { getBoss } from "@/shared/jobs/boss";
 
 import { POST as loginPOST } from "../app/api/login/route";
@@ -63,6 +63,7 @@ import { POST as templateConfigPOST } from "../app/api/template-config/route";
 import { POST as productsPOST } from "../app/api/catalog-builder/products/route";
 import { POST as generatePOST } from "../app/api/catalog-builder/generate/route";
 import { GET as filePOST } from "../app/api/catalogs/[id]/file/route";
+import { GET as customersGET } from "../app/api/customers/route";
 
 const PASSWORD = "Sup3rSecret!1";
 
@@ -81,6 +82,94 @@ async function loginAs(username: string): Promise<{ id: string; role: "tecnico" 
   expect(user).not.toBeNull();
   return user!;
 }
+
+/**
+ * AGENTS.md's "Known coverage limit" — every unit test for `listClientes`/
+ * `countClientes` injects `queryFn`, so a fully green `npm test` proves ZERO
+ * coverage of the real `ilike`/`or()` SQL `buildClienteSearchWhere` builds.
+ * Specifically: `NULL ILIKE x` is NULL, not false, so a customer with a null
+ * `phone` or `vehicle_plate` could in principle be silently dropped from the
+ * `or()`. This describe calls the real `GET /api/customers` handler (no
+ * injected deps) against a real Postgres to prove: mid-string case-
+ * insensitive matching on name/plate, that a NULL column does not drop a row
+ * matched through a different column, mid-string digit matching on phone,
+ * and that the `relaxSearchTerm` near-match pass finds a row the raw
+ * (unrelaxed) term cannot. Runs before the catalog-generation describe below
+ * so `db.$client.end()` in that describe's `afterAll` — its own connection
+ * teardown — still lands after this one, not before.
+ */
+describe("customer search (E2E)", () => {
+  let mixedCaseName: { id: string };
+  let nullPlate: { id: string };
+  let nullPhone: { id: string };
+  let formattedPhone: { id: string };
+
+  beforeAll(async () => {
+    execSync("npx drizzle-kit migrate", { stdio: "inherit" });
+
+    const [row1, row2, row3, row4] = await db
+      .insert(cliente)
+      .values([
+        { name: "María GONZÁLEZ", phone: "50761111111", vehiclePlate: "ABC111" },
+        { name: "Carlos Ruiz", phone: "50762222222", vehiclePlate: null },
+        { name: "Ana Torres", phone: null, vehiclePlate: "XYZ999" },
+        // Stored with a leading "+" — `normalizePhone`'s real output shape
+        // for an international number (validation.ts:47-51), i.e. what a
+        // production row genuinely looks like, not a hand-formatted stub.
+        { name: "Pedro Díaz", phone: "+5076444444", vehiclePlate: "DEF444" },
+      ])
+      .returning({ id: cliente.id });
+    mixedCaseName = row1;
+    nullPlate = row2;
+    nullPhone = row3;
+    formattedPhone = row4;
+  }, 60_000);
+
+  const headers = { "x-user-id": "e2e-customer-search", "x-user-role": "tecnico" };
+
+  async function search(term: string) {
+    const response = await customersGET(
+      new NextRequest(`http://localhost/api/customers?search=${encodeURIComponent(term)}`, { headers }),
+    );
+    expect(response.status).toBe(200);
+    return response.json() as Promise<{ customers: { id: string }[]; total: number; relaxedFrom?: string }>;
+  }
+
+  it("matches partial, lowercase, mixed-case names (mid-string ilike, case-insensitive)", async () => {
+    const body = await search("maría gonzá");
+    expect(body.customers.map((c) => c.id)).toContain(mixedCaseName.id);
+  });
+
+  it("matches a partial plate (mid-string ilike on vehicle_plate)", async () => {
+    const body = await search("bc11");
+    expect(body.customers.map((c) => c.id)).toContain(mixedCaseName.id);
+  });
+
+  it("matches partial digits-only phone (mid-string ilike on phone)", async () => {
+    const body = await search("622222");
+    expect(body.customers.map((c) => c.id)).toContain(nullPlate.id);
+  });
+
+  it("does not silently drop a row with a NULL vehicle_plate from the or() when matched by name", async () => {
+    const body = await search("Carlos");
+    expect(body.customers.map((c) => c.id)).toContain(nullPlate.id);
+  });
+
+  it("does not silently drop a row with a NULL phone from the or() when matched by name", async () => {
+    const body = await search("Torres");
+    expect(body.customers.map((c) => c.id)).toContain(nullPhone.id);
+  });
+
+  it("finds a customer only through the relaxed near-match pass, not the raw term", async () => {
+    // "644-4444" is dashed and has no country code; the stored phone
+    // ("+5076444444") has neither dash nor a bare "644-4444" substring, so
+    // the primary pass must return zero rows before relaxSearchTerm's
+    // digits-only relaxation ("6444444") finds it as a substring.
+    const raw = await search("644-4444");
+    expect(raw.relaxedFrom).toBe("6444444");
+    expect(raw.customers.map((c) => c.id)).toContain(formattedPhone.id);
+  });
+});
 
 describe("full catalog-generation flow (E2E)", () => {
   let regularUser: { id: string; role: "tecnico" | "administrador" };

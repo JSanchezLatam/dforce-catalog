@@ -1,0 +1,184 @@
+# Design: Scalable Customer Search and Picker
+
+## Technical Approach
+
+Add `GET /api/customers` next to the existing `POST` in `src/app/api/customers/route.ts`, backed by
+`listClientes`/`countClientes` **unchanged**. Replace the `<Select>` fed by a 1000-row preload with a
+debounced picker that queries that route. `src/modules/customers/queries.ts` is not edited, which keeps
+the proposal's two-revert rollback intact and keeps the customers list page out of the blast radius.
+
+## Architecture Decisions
+
+### Decision: `GET` in the existing route file, mirroring `api/users/route.ts`
+
+**Choice**: `handleListClientes(request, deps)` + a thin `GET`, with `can(user, "customers.read")`
+evaluated before the body/deps are touched, exactly as `handleListUsers` does (`api/users/route.ts:19-36`).
+Response: `{ customers: ClienteListItem[]; total: number; relaxedFrom?: string }`.
+**Alternatives**: a dedicated `/api/customers/search` route; a second search query in `queries.ts`.
+**Rationale**: `ClienteListItem` already carries `vehiclePlate`, and `buildClienteSearchWhere` already
+implements R19. A second route or predicate would be a second definition of "search" to keep in sync.
+
+### Decision: near matches = re-run the same query with a relaxed term
+
+**Choice**: when the primary search returns zero rows, the handler calls `listClientes` a **second time**
+with a term produced by a new pure module `src/modules/customers/near-match.ts`:
+`relaxSearchTerm(term): string | null` — digits-only when the term is mostly digits (so `2345678`,
+`234-5678` and `+507 234-5678` collapse to the same key), otherwise a shortened prefix; `null` when the
+term is too short to relax, which suppresses the second query entirely. The response marks them with
+`relaxedFrom`, so the client needs no second round-trip to know these are near matches.
+**Alternatives**: `pg_trgm` + a GIN index (extension + migration, explicitly out of scope);
+client-side fuzzy matching (needs the whole table back — the thing this change removes).
+**Rationale**: zero new SQL, zero new dependency, and the relaxation logic is a pure function, which is
+the only part of this feature that can be *proven* without a database.
+
+### Decision: the picker owns the selected customer as an object, not an id
+
+**Choice**: `CustomerPicker` holds `selectedCustomer: ServiceOrderCustomerOption | null`, seeded from an
+optional `selectedCustomer` prop and set from the clicked row. It renders from that state, never from the
+current result page, so changing the search term cannot blank the selection.
+**Alternatives**: add `GET /api/customers/[id]` and re-fetch the preselected customer — **rejected**.
+**Rationale**: rung 1 of the ladder — no endpoint is needed. In create mode the clicked row already
+carries the data. For an existing order the customer is already loaded server-side:
+`service-orders/[id]/page.tsx` imports `getClienteById` at line 18 and calls
+`getClienteById(orden.clienteId)` at line 85, in a server component, before anything renders. That
+customer is passed down as the `selectedCustomer` prop and rendered as the selected option regardless of
+the current search term. It is true that no GET-by-id route exists; it is false that one is required.
+This change adds **no** customer endpoint other than the list `GET`.
+
+### Decision: the result row renders a list of plates, not one plate
+
+**Choice**: `ServiceOrderCustomerOption` widens to
+`Pick<Cliente, "id" | "name" | "phone" | "email" | "vehiclePlate" | "createdAt">` (= `ClienteListItem`,
+so the route body maps straight through). The row component takes `plates: string[]`, today built as
+`vehiclePlate ? [vehiclePlate] : []`. Identifier precedence when columns are null:
+**plates → phone → email → "Registrado el {createdAt}"** — every fallback is a column the route already
+returns, so a customer with neither phone nor plate is still never a bare, ambiguous name.
+**Alternatives**: `plate: string | null` on the row; showing the raw id as fallback.
+**Rationale**: vehicles become one-to-many in a later change; an array prop absorbs that with a mapping
+edit instead of a row redesign. Staff cannot use a cuid as a disambiguator.
+
+### Decision: reuse `CustomerFilters`' debounce, not its URL push
+
+**Choice**: the 300 ms `debounceRef` idiom from `CustomerFilters.tsx:31-44`, but the debounced effect is
+a `fetch`, not `router.push`.
+**Rationale**: the picker lives inside the order `Dialog`. A URL push would re-render the page and drop
+the in-progress cart. This is the one place "reuse the existing idiom" must be read narrowly.
+
+### Decision: `customers.write` gates create-inline; empty state is ordered, never simultaneous
+
+**Choice**: the server page passes `canCreateCustomer={can(user, "customers.write")}`. The empty state
+renders near matches as primary content and reveals the create action **after** them, only when the grant
+is true and only when the near-match set is exhausted or empty.
+**Note**: both `tecnico` and `administrador` hold `customers.write` today (`policy.ts:25-26,42-43`), so
+this gate denies nobody in production. It is kept for defence in depth and matched to the same check
+`handleCreateCliente` already performs.
+
+## Data Flow
+
+    CustomerPicker (Dialog)          GET /api/customers?search=&page=&pageSize=
+      typing ──300ms debounce──────→ requireSession → can("customers.read")
+                                            │ 403 before any query
+                                            ↓
+                                     listClientes / countClientes  (unchanged)
+                                            │ 0 rows?
+                                            ↓ yes
+                                     relaxSearchTerm → listClientes (2nd call)
+      rows ←────{customers,total,relaxedFrom}─────────┘
+      click row → selectedCustomer (survives later searches) → clienteId → POST /api/service-orders
+
+## File Changes
+
+| File | Action | Description |
+|------|--------|-------------|
+| `src/app/api/customers/route.ts` | Modify | `handleListClientes` + `GET`, injectable `listClientes`/`countClientes` |
+| `src/app/api/customers/route.test.ts` | Modify | GET: authz-before-query, params, near-match flag |
+| `src/modules/customers/near-match.ts` | Create | Pure `relaxSearchTerm` |
+| `src/modules/customers/near-match.test.ts` | Create | Digits-only, prefix, null-when-too-short |
+| `src/modules/service-orders/CustomerPicker.tsx` | Create | Debounced async picker, row, ordered empty state |
+| `src/modules/service-orders/CustomerPicker.test.tsx` | Create | jsdom behaviour tests |
+| `src/modules/service-orders/ServiceOrderForm.tsx` | Modify | Widen option type; swap `<Select>`; accept `selectedCustomer`, `canCreateCustomer` |
+| `src/modules/service-orders/ServiceOrderFormTrigger.tsx` | Modify | Pass the two new props through |
+| `src/app/(app)/service-orders/page.tsx` | Modify | Drop the `listClientes` preload; **rewrite** the `PICKER_LIST_LIMIT` comment (line 28-32) to say it now bounds the parts picker only |
+| `src/e2e/full-flow.e2e.test.ts` | Modify | The real-SQL search check (below) |
+| `src/modules/customers/queries.ts` | Unchanged | Reused as-is |
+
+`CustomerPicker` is a new file rather than more of `ServiceOrderForm` (already 313 lines) because it is the
+only unit under test here and it keeps the picker revert independent of the route revert.
+
+## Interfaces / Contracts
+
+```ts
+// GET /api/customers — search: string, page: number = 1, pageSize: number = DEFAULT_PAGE_SIZE (clamped)
+type ListClientesResponse = {
+  customers: ClienteListItem[];
+  total: number;
+  /** Present only when `customers` are near matches for a relaxed term. */
+  relaxedFrom?: string;
+};
+
+// src/modules/customers/near-match.ts
+export function relaxSearchTerm(term: string): string | null;
+```
+
+## Testing Strategy
+
+Strict TDD. RED order: route unit tests → `relaxSearchTerm` → the e2e SQL check → picker component tests →
+implementation.
+
+### Provable with injected seams (`npm test`)
+
+| Layer | What | How |
+|---|---|---|
+| Route | 403 for a denied user **and** the `listClientes` spy was never called | `x-user-role: "unknown"` — `can()` returns `false` for an unrecognised role (`policy.ts:60-63`) and `parseSessionUser` does not validate it (`session.ts:126-135`), so the deny branch is reachable |
+| Route | Throws with no session headers | Same shape as the existing POST test (`route.test.ts:18-24`) |
+| Route | Param parsing/clamping; `relaxedFrom` set only on a zero-result primary; second query suppressed when `relaxSearchTerm` returns `null` | Injected `listClientes`/`countClientes` call counters |
+| Unit | `relaxSearchTerm`: `####-####` and `+507 ####-####` relax to the same key; short terms return `null` | Pure function |
+| Unit | Identifier precedence incl. the phone-null + plate-null customer | Pure function |
+| Component | One fetch per debounce burst; selection survives a later search that excludes it; near matches render **before** the create action and never beside it; create action absent without `customers.write` | jsdom + mocked `fetch` |
+
+### NOT provable that way — needs a real database
+
+A green suite here proves nothing about the SQL: `buildClienteSearchWhere` is asserted only to be
+"defined" (`queries.test.ts:15-17`) and every `listClientes` test injects `queryFn`
+(`queries.test.ts:20-29`). Unproven without Postgres:
+
+- that `ilike '%term%'` actually returns the intended rows (mid-string, mixed case, plate, phone);
+- that `or()` over a **NULL** `phone`/`vehiclePlate` does not silently drop a row (`NULL ILIKE x` is NULL,
+  not false) — the plate-less customer must still be findable by name;
+- `limit`/`offset` against the real `desc(createdAt)` ordering;
+- that the relaxed query really returns a superset of the strict one.
+
+**Named check (required before merge):** a `customer search (E2E)` describe added to
+`src/e2e/full-flow.e2e.test.ts`, run with `npm run test:e2e` against a throwaway Postgres, seeding four
+`cliente` rows — mixed-case name, null plate, null phone, formatted phone — and calling the real `GET`
+handler for each of: partial lowercase name, partial plate, digits-only phone, and a term that only the
+relaxed pass can match. Per `AGENTS.md:178-188`, without this run the change is unverified regardless of
+`npm test`.
+
+## Threat Matrix
+
+N/A — every row in `references/threat-matrix.md` covers Git/shell/PR automation
+(documentation-like paths, repository selection, commit state, push state, PR commands). This change adds
+one authenticated read-only HTTP handler and no shell, subprocess, VCS, or process-integration boundary.
+Its real boundary is authorization, covered as a RED test above.
+
+## Migration / Rollout
+
+No migration. No new index and no `pg_trgm` — deliberate. **Known ceiling:** `cliente_name_idx` and
+`cliente_plate_idx` are btree and cannot serve a leading-wildcard `ilike`, so every search is a sequential
+scan. Correct at 364 rows; the upgrade path when Interfuerza customer sync multiplies that is a `pg_trgm`
+GIN index on `name`/`vehicle_plate`, as its own change with a measurement first.
+
+## Review Budget
+
+~300–380 changed lines including tests. Single PR, well inside 800.
+
+## Open Questions
+
+- [ ] `ServiceOrderForm` hides the customer picker in edit mode (`!isEdit`, line 174) and its only caller
+      never passes `order` (`service-orders/page.tsx:79-83`), so the "existing order blanks its customer"
+      failure is **not reachable today**. The design keeps it correct by construction (prop-seeded
+      selection object) rather than adding an unreachable fetch. Confirm the spec scenario is written as a
+      component-level guarantee, not as an end-to-end edit flow that nothing renders.
+- [ ] Nested `Dialog` (create-customer inside the order dialog) needs a smoke check at apply time; if the
+      UI library misbehaves, the fallback is closing the order dialog and navigating to `/customers`.
