@@ -26,6 +26,7 @@
  * render.
  */
 import { execSync } from "node:child_process";
+import { inArray } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -124,6 +125,19 @@ describe("customer search (E2E)", () => {
     nullPhone = row3;
     formattedPhone = row4;
   }, 60_000);
+
+  // Seeded rows are removed by id. Without this the describe is a one-way
+  // write: `vitest.e2e.config.ts` deliberately does NOT override
+  // `DATABASE_URL`, so this suite runs against whatever the environment
+  // points at — a throwaway container if you were careful, the dev database
+  // if you were not. Four customers per run, accumulating forever, is not a
+  // cost a test is allowed to charge silently. Deleting by captured id (not
+  // by name) leaves any real row that happens to share a name untouched.
+  afterAll(async () => {
+    await db.delete(cliente).where(
+      inArray(cliente.id, [mixedCaseName.id, nullPlate.id, nullPhone.id, formattedPhone.id]),
+    );
+  });
 
   const headers = { "x-user-id": "e2e-customer-search", "x-user-role": "tecnico" };
 
@@ -284,14 +298,22 @@ describe("full catalog-generation flow (E2E)", () => {
     const all = await listInventory({}, { offset: 0, limit: 25 });
     expect(all.total).toBe(3);
 
-    const motorOnly = await listInventory({ categoryL1: "Motor" }, { offset: 0, limit: 25 });
+    // The mock seeds "Motor" because that is the mixed case Interfuerza really
+    // sends; `normalizeCategory` (mapper.ts, and migration 0011 for rows written
+    // before it) folds the typed projection to upper case, so the stored value
+    // is "MOTOR" and an exact `eq()` filter must use that. Asserting the folded
+    // value here is what makes this the only end-to-end proof that the fold
+    // actually reaches the database — every unit test injects its query seam.
+    const motorOnly = await listInventory({ categoryL1: "MOTOR" }, { offset: 0, limit: 25 });
     expect(motorOnly.items.map((i) => i.id).sort()).toEqual(["p1", "p2"]);
 
     // PR10 — grand total stays 3 regardless of the active filter, unlike
     // `listInventory().total` above which is filter-scoped (motorOnly = 2).
     expect(await countAllProducts()).toBe(3);
 
-    expect(await listCategoryL1Options()).toEqual(["Motor", "Suspensión"]);
+    // Folded, and still alphabetical: the fold is what collapses the real
+    // ERP's "Accesorios"/"ACCESORIOS" into one option instead of two.
+    expect(await listCategoryL1Options()).toEqual(["MOTOR", "SUSPENSIÓN"]);
   });
 
   it("configures branding as admin; a non-admin gets 403 (R8, R9.6/NFR-8)", async () => {
@@ -323,7 +345,8 @@ describe("full catalog-generation flow (E2E)", () => {
       new NextRequest("http://localhost/api/catalog-builder/products", {
         method: "POST",
         headers: headersFor(regularUser),
-        body: JSON.stringify({ categories: [{ categoryL1: "Motor" }] }),
+        // "MOTOR", not "Motor" — same folded projection as the filter above.
+        body: JSON.stringify({ categories: [{ categoryL1: "MOTOR" }] }),
       }),
     );
     const { products } = await candidatesRes.json();
