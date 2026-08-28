@@ -43,8 +43,9 @@ import type { CatalogTemplateBranding } from "@/shared/template/CatalogTemplate"
 import { getObject } from "../catalog-storage/r2";
 import { createPendingCatalog } from "../catalog-storage/queries";
 import { buildIndexSections } from "../catalog-builder/selection";
+import { CONTENT_HEIGHT_PX, PAGE_HEIGHT_PX, PAGE_WIDTH_PX } from "@/shared/template/page-geometry";
 import { PDF_GENERATE_JOB, PDF_UPLOAD_JOB, type PdfBranding, type PdfGeneratePayload } from "./enqueue";
-import { PAGE_MARGIN_MM, chunkProducts, renderCatalogHtml } from "./render";
+import { chunkProducts, renderCatalogHtml } from "./render";
 
 export type PdfUploadPayload = {
   catalogId: string;
@@ -111,22 +112,6 @@ export async function resolveBranding(
 }
 
 /**
- * The printed A4 page, minus `renderCatalogHtml`'s own `@page` margin, in CSS
- * px — Chromium lays print content out at 96dpi, so 1mm is 96/25.4 px.
- * Measuring at any other width would measure the wrong card: the product name
- * wraps differently at 1280px (Playwright's default viewport) than in the
- * ~643px column the paper actually gives it, and a card that wraps less
- * measures shorter than it prints.
- */
-const MM_TO_PX = 96 / 25.4;
-// `floor`, not `round`: 170mm is 642.52px, and measuring in a column even half
-// a pixel WIDER than the printed one wraps the name less, so the card measures
-// shorter than it prints. Under-measuring the width over-estimates the height,
-// and over-estimating only costs an emptier page.
-const PRINT_WIDTH_PX = Math.floor((210 - 2 * PAGE_MARGIN_MM) * MM_TO_PX);
-const PRINT_HEIGHT_PX = (297 - 2 * PAGE_MARGIN_MM) * MM_TO_PX;
-
-/**
  * Archive gap #1 — asks the browser how tall each card is instead of
  * estimating it (an estimate is exactly what this replaces). Runs against a
  * document holding every product in ONE grid, so every card exists to be
@@ -136,9 +121,7 @@ const PRINT_HEIGHT_PX = (297 - 2 * PAGE_MARGIN_MM) * MM_TO_PX;
  * The grid's row gap is folded into every card height, so a row works out to
  * `max(card) + gap` without the packer knowing the grid's gap at all. That
  * counts one gap too many per page, which errs towards breaking early —
- * overflowing is the bug, a slightly emptier page is not. `chrome` is the
- * product section's own vertical padding, which eats into the page before
- * any card does.
+ * overflowing is the bug, a slightly emptier page is not.
  *
  * Read these as row heights, not as precise per-card ones: grid items default
  * to `align-items: stretch`, so both wrappers in a row already report the
@@ -151,21 +134,23 @@ const PRINT_HEIGHT_PX = (297 - 2 * PAGE_MARGIN_MM) * MM_TO_PX;
  * A miss on the selector must not fail a job that already holds one of
  * `MAX_QUEUE_DEPTH` slots (`resolveBranding`'s null-not-throw precedent), but
  * it does degrade the split back to fixed-count chunking — archive gap #1
- * restored. That is worth a line in the log rather than silence.
+ * restored. The caller logs that by comparing counts, which is a proxy: it
+ * detects "fewer heights than products", not "the selector missed". With no
+ * products the two are both zero and nothing is logged, which is right, but by
+ * arithmetic rather than by design.
+ *
+ * The page's own chrome is no longer measured here. It used to be the product
+ * section's CSS padding, which a computed-style read could find; it is now the
+ * red and black bands, which are elements. `CONTENT_HEIGHT_PX` subtracts them
+ * arithmetically instead — see `shared/template/page-geometry`.
  */
-async function measureCardHeights(page: Page): Promise<{ cardHeights: number[]; chrome: number }> {
+export async function measureCardHeights(page: Page): Promise<number[]> {
   return page.evaluate(() => {
-    const grid = document.querySelector('[aria-label^="Product page"] > div');
-    if (!(grid instanceof HTMLElement) || !grid.parentElement) return { cardHeights: [], chrome: 0 };
+    const grid = document.querySelector("[data-product-grid]");
+    if (!(grid instanceof HTMLElement)) return [];
 
-    const section = getComputedStyle(grid.parentElement);
-    const chrome = parseFloat(section.paddingTop) + parseFloat(section.paddingBottom);
     const gap = parseFloat(getComputedStyle(grid).rowGap) || 0;
-
-    return {
-      cardHeights: Array.from(grid.children, (card) => card.getBoundingClientRect().height + gap),
-      chrome,
-    };
+    return Array.from(grid.children, (card) => card.getBoundingClientRect().height + gap);
   });
 }
 
@@ -194,23 +179,39 @@ export async function renderPdfBuffer(
 
   const browser = await chromium.launch();
   try {
+    // The viewport is the WHOLE sheet, not a pre-inset content box: the page's
+    // bands and padding are elements inside it, so laying out at the full
+    // 816x1056 is what puts the grid in its real ~353px column. Measuring at
+    // any other width measures the wrong card — a product name wraps
+    // differently at Playwright's default 1280px, and a card that wraps less
+    // measures shorter than it prints. `shared/template/page-geometry` is the
+    // single place any of these numbers is written down.
     const page = await browser.newPage({
-      viewport: { width: PRINT_WIDTH_PX, height: Math.round(PRINT_HEIGHT_PX) },
+      viewport: { width: PAGE_WIDTH_PX, height: PAGE_HEIGHT_PX },
     });
     // `page.pdf()` renders under print media; measure under it too, or a
     // future `@media print` rule would silently invalidate the measurement.
     await page.emulateMedia({ media: "print" });
 
     const everythingOnOnePage = payload.products.length > 0 ? [payload.products] : [];
-    // `domcontentloaded`, not `load`: every product image has a CSS-fixed
-    // height (160/180px, image or placeholder alike), so no measured height
-    // waits on a byte arriving. Blocking on `load` here would download all
-    // 200 images purely to throw the document away — the render pass below
-    // fetches them again, and this job holds the single queue slot meanwhile.
+    // `domcontentloaded`, not `load`: no measured height waits on a byte
+    // arriving, so the split is the same either way.
+    //
+    // That used to hold because every card gave its image a fixed 160/180px
+    // height. The mockup card has no such height — so the reason is now the
+    // card's shape instead. It is a flex row with `align-items: stretch`: the
+    // text column decides the height, the image column is stretched to match,
+    // and the `<img>` inside is `height: 100%` of a box that is already
+    // settled. An image that has not loaded contributes nothing, and a product
+    // with no image gets a placeholder `<div>` whose floor is CSS, not bytes.
+    //
+    // Blocking on `load` here would download all 200 images purely to throw
+    // the document away — the render pass below fetches them again, and this
+    // job holds the single queue slot meanwhile.
     await page.setContent(await renderCatalogHtml({ ...props, productPages: everythingOnOnePage }), {
       waitUntil: "domcontentloaded",
     });
-    const { cardHeights, chrome } = await measureCardHeights(page);
+    const cardHeights = await measureCardHeights(page);
     // Warned here, in Node — a `console.warn` inside `page.evaluate` goes to
     // the browser's console, which nothing is listening to.
     if (cardHeights.length < payload.products.length) {
@@ -219,9 +220,12 @@ export async function renderPdfBuffer(
       );
     }
 
-    const productPages = chunkProducts(payload.products, payload.productsPerPage, cardHeights, PRINT_HEIGHT_PX - chrome);
+    const productPages = chunkProducts(payload.products, payload.productsPerPage, cardHeights, CONTENT_HEIGHT_PX);
     await page.setContent(await renderCatalogHtml({ ...props, productPages }), { waitUntil: "load" });
-    return await page.pdf({ format: "A4", printBackground: true });
+    // Letter, matching the approved mockups' own 816x1056 sheet and the
+    // `@page { size: 8.5in 11in }` rule `renderCatalogHtml` emits. A format
+    // that disagrees with that rule scales every page.
+    return await page.pdf({ format: "Letter", printBackground: true });
   } finally {
     await browser.close();
   }

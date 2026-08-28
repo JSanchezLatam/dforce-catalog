@@ -100,7 +100,7 @@ describe("price: Producto.Precio_Venta string-to-number parsing", () => {
   });
 });
 
-describe("category trim asymmetry: trimmed typed projection, verbatim raw (R3 vs R10.3)", () => {
+describe("category normalization asymmetry: folded typed projection, verbatim raw (R3 vs R10.3)", () => {
   it("trims categoryL1/categoryL2 in the typed projection but keeps raw untrimmed", () => {
     const raw = wrapperFixture();
     const producto = parseProduct(raw);
@@ -108,6 +108,29 @@ describe("category trim asymmetry: trimmed typed projection, verbatim raw (R3 vs
     expect(producto.categoryL1).toBe("ELECTRONICA");
     expect(producto.categoryL2).toBe("BOCINAS");
     expect((producto.raw.Producto as Record<string, unknown>).Category_L1).toBe("ELECTRONICA ");
+  });
+
+  it("uppercases the typed projection so ERP case variants collapse to one value", () => {
+    const raw = wrapperFixture();
+    (raw.Producto as Record<string, unknown>).Category_L1 = "Accesorios ";
+    (raw.Producto as Record<string, unknown>).Category_L2 = "bocinas";
+    const producto = parseProduct(raw);
+
+    expect(producto.categoryL1).toBe("ACCESORIOS");
+    expect(producto.categoryL2).toBe("BOCINAS");
+    expect((producto.raw.Producto as Record<string, unknown>).Category_L1).toBe("Accesorios ");
+    expect((producto.raw.Producto as Record<string, unknown>).Category_L2).toBe("bocinas");
+  });
+
+  it("projects an empty or whitespace-only category as null, not an empty string", () => {
+    const raw = wrapperFixture();
+    (raw.Producto as Record<string, unknown>).Category_L1 = "";
+    (raw.Producto as Record<string, unknown>).Category_L2 = "   ";
+    const producto = parseProduct(raw);
+
+    expect(producto.categoryL1).toBeNull();
+    expect(producto.categoryL2).toBeNull();
+    expect((producto.raw.Producto as Record<string, unknown>).Category_L2).toBe("   ");
   });
 });
 

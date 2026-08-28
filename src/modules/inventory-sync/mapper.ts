@@ -86,6 +86,14 @@ function warnMalformedWrapper(wrapper: Record<string, unknown>, id: string): voi
   }
 }
 
+/** Canonical form of a category field for the typed projection: trimmed,
+ * uppercased, and null when nothing is left. Kept in sync with migration
+ * `0011_fold_category_case.sql`, which applies the same fold in SQL. */
+function normalizeCategory(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  return value.trim().toUpperCase() || null;
+}
+
 /** Parses one raw Interfuerza product WRAPPER ({Producto,InStock,PriceLists,
  * Images,Matrix}) into the internal Producto model. */
 export function parseProduct(raw: Record<string, unknown>): Producto {
@@ -96,15 +104,21 @@ export function parseProduct(raw: Record<string, unknown>): Producto {
   const id = String(producto.id);
   warnMalformedWrapper(raw, id);
 
-  // ponytail: trim-on-projection-but-not-on-raw is intentional, not a bug.
+  // ponytail: normalize-on-projection-but-not-on-raw is intentional, not a bug.
   // Real data has trailing whitespace on category fields (e.g.
-  // "ELECTRONICA "). The typed projection is trimmed because category
-  // filtering (R3) matches against user-typed, trimmed input. `raw` stays
-  // completely verbatim/untrimmed because round-trip (R10.3) must reproduce
+  // "ELECTRONICA ") and inconsistent case for the same category
+  // ("Accesorios" vs "ACCESORIOS"). The typed projection is trimmed,
+  // uppercased and emptied-to-null because category filtering (R3) matches
+  // against user-typed input and every filter option comes from a
+  // selectDistinct of this same column — two spellings mean two options and a
+  // duplicated catalog row. Uppercase is the canonical form: it is the ERP's
+  // own dominant style and what the catalog prints. `.toUpperCase()`, not
+  // `.toLocaleUpperCase()`, so the result never depends on the server locale.
+  // `raw` stays completely verbatim because round-trip (R10.3) must reproduce
   // the exact original payload. Do NOT "fix" this into symmetry — that would
   // break one guarantee to satisfy the other.
-  const categoryL1 = typeof producto.Category_L1 === "string" ? producto.Category_L1.trim() : null;
-  const categoryL2 = typeof producto.Category_L2 === "string" ? producto.Category_L2.trim() : null;
+  const categoryL1 = normalizeCategory(producto.Category_L1);
+  const categoryL2 = normalizeCategory(producto.Category_L2);
 
   return {
     id,

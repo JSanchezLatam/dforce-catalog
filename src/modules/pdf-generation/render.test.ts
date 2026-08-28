@@ -182,7 +182,7 @@ describe("renderCatalogHtml — R6.1 (shares CatalogTemplate with the builder's 
   it("renders cover+index only (no product-page markup) when productPages is omitted", async () => {
     const html = await renderCatalogHtml({ title: "Empty catalog", branding: null, sections: [] });
     expect(html).toContain("Empty catalog");
-    expect(html).not.toContain("Product page");
+    expect(html).not.toContain('data-sheet="product-');
   });
 
   // design.md's New Risk #1 — this body `<style>` tag previously read
@@ -205,51 +205,64 @@ describe("renderCatalogHtml — R6.1 (shares CatalogTemplate with the builder's 
     expect(html).toContain("font-family: sans-serif;");
   });
 
-  it("renders transparent imageType with full-bleed card (height 180px inline)", async () => {
+  /**
+   * The two card kinds used to differ by a fixed image height (180 vs 160px)
+   * and the presence of a border. Both were properties of the pre-mockup card,
+   * and asserting them was really asserting "which of the two components ran".
+   *
+   * The mockup card gives every product the same footprint, so the ONLY thing
+   * that still legitimately differs is how the photo fills it: a cut-out
+   * product is shown whole (`contain`), a photographed one is cropped to fill
+   * (`cover`). That is the behaviour worth protecting — a cut-out cropped to
+   * fill loses the product, and a photo shown whole letterboxes into grey.
+   */
+  const imageFit = (html: string) => html.match(/object-fit:(contain|cover)/)?.[1];
+  const productPage = (imageType: ProductPrintRef["imageType"]) => [
+    [{ id: "1", name: "P1", categoryL1: "Motor", categoryL2: null, image: "https://x/img.png", imageType }],
+  ];
+
+  it("shows a transparent (cut-out) product whole, never cropped", async () => {
     const html = await renderCatalogHtml({
       title: "Test",
       branding: null,
       sections: [],
       defaultImageHandling: "adaptive",
-      productPages: [[{ id: "1", name: "P1", categoryL1: "Motor", categoryL2: null, image: "https://x/img.png", imageType: "transparent" }]],
+      productPages: productPage("transparent"),
     });
-    expect(html).toContain("height:180px");
-    expect(html).not.toContain("border:1px solid");
+    expect(imageFit(html)).toBe("contain");
   });
 
-  it("renders opaque imageType with polaroid card (height 160px inline)", async () => {
+  it("crops an opaque (photographed) product to fill its column", async () => {
     const html = await renderCatalogHtml({
       title: "Test",
       branding: null,
       sections: [],
       defaultImageHandling: "adaptive",
-      productPages: [[{ id: "1", name: "P1", categoryL1: "Motor", categoryL2: null, image: "https://x/img.jpg", imageType: "opaque" }]],
+      productPages: productPage("opaque"),
     });
-    expect(html).toContain("height:160px");
-    expect(html).toContain("border:1px solid");
+    expect(imageFit(html)).toBe("cover");
   });
 
-  it("defaults null imageType to opaque (polaroid card)", async () => {
+  it("defaults null imageType to opaque", async () => {
     const html = await renderCatalogHtml({
       title: "Test",
       branding: null,
       sections: [],
       defaultImageHandling: "adaptive",
-      productPages: [[{ id: "1", name: "P1", categoryL1: "Motor", categoryL2: null, image: "https://x/img.jpg", imageType: null }]],
+      productPages: productPage(null),
     });
-    expect(html).toContain("height:160px");
+    expect(imageFit(html)).toBe("cover");
   });
 
-  it("strict mode uses opaque card regardless of imageType", async () => {
+  it("strict mode uses the opaque card regardless of imageType", async () => {
     const html = await renderCatalogHtml({
       title: "Test",
       branding: null,
       sections: [],
       defaultImageHandling: "strict",
-      productPages: [[{ id: "1", name: "P1", categoryL1: "Motor", categoryL2: null, image: "https://x/img.png", imageType: "transparent" }]],
+      productPages: productPage("transparent"),
     });
-    expect(html).toContain("height:160px");
-    expect(html).not.toContain("height:180px");
+    expect(imageFit(html)).toBe("cover");
   });
 
   it("default (null) handling is strict for backward compat", async () => {
@@ -257,10 +270,9 @@ describe("renderCatalogHtml — R6.1 (shares CatalogTemplate with the builder's 
       title: "Test",
       branding: null,
       sections: [],
-      productPages: [[{ id: "1", name: "P1", categoryL1: "Motor", categoryL2: null, image: "https://x/img.png", imageType: "transparent" }]],
+      productPages: productPage("transparent"),
     });
-    expect(html).toContain("height:160px");
-    expect(html).not.toContain("height:180px");
+    expect(imageFit(html)).toBe("cover");
   });
 });
 
@@ -270,10 +282,279 @@ describe("renderCatalogHtml — R6.1 (shares CatalogTemplate with the builder's 
  * Socio). A tier with no usable price — absent, or an ERP value `<= 0.00` —
  * renders an em-dash, never "$0.00" (design D4).
  */
+/**
+ * `chunkProducts` splits by count and measured height and knows nothing about
+ * category boundaries, so every category transition lands mid-page. The red
+ * band naming only the page's FIRST category made the page deny that the
+ * second was on it — while the index pointed the reader at that exact page to
+ * find it. Two printed pages contradicting each other is the defect.
+ */
+describe("renderCatalogHtml — a product page carrying more than one category", () => {
+  const bandOf = (html: string) => {
+    // `indexOf` returns -1 when the page is absent and `slice(-1)` would hand
+    // back the LAST CHARACTER of the document — the assertion would then fail
+    // with "the band is empty" when the real cause is "the page never
+    // rendered". Fail on the true reason instead.
+    const at = html.indexOf('data-sheet="product-1"');
+    if (at === -1) throw new Error("no product page rendered");
+    return html.slice(at).match(/<h2[^>]*>([^<]*)<\/h2>/)?.[1] ?? "";
+  };
+
+  it("names every category on the page, not just the first", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [
+        { categoryL1: "AUDIO", categoryL2: null, productCount: 1 },
+        { categoryL1: "LUCES", categoryL2: null, productCount: 1 },
+      ],
+      productPages: [
+        [
+          { id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null },
+          { id: "2", name: "Barra", categoryL1: "LUCES", categoryL2: null },
+        ],
+      ],
+    });
+
+    expect(bandOf(html)).toContain("AUDIO");
+    expect(bandOf(html)).toContain("LUCES");
+  });
+
+  it("falls back to a Spanish heading when no product carries a category", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [],
+      productPages: [[{ id: "1", name: "Woofer", categoryL1: null, categoryL2: null }]],
+    });
+
+    expect(bandOf(html)).toBe("PRODUCTOS");
+  });
+});
+
+/**
+ * The one assertion that spans the whole document rather than one function.
+ *
+ * The index prints a page number beside each category; that page prints its own
+ * number in its footer. Those two come from separate places in the markup, and
+ * a reader holding the paper is the only one who notices when they disagree.
+ * Every unit test around this passed while the two derivations of "where do the
+ * products start" sat in different functions — so this checks the sequence end
+ * to end, on rendered output, the way the reader meets it.
+ */
+/**
+ * `INDEX_ROWS_PER_PAGE` is arithmetic over a fixed row height, and CSS `height`
+ * on a `<tr>` is a MINIMUM. Two lists nobody bounds print into boxes the page
+ * geometry has already committed to — the index row's subcategories and the
+ * product band's categories — and neither box clips. Unclamped, a category
+ * carrying a dozen L2s wraps its subtitle, grows its row, and pushes the tail
+ * of the table over the footer band and off the paper: the exact silent loss
+ * the chunking was added to prevent.
+ *
+ * The clamp is what makes the arithmetic honest, so it is what gets asserted.
+ */
+/**
+ * The contact page is the one sheet whose content length varies with how much
+ * the workshop has filled in, so it is the one most able to print a page that
+ * is mostly empty. Its two red bands are what stop it reading as a slab of
+ * black, and the disclaimer is template copy the workshop does not supply.
+ */
+describe("renderCatalogHtml — contact page chrome (Template_Catalogo.op, page 3)", () => {
+  const contactPage = (socialHandles: Record<string, string> | null) =>
+    renderCatalogHtml({
+      title: "C",
+      branding: {
+        templateId: "dforce-classic",
+        logoUrl: null,
+        coverText: null,
+        contact: {
+          name: "DForce",
+          phone: "203-7212",
+          whatsapp: null,
+          email: null,
+          address: null,
+          hours: null,
+          website: null,
+          socialHandles,
+        },
+      },
+      sections: [],
+    });
+
+  it("prints the disclaimer band in Spanish", async () => {
+    expect(await contactPage(null)).toContain("Precios sujetos a cambio sin previo aviso");
+  });
+
+  it("frames the page with the brand red at both edges", async () => {
+    const html = await contactPage(null);
+    const page = html.slice(html.indexOf('data-sheet="contact"'));
+    const red = getTemplate("dforce-classic").primaryColors.primary;
+
+    // Top rule and bottom note band — both full-width, both brand red.
+    expect(page).toContain(`height:12px;background:${red}`);
+    expect(page).toContain(`height:48px;background:${red}`);
+  });
+
+  it("names the network beside each handle so two pills cannot read alike", async () => {
+    const html = await contactPage({ Instagram: "@dforce", Facebook: "@dforce" });
+    expect(html).toContain("Instagram: @dforce");
+    expect(html).toContain("Facebook: @dforce");
+  });
+});
+
+describe("renderCatalogHtml — unbounded lists cannot grow the box they print into", () => {
+  const manySubcategories = Array.from({ length: 12 }, (_, at) => `Subcategoría ${at}`);
+
+  it("clamps the index row's subcategory list to one line", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: manySubcategories.map((categoryL2) => ({ categoryL1: "ELECTRÓNICA", categoryL2, productCount: 1 })),
+    });
+
+    const subtitle = html.match(/<span style="[^"]*font-size:8px[^"]*">Subcategoría 0[^<]*<\/span>/)?.[0] ?? "";
+    expect(subtitle).toContain("white-space:nowrap");
+    expect(subtitle).toContain("text-overflow:ellipsis");
+  });
+
+  it("clamps the product band's category heading to one line", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [],
+      productPages: [
+        Array.from({ length: 6 }, (_, at) => ({
+          id: String(at),
+          name: `Producto ${at}`,
+          categoryL1: `CATEGORÍA MUY LARGA NÚMERO ${at}`,
+          categoryL2: null,
+        })),
+      ],
+    });
+
+    const band = html.match(/<h2 style="[^"]*"/)?.[0] ?? "";
+    expect(band).toContain("white-space:nowrap");
+    expect(band).toContain("text-overflow:ellipsis");
+  });
+});
+
+describe("renderCatalogHtml — printed page numbers agree from cover to last page", () => {
+  /** Every sheet in printed order, as `[data-sheet, footerNumber]`. */
+  const sheetFooters = (html: string): [string, string | null][] =>
+    Array.from(html.matchAll(/<section data-sheet="([^"]+)"[\s\S]*?(?=<section data-sheet=|<\/article>)/g), (m) => [
+      m[1] ?? "",
+      m[0].match(/border-radius:50%[^"]*"[^>]*>(\d+)</)?.[1] ?? null,
+    ]);
+
+  it("numbers the sheets consecutively, with the cover unnumbered", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [
+        { categoryL1: "AUDIO", categoryL2: null, productCount: 1 },
+        { categoryL1: "LUCES", categoryL2: null, productCount: 1 },
+      ],
+      productPages: [
+        [{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null }],
+        [{ id: "2", name: "Barra", categoryL1: "LUCES", categoryL2: null }],
+      ],
+    });
+
+    expect(sheetFooters(html)).toEqual([
+      ["cover", null],
+      ["index-1", "2"],
+      ["product-1", "3"],
+      ["product-2", "4"],
+    ]);
+  });
+
+  it("prints, beside each category in the index, the number that category's own page prints", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [
+        { categoryL1: "AUDIO", categoryL2: null, productCount: 1 },
+        { categoryL1: "LUCES", categoryL2: null, productCount: 1 },
+      ],
+      productPages: [
+        [{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null }],
+        [{ id: "2", name: "Barra", categoryL1: "LUCES", categoryL2: null }],
+      ],
+    });
+
+    // Read from the registry, never a literal: a palette change must not be
+    // able to turn this into "the index printed no page numbers".
+    const red = getTemplate("dforce-classic").primaryColors.primary;
+    const indexNumbers = Array.from(
+      html.matchAll(new RegExp(`font-size:20px;font-weight:800;color:${red}">([^<]*)<`, "g")),
+      (m) => m[1],
+    );
+    const productFooters = sheetFooters(html)
+      .filter(([sheet]) => sheet.startsWith("product-"))
+      .map(([, number]) => number);
+
+    expect(indexNumbers).toEqual(productFooters);
+  });
+});
+
+/**
+ * The sheets are addressed by `data-sheet`, an English machine handle no
+ * sibling can steal, which leaves `aria-label` free to be what it is for: copy
+ * a screen reader says out loud to a Spanish-speaking reader (AGENTS.md,
+ * "Spanish for the user, English for the code"). `Sheet` is the only element
+ * in the document carrying an `aria-label`, so reading them all back in order
+ * also proves no sheet was left untranslated.
+ */
+describe("renderCatalogHtml — every sheet names itself in Spanish", () => {
+  it("labels the cover, index, product and contact sheets in Spanish", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: {
+        templateId: "dforce-classic",
+        logoUrl: null,
+        coverText: null,
+        contact: {
+          name: "DForce",
+          phone: "203-7212",
+          whatsapp: null,
+          email: null,
+          address: null,
+          hours: null,
+          website: null,
+          socialHandles: null,
+        },
+      },
+      sections: [{ categoryL1: "AUDIO", categoryL2: null, productCount: 1 }],
+      productPages: [[{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null }]],
+    });
+
+    expect(Array.from(html.matchAll(/aria-label="([^"]+)"/g), (m) => m[1])).toEqual([
+      "Portada",
+      "\u00cdndice",
+      "P\u00e1gina de productos 1",
+      "Contacto",
+    ]);
+  });
+});
+
 describe("renderCatalogHtml — product prices", () => {
   const priced = (prices: ProductPrintRef["prices"]): ProductPrintRef[][] => [
     [{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null, prices }],
   ];
+
+  /**
+   * Reads the printed tier -> amount pairs back out of the markup.
+   *
+   * These assertions used to match the literal string "Venta: $120.00", which
+   * only held while a tier was one text node. The mockup card prints the label
+   * and the amount as separate cells of a price table, so the old form asserted
+   * a layout rather than the rule. What must never change is which amount ends
+   * up beside which label — so that is what gets read back.
+   */
+  const tiers = (html: string): Record<string, string> =>
+    Object.fromEntries(
+      Array.from(html.matchAll(/>(Venta|Taller|Socio)<\/span><span[^>]*>([^<]*)</g), (m) => [m[1], m[2]]),
+    );
 
   it("prints all three resolved tiers on the card", async () => {
     const html = await renderCatalogHtml({
@@ -283,9 +564,7 @@ describe("renderCatalogHtml — product prices", () => {
       productPages: priced({ venta: 120, taller: 100, socio: 90 }),
     });
 
-    expect(html).toContain("Venta: $120.00");
-    expect(html).toContain("Taller: $100.00");
-    expect(html).toContain("Socio: $90.00");
+    expect(tiers(html)).toEqual({ Venta: "$120.00", Taller: "$100.00", Socio: "$90.00" });
   });
 
   it("renders an em-dash for the one tier missing, without touching the others", async () => {
@@ -296,9 +575,7 @@ describe("renderCatalogHtml — product prices", () => {
       productPages: priced({ venta: 120, taller: null, socio: 90 }),
     });
 
-    expect(html).toContain("Venta: $120.00");
-    expect(html).toContain("Taller: —");
-    expect(html).toContain("Socio: $90.00");
+    expect(tiers(html)).toEqual({ Venta: "$120.00", Taller: "—", Socio: "$90.00" });
   });
 
   // 32 of 694 real products have no retail price. Printing "$0.00" beside one
@@ -311,10 +588,8 @@ describe("renderCatalogHtml — product prices", () => {
       productPages: priced({ venta: null, taller: null, socio: null }),
     });
 
+    expect(tiers(html)).toEqual({ Venta: "—", Taller: "—", Socio: "—" });
     expect(html).not.toContain("$");
-    expect(html).toContain("Venta: —");
-    expect(html).toContain("Taller: —");
-    expect(html).toContain("Socio: —");
   });
 
   it("renders em-dashes when prices is absent entirely", async () => {
@@ -325,8 +600,8 @@ describe("renderCatalogHtml — product prices", () => {
       productPages: [[{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null }]],
     });
 
+    expect(tiers(html)).toEqual({ Venta: "—", Taller: "—", Socio: "—" });
     expect(html).not.toContain("$");
-    expect(html).toContain("Venta: —");
   });
 
   // A hostile/real ERP "0.00" tier must never render as free.
@@ -338,8 +613,8 @@ describe("renderCatalogHtml — product prices", () => {
       productPages: priced({ venta: 0, taller: 100, socio: 0 }),
     });
 
+    expect(tiers(html)).toEqual({ Venta: "—", Taller: "$100.00", Socio: "—" });
     expect(html).not.toContain("$0.00");
-    expect(html).toContain("Taller: $100.00");
   });
 });
 
@@ -443,7 +718,7 @@ describe("renderCatalogHtml — workshop contact page (design D6)", () => {
         },
       },
     });
-    expect(html).not.toContain('aria-label="Contact"');
+    expect(html).not.toContain('data-sheet="contact"');
   });
 
   it("renders no contact page at all when contact is null, not an empty one", async () => {
@@ -476,7 +751,7 @@ describe("renderCatalogHtml — workshop contact page (design D6)", () => {
       sections: [],
     });
 
-    expect(html).toContain('aria-label="Cover"');
+    expect(html).toContain('data-sheet="cover"');
     expect(html).not.toMatch(/<img[^>]*alt=""/);
   });
 });
@@ -496,36 +771,48 @@ describe("renderCatalogHtml — workshop contact page (design D6)", () => {
  * registry rather than hardcoded so a palette change cannot make this test
  * pass by accident.
  */
-describe("renderCatalogHtml — cover photo must not be multiplied into black (archive gap #4)", () => {
+describe("renderCatalogHtml — nothing on the cover may be painted its own background (archive gap #4)", () => {
   const dark = getTemplate("dforce-classic").primaryColors.secondary;
-  const coverTag = (html: string) => html.match(/<section aria-label="Cover"[^>]*>/)?.[0] ?? "";
-
-  it("does not paint the cover background dark when a cover photo is set", async () => {
-    const html = await renderCatalogHtml({
+  const coverTag = (html: string) => html.match(/<section data-sheet="cover"[^>]*>/)?.[0] ?? "";
+  /** The diagonal wedge — found by the clip-path only it has. */
+  const wedgeTag = (html: string) => html.match(/<div style="[^"]*clip-path:polygon[^"]*"/)?.[0] ?? "";
+  const cover = (coverImageUrl: string | null) =>
+    renderCatalogHtml({
       title: "C",
-      branding: {
-        templateId: "dforce-classic",
-        logoUrl: null,
-        coverText: null,
-        coverImageUrl: "data:image/jpeg;base64,Zm9v",
-      },
+      branding: { templateId: "dforce-classic", logoUrl: null, coverText: null, coverImageUrl },
       sections: [],
     });
 
-    const tag = coverTag(html);
-    expect(tag).not.toBe("");
-    expect(tag).not.toContain(`background:${dark}`);
-    expect(tag).toContain("background:#ffffff");
+  /**
+   * ONE rule, because the cover has now produced the same bug twice.
+   *
+   * First (archive gap #4): the cover photo is composited with
+   * `mix-blend-mode: multiply`, and multiplying anything against a BLACK
+   * background is black — the photo was invisible while the tests asserting
+   * the `<img>` and its `src` passed.
+   *
+   * Then, with no photo, the sheet fell back to the template's dark colour and
+   * the diagonal wedge is ALSO that colour: a black page with a red stripe on
+   * it, and again nothing structural to catch it.
+   *
+   * Both are the same defect — a background equal to the colour of the thing
+   * that must contrast against it. So the invariant is stated once and checked
+   * on both paths. The wedge assertion is not decoration: without it, deleting
+   * the wedge entirely would satisfy the contrast check vacuously.
+   */
+  it.each([
+    ["with a cover photo", "data:image/jpeg;base64,Zm9v"],
+    ["with no cover photo", null],
+  ])("keeps the cover sheet a different colour from the wedge %s", async (_case, coverImageUrl) => {
+    const html = await cover(coverImageUrl);
+
+    expect(coverTag(html)).not.toBe("");
+    expect(coverTag(html)).not.toContain(`background:${dark}`);
+    expect(wedgeTag(html)).toContain(`background:${dark}`);
   });
 
-  it("still paints the cover background dark when there is no cover photo (the red/black fallback block)", async () => {
-    const html = await renderCatalogHtml({
-      title: "C",
-      branding: { templateId: "dforce-classic", logoUrl: null, coverText: null, coverImageUrl: null },
-      sections: [],
-    });
-
-    expect(coverTag(html)).toContain(`background:${dark}`);
+  it("degrades to the wedge alone when there is no cover photo — never a broken <img>", async () => {
+    const html = await cover(null);
     expect(html).not.toMatch(/<img[^>]*alt=""/);
   });
 });
@@ -551,6 +838,6 @@ describe("renderCatalogHtml — product prices", () => {
       ],
     });
 
-    expect(html).toContain("Venta: $45.00");
+    expect(html).toMatch(/>Venta<\/span><span[^>]*>\$45\.00</);
   });
 });
