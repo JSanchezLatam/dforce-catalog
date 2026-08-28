@@ -107,12 +107,16 @@ async function main() {
   await mkdir(OUT, { recursive: true });
   const sheets = await page.$$("article > section");
   for (const [index, sheet] of sheets.entries()) {
-    const label = (await sheet.getAttribute("aria-label")) ?? `sheet-${index}`;
+    // `data-sheet`, not `aria-label`: the label is Spanish prose meant for a
+    // reader, so it carries accents and would change with the copy. The data
+    // attribute is the sheet's stable ASCII machine name, which is what a
+    // filename wants.
+    const name = (await sheet.getAttribute("data-sheet")) ?? `sheet-${index}`;
     const box = await sheet.boundingBox();
     // A sheet that is not exactly PAGE_WIDTH x PAGE_HEIGHT will not print as
     // one page, so the size is worth reading even before looking at the PNG.
-    console.log(`  ${label}: ${box?.width}x${box?.height}`);
-    await sheet.screenshot({ path: join(OUT, `${String(index).padStart(2, "0")}-${label.replace(/\s+/g, "-")}.png`) });
+    console.log(`  ${name}: ${box?.width}x${box?.height}`);
+    await sheet.screenshot({ path: join(OUT, `${String(index).padStart(2, "0")}-${name}.png`) });
   }
 
   /**

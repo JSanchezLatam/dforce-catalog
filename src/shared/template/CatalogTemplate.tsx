@@ -341,9 +341,27 @@ function pageHeading(page: ProductPrintRef[]): { title: string; subtitle: string
  * visibly runs long is a bug someone reports; a page that quietly loses its
  * last row is not.
  */
-function Sheet({ label, children, style }: { label: string; children: React.ReactNode; style?: React.CSSProperties }) {
+function Sheet({
+  sheet,
+  label,
+  children,
+  style,
+}: {
+  /** Machine handle: stable, English, lowercase, `<kind>` or `<kind>-<page>`.
+   * Everything that has to FIND a sheet — the tests, the preview script's
+   * screenshot names — selects on this, never on `aria-label`. An attribute
+   * cannot be stolen by a sibling and is not user-facing copy, so translating
+   * the label can never silently break a selector (same reasoning as
+   * `[data-product-grid]`). */
+  sheet: string;
+  /** Spanish, because a screen reader says it out loud to the reader. */
+  label: string;
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}) {
   return (
     <section
+      data-sheet={sheet}
       aria-label={label}
       style={{
         position: "relative",
@@ -536,7 +554,7 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
           invisible — so the sheet never wears the wedge's colour. */}
       {/* The one sheet that clips: the cover photo is 902px wide on an 816px
           sheet and hangs off the right edge by design. */}
-      <Sheet label="Cover" style={{ overflow: "hidden" }}>
+      <Sheet sheet="cover" label="Portada" style={{ overflow: "hidden" }}>
         {coverImageUrl && (
           <img
             src={coverImageUrl}
@@ -612,7 +630,11 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
           row, tinted alternating rows, the count in grey and the page number
           in red. In Spanish, as the mockup writes it. */}
       {indexPages.map((pageRows, pageIndex) => (
-        <Sheet key={pageIndex} label={pageIndex === 0 ? "Index" : `Index page ${pageIndex + 1}`}>
+        <Sheet
+          key={pageIndex}
+          sheet={`index-${pageIndex + 1}`}
+          label={pageIndex === 0 ? "Índice" : `Índice, página ${pageIndex + 1}`}
+        >
           <PageChrome
             heading="Índice"
             subheading={title}
@@ -683,7 +705,7 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
       {productPages.map((page, pageIndex) => {
         const { title: heading, subtitle } = pageHeading(page);
         return (
-          <Sheet key={pageIndex} label={`Product page ${pageIndex + 1}`}>
+          <Sheet key={pageIndex} sheet={`product-${pageIndex + 1}`} label={`Página de productos ${pageIndex + 1}`}>
             <PageChrome
               heading={heading}
               subheading={subtitle}
@@ -727,7 +749,7 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
           Guarding on `contact != null` alone appended a blank black page to
           every catalog from such a workshop. */}
       {hasContactContent(contact) && contact && (
-        <Sheet label="Contact" style={{ background: black }}>
+        <Sheet sheet="contact" label="Contacto" style={{ background: black }}>
           {/* Thin red rule across the top, and the red note band across the
               bottom — the two marks that stop the page reading as a slab of
               black. Both bleed edge to edge, like every other band. */}

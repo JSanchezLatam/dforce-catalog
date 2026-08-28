@@ -182,7 +182,7 @@ describe("renderCatalogHtml — R6.1 (shares CatalogTemplate with the builder's 
   it("renders cover+index only (no product-page markup) when productPages is omitted", async () => {
     const html = await renderCatalogHtml({ title: "Empty catalog", branding: null, sections: [] });
     expect(html).toContain("Empty catalog");
-    expect(html).not.toContain("Product page");
+    expect(html).not.toContain('data-sheet="product-');
   });
 
   // design.md's New Risk #1 — this body `<style>` tag previously read
@@ -295,7 +295,7 @@ describe("renderCatalogHtml — a product page carrying more than one category",
     // back the LAST CHARACTER of the document — the assertion would then fail
     // with "the band is empty" when the real cause is "the page never
     // rendered". Fail on the true reason instead.
-    const at = html.indexOf('aria-label="Product page 1"');
+    const at = html.indexOf('data-sheet="product-1"');
     if (at === -1) throw new Error("no product page rendered");
     return html.slice(at).match(/<h2[^>]*>([^<]*)<\/h2>/)?.[1] ?? "";
   };
@@ -387,7 +387,7 @@ describe("renderCatalogHtml — contact page chrome (Template_Catalogo.op, page 
 
   it("frames the page with the brand red at both edges", async () => {
     const html = await contactPage(null);
-    const page = html.slice(html.indexOf('aria-label="Contact"'));
+    const page = html.slice(html.indexOf('data-sheet="contact"'));
     const red = getTemplate("dforce-classic").primaryColors.primary;
 
     // Top rule and bottom note band — both full-width, both brand red.
@@ -439,9 +439,9 @@ describe("renderCatalogHtml — unbounded lists cannot grow the box they print i
 });
 
 describe("renderCatalogHtml — printed page numbers agree from cover to last page", () => {
-  /** Every sheet in printed order, as `[label, footerNumber]`. */
+  /** Every sheet in printed order, as `[data-sheet, footerNumber]`. */
   const sheetFooters = (html: string): [string, string | null][] =>
-    Array.from(html.matchAll(/<section aria-label="([^"]+)"[\s\S]*?(?=<section aria-label=|<\/article>)/g), (m) => [
+    Array.from(html.matchAll(/<section data-sheet="([^"]+)"[\s\S]*?(?=<section data-sheet=|<\/article>)/g), (m) => [
       m[1] ?? "",
       m[0].match(/border-radius:50%[^"]*"[^>]*>(\d+)</)?.[1] ?? null,
     ]);
@@ -461,10 +461,10 @@ describe("renderCatalogHtml — printed page numbers agree from cover to last pa
     });
 
     expect(sheetFooters(html)).toEqual([
-      ["Cover", null],
-      ["Index", "2"],
-      ["Product page 1", "3"],
-      ["Product page 2", "4"],
+      ["cover", null],
+      ["index-1", "2"],
+      ["product-1", "3"],
+      ["product-2", "4"],
     ]);
   });
 
@@ -490,10 +490,50 @@ describe("renderCatalogHtml — printed page numbers agree from cover to last pa
       (m) => m[1],
     );
     const productFooters = sheetFooters(html)
-      .filter(([label]) => label.startsWith("Product page"))
+      .filter(([sheet]) => sheet.startsWith("product-"))
       .map(([, number]) => number);
 
     expect(indexNumbers).toEqual(productFooters);
+  });
+});
+
+/**
+ * The sheets are addressed by `data-sheet`, an English machine handle no
+ * sibling can steal, which leaves `aria-label` free to be what it is for: copy
+ * a screen reader says out loud to a Spanish-speaking reader (AGENTS.md,
+ * "Spanish for the user, English for the code"). `Sheet` is the only element
+ * in the document carrying an `aria-label`, so reading them all back in order
+ * also proves no sheet was left untranslated.
+ */
+describe("renderCatalogHtml — every sheet names itself in Spanish", () => {
+  it("labels the cover, index, product and contact sheets in Spanish", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: {
+        templateId: "dforce-classic",
+        logoUrl: null,
+        coverText: null,
+        contact: {
+          name: "DForce",
+          phone: "203-7212",
+          whatsapp: null,
+          email: null,
+          address: null,
+          hours: null,
+          website: null,
+          socialHandles: null,
+        },
+      },
+      sections: [{ categoryL1: "AUDIO", categoryL2: null, productCount: 1 }],
+      productPages: [[{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null }]],
+    });
+
+    expect(Array.from(html.matchAll(/aria-label="([^"]+)"/g), (m) => m[1])).toEqual([
+      "Portada",
+      "\u00cdndice",
+      "P\u00e1gina de productos 1",
+      "Contacto",
+    ]);
   });
 });
 
@@ -678,7 +718,7 @@ describe("renderCatalogHtml — workshop contact page (design D6)", () => {
         },
       },
     });
-    expect(html).not.toContain('aria-label="Contact"');
+    expect(html).not.toContain('data-sheet="contact"');
   });
 
   it("renders no contact page at all when contact is null, not an empty one", async () => {
@@ -711,7 +751,7 @@ describe("renderCatalogHtml — workshop contact page (design D6)", () => {
       sections: [],
     });
 
-    expect(html).toContain('aria-label="Cover"');
+    expect(html).toContain('data-sheet="cover"');
     expect(html).not.toMatch(/<img[^>]*alt=""/);
   });
 });
@@ -733,7 +773,7 @@ describe("renderCatalogHtml — workshop contact page (design D6)", () => {
  */
 describe("renderCatalogHtml — nothing on the cover may be painted its own background (archive gap #4)", () => {
   const dark = getTemplate("dforce-classic").primaryColors.secondary;
-  const coverTag = (html: string) => html.match(/<section aria-label="Cover"[^>]*>/)?.[0] ?? "";
+  const coverTag = (html: string) => html.match(/<section data-sheet="cover"[^>]*>/)?.[0] ?? "";
   /** The diagonal wedge — found by the clip-path only it has. */
   const wedgeTag = (html: string) => html.match(/<div style="[^"]*clip-path:polygon[^"]*"/)?.[0] ?? "";
   const cover = (coverImageUrl: string | null) =>
