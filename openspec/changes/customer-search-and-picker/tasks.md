@@ -56,13 +56,13 @@ Chain strategy: pending
 
 ## Phase 5: Wire into the order form
 
-- [ ] 5.1 `ServiceOrderForm.tsx`: widen `ServiceOrderCustomerOption` (line 23) to `ClienteListItem`'s shape; accept `selectedCustomer`/`canCreateCustomer` props; replace the `<Select>` block (lines 174–195) with `CustomerPicker`; drop the `customers` array prop.
-- [ ] 5.2 `ServiceOrderFormTrigger.tsx`: drop `customers` prop, forward `selectedCustomer`/`canCreateCustomer`.
-- [ ] 5.3 `service-orders/page.tsx`: drop the `listClientes` preload (line 69) and its `Promise.all` slot; pass `canCreateCustomer={can(user, "customers.write")}` to the trigger; rewrite the `PICKER_LIST_LIMIT` comment (lines 28–32) — it now bounds the parts picker only, a customer search route exists.
+- [x] 5.1 `ServiceOrderForm.tsx`: widen `ServiceOrderCustomerOption` (line 23) to `ClienteListItem`'s shape; accept `selectedCustomer`/`canCreateCustomer` props; replace the `<Select>` block (lines 174–195) with `CustomerPicker`; drop the `customers` array prop.
+- [x] 5.2 `ServiceOrderFormTrigger.tsx`: drop `customers` prop, forward `selectedCustomer`/`canCreateCustomer`.
+- [x] 5.3 `service-orders/page.tsx`: drop the `listClientes` preload (line 69) and its `Promise.all` slot; pass `canCreateCustomer={can(user, "customers.write")}` to the trigger; rewrite the `PICKER_LIST_LIMIT` comment (lines 28–32) — it now bounds the parts picker only, a customer search route exists.
 
 ## Phase 6: Delivery
 
-- [ ] 6.1 Run full suite + `npm run test:e2e`; confirm ≥833 passing (baseline) plus new tests, 0 regressions.
-- [ ] 6.2 `tsc` exit 0; lint 0 errors, ≤15 pre-existing warnings (no new ones).
+- [x] 6.1 Run full suite + `npm run test:e2e`; confirm ≥833 passing (baseline) plus new tests, 0 regressions.
+- [x] 6.2 `tsc` exit 0; lint 0 errors, ≤15 pre-existing warnings (no new ones).
 - [ ] 6.3 Manual GGA review pass (four layers) before opening the PR.
 - [ ] 6.4 Open PR against `chore/preview-clean-output`; note the two independent revert boundaries (route commit, picker commit) from proposal.md's Rollback Plan.
