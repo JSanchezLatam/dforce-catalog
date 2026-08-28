@@ -9,7 +9,7 @@
  * Run: npx tsx scripts/preview-catalog.ts
  * Output: preview-out/ (gitignored) — one PNG per printed page, plus the PDF.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { chromium } from "playwright";
@@ -104,6 +104,15 @@ async function main() {
   const html = await renderCatalogHtml({ ...props, productPages });
   await page.setContent(html, { waitUntil: "load" });
 
+  // Wiped, not just created. This gate's exit criterion is a human looking at
+  // the PNGs, so a stale sheet left over from an earlier run is not clutter —
+  // it is a wrong answer wearing a plausible filename. Two ways it bit:
+  // a renamed sheet leaves its old file behind forever (`02-Product-page-1.png`
+  // outlived the switch to `data-sheet`), and on a case-insensitive filesystem
+  // writing `00-cover.png` over an existing `00-Cover.png` replaces the bytes
+  // but KEEPS the old name, so the directory disagrees with this script's own
+  // log about what it just wrote.
+  await rm(OUT, { recursive: true, force: true });
   await mkdir(OUT, { recursive: true });
   const sheets = await page.$$("article > section");
   for (const [index, sheet] of sheets.entries()) {
