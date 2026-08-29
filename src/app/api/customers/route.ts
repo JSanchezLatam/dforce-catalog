@@ -48,15 +48,15 @@ export async function handleListClientes(
   const list = deps.listClientes ?? listClientesQuery;
   const countFn = deps.countClientes ?? countClientesQuery;
 
-  let customers = await list({ search }, pageWindow);
-  let total = await countFn({ search });
+  // Both round-trips at once, as `customers/page.tsx:49` does — the search is
+  // a sequential scan, so serialising them doubles every keystroke's latency.
+  let [customers, total] = await Promise.all([list({ search }, pageWindow), countFn({ search })]);
   let relaxedFrom: string | undefined;
 
   if (search && customers.length === 0) {
     const relaxed = relaxSearchTerm(search);
     if (relaxed) {
-      customers = await list({ search: relaxed }, pageWindow);
-      total = await countFn({ search: relaxed });
+      [customers, total] = await Promise.all([list({ search: relaxed }, pageWindow), countFn({ search: relaxed })]);
       if (customers.length > 0) relaxedFrom = relaxed;
     }
   }

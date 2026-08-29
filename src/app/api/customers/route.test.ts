@@ -132,6 +132,27 @@ describe("GET /api/customers (R19)", () => {
     expect(body.total).toBe(1);
   });
 
+  /**
+   * The search is a sequential scan (design.md), so a serial `await list()`
+   * then `await count()` doubles the latency of every keystroke burst.
+   * `customers/page.tsx:49` already issues both at once.
+   */
+  it("issues the list and count queries concurrently, not one after the other", async () => {
+    let resolveList: (rows: ClienteListItem[]) => void = () => {};
+    const listClientes = vi.fn(
+      () => new Promise<ClienteListItem[]>((resolve) => { resolveList = resolve; }),
+    );
+    const countClientes = vi.fn().mockResolvedValue(1);
+
+    const pending = handleListClientes(getReq("tecnico", "?search=juan"), { listClientes, countClientes });
+    await Promise.resolve();
+
+    expect(countClientes).toHaveBeenCalled();
+
+    resolveList([ROW]);
+    expect((await (await pending).json()).total).toBe(1);
+  });
+
   it("does not re-query when the primary search already has results", async () => {
     const listClientes = vi.fn().mockResolvedValue([ROW]);
     const countClientes = vi.fn().mockResolvedValue(1);
