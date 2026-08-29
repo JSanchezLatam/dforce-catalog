@@ -200,7 +200,9 @@ export function CustomerPicker({
       )}
 
       {zeroExactMatches && canCreateCustomer && (
-        <CustomerForm triggerLabel="Crear cliente nuevo" onSaved={(cliente) => handleSelect(cliente)} />
+        // `CustomerForm` doesn't collect vehicles yet (slice 3) — a freshly
+        // created customer genuinely has none.
+        <CustomerForm triggerLabel="Crear cliente nuevo" onSaved={(cliente) => handleSelect({ ...cliente, plates: [] })} />
       )}
     </div>
   );
