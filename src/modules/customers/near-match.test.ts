@@ -18,6 +18,12 @@ describe("relaxSearchTerm", () => {
     expect(relaxSearchTerm("Juan Alberto")).toBe("Juan");
   });
 
+  // Three words or more is the only fixture that can tell "first word" apart
+  // from "drop the last word" — a two-word term gives the same answer either way.
+  it("relaxes a four-word name term to its first word, not to everything but the last", () => {
+    expect(relaxSearchTerm("Juan Carlos Perez Gomez")).toBe("Juan");
+  });
+
   it("relaxes a single-token name/plate term to a shorter prefix", () => {
     expect(relaxSearchTerm("ABC1234")).toBe("ABC1");
   });

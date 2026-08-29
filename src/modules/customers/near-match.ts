@@ -27,7 +27,7 @@ export function relaxSearchTerm(term: string): string | null {
     return digits.length >= PHONE_KEY_LENGTH ? digits.slice(-PHONE_KEY_LENGTH) : null;
   }
 
-  const lastSpace = trimmed.lastIndexOf(" ");
-  const prefix = lastSpace > 0 ? trimmed.slice(0, lastSpace) : trimmed.slice(0, Math.floor((trimmed.length * 2) / 3));
+  const firstSpace = trimmed.indexOf(" ");
+  const prefix = firstSpace > 0 ? trimmed.slice(0, firstSpace) : trimmed.slice(0, Math.floor((trimmed.length * 2) / 3));
   return prefix.length >= MIN_PREFIX_LENGTH && prefix.length < trimmed.length ? prefix : null;
 }
