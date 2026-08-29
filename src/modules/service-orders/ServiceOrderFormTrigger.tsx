@@ -16,22 +16,25 @@ import {
  * `CustomerFormTrigger.tsx`, for the same RSC function-prop reason.
  */
 export function ServiceOrderFormTrigger({
-  customers,
   products,
   order,
+  selectedCustomer,
+  canCreateCustomer,
   triggerLabel,
 }: {
-  customers: ServiceOrderCustomerOption[];
   products: ServiceOrderProductOption[];
   order?: OrdenServicio | null;
+  selectedCustomer?: ServiceOrderCustomerOption | null;
+  canCreateCustomer: boolean;
   triggerLabel?: ReactNode;
 }) {
   const router = useRouter();
   return (
     <ServiceOrderForm
-      customers={customers}
       products={products}
       order={order}
+      selectedCustomer={selectedCustomer}
+      canCreateCustomer={canCreateCustomer}
       triggerLabel={triggerLabel}
       onSaved={() => router.refresh()}
     />

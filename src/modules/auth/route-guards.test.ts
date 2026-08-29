@@ -20,7 +20,7 @@ export const ROUTE_GUARDS: Record<string, Partial<Record<"GET" | "POST" | "PATCH
   "/change-password": { GET: "session-only" },
   "/api/login": { POST: "session-only" },
   "/api/logout": { POST: "session-only" },
-  "/api/customers": { POST: "customers.write" },
+  "/api/customers": { GET: "customers.read", POST: "customers.write" },
   "/api/customers/[id]": { PATCH: "customers.write" },
   "/api/service-orders": { POST: "service-orders.write" },
   "/api/service-orders/[id]": { PATCH: "service-orders.write" },

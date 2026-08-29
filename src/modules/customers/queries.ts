@@ -6,7 +6,8 @@
  * the real DB call (defaulting to the actual drizzle query), so this module
  * is unit-testable with injected fakes and no live Postgres connection.
  */
-import { count, desc, eq, ilike, or } from "drizzle-orm";
+import { count, desc, eq, or, sql, type SQL } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 
 import { db } from "@/shared/db/client";
 import { cliente, ordenServicio, type Cliente, type OrdenServicio } from "@/shared/db/schema";
@@ -19,12 +20,30 @@ export type ClienteListItem = Pick<Cliente, "id" | "name" | "phone" | "email" | 
 
 export type ClienteDetail = { cliente: Cliente; orders: OrdenServicio[] };
 
-/** Pure — R19's "partial, case-insensitive match against name, phone, or vehicle plate". */
+/**
+ * `ilike` folds case but NOT accents, so 'María GONZÁLEZ' ilike '%maria%' is
+ * false. Wrapping BOTH sides in `unaccent()` (extension enabled by migration
+ * 0012) makes the fold symmetric: an unaccented term matches an accented row
+ * and vice versa.
+ *
+ * `unaccent()` is STABLE, not IMMUTABLE, so it can never back an expression
+ * index — see design.md's "Migration / Rollout". Correct at 364 rows; a
+ * future `pg_trgm` upgrade must account for it.
+ */
+function unaccentIlike(column: PgColumn, pattern: string): SQL {
+  return sql`unaccent(${column}) ilike unaccent(${pattern})`;
+}
+
+/** Pure — R19's "partial, case- and accent-insensitive match against name, phone, or vehicle plate". */
 export function buildClienteSearchWhere(search?: string) {
   const term = search?.trim();
   if (!term) return undefined;
   const pattern = `%${term}%`;
-  return or(ilike(cliente.name, pattern), ilike(cliente.phone, pattern), ilike(cliente.vehiclePlate, pattern));
+  return or(
+    unaccentIlike(cliente.name, pattern),
+    unaccentIlike(cliente.phone, pattern),
+    unaccentIlike(cliente.vehiclePlate, pattern),
+  );
 }
 
 /** R19 — paginated + searched customer list, newest first. */

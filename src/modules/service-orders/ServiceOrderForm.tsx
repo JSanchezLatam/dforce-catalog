@@ -3,7 +3,7 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Search } from "lucide-react";
 
-import type { Cliente, OrdenServicio, Producto } from "@/shared/db/schema";
+import type { OrdenServicio, Producto } from "@/shared/db/schema";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,11 +16,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import type { ClienteListItem } from "@/modules/customers/queries";
+import { CustomerPicker } from "./CustomerPicker";
 import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
 
-export type ServiceOrderCustomerOption = Pick<Cliente, "id" | "name" | "phone">;
+/** = `ClienteListItem` — the route body (`GET /api/customers`) maps straight through (design.md). */
+export type ServiceOrderCustomerOption = ClienteListItem;
 export type ServiceOrderProductOption = Pick<Producto, "id" | "name" | "price">;
 
 type CartLine = { productoId: string; productName: string; unitPrice: number | null; quantity: number };
@@ -38,29 +40,39 @@ function toDatetimeLocal(value?: Date | string | null): string {
  * `appointmentAt` on an existing order (customer + parts are immutable after
  * creation — `service-orders/service.ts`'s `updateOrder` only patches those
  * two fields, per design.md §7's route table). "use client", Dialog+Input+
- * Label+Button+Select+Table, `FIELD_ERROR` — mirrors `CustomerForm.tsx` and
- * reuses `CatalogBuilderForm.tsx`'s search+Table idiom for the parts picker
- * (client-side filter over an already-fetched `products` list, no new
- * search route). POSTs to `/api/service-orders` (create) or PATCHes
- * `/api/service-orders/[id]` (edit) — tasks 5.3/5.4.
+ * Label+Button+Table, `FIELD_ERROR` — mirrors `CustomerForm.tsx`; the
+ * customer field is `CustomerPicker` (async, debounced `GET
+ * /api/customers`, `customer-search-and-picker` change), and parts keep
+ * `CatalogBuilderForm.tsx`'s search+Table idiom (client-side filter over an
+ * already-fetched `products` list — no dedicated parts search route yet,
+ * see `page.tsx`'s `PICKER_LIST_LIMIT`). POSTs to `/api/service-orders`
+ * (create) or PATCHes `/api/service-orders/[id]` (edit) — tasks 5.3/5.4.
  */
 export function ServiceOrderForm({
-  customers,
   products,
   order,
+  selectedCustomer,
+  canCreateCustomer,
   triggerLabel,
   onSaved,
 }: {
-  customers: ServiceOrderCustomerOption[];
   products: ServiceOrderProductOption[];
   /** Provided => edit mode (PATCH, description/appointmentAt only); omitted => create mode (POST). */
   order?: OrdenServicio | null;
+  /**
+   * The order's already-resolved customer (create mode: none yet; edit mode:
+   * loaded server-side by id, e.g. `service-orders/[id]/page.tsx`'s
+   * `getClienteById`) — rendered as selected regardless of the picker's
+   * current search term (design.md decision).
+   */
+  selectedCustomer?: ServiceOrderCustomerOption | null;
+  canCreateCustomer: boolean;
   triggerLabel?: ReactNode;
   onSaved?: (orden: OrdenServicio) => void;
 }) {
   const isEdit = Boolean(order);
   const [open, setOpen] = useState(false);
-  const [clienteId, setClienteId] = useState(order?.clienteId ?? "");
+  const [clienteId, setClienteId] = useState(order?.clienteId ?? selectedCustomer?.id ?? "");
   const [description, setDescription] = useState(order?.description ?? "");
   const [appointmentAt, setAppointmentAt] = useState(toDatetimeLocal(order?.appointmentAt));
   const [searchQuery, setSearchQuery] = useState("");
@@ -75,7 +87,7 @@ export function ServiceOrderForm({
   }, [products, searchQuery]);
 
   function resetForm() {
-    setClienteId(order?.clienteId ?? "");
+    setClienteId(order?.clienteId ?? selectedCustomer?.id ?? "");
     setDescription(order?.description ?? "");
     setAppointmentAt(toDatetimeLocal(order?.appointmentAt));
     setSearchQuery("");
@@ -173,19 +185,12 @@ export function ServiceOrderForm({
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {!isEdit && (
             <div className="grid gap-2">
-              <Label htmlFor="orden-cliente">Cliente</Label>
-              <Select value={clienteId} onValueChange={(value) => setClienteId(value ?? "")}>
-                <SelectTrigger id="orden-cliente">
-                  <SelectValue placeholder="Seleccioná un cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name} ({c.phone})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Cliente</Label>
+              <CustomerPicker
+                selectedCustomer={selectedCustomer ?? null}
+                canCreateCustomer={canCreateCustomer}
+                onSelect={(customer) => setClienteId(customer.id)}
+              />
               {errors.clienteId && (
                 <p role="alert" className={FIELD_ERROR}>
                   {errors.clienteId}

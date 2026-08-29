@@ -2,8 +2,83 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
+import {
+  countClientes as countClientesQuery,
+  listClientes as listClientesQuery,
+  type ClienteListItem,
+} from "@/modules/customers/queries";
+import { relaxSearchTerm } from "@/modules/customers/near-match";
 import { createCliente, DuplicatePhoneError, type CreateClienteDeps } from "@/modules/customers/service";
 import { ClienteValidationError } from "@/modules/customers/validation";
+import { computePageWindow, parsePageSize } from "@/modules/inventory-view/queries";
+
+export type ListClientesDeps = {
+  listClientes?: typeof listClientesQuery;
+  countClientes?: typeof countClientesQuery;
+};
+
+export type ListClientesResponseBody = {
+  customers: ClienteListItem[];
+  total: number;
+  /** Present only when `customers` are near matches for a relaxed term (design.md). */
+  relaxedFrom?: string;
+};
+
+/**
+ * R19 — search/pagination read, mirroring `handleListUsers`'s shape
+ * (`api/users/route.ts:19-36`): `can()` runs before the query string or any
+ * dependency is touched. When the primary search returns zero rows, a
+ * second pass re-runs the same query with `relaxSearchTerm`'s broader term
+ * (design.md's near-match decision) — `queries.ts` itself stays untouched.
+ */
+export async function handleListClientes(
+  request: NextRequest,
+  deps: ListClientesDeps = {},
+): Promise<NextResponse> {
+  const user = requireSession(request);
+  if (!can(user, "customers.read")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const params = request.nextUrl.searchParams;
+  const search = params.get("search")?.trim() || undefined;
+  const pageSize = parsePageSize(params.get("pageSize") ?? undefined);
+  const pageWindow = computePageWindow(params.get("page") ?? undefined, pageSize);
+
+  const list = deps.listClientes ?? listClientesQuery;
+  const countFn = deps.countClientes ?? countClientesQuery;
+
+  // Both round-trips at once, as `customers/page.tsx:49` does — the search is
+  // a sequential scan, so serialising them doubles every keystroke's latency.
+  let [customers, total] = await Promise.all([list({ search }, pageWindow), countFn({ search })]);
+  let relaxedFrom: string | undefined;
+
+  // `total === 0`, NOT `customers.length === 0`: an empty PAGE is not an empty
+  // RESULT SET. Past the last page of a term that does match rows, the list
+  // comes back empty while the count still reports the real total — keying the
+  // fallback on the rows would relax a search that found plenty.
+  if (search && total === 0) {
+    const relaxed = relaxSearchTerm(search);
+    if (relaxed) {
+      const [relaxedCustomers, relaxedTotal] = await Promise.all([
+        list({ search: relaxed }, pageWindow),
+        countFn({ search: relaxed }),
+      ]);
+      // Adopted whole or not at all. Taking `relaxedTotal` while its rows are
+      // empty would publish a count for a term the caller never asked about,
+      // and `relaxedFrom` — the only signal that a substitution happened —
+      // would stay unset, because it fires on rows.
+      if (relaxedCustomers.length > 0) {
+        customers = relaxedCustomers;
+        total = relaxedTotal;
+        relaxedFrom = relaxed;
+      }
+    }
+  }
+
+  const body: ListClientesResponseBody = { customers, total, ...(relaxedFrom ? { relaxedFrom } : {}) };
+  return NextResponse.json(body);
+}
 
 export async function handleCreateCliente(
   request: NextRequest,
@@ -28,6 +103,10 @@ export async function handleCreateCliente(
     }
     throw err;
   }
+}
+
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  return handleListClientes(request);
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {

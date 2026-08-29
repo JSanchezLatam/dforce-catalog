@@ -26,6 +26,7 @@
  * render.
  */
 import { execSync } from "node:child_process";
+import { inArray } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -55,7 +56,7 @@ import { runSync } from "@/modules/inventory-sync/job";
 import { registerPdfGenerateWorker } from "@/modules/pdf-generation/worker";
 import { proxy } from "@/proxy";
 import { db } from "@/shared/db/client";
-import { users } from "@/shared/db/schema";
+import { cliente, users } from "@/shared/db/schema";
 import { getBoss } from "@/shared/jobs/boss";
 
 import { POST as loginPOST } from "../app/api/login/route";
@@ -63,6 +64,7 @@ import { POST as templateConfigPOST } from "../app/api/template-config/route";
 import { POST as productsPOST } from "../app/api/catalog-builder/products/route";
 import { POST as generatePOST } from "../app/api/catalog-builder/generate/route";
 import { GET as filePOST } from "../app/api/catalogs/[id]/file/route";
+import { GET as customersGET } from "../app/api/customers/route";
 
 const PASSWORD = "Sup3rSecret!1";
 
@@ -81,6 +83,126 @@ async function loginAs(username: string): Promise<{ id: string; role: "tecnico" 
   expect(user).not.toBeNull();
   return user!;
 }
+
+/**
+ * AGENTS.md's "Known coverage limit" — every unit test for `listClientes`/
+ * `countClientes` injects `queryFn`, so a fully green `npm test` proves ZERO
+ * coverage of the real `ilike`/`or()` SQL `buildClienteSearchWhere` builds.
+ * Specifically: `NULL ILIKE x` is NULL, not false, so a customer with a null
+ * `phone` or `vehicle_plate` could in principle be silently dropped from the
+ * `or()`. This describe calls the real `GET /api/customers` handler (no
+ * injected deps) against a real Postgres to prove: mid-string case-
+ * insensitive matching on name/plate, that a NULL column does not drop a row
+ * matched through a different column, mid-string digit matching on phone,
+ * and that the `relaxSearchTerm` near-match pass finds a row the raw
+ * (unrelaxed) term cannot. Runs before the catalog-generation describe below
+ * so `db.$client.end()` in that describe's `afterAll` — its own connection
+ * teardown — still lands after this one, not before.
+ */
+describe("customer search (E2E)", () => {
+  let mixedCaseName: { id: string };
+  let nullPlate: { id: string };
+  let nullPhone: { id: string };
+  let formattedPhone: { id: string };
+
+  beforeAll(async () => {
+    execSync("npx drizzle-kit migrate", { stdio: "inherit" });
+
+    const [row1, row2, row3, row4] = await db
+      .insert(cliente)
+      .values([
+        { name: "María GONZÁLEZ", phone: "50761111111", vehiclePlate: "ABC111" },
+        { name: "Carlos Ruiz", phone: "50762222222", vehiclePlate: null },
+        { name: "Ana Torres", phone: null, vehiclePlate: "XYZ999" },
+        // Stored with a leading "+" — `normalizePhone`'s real output shape
+        // for an international number (validation.ts:47-51), i.e. what a
+        // production row genuinely looks like, not a hand-formatted stub.
+        { name: "Pedro Díaz", phone: "+5076444444", vehiclePlate: "DEF444" },
+      ])
+      .returning({ id: cliente.id });
+    mixedCaseName = row1;
+    nullPlate = row2;
+    nullPhone = row3;
+    formattedPhone = row4;
+  }, 60_000);
+
+  // Seeded rows are removed by id. Without this the describe is a one-way
+  // write: `vitest.e2e.config.ts` deliberately does NOT override
+  // `DATABASE_URL`, so this suite runs against whatever the environment
+  // points at — a throwaway container if you were careful, the dev database
+  // if you were not. Four customers per run, accumulating forever, is not a
+  // cost a test is allowed to charge silently. Deleting by captured id (not
+  // by name) leaves any real row that happens to share a name untouched.
+  afterAll(async () => {
+    // Optional chaining because a throwing `beforeAll` leaves these undefined,
+    // and a TypeError in here would mask the real seed error underneath it.
+    const seeded = [mixedCaseName?.id, nullPlate?.id, nullPhone?.id, formattedPhone?.id].filter(
+      (id): id is string => Boolean(id),
+    );
+    if (seeded.length > 0) await db.delete(cliente).where(inArray(cliente.id, seeded));
+  });
+
+  const headers = { "x-user-id": "e2e-customer-search", "x-user-role": "tecnico" };
+
+  async function search(term: string) {
+    const response = await customersGET(
+      new NextRequest(`http://localhost/api/customers?search=${encodeURIComponent(term)}`, { headers }),
+    );
+    expect(response.status).toBe(200);
+    return response.json() as Promise<{ customers: { id: string }[]; total: number; relaxedFrom?: string }>;
+  }
+
+  it("matches partial, lowercase, mixed-case names (mid-string ilike, case-insensitive)", async () => {
+    const body = await search("maría gonzá");
+    expect(body.customers.map((c) => c.id)).toContain(mixedCaseName.id);
+  });
+
+  it("matches an accented name from an UNACCENTED term (unaccent() on both sides)", async () => {
+    // The accented sibling above passes precisely by avoiding the failing
+    // input: `ilike` folds case but not accents, so before migration 0012
+    // 'María GONZÁLEZ' ilike '%maria gonza%' was false and staff typing the
+    // name the ordinary way got zero matches plus a "create customer" button.
+    // This is the only check that proves the real `unaccent()` SQL.
+    const body = await search("maria gonza");
+    expect(body.customers.map((c) => c.id)).toContain(mixedCaseName.id);
+  });
+
+  it("matches a partial plate (mid-string ilike on vehicle_plate)", async () => {
+    const body = await search("bc11");
+    expect(body.customers.map((c) => c.id)).toContain(mixedCaseName.id);
+  });
+
+  it("matches partial digits-only phone (mid-string ilike on phone)", async () => {
+    const body = await search("622222");
+    expect(body.customers.map((c) => c.id)).toContain(nullPlate.id);
+  });
+
+  it("does not silently drop a row with a NULL vehicle_plate from the or() when matched by name", async () => {
+    const body = await search("Carlos");
+    expect(body.customers.map((c) => c.id)).toContain(nullPlate.id);
+  });
+
+  it("does not silently drop a row with a NULL phone from the or() when matched by name", async () => {
+    const body = await search("Torres");
+    expect(body.customers.map((c) => c.id)).toContain(nullPhone.id);
+  });
+
+  it("finds a customer only through the relaxed near-match pass, not the raw term", async () => {
+    // "644-4444" is dashed and has no country code; the stored phone
+    // ("+5076444444") has neither dash nor a bare "644-4444" substring, so
+    // the primary pass must return zero rows before relaxSearchTerm's
+    // digits-only relaxation ("6444444") finds it as a substring.
+    // NOTE: this is the one case in this describe that depends on the whole
+    // table, not just the seeded rows — `relaxedFrom` is only set when the
+    // primary pass finds ZERO rows anywhere. Run against a database that
+    // already holds a customer whose phone contains "644-4444" and it goes red
+    // for a reason unrelated to the code. Every other case uses `toContain`
+    // and is immune. Recreate the database per run, as the header says.
+    const raw = await search("644-4444");
+    expect(raw.relaxedFrom).toBe("6444444");
+    expect(raw.customers.map((c) => c.id)).toContain(formattedPhone.id);
+  });
+});
 
 describe("full catalog-generation flow (E2E)", () => {
   let regularUser: { id: string; role: "tecnico" | "administrador" };
@@ -195,14 +317,22 @@ describe("full catalog-generation flow (E2E)", () => {
     const all = await listInventory({}, { offset: 0, limit: 25 });
     expect(all.total).toBe(3);
 
-    const motorOnly = await listInventory({ categoryL1: "Motor" }, { offset: 0, limit: 25 });
+    // The mock seeds "Motor" because that is the mixed case Interfuerza really
+    // sends; `normalizeCategory` (mapper.ts, and migration 0011 for rows written
+    // before it) folds the typed projection to upper case, so the stored value
+    // is "MOTOR" and an exact `eq()` filter must use that. Asserting the folded
+    // value here is what makes this the only end-to-end proof that the fold
+    // actually reaches the database — every unit test injects its query seam.
+    const motorOnly = await listInventory({ categoryL1: "MOTOR" }, { offset: 0, limit: 25 });
     expect(motorOnly.items.map((i) => i.id).sort()).toEqual(["p1", "p2"]);
 
     // PR10 — grand total stays 3 regardless of the active filter, unlike
     // `listInventory().total` above which is filter-scoped (motorOnly = 2).
     expect(await countAllProducts()).toBe(3);
 
-    expect(await listCategoryL1Options()).toEqual(["Motor", "Suspensión"]);
+    // Folded, and still alphabetical: the fold is what collapses the real
+    // ERP's "Accesorios"/"ACCESORIOS" into one option instead of two.
+    expect(await listCategoryL1Options()).toEqual(["MOTOR", "SUSPENSIÓN"]);
   });
 
   it("configures branding as admin; a non-admin gets 403 (R8, R9.6/NFR-8)", async () => {
@@ -234,7 +364,8 @@ describe("full catalog-generation flow (E2E)", () => {
       new NextRequest("http://localhost/api/catalog-builder/products", {
         method: "POST",
         headers: headersFor(regularUser),
-        body: JSON.stringify({ categories: [{ categoryL1: "Motor" }] }),
+        // "MOTOR", not "Motor" — same folded projection as the filter above.
+        body: JSON.stringify({ categories: [{ categoryL1: "MOTOR" }] }),
       }),
     );
     const { products } = await candidatesRes.json();

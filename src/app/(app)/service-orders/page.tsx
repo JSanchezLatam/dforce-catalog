@@ -3,7 +3,6 @@ import { Wrench } from "lucide-react";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
-import { listClientes } from "@/modules/customers/queries";
 import { computePageWindow, listInventory, parsePageSize } from "@/modules/inventory-view/queries";
 import { ServiceOrderFilters } from "@/modules/service-orders/ServiceOrderFilters";
 import { ServiceOrderFormTrigger } from "@/modules/service-orders/ServiceOrderFormTrigger";
@@ -25,10 +24,12 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   cancelled: "Cancelada",
 };
 
-// Both the customer picker and the parts picker inside ServiceOrderForm work
-// over an already-fetched list (Phase 5's client-side search+cart idiom, no
-// server round-trip) — capped at 1000 rows each since there is no dedicated
-// search route for either list yet (same known limitation flagged in Phase 5).
+// The parts picker inside ServiceOrderForm still works over an already-
+// fetched list (client-side search+cart idiom, no server round-trip),
+// capped at 1000 rows — there is no dedicated parts search route yet (known
+// sibling limitation, proposal.md's Out of Scope). The customer picker no
+// longer preloads anything: `customer-search-and-picker` gave it its own
+// `GET /api/customers?search=` route instead (`CustomerPicker.tsx`).
 const PICKER_LIST_LIMIT = 1000;
 
 function firstValue(value: string | string[] | undefined): string | undefined {
@@ -63,10 +64,9 @@ export default async function ServiceOrdersPage({
     return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
   }
 
-  const [items, total, customers, products] = await Promise.all([
+  const [items, total, products] = await Promise.all([
     listOrdenesServicio(filters, pageWindow),
     countOrdenesServicio(filters),
-    listClientes({}, { offset: 0, limit: PICKER_LIST_LIMIT }),
     listInventory({}, { offset: 0, limit: PICKER_LIST_LIMIT }),
   ]);
 
@@ -77,8 +77,8 @@ export default async function ServiceOrdersPage({
       <div className="mb-6 flex items-center justify-between">
         <h1 className={PAGE_HEADING}>Órdenes de servicio</h1>
         <ServiceOrderFormTrigger
-          customers={customers}
           products={products.items}
+          canCreateCustomer={can(user, "customers.write")}
           triggerLabel="Nueva orden de servicio"
         />
       </div>
