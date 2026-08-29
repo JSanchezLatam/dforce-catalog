@@ -56,7 +56,7 @@ import { runSync } from "@/modules/inventory-sync/job";
 import { registerPdfGenerateWorker } from "@/modules/pdf-generation/worker";
 import { proxy } from "@/proxy";
 import { db } from "@/shared/db/client";
-import { cliente, users } from "@/shared/db/schema";
+import { cliente, users, vehiculo } from "@/shared/db/schema";
 import { getBoss } from "@/shared/jobs/boss";
 
 import { POST as loginPOST } from "../app/api/login/route";
@@ -124,6 +124,13 @@ describe("customer search (E2E)", () => {
     nullPlate = row2;
     nullPhone = row3;
     formattedPhone = row4;
+
+    // R19's plate match now runs against `vehiculo`, not `cliente.vehicle_plate`
+    // (design.md D4) — the row above still carries the legacy column (it's
+    // still physically present, just unread by search) so a `vehiculo` row is
+    // what the "matches a partial plate" case below actually needs. Cascades
+    // with `mixedCaseName`'s deletion in `afterAll`, no separate cleanup.
+    await db.insert(vehiculo).values({ clienteId: mixedCaseName.id, plate: "ABC111" });
   }, 60_000);
 
   // Seeded rows are removed by id. Without this the describe is a one-way
@@ -201,6 +208,90 @@ describe("customer search (E2E)", () => {
     const raw = await search("644-4444");
     expect(raw.relaxedFrom).toBe("6444444");
     expect(raw.customers.map((c) => c.id)).toContain(formattedPhone.id);
+  });
+});
+
+/**
+ * vehicles-one-to-many (C3, design.md Testing Strategy) — the ONE thing every
+ * unit test cannot prove: `service.test.ts`/`queries.test.ts` inject the
+ * query seam, so a green `npm test` proves zero coverage of the real
+ * `EXISTS`/`array_agg` SQL `buildClienteSearchWhere`/`listClientes` build.
+ * Mirrors `customer search (E2E)` exactly: real migrate, seed via captured
+ * ids, `afterAll` deletes those `cliente` ids (`vehiculo` cascades, no
+ * separate cleanup needed).
+ */
+describe("vehicle search (E2E)", () => {
+  let threeVehicles: { id: string };
+  let zeroVehicles: { id: string };
+  let withDeactivated: { id: string };
+
+  beforeAll(async () => {
+    execSync("npx drizzle-kit migrate", { stdio: "inherit" });
+
+    const [row1, row2, row3] = await db
+      .insert(cliente)
+      .values([
+        { name: "Lucía Fernández", phone: "50763333333" },
+        { name: "Roberto Silva", phone: "50764444444" },
+        { name: "Marta Núñez", phone: "50765555555" },
+      ])
+      .returning({ id: cliente.id });
+    threeVehicles = row1;
+    zeroVehicles = row2;
+    withDeactivated = row3;
+
+    await db.insert(vehiculo).values([
+      { clienteId: threeVehicles.id, plate: "AAA111" },
+      { clienteId: threeVehicles.id, plate: "BBB222" },
+      { clienteId: threeVehicles.id, plate: "CCC333" },
+      { clienteId: withDeactivated.id, plate: "ZZZ999", deactivatedAt: new Date() },
+    ]);
+  }, 60_000);
+
+  afterAll(async () => {
+    const seeded = [threeVehicles?.id, zeroVehicles?.id, withDeactivated?.id].filter(
+      (id): id is string => Boolean(id),
+    );
+    if (seeded.length > 0) await db.delete(cliente).where(inArray(cliente.id, seeded));
+  });
+
+  const headers = { "x-user-id": "e2e-vehicle-search", "x-user-role": "tecnico" };
+
+  async function search(term: string) {
+    const response = await customersGET(
+      new NextRequest(`http://localhost/api/customers?search=${encodeURIComponent(term)}`, { headers }),
+    );
+    expect(response.status).toBe(200);
+    return response.json() as Promise<{ customers: { id: string; plates: string[] }[]; total: number }>;
+  }
+
+  it("matches a 3-vehicle customer by the SECOND plate, not only the first", async () => {
+    const body = await search("bbb2");
+    expect(body.customers.map((c) => c.id)).toContain(threeVehicles.id);
+  });
+
+  it("matches a 3-vehicle customer by the THIRD plate", async () => {
+    const body = await search("ccc3");
+    expect(body.customers.map((c) => c.id)).toContain(threeVehicles.id);
+  });
+
+  it("still matches a zero-vehicle customer on name and phone", async () => {
+    const body = await search("Roberto Silva");
+    expect(body.customers.map((c) => c.id)).toContain(zeroVehicles.id);
+  });
+
+  it("excludes a soft-deleted vehicle's plate from search while its customer stays findable by name", async () => {
+    const byPlate = await search("zzz9");
+    expect(byPlate.customers.map((c) => c.id)).not.toContain(withDeactivated.id);
+
+    const byName = await search("Marta Núñez");
+    expect(byName.customers.map((c) => c.id)).toContain(withDeactivated.id);
+  });
+
+  it("returns `plates` as a real multi-element array (array_agg), active vehicles only", async () => {
+    const body = await search("Lucía Fernández");
+    const row = body.customers.find((c) => c.id === threeVehicles.id);
+    expect(row?.plates.slice().sort()).toEqual(["AAA111", "BBB222", "CCC333"]);
   });
 });
 
