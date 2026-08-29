@@ -197,10 +197,12 @@ What actually gates work:
   --agent <runtime> --next-transition`), which selects lenses by risk and
   produces a receipt. It found a merge-blocking defect in
   `user-lifecycle-management` WU3 that the full test suite passed over.
-- `npm run lint` currently reports 5 pre-existing errors (`use-mobile`,
-  `CatalogBuilderForm` ×2, `TreeSelect`, `ThemeToggle` — all
-  `react-hooks/set-state-in-effect`). Don't add to them; fixing them is its
-  own change.
+- `npm run lint` currently reports **0 errors and 15 warnings** (verified
+  2026-08-28), all pre-existing: `@typescript-eslint/no-unused-vars`,
+  `@next/next/no-img-element`, and one `react-hooks/exhaustive-deps`. The five
+  `react-hooks/set-state-in-effect` errors this line used to claim are gone.
+  Don't add to the warnings; clearing them is its own change — and re-run the
+  command before trusting any count written here.
 
 ### GGA — run it before opening a PR
 
