@@ -55,6 +55,16 @@ describe("POST /api/customers (R16)", () => {
     const body = await response.json();
     expect(body.existingClienteId).toBe("existing-1");
   });
+
+  it("returns 400 for a vehicle missing its plate, unchanged error mapping (D5/D6)", async () => {
+    const response = await handleCreateCliente(requestWith({ ...validInput, vehicles: [{ make: "Toyota" }] }), {
+      findByPhone: async () => null,
+    });
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.errors["vehicles.0.plate"]).toBeTruthy();
+  });
 });
 
 function getReq(role: string, query = "") {
@@ -69,6 +79,7 @@ const ROW: ClienteListItem = {
   phone: null,
   email: null,
   vehiclePlate: null,
+  plates: [],
   createdAt: new Date("2026-01-01"),
 };
 

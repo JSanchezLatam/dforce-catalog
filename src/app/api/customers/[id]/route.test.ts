@@ -76,9 +76,18 @@ describe("PATCH /api/customers/[id] (R16)", () => {
   });
 
   it("returns 400 on a validation error", async () => {
-    const response = await handleUpdateCliente(requestWith({ vehicleMake: "Toyota" }), "c1", {
+    const response = await handleUpdateCliente(requestWith({ name: "" }), "c1", {
       getById: async () => current,
     });
     expect(response.status).toBe(400);
+  });
+
+  it("returns 400 for a vehicles entry missing its plate, unchanged error mapping (D5/D6)", async () => {
+    const response = await handleUpdateCliente(requestWith({ vehicles: [{ make: "Toyota" }] }), "c1", {
+      getById: async () => current,
+    });
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.errors["vehicles.0.plate"]).toBeTruthy();
   });
 });
