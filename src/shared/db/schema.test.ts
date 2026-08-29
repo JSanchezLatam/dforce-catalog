@@ -12,6 +12,7 @@ import {
   reminderTypeEnum,
   roleEnum,
   users,
+  vehiculo,
   workshopConfig,
 } from "./schema";
 
@@ -143,6 +144,51 @@ describe("schema — cliente table (Phase 1, task 1.2)", () => {
     expect(nameIdx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["name"]);
     expect(plateIdx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["vehicle_plate"]);
     expect(createdIdx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["created_at"]);
+  });
+
+  it("still has its 4 inline vehicle columns + cliente_plate_idx — vehicles-one-to-many slice 1 does not touch cliente", () => {
+    expect(findColumn(config.columns, "vehicle_make").notNull).toBe(false);
+    expect(findColumn(config.columns, "vehicle_model").notNull).toBe(false);
+    expect(findColumn(config.columns, "vehicle_year").notNull).toBe(false);
+    expect(findColumn(config.columns, "vehicle_plate").notNull).toBe(false);
+    expect(() => findIndex(config.indexes, "cliente_plate_idx")).not.toThrow();
+  });
+});
+
+describe("schema — vehiculo table (vehicles-one-to-many, Phase 1 slice 1)", () => {
+  const config = getTableConfig(vehiculo);
+
+  it("is named 'vehiculo'", () => {
+    expect(config.name).toBe("vehiculo");
+  });
+
+  it("has id/clienteId/make/model/year/plate/deactivatedAt/createdAt columns", () => {
+    expect(findColumn(config.columns, "id").primary).toBe(true);
+    expect(findColumn(config.columns, "cliente_id").notNull).toBe(true);
+    expect(findColumn(config.columns, "make").notNull).toBe(false);
+    expect(findColumn(config.columns, "model").notNull).toBe(false);
+    expect(findColumn(config.columns, "year").notNull).toBe(false);
+    expect(findColumn(config.columns, "plate").notNull).toBe(true);
+    // D3 — nullable timestamp, not a boolean. NULL = active.
+    const deactivatedAt = findColumn(config.columns, "deactivated_at");
+    expect(deactivatedAt.columnType).toBe("PgTimestamp");
+    expect(deactivatedAt.notNull).toBe(false);
+    expect(findColumn(config.columns, "created_at").notNull).toBe(true);
+  });
+
+  it("does NOT have a boolean 'active' column — the spec's earlier draft is stale", () => {
+    expect(config.columns.some((c) => c.name === "active")).toBe(false);
+  });
+
+  it("clienteId FK cascades on delete (D1 — vehicles have no independent lifecycle)", () => {
+    const fk = config.foreignKeys.find((f) => f.reference().columns.some((c) => c.name === "cliente_id"));
+    if (!fk) throw new Error("cliente_id foreign key not found");
+    expect(fk.onDelete).toBe("cascade");
+  });
+
+  it("has a vehiculo_plate_idx index on plate", () => {
+    const idx = findIndex(config.indexes, "vehiculo_plate_idx");
+    expect(idx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["plate"]);
   });
 });
 
