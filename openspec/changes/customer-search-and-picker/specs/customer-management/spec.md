@@ -4,7 +4,7 @@
 
 ### Requirement: List View Search and Filter (R19)
 
-The customer list view MUST provide a text search input matching `cliente` records by partial, case-insensitive match against `name`, `phone`, or vehicle `plate`. The same matching MUST also be reachable through `GET /api/customers`, gated by `customers.read`, accepting `search`, `page`, and `pageSize` parameters. Each result MUST include `vehiclePlate` for disambiguation; a `cliente` with neither `phone` nor `plate` on record MUST still render as an identifiable row, not a blank one. WHEN a search yields zero exact matches, the route MUST also return near matches produced from the same relaxed term — a shorter prefix for name/plate, and a digits-only comparison for `phone` that ignores formatting and country-code differences. This is deliberately NOT fuzzy/similarity matching.
+The customer list view MUST provide a text search input matching `cliente` records by partial, case-insensitive match against `name`, `phone`, or vehicle `plate`. The same matching MUST also be reachable through `GET /api/customers`, gated by `customers.read`, accepting `search`, `page`, and `pageSize` parameters. Each result MUST include `vehiclePlate` for disambiguation; a `cliente` with neither `phone` nor `plate` on record MUST still render as an identifiable row, not a blank one. WHEN a search yields zero exact matches, the route MUST also return near matches produced from the same relaxed term — a shorter prefix for name/plate, and for `phone` the search TERM reduced to its last significant digits. The relaxation applies to the term only: the comparison still runs against the stored column verbatim, so this guarantee holds exactly as far as `normalizePhone` (`validation.ts`) has already stripped separators on write. A row written by any path that bypasses `normalizePhone` — a bulk import, for instance — keeps its separators and is NOT covered. This is deliberately NOT fuzzy/similarity matching.
 
 (Previously: search existed only inside the list-view page, had no HTTP route, returned no plate, and had no near-match fallback.)
 
@@ -39,6 +39,6 @@ The customer list view MUST provide a text search input matching `cliente` recor
 - THEN all three rows MUST be returned, the two Juans each carrying their own `vehiclePlate`, and the third rendering with a defined fallback label instead of blank fields
 
 #### Scenario: Near match by relaxed term
-- GIVEN a `cliente` whose name only starts with "Juan" (not "Juan Alberto") and another whose `phone` is "+52 55 1234 5678"
-- WHEN searches for "Juan Alberto" and for "5512345678" each yield zero exact matches
-- THEN the system MUST return each `cliente` as a near match — by shorter prefix, and by digits-only phone comparison
+- GIVEN a `cliente` whose name only starts with "Juan" (not "Juan Alberto") and another whose `phone` is stored as "+525512345678" — separator-free, which is what `normalizePhone` writes; a row still carrying "+52 55 1234 5678" is out of scope, since the relaxed term is matched against the column verbatim
+- WHEN searches for "Juan Alberto" and for "55 1234-5678" each yield zero exact matches
+- THEN the system MUST return each `cliente` as a near match — by shorter prefix, and by reducing the search term to its last significant digits

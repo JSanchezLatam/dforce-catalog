@@ -133,6 +133,23 @@ describe("GET /api/customers (R19)", () => {
   });
 
   /**
+   * `CustomerPicker` asks for exactly 50 (`pageSize=50`), and its own test
+   * asserts only that the string is in the URL. `parsePageSize` silently falls
+   * back to `DEFAULT_PAGE_SIZE` (10) for any value outside `[10,25,50,100]`,
+   * so if 50 ever left that list the picker would quietly show 10 rows and
+   * BOTH tests would stay green — reproducing the silent truncation this whole
+   * change exists to remove. This is the test that would go red instead.
+   */
+  it("honours the pageSize=50 the picker actually asks for", async () => {
+    const listClientes = vi.fn().mockResolvedValue([ROW]);
+    const countClientes = vi.fn().mockResolvedValue(1);
+
+    await handleListClientes(getReq("tecnico", "?search=perez&pageSize=50"), { listClientes, countClientes });
+
+    expect(listClientes).toHaveBeenCalledWith({ search: "perez" }, expect.objectContaining({ limit: 50 }));
+  });
+
+  /**
    * An empty PAGE is not an empty RESULT SET. Past the last page of a term
    * that does match rows, `listClientes` returns `[]` while `countClientes`
    * still reports the real total — so keying the fallback on the row count

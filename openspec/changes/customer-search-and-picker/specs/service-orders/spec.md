@@ -40,4 +40,5 @@ When creating or editing an `orden_servicio`, the customer picker MUST query cus
 #### Scenario: Zero exact and zero near matches
 - GIVEN a search term with no exact and no near matches
 - WHEN the picker renders its empty state
-- THEN the system MUST show only the create-customer affordance, still gated by `customers.write`
+- THEN the system MUST show an explicit no-matches message, followed by the create-customer affordance when `customers.write` is held
+- AND a user without `customers.write` MUST still see that message, because rendering nothing is indistinguishable from a search that has not finished
