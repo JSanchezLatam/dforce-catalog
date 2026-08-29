@@ -1,7 +1,15 @@
+import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 import type { Cliente, OrdenServicio } from "@/shared/db/schema";
 import { buildClienteSearchWhere, countClientes, findClienteByPhone, getClienteById, listClientes } from "./queries";
+
+/** Renders the built condition to real Postgres SQL + bound params, no connection needed. */
+function compileSearchWhere(term: string) {
+  const condition = buildClienteSearchWhere(term);
+  expect(condition).toBeDefined();
+  return new PgDialect().sqlToQuery(condition!);
+}
 
 describe("buildClienteSearchWhere (R19)", () => {
   it("returns undefined when no search term is given", () => {
@@ -14,6 +22,20 @@ describe("buildClienteSearchWhere (R19)", () => {
 
   it("returns a defined condition when a search term is given (matches name/phone/plate)", () => {
     expect(buildClienteSearchWhere("juan")).toBeDefined();
+  });
+
+  it("folds accents as well as case, so an unaccented term matches an accented row", () => {
+    // Postgres `ilike` folds case but NOT accents: 'María GONZÁLEZ' ilike
+    // '%maria%' is false. The customer dataset is Spanish, so staff typing
+    // "maria gonza" would otherwise get zero matches and be offered "create
+    // customer" — the duplicate this whole change exists to prevent. Both
+    // sides go through `unaccent()` (migration 0012) so the fold is symmetric:
+    // an unaccented term matches an accented row and vice versa.
+    const { sql, params } = compileSearchWhere("maria gonza");
+    expect(sql).toContain(`unaccent("cliente"."name") ilike unaccent($1)`);
+    expect(sql).toContain(`unaccent("cliente"."phone") ilike unaccent($2)`);
+    expect(sql).toContain(`unaccent("cliente"."vehicle_plate") ilike unaccent($3)`);
+    expect(params).toEqual(["%maria gonza%", "%maria gonza%", "%maria gonza%"]);
   });
 });
 

@@ -157,6 +157,16 @@ describe("customer search (E2E)", () => {
     expect(body.customers.map((c) => c.id)).toContain(mixedCaseName.id);
   });
 
+  it("matches an accented name from an UNACCENTED term (unaccent() on both sides)", async () => {
+    // The accented sibling above passes precisely by avoiding the failing
+    // input: `ilike` folds case but not accents, so before migration 0012
+    // 'María GONZÁLEZ' ilike '%maria gonza%' was false and staff typing the
+    // name the ordinary way got zero matches plus a "create customer" button.
+    // This is the only check that proves the real `unaccent()` SQL.
+    const body = await search("maria gonza");
+    expect(body.customers.map((c) => c.id)).toContain(mixedCaseName.id);
+  });
+
   it("matches a partial plate (mid-string ilike on vehicle_plate)", async () => {
     const body = await search("bc11");
     expect(body.customers.map((c) => c.id)).toContain(mixedCaseName.id);
