@@ -145,14 +145,6 @@ describe("schema — cliente table (Phase 1, task 1.2)", () => {
     expect(plateIdx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["vehicle_plate"]);
     expect(createdIdx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["created_at"]);
   });
-
-  it("still has its 4 inline vehicle columns + cliente_plate_idx — vehicles-one-to-many slice 1 does not touch cliente", () => {
-    expect(findColumn(config.columns, "vehicle_make").notNull).toBe(false);
-    expect(findColumn(config.columns, "vehicle_model").notNull).toBe(false);
-    expect(findColumn(config.columns, "vehicle_year").notNull).toBe(false);
-    expect(findColumn(config.columns, "vehicle_plate").notNull).toBe(false);
-    expect(() => findIndex(config.indexes, "cliente_plate_idx")).not.toThrow();
-  });
 });
 
 describe("schema — vehiculo table (vehicles-one-to-many, Phase 1 slice 1)", () => {
@@ -176,7 +168,7 @@ describe("schema — vehiculo table (vehicles-one-to-many, Phase 1 slice 1)", ()
     expect(findColumn(config.columns, "created_at").notNull).toBe(true);
   });
 
-  it("does NOT have a boolean 'active' column — the spec's earlier draft is stale", () => {
+  it("does NOT have a boolean 'active' column — soft delete is a nullable timestamp (users.deactivated_at convention, D3)", () => {
     expect(config.columns.some((c) => c.name === "active")).toBe(false);
   });
 
@@ -186,9 +178,13 @@ describe("schema — vehiculo table (vehicles-one-to-many, Phase 1 slice 1)", ()
     expect(fk.onDelete).toBe("cascade");
   });
 
-  it("has a vehiculo_plate_idx index on plate", () => {
-    const idx = findIndex(config.indexes, "vehiculo_plate_idx");
-    expect(idx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["plate"]);
+  it("has a vehiculo_cliente_idx index on cliente_id — every read path filters on it, and ON DELETE CASCADE scans it", () => {
+    const idx = findIndex(config.indexes, "vehiculo_cliente_idx");
+    expect(idx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["cliente_id"]);
+  });
+
+  it("has NO index on bare plate — R19 searches unaccent(plate) ILIKE ..., which a plain btree cannot serve", () => {
+    expect(config.indexes.map((i) => i.config.name)).not.toContain("vehiculo_plate_idx");
   });
 });
 

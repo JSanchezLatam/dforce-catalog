@@ -1,5 +1,5 @@
 {
-  "id": "2836dcc2-8cb3-4ac1-9862-ff75d0f75633",
+  "id": "d47bd075-2b51-4f51-9ac6-ac00c7810ae0",
   "prevId": "290f1971-ba72-4679-b4b3-7a25299261d4",
   "version": "7",
   "dialect": "postgresql",
@@ -1015,11 +1015,11 @@
         }
       },
       "indexes": {
-        "vehiculo_plate_idx": {
-          "name": "vehiculo_plate_idx",
+        "vehiculo_cliente_idx": {
+          "name": "vehiculo_cliente_idx",
           "columns": [
             {
-              "expression": "plate",
+              "expression": "cliente_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

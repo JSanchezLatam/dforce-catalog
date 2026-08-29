@@ -305,7 +305,15 @@ export const vehiculo = pgTable(
     deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("vehiculo_plate_idx").on(table.plate)],
+  /**
+   * `cliente_id` only. Every read path filters on it (D4's `EXISTS`, the
+   * `array_agg` plates subselect) and `ON DELETE CASCADE` seq-scans this table
+   * per parent delete without it. No index on bare `plate`: R19 searches
+   * `unaccent("plate") ILIKE unaccent($1)`, an expression predicate a plain
+   * btree on the raw column cannot serve. Add an exact-plate index when an
+   * exact-plate lookup actually appears.
+   */
+  (table) => [index("vehiculo_cliente_idx").on(table.clienteId)],
 );
 
 export type Vehiculo = typeof vehiculo.$inferSelect;
