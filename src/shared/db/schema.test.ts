@@ -12,6 +12,7 @@ import {
   reminderTypeEnum,
   roleEnum,
   users,
+  vehiculo,
   workshopConfig,
 } from "./schema";
 
@@ -143,6 +144,47 @@ describe("schema — cliente table (Phase 1, task 1.2)", () => {
     expect(nameIdx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["name"]);
     expect(plateIdx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["vehicle_plate"]);
     expect(createdIdx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["created_at"]);
+  });
+});
+
+describe("schema — vehiculo table (vehicles-one-to-many, Phase 1 slice 1)", () => {
+  const config = getTableConfig(vehiculo);
+
+  it("is named 'vehiculo'", () => {
+    expect(config.name).toBe("vehiculo");
+  });
+
+  it("has id/clienteId/make/model/year/plate/deactivatedAt/createdAt columns", () => {
+    expect(findColumn(config.columns, "id").primary).toBe(true);
+    expect(findColumn(config.columns, "cliente_id").notNull).toBe(true);
+    expect(findColumn(config.columns, "make").notNull).toBe(false);
+    expect(findColumn(config.columns, "model").notNull).toBe(false);
+    expect(findColumn(config.columns, "year").notNull).toBe(false);
+    expect(findColumn(config.columns, "plate").notNull).toBe(true);
+    // D3 — nullable timestamp, not a boolean. NULL = active.
+    const deactivatedAt = findColumn(config.columns, "deactivated_at");
+    expect(deactivatedAt.columnType).toBe("PgTimestamp");
+    expect(deactivatedAt.notNull).toBe(false);
+    expect(findColumn(config.columns, "created_at").notNull).toBe(true);
+  });
+
+  it("does NOT have a boolean 'active' column — soft delete is a nullable timestamp (users.deactivated_at convention, D3)", () => {
+    expect(config.columns.some((c) => c.name === "active")).toBe(false);
+  });
+
+  it("clienteId FK cascades on delete (D1 — vehicles have no independent lifecycle)", () => {
+    const fk = config.foreignKeys.find((f) => f.reference().columns.some((c) => c.name === "cliente_id"));
+    if (!fk) throw new Error("cliente_id foreign key not found");
+    expect(fk.onDelete).toBe("cascade");
+  });
+
+  it("has a vehiculo_cliente_idx index on cliente_id — every read path filters on it, and ON DELETE CASCADE scans it", () => {
+    const idx = findIndex(config.indexes, "vehiculo_cliente_idx");
+    expect(idx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["cliente_id"]);
+  });
+
+  it("has NO index on bare plate — R19 searches unaccent(plate) ILIKE ..., which a plain btree cannot serve", () => {
+    expect(config.indexes.map((i) => i.config.name)).not.toContain("vehiculo_plate_idx");
   });
 });
 

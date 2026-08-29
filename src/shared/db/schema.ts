@@ -237,9 +237,10 @@ export const reminderStatusEnum = pgEnum("reminder_status", [
 ]);
 
 /**
- * `cliente` — customer + inline single vehicle (v1, ADR-6). A separate
- * `vehiculo` table is deferred until a customer needs more than one vehicle
- * (YAGNI — see design.md ADR-6).
+ * `cliente` — customer + inline single vehicle (v1, ADR-6). Superseded by the
+ * `vehiculo` child table below (vehicles-one-to-many, C3) — these four inline
+ * columns are dropped in migration 0014 (slice 3, expand/contract). They stay
+ * here through slice 1 and slice 2 so the app keeps compiling.
  */
 export const cliente = pgTable(
   "cliente",
@@ -274,6 +275,48 @@ export const cliente = pgTable(
 );
 
 export type Cliente = typeof cliente.$inferSelect;
+
+/**
+ * `vehiculo` — a `cliente`'s vehicle collection (vehicles-one-to-many, C3,
+ * design.md D1/D3). Child table, not JSONB — C4's `orden_servicio.vehiculo_id`
+ * needs a real FK target (D1). `cliente_id` cascades on delete: vehicles have
+ * no independent lifecycle.
+ *
+ * `deactivatedAt` is a nullable timestamp, NOT a boolean (D3) — copies the
+ * `users.deactivated_at` convention already in this codebase (`isUserActive()`,
+ * `isNull(...)` filters, `deactivateUser`/`reactivateUser`). NULL = active.
+ * Sole owner of reads/writes: `src/modules/customers/vehicles.ts` (slice 2).
+ */
+export const vehiculo = pgTable(
+  "vehiculo",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    clienteId: text("cliente_id")
+      .notNull()
+      .references(() => cliente.id, { onDelete: "cascade" }),
+    make: text("make"),
+    model: text("model"),
+    year: integer("year"),
+    /** Required per vehicle (R17) — a vehicle without a plate has no reason to exist. */
+    plate: text("plate").notNull(),
+    /** NULL = active; stamped on soft delete. See table doc comment above. */
+    deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  /**
+   * `cliente_id` only. Every read path filters on it (D4's `EXISTS`, the
+   * `array_agg` plates subselect) and `ON DELETE CASCADE` seq-scans this table
+   * per parent delete without it. No index on bare `plate`: R19 searches
+   * `unaccent("plate") ILIKE unaccent($1)`, an expression predicate a plain
+   * btree on the raw column cannot serve. Add an exact-plate index when an
+   * exact-plate lookup actually appears.
+   */
+  (table) => [index("vehiculo_cliente_idx").on(table.clienteId)],
+);
+
+export type Vehiculo = typeof vehiculo.$inferSelect;
 
 /** `orden_servicio` — service order. */
 export const ordenServicio = pgTable(
