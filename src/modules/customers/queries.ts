@@ -10,15 +10,25 @@ import { count, desc, eq, or, sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import { db } from "@/shared/db/client";
-import { cliente, ordenServicio, type Cliente, type OrdenServicio } from "@/shared/db/schema";
+import { cliente, ordenServicio, vehiculo, type Cliente, type OrdenServicio, type Vehiculo } from "@/shared/db/schema";
+import { activeVehiculoFilter, listVehiculosByCliente, platesSubquery } from "./vehicles";
 
 export const DEFAULT_PAGE_SIZE = 10;
 
 export type ClienteFilters = { search?: string };
 
-export type ClienteListItem = Pick<Cliente, "id" | "name" | "phone" | "email" | "vehiclePlate" | "createdAt">;
+/**
+ * `vehiclePlate` is kept for now alongside `plates` — dropping it would break
+ * `customers/page.tsx` and `CustomerPicker.tsx`, both slice 3 scope
+ * (expand/contract, design.md). It's removed when `cliente`'s inline vehicle
+ * columns are (migration 0014, slice 3).
+ */
+export type ClienteListItem = Pick<Cliente, "id" | "name" | "phone" | "email" | "vehiclePlate" | "createdAt"> & {
+  /** R19/D4 — this customer's active vehicle plates, replacing the single `vehiclePlate` column as the source of truth. */
+  plates: string[];
+};
 
-export type ClienteDetail = { cliente: Cliente; orders: OrdenServicio[] };
+export type ClienteDetail = { cliente: Cliente; orders: OrdenServicio[]; vehicles: Vehiculo[] };
 
 /**
  * `ilike` folds case but NOT accents, so 'María GONZÁLEZ' ilike '%maria%' is
@@ -34,16 +44,24 @@ function unaccentIlike(column: PgColumn, pattern: string): SQL {
   return sql`unaccent(${column}) ilike unaccent(${pattern})`;
 }
 
-/** Pure — R19's "partial, case- and accent-insensitive match against name, phone, or vehicle plate". */
+/**
+ * D4 — plate match as an EXISTS over the customer's active vehicle
+ * collection (not a single-column comparison): a customer matches if ANY one
+ * active vehicle's plate matches. `unaccentIlike` is reused verbatim (PR
+ * #44), now against `vehiculo.plate`. `activeVehiculoFilter()` (D3) supplies
+ * the `deactivated_at is null` clause — dropping it is caught by the
+ * "active vehicles only" unit test below, no database needed.
+ */
+function vehiculoPlateExists(pattern: string): SQL {
+  return sql`exists (select 1 from ${vehiculo} where ${vehiculo.clienteId} = ${cliente.id} and ${activeVehiculoFilter()} and ${unaccentIlike(vehiculo.plate, pattern)})`;
+}
+
+/** Pure — R19's "partial, case- and accent-insensitive match against name, phone, or any active vehicle plate". */
 export function buildClienteSearchWhere(search?: string) {
   const term = search?.trim();
   if (!term) return undefined;
   const pattern = `%${term}%`;
-  return or(
-    unaccentIlike(cliente.name, pattern),
-    unaccentIlike(cliente.phone, pattern),
-    unaccentIlike(cliente.vehiclePlate, pattern),
-  );
+  return or(unaccentIlike(cliente.name, pattern), unaccentIlike(cliente.phone, pattern), vehiculoPlateExists(pattern));
 }
 
 /** R19 — paginated + searched customer list, newest first. */
@@ -58,6 +76,7 @@ export async function listClientes(
         phone: cliente.phone,
         email: cliente.email,
         vehiclePlate: cliente.vehiclePlate,
+        plates: platesSubquery(),
         createdAt: cliente.createdAt,
       })
       .from(cliente)
@@ -92,7 +111,8 @@ export async function getClienteById(
       .from(ordenServicio)
       .where(eq(ordenServicio.clienteId, id))
       .orderBy(desc(ordenServicio.createdAt));
-    return { cliente: clienteRow, orders };
+    const vehicles = await listVehiculosByCliente(id);
+    return { cliente: clienteRow, orders, vehicles };
   },
 ): Promise<ClienteDetail | null> {
   return queryFn();
