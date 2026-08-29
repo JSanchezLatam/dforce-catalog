@@ -8,7 +8,9 @@
 # the exact command that fixes it, then exits non-zero.
 #
 # Usage:  ./scripts/dev.sh
-# Env:    APP_PORT (default 3000), SKIP_TYPECHECK=1 to skip the tsc gate
+# Env:    APP_PORT (default 3000), SKIP_TYPECHECK=1 to skip the tsc gate,
+#         DEV_USER / DEV_PASSWORD (default admin / admin123) for the
+#         administrator seeded when the users table is empty
 
 set -uo pipefail
 
@@ -222,12 +224,34 @@ manda es drizzle.__drizzle_migrations — NO public.__drizzle_migrations, que
 es un resto de un arreglo manual viejo y no la lee nadie."
 ok "Base de datos al día"
 
-# An empty users table looks exactly like a broken login. Cheap to detect,
-# confusing to debug — so say it here rather than at the login screen.
+# An empty users table looks exactly like a broken login, and after a
+# `docker volume prune` it is the normal state rather than the exception.
+#
+# Seeded here and NOT in a migration on purpose: migrations run in every
+# environment including production, and they are plain SQL — seeding a user
+# there means committing a fixed bcrypt hash to git, which is a known
+# administrator credential on every deployment. This script only ever runs on
+# a developer machine.
 USER_COUNT="$(cd "$ROOT" && docker compose exec -T db psql -U dforce -d dforce_catalog -tAc 'select count(*) from users;' 2>/dev/null | tr -d '[:space:]')"
 if [ "$USER_COUNT" = "0" ]; then
-  warn "La tabla users está vacía — no vas a poder iniciar sesión."
-  printf '    Creá uno con: %snpm run db:seed-user%s\n' "$DIM" "$OFF"
+  DEV_USER="${DEV_USER:-admin}"
+  DEV_PASSWORD="${DEV_PASSWORD:-admin123}"
+  warn "La tabla users está vacía — creando el usuario de desarrollo."
+  # Same reason DATABASE_URL is exported for the migration step: seed-user.mjs
+  # reads process.env directly and does not load .env.
+  SEED_OUT="$(cd "$ROOT" && DATABASE_URL="$DATABASE_URL" node scripts/seed-user.mjs "$DEV_USER" "$DEV_PASSWORD" administrador 2>&1)" || fail \
+    "No pude crear el usuario de desarrollo. Salida completa:
+
+$SEED_OUT" \
+    "Creá uno a mano:
+
+  DATABASE_URL=postgres://dforce:dforce@localhost:$DB_HOST_PORT/dforce_catalog \\
+    node scripts/seed-user.mjs <usuario> <clave> administrador"
+  ok "Usuario '$DEV_USER' creado con rol administrador"
+  if [ "$DEV_PASSWORD" = "admin123" ]; then
+    printf '    %sclave: admin123 — cambiala desde Mi cuenta, o corré%s\n' "$DIM" "$OFF"
+    printf '    %sDEV_USER=<usuario> DEV_PASSWORD=<clave> ./scripts/dev.sh%s\n' "$DIM" "$OFF"
+  fi
 else
   ok "${USER_COUNT} usuario(s) en la base"
 fi
