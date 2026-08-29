@@ -28,14 +28,18 @@ independent lifecycle and it keeps E2E cleanup a single delete by `cliente` id. 
 
 | | Migration | Slice | Reversible |
 |---|---|---|---|
-| Expand | `0013` — `CREATE TABLE vehiculo` + `vehiculo_plate_idx` + `INSERT…SELECT` backfill of rows where `vehicle_plate IS NOT NULL` | 1 | Yes — drop the table |
+| Expand | `0013` — `CREATE TABLE vehiculo` + `vehiculo_cliente_idx` + a pre-flight guard that aborts on any plate-less vehicle row + `INSERT…SELECT` backfill of rows where `vehicle_plate IS NOT NULL` | 1 | Yes — drop the table |
 | Contract | `0014` — `DROP` the four `cliente` columns + `cliente_plate_idx` | 3 | No |
 
 **Rejected**: one migration in slice 1. It leaves `tsc` red and the app broken at the end of a slice.
-**Rationale**: standard expand/contract. Between slices 2 and 3 the four columns are dead but still
-present — a branch-level transient only: in the feature-branch-chain only the tracker merges to `main`,
-so no intermediate state reaches production. Backfill is `1` row today (`orden_servicio` = 0 rows,
-0 rows violate R17), eyeball-verifiable, and never cheaper than now.
+**Rationale**: standard expand/contract. Slices go to `main` sequentially, so `main` really does carry
+the new table alongside the four still-live `cliente` columns between slices — that transient reaches
+production, and it is exactly the state expand/contract exists to make safe. `vehiculo` is written by
+`0013`'s backfill and then read by nothing until slice 2; the four `cliente` columns stay the
+authoritative source until slice 3 flips the readers and drops them. Every slice is therefore
+independently revertible on its own (slice 1: `DROP TABLE vehiculo`), which a single migration would
+not be. Backfill is `1` row today (`orden_servicio` = 0 rows, 0 rows violate R17), eyeball-verifiable,
+and never cheaper than now.
 
 ### D3 — Soft delete copies `users.deactivated_at`, it does not invent a flag
 

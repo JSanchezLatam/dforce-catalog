@@ -79,7 +79,9 @@ Deleting a vehicle MUST be a soft delete: the system MUST stamp `deactivated_at`
 
 **This is NOT a new convention — it copies the one already in this codebase.** `users.deactivated_at` ships the complete reversible-deactivation pattern: `isUserActive()`, an `isNull(...)` filter with an `includeInactive` query parameter, `deactivateUser`/`reactivateUser`, and a `showInactive` UI toggle. It deliberately uses a **nullable timestamp rather than a boolean**, and `modules/account/queries.ts` records why: the flag "is exposed (not folded into a boolean) so the UI can show WHEN access was lost, which an audit needs". A boolean here would be a second, incompatible convention that also discards *when* the vehicle left service. A later change enabling/disabling a `cliente` follows the same shape.
 
-The schema migration that introduces `vehiculo` MUST preserve existing data: for every `cliente` row that had any inline vehicle field set, the migration MUST create exactly one `vehiculo` row carrying that make, model, year, and plate, active (`deactivated_at` NULL).
+The schema migration that introduces `vehiculo` MUST preserve existing data: for every `cliente` row that had an inline `vehicle_plate`, the migration MUST create exactly one `vehiculo` row carrying that make, model, year, and plate, active (`deactivated_at` NULL).
+
+The condition is the **plate**, not "any inline vehicle field", because `vehiculo.plate` is `NOT NULL`: a vehicle without a plate is structurally unrepresentable in the new model, so no migration could satisfy a wider condition. This is R17's rule, now enforced by the schema rather than only by application validation. R17 being app-only until now means such a row is still reachable by direct SQL or a bulk import, so the migration MUST refuse to run — with an error naming the offending row count — rather than silently dropping any `cliente` row that carries make, model, or year with no plate.
 
 #### Scenarios
 
@@ -88,4 +90,5 @@ The schema migration that introduces `vehiculo` MUST preserve existing data: for
 - GIVEN a `cliente` with one active vehicle WHEN staff soft-deletes it THEN the system MUST stamp that `vehiculo` row's `deactivated_at`, MUST NOT delete the row, and the vehicle MUST no longer appear in the list view, R19 search results, or `CustomerPicker`
 - GIVEN a previously deactivated vehicle WHEN staff restores it THEN the system MUST set `deactivated_at` back to `NULL` and the vehicle's make, model, year, and plate MUST be exactly as recorded before the deactivation
 - GIVEN a `cliente` update patch that edits only the phone field and includes no vehicles WHEN staff saves THEN every existing `vehiculo` row for that `cliente` MUST remain unchanged, including each row's `deactivated_at`
-- GIVEN the pre-migration `cliente` row carrying inline vehicle fields WHEN the schema migration runs THEN the system MUST create exactly one `vehiculo` row for it, preserving make, model, year, and plate, with `deactivated_at` NULL
+- GIVEN the pre-migration `cliente` row carrying an inline `vehicle_plate` WHEN the schema migration runs THEN the system MUST create exactly one `vehiculo` row for it, preserving make, model, year, and plate, with `deactivated_at` NULL
+- GIVEN a pre-migration `cliente` row carrying `vehicle_make`, `vehicle_model`, or `vehicle_year` with no `vehicle_plate` WHEN the schema migration runs THEN the migration MUST abort with an error naming how many such rows exist, and MUST NOT create any `vehiculo` row

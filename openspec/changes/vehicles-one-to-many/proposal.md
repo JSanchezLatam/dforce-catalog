@@ -16,7 +16,9 @@ is the *Interfuerza ERP* census, not our row count; `queries.ts:30` repeats it i
 
 ### In Scope
 
-- New `vehiculo` table: `id text` UUID PK, `cliente_id` FK, make/model/year/plate + `vehiculo_plate_idx`.
+- New `vehiculo` table: `id text` UUID PK, `cliente_id` FK, make/model/year/plate + `vehiculo_cliente_idx`
+  (every read path filters on `cliente_id`; no index on bare `plate` — R19 searches `unaccent(plate) ILIKE`,
+  which a plain btree cannot serve).
 - Custom Drizzle migration: `INSERT…SELECT` backfill, then drop the four `cliente` columns and `cliente_plate_idx`.
 - `buildClienteSearchWhere` plate branch → `EXISTS` subquery; `unaccentIlike` and both-sides `unaccent()` preserved verbatim.
 - R17's plate rule relocated to a per-vehicle `validateVehiculoInput`.
@@ -83,9 +85,14 @@ independent workflow, unlike `service-orders` or `reminders`.
 
 ## Rollback Plan
 
-Per-slice revert; slice 1 is the only irreversible one. A down-migration must re-add the four columns
-and copy back **one** vehicle per customer — lossy if any customer has gained a second by then. Roll
-back before slice 3 ships or accept the loss. Slices 2 and 3 are ordinary code reverts.
+Per-slice revert. **Slice 3 is the irreversible one, not slice 1.**
+
+- **Slice 1** — clean. `DROP TABLE vehiculo;` and delete `0013`'s row from `drizzle.__drizzle_migrations`.
+  `cliente` is untouched by this slice, so nothing is lost.
+- **Slice 2** — ordinary code revert. `0013` stays harmless and inert with no readers.
+- **Slice 3** — **irreversible past merge.** `0014` drops the four `cliente` columns. A down-migration
+  can re-add them but can only copy back **one** vehicle per customer, so it is lossy the moment any
+  customer has a second. Roll back before `0014` merges, or accept the loss.
 
 ## Dependencies
 
