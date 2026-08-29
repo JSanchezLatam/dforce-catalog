@@ -4,9 +4,9 @@
 
 ### Requirement: List View Search and Filter (R19)
 
-The customer list view MUST provide a text search input matching `cliente` records by partial, case-insensitive match against `name`, `phone`, or vehicle `plate`. The same matching MUST also be reachable through `GET /api/customers`, gated by `customers.read`, accepting `search`, `page`, and `pageSize` parameters. Each result MUST include `vehiclePlate` for disambiguation; a `cliente` with neither `phone` nor `plate` on record MUST still render as an identifiable row, not a blank one. WHEN a search yields zero exact matches, the route MUST also return near matches produced from the same relaxed term — a shorter prefix for name/plate, and for `phone` the search TERM reduced to its last significant digits. The relaxation applies to the term only: the comparison still runs against the stored column verbatim, so this guarantee holds exactly as far as `normalizePhone` (`validation.ts`) has already stripped separators on write. A row written by any path that bypasses `normalizePhone` — a bulk import, for instance — keeps its separators and is NOT covered. This is deliberately NOT fuzzy/similarity matching.
+The customer list view MUST provide a text search input matching `cliente` records by partial, case-insensitive AND accent-insensitive match against `name`, `phone`, or vehicle `plate`. Accent folding MUST apply to both the stored value and the search term, so a term matches regardless of which side carries the diacritics. The same matching MUST also be reachable through `GET /api/customers`, gated by `customers.read`, accepting `search`, `page`, and `pageSize` parameters. Each result MUST include `vehiclePlate` for disambiguation; a `cliente` with neither `phone` nor `plate` on record MUST still render as an identifiable row, not a blank one. WHEN a search yields zero exact matches, the route MUST also return near matches produced from the same relaxed term — a shorter prefix for name/plate, and for `phone` the search TERM reduced to its last significant digits. The relaxation applies to the term only: the comparison still runs against the stored column verbatim, so this guarantee holds exactly as far as `normalizePhone` (`validation.ts`) has already stripped separators on write. A row written by any path that bypasses `normalizePhone` — a bulk import, for instance — keeps its separators and is NOT covered. This is deliberately NOT fuzzy/similarity matching.
 
-(Previously: search existed only inside the list-view page, had no HTTP route, returned no plate, and had no near-match fallback.)
+(Previously: search existed only inside the list-view page, had no HTTP route, returned no plate, had no near-match fallback, and folded case only — `ilike` does not fold accents, so an accented `name` was unreachable from an unaccented term.)
 
 #### Scenario: Search by name (unchanged)
 - GIVEN a `cliente` named "Juan Pérez"
@@ -17,6 +17,12 @@ The customer list view MUST provide a text search input matching `cliente` recor
 - GIVEN a `cliente` with plate "ABC-123"
 - WHEN staff types "abc" in the search box
 - THEN the system MUST show that customer in the filtered results
+
+#### Scenario: Search an accented name without typing the accents
+- GIVEN a `cliente` named "María GONZÁLEZ"
+- WHEN staff types "maria gonza" — no accents, lower case — in the picker or the list-view search box
+- THEN the system MUST show that customer as an exact match, and MUST NOT report zero matches or offer "create customer" as if none existed
+- AND typing "maría gonzá", with the accents, MUST still match the same customer
 
 #### Scenario: No matches in the list view (unchanged)
 - GIVEN a search term that matches no `cliente`

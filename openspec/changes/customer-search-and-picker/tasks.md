@@ -24,6 +24,7 @@ Chain strategy: pending
 | 1 | `GET /api/customers` + `relaxSearchTerm` | PR 1 | `npm test -- route.test near-match.test` | `npm run test:e2e` (customer search describe, real Postgres) | Delete `GET`/`handleListClientes` export; `near-match.ts` |
 | 2 | `CustomerPicker` component | PR 1 | `npm test -- CustomerPicker.test` | N/A — jsdom + mocked `fetch` only, no real backend behaviour to prove | Delete `CustomerPicker.tsx`/`.test.tsx` |
 | 3 | Wire picker into `ServiceOrderForm`/page | PR 1 | `npm test -- ServiceOrderForm` | N/A — wiring only, covered by unit 1/2 harnesses | Revert to `<Select>` + preload (git revert this commit) |
+| 4 | Accent-insensitive `buildClienteSearchWhere` + `unaccent` migration | PR 1 | `npm test -- queries.test` | `npm run test:e2e` (the unaccented-term case — the only real-SQL proof) | Standalone `git revert`, but NOT blast-radius-free: it also reverts the customers list page's search. Migration is additive, leave it |
 
 ## Phase 0: Branch
 
@@ -60,6 +61,19 @@ Chain strategy: pending
 - [x] 5.1 `ServiceOrderForm.tsx`: widen `ServiceOrderCustomerOption` (line 23) to `ClienteListItem`'s shape; accept `selectedCustomer`/`canCreateCustomer` props; replace the `<Select>` block (lines 174–195) with `CustomerPicker`; drop the `customers` array prop.
 - [x] 5.2 `ServiceOrderFormTrigger.tsx`: drop `customers` prop, forward `selectedCustomer`/`canCreateCustomer`.
 - [x] 5.3 `service-orders/page.tsx`: drop the `listClientes` preload (line 69) and its `Promise.all` slot; pass `canCreateCustomer={can(user, "customers.write")}` to the trigger; rewrite the `PICKER_LIST_LIMIT` comment (lines 28–32) — it now bounds the parts picker only, a customer search route exists.
+
+## Phase 5b: Accent-insensitive search
+
+Added after apply, when a live check found `ilike` folds case but NOT accents
+(`'María GONZÁLEZ' ilike '%maria%'` → `f` on PG 17.10) and the dataset is Spanish. Fixed rather than
+documented as a ceiling: the picker's whole purpose is to stop duplicate customers, and this made it
+offer "Crear cliente nuevo" on the most common name shape in the data.
+
+- [x] 5b.1 RED — `queries.test.ts`: compile `buildClienteSearchWhere` with `new PgDialect().sqlToQuery()` and assert both column and pattern are wrapped in `unaccent()` on all three columns. Confirmed failing against the bare `ilike` predicate.
+- [x] 5b.2 GREEN — `queries.ts`: private `unaccentIlike(column, pattern)` helper using Drizzle's `sql` template; `buildClienteSearchWhere` uses it for `name`, `phone`, `vehiclePlate`.
+- [x] 5b.3 Migration — `npx drizzle-kit generate --custom --name enable_unaccent` (NOT a hand-written `.sql`: without the journal entry Drizzle never runs it), body `CREATE EXTENSION IF NOT EXISTS unaccent`. Trusted extension on PG 13+, created by the `dforce` role with no superuser step.
+- [x] 5b.4 RED→GREEN e2e — new case in `src/e2e/full-flow.e2e.test.ts` searching `"maria gonza"` against the seeded `"María GONZÁLEZ"`, beside the existing accented `"maría gonzá"` case so both directions of the fold are locked in. RED verified for real by stashing `queries.ts`: that one case failed, the other eleven passed.
+- [x] 5b.5 Record the three consequences honestly in `proposal.md`/`design.md` rather than deleting the sentences they falsify: (a) the rollback is no longer "clean because `queries.ts` is untouched"; (b) `customers/page.tsx` shares the predicate, so its search changes too though it was listed as unchanged; (c) `unaccent()` is STABLE not IMMUTABLE (`provolatile = 's'`, verified) so it cannot back an index — the deferred `pg_trgm` path must account for it. No index and no `pg_trgm` added here; 364 rows makes the sequential scan correct.
 
 ## Phase 6: Delivery
 

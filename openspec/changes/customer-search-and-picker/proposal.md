@@ -13,6 +13,7 @@ Today `service-orders/page.tsx` pre-loads `PICKER_LIST_LIMIT = 1000` customers i
 - Switch the service-order customer picker to query that route asynchronously (debounced), dropping the 1000-row preload.
 - Each result row shows the vehicle plate as disambiguator, with a defined no-plate fallback.
 - Empty-state ordering: near matches first, inline "create customer" only as a secondary action revealed after them.
+- **Accent-insensitive matching.** Postgres `ilike` folds case but not accents (`'María GONZÁLEZ' ilike '%maria%'` is `f`, verified on PG 17.10), and the dataset is Spanish. Staff typing `maria gonzalez` got zero exact matches, zero near matches, and then the create button — this change's own anti-duplicate mechanism handing them the duplicate, on the most common input shape in the data. `buildClienteSearchWhere` now wraps both column and pattern in `unaccent()`; migration `0012` enables the extension.
 
 ### Out of Scope
 - Duplicate-phone race fix and `phone NOT NULL` (a UNIQUE phone index is ruled out — shared phones are legitimate).
@@ -32,7 +33,7 @@ Note: `openspec/specs/` holds only `catalog-generation`, `template-config`, `wor
 
 ## Approach
 
-Reuse `buildClienteSearchWhere` (pure, tested, already ORs `ilike` over name/phone/plate) through the existing paginated `listClientes`. Do not write a second search implementation. Mirror `api/users/route.ts` for the route shape (`can()` before any work, injectable deps) and `CustomerFilters.tsx` for the debounced input. `ClienteListItem` already carries `vehiclePlate`; `ServiceOrderCustomerOption` widens to include it.
+Reuse `buildClienteSearchWhere` (pure, tested, ORs a match over name/phone/plate) through the existing paginated `listClientes`. Do not write a second search implementation. The one edit it does take is the accent fold below — made *inside* that predicate precisely so there stays exactly one definition of "search". Mirror `api/users/route.ts` for the route shape (`can()` before any work, injectable deps) and `CustomerFilters.tsx` for the debounced input. `ClienteListItem` already carries `vehiclePlate`; `ServiceOrderCustomerOption` widens to include it.
 
 ## Affected Areas
 
@@ -41,20 +42,27 @@ Reuse `buildClienteSearchWhere` (pure, tested, already ORs `ilike` over name/pho
 | `src/app/api/customers/route.ts` | Modified | Add `handleListClientes` + `GET` |
 | `src/modules/service-orders/ServiceOrderForm.tsx` | Modified | Async picker; option type gains plate |
 | `src/app/(app)/service-orders/page.tsx` | Modified | Drop customer preload + its half of `PICKER_LIST_LIMIT` |
-| `src/modules/customers/queries.ts` | Unchanged | Reused as-is |
+| `src/modules/customers/queries.ts` | Modified | `buildClienteSearchWhere` folds accents: `unaccent(col) ilike unaccent(pattern)` on all three columns |
+| `src/shared/db/migrations/0012_enable_unaccent.sql` | Added | `CREATE EXTENSION IF NOT EXISTS unaccent` (trusted on PG 13+, no superuser) |
+| `src/app/(app)/customers/page.tsx` | **Behaviour changed, code unchanged** | Shares `buildClienteSearchWhere`, so its list search becomes accent-insensitive too — see Risks |
 
 ## Risks
 
 | Risk | Likelihood | Mitigation |
 |------|------------|------------|
 | Create affordance still races ahead of matches | Med | Spec it as an ordering requirement with its own scenario |
-| Leading-wildcard `ilike` ignores the btree indexes | Low | 364 rows; revisit with a trigram index only if measured |
+| Leading-wildcard `ilike` ignores the btree indexes, and `unaccent()` puts an index further out of reach still | Low | 364 rows, sequential scan is correct; see design.md "Migration / Rollout" before any `pg_trgm` work |
+| The customers list page's search changes too, though we said we would not touch it | Med | Stated, not hidden: `buildClienteSearchWhere` is shared with `customers/page.tsx`, so its search also stops missing accented rows. Consistent and an improvement — but a real behaviour change to a page listed as unchanged, and the reason the rollback is no longer two independent reverts |
 | Editing an order whose customer is off the first page | Med | Preselected customer resolved by id, not by search results |
 | Regressing the plate-less customer to an unlabelled row | Med | Explicit fallback scenario |
 
 ## Rollback Plan
 
-Two independent reverts: the picker commit restores the `listClientes` preload and the old `<Select>`; the route commit deletes the `GET` export. `queries.ts` is untouched, so neither revert can affect the customers list page.
+Three reverts, and only two of them are independent. The picker commit restores the `listClientes` preload and the old `<Select>`; the route commit deletes the `GET` export. Neither touches `queries.ts`, so neither affects the customers list page.
+
+The accent-fold commit is the exception, and this section originally claimed otherwise. `queries.ts` **is** modified now, so reverting that commit also reverts the customers list page's search back to accent-sensitive. It is still a clean, standalone `git revert` — the predicate is one function and the migration is additive — but it is not blast-radius-free, and it must be reverted on its own rather than as a side effect of rolling back the picker or the route.
+
+Reverting the code does not need the migration reverted: `CREATE EXTENSION IF NOT EXISTS unaccent` is additive and unused once the predicate stops calling it. Drop the extension only as a deliberate separate step.
 
 ## Dependencies
 
