@@ -134,9 +134,12 @@ describe("customer search (E2E)", () => {
   // cost a test is allowed to charge silently. Deleting by captured id (not
   // by name) leaves any real row that happens to share a name untouched.
   afterAll(async () => {
-    await db.delete(cliente).where(
-      inArray(cliente.id, [mixedCaseName.id, nullPlate.id, nullPhone.id, formattedPhone.id]),
+    // Optional chaining because a throwing `beforeAll` leaves these undefined,
+    // and a TypeError in here would mask the real seed error underneath it.
+    const seeded = [mixedCaseName?.id, nullPlate?.id, nullPhone?.id, formattedPhone?.id].filter(
+      (id): id is string => Boolean(id),
     );
+    if (seeded.length > 0) await db.delete(cliente).where(inArray(cliente.id, seeded));
   });
 
   const headers = { "x-user-id": "e2e-customer-search", "x-user-role": "tecnico" };

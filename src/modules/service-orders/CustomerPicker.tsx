@@ -128,6 +128,15 @@ export function CustomerPicker({
         placeholder="Buscar cliente…"
         value={term}
         onChange={(e) => handleSearchChange(e.target.value)}
+        // This input lives inside ServiceOrderForm's <form>, and a lone text
+        // input in a form with a submit button triggers implicit submission on
+        // Enter. Hitting Enter to "run the search" would save the order instead
+        // — with whatever customer was picked, or none. The picker introduced
+        // the input, so the picker contains the consequence rather than making
+        // the form defend against its children.
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.preventDefault();
+        }}
       />
 
       {error && (
