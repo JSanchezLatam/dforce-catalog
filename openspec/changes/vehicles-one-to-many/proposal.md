@@ -79,9 +79,9 @@ independent workflow, unlike `service-orders` or `reminders`.
 | `CustomerForm` repeating group under-scoped in `tasks.md` | High | Its own work unit with its own `.test.tsx`; do not fold into the schema slice |
 | Hand-written backfill SQL is the AGENTS.md blind spot — a green suite *proves* zero real-SQL coverage | Med | Live smoke test before merge; the 1-row/0-violation state makes it verifiable by eye |
 | `EXISTS` matches only a customer's first plate | Med | Named E2E check below |
-| R19's live text is in the **unarchived** `openspec/changes/customer-search-and-picker/`, not `openspec/specs/` | Med | C3's delta stacks on it; do not land before that change archives |
+| ~~R19's live text is in the **unarchived** `openspec/changes/customer-search-and-picker/`~~ | **Closed** | That change is archived (`061cb2d`) and its deltas are consolidated into `openspec/specs/customer-management/spec.md`, which now holds R16–R19 plus access control. C3's delta stacks on a real baseline, not on a change folder. |
 | R18's rationale silently left stale (rule untouched, so a delta review can skip it) | Med | Explicit line item in the spec delta |
-| **Exceeds the 800-line review budget** (~1000–1100 changed lines) | High | Three chained PRs: (1) schema + migration + backfill, (2) validation/queries/service + E2E, (3) `CustomerForm` + pages + picker + fixtures |
+| **Exceeds the 800-line review budget** (~1000–1100 changed lines) | High | Three slices delivered **sequentially to `main`**, each merged before the next branches: (1) schema + migration + backfill, (2) validation/queries/service + E2E, (3) `CustomerForm` + pages + picker + fixtures. Not a branch chain — expand/contract already makes each slice shippable alone, and GGA's `--pr-mode` always resolves to `main`, so a chained branch would re-review every ancestor commit. |
 
 ## Rollback Plan
 
@@ -96,7 +96,7 @@ Per-slice revert. **Slice 3 is the irreversible one, not slice 1.**
 
 ## Dependencies
 
-- `customer-search-and-picker` (PR #44) must be archived first — R19's current text lives there.
+- ~~`customer-search-and-picker` (PR #44) must be archived first~~ — **done** (`061cb2d`); R19 now lives in `openspec/specs/customer-management/spec.md`.
 - The `unaccent` extension (migration `0012`) — already shipped.
 
 ## Success Criteria
