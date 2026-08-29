@@ -72,12 +72,17 @@ optional `selectedCustomer` prop and set from the clicked row. It renders from t
 current result page, so changing the search term cannot blank the selection.
 **Alternatives**: add `GET /api/customers/[id]` and re-fetch the preselected customer — **rejected**.
 **Rationale**: rung 1 of the ladder — no endpoint is needed. In create mode the clicked row already
-carries the data. For an existing order the customer is already loaded server-side:
-`service-orders/[id]/page.tsx` imports `getClienteById` at line 18 and calls
-`getClienteById(orden.clienteId)` at line 85, in a server component, before anything renders. That
-customer is passed down as the `selectedCustomer` prop and rendered as the selected option regardless of
-the current search term. It is true that no GET-by-id route exists; it is false that one is required.
-This change adds **no** customer endpoint other than the list `GET`.
+carries the data. It is true that no GET-by-id route exists; it is false that one is required. This
+change adds **no** customer endpoint other than the list `GET`.
+
+**Scope note, corrected**: an earlier draft of this section claimed the preselected customer "is passed
+down as the `selectedCustomer` prop" from `service-orders/[id]/page.tsx`. That wiring does not exist and
+this change does not build it. That page renders `OrderStatusControls` only — no `ServiceOrderForm`, no
+picker — and `ServiceOrderForm` gates the picker behind `!isEdit` anyway, so no rendered path can blank a
+selected customer today. The `selectedCustomer` prop is therefore a **component-level guarantee**, not a
+reachable flow: whenever an edit path does grow a picker, the customer it is handed will render
+regardless of the search term. What the page genuinely does have is `getClienteById(orden.clienteId)`
+already called server-side, which is why that future wiring needs a prop and not an endpoint.
 
 ### Decision: the result row renders a list of plates, not one plate
 

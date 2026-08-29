@@ -192,6 +192,12 @@ describe("customer search (E2E)", () => {
     // ("+5076444444") has neither dash nor a bare "644-4444" substring, so
     // the primary pass must return zero rows before relaxSearchTerm's
     // digits-only relaxation ("6444444") finds it as a substring.
+    // NOTE: this is the one case in this describe that depends on the whole
+    // table, not just the seeded rows — `relaxedFrom` is only set when the
+    // primary pass finds ZERO rows anywhere. Run against a database that
+    // already holds a customer whose phone contains "644-4444" and it goes red
+    // for a reason unrelated to the code. Every other case uses `toContain`
+    // and is immune. Recreate the database per run, as the header says.
     const raw = await search("644-4444");
     expect(raw.relaxedFrom).toBe("6444444");
     expect(raw.customers.map((c) => c.id)).toContain(formattedPhone.id);

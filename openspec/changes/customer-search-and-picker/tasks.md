@@ -59,6 +59,7 @@ Chain strategy: pending
 ## Phase 5: Wire into the order form
 
 - [x] 5.1 `ServiceOrderForm.tsx`: widen `ServiceOrderCustomerOption` (line 23) to `ClienteListItem`'s shape; accept `selectedCustomer`/`canCreateCustomer` props; replace the `<Select>` block (lines 174–195) with `CustomerPicker`; drop the `customers` array prop.
+- [x] 5.1b `ServiceOrderForm.test.tsx` (new, not in the original breakdown): covers the props reshape 5.1 performs. Its `clienteId`-seeded-from-`selectedCustomer` case had a real RED — it reproduced the reported symptom, a selected customer rendered above a still-disabled Guardar button. Its sibling case would also pass against the old `<Select>`, so it is a guard, not a proof; recorded here rather than left to look like a TDD step it was not.
 - [x] 5.2 `ServiceOrderFormTrigger.tsx`: drop `customers` prop, forward `selectedCustomer`/`canCreateCustomer`.
 - [x] 5.3 `service-orders/page.tsx`: drop the `listClientes` preload (line 69) and its `Promise.all` slot; pass `canCreateCustomer={can(user, "customers.write")}` to the trigger; rewrite the `PICKER_LIST_LIMIT` comment (lines 28–32) — it now bounds the parts picker only, a customer search route exists.
 
@@ -79,5 +80,5 @@ offer "Crear cliente nuevo" on the most common name shape in the data.
 
 - [x] 6.1 Run full suite + `npm run test:e2e`; confirm ≥833 passing (baseline) plus new tests, 0 regressions.
 - [x] 6.2 `tsc` exit 0; lint 0 errors, ≤15 pre-existing warnings (no new ones).
-- [ ] 6.3 Manual GGA review pass (four layers) before opening the PR.
+- [x] 6.3 Manual GGA review pass (four layers) before opening the PR. **Five rounds run**, the cap `retrospectiva.md` sets, re-running after every fix because GGA is non-deterministic. Round 1: swallowed fetch error leaving the dialog permanently blank, silent 10-row truncation, and a test whose name claimed behaviour the code did not have. Round 2: the near-match fallback keyed on an empty PAGE rather than an empty RESULT SET, and a reader without `customers.write` seeing an empty dialog on zero results. Round 3: R19 promising accent- and format-insensitivity the code did not deliver. Round 4: `ILIKE` not folding accents at all — the finding that led to Phase 5b, since staff typing `maria gonzalez` were being offered "create customer" for a customer that exists. Round 5: this file's own unchecked boxes, and `design.md` describing preselection wiring that was never built.
 - [ ] 6.4 Open PR against `chore/preview-clean-output`; note the two independent revert boundaries (route commit, picker commit) from proposal.md's Rollback Plan.
