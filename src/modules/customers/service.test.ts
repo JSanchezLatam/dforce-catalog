@@ -1,10 +1,54 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { Cliente } from "@/shared/db/schema";
-import { ClienteNotFoundError, createCliente, DuplicatePhoneError, updateCliente } from "./service";
+import { cliente, vehiculo, type Cliente, type Vehiculo } from "@/shared/db/schema";
+import { ClienteNotFoundError, createCliente, DuplicatePhoneError, updateCliente, type DatabaseDep } from "./service";
 import { ClienteValidationError } from "./validation";
+import type { TxLike } from "./vehicles";
 
 const validInput = { name: "Juan Pérez", phone: "+52 55 1234 5678" };
+
+/**
+ * A minimal fake of Drizzle's own query builder: every chain method returns
+ * another instance of itself, and the whole thing is thenable (like Drizzle's
+ * real `PgInsert`/`PgUpdate`), so both `await tx.insert(t).values(v)` (no
+ * `.returning()`, as `vehicles.ts`'s `applyVehiculoPlan` does) and
+ * `await tx.insert(t).values(v).returning()` (as `service.ts`'s own cliente
+ * write does) resolve through the same fake.
+ */
+function queryBuilder(resolvedValue: unknown, error?: Error) {
+  const promise = error ? Promise.reject(error) : Promise.resolve(resolvedValue);
+  const builder = Object.assign(promise, {
+    values: () => queryBuilder(resolvedValue, error),
+    set: () => queryBuilder(resolvedValue, error),
+    where: () => queryBuilder(resolvedValue, error),
+    returning: () => (error ? Promise.reject(error) : Promise.resolve(resolvedValue)),
+  });
+  return builder;
+}
+
+/**
+ * A fake `deps.database.transaction`, mirroring `account/service.test.ts`'s
+ * `fakeTransactionalDatabase` — the real transaction seam needs a live
+ * Postgres and is not exercised here (design.md's Testing Strategy).
+ * `clienteRow` is what any `cliente` insert/update resolves to;
+ * `vehiculoInsertError`/`vehiculoUpdateError` let a test simulate the
+ * vehicle-side write failing so the whole transaction aborts.
+ */
+function fakeDatabase(
+  clienteRow: Cliente,
+  opts: { vehiculoInsertError?: Error; vehiculoUpdateError?: Error } = {},
+) {
+  const insert = vi.fn((table: unknown) =>
+    table === vehiculo ? queryBuilder(undefined, opts.vehiculoInsertError) : queryBuilder([clienteRow]),
+  );
+  const update = vi.fn((table: unknown) =>
+    table === vehiculo ? queryBuilder(undefined, opts.vehiculoUpdateError) : queryBuilder([clienteRow]),
+  );
+  const tx = { insert, update, select: vi.fn() } as unknown as TxLike;
+  const transaction = vi.fn(async (fn: (t: TxLike) => Promise<unknown>) => fn(tx));
+  const database = { transaction } as unknown as DatabaseDep;
+  return { database, tx, transaction };
+}
 
 describe("createCliente (R16, R18)", () => {
   it("rejects invalid input before touching the DB", async () => {
@@ -35,6 +79,43 @@ describe("createCliente (R16, R18)", () => {
     const result = await createCliente(validInput, { findByPhone: async () => null, insert });
     expect(result).toEqual({ id: "c1", name: "Juan Pérez", phone: "+525512345678" });
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ name: "Juan Pérez", phone: "+525512345678" }));
+  });
+
+  it("rejects invalid vehicle input before writing anything, even with an otherwise-valid cliente", async () => {
+    const insert = vi.fn();
+    await expect(
+      createCliente(
+        { ...validInput, vehicles: [{ make: "Toyota" }] },
+        { findByPhone: async () => null, insert },
+      ),
+    ).rejects.toBeInstanceOf(ClienteValidationError);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("writes the cliente row and its vehicles in one transaction when vehicles are given (D5)", async () => {
+    const clienteRow = { id: "c1", ...validInput, phone: "+525512345678" } as unknown as Cliente;
+    const { database, tx } = fakeDatabase(clienteRow);
+
+    const result = await createCliente(
+      { ...validInput, vehicles: [{ plate: "ABC-123" }] },
+      { findByPhone: async () => null, database },
+    );
+
+    expect(result).toEqual(clienteRow);
+    expect(tx.insert).toHaveBeenCalledWith(cliente);
+    expect(tx.insert).toHaveBeenCalledWith(vehiculo);
+  });
+
+  it("aborts the whole write when the vehicle insert fails (transaction atomicity)", async () => {
+    const clienteRow = { id: "c1", ...validInput, phone: "+525512345678" } as unknown as Cliente;
+    const { database } = fakeDatabase(clienteRow, { vehiculoInsertError: new Error("insert failed") });
+
+    await expect(
+      createCliente(
+        { ...validInput, vehicles: [{ plate: "ABC-123" }] },
+        { findByPhone: async () => null, database },
+      ),
+    ).rejects.toThrow("insert failed");
   });
 });
 
@@ -98,14 +179,54 @@ describe("updateCliente (R16, R18)", () => {
     ).rejects.toBeInstanceOf(DuplicatePhoneError);
   });
 
-  it("rejects a patch that violates the vehicle-requires-plate rule against the merged record", async () => {
-    const current = {
-      cliente: { id: "c1", name: "Juan", phone: "+525512345678", vehiclePlate: null } as unknown as Cliente,
-      orders: [],
-    };
+  it("rejects an update whose vehicles entry is missing a plate, without touching the DB", async () => {
+    const current = { cliente: { id: "c1", name: "Juan", phone: "+525512345678" } as unknown as Cliente, orders: [] };
+    const update = vi.fn();
 
     await expect(
-      updateCliente("c1", { vehicleMake: "Toyota" }, { getById: async () => current }),
+      updateCliente("c1", { vehicles: [{ make: "Toyota" }] }, { getById: async () => current, update }),
     ).rejects.toBeInstanceOf(ClienteValidationError);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("leaves the vehicle collection completely untouched when vehicles is omitted from the patch (R16)", async () => {
+    const current = {
+      cliente: { id: "c1", name: "Juan Pérez", phone: "+525512345678" } as unknown as Cliente,
+      orders: [],
+      vehicles: [{ id: "v1", plate: "ABC111" } as unknown as Vehiculo],
+    };
+    const clienteRow = { ...current.cliente };
+    const { database, transaction } = fakeDatabase(clienteRow as unknown as Cliente);
+    const update = vi.fn().mockResolvedValue(clienteRow);
+
+    await updateCliente("c1", { name: "Juan P." }, { getById: async () => current, update, database });
+
+    // No transaction opened at all — the plain scalar `deps.update` path runs,
+    // exactly as it did before vehicles existed.
+    expect(transaction).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith("c1", { name: "Juan P." });
+  });
+
+  it("reconciles the vehicle collection and the scalar patch in one transaction when vehicles is present (D5)", async () => {
+    const current = {
+      cliente: { id: "c1", name: "Juan Pérez", phone: "+525512345678" } as unknown as Cliente,
+      orders: [],
+      vehicles: [{ id: "v1", plate: "ABC111" } as unknown as Vehiculo],
+    };
+    const clienteRow = { ...current.cliente, name: "Juan P." } as unknown as Cliente;
+    const { database, tx } = fakeDatabase(clienteRow);
+
+    const result = await updateCliente(
+      "c1",
+      { name: "Juan P.", vehicles: [{ plate: "XYZ999" }] },
+      { getById: async () => current, database },
+    );
+
+    expect(result).toEqual(clienteRow);
+    expect(tx.update).toHaveBeenCalledWith(cliente);
+    // v1 (existing, active, omitted from the incoming payload) is deactivated;
+    // the new plate is inserted.
+    expect(tx.insert).toHaveBeenCalledWith(vehiculo);
+    expect(tx.update).toHaveBeenCalledWith(vehiculo);
   });
 });
