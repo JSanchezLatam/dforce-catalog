@@ -92,6 +92,13 @@
       "when": 1787972308898,
       "tag": "0012_enable_unaccent",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788019787901,
+      "tag": "0013_vehiculo_table",
+      "breakpoints": true
     }
   ]
 }
