@@ -160,6 +160,23 @@ describe("CustomerPicker", () => {
     expect(screen.getByText(/364 clientes coinciden/i)).toBeInTheDocument();
   });
 
+  /**
+   * The same hole the failed-search fix closed, left open one branch over: the
+   * rows render only when there ARE rows and the create action only with
+   * `customers.write`, so a reader searching a name that does not exist saw a
+   * search box and nothing else. "Nothing rendered" must never be how this
+   * component says "no match" — that is indistinguishable from "still typing".
+   */
+  it("says there are no matches even when the user cannot create a customer", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ customers: [], total: 0 }));
+
+    render(<CustomerPicker selectedCustomer={null} canCreateCustomer={false} onSelect={vi.fn()} />);
+    await typeAndDebounce("nadie");
+
+    expect(screen.getByText(/sin coincidencias/i)).toBeInTheDocument();
+    expect(screen.queryByText(/crear cliente nuevo/i)).not.toBeInTheDocument();
+  });
+
   it("does not claim truncation when every match is on screen", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ customers: [row({ id: "c-1" }), row({ id: "c-2" })], total: 2 }));
 

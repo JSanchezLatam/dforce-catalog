@@ -182,6 +182,14 @@ export function CustomerPicker({
         </div>
       )}
 
+      {/* Before the create action, and independent of the permission that
+          gates it: a reader who cannot create still has to be told the search
+          came back empty. Rendering nothing is indistinguishable from "still
+          typing", which is the failure the error branch above already fixed. */}
+      {hasSearched && results.length === 0 && (
+        <p className="text-sm text-muted-foreground">Sin coincidencias para esa búsqueda.</p>
+      )}
+
       {zeroExactMatches && canCreateCustomer && (
         <CustomerForm triggerLabel="Crear cliente nuevo" onSaved={(cliente) => handleSelect(cliente)} />
       )}

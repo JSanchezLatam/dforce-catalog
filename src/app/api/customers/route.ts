@@ -53,11 +53,26 @@ export async function handleListClientes(
   let [customers, total] = await Promise.all([list({ search }, pageWindow), countFn({ search })]);
   let relaxedFrom: string | undefined;
 
-  if (search && customers.length === 0) {
+  // `total === 0`, NOT `customers.length === 0`: an empty PAGE is not an empty
+  // RESULT SET. Past the last page of a term that does match rows, the list
+  // comes back empty while the count still reports the real total — keying the
+  // fallback on the rows would relax a search that found plenty.
+  if (search && total === 0) {
     const relaxed = relaxSearchTerm(search);
     if (relaxed) {
-      [customers, total] = await Promise.all([list({ search: relaxed }, pageWindow), countFn({ search: relaxed })]);
-      if (customers.length > 0) relaxedFrom = relaxed;
+      const [relaxedCustomers, relaxedTotal] = await Promise.all([
+        list({ search: relaxed }, pageWindow),
+        countFn({ search: relaxed }),
+      ]);
+      // Adopted whole or not at all. Taking `relaxedTotal` while its rows are
+      // empty would publish a count for a term the caller never asked about,
+      // and `relaxedFrom` — the only signal that a substitution happened —
+      // would stay unset, because it fires on rows.
+      if (relaxedCustomers.length > 0) {
+        customers = relaxedCustomers;
+        total = relaxedTotal;
+        relaxedFrom = relaxed;
+      }
     }
   }
 

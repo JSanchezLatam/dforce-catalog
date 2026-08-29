@@ -133,6 +133,47 @@ describe("GET /api/customers (R19)", () => {
   });
 
   /**
+   * An empty PAGE is not an empty RESULT SET. Past the last page of a term
+   * that does match rows, `listClientes` returns `[]` while `countClientes`
+   * still reports the real total — so keying the fallback on the row count
+   * relaxes a search that found plenty, and reports the relaxed term's total
+   * under the caller's original term with no `relaxedFrom` to admit it.
+   */
+  it("does not relax a search that matched rows, when the requested page is past the end", async () => {
+    const listClientes = vi.fn().mockResolvedValue([]);
+    const countClientes = vi.fn().mockResolvedValue(40);
+
+    const response = await handleListClientes(getReq("tecnico", "?search=gonzalez&page=99"), {
+      listClientes,
+      countClientes,
+    });
+
+    const body = await response.json();
+    expect(listClientes).toHaveBeenCalledTimes(1);
+    expect(body.relaxedFrom).toBeUndefined();
+    expect(body.total).toBe(40);
+  });
+
+  /**
+   * The relaxed pass is adopted whole or not at all. Taking its `total` while
+   * its rows are empty publishes a count for a term the caller never asked
+   * about, and `relaxedFrom` stays unset because that only fires on rows.
+   */
+  it("keeps the original total when the relaxed pass finds nothing to show", async () => {
+    const listClientes = vi.fn().mockResolvedValue([]);
+    const countClientes = vi.fn().mockResolvedValueOnce(0).mockResolvedValueOnce(7);
+
+    const response = await handleListClientes(getReq("tecnico", "?search=Juan+Alberto&page=99"), {
+      listClientes,
+      countClientes,
+    });
+
+    const body = await response.json();
+    expect(body.relaxedFrom).toBeUndefined();
+    expect(body.total).toBe(0);
+  });
+
+  /**
    * The search is a sequential scan (design.md), so a serial `await list()`
    * then `await count()` doubles the latency of every keystroke burst.
    * `customers/page.tsx:49` already issues both at once.
