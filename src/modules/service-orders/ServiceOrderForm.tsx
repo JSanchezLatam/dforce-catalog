@@ -72,7 +72,7 @@ export function ServiceOrderForm({
 }) {
   const isEdit = Boolean(order);
   const [open, setOpen] = useState(false);
-  const [clienteId, setClienteId] = useState(order?.clienteId ?? "");
+  const [clienteId, setClienteId] = useState(order?.clienteId ?? selectedCustomer?.id ?? "");
   const [description, setDescription] = useState(order?.description ?? "");
   const [appointmentAt, setAppointmentAt] = useState(toDatetimeLocal(order?.appointmentAt));
   const [searchQuery, setSearchQuery] = useState("");
@@ -87,7 +87,7 @@ export function ServiceOrderForm({
   }, [products, searchQuery]);
 
   function resetForm() {
-    setClienteId(order?.clienteId ?? "");
+    setClienteId(order?.clienteId ?? selectedCustomer?.id ?? "");
     setDescription(order?.description ?? "");
     setAppointmentAt(toDatetimeLocal(order?.appointmentAt));
     setSearchQuery("");
