@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { ClienteValidationError, isValidPhoneFormat, normalizePhone, validateClienteInput } from "./validation";
+import {
+  ClienteValidationError,
+  isValidPhoneFormat,
+  normalizePhone,
+  validateClienteInput,
+  validateVehiculoInput,
+  validateVehiculosInput,
+} from "./validation";
 
 const validInput = {
   name: "Juan Pérez",
@@ -28,20 +35,6 @@ describe("validateClienteInput (R17)", () => {
 
   it("rejects an invalid email format when email is provided", () => {
     expect(() => validateClienteInput({ ...validInput, email: "not-an-email" })).toThrow(ClienteValidationError);
-  });
-
-  it("accepts a submission with no vehicle fields at all (vehicle is optional)", () => {
-    expect(() => validateClienteInput(validInput)).not.toThrow();
-  });
-
-  it("rejects a vehicle make with no plate", () => {
-    expect(() => validateClienteInput({ ...validInput, vehicleMake: "Toyota" })).toThrow(ClienteValidationError);
-  });
-
-  it("accepts a vehicle make when a plate is also given", () => {
-    expect(() =>
-      validateClienteInput({ ...validInput, vehicleMake: "Toyota", vehiclePlate: "ABC-123" }),
-    ).not.toThrow();
   });
 
   it("collects all field errors on the thrown error, not just the first", () => {
@@ -85,5 +78,57 @@ describe("normalizePhone (E.164-ish, needed for Kapso in Phase 7)", () => {
 
   it("keeps a leading + and strips other separators", () => {
     expect(normalizePhone("+52 (55) 1234-5678")).toBe("+525512345678");
+  });
+});
+
+describe("validateVehiculoInput (R17 relocated, D6)", () => {
+  it("accepts a vehicle with only a plate (make/model/year optional)", () => {
+    expect(validateVehiculoInput({ plate: "ABC-123" })).toEqual({ plate: "ABC-123" });
+  });
+
+  it("rejects a vehicle with make but no plate", () => {
+    expect(() => validateVehiculoInput({ make: "Toyota" })).toThrow(ClienteValidationError);
+  });
+
+  it("accepts a fully-populated vehicle and normalizes fields", () => {
+    expect(validateVehiculoInput({ plate: "ABC-123", make: "Toyota", model: "Corolla", year: 2020 })).toEqual({
+      plate: "ABC-123",
+      make: "Toyota",
+      model: "Corolla",
+      year: 2020,
+    });
+  });
+
+  it("preserves a supplied id (identifies an update, never a key by plate)", () => {
+    expect(validateVehiculoInput({ id: "v1", plate: "ABC-123" })).toEqual({ id: "v1", plate: "ABC-123" });
+  });
+});
+
+describe("validateVehiculosInput (per-vehicle, independent)", () => {
+  it("returns undefined when the vehicles key is omitted (collection untouched)", () => {
+    expect(validateVehiculosInput(undefined)).toBeUndefined();
+  });
+
+  it("returns an empty array for an explicit empty list", () => {
+    expect(validateVehiculosInput([])).toEqual([]);
+  });
+
+  it("validates every vehicle independently — one invalid sibling never changes a valid one's fields", () => {
+    expect(() =>
+      validateVehiculosInput([{ plate: "ABC-123" }, { make: "Toyota" }]),
+    ).toThrow(ClienteValidationError);
+
+    try {
+      validateVehiculosInput([{ plate: "ABC-123" }, { make: "Toyota" }]);
+      expect.fail("expected validation to throw");
+    } catch (err) {
+      const validationError = err as ClienteValidationError;
+      // Only the invalid (second, index 1) vehicle is cited.
+      expect(Object.keys(validationError.errors)).toEqual(["vehicles.1.plate"]);
+    }
+  });
+
+  it("rejects a non-array vehicles payload", () => {
+    expect(() => validateVehiculosInput("not-an-array")).toThrow(ClienteValidationError);
   });
 });
