@@ -7,8 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CustomerForm } from "@/modules/customers/CustomerForm";
 import type { ClienteListItem } from "@/modules/customers/queries";
+import { FIELD_ERROR } from "@/shared/ui/styles";
 
 const DEBOUNCE_MS = 300;
+const SEARCH_FAILED = "No se pudo buscar clientes. Intentalo de nuevo.";
 
 /** design.md's identifier precedence: plates → phone → email → registration date fallback. */
 function identifierFor(customer: ClienteListItem, plates: string[]): string {
@@ -46,23 +48,46 @@ export function CustomerPicker({
   const [results, setResults] = useState<ClienteListItem[]>([]);
   const [relaxedFrom, setRelaxedFrom] = useState<string | undefined>(undefined);
   const [selected, setSelected] = useState<ClienteListItem | null>(selectedCustomer);
+  const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-  const activeSelection = selected ?? selectedCustomer;
-
+  /**
+   * Every failure mode lands on the same rendered state: an error the staff
+   * member can read, never a blank dialog they mistake for "keep typing".
+   * The `AbortController` is the sequencing guard — a slow earlier response
+   * cannot overwrite the rows a faster later search already painted.
+   */
   async function runSearch(value: string) {
+    abortRef.current?.abort();
     if (!value.trim()) {
       setHasSearched(false);
       setResults([]);
       setRelaxedFrom(undefined);
+      setError(null);
       return;
     }
-    const response = await fetch(`/api/customers?search=${encodeURIComponent(value)}`);
-    if (!response.ok) return;
-    const body: ListClientesResponse = await response.json();
-    setResults(body.customers);
-    setRelaxedFrom(body.relaxedFrom);
-    setHasSearched(true);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try {
+      const response = await fetch(`/api/customers?search=${encodeURIComponent(value)}`, {
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`GET /api/customers failed with ${response.status}`);
+      const body: ListClientesResponse = await response.json();
+      if (controller.signal.aborted) return;
+      setResults(body.customers);
+      setRelaxedFrom(body.relaxedFrom);
+      setError(null);
+      setHasSearched(true);
+    } catch {
+      if (controller.signal.aborted) return;
+      setResults([]);
+      setRelaxedFrom(undefined);
+      setHasSearched(false);
+      setError(SEARCH_FAILED);
+    }
   }
 
   function handleSearchChange(value: string) {
@@ -82,9 +107,9 @@ export function CustomerPicker({
 
   return (
     <div className="flex flex-col gap-3">
-      {activeSelection && (
+      {selected && (
         <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm text-foreground">
-          Cliente seleccionado: <span className="font-medium">{activeSelection.name}</span>
+          Cliente seleccionado: <span className="font-medium">{selected.name}</span>
         </div>
       )}
 
@@ -94,6 +119,12 @@ export function CustomerPicker({
         value={term}
         onChange={(e) => handleSearchChange(e.target.value)}
       />
+
+      {error && (
+        <p role="alert" className={FIELD_ERROR}>
+          {error}
+        </p>
+      )}
 
       {hasSearched && results.length > 0 && (
         <div className="flex flex-col gap-2">

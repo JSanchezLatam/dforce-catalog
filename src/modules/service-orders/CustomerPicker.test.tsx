@@ -27,6 +27,10 @@ function jsonResponse(body: unknown) {
   return { ok: true, status: 200, json: async () => body } as Response;
 }
 
+function failedResponse(status: number) {
+  return { ok: false, status, json: async () => ({ error: "Forbidden" }) } as Response;
+}
+
 function searchInput() {
   return screen.getByRole("textbox", { name: /buscar cliente/i });
 }
@@ -130,6 +134,67 @@ describe("CustomerPicker", () => {
 
     expect(screen.getByText("Juan Cerca")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /crear cliente nuevo/i })).not.toBeInTheDocument();
+  });
+
+  /**
+   * A failed search used to leave `hasSearched` false, so the dialog rendered
+   * nothing at all: no rows, no empty state, no create action. A 403, a 500
+   * and a dropped connection were indistinguishable from "keep typing".
+   */
+  it("surfaces an error when the search request is rejected outright", async () => {
+    fetchMock.mockRejectedValue(new Error("network down"));
+
+    render(<CustomerPicker selectedCustomer={null} canCreateCustomer onSelect={vi.fn()} />);
+    await typeAndDebounce("juan");
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/No se pudo buscar clientes/i);
+  });
+
+  it("surfaces an error when the search responds with a failure status", async () => {
+    fetchMock.mockResolvedValue(failedResponse(403));
+
+    render(<CustomerPicker selectedCustomer={null} canCreateCustomer onSelect={vi.fn()} />);
+    await typeAndDebounce("juan");
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/No se pudo buscar clientes/i);
+  });
+
+  it("clears a previous error once a later search succeeds", async () => {
+    fetchMock
+      .mockResolvedValueOnce(failedResponse(500))
+      .mockResolvedValueOnce(jsonResponse({ customers: [row({ id: "c-ok", name: "Cliente Ok" })], total: 1 }));
+
+    render(<CustomerPicker selectedCustomer={null} canCreateCustomer onSelect={vi.fn()} />);
+    await typeAndDebounce("juan");
+    await typeAndDebounce("juana");
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText("Cliente Ok")).toBeInTheDocument();
+  });
+
+  it("ignores a slow earlier response that lands after a newer search resolved", async () => {
+    let landFirst: () => void = () => {};
+    fetchMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            landFirst = () => resolve(jsonResponse({ customers: [row({ id: "c-old", name: "Viejo" })], total: 1 }));
+          }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ customers: [row({ id: "c-new", name: "Nuevo" })], total: 1 }));
+
+    render(<CustomerPicker selectedCustomer={null} canCreateCustomer={false} onSelect={vi.fn()} />);
+    await typeAndDebounce("vie");
+    await typeAndDebounce("nue");
+
+    await act(async () => {
+      landFirst();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText("Nuevo")).toBeInTheDocument();
+    expect(screen.queryByText("Viejo")).not.toBeInTheDocument();
   });
 
   it("shows only the create action when there are zero exact and zero near matches", async () => {
