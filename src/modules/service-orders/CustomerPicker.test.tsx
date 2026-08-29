@@ -137,6 +137,39 @@ describe("CustomerPicker", () => {
   });
 
   /**
+   * The route defaults to DEFAULT_PAGE_SIZE = 10 ordered by `desc(createdAt)`.
+   * A common surname across hundreds of customers therefore showed the ten most
+   * recently created and hid the rest — with nothing saying so, which is exactly
+   * how staff end up creating the duplicate this change exists to prevent.
+   */
+  it("asks for more than the route's default page of matches", async () => {
+    render(<CustomerPicker selectedCustomer={null} canCreateCustomer={false} onSelect={vi.fn()} />);
+    await typeAndDebounce("perez");
+
+    expect(fetchMock.mock.calls[0][0]).toContain("pageSize=50");
+  });
+
+  it("says how many customers matched when more matched than are shown", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ customers: [row({ id: "c-1" }), row({ id: "c-2" })], total: 364 }),
+    );
+
+    render(<CustomerPicker selectedCustomer={null} canCreateCustomer={false} onSelect={vi.fn()} />);
+    await typeAndDebounce("perez");
+
+    expect(screen.getByText(/364 clientes coinciden/i)).toBeInTheDocument();
+  });
+
+  it("does not claim truncation when every match is on screen", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ customers: [row({ id: "c-1" }), row({ id: "c-2" })], total: 2 }));
+
+    render(<CustomerPicker selectedCustomer={null} canCreateCustomer={false} onSelect={vi.fn()} />);
+    await typeAndDebounce("perez");
+
+    expect(screen.queryByText(/coinciden/i)).not.toBeInTheDocument();
+  });
+
+  /**
    * A failed search used to leave `hasSearched` false, so the dialog rendered
    * nothing at all: no rows, no empty state, no create action. A 403, a 500
    * and a dropped connection were indistinguishable from "keep typing".

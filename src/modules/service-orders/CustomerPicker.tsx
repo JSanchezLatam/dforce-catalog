@@ -11,6 +11,13 @@ import { FIELD_ERROR } from "@/shared/ui/styles";
 
 const DEBOUNCE_MS = 300;
 const SEARCH_FAILED = "No se pudo buscar clientes. Intentalo de nuevo.";
+/**
+ * One of `parsePageSize`'s allowed options (`inventory-view/queries.ts`), well
+ * above its default of 10 — a picker that silently showed the 10 most recently
+ * created matches is how a duplicate gets created. Deliberately not paginated:
+ * anything past this asks the staff member to narrow the term instead.
+ */
+const SEARCH_PAGE_SIZE = 50;
 
 /** design.md's identifier precedence: plates → phone → email → registration date fallback. */
 function identifierFor(customer: ClienteListItem, plates: string[]): string {
@@ -47,6 +54,7 @@ export function CustomerPicker({
   const [hasSearched, setHasSearched] = useState(false);
   const [results, setResults] = useState<ClienteListItem[]>([]);
   const [relaxedFrom, setRelaxedFrom] = useState<string | undefined>(undefined);
+  const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState<ClienteListItem | null>(selectedCustomer);
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -63,6 +71,7 @@ export function CustomerPicker({
     if (!value.trim()) {
       setHasSearched(false);
       setResults([]);
+      setTotal(0);
       setRelaxedFrom(undefined);
       setError(null);
       return;
@@ -71,19 +80,20 @@ export function CustomerPicker({
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      const response = await fetch(`/api/customers?search=${encodeURIComponent(value)}`, {
-        signal: controller.signal,
-      });
+      const url = `/api/customers?search=${encodeURIComponent(value)}&pageSize=${SEARCH_PAGE_SIZE}`;
+      const response = await fetch(url, { signal: controller.signal });
       if (!response.ok) throw new Error(`GET /api/customers failed with ${response.status}`);
       const body: ListClientesResponse = await response.json();
       if (controller.signal.aborted) return;
       setResults(body.customers);
+      setTotal(body.total);
       setRelaxedFrom(body.relaxedFrom);
       setError(null);
       setHasSearched(true);
     } catch {
       if (controller.signal.aborted) return;
       setResults([]);
+      setTotal(0);
       setRelaxedFrom(undefined);
       setHasSearched(false);
       setError(SEARCH_FAILED);
@@ -130,6 +140,11 @@ export function CustomerPicker({
         <div className="flex flex-col gap-2">
           {relaxedFrom !== undefined && (
             <p className="text-sm text-muted-foreground">Sin coincidencias exactas. Clientes similares:</p>
+          )}
+          {total > results.length && (
+            <p className="text-sm text-muted-foreground">
+              {total} clientes coinciden y se muestran los primeros {results.length}. Refiná la búsqueda.
+            </p>
           )}
           <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
             <Table>
