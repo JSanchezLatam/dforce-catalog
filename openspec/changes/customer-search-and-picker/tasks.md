@@ -44,6 +44,7 @@ Chain strategy: pending
 ## Phase 3: Real-SQL proof (required, not optional)
 
 - [x] 3.1 Add `customer search (E2E)` describe to `src/e2e/full-flow.e2e.test.ts`: seed 4 `cliente` rows (mixed-case name, null plate, null phone, formatted phone); call the real `GET` handler for partial lowercase name, partial plate, digits-only phone, and a relaxed-only term. Run with `npm run test:e2e` against a throwaway Postgres.
+- [x] 3.2 `2a3eb9e` — two e2e repairs 3.1 surfaced, both outside this change's own files. The inventory-sync assertions still asked for `"Motor"` after `normalizeCategory` started folding the typed projection to upper case, so they matched nothing and the suite carried two failures nobody saw (`npm test` stays green because every unit test injects its query seam). And 3.1's own describe seeded four `cliente` rows it never removed — `vitest.e2e.config.ts` deliberately does not override `DATABASE_URL`, and `.env` points at the dev database, so the seed leaked into real data; it now cleans up after itself.
 
 ## Phase 4: `CustomerPicker` component
 
