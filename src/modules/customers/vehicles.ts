@@ -118,7 +118,18 @@ export function planVehiculoReconcile(existing: Vehiculo[], incoming: VehiculoIn
   return { inserts, updates, deactivate };
 }
 
-/** D5 — executes a plan inside `tx`; the transaction stays a dumb executor of the pure plan above. */
+/**
+ * D5 — executes a plan inside `tx`; the transaction stays a dumb executor of
+ * the pure plan above.
+ *
+ * Every statement is scoped to `clienteId`, including the two that already
+ * carry a primary key. `planVehiculoReconcile` rejects a foreign id, but that
+ * is a caller-side invariant — it only holds when the caller handed it the
+ * right `existing` set. Ownership is the trust boundary this module's D5
+ * docstring names, and a trust boundary enforced only by its callers is not
+ * one; the extra predicate costs nothing and turns a cross-customer write into
+ * zero affected rows.
+ */
 export async function applyVehiculoPlan(tx: TxLike, clienteId: string, plan: VehiculoPlan): Promise<void> {
   if (plan.inserts.length > 0) {
     await tx.insert(vehiculo).values(
@@ -136,10 +147,13 @@ export async function applyVehiculoPlan(tx: TxLike, clienteId: string, plan: Veh
     await tx
       .update(vehiculo)
       .set({ plate: v.plate, make: v.make ?? null, model: v.model ?? null, year: v.year ?? null })
-      .where(eq(vehiculo.id, v.id!));
+      .where(and(eq(vehiculo.clienteId, clienteId), eq(vehiculo.id, v.id!)));
   }
 
   if (plan.deactivate.length > 0) {
-    await tx.update(vehiculo).set({ deactivatedAt: new Date() }).where(inArray(vehiculo.id, plan.deactivate));
+    await tx
+      .update(vehiculo)
+      .set({ deactivatedAt: new Date() })
+      .where(and(eq(vehiculo.clienteId, clienteId), inArray(vehiculo.id, plan.deactivate)));
   }
 }

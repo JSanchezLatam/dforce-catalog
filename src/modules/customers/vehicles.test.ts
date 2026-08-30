@@ -1,9 +1,10 @@
+import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 import type { Vehiculo } from "@/shared/db/schema";
 import { ClienteValidationError } from "./validation";
-import { planVehiculoReconcile, platesSubquery, type VehiculoInput } from "./vehicles";
+import { applyVehiculoPlan, planVehiculoReconcile, platesSubquery, type TxLike, type VehiculoInput } from "./vehicles";
 
 function vehiculo(overrides: Partial<Vehiculo> = {}): Vehiculo {
   return {
@@ -76,5 +77,50 @@ describe("planVehiculoReconcile (D5)", () => {
     const plan = planVehiculoReconcile(existing, incoming);
     expect(plan.inserts).toEqual([{ plate: "ABC111" }]);
     expect(plan.deactivate).toEqual([]);
+  });
+});
+
+/**
+ * A `TxLike` that records the rendered `where` of every write instead of
+ * running it. It sees what a statement is SCOPED to; it cannot see row
+ * effects, so no test below can prove a write was actually prevented — that
+ * is `vehicle search (E2E)`'s job ("ignores a plan naming another customer's
+ * vehicle").
+ */
+function recordingTx() {
+  const dialect = new PgDialect();
+  const wheres: { sql: string; params: unknown[] }[] = [];
+  const tx = {
+    insert: () => ({ values: async () => undefined }),
+    update: () => ({
+      set: () => ({
+        where: async (clause: SQL) => {
+          wheres.push(dialect.sqlToQuery(clause));
+        },
+      }),
+    }),
+    select: () => undefined,
+  } as unknown as TxLike;
+  return { tx, wheres };
+}
+
+describe("applyVehiculoPlan (D5)", () => {
+  // `planVehiculoReconcile` rejects a foreign id, but that is a caller-side
+  // invariant: `applyVehiculoPlan` takes any plan handed to it, and the
+  // module's own docstring calls ownership "a trust boundary". A trust
+  // boundary that only holds when the caller got it right is not one, so both
+  // mutating statements carry the `clienteId` they were already given.
+  it("scopes an update to the owning customer, not to the vehicle id alone", async () => {
+    const { tx, wheres } = recordingTx();
+    await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [{ id: "v1", plate: "ABC222" }], deactivate: [] });
+    expect(wheres).toHaveLength(1);
+    expect(wheres[0].params).toContain("c1");
+  });
+
+  it("scopes a deactivate to the owning customer, not to the vehicle ids alone", async () => {
+    const { tx, wheres } = recordingTx();
+    await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [], deactivate: ["v1", "v2"] });
+    expect(wheres).toHaveLength(1);
+    expect(wheres[0].params).toContain("c1");
   });
 });

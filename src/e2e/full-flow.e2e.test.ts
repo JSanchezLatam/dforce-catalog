@@ -26,7 +26,7 @@
  * render.
  */
 import { execSync } from "node:child_process";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -47,6 +47,7 @@ vi.mock("@/modules/catalog-storage/r2", () => {
 import { hashPassword } from "@/modules/auth/password";
 import { SESSION_COOKIE, validateSession } from "@/modules/auth/session";
 import { resolveAllPrices } from "@/modules/catalog-builder/price-lists";
+import { applyVehiculoPlan } from "@/modules/customers/vehicles";
 import { buildIndexSections } from "@/modules/catalog-builder/selection";
 import { DEFAULT_TEMPLATE_ID } from "@/shared/template/registry";
 import { listCatalogsForUser } from "@/modules/catalog-storage/queries";
@@ -249,7 +250,9 @@ describe("vehicle search (E2E)", () => {
   let threeVehicles: { id: string };
   let zeroVehicles: { id: string };
   let withDeactivated: { id: string };
-  /** Both created by the tests below through the REAL write path, not seeded here. */
+  /** `threeVehicles`' seeded rows, in `values()` order — AAA111, BBB222, CCC333. */
+  let threeVehicleIds: string[] = [];
+  /** All created by the tests below through the REAL write path, not seeded here. */
   let flatPlateOnly: { id: string } | undefined;
   let collectionWrite: { id: string } | undefined;
 
@@ -268,12 +271,16 @@ describe("vehicle search (E2E)", () => {
     zeroVehicles = row2;
     withDeactivated = row3;
 
-    await db.insert(vehiculo).values([
-      { clienteId: threeVehicles.id, plate: "AAA111" },
-      { clienteId: threeVehicles.id, plate: "BBB222" },
-      { clienteId: threeVehicles.id, plate: "CCC333" },
-      { clienteId: withDeactivated.id, plate: "ZZZ999", deactivatedAt: new Date() },
-    ]);
+    const seededVehicles = await db
+      .insert(vehiculo)
+      .values([
+        { clienteId: threeVehicles.id, plate: "AAA111" },
+        { clienteId: threeVehicles.id, plate: "BBB222" },
+        { clienteId: threeVehicles.id, plate: "CCC333" },
+        { clienteId: withDeactivated.id, plate: "ZZZ999", deactivatedAt: new Date() },
+      ])
+      .returning({ id: vehiculo.id });
+    threeVehicleIds = seededVehicles.slice(0, 3).map((v) => v.id);
   }, 60_000);
 
   afterAll(async () => {
@@ -375,6 +382,24 @@ describe("vehicle search (E2E)", () => {
     const body = await search("Lucía Fernández");
     const row = body.customers.find((c) => c.id === threeVehicles.id);
     expect(row?.plates.slice().sort()).toEqual(["AAA111", "BBB222", "CCC333"]);
+  });
+
+  it("ignores a plan naming another customer's vehicle — ownership is enforced in SQL, not by the caller", async () => {
+    // No API call can reach this: `planVehiculoReconcile` rejects a foreign id
+    // first. That is exactly the point — the rejection is a caller-side
+    // invariant, so `applyVehiculoPlan` is called directly here with the plan a
+    // buggy caller could hand it. `db` satisfies `TxLike`. Both statements are
+    // scoped to `zeroVehicles`, so both must affect zero rows.
+    const [rename, deactivate] = threeVehicleIds;
+    await applyVehiculoPlan(db, zeroVehicles.id, {
+      inserts: [],
+      updates: [{ id: rename, plate: "HACK01" }],
+      deactivate: [deactivate],
+    });
+
+    const rows = await db.select().from(vehiculo).where(eq(vehiculo.clienteId, threeVehicles.id));
+    expect(rows.map((r) => r.plate).sort()).toEqual(["AAA111", "BBB222", "CCC333"]);
+    expect(rows.filter((r) => r.deactivatedAt !== null)).toHaveLength(0);
   });
 });
 
