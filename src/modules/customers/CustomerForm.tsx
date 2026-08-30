@@ -385,7 +385,14 @@ export function CustomerForm({
                       {/* Both actions in one group so they wrap together to a
                           right-aligned second line: with `ml-auto` on the
                           first button alone, the second wrapped by itself and
-                          overflowed the row. */}
+                          overflowed the row.
+
+                          `ml-auto` here AND `justify-between` on the parent are
+                          not redundant, they cover different cases. Unwrapped,
+                          `justify-between` splits plate-left / actions-right.
+                          Wrapped, this group is the only item on its line and
+                          `justify-between` would put it at the start — `ml-auto`
+                          is what still pushes it right. */}
                       <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
                         <Button
                           type="button"
@@ -410,7 +417,7 @@ export function CustomerForm({
                         >
                           Eliminar definitivamente
                         </Button>
-                    </div>
+                      </div>
                     </div>
                   );
                 }
@@ -549,7 +556,10 @@ export function CustomerForm({
         <Dialog open={pendingDelete !== null} onOpenChange={(next) => !next && setPendingDelete(null)}>
           <DialogContent showCloseButton={false} className="max-w-md">
             <DialogTitle>Eliminar vehículo definitivamente</DialogTitle>
-            <DialogBody className="flex flex-col gap-2 text-sm text-muted-foreground">
+            {/* A plain div, not `DialogBody`: two fixed paragraphs can never
+                outgrow the cap, and a scroll container that can never scroll is
+                structure pretending to do something. */}
+            <div className="flex flex-col gap-2 text-sm text-muted-foreground">
               <p>
                 Se va a borrar el vehículo {pendingDelete?.plate.trim() || "sin placa"} de este cliente. Esta
                 acción no se puede deshacer.
@@ -558,7 +568,7 @@ export function CustomerForm({
                 Si el auto simplemente ya no está con el cliente, usá Quitar: queda desactivado y se conserva
                 su historial de servicio.
               </p>
-            </DialogBody>
+            </div>
             <DialogFooter>
               <Button
                 type="button"
