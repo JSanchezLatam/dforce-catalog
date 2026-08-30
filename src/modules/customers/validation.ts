@@ -1,8 +1,10 @@
 /**
  * customers/validation.ts — pure, DB-free validation for `cliente` (R17) and,
  * since vehicles-one-to-many (C3, design.md D6), for each `vehiculo` in a
- * customer's collection independently. The per-vehicle path is ADDITIVE: the
- * flat `vehicle*` fields below keep working until slice 3 (see `ClienteInput`).
+ * customer's collection independently. Migration `0014` (slice 3) dropped
+ * `cliente`'s four inline vehicle columns, so `ClienteInput` no longer has
+ * flat vehicle fields — `validateVehiculoInput`/`validateVehiculosInput` are
+ * the only vehicle validation now.
  *
  * Mirrors template-config/service.ts's `validateTemplateConfigInput`: a
  * single validate function that either returns a fully-typed, normalized
@@ -11,23 +13,10 @@
  */
 import type { VehiculoInput } from "./vehicles";
 
-/**
- * The four flat `vehicle*` fields are kept for now alongside the `vehicles`
- * collection — dropping them would silently discard whatever `CustomerForm`'s
- * four inline inputs send, which is slice 3 scope (expand/contract, design.md).
- * They stay authoritative on `cliente`'s own columns until migration `0014`
- * drops them. Exactly the reasoning `queries.ts` records for
- * `ClienteListItem.vehiclePlate` on the read side, mirrored here on the write
- * side.
- */
 export type ClienteInput = {
   name: string;
   phone: string;
   email?: string;
-  vehicleMake?: string;
-  vehicleModel?: string;
-  vehicleYear?: number;
-  vehiclePlate?: string;
   whatsappOptOut?: boolean;
   emailOptOut?: boolean;
 };
@@ -90,20 +79,6 @@ export function validateClienteInput(input: unknown): ClienteInput {
     errors.email = "Email must be a valid email address";
   }
 
-  const vehicleMake = trimmedOrUndefined(value.vehicleMake);
-  const vehicleModel = trimmedOrUndefined(value.vehicleModel);
-  const vehiclePlate = trimmedOrUndefined(value.vehiclePlate);
-  const vehicleYear =
-    typeof value.vehicleYear === "number" && Number.isFinite(value.vehicleYear) ? value.vehicleYear : undefined;
-
-  // R17 — "IF any inline vehicle field other than plate is provided, THEN
-  // plate MUST also be provided". Still the ONLY thing that shouts on the flat
-  // path, which `CustomerForm` is still the sole caller of until slice 3.
-  const hasOtherVehicleField = vehicleMake !== undefined || vehicleModel !== undefined || vehicleYear !== undefined;
-  if (hasOtherVehicleField && vehiclePlate === undefined) {
-    errors.vehiclePlate = "Plate is required whenever any other vehicle field is present";
-  }
-
   const whatsappOptOut = typeof value.whatsappOptOut === "boolean" ? value.whatsappOptOut : undefined;
   const emailOptOut = typeof value.emailOptOut === "boolean" ? value.emailOptOut : undefined;
 
@@ -115,10 +90,6 @@ export function validateClienteInput(input: unknown): ClienteInput {
     name,
     phone: normalizePhone(rawPhone),
     ...(email !== undefined ? { email } : {}),
-    ...(vehicleMake !== undefined ? { vehicleMake } : {}),
-    ...(vehicleModel !== undefined ? { vehicleModel } : {}),
-    ...(vehicleYear !== undefined ? { vehicleYear } : {}),
-    ...(vehiclePlate !== undefined ? { vehiclePlate } : {}),
     ...(whatsappOptOut !== undefined ? { whatsappOptOut } : {}),
     ...(emailOptOut !== undefined ? { emailOptOut } : {}),
   };
