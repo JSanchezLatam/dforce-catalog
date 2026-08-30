@@ -18,7 +18,7 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
 import { getClienteById } from "@/modules/customers/queries";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
-import { CARD, CHIP, PLATE_BADGE } from "@/shared/ui/styles";
+import { CARD, CARD_MUTED, CHIP, PLATE_BADGE, PLATE_BADGE_MUTED } from "@/shared/ui/styles";
 
 export const dynamic = "force-dynamic";
 
@@ -95,13 +95,19 @@ export default async function CustomerDetailPage({
 
       {/*
        * Master-detail (design direction): customer header above, vehicle
-       * collection below. A deactivated vehicle stays visible but visibly
-       * secondary (`opacity-70` + the "Vehículo desactivado" label) — no
-       * show/hide toggle here: `UsersTable`'s `showInactive` idiom fits a
-       * many-row admin table, but one customer's own handful of vehicles is
-       * small enough to just always show. Restoring one happens from
-       * "Editar" (`CustomerForm` carries the actual restore action); this
-       * view is read-only.
+       * collection below. A deactivated vehicle stays visible but collapses
+       * to a muted one-line row — no show/hide toggle here: `UsersTable`'s
+       * `showInactive` idiom fits a many-row admin table, but one customer's
+       * own handful of vehicles is small enough to just always show.
+       *
+       * The two states are told apart by WEIGHT, not by a caption: an
+       * identical card plus the words "Vehículo desactivado" made the one
+       * vehicle actually in service the hardest thing on the screen to find
+       * — worse when it has no make/model/year, since then it is the card
+       * with the FEWEST chips too. First question a workshop asks of this
+       * list is "which of these can I work on", so that has to be answerable
+       * without reading. Restoring one happens from "Editar" (`CustomerForm`
+       * carries the actual restore action); this view is read-only.
        */}
       <Card className="mb-6">
         <CardHeader>
@@ -112,26 +118,25 @@ export default async function CustomerDetailPage({
             <p className="text-sm text-muted-foreground">Este cliente no tiene vehículos registrados.</p>
           ) : (
             <div className="flex flex-col gap-3">
-              {vehicles.map((vehiculo) => (
-                <div
-                  key={vehiculo.id}
-                  className={CARD + " flex flex-col gap-2" + (vehiculo.deactivatedAt ? " opacity-70" : "")}
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={PLATE_BADGE}>{vehiculo.plate}</span>
-                    {vehiculo.deactivatedAt && (
-                      <span className="text-xs font-medium text-muted-foreground">Vehículo desactivado</span>
+              {vehicles.map((vehiculo) =>
+                vehiculo.deactivatedAt ? (
+                  <div key={vehiculo.id} className={CARD_MUTED + " flex flex-wrap items-center gap-2"}>
+                    <span className={PLATE_BADGE_MUTED}>{vehiculo.plate}</span>
+                    <span className="text-xs font-medium">Vehículo desactivado</span>
+                  </div>
+                ) : (
+                  <div key={vehiculo.id} className={CARD + " flex flex-col gap-2"}>
+                    <span className={PLATE_BADGE + " self-start"}>{vehiculo.plate}</span>
+                    {(vehiculo.make || vehiculo.model || vehiculo.year) && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {vehiculo.make && <span className={CHIP}>{vehiculo.make}</span>}
+                        {vehiculo.model && <span className={CHIP}>{vehiculo.model}</span>}
+                        {vehiculo.year && <span className={CHIP}>{vehiculo.year}</span>}
+                      </div>
                     )}
                   </div>
-                  {(vehiculo.make || vehiculo.model || vehiculo.year) && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {vehiculo.make && <span className={CHIP}>{vehiculo.make}</span>}
-                      {vehiculo.model && <span className={CHIP}>{vehiculo.model}</span>}
-                      {vehiculo.year && <span className={CHIP}>{vehiculo.year}</span>}
-                    </div>
-                  )}
-                </div>
-              ))}
+                ),
+              )}
             </div>
           )}
         </CardContent>
