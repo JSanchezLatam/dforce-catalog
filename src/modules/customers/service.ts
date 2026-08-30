@@ -15,8 +15,14 @@ import { eq } from "drizzle-orm";
 import { db } from "@/shared/db/client";
 import { cliente, type Cliente, type Vehiculo } from "@/shared/db/schema";
 import { findClienteByPhone, getClienteById } from "./queries";
-import { normalizePhone, validateClienteInput, validateVehiculosInput, type ClienteInput } from "./validation";
-import { applyVehiculoPlan, planVehiculoReconcile, type TxLike } from "./vehicles";
+import {
+  ClienteValidationError,
+  normalizePhone,
+  validateClienteInput,
+  validateVehiculosInput,
+  type ClienteInput,
+} from "./validation";
+import { applyVehiculoPlan, planVehiculoReconcile, type TxLike, type VehiculoInput } from "./vehicles";
 
 /** R18 — a phone that already belongs to another cliente; `existingClienteId` lets the caller link to it. */
 export class DuplicatePhoneError extends Error {
@@ -37,6 +43,43 @@ function extractVehiclesRaw(input: unknown): unknown {
   return (input as Record<string, unknown> | null | undefined)?.vehicles;
 }
 
+/**
+ * Runs BOTH validators and merges their errors into one throw. Sequential
+ * throws would leak validation.ts's "ALL field errors collected (not just the
+ * first)" contract across the scalar/collection boundary: a submission with a
+ * bad name AND a plate-less vehicle would make the user fix the name,
+ * resubmit, and only then learn about the plate.
+ */
+function validateClienteAndVehicles(
+  scalarInput: unknown,
+  vehiclesRaw: unknown,
+): { value: ClienteInput; vehicles: VehiculoInput[] | undefined } {
+  const errors: Record<string, string> = {};
+  let value: ClienteInput | undefined;
+  let vehicles: VehiculoInput[] | undefined;
+
+  const collect = (run: () => void) => {
+    try {
+      run();
+    } catch (err) {
+      if (!(err instanceof ClienteValidationError)) throw err;
+      Object.assign(errors, err.errors);
+    }
+  };
+
+  collect(() => {
+    value = validateClienteInput(scalarInput);
+  });
+  collect(() => {
+    vehicles = validateVehiculosInput(vehiclesRaw);
+  });
+
+  if (Object.keys(errors).length > 0) {
+    throw new ClienteValidationError(errors);
+  }
+  return { value: value!, vehicles };
+}
+
 export type CreateClienteDeps = {
   findByPhone?: (phone: string) => Promise<Cliente | null>;
   insert?: (value: ClienteInput) => Promise<Cliente>;
@@ -52,8 +95,7 @@ export type CreateClienteDeps = {
  * no transaction).
  */
 export async function createCliente(input: unknown, deps: CreateClienteDeps = {}): Promise<Cliente> {
-  const value = validateClienteInput(input);
-  const vehiclesInput = validateVehiculosInput(extractVehiclesRaw(input));
+  const { value, vehicles: vehiclesInput } = validateClienteAndVehicles(input, extractVehiclesRaw(input));
 
   const findByPhone = deps.findByPhone ?? findClienteByPhone;
   const existing = await findByPhone(value.phone);
@@ -120,8 +162,7 @@ export async function updateCliente(
 
   // Validate the MERGED scalar record so cross-field rules see the full
   // picture — but only the patch's own keys get persisted below (R16).
-  validateClienteInput({ ...current.cliente, ...patch });
-  const vehiclesInput = validateVehiculosInput(patch.vehicles);
+  const { vehicles: vehiclesInput } = validateClienteAndVehicles({ ...current.cliente, ...patch }, patch.vehicles);
 
   const persistedPatch: Partial<ClienteInput> = Object.fromEntries(
     Object.entries(patch).filter(([key]) => key !== "vehicles"),

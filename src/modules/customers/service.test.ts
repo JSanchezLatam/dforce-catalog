@@ -14,16 +14,23 @@ const validInput = { name: "Juan Pérez", phone: "+52 55 1234 5678" };
  * `.returning()`, as `vehicles.ts`'s `applyVehiculoPlan` does) and
  * `await tx.insert(t).values(v).returning()` (as `service.ts`'s own cliente
  * write does) resolve through the same fake.
+ *
+ * The settled promise is built LAZILY, at `then()`/`returning()` time. Built
+ * eagerly in the factory, every intermediate link of an error chain
+ * (`tx.insert(t)` before `.values(v)`) creates a rejected promise nobody ever
+ * awaits — an unhandled rejection that is silent under this Vitest config and
+ * a red suite under one that is stricter.
  */
 function queryBuilder(resolvedValue: unknown, error?: Error) {
-  const promise = error ? Promise.reject(error) : Promise.resolve(resolvedValue);
-  const builder = Object.assign(promise, {
+  const settle = () => (error ? Promise.reject(error) : Promise.resolve(resolvedValue));
+  return {
     values: () => queryBuilder(resolvedValue, error),
     set: () => queryBuilder(resolvedValue, error),
     where: () => queryBuilder(resolvedValue, error),
-    returning: () => (error ? Promise.reject(error) : Promise.resolve(resolvedValue)),
-  });
-  return builder;
+    returning: () => settle(),
+    then: (onFulfilled?: (value: unknown) => unknown, onRejected?: (reason: unknown) => unknown) =>
+      settle().then(onFulfilled, onRejected),
+  };
 }
 
 /**
@@ -89,6 +96,17 @@ describe("createCliente (R16, R18)", () => {
         { findByPhone: async () => null, insert },
       ),
     ).rejects.toBeInstanceOf(ClienteValidationError);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("collects scalar AND vehicle field errors on one thrown error, not just the scalar ones", async () => {
+    // validation.ts's contract is "ALL field errors collected (not just the
+    // first)". Two sequential throws break it across the boundary: the user
+    // fixes the name, resubmits, and only then learns the vehicle has no plate.
+    const insert = vi.fn();
+    await expect(
+      createCliente({ name: "", phone: "5512345678", vehicles: [{ make: "Toyota" }] }, { insert }),
+    ).rejects.toMatchObject({ errors: { name: expect.any(String), "vehicles.0.plate": expect.any(String) } });
     expect(insert).not.toHaveBeenCalled();
   });
 
