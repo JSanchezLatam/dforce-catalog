@@ -99,6 +99,13 @@
       "when": 1788021169490,
       "tag": "0013_vehiculo_table",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788081734782,
+      "tag": "0014_drop_cliente_vehicle_columns",
+      "breakpoints": true
     }
   ]
 }

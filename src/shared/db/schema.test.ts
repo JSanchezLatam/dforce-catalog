@@ -126,24 +126,32 @@ describe("schema — cliente table (Phase 1, task 1.2)", () => {
     expect(whatsappOptOut.name).not.toBe(emailOptOut.name);
   });
 
-  it("has nullable contact/vehicle fields (name is the only required field)", () => {
+  it("has nullable contact fields (name is the only required field)", () => {
     expect(findColumn(config.columns, "name").notNull).toBe(true);
     expect(findColumn(config.columns, "phone").notNull).toBe(false);
     expect(findColumn(config.columns, "email").notNull).toBe(false);
-    expect(findColumn(config.columns, "vehicle_make").notNull).toBe(false);
-    expect(findColumn(config.columns, "vehicle_model").notNull).toBe(false);
-    expect(findColumn(config.columns, "vehicle_year").notNull).toBe(false);
-    expect(findColumn(config.columns, "vehicle_plate").notNull).toBe(false);
   });
 
-  it("has name/plate/createdAt indexes for list search + newest-first listing", () => {
+  it("has name/createdAt indexes for list search + newest-first listing", () => {
     const nameIdx = findIndex(config.indexes, "cliente_name_idx");
-    const plateIdx = findIndex(config.indexes, "cliente_plate_idx");
     const createdIdx = findIndex(config.indexes, "cliente_created_idx");
 
     expect(nameIdx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["name"]);
-    expect(plateIdx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["vehicle_plate"]);
     expect(createdIdx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["created_at"]);
+  });
+
+  /**
+   * Migration `0014` (slice 3, expand/contract's contract step) dropped
+   * `cliente`'s four inline vehicle columns and `cliente_plate_idx` — a
+   * vehicle is now always a `vehiculo` row (extends the slice-1 test that
+   * asserted these were still present while `0013` only ADDED `vehiculo`).
+   */
+  it("no longer has the four inline vehicle columns or cliente_plate_idx (0014, slice 3)", () => {
+    expect(config.columns.some((c) => c.name === "vehicle_make")).toBe(false);
+    expect(config.columns.some((c) => c.name === "vehicle_model")).toBe(false);
+    expect(config.columns.some((c) => c.name === "vehicle_year")).toBe(false);
+    expect(config.columns.some((c) => c.name === "vehicle_plate")).toBe(false);
+    expect(config.indexes.map((i) => i.config.name)).not.toContain("cliente_plate_idx");
   });
 });
 
