@@ -39,7 +39,9 @@ function queryBuilder(resolvedValue: unknown, error?: Error) {
  * Postgres and is not exercised here (design.md's Testing Strategy).
  * `clienteRow` is what any `cliente` insert/update resolves to;
  * `vehiculoInsertError`/`vehiculoUpdateError` let a test simulate the
- * vehicle-side write failing so the whole transaction aborts.
+ * vehicle-side write failing. `transaction` here only calls its callback —
+ * there is no rollback and no state to roll back, so no test in this file can
+ * assert atomicity, only that the failure propagates.
  */
 function fakeDatabase(
   clienteRow: Cliente,
@@ -124,7 +126,13 @@ describe("createCliente (R16, R18)", () => {
     expect(tx.insert).toHaveBeenCalledWith(vehiculo);
   });
 
-  it("aborts the whole write when the vehicle insert fails (transaction atomicity)", async () => {
+  // NOT an atomicity test, deliberately: `fakeDatabase`'s `transaction` just
+  // calls the callback, so there is no rollback to observe and nothing asserts
+  // that the `cliente` insert was undone. What it does prove is that the
+  // vehicle-side failure escapes `createCliente` instead of being swallowed
+  // into a "created" result. Real rollback needs the live Postgres seam and is
+  // owned by `vehicle search (E2E)`.
+  it("propagates a vehicle-insert failure instead of swallowing it", async () => {
     const clienteRow = { id: "c1", ...validInput, phone: "+525512345678" } as unknown as Cliente;
     const { database } = fakeDatabase(clienteRow, { vehiculoInsertError: new Error("insert failed") });
 
