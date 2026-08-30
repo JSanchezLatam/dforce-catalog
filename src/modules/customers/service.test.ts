@@ -226,7 +226,7 @@ describe("updateCliente (R16, R18)", () => {
     const current = {
       cliente: { id: "c1", name: "Juan Pérez", phone: "+525512345678" } as unknown as Cliente,
       orders: [],
-      vehicles: [{ id: "v1", plate: "ABC111" } as unknown as Vehiculo],
+      vehicles: [{ id: "v1", plate: "ABC111", deactivatedAt: null } as unknown as Vehiculo],
     };
     const clienteRow = { ...current.cliente };
     const { database, transaction } = fakeDatabase(clienteRow as unknown as Cliente);
@@ -244,7 +244,7 @@ describe("updateCliente (R16, R18)", () => {
     const current = {
       cliente: { id: "c1", name: "Juan Pérez", phone: "+525512345678" } as unknown as Cliente,
       orders: [],
-      vehicles: [{ id: "v1", plate: "ABC111" } as unknown as Vehiculo],
+      vehicles: [{ id: "v1", plate: "ABC111", deactivatedAt: null } as unknown as Vehiculo],
     };
     const clienteRow = { ...current.cliente, name: "Juan P." } as unknown as Cliente;
     const { database, tx } = fakeDatabase(clienteRow);

@@ -68,29 +68,49 @@ export function vehiculoPlateExists(
   return sql`exists (select 1 from ${vehiculo} where ${vehiculo.clienteId} = ${cliente.id} and ${activeVehiculoFilter()} and ${match(vehiculo.plate, pattern)})`;
 }
 
-/** R16 — a customer's active vehicles. */
+/**
+ * R16, restore — a customer's vehicles. Active-only by DEFAULT (mirrors
+ * `account/queries.ts`'s `listUsers`); `includeInactive` is threaded into
+ * `queryFn` rather than the caller swapping the whole query, so the default
+ * is observable in a DB-free test. `getClienteById` opts in: the detail view
+ * and `CustomerForm`'s restore action both need to see an inactive vehicle
+ * to offer it back.
+ */
 export async function listVehiculosByCliente(
   clienteId: string,
-  queryFn: () => Promise<Vehiculo[]> = () =>
+  options: { includeInactive?: boolean } = {},
+  queryFn: (includeInactive: boolean) => Promise<Vehiculo[]> = (includeInactive) =>
     db
       .select()
       .from(vehiculo)
-      .where(and(eq(vehiculo.clienteId, clienteId), activeVehiculoFilter())),
+      .where(
+        includeInactive
+          ? eq(vehiculo.clienteId, clienteId)
+          : and(eq(vehiculo.clienteId, clienteId), activeVehiculoFilter()),
+      ),
 ): Promise<Vehiculo[]> {
-  return queryFn();
+  return queryFn(options.includeInactive ?? false);
 }
 
 /**
- * D5 — pure reconcile. `existing` is the customer's current ACTIVE vehicles;
- * `incoming` is the already-validated payload. Omitted `incoming` leaves the
- * collection completely untouched (R16); `[]` deactivates every active
- * vehicle. An element WITH `id` is an update, WITHOUT `id` is an insert —
- * plates are never the key (editable, not unique). An `id` absent from
- * `existing` (another customer's, or an already-deactivated vehicle) throws
- * rather than silently inserting — a trust boundary, not a data-shape bug.
- * A re-added plate with no id becomes a brand new row; this deliberately
- * does not resurrect a deactivated one (ponytail: revive-on-match if history
- * continuity is ever asked for).
+ * D5 — pure reconcile. `existing` is the customer's WHOLE vehicle collection
+ * — active AND inactive — so an id belonging to an already-deactivated
+ * vehicle is recognized as this customer's own rather than rejected as
+ * foreign (restore); `incoming` is the already-validated payload. Omitted
+ * `incoming` leaves the collection completely untouched (R16); `[]`
+ * deactivates every active vehicle. An element WITH `id` is an update,
+ * WITHOUT `id` is an insert — plates are never the key (editable, not
+ * unique). An `id` absent from `existing` (another customer's) throws rather
+ * than silently inserting — a trust boundary, not a data-shape bug. Only
+ * ACTIVE vehicles omitted from `incoming` are deactivated — an already-
+ * inactive one omitted again is left alone, so its original
+ * `deactivated_at` is never overwritten by an unrelated edit. An update
+ * always restores (`applyVehiculoPlan` clears `deactivatedAt`), so naming an
+ * inactive vehicle's id in `incoming` is how a client restores it. A
+ * re-added plate with no id becomes a brand new row; this deliberately does
+ * not resurrect a deactivated one by plate (ponytail: revive-on-match by
+ * plate if history continuity is ever asked for — id-based restore above
+ * already covers the explicit case).
  */
 export function planVehiculoReconcile(existing: Vehiculo[], incoming: VehiculoInput[] | undefined): VehiculoPlan {
   if (incoming === undefined) {
@@ -114,7 +134,9 @@ export function planVehiculoReconcile(existing: Vehiculo[], incoming: VehiculoIn
     updates.push(item);
   }
 
-  const deactivate = existing.filter((v) => !keptIds.has(v.id)).map((v) => v.id);
+  const deactivate = existing
+    .filter((v) => v.deactivatedAt === null && !keptIds.has(v.id))
+    .map((v) => v.id);
   return { inserts, updates, deactivate };
 }
 
@@ -144,9 +166,12 @@ export async function applyVehiculoPlan(tx: TxLike, clienteId: string, plan: Veh
   }
 
   for (const v of plan.updates) {
+    // `deactivatedAt: null` unconditionally — an update is "this vehicle
+    // exists and is active with these values", whether it was already active
+    // (no-op here) or inactive (this is the restore, D5).
     await tx
       .update(vehiculo)
-      .set({ plate: v.plate, make: v.make ?? null, model: v.model ?? null, year: v.year ?? null })
+      .set({ plate: v.plate, make: v.make ?? null, model: v.model ?? null, year: v.year ?? null, deactivatedAt: null })
       .where(and(eq(vehiculo.clienteId, clienteId), eq(vehiculo.id, v.id!)));
   }
 

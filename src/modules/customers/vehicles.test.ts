@@ -1,10 +1,17 @@
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Vehiculo } from "@/shared/db/schema";
 import { ClienteValidationError } from "./validation";
-import { applyVehiculoPlan, planVehiculoReconcile, platesSubquery, type TxLike, type VehiculoInput } from "./vehicles";
+import {
+  applyVehiculoPlan,
+  listVehiculosByCliente,
+  planVehiculoReconcile,
+  platesSubquery,
+  type TxLike,
+  type VehiculoInput,
+} from "./vehicles";
 
 function vehiculo(overrides: Partial<Vehiculo> = {}): Vehiculo {
   return {
@@ -63,10 +70,31 @@ describe("planVehiculoReconcile (D5)", () => {
     expect(plan).toEqual({ inserts: [], updates: [{ id: "v1", plate: "ABC111" }], deactivate: ["v2"] });
   });
 
-  it("throws rather than silently inserting when an id does not belong to this customer's active vehicles", () => {
+  it("throws rather than silently inserting when an id does not belong to this customer at all", () => {
     const existing = [vehiculo({ id: "v1" })];
     const incoming: VehiculoInput[] = [{ id: "foreign-id", plate: "ZZZ000" }];
     expect(() => planVehiculoReconcile(existing, incoming)).toThrow(ClienteValidationError);
+  });
+
+  /**
+   * Restore (spec: "Vehicle Collection Persistence") means the client resends
+   * a previously-deactivated vehicle's id. `existing` therefore has to carry
+   * BOTH active and inactive vehicles — `getClienteById` now fetches the
+   * whole collection (`listVehiculosByCliente(id, { includeInactive: true })`)
+   * so the ownership check below has something to match against; rejecting an
+   * inactive vehicle's own id as "foreign" would make restore impossible.
+   */
+  it("plans an update (never a rejection) for an id belonging to an inactive existing vehicle — this is how restore works", () => {
+    const existing = [vehiculo({ id: "v1", deactivatedAt: new Date("2026-01-02") })];
+    const incoming: VehiculoInput[] = [{ id: "v1", plate: "ABC111" }];
+    const plan = planVehiculoReconcile(existing, incoming);
+    expect(plan).toEqual({ inserts: [], updates: [{ id: "v1", plate: "ABC111" }], deactivate: [] });
+  });
+
+  it("never re-stamps an already-inactive vehicle omitted from incoming — deactivate only ever touches active rows", () => {
+    const existing = [vehiculo({ id: "v1" }), vehiculo({ id: "v2", deactivatedAt: new Date("2026-01-02") })];
+    const plan = planVehiculoReconcile(existing, []);
+    expect(plan).toEqual({ inserts: [], updates: [], deactivate: ["v1"] });
   });
 
   it("keys on id, never plate: an id-less element whose plate already exists inserts a new row and drops the old", () => {
@@ -95,18 +123,22 @@ describe("planVehiculoReconcile (D5)", () => {
 function recordingTx() {
   const dialect = new PgDialect();
   const wheres: { sql: string; params: unknown[] }[] = [];
+  const sets: Record<string, unknown>[] = [];
   const tx = {
     insert: () => ({ values: async () => undefined }),
     update: () => ({
-      set: () => ({
-        where: async (clause: SQL) => {
-          wheres.push(dialect.sqlToQuery(clause));
-        },
-      }),
+      set: (patch: Record<string, unknown>) => {
+        sets.push(patch);
+        return {
+          where: async (clause: SQL) => {
+            wheres.push(dialect.sqlToQuery(clause));
+          },
+        };
+      },
     }),
     select: () => undefined,
   } as unknown as TxLike;
-  return { tx, wheres };
+  return { tx, wheres, sets };
 }
 
 describe("applyVehiculoPlan (D5)", () => {
@@ -127,5 +159,31 @@ describe("applyVehiculoPlan (D5)", () => {
     await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [], deactivate: ["v1", "v2"] });
     expect(wheres).toHaveLength(1);
     expect(wheres[0].params).toContain("c1");
+  });
+
+  // D5 restore: an update always clears deactivatedAt, whether the row was
+  // already active (no-op) or inactive (this IS the restore). The reconcile
+  // plans an "update" for both cases (see planVehiculoReconcile above), so
+  // this is the one statement that has to do the reactivating.
+  it("clears deactivatedAt on every update — restoring a vehicle is an ordinary update, not a separate action", async () => {
+    const { tx, sets } = recordingTx();
+    await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [{ id: "v1", plate: "ABC222" }], deactivate: [] });
+    expect(sets[0]).toMatchObject({ deactivatedAt: null });
+  });
+});
+
+describe("listVehiculosByCliente (R16, restore)", () => {
+  it("defaults to active-only", async () => {
+    const queryFn = vi.fn().mockResolvedValue([]);
+    await listVehiculosByCliente("c1", undefined, queryFn);
+    expect(queryFn).toHaveBeenCalledWith(false);
+  });
+
+  it("fetches the whole collection, active and inactive, when includeInactive is opted in", async () => {
+    // `getClienteById` needs this: the detail view and `CustomerForm`'s
+    // restore action both need to see an inactive vehicle to offer it back.
+    const queryFn = vi.fn().mockResolvedValue([]);
+    await listVehiculosByCliente("c1", { includeInactive: true }, queryFn);
+    expect(queryFn).toHaveBeenCalledWith(true);
   });
 });
