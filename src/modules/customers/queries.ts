@@ -10,8 +10,8 @@ import { count, desc, eq, or, sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import { db } from "@/shared/db/client";
-import { cliente, ordenServicio, vehiculo, type Cliente, type OrdenServicio, type Vehiculo } from "@/shared/db/schema";
-import { activeVehiculoFilter, listVehiculosByCliente, platesSubquery } from "./vehicles";
+import { cliente, ordenServicio, type Cliente, type OrdenServicio, type Vehiculo } from "@/shared/db/schema";
+import { listVehiculosByCliente, platesSubquery, vehiculoPlateExists } from "./vehicles";
 
 export const DEFAULT_PAGE_SIZE = 10;
 
@@ -45,18 +45,6 @@ function unaccentIlike(column: PgColumn, pattern: string): SQL {
 }
 
 /**
- * D4 — plate match as an EXISTS over the customer's active vehicle
- * collection (not a single-column comparison): a customer matches if ANY one
- * active vehicle's plate matches. `unaccentIlike` is reused verbatim (PR
- * #44), now against `vehiculo.plate`. `activeVehiculoFilter()` (D3) supplies
- * the `deactivated_at is null` clause — dropping it is caught by the
- * "active vehicles only" unit test below, no database needed.
- */
-function vehiculoPlateExists(pattern: string): SQL {
-  return sql`exists (select 1 from ${vehiculo} where ${vehiculo.clienteId} = ${cliente.id} and ${activeVehiculoFilter()} and ${unaccentIlike(vehiculo.plate, pattern)})`;
-}
-
-/**
  * Pure — R19's "partial, case- and accent-insensitive match against name,
  * phone, or any active vehicle plate".
  *
@@ -77,7 +65,9 @@ export function buildClienteSearchWhere(search?: string) {
     unaccentIlike(cliente.name, pattern),
     unaccentIlike(cliente.phone, pattern),
     unaccentIlike(cliente.vehiclePlate, pattern),
-    vehiculoPlateExists(pattern),
+    // D4 — `unaccentIlike` is reused verbatim (PR #44), applied to
+    // `vehiculo.plate` inside `vehicles.ts`, which owns that table (D3).
+    vehiculoPlateExists(pattern, unaccentIlike),
   );
 }
 

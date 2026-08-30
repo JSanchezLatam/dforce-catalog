@@ -5,9 +5,10 @@
  * built here or composed into `queries.ts` — never a raw query builder.
  */
 import { and, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import type { PgColumn } from "drizzle-orm/pg-core";
 
 import { db } from "@/shared/db/client";
-import { vehiculo, type Vehiculo } from "@/shared/db/schema";
+import { cliente, vehiculo, type Vehiculo } from "@/shared/db/schema";
 import { ClienteValidationError } from "./validation";
 
 export type VehiculoInput = { id?: string; plate: string; make?: string; model?: string; year?: number };
@@ -46,6 +47,25 @@ export function activeVehiculoFilter(): SQL {
 export function platesSubquery(): SQL<string[]> {
   return sql<string[]>`(select coalesce(array_agg("vehiculo"."plate" order by "vehiculo"."created_at", "vehiculo"."id"), '{}')
     from "vehiculo" where "vehiculo"."cliente_id" = "cliente"."id" and "vehiculo"."deactivated_at" is null)`;
+}
+
+/**
+ * D4 — R19's plate predicate: a `cliente` row matches when ANY of its ACTIVE
+ * vehicles' plates matches. Correlated `EXISTS`, not a `LEFT JOIN`, so
+ * `listClientes`/`countClientes` stay structurally identical.
+ *
+ * `match` is the caller's text comparison (`queries.ts`'s `unaccentIlike`),
+ * passed in rather than imported: the accent-folding rule belongs with the
+ * other searchable columns, while `vehiculo` stays owned by this module (D3
+ * "one owner" — `vehiculo` is imported from `schema.ts` here and nowhere
+ * else). Importing it the other way round would make `queries.ts` ↔
+ * `vehicles.ts` circular.
+ */
+export function vehiculoPlateExists(
+  pattern: string,
+  match: (column: PgColumn, pattern: string) => SQL,
+): SQL {
+  return sql`exists (select 1 from ${vehiculo} where ${vehiculo.clienteId} = ${cliente.id} and ${activeVehiculoFilter()} and ${match(vehiculo.plate, pattern)})`;
 }
 
 /** R16 — a customer's active vehicles. */
