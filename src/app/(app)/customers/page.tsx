@@ -94,7 +94,7 @@ export default async function CustomersPage({
                     <TableHead>Nombre</TableHead>
                     <TableHead>Teléfono</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Placa</TableHead>
+                    <TableHead>Vehículos</TableHead>
                     <TableHead className="w-24">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -104,7 +104,7 @@ export default async function CustomersPage({
                       <TableCell className="font-medium">{item.name}</TableCell>
                       <TableCell>{item.phone ?? "—"}</TableCell>
                       <TableCell>{item.email ?? "—"}</TableCell>
-                      <TableCell>{item.vehiclePlate ?? "—"}</TableCell>
+                      <TableCell>{item.plates.length > 0 ? item.plates.join(", ") : "—"}</TableCell>
                       <TableCell>
                         <Link
                           href={`/customers/${item.id}`}

@@ -18,6 +18,7 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
 import { getClienteById } from "@/modules/customers/queries";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
+import { CARD, CHIP, PLATE_BADGE } from "@/shared/ui/styles";
 
 export const dynamic = "force-dynamic";
 
@@ -61,8 +62,7 @@ export default async function CustomerDetailPage({
 
   if (!detail) notFound();
 
-  const { cliente, orders } = detail;
-  const vehicle = [cliente.vehicleMake, cliente.vehicleModel, cliente.vehicleYear].filter(Boolean).join(" ");
+  const { cliente, orders, vehicles } = detail;
 
   return (
     <div className="p-8">
@@ -81,17 +81,59 @@ export default async function CustomerDetailPage({
       <Card className="mb-6">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{cliente.name}</CardTitle>
-          <CustomerFormTrigger cliente={cliente} triggerLabel="Editar" />
+          <CustomerFormTrigger cliente={cliente} vehicles={vehicles} triggerLabel="Editar" />
         </CardHeader>
         <CardContent>
           <dl>
             {field("Teléfono", cliente.phone)}
             {field("Email", cliente.email)}
-            {field("Vehículo", vehicle || null)}
-            {field("Placa", cliente.vehiclePlate)}
             {field("Recordatorios WhatsApp", cliente.whatsappOptOut ? "Desactivados" : "Activos")}
             {field("Recordatorios email", cliente.emailOptOut ? "Desactivados" : "Activos")}
           </dl>
+        </CardContent>
+      </Card>
+
+      {/*
+       * Master-detail (design direction): customer header above, vehicle
+       * collection below. A deactivated vehicle stays visible but visibly
+       * secondary (`opacity-70` + the "Vehículo desactivado" label) — no
+       * show/hide toggle here: `UsersTable`'s `showInactive` idiom fits a
+       * many-row admin table, but one customer's own handful of vehicles is
+       * small enough to just always show. Restoring one happens from
+       * "Editar" (`CustomerForm` carries the actual restore action); this
+       * view is read-only.
+       */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Vehículos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {vehicles.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Este cliente no tiene vehículos registrados.</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {vehicles.map((vehiculo) => (
+                <div
+                  key={vehiculo.id}
+                  className={CARD + " flex flex-col gap-2" + (vehiculo.deactivatedAt ? " opacity-70" : "")}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={PLATE_BADGE}>{vehiculo.plate}</span>
+                    {vehiculo.deactivatedAt && (
+                      <span className="text-xs font-medium text-muted-foreground">Vehículo desactivado</span>
+                    )}
+                  </div>
+                  {(vehiculo.make || vehiculo.model || vehiculo.year) && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {vehiculo.make && <span className={CHIP}>{vehiculo.make}</span>}
+                      {vehiculo.model && <span className={CHIP}>{vehiculo.model}</span>}
+                      {vehiculo.year && <span className={CHIP}>{vehiculo.year}</span>}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
