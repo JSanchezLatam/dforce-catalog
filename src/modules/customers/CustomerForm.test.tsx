@@ -147,6 +147,41 @@ describe("CustomerForm — vehicle collection (create)", () => {
     expect(within(vehicleGroup(1)).queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  /**
+   * `validateVehiculosInput` and `planVehiculoReconcile` both throw under the
+   * bare `vehicles` key. Without a slot for it a 400 carrying only that key
+   * leaves the dialog open with nothing on screen: the staff member presses
+   * Guardar and nothing at all happens.
+   */
+  it("renders a collection-level vehicles error, not just per-row plate errors", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({
+      status: 400,
+      body: { errors: { vehicles: "Vehículos debe ser una lista" } },
+    });
+    render(<CustomerForm />);
+    await open(user, "Nuevo cliente");
+
+    await user.type(screen.getByLabelText("Nombre"), "Juan Pérez");
+    await user.type(screen.getByLabelText("Teléfono"), "+525512345678");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(screen.getByRole("alert")).toHaveTextContent("Vehículos debe ser una lista");
+  });
+
+  /** The row number is a test/screen-reader handle, not copy a staff member should read. */
+  it("keeps the row number out of the visible button copy while it still names the button", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm />);
+    await open(user, "Nuevo cliente");
+
+    await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+
+    const remove = screen.getByRole("button", { name: "Quitar vehículo 1" });
+    expect(remove).toHaveTextContent(/^Quitar$/);
+  });
+
   it("passes the just-submitted plates to onSaved, not a hardcoded empty array", async () => {
     const user = userEvent.setup();
     mockFetch({ status: 201, body: { cliente: { id: "c1" } } });
@@ -207,6 +242,39 @@ describe("CustomerForm — vehicle collection (edit)", () => {
 
     await user.click(screen.getByRole("button", { name: "Guardar" }));
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(bodyOf(fetchMock).vehicles).toEqual([{ id: "v1", plate: "ABC111" }]);
+    // `deactivated: false` is the ASK. The server no longer reactivates a row
+    // just because the payload included it, so a restore has to say so.
+    expect(bodyOf(fetchMock).vehicles).toEqual([{ id: "v1", plate: "ABC111", deactivated: false }]);
+  });
+
+  /**
+   * A deactivated vehicle must read as secondary at a glance, not as an
+   * identical card with an extra caption: muted surface and foreground, and a
+   * compact row — plate, state, restore — instead of the full edit form.
+   * Nothing on a deactivated row is editable anyway (the fields were rendered
+   * `disabled`), so they were pure vertical weight on the least important row
+   * on screen.
+   */
+  it("collapses a deactivated vehicle to a muted compact row instead of a full card", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ deactivatedAt: new Date("2026-02-01") })]} />);
+    await open(user, "Editar");
+
+    const group = vehicleGroup(1);
+    expect(within(group).queryByLabelText("Placa")).not.toBeInTheDocument();
+    expect(within(group).queryByLabelText("Marca")).not.toBeInTheDocument();
+    expect(within(group).getByText("ABC111")).toBeInTheDocument();
+    expect(group.className).toContain("bg-muted");
+    expect(group.className).toContain("text-muted-foreground");
+    expect(within(group).getByRole("button", { name: "Restaurar vehículo 1" })).toHaveTextContent(/^Restaurar$/);
+  });
+
+  it("brings the editable fields back when the vehicle is restored", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ deactivatedAt: new Date("2026-02-01") })]} />);
+    await open(user, "Editar");
+
+    await user.click(screen.getByRole("button", { name: "Restaurar vehículo 1" }));
+    expect(within(vehicleGroup(1)).getByLabelText("Placa")).toHaveValue("ABC111");
   });
 });

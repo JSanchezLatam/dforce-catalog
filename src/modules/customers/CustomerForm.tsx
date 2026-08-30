@@ -16,7 +16,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FIELD_ERROR, PLATE_BADGE, SECTION_HEADING } from "@/shared/ui/styles";
+import {
+  CARD,
+  CARD_MUTED,
+  FIELD_ERROR,
+  PLATE_BADGE,
+  PLATE_BADGE_MUTED,
+  SECTION_HEADING,
+} from "@/shared/ui/styles";
 
 /**
  * One vehicle row in the form. `key` is a stable, client-only React key
@@ -84,8 +91,12 @@ function buildPayload(form: CustomerFormState) {
     // "deactivate" from a previously-active vehicle's id being absent from
     // this array (design.md D5) — that is the whole mechanism, both here and
     // for a never-saved row that was simply removed before ever being sent.
+    // `deactivated: false` on an existing row is this form ASKING for the
+    // vehicle to be active — the server never infers a restore from a row
+    // merely being present (vehicles.ts, `VehiculoInput`). An insert has no
+    // state to restore, so it carries no flag.
     vehicles: activeVehicles(form.vehicles).map((v) => ({
-      ...(v.id !== undefined ? { id: v.id } : {}),
+      ...(v.id !== undefined ? { id: v.id, deactivated: false } : {}),
       plate: v.plate.trim(),
       make: v.make.trim() || undefined,
       model: v.model.trim() || undefined,
@@ -261,44 +272,52 @@ export function CustomerForm({
 
           <div className="flex flex-col gap-3">
             <h3 className={SECTION_HEADING}>Vehículos</h3>
-            {activeVehiculoIndices(form.vehicles).map(({ row, index, sentIndex }) => {
+            {indexedVehicleRows(form.vehicles).map(({ row, index, sentIndex }) => {
+              // A deactivated vehicle is not editable and is not the row the
+              // staff member came here for: it collapses to plate + state +
+              // the way back, on a muted surface, so the vehicles actually in
+              // service are the ones carrying the visual weight. The row
+              // number lives in `aria-label` only — it is a unique handle for
+              // assistive tech and tests, not copy anyone should have to read.
+              if (row.deactivated) {
+                return (
+                  <div
+                    key={row.key}
+                    role="group"
+                    aria-label={`Vehículo ${index}`}
+                    className={CARD_MUTED + " flex flex-wrap items-center gap-2"}
+                  >
+                    <span className={PLATE_BADGE_MUTED}>{row.plate.trim() || "Sin placa"}</span>
+                    <span className="text-xs font-medium">Vehículo desactivado</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="ml-auto min-h-11 min-w-11"
+                      aria-label={`Restaurar vehículo ${index}`}
+                      onClick={() => restoreVehicle(row.key)}
+                    >
+                      Restaurar
+                    </Button>
+                  </div>
+                );
+              }
+
               const plateError = sentIndex >= 0 ? errors[`vehicles.${sentIndex}.plate`] : undefined;
               return (
-                <div
-                  key={row.key}
-                  role="group"
-                  aria-label={`Vehículo ${index}`}
-                  className={
-                    "flex flex-col gap-3 rounded-xl border bg-card p-4 text-card-foreground" +
-                    (row.deactivated ? " opacity-70" : "")
-                  }
-                >
+                <div key={row.key} role="group" aria-label={`Vehículo ${index}`} className={CARD + " flex flex-col gap-3"}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className={PLATE_BADGE}>{row.plate.trim() || "Sin placa"}</span>
-                    {row.deactivated && (
-                      <span className="text-xs font-medium text-muted-foreground">Vehículo desactivado</span>
-                    )}
-                    {row.deactivated ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="min-h-11 min-w-11"
-                        onClick={() => restoreVehicle(row.key)}
-                      >
-                        {`Restaurar vehículo ${index}`}
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="min-h-11 min-w-11"
-                        onClick={() => removeOrDeactivateVehicle(row.key)}
-                      >
-                        {`Quitar vehículo ${index}`}
-                      </Button>
-                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="min-h-11 min-w-11"
+                      aria-label={`Quitar vehículo ${index}`}
+                      onClick={() => removeOrDeactivateVehicle(row.key)}
+                    >
+                      Quitar
+                    </Button>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -307,7 +326,6 @@ export function CustomerForm({
                       <Input
                         id={`${row.key}-plate`}
                         value={row.plate}
-                        disabled={row.deactivated}
                         onChange={(e) => updateVehicle(row.key, { plate: e.target.value })}
                       />
                     </div>
@@ -316,7 +334,6 @@ export function CustomerForm({
                       <Input
                         id={`${row.key}-make`}
                         value={row.make}
-                        disabled={row.deactivated}
                         onChange={(e) => updateVehicle(row.key, { make: e.target.value })}
                       />
                     </div>
@@ -325,7 +342,6 @@ export function CustomerForm({
                       <Input
                         id={`${row.key}-model`}
                         value={row.model}
-                        disabled={row.deactivated}
                         onChange={(e) => updateVehicle(row.key, { model: e.target.value })}
                       />
                     </div>
@@ -335,7 +351,6 @@ export function CustomerForm({
                         id={`${row.key}-year`}
                         type="number"
                         value={row.year}
-                        disabled={row.deactivated}
                         onChange={(e) => updateVehicle(row.key, { year: e.target.value })}
                       />
                     </div>
@@ -349,6 +364,15 @@ export function CustomerForm({
                 </div>
               );
             })}
+            {/* `validateVehiculosInput` and `planVehiculoReconcile` both throw
+                under the bare `vehicles` key (a non-list payload, a foreign
+                vehicle id). With no slot for it the dialog just sat there
+                after Guardar with nothing on screen. */}
+            {errors.vehicles && (
+              <p role="alert" className={FIELD_ERROR}>
+                {errors.vehicles}
+              </p>
+            )}
             <Button type="button" variant="outline" size="sm" className="min-h-11 min-w-11" onClick={addVehicle}>
               Agregar vehículo
             </Button>
@@ -392,8 +416,8 @@ export function CustomerForm({
   );
 }
 
-/** Pairs each row with its 1-based display index and its index within the ACTIVE-only array the server sees (-1 for a deactivated row, which has no server-side error slot). */
-function activeVehiculoIndices(vehicles: VehiculoRow[]) {
+/** Pairs EVERY row with its 1-based display index and its index within the ACTIVE-only array the server sees (-1 for a deactivated row, which has no server-side error slot). Filtering is `activeVehicles`' job. */
+function indexedVehicleRows(vehicles: VehiculoRow[]) {
   let sentIndex = -1;
   return vehicles.map((row, i) => {
     if (!row.deactivated) sentIndex += 1;
