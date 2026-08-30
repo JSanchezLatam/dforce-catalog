@@ -200,8 +200,12 @@ export function CustomerPicker({
       )}
 
       {zeroExactMatches && canCreateCustomer && (
-        // `CustomerForm` doesn't collect vehicles yet (slice 3) — a freshly
-        // created customer genuinely has none.
+        // `CustomerForm` DOES collect a plate — it just sends it as the flat
+        // `vehiclePlate` field, so it lands in `cliente.vehicle_plate` with no
+        // `vehiculo` row behind it and `plates` is genuinely empty. Harmless
+        // only because line 169 reads `vehiclePlate`, not `plates`. Slice 3
+        // (task 3.5) moves both in the same commit: the moment that line reads
+        // `plates`, this `[]` blanks the plate of a customer created here.
         <CustomerForm triggerLabel="Crear cliente nuevo" onSaved={(cliente) => handleSelect({ ...cliente, plates: [] })} />
       )}
     </div>
