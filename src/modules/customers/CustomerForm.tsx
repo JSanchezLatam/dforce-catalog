@@ -177,7 +177,11 @@ export function CustomerForm({
    * open — neither fires here.
    */
   function clearVehicleIndexedErrors() {
-    setErrors({});
+    // Only the `vehicles.<i>.*` keys — those are the ones a membership change
+    // invalidates. `errors.name`/`errors.phone`/`errors.form` are still true
+    // and survive, so fixing the vehicle rows does not silently drop the
+    // message about the phone the staff member has yet to correct.
+    setErrors((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => !key.startsWith("vehicles."))));
   }
 
   function addVehicle() {

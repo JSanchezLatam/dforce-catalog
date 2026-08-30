@@ -328,9 +328,9 @@ describe("CustomerForm — vehicle collection (edit)", () => {
    * A deactivated vehicle must read as secondary at a glance, not as an
    * identical card with an extra caption: muted surface and foreground, and a
    * compact row — plate, state, restore — instead of the full edit form.
-   * Nothing on a deactivated row is editable anyway (the fields were rendered
-   * `disabled`), so they were pure vertical weight on the least important row
-   * on screen.
+   * Nothing on a deactivated row is editable anyway, so its four inputs were
+   * pure vertical weight on the least important row on screen — they are no
+   * longer rendered at all.
    */
   it("collapses a deactivated vehicle to a muted compact row instead of a full card", async () => {
     const user = userEvent.setup();

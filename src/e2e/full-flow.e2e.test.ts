@@ -103,7 +103,7 @@ async function loginAs(username: string): Promise<{ id: string; role: "tecnico" 
  */
 describe("customer search (E2E)", () => {
   let mixedCaseName: { id: string };
-  let nullPlate: { id: string };
+  let noVehicles: { id: string };
   let nullPhone: { id: string };
   let formattedPhone: { id: string };
 
@@ -123,7 +123,7 @@ describe("customer search (E2E)", () => {
       ])
       .returning({ id: cliente.id });
     mixedCaseName = row1;
-    nullPlate = row2;
+    noVehicles = row2;
     nullPhone = row3;
     formattedPhone = row4;
 
@@ -155,7 +155,7 @@ describe("customer search (E2E)", () => {
   afterAll(async () => {
     // Optional chaining because a throwing `beforeAll` leaves these undefined,
     // and a TypeError in here would mask the real seed error underneath it.
-    const seeded = [mixedCaseName?.id, nullPlate?.id, nullPhone?.id, formattedPhone?.id].filter(
+    const seeded = [mixedCaseName?.id, noVehicles?.id, nullPhone?.id, formattedPhone?.id].filter(
       (id): id is string => Boolean(id),
     );
     if (seeded.length > 0) await db.delete(cliente).where(inArray(cliente.id, seeded));
@@ -214,17 +214,17 @@ describe("customer search (E2E)", () => {
 
   it("matches partial digits-only phone (mid-string ilike on phone)", async () => {
     const body = await search("622222");
-    expect(body.customers.map((c) => c.id)).toContain(nullPlate.id);
+    expect(body.customers.map((c) => c.id)).toContain(noVehicles.id);
   });
 
-  // `cliente.vehicle_plate` is gone (migration 0014); `nullPlate` (Carlos
+  // `cliente.vehicle_plate` is gone (migration 0014); `noVehicles` (Carlos
   // Ruiz) now has ZERO vehicles instead of a NULL flat plate. The risk this
-  // guards is unchanged either way: `nullPlate`'s plate-match branch (`EXISTS`
+  // guards is unchanged either way: `noVehicles`'s plate-match branch (`EXISTS`
   // over `vehiculo`, false for a zero-vehicle customer, never NULL) must not
   // suppress the row when a DIFFERENT branch (`name`) matches it.
   it("does not drop a zero-vehicle row from the or() when matched by name", async () => {
     const body = await search("Carlos");
-    expect(body.customers.map((c) => c.id)).toContain(nullPlate.id);
+    expect(body.customers.map((c) => c.id)).toContain(noVehicles.id);
   });
 
   it("does not silently drop a row with a NULL phone from the or() when matched by name", async () => {
