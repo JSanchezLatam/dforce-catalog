@@ -131,8 +131,10 @@ export async function createCliente(input: unknown, deps: CreateClienteDeps = {}
 export type UpdateClienteDeps = {
   /**
    * `vehicles` is REQUIRED, not optional: the reconcile below treats the
-   * returned set as the customer's complete active collection, so an omitted
-   * one would read as "this customer has none" — never deactivating a real
+   * returned set as the customer's WHOLE collection (active AND inactive,
+   * since `getClienteById` now fetches both — restore needs an inactive
+   * vehicle's id to be recognized as this customer's own), so an omitted one
+   * would read as "this customer has none" — never deactivating a real
    * vehicle and inserting duplicates for every id-less entry. The type is what
    * rules that out; a `?? []` here would just make it fail silently.
    */

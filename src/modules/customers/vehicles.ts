@@ -11,7 +11,24 @@ import { db } from "@/shared/db/client";
 import { cliente, vehiculo, type Vehiculo } from "@/shared/db/schema";
 import { ClienteValidationError } from "./validation";
 
-export type VehiculoInput = { id?: string; plate: string; make?: string; model?: string; year?: number };
+/**
+ * `deactivated` is the activation state the CALLER asks for, and it is
+ * tri-state on purpose: omitted means "leave this vehicle's activation state
+ * exactly as it is". Without that default, `getClienteById` returning
+ * inactive vehicles (needed for restore) plus an update that clears
+ * `deactivated_at` would make the most obvious client possible — GET the
+ * detail, PATCH the collection straight back — silently resurrect every soft
+ * delete. Restore (`false`) has to be asked for, not inferred from a row
+ * being included.
+ */
+export type VehiculoInput = {
+  id?: string;
+  plate: string;
+  make?: string;
+  model?: string;
+  year?: number;
+  deactivated?: boolean;
+};
 export type VehiculoPlan = { inserts: VehiculoInput[]; updates: VehiculoInput[]; deactivate: string[] };
 
 /**
@@ -68,29 +85,73 @@ export function vehiculoPlateExists(
   return sql`exists (select 1 from ${vehiculo} where ${vehiculo.clienteId} = ${cliente.id} and ${activeVehiculoFilter()} and ${match(vehiculo.plate, pattern)})`;
 }
 
-/** R16 — a customer's active vehicles. */
+/**
+ * R16, restore — a customer's vehicles. Active-only by DEFAULT (mirrors
+ * `account/queries.ts`'s `listUsers`); `includeInactive` is threaded into
+ * `queryFn` rather than the caller swapping the whole query, so the default
+ * is observable in a DB-free test. `getClienteById` opts in: the detail view
+ * and `CustomerForm`'s restore action both need to see an inactive vehicle
+ * to offer it back.
+ */
 export async function listVehiculosByCliente(
   clienteId: string,
-  queryFn: () => Promise<Vehiculo[]> = () =>
+  options: { includeInactive?: boolean } = {},
+  queryFn: (includeInactive: boolean) => Promise<Vehiculo[]> = (includeInactive) =>
     db
       .select()
       .from(vehiculo)
-      .where(and(eq(vehiculo.clienteId, clienteId), activeVehiculoFilter())),
+      .where(
+        includeInactive
+          ? eq(vehiculo.clienteId, clienteId)
+          : and(eq(vehiculo.clienteId, clienteId), activeVehiculoFilter()),
+      )
+      // Same `(created_at, id)` tuple `platesSubquery` uses, for the same
+      // reason and with the same caveat: this buys STABILITY, not insertion
+      // order. A batch insert shares one `created_at`, so `id` — a random
+      // UUID — breaks the tie: arbitrary, but the same on every read.
+      //
+      // Without it this is a bare SELECT with no guaranteed order at all, and
+      // `applyVehiculoPlan` UPDATEs every active vehicle on every save, which
+      // writes a new tuple version that commonly lands at the end of the heap.
+      // The rows would then reorder after an edit — and `CustomerForm` labels
+      // them positionally (`Vehículo 1`), which is both the screen-reader name
+      // and the test handle, so "Vehículo 1" would silently become a different
+      // car. Ordering here also keeps the detail list and the joined
+      // `Vehículos` column agreeing with each other.
+      //
+      // Deliberately UNTESTED, and that is the honest state: an e2e case was
+      // written for it and deleted, because it passed with AND without this
+      // clause. On a three-row table Postgres does not move the updated tuple
+      // observably, so the failure mode is real in principle and not
+      // reproducible at test scale. A test that cannot fail for its stated
+      // reason is worse than none. This clause is one line of insurance
+      // against depending on heap order at all — not a claim that a test
+      // guards it.
+      .orderBy(vehiculo.createdAt, vehiculo.id),
 ): Promise<Vehiculo[]> {
-  return queryFn();
+  return queryFn(options.includeInactive ?? false);
 }
 
 /**
- * D5 — pure reconcile. `existing` is the customer's current ACTIVE vehicles;
- * `incoming` is the already-validated payload. Omitted `incoming` leaves the
- * collection completely untouched (R16); `[]` deactivates every active
- * vehicle. An element WITH `id` is an update, WITHOUT `id` is an insert —
- * plates are never the key (editable, not unique). An `id` absent from
- * `existing` (another customer's, or an already-deactivated vehicle) throws
- * rather than silently inserting — a trust boundary, not a data-shape bug.
- * A re-added plate with no id becomes a brand new row; this deliberately
- * does not resurrect a deactivated one (ponytail: revive-on-match if history
- * continuity is ever asked for).
+ * D5 — pure reconcile. `existing` is the customer's WHOLE vehicle collection
+ * — active AND inactive — so an id belonging to an already-deactivated
+ * vehicle is recognized as this customer's own rather than rejected as
+ * foreign (restore); `incoming` is the already-validated payload. Omitted
+ * `incoming` leaves the collection completely untouched (R16); `[]`
+ * deactivates every active vehicle. An element WITH `id` is an update,
+ * WITHOUT `id` is an insert — plates are never the key (editable, not
+ * unique). An `id` absent from `existing` (another customer's) throws rather
+ * than silently inserting — a trust boundary, not a data-shape bug. Only
+ * ACTIVE vehicles omitted from `incoming` are deactivated — an already-
+ * inactive one omitted again is left alone, so its original
+ * `deactivated_at` is never overwritten by an unrelated edit. Restore is
+ * `deactivated: false` on the incoming element — naming an inactive
+ * vehicle's id is NOT enough, or resending an unchanged collection would
+ * reactivate every soft-deleted row in it (see `VehiculoInput`). A
+ * re-added plate with no id becomes a brand new row; this deliberately does
+ * not resurrect a deactivated one by plate (ponytail: revive-on-match by
+ * plate if history continuity is ever asked for — id-based restore above
+ * already covers the explicit case).
  */
 export function planVehiculoReconcile(existing: Vehiculo[], incoming: VehiculoInput[] | undefined): VehiculoPlan {
   if (incoming === undefined) {
@@ -99,6 +160,7 @@ export function planVehiculoReconcile(existing: Vehiculo[], incoming: VehiculoIn
 
   const existingIds = new Set(existing.map((v) => v.id));
   const keptIds = new Set<string>();
+  const deactivateAsked = new Set<string>();
   const inserts: VehiculoInput[] = [];
   const updates: VehiculoInput[] = [];
 
@@ -111,10 +173,18 @@ export function planVehiculoReconcile(existing: Vehiculo[], incoming: VehiculoIn
       throw new ClienteValidationError({ vehicles: `El vehículo ${item.id} no pertenece a este cliente` });
     }
     keptIds.add(item.id);
+    if (item.deactivated === true) deactivateAsked.add(item.id);
     updates.push(item);
   }
 
-  const deactivate = existing.filter((v) => !keptIds.has(v.id)).map((v) => v.id);
+  // Two ways in, one filter: omitted from `incoming` (the original mechanism)
+  // or included with `deactivated: true` (a round-tripped payload saying "this
+  // one is still deactivated"). Either way only ACTIVE rows are touched, so an
+  // already-inactive vehicle never has its original `deactivated_at`
+  // overwritten by an unrelated edit.
+  const deactivate = existing
+    .filter((v) => v.deactivatedAt === null && (!keptIds.has(v.id) || deactivateAsked.has(v.id)))
+    .map((v) => v.id);
   return { inserts, updates, deactivate };
 }
 
@@ -144,9 +214,20 @@ export async function applyVehiculoPlan(tx: TxLike, clienteId: string, plan: Veh
   }
 
   for (const v of plan.updates) {
+    // `deactivated_at` is in the SET only when the payload asked for the row
+    // to be active — that clear IS the restore (D5). Omitting the column
+    // otherwise is what keeps a resent, unchanged collection a no-op; the
+    // `true` case is handled by `plan.deactivate` below, which never
+    // re-stamps a row that is already inactive.
     await tx
       .update(vehiculo)
-      .set({ plate: v.plate, make: v.make ?? null, model: v.model ?? null, year: v.year ?? null })
+      .set({
+        plate: v.plate,
+        make: v.make ?? null,
+        model: v.model ?? null,
+        year: v.year ?? null,
+        ...(v.deactivated === false ? { deactivatedAt: null } : {}),
+      })
       .where(and(eq(vehiculo.clienteId, clienteId), eq(vehiculo.id, v.id!)));
   }
 

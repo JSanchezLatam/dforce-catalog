@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
-import type { Cliente } from "@/shared/db/schema";
+import type { Cliente, Vehiculo } from "@/shared/db/schema";
 import { CustomerForm } from "./CustomerForm";
 
 /**
@@ -16,11 +16,21 @@ import { CustomerForm } from "./CustomerForm";
  */
 export function CustomerFormTrigger({
   cliente,
+  vehicles,
   triggerLabel,
 }: {
   cliente?: Cliente | null;
+  /** The customer's whole vehicle collection (active + inactive) — omitted in create mode. */
+  vehicles?: Vehiculo[] | null;
   triggerLabel?: ReactNode;
 }) {
   const router = useRouter();
-  return <CustomerForm cliente={cliente} triggerLabel={triggerLabel} onSaved={() => router.refresh()} />;
+  return (
+    <CustomerForm
+      cliente={cliente}
+      vehicles={vehicles}
+      triggerLabel={triggerLabel}
+      onSaved={() => router.refresh()}
+    />
+  );
 }

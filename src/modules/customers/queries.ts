@@ -17,14 +17,8 @@ export const DEFAULT_PAGE_SIZE = 10;
 
 export type ClienteFilters = { search?: string };
 
-/**
- * `vehiclePlate` is kept for now alongside `plates` — dropping it would break
- * `customers/page.tsx` and `CustomerPicker.tsx`, both slice 3 scope
- * (expand/contract, design.md). It's removed when `cliente`'s inline vehicle
- * columns are (migration 0014, slice 3).
- */
-export type ClienteListItem = Pick<Cliente, "id" | "name" | "phone" | "email" | "vehiclePlate" | "createdAt"> & {
-  /** R19/D4 — this customer's active vehicle plates, replacing the single `vehiclePlate` column as the source of truth. */
+export type ClienteListItem = Pick<Cliente, "id" | "name" | "phone" | "email" | "createdAt"> & {
+  /** R19/D4 — this customer's active vehicle plates. */
   plates: string[];
 };
 
@@ -46,16 +40,8 @@ function unaccentIlike(column: PgColumn, pattern: string): SQL {
 
 /**
  * Pure — R19's "partial, case- and accent-insensitive match against name,
- * phone, or any active vehicle plate".
- *
- * BOTH plate paths are matched, the same expand/contract `validation.ts` and
- * `ClienteListItem` already apply on the write and read sides: until slice 3
- * moves `CustomerForm` to the `vehicles` collection, a create sends no
- * `vehicles` key, so `createCliente` takes its scalar-only branch and the
- * plate lands in `cliente.vehicle_plate` with NO `vehiculo` row behind it.
- * With only the `EXISTS`, every customer created between this slice and slice
- * 3 would be permanently unfindable by plate — and `0013` backfills only rows
- * that existed before it ran. Removed by `0014` (slice 3).
+ * phone, or any active vehicle plate". Migration `0014` (slice 3) dropped
+ * `cliente.vehicle_plate`, so the plate path is the `vehiculo` EXISTS only.
  */
 export function buildClienteSearchWhere(search?: string) {
   const term = search?.trim();
@@ -64,7 +50,6 @@ export function buildClienteSearchWhere(search?: string) {
   return or(
     unaccentIlike(cliente.name, pattern),
     unaccentIlike(cliente.phone, pattern),
-    unaccentIlike(cliente.vehiclePlate, pattern),
     // D4 — `unaccentIlike` is reused verbatim (PR #44), applied to
     // `vehiculo.plate` inside `vehicles.ts`, which owns that table (D3).
     vehiculoPlateExists(pattern, unaccentIlike),
@@ -82,7 +67,6 @@ export async function listClientes(
         name: cliente.name,
         phone: cliente.phone,
         email: cliente.email,
-        vehiclePlate: cliente.vehiclePlate,
         plates: platesSubquery(),
         createdAt: cliente.createdAt,
       })
@@ -118,7 +102,10 @@ export async function getClienteById(
       .from(ordenServicio)
       .where(eq(ordenServicio.clienteId, id))
       .orderBy(desc(ordenServicio.createdAt));
-    const vehicles = await listVehiculosByCliente(id);
+    // R16/restore — the WHOLE collection, not just active vehicles: the
+    // detail view renders an inactive vehicle as visibly secondary, and
+    // `CustomerForm`'s restore action needs its id to reconcile against.
+    const vehicles = await listVehiculosByCliente(id, { includeInactive: true });
     return { cliente: clienteRow, orders, vehicles };
   },
 ): Promise<ClienteDetail | null> {

@@ -237,10 +237,11 @@ export const reminderStatusEnum = pgEnum("reminder_status", [
 ]);
 
 /**
- * `cliente` — customer + inline single vehicle (v1, ADR-6). Superseded by the
- * `vehiculo` child table below (vehicles-one-to-many, C3) — these four inline
- * columns are dropped in migration 0014 (slice 3, expand/contract). They stay
- * here through slice 1 and slice 2 so the app keeps compiling.
+ * `cliente` — customer. Originally shipped with one inline vehicle (v1,
+ * ADR-6); superseded by the `vehiculo` child table below
+ * (vehicles-one-to-many, C3) — the four inline vehicle columns and
+ * `cliente_plate_idx` were dropped by migration `0014` (slice 3,
+ * expand/contract's contract step). A vehicle is now always a `vehiculo` row.
  */
 export const cliente = pgTable(
   "cliente",
@@ -252,10 +253,6 @@ export const cliente = pgTable(
     /** E.164 preferred (WhatsApp needs it); validated in modules/customers/validation.ts. */
     phone: text("phone"),
     email: text("email"),
-    vehicleMake: text("vehicle_make"),
-    vehicleModel: text("vehicle_model"),
-    vehicleYear: integer("vehicle_year"),
-    vehiclePlate: text("vehicle_plate"),
     /**
      * Two INDEPENDENT opt-out flags (R26, design ADR-5) — WhatsApp and email
      * are legally distinct consent regimes, so a customer can decline one
@@ -269,7 +266,6 @@ export const cliente = pgTable(
   },
   (table) => [
     index("cliente_name_idx").on(table.name), // list search by name
-    index("cliente_plate_idx").on(table.vehiclePlate), // lookup by plate
     index("cliente_created_idx").on(table.createdAt), // newest-first listing
   ],
 );
