@@ -69,6 +69,23 @@ describe("CustomerForm — vehicle collection (create)", () => {
     expect(screen.queryByRole("group", { name: /vehículo/i })).not.toBeInTheDocument();
   });
 
+  /**
+   * The `vehicles` prop's docstring promises it is honoured only in edit mode.
+   * Without the guard in `toFormState` it was mapped regardless of `cliente`,
+   * so these rows would render, `buildPayload` would POST ids belonging to
+   * another customer, and `planVehiculoReconcile` would reject the whole
+   * request as foreign-id ownership. No caller passes them today; this pins
+   * the promise so none can start.
+   */
+  it("ignores a vehicles prop in create mode, as its docstring promises", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm vehicles={[vehiculo({ id: "v-otro", plate: "ZZZ999" })]} />);
+    await open(user, "Nuevo cliente");
+
+    expect(screen.queryByRole("group", { name: /vehículo/i })).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue("ZZZ999")).not.toBeInTheDocument();
+  });
+
   it("adds a vehicle row with its own Placa/Marca/Modelo/Año fields", async () => {
     const user = userEvent.setup();
     render(<CustomerForm />);

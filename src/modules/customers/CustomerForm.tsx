@@ -57,7 +57,16 @@ function emptyVehicleRow(): VehiculoRow {
   return { key: crypto.randomUUID(), plate: "", make: "", model: "", year: "", deactivated: false };
 }
 
-function toFormState(cliente?: Cliente | null, vehicles?: Vehiculo[] | null): CustomerFormState {
+/**
+ * `vehicles` is honoured only in edit mode, as the prop's own docstring
+ * promises. Enforced here rather than trusted: in create mode those rows would
+ * carry ids belonging to some other customer, `buildPayload` would POST them,
+ * and `planVehiculoReconcile` would reject the whole request as foreign-id
+ * ownership. No caller does that today — which is exactly why the guard is one
+ * line now instead of a bug report later.
+ */
+function toFormState(cliente?: Cliente | null, allVehicles?: Vehiculo[] | null): CustomerFormState {
+  const vehicles = cliente ? allVehicles : null;
   return {
     name: cliente?.name ?? "",
     phone: cliente?.phone ?? "",
@@ -87,14 +96,19 @@ function buildPayload(form: CustomerFormState) {
     name: form.name,
     phone: form.phone,
     email: form.email.trim() || undefined,
-    // Deactivated rows are OMITTED, not sent with a flag: the server infers
-    // "deactivate" from a previously-active vehicle's id being absent from
-    // this array (design.md D5) — that is the whole mechanism, both here and
-    // for a never-saved row that was simply removed before ever being sent.
+    // Two routes reach `plan.deactivate`, and this form uses the first:
+    // deactivated rows are OMITTED, so the server infers "deactivate" from a
+    // previously-active vehicle's id being absent from this array (design.md
+    // D5). The same omission covers a never-saved row removed before it was
+    // ever sent. The second route — `deactivated: true` on a row that IS
+    // present — exists for other callers; this form never needs it.
+    //
     // `deactivated: false` on an existing row is this form ASKING for the
-    // vehicle to be active — the server never infers a restore from a row
-    // merely being present (vehicles.ts, `VehiculoInput`). An insert has no
-    // state to restore, so it carries no flag.
+    // vehicle to be active. The server never infers a restore from a row
+    // merely being present: `VehiculoInput.deactivated` is tri-state and
+    // OMITTED means "leave this vehicle's state alone", which is what makes
+    // an unchanged resend a no-op for any client (vehicles.ts). An insert has
+    // no state to restore, so it carries no flag.
     vehicles: activeVehicles(form.vehicles).map((v) => ({
       ...(v.id !== undefined ? { id: v.id, deactivated: false } : {}),
       plate: v.plate.trim(),
