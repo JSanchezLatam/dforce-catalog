@@ -165,26 +165,25 @@ export function CustomerPicker({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {results.map((customer) => {
-                  const plates = customer.vehiclePlate ? [customer.vehiclePlate] : [];
-                  return (
-                    <TableRow key={customer.id}>
-                      <TableCell className="font-medium">{customer.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{identifierFor(customer, plates)}</TableCell>
-                      <TableCell>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          aria-label={`Seleccionar ${customer.name}`}
-                          onClick={() => handleSelect(customer)}
-                        >
-                          Seleccionar
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                {results.map((customer) => (
+                  <TableRow key={customer.id}>
+                    <TableCell className="font-medium">{customer.name}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {identifierFor(customer, customer.plates)}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-label={`Seleccionar ${customer.name}`}
+                        onClick={() => handleSelect(customer)}
+                      >
+                        Seleccionar
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </div>
@@ -200,13 +199,18 @@ export function CustomerPicker({
       )}
 
       {zeroExactMatches && canCreateCustomer && (
-        // `CustomerForm` DOES collect a plate — it just sends it as the flat
-        // `vehiclePlate` field, so it lands in `cliente.vehicle_plate` with no
-        // `vehiculo` row behind it and `plates` is genuinely empty. Harmless
-        // only because line 169 reads `vehiclePlate`, not `plates`. Slice 3
-        // (task 3.5) moves both in the same commit: the moment that line reads
-        // `plates`, this `[]` blanks the plate of a customer created here.
-        <CustomerForm triggerLabel="Crear cliente nuevo" onSaved={(cliente) => handleSelect({ ...cliente, plates: [] })} />
+        // `onSaved`'s second argument is exactly what this create just wrote
+        // (the form's own submitted vehicle collection), not a hardcoded `[]`
+        // — the API's 201 response carries only the `cliente` row, no
+        // `vehicles`/`plates`, so the form is the only thing that knows what
+        // it sent. A hardcoded `[]` here used to be harmless only because the
+        // table above still read the flat `vehiclePlate` field instead of
+        // `plates` — now that it reads `plates`, this is what keeps a
+        // customer created from inside the picker showing its real plate.
+        <CustomerForm
+          triggerLabel="Crear cliente nuevo"
+          onSaved={(cliente, plates) => handleSelect({ ...cliente, plates })}
+        />
       )}
     </div>
   );
