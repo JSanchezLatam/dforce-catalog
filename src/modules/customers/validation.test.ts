@@ -37,6 +37,38 @@ describe("validateClienteInput (R17)", () => {
     expect(() => validateClienteInput({ ...validInput, email: "not-an-email" })).toThrow(ClienteValidationError);
   });
 
+  /**
+   * The flat vehicle fields stay on `ClienteInput` until migration `0014`
+   * drops `cliente`'s columns (slice 3) — mirrors `queries.ts`'s
+   * `ClienteListItem.vehiclePlate` note on the read side.
+   */
+  it("returns the flat vehicle fields normalized, alongside the scalars", () => {
+    expect(
+      validateClienteInput({
+        ...validInput,
+        vehicleMake: " Toyota ",
+        vehicleModel: "Corolla",
+        vehicleYear: 2020,
+        vehiclePlate: "ABC-123",
+      }),
+    ).toMatchObject({
+      vehicleMake: "Toyota",
+      vehicleModel: "Corolla",
+      vehicleYear: 2020,
+      vehiclePlate: "ABC-123",
+    });
+  });
+
+  it("rejects a flat vehicle make with no plate (R17, flat path)", () => {
+    expect(() => validateClienteInput({ ...validInput, vehicleMake: "Toyota" })).toThrow(ClienteValidationError);
+  });
+
+  it("accepts a flat vehicle make when a plate is also given", () => {
+    expect(() =>
+      validateClienteInput({ ...validInput, vehicleMake: "Toyota", vehiclePlate: "ABC-123" }),
+    ).not.toThrow();
+  });
+
   it("collects all field errors on the thrown error, not just the first", () => {
     try {
       validateClienteInput({});

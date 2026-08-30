@@ -56,6 +56,36 @@ describe("POST /api/customers (R16)", () => {
     expect(body.existingClienteId).toBe("existing-1");
   });
 
+  /**
+   * The form still sends the four flat vehicle fields and `cliente` still owns
+   * their columns until `0014` drops them (slice 3). Without this case, a
+   * create that silently discarded them would still return 201 and look green.
+   */
+  it("persists the flat vehicle fields a create carries (cliente columns, until 0014)", async () => {
+    const insert = vi.fn().mockResolvedValue({ id: "c1", ...validInput });
+
+    const response = await handleCreateCliente(
+      requestWith({
+        ...validInput,
+        vehicleMake: "Toyota",
+        vehicleModel: "Corolla",
+        vehicleYear: 2020,
+        vehiclePlate: "ABC-123",
+      }),
+      { findByPhone: async () => null, insert },
+    );
+
+    expect(response.status).toBe(201);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        vehicleMake: "Toyota",
+        vehicleModel: "Corolla",
+        vehicleYear: 2020,
+        vehiclePlate: "ABC-123",
+      }),
+    );
+  });
+
   it("returns 400 for a vehicle missing its plate, unchanged error mapping (D5/D6)", async () => {
     const response = await handleCreateCliente(requestWith({ ...validInput, vehicles: [{ make: "Toyota" }] }), {
       findByPhone: async () => null,
