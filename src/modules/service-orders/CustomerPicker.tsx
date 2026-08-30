@@ -20,8 +20,8 @@ const SEARCH_FAILED = "No se pudo buscar clientes. Intentalo de nuevo.";
 const SEARCH_PAGE_SIZE = 50;
 
 /** design.md's identifier precedence: plates → phone → email → registration date fallback. */
-function identifierFor(customer: ClienteListItem, plates: string[]): string {
-  if (plates.length > 0) return plates.join(", ");
+function identifierFor(customer: ClienteListItem): string {
+  if (customer.plates.length > 0) return customer.plates.join(", ");
   if (customer.phone) return customer.phone;
   if (customer.email) return customer.email;
   return `Registrado el ${new Date(customer.createdAt).toLocaleDateString("es-PA")}`;
@@ -169,7 +169,7 @@ export function CustomerPicker({
                   <TableRow key={customer.id}>
                     <TableCell className="font-medium">{customer.name}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {identifierFor(customer, customer.plates)}
+                      {identifierFor(customer)}
                     </TableCell>
                     <TableCell>
                       <Button
