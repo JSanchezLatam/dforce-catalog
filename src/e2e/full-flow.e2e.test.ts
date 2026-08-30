@@ -66,6 +66,7 @@ import { POST as productsPOST } from "../app/api/catalog-builder/products/route"
 import { POST as generatePOST } from "../app/api/catalog-builder/generate/route";
 import { GET as filePOST } from "../app/api/catalogs/[id]/file/route";
 import { GET as customersGET, POST as customersPOST } from "../app/api/customers/route";
+import { PATCH as customersPATCH } from "../app/api/customers/[id]/route";
 
 const PASSWORD = "Sup3rSecret!1";
 
@@ -255,6 +256,7 @@ describe("vehicle search (E2E)", () => {
   /** All created by the tests below through the REAL write path, not seeded here. */
   let flatPlateOnly: { id: string } | undefined;
   let collectionWrite: { id: string } | undefined;
+  let collectionPatch: { id: string } | undefined;
 
   beforeAll(async () => {
     execSync("npx drizzle-kit migrate", { stdio: "inherit" });
@@ -290,6 +292,7 @@ describe("vehicle search (E2E)", () => {
       withDeactivated?.id,
       flatPlateOnly?.id,
       collectionWrite?.id,
+      collectionPatch?.id,
     ].filter(
       (id): id is string => Boolean(id),
     );
@@ -304,6 +307,19 @@ describe("vehicle search (E2E)", () => {
     );
     expect(response.status).toBe(200);
     return response.json() as Promise<{ customers: { id: string; plates: string[] }[]; total: number }>;
+  }
+
+  /** A `vehicles`-only PATCH: nothing scalar changes, so the collection write is all that runs. */
+  async function patchVehicles(id: string, vehicles: { id?: string; plate: string }[]) {
+    const response = await customersPATCH(
+      new NextRequest(`http://localhost/api/customers/${id}`, {
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ vehicles }),
+      }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(response.status).toBe(200);
   }
 
   it("matches a 3-vehicle customer by the SECOND plate, not only the first", async () => {
@@ -382,6 +398,57 @@ describe("vehicle search (E2E)", () => {
     const body = await search("Lucía Fernández");
     const row = body.customers.find((c) => c.id === threeVehicles.id);
     expect(row?.plates.slice().sort()).toEqual(["AAA111", "BBB222", "CCC333"]);
+  });
+
+  it("PATCHes the collection through the REAL transaction: an update lands, dropped vehicles deactivate, and a re-added plate becomes a NEW row", async () => {
+    // `applyVehiculoPlan`'s update and deactivate branches are hand-written
+    // SQL with no other automated coverage: `service.test.ts` injects
+    // `deps.database`, and the soft-delete case above seeds `deactivated_at`
+    // by hand instead of going through this path (AGENTS.md's "Known coverage
+    // limit"). One customer, one lifecycle: create three, keep one under a new
+    // plate, then re-add a dropped plate.
+    const created = await customersPOST(
+      new NextRequest("http://localhost/api/customers", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Elena Ortiz",
+          phone: "50768888888",
+          vehicles: [{ plate: "PCH001" }, { plate: "PCH002" }, { plate: "PCH003" }],
+        }),
+      }),
+    );
+    expect(created.status).toBe(201);
+    collectionPatch = ((await created.json()) as { cliente: { id: string } }).cliente;
+
+    const seeded = await db.select().from(vehiculo).where(eq(vehiculo.clienteId, collectionPatch.id));
+    const keep = seeded.find((v) => v.plate === "PCH001")!;
+
+    // Renames the kept vehicle AND drops the other two, so one PATCH exercises
+    // both mutating branches. A plate the payload does not name is not "left
+    // alone" — the reconcile deactivates it.
+    //
+    // The surviving plate deliberately shares NO prefix with the dropped ones:
+    // `relaxSearchTerm` retypes a 6-char term to its first 4 chars, so a
+    // survivor named `PCH009` would answer a `pch002` search through the
+    // near-match pass and the deactivation assertion below would pass whether
+    // or not the row was ever deactivated.
+    await patchVehicles(collectionPatch.id, [{ id: keep.id, plate: "KEP009" }]);
+
+    const afterDrop = await search("kep009");
+    expect(afterDrop.customers.find((c) => c.id === collectionPatch!.id)?.plates).toEqual(["KEP009"]);
+    expect((await search("pch002")).customers.map((c) => c.id)).not.toContain(collectionPatch.id);
+
+    // D5's no-resurrection rule, where `deactivated_at` is real: re-adding
+    // PCH002 with no id must write a brand new row and leave the deactivated
+    // one deactivated — the property `planVehiculoReconcile`'s unit tests
+    // structurally cannot see, since callers only ever hand them ACTIVE rows.
+    await patchVehicles(collectionPatch.id, [{ id: keep.id, plate: "KEP009" }, { plate: "PCH002" }]);
+
+    const rows = await db.select().from(vehiculo).where(eq(vehiculo.clienteId, collectionPatch.id));
+    expect(rows).toHaveLength(4);
+    expect(rows.filter((r) => r.plate === "PCH002")).toHaveLength(2);
+    expect(rows.filter((r) => r.plate === "PCH002" && r.deactivatedAt === null)).toHaveLength(1);
   });
 
   it("ignores a plan naming another customer's vehicle — ownership is enforced in SQL, not by the caller", async () => {
