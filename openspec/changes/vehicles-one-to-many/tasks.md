@@ -50,11 +50,18 @@ If slice 2's API/E2E work grows past ~550 authored lines, split the `vehicle sea
 - [x] 2.6 GREEN — `src/modules/customers/queries.ts`: `buildClienteSearchWhere`'s plate branch → `EXISTS(...)` via a private `vehiculoPlateExists()` reusing `unaccentIlike`/`activeVehiculoFilter` (imported from `vehicles.ts`); `ClienteListItem.plates: string[]` added ALONGSIDE `vehiclePlate` (kept — see Deviations) via `platesSubquery()`; `getClienteById` adds `vehicles: Vehiculo[]` via `listVehiculosByCliente()` in its existing `queryFn`.
 - [x] 2.7 RED — `src/modules/customers/service.test.ts`: fake `deps.database.transaction` (`account/service.test.ts` precedent, adapted to a thenable Drizzle-builder fake since `TxLike` here exposes `insert`/`update`/`select`, not raw `execute`) — `createCliente`/`updateCliente` accept `vehicles?`/`vehicles` beside the scalars; a thrown vehicle insert aborts the whole write; a patch with `vehicles` omitted leaves the collection untouched (no transaction opened at all); the existing scalar-merge test (line 81 pre-change) passes unchanged, untouched.
 - [x] 2.8 GREEN — `src/modules/customers/service.ts`: `vehicles`/`ClientePatch.vehicles` sits beside the scalar patch, stripped out before the `validateClienteInput`/persisted-patch spread; a transaction (`deps.database ?? db.transaction`) is opened ONLY when `vehicles` is present in the input/patch — vehicle-less writes take the exact old `deps.insert`/`deps.update` path, unchanged; `planVehiculoReconcile` + `applyVehiculoPlan` (Drizzle builders on `tx`, not hand-written SQL) execute inside it.
-- [x] 2.9 RED — `src/app/api/customers/route.test.ts` + `[id]/route.test.ts`: added cases proving the request body's `vehicles` array reaches validation (400 with `errors["vehicles.0.plate"]`) unchanged; existing 400/409/404 mapping cases preserved (one was rewritten — see Deviations, `vehicleMake` no longer exists as a field so its 400 case had to target a real validation failure).
+- [x] 2.9 RED — `src/app/api/customers/route.test.ts` + `[id]/route.test.ts`: added cases proving the request body's `vehicles` array reaches validation (400 with `errors["vehicles.0.plate"]`) unchanged; existing 400/409/404 mapping cases preserved. **Correction (GGA round 2)**: the note that used to sit here — "one was rewritten, `vehicleMake` no longer exists as a field" — was stale from the moment 2.4's deviation restored the flat fields, and rewriting `[id]/route.test.ts`'s 400 case from `{ vehicleMake: "Toyota" }` to `{ name: "" }` left the PATCH path with ZERO coverage of the flat plate-required guard, the one thing 2.4 itself calls "the ONLY thing that shouts on the flat path". Both cases now exist side by side: `{ name: "" }` (generic 400 mapping) and `{ vehicleMake: "Toyota" }` asserting `body.errors.vehiclePlate`. Removed in 3.2 together with the guard.
 - [x] 2.10 GREEN — `route.ts`/`[id]/route.ts`: needed NO code changes — both already pass the untyped request body straight through to `deps`/`service.ts`; confirmed via the new 2.9 tests passing unmodified.
 - [x] 2.11 New `vehicle search (E2E)` describe in `src/e2e/full-flow.e2e.test.ts`, following `customer search (E2E)`'s exact discipline: (a) a 3-vehicle customer matches by the 2nd/3rd plate; (b) a zero-vehicle customer still matches by name/phone; (c) a soft-deleted vehicle disappears from search while its customer stays findable by name; (d) `plates` returns as a real multi-element array. Also updated the EXISTING `customer search (E2E)` describe's seed (added one `vehiculo` row for `mixedCaseName`) — see Deviations, its plate-match case would otherwise have gone red under the new `EXISTS`-based predicate.
 - [x] 2.12 Full suite + `tsc` + lint — 894 unit tests passed (874 baseline + 20 new), `tsc --noEmit` exit 0, lint 0 errors / 15 warnings (all pre-existing, matches baseline).
 - [x] 2.13 Ran the E2E for real against the throwaway `dforce_e2e` DB (port 5433, recreated per run): 17/17 passing (12 baseline + 5 new `vehicle search (E2E)` cases). Also live-smoke-tested the real `createCliente`/`updateCliente` transactional write path (not exercised by the E2E block itself, which only seeds directly) — see Deviations for the real bug this caught.
+- [x] 2.14a GGA round-2 fixes (blocking + 4 non-blocking), all driven RED-first except where noted:
+  - **BLOCKING — `queries.ts` search dropped the flat plate path.** `buildClienteSearchWhere` matched `vehiculo` via `EXISTS` only. But `CustomerForm` sends no `vehicles` key until 3.2, so `createCliente` takes its scalar-only branch: the plate lands in `cliente.vehicle_plate` and NO `vehiculo` row is written. `0013` backfilled only rows that existed when it ran; nothing backfills rows created during the window. Every customer created between this slice merging and slice 3 would have been permanently unfindable by plate — staff enter a plate, see it in the Placa column, search it in `CustomerPicker`, get "Sin coincidencias" and create the exact duplicate this change exists to prevent. Fixed by the same expand/contract already applied to `validation.ts` (2.4) and `ClienteListItem` (2.6): `unaccentIlike(cliente.vehiclePlate, pattern)` restored to the `or()`, removed by `0014` in 3.2/3.3.
+  - Driving test: `vehicle search (E2E)` now creates a customer through the REAL write path (`POST /api/customers` with only `vehiclePlate`, no `vehicles` key) and searches that plate. Every other case in that describe seeds `db.insert(vehiculo)` directly, which is exactly why none of them caught this. Likewise the `vehiculo` row added to `customer search (E2E)`'s seed in 2.11 was not a fixture fix — it was this bug's first signal, treated as one. **Rule for slice 3: if a seed needs a new row to keep a test green, ask what broke.**
+  - **`service.ts` "all field errors" contract** — `validateClienteInput` then `validateVehiculosInput` were two sequential throws, so a bad name AND a plate-less vehicle made the user fix the name, resubmit, and only then learn about the plate. New private `validateClienteAndVehicles()` runs both and merges the error objects before throwing; used by `createCliente` and `updateCliente`.
+  - **`vehicles.ts` `platesSubquery` ordering** — `order by "vehiculo"."created_at"` was documented as "insertion order" and is not one: `created_at` defaults to `now()`, the TRANSACTION timestamp, so every row of `applyVehiculoPlan`'s batch insert shares it. Now `order by created_at, id`; comment corrected. The E2E only passed because it sorts.
+  - **`service.test.ts` `queryBuilder` unhandled rejection** — `Object.assign(Promise.reject(e), …)` built a rejected promise at every intermediate chain link (`tx.insert(t)` before `.values(v)`), only the last of which was awaited. Green under this Vitest config, one config flip from a red suite unrelated to the code. The settled promise is now built lazily in `then()`/`returning()`. Test-harness hygiene: no new test drives it, the existing atomicity tests cover the behaviour.
+  - `[id]/route.test.ts` flat-guard coverage restored — see 2.9. That case passed the moment it was written (the guard already exists); it restores coverage, it does not drive a fix.
 - [ ] 2.14 Manual GGA pass — explicitly reserved for the owner, not done.
 - [ ] 2.15 Open PR #2 — explicitly reserved for the owner, not done.
 
@@ -65,7 +72,7 @@ If slice 2's API/E2E work grows past ~550 authored lines, split the `vehicle sea
 - [ ] 3.2 GREEN — `src/modules/customers/CustomerForm.tsx`: replace the 4 flat vehicle inputs (lines 183–222) with a repeating-group array state (add/remove row), Spanish labels ("Vehículos", "Agregar vehículo", "Quitar"); `buildPayload` sends `vehicles: VehiculoInput[]`. Once `buildPayload` stops sending them, ALSO remove the 4 flat `vehicle*` fields and the `hasOtherVehicleField` guard from `validateClienteInput` (kept alive by slice 2's deviation at 2.4) — they and `0014` go in the same slice, or the write path outlives its columns.
 - [ ] 3.3 `src/app/(app)/customers/page.tsx`: `Placa` column (line 107) → `item.plates.join(", ")`, reusing `CustomerPicker`'s convention; drop the `vehiclePlate` reference.
 - [ ] 3.4 `src/app/(app)/customers/[id]/page.tsx`: replace the single `vehicle`/`Placa` fields (lines 65, 91) with a per-vehicle detail block iterating the query's `vehicles: Vehiculo[]` (2.6).
-- [ ] 3.5 `src/modules/service-orders/CustomerPicker.tsx` line 169: drop the local `const plates = customer.vehiclePlate ? [...] : []` conversion; call `identifierFor(customer, customer.plates)` directly.
+- [ ] 3.5 `src/modules/service-orders/CustomerPicker.tsx` line 169: drop the local `const plates = customer.vehiclePlate ? [...] : []` conversion; call `identifierFor(customer, customer.plates)` directly. **Same commit (R9 in the inventory below)**: line 205's `onSaved={(cliente) => handleSelect({ ...cliente, plates: [] })}` hardcodes an empty collection — harmless only while line 169 reads `vehiclePlate`. Once it reads `plates`, a customer created from inside the picker renders with no plate. Build the array from what the create actually returned.
 - [ ] 3.6 Fixture-only updates (mechanical — zero vehicle-column references in the implementations themselves): `reminders/job.test.ts`, `reminders/schedule.test.ts`, `ServiceOrderForm.test.tsx`, `CustomerPicker.test.tsx`, `api/customers/route.test.ts`, `api/customers/[id]/route.test.ts` — replace any `vehiclePlate` fixture field with `plates: string[]`.
 - [ ] 3.7 `npx drizzle-kit generate --custom --name drop_cliente_vehicle_columns` → `0014_<name>.sql`.
 - [ ] 3.8 Edit generated `0014` body: `ALTER TABLE cliente DROP COLUMN vehicle_make, DROP COLUMN vehicle_model, DROP COLUMN vehicle_year, DROP COLUMN vehicle_plate; DROP INDEX cliente_plate_idx;` — irreversible past this point (design.md Migration/Rollout); do not merge before slice 3 is fully ready.
@@ -74,6 +81,51 @@ If slice 2's API/E2E work grows past ~550 authored lines, split the `vehicle sea
 - [ ] 3.11 Full suite + `tsc` + lint.
 - [ ] 3.12 Manual GGA pass, re-run after every fix.
 - [ ] 3.13 Open PR #3 → base `main`. If slice-2 changes appear in this diff, the branch was cut before PR #2 merged (see 3.0). `0014` drops the columns here and is the one irreversible step: do not merge until the whole slice is ready.
+
+## Plate read/write inventory — the checklist `0014` must clear (slice 3)
+
+The same expand/contract gap has now been found three times, each round one
+step further along the pipeline: the read model (`ClienteListItem`, GGA round
+1), the write path (`validation.ts`/`service.ts`, round 1), and search
+(`queries.ts`, round 2). It was never three bugs — it was one omission found
+piecemeal. This is every site that reads or writes a vehicle plate, so slice 3
+works from a list instead of finding the next one in production.
+
+**Legend** — `BOTH`: handles the flat `cliente.vehicle_plate` column AND the
+`vehiculo` table. `FLAT`: flat only. `COLLECTION`: `vehiculo` only.
+
+### Writes
+
+| # | Site | Path | Verdict |
+|---|------|------|---------|
+| W1 | `CustomerForm.tsx` `buildPayload` (48-60) | FLAT | Deliberate — 3.2 replaces it with `vehicles: VehiculoInput[]`. The reason every other flat path below must stay alive until then. |
+| W2 | `validation.ts` `validateClienteInput` (flat 4 fields + the plate-required cross-field guard) | FLAT | Deliberate, restored by 2.4's deviation. Paired with W3 the write side is BOTH. Deleted in 3.2, same commit as W1. |
+| W3 | `validation.ts` `validateVehiculoInput`/`validateVehiculosInput` | COLLECTION | Correct — the new path, additive beside W2. |
+| W4 | `service.ts` `createCliente` | BOTH (disjoint branches) | Correct today, and the trap: a payload with NO `vehicles` key writes the flat column and no `vehiculo` row at all. Any read that assumes a `vehiculo` row exists for every plate is wrong until 3.2. |
+| W5 | `service.ts` `updateCliente` | BOTH (disjoint branches) | Same as W4. |
+| W6 | `vehicles.ts` `applyVehiculoPlan` | COLLECTION | Correct — sole owner of `vehiculo` writes (D3). |
+| W7 | Migration `0013` backfill | one-shot flat → COLLECTION | Correct but bounded: it copies rows that existed WHEN IT RAN. Nothing backfills rows created after. Do not reason as if it did. |
+
+### Reads
+
+| # | Site | Path | Verdict |
+|---|------|------|---------|
+| R1 | `queries.ts` `buildClienteSearchWhere` | BOTH | **Was FLAT-less — the round-2 blocking bug, fixed in 2.14a.** Drop the `cliente.vehiclePlate` branch in 3.3, not before. |
+| R2 | `queries.ts` `listClientes` select | BOTH (`vehiclePlate` + `plates`) | Correct. Drop `vehiclePlate` in 3.3. |
+| R3 | `queries.ts` `getClienteById` | BOTH (whole `cliente` row + `vehicles: Vehiculo[]`) | Correct. |
+| R4 | `vehicles.ts` `platesSubquery` | COLLECTION | Correct — it IS the collection aggregate. |
+| R5 | `vehicles.ts` `listVehiculosByCliente` | COLLECTION | Correct. |
+| R6 | `customers/page.tsx:107` Placa column | FLAT | Single-path. No live regression (W1 means staff-created plates are always flat), but a plate written through the `vehicles` API path renders `—`. 3.3 fixes. |
+| R7 | `customers/[id]/page.tsx:65,91` | FLAT | Single-path, and it discards the `vehicles` array R3 already hands it. 3.4 fixes. |
+| R8 | `CustomerPicker.tsx:169` `customer.vehiclePlate ? [...] : []` | FLAT | Single-path while `customer.plates` sits right there unused. Same consequence as R6, on the screen where a missed match creates the duplicate. 3.5 fixes. |
+| R9 | `CustomerPicker.tsx:205` `onSaved={… { ...cliente, plates: [] }}` | neither | Hardcodes an empty collection for a just-created customer. Harmless only because R8 reads `vehiclePlate` instead; the moment 3.5 lands and R8 reads `plates`, a customer created from inside the picker shows no plate. **Fix it in the same commit as R8.** |
+| R10 | `CustomerForm.tsx` `toFormState` | FLAT | Single-path; disappears with W1 in 3.2. |
+| R11 | `schema.ts` (`cliente.vehiclePlate` + `cliente_plate_idx`, `vehiculo.plate`) | BOTH | Correct. 3.9 removes the flat half. |
+| R12 | Test fixtures (3.6's six files) | FLAT | Mechanical; 3.6. |
+
+Nothing outside this list touches a plate — `reminders/job.ts`,
+`reminders/schedule.ts` and the whole catalog/PDF side were checked and carry
+no vehicle field (the `rg` hits there are `tem-plate-s`, not plates).
 
 ## Follow-ups (not done here — carry into the PR description)
 
