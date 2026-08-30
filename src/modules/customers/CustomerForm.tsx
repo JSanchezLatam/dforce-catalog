@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogFooter,
@@ -267,173 +268,179 @@ export function CustomerForm({
           <DialogTitle>{isEdit ? "Editar cliente" : "Nuevo cliente"}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="cliente-name">Nombre</Label>
-            <Input id="cliente-name" value={form.name} onChange={(e) => update("name", e.target.value)} />
-            {errors.name && (
-              <p role="alert" className={FIELD_ERROR}>
-                {errors.name}
-              </p>
-            )}
-          </div>
+        {/* `min-h-0 flex-1` is what lets the `DialogBody` inside it actually
+            scroll: the form is the flex child `DialogContent`'s 85vh cap
+            applies to, and a flex item's default `min-height: auto` would
+            refuse to shrink below its content. */}
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col gap-4">
+          <DialogBody className="flex flex-col gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="cliente-name">Nombre</Label>
+              <Input id="cliente-name" value={form.name} onChange={(e) => update("name", e.target.value)} />
+              {errors.name && (
+                <p role="alert" className={FIELD_ERROR}>
+                  {errors.name}
+                </p>
+              )}
+            </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="cliente-phone">Teléfono</Label>
-            <Input id="cliente-phone" value={form.phone} onChange={(e) => update("phone", e.target.value)} />
-            {errors.phone && (
-              <p role="alert" className={FIELD_ERROR}>
-                {errors.phone}
-              </p>
-            )}
-          </div>
+            <div className="grid gap-2">
+              <Label htmlFor="cliente-phone">Teléfono</Label>
+              <Input id="cliente-phone" value={form.phone} onChange={(e) => update("phone", e.target.value)} />
+              {errors.phone && (
+                <p role="alert" className={FIELD_ERROR}>
+                  {errors.phone}
+                </p>
+              )}
+            </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="cliente-email">Email</Label>
-            <Input
-              id="cliente-email"
-              type="email"
-              value={form.email}
-              onChange={(e) => update("email", e.target.value)}
-            />
-            {errors.email && (
-              <p role="alert" className={FIELD_ERROR}>
-                {errors.email}
-              </p>
-            )}
-          </div>
+            <div className="grid gap-2">
+              <Label htmlFor="cliente-email">Email</Label>
+              <Input
+                id="cliente-email"
+                type="email"
+                value={form.email}
+                onChange={(e) => update("email", e.target.value)}
+              />
+              {errors.email && (
+                <p role="alert" className={FIELD_ERROR}>
+                  {errors.email}
+                </p>
+              )}
+            </div>
 
-          <div className="flex flex-col gap-3">
-            <h3 className={SECTION_HEADING}>Vehículos</h3>
-            {indexedVehicleRows(form.vehicles).map(({ row, index, sentIndex }) => {
-              // A deactivated vehicle is not editable and is not the row the
-              // staff member came here for: it collapses to plate + state +
-              // the way back, on a muted surface, so the vehicles actually in
-              // service are the ones carrying the visual weight. The row
-              // number lives in `aria-label` only — it is a unique handle for
-              // assistive tech and tests, not copy anyone should have to read.
-              if (row.deactivated) {
-                return (
-                  <div
-                    key={row.key}
-                    role="group"
-                    aria-label={`Vehículo ${index}`}
-                    className={CARD_MUTED + " flex flex-wrap items-center gap-2"}
-                  >
-                    <span className={PLATE_BADGE_MUTED}>{row.plate.trim() || "Sin placa"}</span>
-                    <span className="text-xs font-medium">Vehículo desactivado</span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="ml-auto min-h-11 min-w-11"
-                      aria-label={`Restaurar vehículo ${index}`}
-                      onClick={() => restoreVehicle(row.key)}
+            <div className="flex flex-col gap-3">
+              <h3 className={SECTION_HEADING}>Vehículos</h3>
+              {indexedVehicleRows(form.vehicles).map(({ row, index, sentIndex }) => {
+                // A deactivated vehicle is not editable and is not the row the
+                // staff member came here for: it collapses to plate + state +
+                // the way back, on a muted surface, so the vehicles actually in
+                // service are the ones carrying the visual weight. The row
+                // number lives in `aria-label` only — it is a unique handle for
+                // assistive tech and tests, not copy anyone should have to read.
+                if (row.deactivated) {
+                  return (
+                    <div
+                      key={row.key}
+                      role="group"
+                      aria-label={`Vehículo ${index}`}
+                      className={CARD_MUTED + " flex flex-wrap items-center gap-2"}
                     >
-                      Restaurar
-                    </Button>
+                      <span className={PLATE_BADGE_MUTED}>{row.plate.trim() || "Sin placa"}</span>
+                      <span className="text-xs font-medium">Vehículo desactivado</span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="ml-auto min-h-11 min-w-11"
+                        aria-label={`Restaurar vehículo ${index}`}
+                        onClick={() => restoreVehicle(row.key)}
+                      >
+                        Restaurar
+                      </Button>
+                    </div>
+                  );
+                }
+
+                const plateError = sentIndex >= 0 ? errors[`vehicles.${sentIndex}.plate`] : undefined;
+                return (
+                  <div key={row.key} role="group" aria-label={`Vehículo ${index}`} className={CARD + " flex flex-col gap-3"}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className={PLATE_BADGE}>{row.plate.trim() || "Sin placa"}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="min-h-11 min-w-11"
+                        aria-label={`Quitar vehículo ${index}`}
+                        onClick={() => removeOrDeactivateVehicle(row.key)}
+                      >
+                        Quitar
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="grid gap-2">
+                        <Label htmlFor={`${row.key}-plate`}>Placa</Label>
+                        <Input
+                          id={`${row.key}-plate`}
+                          value={row.plate}
+                          onChange={(e) => updateVehicle(row.key, { plate: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor={`${row.key}-make`}>Marca</Label>
+                        <Input
+                          id={`${row.key}-make`}
+                          value={row.make}
+                          onChange={(e) => updateVehicle(row.key, { make: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor={`${row.key}-model`}>Modelo</Label>
+                        <Input
+                          id={`${row.key}-model`}
+                          value={row.model}
+                          onChange={(e) => updateVehicle(row.key, { model: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor={`${row.key}-year`}>Año</Label>
+                        <Input
+                          id={`${row.key}-year`}
+                          type="number"
+                          value={row.year}
+                          onChange={(e) => updateVehicle(row.key, { year: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    {plateError && (
+                      <p role="alert" className={FIELD_ERROR}>
+                        {plateError}
+                      </p>
+                    )}
                   </div>
                 );
-              }
+              })}
+              {/* `validateVehiculosInput` and `planVehiculoReconcile` both throw
+                  under the bare `vehicles` key (a non-list payload, a foreign
+                  vehicle id). With no slot for it the dialog just sat there
+                  after Guardar with nothing on screen. */}
+              {errors.vehicles && (
+                <p role="alert" className={FIELD_ERROR}>
+                  {errors.vehicles}
+                </p>
+              )}
+              <Button type="button" variant="outline" size="sm" className="min-h-11 min-w-11" onClick={addVehicle}>
+                Agregar vehículo
+              </Button>
+            </div>
 
-              const plateError = sentIndex >= 0 ? errors[`vehicles.${sentIndex}.plate`] : undefined;
-              return (
-                <div key={row.key} role="group" aria-label={`Vehículo ${index}`} className={CARD + " flex flex-col gap-3"}>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className={PLATE_BADGE}>{row.plate.trim() || "Sin placa"}</span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="min-h-11 min-w-11"
-                      aria-label={`Quitar vehículo ${index}`}
-                      onClick={() => removeOrDeactivateVehicle(row.key)}
-                    >
-                      Quitar
-                    </Button>
-                  </div>
+            {/* R26 — two independent per-channel opt-out flags, re-checked at reminder fire time. */}
+            <div className="flex flex-col gap-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Checkbox
+                  checked={form.whatsappOptOut}
+                  onCheckedChange={(checked) => update("whatsappOptOut", checked === true)}
+                />
+                No enviar recordatorios por WhatsApp
+              </label>
+              <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Checkbox
+                  checked={form.emailOptOut}
+                  onCheckedChange={(checked) => update("emailOptOut", checked === true)}
+                />
+                No enviar recordatorios por email
+              </label>
+            </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="grid gap-2">
-                      <Label htmlFor={`${row.key}-plate`}>Placa</Label>
-                      <Input
-                        id={`${row.key}-plate`}
-                        value={row.plate}
-                        onChange={(e) => updateVehicle(row.key, { plate: e.target.value })}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor={`${row.key}-make`}>Marca</Label>
-                      <Input
-                        id={`${row.key}-make`}
-                        value={row.make}
-                        onChange={(e) => updateVehicle(row.key, { make: e.target.value })}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor={`${row.key}-model`}>Modelo</Label>
-                      <Input
-                        id={`${row.key}-model`}
-                        value={row.model}
-                        onChange={(e) => updateVehicle(row.key, { model: e.target.value })}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor={`${row.key}-year`}>Año</Label>
-                      <Input
-                        id={`${row.key}-year`}
-                        type="number"
-                        value={row.year}
-                        onChange={(e) => updateVehicle(row.key, { year: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  {plateError && (
-                    <p role="alert" className={FIELD_ERROR}>
-                      {plateError}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-            {/* `validateVehiculosInput` and `planVehiculoReconcile` both throw
-                under the bare `vehicles` key (a non-list payload, a foreign
-                vehicle id). With no slot for it the dialog just sat there
-                after Guardar with nothing on screen. */}
-            {errors.vehicles && (
+            {errors.form && (
               <p role="alert" className={FIELD_ERROR}>
-                {errors.vehicles}
+                {errors.form}
               </p>
             )}
-            <Button type="button" variant="outline" size="sm" className="min-h-11 min-w-11" onClick={addVehicle}>
-              Agregar vehículo
-            </Button>
-          </div>
-
-          {/* R26 — two independent per-channel opt-out flags, re-checked at reminder fire time. */}
-          <div className="flex flex-col gap-3">
-            <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <Checkbox
-                checked={form.whatsappOptOut}
-                onCheckedChange={(checked) => update("whatsappOptOut", checked === true)}
-              />
-              No enviar recordatorios por WhatsApp
-            </label>
-            <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <Checkbox
-                checked={form.emailOptOut}
-                onCheckedChange={(checked) => update("emailOptOut", checked === true)}
-              />
-              No enviar recordatorios por email
-            </label>
-          </div>
-
-          {errors.form && (
-            <p role="alert" className={FIELD_ERROR}>
-              {errors.form}
-            </p>
-          )}
+          </DialogBody>
 
           <DialogFooter>
             <DialogClose render={<Button type="button" variant="outline" disabled={isSubmitting} />}>

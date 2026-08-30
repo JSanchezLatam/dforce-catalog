@@ -355,3 +355,47 @@ describe("CustomerForm — vehicle collection (edit)", () => {
     expect(within(vehicleGroup(1)).getByLabelText("Placa")).toHaveValue("ABC111");
   });
 });
+
+/**
+ * The edit dialog is the longest one in the app: a customer with several
+ * vehicles renders more than `DialogContent`'s `max-h-[85vh]` cap allows. The
+ * cap was there; the scroll container was not, so the overflow rendered
+ * OUTSIDE the dialog's surface, over the page behind it.
+ *
+ * jsdom has no layout, so these assert the STRUCTURE that makes the browser
+ * scroll rather than a measured overflow: which element is the scroll box, and
+ * which controls are deliberately outside it. That is the part that regressed
+ * and the part a refactor can silently undo.
+ */
+describe("CustomerForm — long dialog scrolling", () => {
+  it("renders the form body inside a scroll container", async () => {
+    const user = userEvent.setup();
+    render(
+      <CustomerForm
+        cliente={CLIENTE}
+        vehicles={[vehiculo({ id: "v1" }), vehiculo({ id: "v2", plate: "BBB222" }), vehiculo({ id: "v3", plate: "CCC333" })]}
+      />,
+    );
+    await open(user, "Editar");
+
+    const body = document.querySelector('[data-slot="dialog-body"]');
+    expect(body).not.toBeNull();
+    expect(body!.className).toContain("overflow-y-auto");
+    // Without `min-h-0` a flex item refuses to shrink below its content, which
+    // silently disables the overflow — the cap holds and nothing scrolls.
+    expect(body!.className).toContain("min-h-0");
+    expect(body).toContainElement(vehicleGroup(3));
+  });
+
+  it("keeps Guardar and the dialog title out of the scrolling region", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo()]} />);
+    await open(user, "Editar");
+
+    const body = document.querySelector('[data-slot="dialog-body"]')!;
+    // A Guardar button that scrolls out of reach is a different bug, not a fix.
+    expect(body).not.toContainElement(screen.getByRole("button", { name: "Guardar" }));
+    expect(body).not.toContainElement(screen.getByRole("button", { name: "Cancelar" }));
+    expect(body).not.toContainElement(screen.getByText("Editar cliente"));
+  });
+});

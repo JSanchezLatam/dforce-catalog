@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogClose,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -212,120 +213,122 @@ export function UserForm({
           <DialogTitle>{isEdit ? "Editar usuario" : "Nuevo usuario"}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="user-username">Usuario</Label>
-            <Input
-              id="user-username"
-              value={form.username}
-              readOnly={isEdit}
-              aria-describedby={isEdit ? "user-username-hint" : undefined}
-              onChange={(e) => update("username", e.target.value)}
-            />
-            {isEdit && (
-              <p id="user-username-hint" className="text-xs text-muted-foreground">
-                El nombre de usuario no se puede cambiar.
-              </p>
-            )}
-            {errors.username && (
-              <p role="alert" className={FIELD_ERROR}>
-                {errors.username}
-              </p>
-            )}
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="user-name">Nombre</Label>
-            <Input id="user-name" value={form.name} onChange={(e) => update("name", e.target.value)} />
-            {errors.name && (
-              <p role="alert" className={FIELD_ERROR}>
-                {errors.name}
-              </p>
-            )}
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="user-email">Email</Label>
-            <Input
-              id="user-email"
-              type="email"
-              value={form.email}
-              onChange={(e) => update("email", e.target.value)}
-            />
-            {errors.email && (
-              <p role="alert" className={FIELD_ERROR}>
-                {errors.email}
-              </p>
-            )}
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="user-role">Rol</Label>
-            {/* `items` lets SelectValue render the human label instead of the raw enum value. */}
-            <Select
-              items={ROLE_LABELS}
-              value={form.role}
-              onValueChange={(value) => update("role", (value as Role | null) ?? null)}
-            >
-              <SelectTrigger id="user-role" className="w-full">
-                <SelectValue placeholder="Seleccioná un rol" />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(ROLE_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.role && (
-              <p role="alert" className={FIELD_ERROR}>
-                {errors.role}
-              </p>
-            )}
-          </div>
-
-          {/* `id` + `htmlFor` rather than CustomerForm's wrapping <label>: the
-              base-ui Checkbox renders a button AND a hidden input, and a
-              wrapping label points at both of them. */}
-          {isEdit && (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="user-reset-password"
-                checked={form.resetPassword}
-                onCheckedChange={(checked) => update("resetPassword", checked === true)}
-              />
-              <Label htmlFor="user-reset-password">Restablecer contraseña</Label>
-            </div>
-          )}
-
-          {wantsPassword && (
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col gap-4">
+          <DialogBody className="flex flex-col gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="user-password">{isEdit ? "Nueva contraseña" : "Contraseña inicial"}</Label>
+              <Label htmlFor="user-username">Usuario</Label>
               <Input
-                id="user-password"
-                type="password"
-                value={form.password}
-                onChange={(e) => update("password", e.target.value)}
+                id="user-username"
+                value={form.username}
+                readOnly={isEdit}
+                aria-describedby={isEdit ? "user-username-hint" : undefined}
+                onChange={(e) => update("username", e.target.value)}
               />
-              {/* Both paths force a rotation on first login, so say so rather
-                  than letting the admin assume this password is permanent. */}
-              <p className="text-xs text-muted-foreground">
-                El usuario deberá cambiarla la próxima vez que inicie sesión.
-              </p>
-              {errors.password && (
+              {isEdit && (
+                <p id="user-username-hint" className="text-xs text-muted-foreground">
+                  El nombre de usuario no se puede cambiar.
+                </p>
+              )}
+              {errors.username && (
                 <p role="alert" className={FIELD_ERROR}>
-                  {errors.password}
+                  {errors.username}
                 </p>
               )}
             </div>
-          )}
 
-          {errors.form && (
-            <p role="alert" className={FIELD_ERROR}>
-              {errors.form}
-            </p>
-          )}
+            <div className="grid gap-2">
+              <Label htmlFor="user-name">Nombre</Label>
+              <Input id="user-name" value={form.name} onChange={(e) => update("name", e.target.value)} />
+              {errors.name && (
+                <p role="alert" className={FIELD_ERROR}>
+                  {errors.name}
+                </p>
+              )}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="user-email">Email</Label>
+              <Input
+                id="user-email"
+                type="email"
+                value={form.email}
+                onChange={(e) => update("email", e.target.value)}
+              />
+              {errors.email && (
+                <p role="alert" className={FIELD_ERROR}>
+                  {errors.email}
+                </p>
+              )}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="user-role">Rol</Label>
+              {/* `items` lets SelectValue render the human label instead of the raw enum value. */}
+              <Select
+                items={ROLE_LABELS}
+                value={form.role}
+                onValueChange={(value) => update("role", (value as Role | null) ?? null)}
+              >
+                <SelectTrigger id="user-role" className="w-full">
+                  <SelectValue placeholder="Seleccioná un rol" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.role && (
+                <p role="alert" className={FIELD_ERROR}>
+                  {errors.role}
+                </p>
+              )}
+            </div>
+
+            {/* `id` + `htmlFor` rather than CustomerForm's wrapping <label>: the
+                base-ui Checkbox renders a button AND a hidden input, and a
+                wrapping label points at both of them. */}
+            {isEdit && (
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="user-reset-password"
+                  checked={form.resetPassword}
+                  onCheckedChange={(checked) => update("resetPassword", checked === true)}
+                />
+                <Label htmlFor="user-reset-password">Restablecer contraseña</Label>
+              </div>
+            )}
+
+            {wantsPassword && (
+              <div className="grid gap-2">
+                <Label htmlFor="user-password">{isEdit ? "Nueva contraseña" : "Contraseña inicial"}</Label>
+                <Input
+                  id="user-password"
+                  type="password"
+                  value={form.password}
+                  onChange={(e) => update("password", e.target.value)}
+                />
+                {/* Both paths force a rotation on first login, so say so rather
+                    than letting the admin assume this password is permanent. */}
+                <p className="text-xs text-muted-foreground">
+                  El usuario deberá cambiarla la próxima vez que inicie sesión.
+                </p>
+                {errors.password && (
+                  <p role="alert" className={FIELD_ERROR}>
+                    {errors.password}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {errors.form && (
+              <p role="alert" className={FIELD_ERROR}>
+                {errors.form}
+              </p>
+            )}
+          </DialogBody>
 
           <DialogFooter>
             <DialogClose render={<Button type="button" variant="outline" disabled={isSubmitting} />}>

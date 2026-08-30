@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogClose,
+  DialogBody,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -182,109 +183,76 @@ export function ServiceOrderForm({
           <DialogTitle>{isEdit ? "Editar orden de servicio" : "Nueva orden de servicio"}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {!isEdit && (
-            <div className="grid gap-2">
-              <Label>Cliente</Label>
-              <CustomerPicker
-                selectedCustomer={selectedCustomer ?? null}
-                canCreateCustomer={canCreateCustomer}
-                onSelect={(customer) => setClienteId(customer.id)}
-              />
-              {errors.clienteId && (
-                <p role="alert" className={FIELD_ERROR}>
-                  {errors.clienteId}
-                </p>
-              )}
-            </div>
-          )}
-
-          <div className="grid gap-2">
-            <Label htmlFor="orden-description">Descripción</Label>
-            <Input id="orden-description" value={description} onChange={(e) => setDescription(e.target.value)} />
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="orden-appointment">Cita</Label>
-            <Input
-              id="orden-appointment"
-              type="datetime-local"
-              value={appointmentAt}
-              onChange={(e) => setAppointmentAt(e.target.value)}
-            />
-          </div>
-
-          {!isEdit && (
-            <section aria-label="Parts selection">
-              <h2 className={SECTION_HEADING}>Piezas</h2>
-              <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
-                <Input
-                  type="search"
-                  placeholder="Buscar producto…"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col gap-4">
+          <DialogBody className="flex flex-col gap-4">
+            {!isEdit && (
+              <div className="grid gap-2">
+                <Label>Cliente</Label>
+                <CustomerPicker
+                  selectedCustomer={selectedCustomer ?? null}
+                  canCreateCustomer={canCreateCustomer}
+                  onSelect={(customer) => setClienteId(customer.id)}
                 />
+                {errors.clienteId && (
+                  <p role="alert" className={FIELD_ERROR}>
+                    {errors.clienteId}
+                  </p>
+                )}
               </div>
-              <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>ID</TableHead>
-                      <TableHead className="w-24" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredProducts.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={3} className="py-6 text-center text-sm text-muted-foreground">
-                          Sin resultados
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    {filteredProducts.map((product) => (
-                      <TableRow key={product.id}>
-                        <TableCell className="font-medium">{product.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{product.id}</TableCell>
-                        <TableCell>
-                          <Button type="button" variant="outline" size="sm" onClick={() => addPart(product)}>
-                            Agregar
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+            )}
 
-              {cart.length > 0 && (
-                <div className="mt-3 rounded-lg border border-border">
+            <div className="grid gap-2">
+              <Label htmlFor="orden-description">Descripción</Label>
+              <Input id="orden-description" value={description} onChange={(e) => setDescription(e.target.value)} />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="orden-appointment">Cita</Label>
+              <Input
+                id="orden-appointment"
+                type="datetime-local"
+                value={appointmentAt}
+                onChange={(e) => setAppointmentAt(e.target.value)}
+              />
+            </div>
+
+            {!isEdit && (
+              <section aria-label="Parts selection">
+                <h2 className={SECTION_HEADING}>Piezas</h2>
+                <div className="relative mb-3">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="search"
+                    placeholder="Buscar producto…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Pieza</TableHead>
-                        <TableHead className="w-24">Cantidad</TableHead>
-                        <TableHead className="w-16" />
+                        <TableHead>Nombre</TableHead>
+                        <TableHead>ID</TableHead>
+                        <TableHead className="w-24" />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {cart.map((line) => (
-                        <TableRow key={line.productoId}>
-                          <TableCell className="font-medium">{line.productName}</TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              min={1}
-                              value={line.quantity}
-                              onChange={(e) => updateQuantity(line.productoId, Math.max(1, Number(e.target.value)))}
-                              className="w-16"
-                            />
+                      {filteredProducts.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={3} className="py-6 text-center text-sm text-muted-foreground">
+                            Sin resultados
                           </TableCell>
+                        </TableRow>
+                      )}
+                      {filteredProducts.map((product) => (
+                        <TableRow key={product.id}>
+                          <TableCell className="font-medium">{product.name}</TableCell>
+                          <TableCell className="text-muted-foreground">{product.id}</TableCell>
                           <TableCell>
-                            <Button type="button" variant="ghost" size="sm" onClick={() => removePart(line.productoId)}>
-                              Quitar
+                            <Button type="button" variant="outline" size="sm" onClick={() => addPart(product)}>
+                              Agregar
                             </Button>
                           </TableCell>
                         </TableRow>
@@ -292,15 +260,50 @@ export function ServiceOrderForm({
                     </TableBody>
                   </Table>
                 </div>
-              )}
-            </section>
-          )}
 
-          {errors.form && (
-            <p role="alert" className={FIELD_ERROR}>
-              {errors.form}
-            </p>
-          )}
+                {cart.length > 0 && (
+                  <div className="mt-3 rounded-lg border border-border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Pieza</TableHead>
+                          <TableHead className="w-24">Cantidad</TableHead>
+                          <TableHead className="w-16" />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {cart.map((line) => (
+                          <TableRow key={line.productoId}>
+                            <TableCell className="font-medium">{line.productName}</TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                min={1}
+                                value={line.quantity}
+                                onChange={(e) => updateQuantity(line.productoId, Math.max(1, Number(e.target.value)))}
+                                className="w-16"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Button type="button" variant="ghost" size="sm" onClick={() => removePart(line.productoId)}>
+                                Quitar
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {errors.form && (
+              <p role="alert" className={FIELD_ERROR}>
+                {errors.form}
+              </p>
+            )}
+          </DialogBody>
 
           <DialogFooter>
             <DialogClose render={<Button type="button" variant="outline" disabled={isSubmitting} />}>
