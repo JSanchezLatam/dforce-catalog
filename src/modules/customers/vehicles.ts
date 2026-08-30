@@ -28,7 +28,12 @@ export function activeVehiculoFilter(): SQL {
 
 /**
  * D4 — correlated `array_agg` of an outer `cliente` row's active plates,
- * insertion order. Column names are hardcoded (not interpolated `Column`
+ * ordered by `created_at` then `id`. `created_at` alone is NOT insertion
+ * order: it defaults to `now()`, the TRANSACTION timestamp, so every row of
+ * one batch insert (`applyVehiculoPlan`'s multi-row `values()`) shares it and
+ * their relative order is whatever the planner returns. `id` breaks the tie
+ * — arbitrary but stable, which is what a rendered plate list needs.
+ * Column names are hardcoded (not interpolated `Column`
  * objects) deliberately: when this fragment is embedded in a `.select({...})`
  * field map (as opposed to a `.where()` clause), Drizzle's own qualifier
  * elision drops the table prefix on interpolated columns — and `vehiculo`
@@ -39,7 +44,7 @@ export function activeVehiculoFilter(): SQL {
  * identifiers, not user input, so hardcoding them here is safe.
  */
 export function platesSubquery(): SQL<string[]> {
-  return sql<string[]>`(select coalesce(array_agg("vehiculo"."plate" order by "vehiculo"."created_at"), '{}')
+  return sql<string[]>`(select coalesce(array_agg("vehiculo"."plate" order by "vehiculo"."created_at", "vehiculo"."id"), '{}')
     from "vehiculo" where "vehiculo"."cliente_id" = "cliente"."id" and "vehiculo"."deactivated_at" is null)`;
 }
 

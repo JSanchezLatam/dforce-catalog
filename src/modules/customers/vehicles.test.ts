@@ -1,8 +1,9 @@
+import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 import type { Vehiculo } from "@/shared/db/schema";
 import { ClienteValidationError } from "./validation";
-import { planVehiculoReconcile, type VehiculoInput } from "./vehicles";
+import { planVehiculoReconcile, platesSubquery, type VehiculoInput } from "./vehicles";
 
 function vehiculo(overrides: Partial<Vehiculo> = {}): Vehiculo {
   return {
@@ -17,6 +18,17 @@ function vehiculo(overrides: Partial<Vehiculo> = {}): Vehiculo {
     ...overrides,
   };
 }
+
+describe("platesSubquery (D4)", () => {
+  it("breaks the created_at tie on id so the aggregate order is deterministic", () => {
+    // `created_at` defaults to `now()`, which is the TRANSACTION timestamp:
+    // every row of one batch insert shares it, so ordering on it alone leaves
+    // the order of a customer's plates arbitrary. `id` is the tiebreaker.
+    expect(new PgDialect().sqlToQuery(platesSubquery()).sql).toContain(
+      `order by "vehiculo"."created_at", "vehiculo"."id"`,
+    );
+  });
+});
 
 describe("planVehiculoReconcile (D5)", () => {
   it("leaves every list empty when incoming is omitted (collection untouched, R16)", () => {
