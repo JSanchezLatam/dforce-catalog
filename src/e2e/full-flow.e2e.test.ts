@@ -125,11 +125,19 @@ describe("customer search (E2E)", () => {
     nullPhone = row3;
     formattedPhone = row4;
 
-    // R19's plate match now runs against `vehiculo`, not `cliente.vehicle_plate`
-    // (design.md D4) — the row above still carries the legacy column (it's
-    // still physically present, just unread by search) so a `vehiculo` row is
-    // what the "matches a partial plate" case below actually needs. Cascades
-    // with `mixedCaseName`'s deletion in `afterAll`, no separate cleanup.
+    // `mixedCaseName` deliberately carries the SAME plate in both places: the
+    // legacy `cliente.vehicle_plate` from its seed above, and a `vehiculo` row
+    // here. That is exactly the shape migration `0013`'s backfill produced, and
+    // during slices 2-3 search reads BOTH columns, so this row pins that a
+    // customer in that state is found once, not twice.
+    //
+    // It is NOT what makes "matches a partial plate" pass — the flat branch in
+    // `buildClienteSearchWhere` already does that. An earlier version of this
+    // comment claimed search no longer reads the flat column; it does, until
+    // `0014` drops it in slice 3. Whoever writes that slice: deleting the flat
+    // branch is what finally makes this row load-bearing.
+    //
+    // Cascades with `mixedCaseName`'s deletion in `afterAll`, no separate cleanup.
     await db.insert(vehiculo).values({ clienteId: mixedCaseName.id, plate: "ABC111" });
   }, 60_000);
 
@@ -177,6 +185,23 @@ describe("customer search (E2E)", () => {
   it("matches a partial plate (mid-string ilike on vehicle_plate)", async () => {
     const body = await search("bc11");
     expect(body.customers.map((c) => c.id)).toContain(mixedCaseName.id);
+  });
+
+  /**
+   * `mixedCaseName` holds "ABC111" in BOTH `cliente.vehicle_plate` and a
+   * `vehiculo` row — the shape migration `0013`'s backfill produced, and the
+   * shape every backfilled customer has during slices 2-3 while search reads
+   * both. Two matching branches in the same `or()` must still yield ONE row.
+   *
+   * This is why `vehiculoPlateExists` is an `EXISTS` subquery and not a
+   * `LEFT JOIN` (design D4): a join would emit one `cliente` row per matching
+   * vehicle and need `DISTINCT` to hide it. `toContain` cannot see that — only
+   * counting can.
+   */
+  it("returns one row for a customer whose plate matches through both paths", async () => {
+    const body = await search("bc11");
+    const hits = body.customers.filter((c) => c.id === mixedCaseName.id);
+    expect(hits).toHaveLength(1);
   });
 
   it("matches partial digits-only phone (mid-string ilike on phone)", async () => {

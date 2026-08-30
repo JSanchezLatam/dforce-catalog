@@ -113,10 +113,16 @@ export async function createCliente(input: unknown, deps: CreateClienteDeps = {}
     return insert(value);
   }
 
+  // Planned BEFORE the transaction opens. `planVehiculoReconcile` throws when an
+  // incoming vehicle carries an id this customer does not own — a trust-boundary
+  // rejection that is decidable with no database contact at all (on create,
+  // `existing` is always empty). Left inside the transaction it inserted the
+  // cliente, threw, and rolled back, spending a write to produce a 400.
+  const plan = planVehiculoReconcile([], vehiclesInput);
+
   const database = deps.database ?? { transaction: (fn: (tx: TxLike) => Promise<Cliente>) => db.transaction(fn) };
   return database.transaction(async (tx) => {
     const [row] = await tx.insert(cliente).values(value).returning();
-    const plan = planVehiculoReconcile([], vehiclesInput);
     await applyVehiculoPlan(tx, row.id, plan);
     return row;
   });
@@ -164,9 +170,16 @@ export async function updateCliente(
   // picture — but only the patch's own keys get persisted below (R16).
   const { vehicles: vehiclesInput } = validateClienteAndVehicles({ ...current.cliente, ...patch }, patch.vehicles);
 
-  const persistedPatch: Partial<ClienteInput> = Object.fromEntries(
-    Object.entries(patch).filter(([key]) => key !== "vehicles"),
-  );
+  // Rest destructuring, NOT `Object.fromEntries(Object.entries(...).filter(...))`:
+  // that returns `{ [k: string]: any }`, which assigns to `Partial<ClienteInput>`
+  // without checking anything, so a typo'd key or a renamed field would compile
+  // clean and land in `db.update(cliente).set(...)`. This keeps the write path
+  // type-checked, which the pre-change `{ ...patch }` spread already was.
+  const { vehicles: strippedVehicles, ...persistedPatch } = patch;
+  // The binding exists only to keep `vehicles` out of `persistedPatch`; it is
+  // already validated above as `vehiclesInput`. `void` marks it used rather
+  // than relaxing `no-unused-vars` repo-wide for one line.
+  void strippedVehicles;
 
   if (patch.phone !== undefined) {
     const normalizedPhone = normalizePhone(patch.phone);
@@ -191,13 +204,17 @@ export async function updateCliente(
     return update(id, persistedPatch);
   }
 
+  // Same reasoning as `createCliente`: both inputs are in hand before any write,
+  // so the ownership rejection belongs with the rest of validation, not inside a
+  // transaction it would have to roll back.
+  const plan = planVehiculoReconcile(current.vehicles, vehiclesInput);
+
   const database = deps.database ?? { transaction: (fn: (tx: TxLike) => Promise<Cliente>) => db.transaction(fn) };
   return database.transaction(async (tx) => {
     const row =
       Object.keys(persistedPatch).length > 0
         ? (await tx.update(cliente).set(persistedPatch).where(eq(cliente.id, id)).returning())[0]
         : current.cliente;
-    const plan = planVehiculoReconcile(current.vehicles, vehiclesInput);
     await applyVehiculoPlan(tx, id, plan);
     return row;
   });
