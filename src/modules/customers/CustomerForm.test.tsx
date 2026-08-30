@@ -165,6 +165,66 @@ describe("CustomerForm — vehicle collection (create)", () => {
   });
 
   /**
+   * The sibling case above cannot fail for the reason its name gives: with no
+   * deactivated rows, a row's position ON SCREEN and its position in the
+   * SUBMITTED array are the same number, so an implementation that used the
+   * display index would pass it too. The divergence `indexedVehicleRows`
+   * exists for is only observable with a deactivated row above the erroring
+   * one — display index 2, submitted index 0.
+   */
+  it("keys the plate error by the row's position in the ACTIVE array, not its position on screen", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({
+      status: 400,
+      body: { errors: { "vehicles.0.plate": "La placa es obligatoria" } },
+    });
+    render(
+      <CustomerForm
+        cliente={CLIENTE}
+        vehicles={[vehiculo({ id: "v1", plate: "OLD111", deactivatedAt: new Date("2026-02-01") })]}
+      />,
+    );
+    await open(user, "Editar");
+
+    await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(within(vehicleGroup(2)).getByRole("alert")).toHaveTextContent("La placa es obligatoria");
+  });
+
+  /**
+   * A 400 leaves the dialog open holding `vehicles.<i>.*` keys indexed against
+   * the array THAT submit sent. Adding or removing a row recomputes every
+   * position while those keys stay put, so a stale error repaints itself onto
+   * whichever car now sits at that index — a different one. Nothing else
+   * clears them: `handleSubmit` fires on the next submit, `handleOpenChange`
+   * on open.
+   */
+  it("drops stale per-row errors when the collection changes under them", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({
+      status: 400,
+      body: { errors: { "vehicles.0.plate": "La placa es obligatoria" } },
+    });
+    render(<CustomerForm />);
+    await open(user, "Nuevo cliente");
+
+    await user.type(screen.getByLabelText("Nombre"), "Juan Pérez");
+    await user.type(screen.getByLabelText("Teléfono"), "+525512345678");
+    await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(within(vehicleGroup(1)).getByRole("alert")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+
+    expect(within(vehicleGroup(1)).queryByRole("alert")).not.toBeInTheDocument();
+    expect(within(vehicleGroup(2)).queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  /**
    * `validateVehiculosInput` and `planVehiculoReconcile` both throw under the
    * bare `vehicles` key. Without a slot for it a 400 carrying only that key
    * leaves the dialog open with nothing on screen: the staff member presses

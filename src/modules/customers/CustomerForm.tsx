@@ -168,12 +168,26 @@ export function CustomerForm({
     }));
   }
 
+  /**
+   * Every `vehicles.<i>.*` error key is a position in the array the LAST submit
+   * sent, and these three functions change what that array contains. A 400
+   * leaves the dialog open holding those keys; recomputing positions without
+   * dropping them repaints a stale error onto whichever car now sits at that
+   * index. `handleSubmit` clears on the next submit and `handleOpenChange` on
+   * open — neither fires here.
+   */
+  function clearVehicleIndexedErrors() {
+    setErrors({});
+  }
+
   function addVehicle() {
+    clearVehicleIndexedErrors();
     setForm((prev) => ({ ...prev, vehicles: [...prev.vehicles, emptyVehicleRow()] }));
   }
 
   /** A never-saved row (`id` undefined) is dropped outright; an existing one is marked deactivated (soft delete, D5). */
   function removeOrDeactivateVehicle(rowKey: string) {
+    clearVehicleIndexedErrors();
     setForm((prev) => ({
       ...prev,
       vehicles: prev.vehicles.flatMap((v) => {
@@ -184,6 +198,7 @@ export function CustomerForm({
   }
 
   function restoreVehicle(rowKey: string) {
+    clearVehicleIndexedErrors();
     setForm((prev) => ({
       ...prev,
       vehicles: prev.vehicles.map((v) => (v.key === rowKey ? { ...v, deactivated: false } : v)),
