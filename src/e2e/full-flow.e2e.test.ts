@@ -224,8 +224,9 @@ describe("vehicle search (E2E)", () => {
   let threeVehicles: { id: string };
   let zeroVehicles: { id: string };
   let withDeactivated: { id: string };
-  /** Created by the test below through the REAL write path, not seeded here. */
+  /** Both created by the tests below through the REAL write path, not seeded here. */
   let flatPlateOnly: { id: string } | undefined;
+  let collectionWrite: { id: string } | undefined;
 
   beforeAll(async () => {
     execSync("npx drizzle-kit migrate", { stdio: "inherit" });
@@ -251,7 +252,13 @@ describe("vehicle search (E2E)", () => {
   }, 60_000);
 
   afterAll(async () => {
-    const seeded = [threeVehicles?.id, zeroVehicles?.id, withDeactivated?.id, flatPlateOnly?.id].filter(
+    const seeded = [
+      threeVehicles?.id,
+      zeroVehicles?.id,
+      withDeactivated?.id,
+      flatPlateOnly?.id,
+      collectionWrite?.id,
+    ].filter(
       (id): id is string => Boolean(id),
     );
     if (seeded.length > 0) await db.delete(cliente).where(inArray(cliente.id, seeded));
@@ -308,6 +315,35 @@ describe("vehicle search (E2E)", () => {
 
     const body = await search("flt7");
     expect(body.customers.map((c) => c.id)).toContain(flatPlateOnly.id);
+  });
+
+  it("writes a vehicles[] payload through the REAL transaction and reads the plates back", async () => {
+    // The newest hand-written SQL in this slice — `db.transaction` +
+    // `applyVehiculoPlan`'s batch insert — has no other automated coverage:
+    // `service.test.ts` injects `deps.database`, so a green `npm test` proves
+    // zero coverage of it (AGENTS.md's "Known coverage limit"). Two plates,
+    // not one, so the batch insert is a real multi-row `values()`.
+    // Sorted before comparing, like the `array_agg` case below: `id` is a
+    // random uuid, so `platesSubquery`'s `(created_at, id)` order is stable
+    // across reads but NOT predictable from the payload — asserting a literal
+    // order here would flake, not pin the ordering fix.
+    const response = await customersPOST(
+      new NextRequest("http://localhost/api/customers", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Diego Ramírez",
+          phone: "50767777777",
+          vehicles: [{ plate: "TRX001" }, { plate: "TRX002" }],
+        }),
+      }),
+    );
+    expect(response.status).toBe(201);
+    collectionWrite = ((await response.json()) as { cliente: { id: string } }).cliente;
+
+    const body = await search("trx00");
+    const row = body.customers.find((c) => c.id === collectionWrite!.id);
+    expect(row?.plates.slice().sort()).toEqual(["TRX001", "TRX002"]);
   });
 
   it("returns `plates` as a real multi-element array (array_agg), active vehicles only", async () => {
