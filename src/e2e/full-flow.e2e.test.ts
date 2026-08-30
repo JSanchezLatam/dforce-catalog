@@ -113,13 +113,13 @@ describe("customer search (E2E)", () => {
     const [row1, row2, row3, row4] = await db
       .insert(cliente)
       .values([
-        { name: "María GONZÁLEZ", phone: "50761111111", vehiclePlate: "ABC111" },
-        { name: "Carlos Ruiz", phone: "50762222222", vehiclePlate: null },
-        { name: "Ana Torres", phone: null, vehiclePlate: "XYZ999" },
+        { name: "María GONZÁLEZ", phone: "50761111111" },
+        { name: "Carlos Ruiz", phone: "50762222222" },
+        { name: "Ana Torres", phone: null },
         // Stored with a leading "+" — `normalizePhone`'s real output shape
         // for an international number (validation.ts:47-51), i.e. what a
         // production row genuinely looks like, not a hand-formatted stub.
-        { name: "Pedro Díaz", phone: "+5076444444", vehiclePlate: "DEF444" },
+        { name: "Pedro Díaz", phone: "+5076444444" },
       ])
       .returning({ id: cliente.id });
     mixedCaseName = row1;
@@ -127,20 +127,22 @@ describe("customer search (E2E)", () => {
     nullPhone = row3;
     formattedPhone = row4;
 
-    // `mixedCaseName` deliberately carries the SAME plate in both places: the
-    // legacy `cliente.vehicle_plate` from its seed above, and a `vehiculo` row
-    // here. That is exactly the shape migration `0013`'s backfill produced, and
-    // during slices 2-3 search reads BOTH columns, so this row pins that a
-    // customer in that state is found once, not twice.
-    //
-    // It is NOT what makes "matches a partial plate" pass — the flat branch in
-    // `buildClienteSearchWhere` already does that. An earlier version of this
-    // comment claimed search no longer reads the flat column; it does, until
-    // `0014` drops it in slice 3. Whoever writes that slice: deleting the flat
-    // branch is what finally makes this row load-bearing.
+    // Migration `0014` (slice 3) dropped `cliente.vehicle_plate`, so a plate
+    // now only ever lives in `vehiculo`. `mixedCaseName` gets TWO active
+    // vehicles sharing the same "bc1" substring — that is what still proves
+    // D4's `EXISTS` (not a `LEFT JOIN`): a join would emit one `cliente` row
+    // PER matching vehicle here (two), which is exactly the duplication this
+    // design decision exists to avoid. Before `0014` this row instead carried
+    // the same plate on BOTH `cliente.vehicle_plate` and one `vehiculo` row —
+    // that dedup risk is now structurally impossible (only one path to a
+    // plate remains), so the fixture moved to the risk EXISTS still has to
+    // cover: more than one matching vehicle on the same customer.
     //
     // Cascades with `mixedCaseName`'s deletion in `afterAll`, no separate cleanup.
-    await db.insert(vehiculo).values({ clienteId: mixedCaseName.id, plate: "ABC111" });
+    await db.insert(vehiculo).values([
+      { clienteId: mixedCaseName.id, plate: "ABC111" },
+      { clienteId: mixedCaseName.id, plate: "ABC112" },
+    ]);
   }, 60_000);
 
   // Seeded rows are removed by id. Without this the describe is a one-way
@@ -184,23 +186,27 @@ describe("customer search (E2E)", () => {
     expect(body.customers.map((c) => c.id)).toContain(mixedCaseName.id);
   });
 
-  it("matches a partial plate (mid-string ilike on vehicle_plate)", async () => {
+  it("matches a partial plate (mid-string ilike on vehiculo.plate, via EXISTS)", async () => {
     const body = await search("bc11");
     expect(body.customers.map((c) => c.id)).toContain(mixedCaseName.id);
   });
 
   /**
-   * `mixedCaseName` holds "ABC111" in BOTH `cliente.vehicle_plate` and a
-   * `vehiculo` row — the shape migration `0013`'s backfill produced, and the
-   * shape every backfilled customer has during slices 2-3 while search reads
-   * both. Two matching branches in the same `or()` must still yield ONE row.
+   * `mixedCaseName` has TWO active vehicles ("ABC111"/"ABC112") that both
+   * match "bc1". This is why `vehiculoPlateExists` is an `EXISTS` subquery
+   * and not a `LEFT JOIN` (design D4): a join would emit one `cliente` row
+   * PER matching vehicle (two, here) and need `DISTINCT` to hide it.
+   * `toContain` cannot see that — only counting can.
    *
-   * This is why `vehiculoPlateExists` is an `EXISTS` subquery and not a
-   * `LEFT JOIN` (design D4): a join would emit one `cliente` row per matching
-   * vehicle and need `DISTINCT` to hide it. `toContain` cannot see that — only
-   * counting can.
+   * Before migration `0014` this same risk was covered by one customer
+   * holding the same plate on BOTH `cliente.vehicle_plate` and a `vehiculo`
+   * row (the shape `0013`'s backfill produced) — `0014` removed the flat
+   * column, so that specific duplication is now structurally impossible.
+   * The underlying EXISTS-vs-JOIN risk this test guards is not gone, so the
+   * fixture moved to the shape that still exercises it: a customer with more
+   * than one vehicle matching the same term.
    */
-  it("returns one row for a customer whose plate matches through both paths", async () => {
+  it("returns one row for a customer with two vehicles matching the same term", async () => {
     const body = await search("bc11");
     const hits = body.customers.filter((c) => c.id === mixedCaseName.id);
     expect(hits).toHaveLength(1);
@@ -211,7 +217,12 @@ describe("customer search (E2E)", () => {
     expect(body.customers.map((c) => c.id)).toContain(nullPlate.id);
   });
 
-  it("does not silently drop a row with a NULL vehicle_plate from the or() when matched by name", async () => {
+  // `cliente.vehicle_plate` is gone (migration 0014); `nullPlate` (Carlos
+  // Ruiz) now has ZERO vehicles instead of a NULL flat plate. The risk this
+  // guards is unchanged either way: `nullPlate`'s plate-match branch (`EXISTS`
+  // over `vehiculo`, false for a zero-vehicle customer, never NULL) must not
+  // suppress the row when a DIFFERENT branch (`name`) matches it.
+  it("does not drop a zero-vehicle row from the or() when matched by name", async () => {
     const body = await search("Carlos");
     expect(body.customers.map((c) => c.id)).toContain(nullPlate.id);
   });
@@ -254,7 +265,7 @@ describe("vehicle search (E2E)", () => {
   /** `threeVehicles`' seeded rows, in `values()` order — AAA111, BBB222, CCC333. */
   let threeVehicleIds: string[] = [];
   /** All created by the tests below through the REAL write path, not seeded here. */
-  let flatPlateOnly: { id: string } | undefined;
+  let explicitEmptyVehicles: { id: string } | undefined;
   let collectionWrite: { id: string } | undefined;
   let collectionPatch: { id: string } | undefined;
 
@@ -290,7 +301,7 @@ describe("vehicle search (E2E)", () => {
       threeVehicles?.id,
       zeroVehicles?.id,
       withDeactivated?.id,
-      flatPlateOnly?.id,
+      explicitEmptyVehicles?.id,
       collectionWrite?.id,
       collectionPatch?.id,
     ].filter(
@@ -345,24 +356,32 @@ describe("vehicle search (E2E)", () => {
     expect(byName.customers.map((c) => c.id)).toContain(withDeactivated.id);
   });
 
-  it("finds a customer created through the REAL flat write path, which writes no vehiculo row", async () => {
-    // Every other case in this describe seeds `vehiculo` directly, so none of
-    // them exercises what production actually does today: `CustomerForm` sends
-    // no `vehicles` key, `createCliente` takes its scalar-only branch, the
-    // plate lands in `cliente.vehicle_plate` and NO `vehiculo` row is written.
-    // Search must find that customer until `0014` (slice 3) moves the write.
+  /**
+   * Migration `0014` (slice 3) removed the flat write path this case used to
+   * exercise (`CustomerForm` sending only `vehiclePlate`, no `vehicles` key) —
+   * `validateClienteInput` no longer reads that field at all, so it would now
+   * silently do nothing. `createCliente`'s explicit-`vehicles: []` branch
+   * replaces it: it is real hand-written SQL (`db.transaction` +
+   * `planVehiculoReconcile([], [])`) with no other automated coverage —
+   * `service.test.ts`'s fake `deps.database` never reaches it, and every
+   * other case in this describe seeds `vehiculo` directly or sends a
+   * non-empty `vehicles` array.
+   */
+  it("creates a customer via POST with an explicit empty vehicles array — opens the real transaction, writes nothing, still findable by name", async () => {
     const response = await customersPOST(
       new NextRequest("http://localhost/api/customers", {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "Sofía Ledesma", phone: "50766666666", vehiclePlate: "FLT777" }),
+        body: JSON.stringify({ name: "Sofía Ledesma", phone: "50766666666", vehicles: [] }),
       }),
     );
     expect(response.status).toBe(201);
-    flatPlateOnly = ((await response.json()) as { cliente: { id: string } }).cliente;
+    explicitEmptyVehicles = ((await response.json()) as { cliente: { id: string } }).cliente;
 
-    const body = await search("flt7");
-    expect(body.customers.map((c) => c.id)).toContain(flatPlateOnly.id);
+    const body = await search("Sofía Ledesma");
+    const row = body.customers.find((c) => c.id === explicitEmptyVehicles!.id);
+    expect(row).toBeDefined();
+    expect(row?.plates).toEqual([]);
   });
 
   it("writes a vehicles[] payload through the REAL transaction and reads the plates back", async () => {
