@@ -376,33 +376,41 @@ export function CustomerForm({
                       key={row.key}
                       role="group"
                       aria-label={`Vehículo ${index}`}
-                      className={CARD_MUTED + " flex flex-wrap items-center gap-2"}
+                      className={CARD_MUTED + " flex flex-wrap items-center justify-between gap-2"}
                     >
-                      <span className={PLATE_BADGE_MUTED}>{row.plate.trim() || "Sin placa"}</span>
-                      <span className="text-xs font-medium">Vehículo desactivado</span>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="ml-auto min-h-11 min-w-11"
-                        aria-label={`Restaurar vehículo ${index}`}
-                        onClick={() => restoreVehicle(row.key)}
-                      >
-                        Restaurar
-                      </Button>
-                      {/* Offered here too: a plate typed wrong and then quitado
-                          is exactly the row that should never have existed, and
-                          without this it would stay on the customer forever. */}
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        className="min-h-11 min-w-11"
-                        aria-label={`Eliminar vehículo ${index} definitivamente`}
-                        onClick={() => setPendingDelete(row)}
-                      >
-                        Eliminar definitivamente
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <span className={PLATE_BADGE_MUTED}>{row.plate.trim() || "Sin placa"}</span>
+                        <span className="text-xs font-medium">Vehículo desactivado</span>
+                      </div>
+                      {/* Both actions in one group so they wrap together to a
+                          right-aligned second line: with `ml-auto` on the
+                          first button alone, the second wrapped by itself and
+                          overflowed the row. */}
+                      <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="min-h-11 min-w-11"
+                          aria-label={`Restaurar vehículo ${index}`}
+                          onClick={() => restoreVehicle(row.key)}
+                        >
+                          Restaurar
+                        </Button>
+                        {/* Offered here too: a plate typed wrong and then quitado
+                            is exactly the row that should never have existed, and
+                            without this it would stay on the customer forever. */}
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="min-h-11 min-w-11"
+                          aria-label={`Eliminar vehículo ${index} definitivamente`}
+                          onClick={() => setPendingDelete(row)}
+                        >
+                          Eliminar definitivamente
+                        </Button>
+                    </div>
                     </div>
                   );
                 }
