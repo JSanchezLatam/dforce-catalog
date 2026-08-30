@@ -69,14 +69,19 @@ describe("planVehiculoReconcile (D5)", () => {
     expect(() => planVehiculoReconcile(existing, incoming)).toThrow(ClienteValidationError);
   });
 
-  it("inserts a brand new row for a re-added plate instead of resurrecting the old (deactivated) one", () => {
-    // The previously deactivated vehicle is simply absent from `existing` —
-    // callers only ever pass the customer's ACTIVE vehicles in.
-    const existing: Vehiculo[] = [];
+  it("keys on id, never plate: an id-less element whose plate already exists inserts a new row and drops the old", () => {
+    // The mechanism behind D5's no-resurrection rule. `existing` holds only
+    // ACTIVE vehicles, so a deactivated row is never visible here at all —
+    // this function CANNOT observe resurrection, and a fixture pretending
+    // otherwise would assert a shape the contract says never reaches it.
+    // What it can observe is the reason resurrection is impossible: a plate
+    // collision is not a match. A plate-keyed implementation would return
+    // `updates: [{ id: "v-old", ... }]` here. The full lifecycle, with a real
+    // `deactivated_at`, is pinned by `vehicle search (E2E)`.
+    const existing = [vehiculo({ id: "v-old", plate: "ABC111" })];
     const incoming: VehiculoInput[] = [{ plate: "ABC111" }];
     const plan = planVehiculoReconcile(existing, incoming);
-    expect(plan.inserts).toEqual([{ plate: "ABC111" }]);
-    expect(plan.deactivate).toEqual([]);
+    expect(plan).toEqual({ inserts: [{ plate: "ABC111" }], updates: [], deactivate: ["v-old"] });
   });
 });
 
