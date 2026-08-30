@@ -104,7 +104,30 @@ export async function listVehiculosByCliente(
         includeInactive
           ? eq(vehiculo.clienteId, clienteId)
           : and(eq(vehiculo.clienteId, clienteId), activeVehiculoFilter()),
-      ),
+      )
+      // Same `(created_at, id)` tuple `platesSubquery` uses, for the same
+      // reason and with the same caveat: this buys STABILITY, not insertion
+      // order. A batch insert shares one `created_at`, so `id` — a random
+      // UUID — breaks the tie: arbitrary, but the same on every read.
+      //
+      // Without it this is a bare SELECT with no guaranteed order at all, and
+      // `applyVehiculoPlan` UPDATEs every active vehicle on every save, which
+      // writes a new tuple version that commonly lands at the end of the heap.
+      // The rows would then reorder after an edit — and `CustomerForm` labels
+      // them positionally (`Vehículo 1`), which is both the screen-reader name
+      // and the test handle, so "Vehículo 1" would silently become a different
+      // car. Ordering here also keeps the detail list and the joined
+      // `Vehículos` column agreeing with each other.
+      //
+      // Deliberately UNTESTED, and that is the honest state: an e2e case was
+      // written for it and deleted, because it passed with AND without this
+      // clause. On a three-row table Postgres does not move the updated tuple
+      // observably, so the failure mode is real in principle and not
+      // reproducible at test scale. A test that cannot fail for its stated
+      // reason is worse than none. This clause is one line of insurance
+      // against depending on heap order at all — not a claim that a test
+      // guards it.
+      .orderBy(vehiculo.createdAt, vehiculo.id),
 ): Promise<Vehiculo[]> {
   return queryFn(options.includeInactive ?? false);
 }
