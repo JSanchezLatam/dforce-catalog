@@ -81,7 +81,14 @@ export async function createCliente(input: unknown, deps: CreateClienteDeps = {}
 }
 
 export type UpdateClienteDeps = {
-  getById?: (id: string) => Promise<{ cliente: Cliente; vehicles?: Vehiculo[] } | null>;
+  /**
+   * `vehicles` is REQUIRED, not optional: the reconcile below treats the
+   * returned set as the customer's complete active collection, so an omitted
+   * one would read as "this customer has none" — never deactivating a real
+   * vehicle and inserting duplicates for every id-less entry. The type is what
+   * rules that out; a `?? []` here would just make it fail silently.
+   */
+  getById?: (id: string) => Promise<{ cliente: Cliente; vehicles: Vehiculo[] } | null>;
   findByPhone?: (phone: string) => Promise<Cliente | null>;
   update?: (id: string, patch: Partial<ClienteInput>) => Promise<Cliente>;
   /** Only opened when the patch carries a `vehicles` key — see design.md D5. */
@@ -149,7 +156,7 @@ export async function updateCliente(
       Object.keys(persistedPatch).length > 0
         ? (await tx.update(cliente).set(persistedPatch).where(eq(cliente.id, id)).returning())[0]
         : current.cliente;
-    const plan = planVehiculoReconcile(current.vehicles ?? [], vehiclesInput);
+    const plan = planVehiculoReconcile(current.vehicles, vehiclesInput);
     await applyVehiculoPlan(tx, id, plan);
     return row;
   });

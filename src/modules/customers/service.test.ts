@@ -139,6 +139,7 @@ describe("updateCliente (R16, R18)", () => {
         vehiclePlate: null,
       } as unknown as Cliente,
       orders: [],
+      vehicles: [],
     };
     const update = vi.fn().mockResolvedValue({ ...current.cliente, phone: "+525599998888" });
 
@@ -155,6 +156,7 @@ describe("updateCliente (R16, R18)", () => {
     const current = {
       cliente: { id: "c1", name: "Juan Pérez", phone: "+525512345678" } as unknown as Cliente,
       orders: [],
+      vehicles: [],
     };
     const findByPhone = vi.fn();
     const update = vi.fn().mockResolvedValue(current.cliente);
@@ -168,6 +170,7 @@ describe("updateCliente (R16, R18)", () => {
     const current = {
       cliente: { id: "c1", name: "Juan", phone: "+525512345678" } as unknown as Cliente,
       orders: [],
+      vehicles: [],
     };
 
     await expect(
@@ -180,7 +183,11 @@ describe("updateCliente (R16, R18)", () => {
   });
 
   it("rejects an update whose vehicles entry is missing a plate, without touching the DB", async () => {
-    const current = { cliente: { id: "c1", name: "Juan", phone: "+525512345678" } as unknown as Cliente, orders: [] };
+    const current = {
+      cliente: { id: "c1", name: "Juan", phone: "+525512345678" } as unknown as Cliente,
+      orders: [],
+      vehicles: [],
+    };
     const update = vi.fn();
 
     await expect(

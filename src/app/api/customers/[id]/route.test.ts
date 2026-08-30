@@ -26,6 +26,7 @@ const current = {
     emailOptOut: false,
   } as unknown as Cliente,
   orders: [],
+  vehicles: [],
 };
 
 describe("PATCH /api/customers/[id] (R16)", () => {
