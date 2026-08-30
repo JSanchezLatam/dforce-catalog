@@ -83,6 +83,18 @@ describe("PATCH /api/customers/[id] (R16)", () => {
     expect(response.status).toBe(400);
   });
 
+  it("returns 400 for a flat vehicle field with no plate (R17, the only guard on the flat path)", async () => {
+    // `CustomerForm` is still the sole caller of the flat path until slice 3,
+    // and this cross-field guard is the only thing that shouts on it. Without
+    // this case the PATCH route has zero coverage of it.
+    const response = await handleUpdateCliente(requestWith({ vehicleMake: "Toyota" }), "c1", {
+      getById: async () => current,
+    });
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.errors.vehiclePlate).toBeTruthy();
+  });
+
   it("returns 400 for a vehicles entry missing its plate, unchanged error mapping (D5/D6)", async () => {
     const response = await handleUpdateCliente(requestWith({ vehicles: [{ make: "Toyota" }] }), "c1", {
       getById: async () => current,
