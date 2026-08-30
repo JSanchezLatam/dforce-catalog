@@ -41,33 +41,33 @@ describe("platesSubquery (D4)", () => {
 describe("planVehiculoReconcile (D5)", () => {
   it("leaves every list empty when incoming is omitted (collection untouched, R16)", () => {
     const existing = [vehiculo()];
-    expect(planVehiculoReconcile(existing, undefined)).toEqual({ inserts: [], updates: [], deactivate: [] });
+    expect(planVehiculoReconcile(existing, undefined)).toEqual({ inserts: [], updates: [], deactivate: [], delete: [] });
   });
 
   it("deactivates every existing active id when incoming is an empty array", () => {
     const existing = [vehiculo({ id: "v1" }), vehiculo({ id: "v2" })];
     const plan = planVehiculoReconcile(existing, []);
-    expect(plan).toEqual({ inserts: [], updates: [], deactivate: ["v1", "v2"] });
+    expect(plan).toEqual({ inserts: [], updates: [], deactivate: ["v1", "v2"], delete: [] });
   });
 
   it("plans an insert for an incoming element with no id", () => {
     const incoming: VehiculoInput[] = [{ plate: "XYZ999" }];
     const plan = planVehiculoReconcile([], incoming);
-    expect(plan).toEqual({ inserts: [{ plate: "XYZ999" }], updates: [], deactivate: [] });
+    expect(plan).toEqual({ inserts: [{ plate: "XYZ999" }], updates: [], deactivate: [], delete: [] });
   });
 
   it("plans an update for an incoming element whose id matches an existing active vehicle", () => {
     const existing = [vehiculo({ id: "v1", plate: "ABC111" })];
     const incoming: VehiculoInput[] = [{ id: "v1", plate: "ABC222" }];
     const plan = planVehiculoReconcile(existing, incoming);
-    expect(plan).toEqual({ inserts: [], updates: [{ id: "v1", plate: "ABC222" }], deactivate: [] });
+    expect(plan).toEqual({ inserts: [], updates: [{ id: "v1", plate: "ABC222" }], deactivate: [], delete: [] });
   });
 
   it("deactivates an existing vehicle omitted from the incoming payload", () => {
     const existing = [vehiculo({ id: "v1" }), vehiculo({ id: "v2" })];
     const incoming: VehiculoInput[] = [{ id: "v1", plate: "ABC111" }];
     const plan = planVehiculoReconcile(existing, incoming);
-    expect(plan).toEqual({ inserts: [], updates: [{ id: "v1", plate: "ABC111" }], deactivate: ["v2"] });
+    expect(plan).toEqual({ inserts: [], updates: [{ id: "v1", plate: "ABC111" }], deactivate: ["v2"], delete: [] });
   });
 
   it("throws rather than silently inserting when an id does not belong to this customer at all", () => {
@@ -93,6 +93,7 @@ describe("planVehiculoReconcile (D5)", () => {
       inserts: [],
       updates: [{ id: "v1", plate: "ABC111", deactivated: false }],
       deactivate: [],
+      delete: [],
     });
   });
 
@@ -122,7 +123,7 @@ describe("planVehiculoReconcile (D5)", () => {
   it("never re-stamps an already-inactive vehicle omitted from incoming — deactivate only ever touches active rows", () => {
     const existing = [vehiculo({ id: "v1" }), vehiculo({ id: "v2", deactivatedAt: new Date("2026-01-02") })];
     const plan = planVehiculoReconcile(existing, []);
-    expect(plan).toEqual({ inserts: [], updates: [], deactivate: ["v1"] });
+    expect(plan).toEqual({ inserts: [], updates: [], deactivate: ["v1"], delete: [] });
   });
 
   it("keys on id, never plate: an id-less element whose plate already exists inserts a new row and drops the old", () => {
@@ -137,7 +138,7 @@ describe("planVehiculoReconcile (D5)", () => {
     const existing = [vehiculo({ id: "v-old", plate: "ABC111" })];
     const incoming: VehiculoInput[] = [{ plate: "ABC111" }];
     const plan = planVehiculoReconcile(existing, incoming);
-    expect(plan).toEqual({ inserts: [{ plate: "ABC111" }], updates: [], deactivate: ["v-old"] });
+    expect(plan).toEqual({ inserts: [{ plate: "ABC111" }], updates: [], deactivate: ["v-old"], delete: [] });
   });
 });
 
@@ -164,6 +165,11 @@ function recordingTx() {
         };
       },
     }),
+    delete: () => ({
+      where: async (clause: SQL) => {
+        wheres.push(dialect.sqlToQuery(clause));
+      },
+    }),
     select: () => undefined,
   } as unknown as TxLike;
   return { tx, wheres, sets };
@@ -177,14 +183,14 @@ describe("applyVehiculoPlan (D5)", () => {
   // mutating statements carry the `clienteId` they were already given.
   it("scopes an update to the owning customer, not to the vehicle id alone", async () => {
     const { tx, wheres } = recordingTx();
-    await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [{ id: "v1", plate: "ABC222" }], deactivate: [] });
+    await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [{ id: "v1", plate: "ABC222" }], deactivate: [], delete: [] });
     expect(wheres).toHaveLength(1);
     expect(wheres[0].params).toContain("c1");
   });
 
   it("scopes a deactivate to the owning customer, not to the vehicle ids alone", async () => {
     const { tx, wheres } = recordingTx();
-    await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [], deactivate: ["v1", "v2"] });
+    await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [], deactivate: ["v1", "v2"], delete: [] });
     expect(wheres).toHaveLength(1);
     expect(wheres[0].params).toContain("c1");
   });
@@ -195,7 +201,7 @@ describe("applyVehiculoPlan (D5)", () => {
   // detail, PATCH it back unchanged silently resurrects every soft delete.
   it("leaves deactivated_at untouched on an update that does not name an activation state", async () => {
     const { tx, sets } = recordingTx();
-    await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [{ id: "v1", plate: "ABC222" }], deactivate: [] });
+    await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [{ id: "v1", plate: "ABC222" }], deactivate: [], delete: [] });
     expect(sets[0]).not.toHaveProperty("deactivatedAt");
   });
 
@@ -205,6 +211,7 @@ describe("applyVehiculoPlan (D5)", () => {
       inserts: [],
       updates: [{ id: "v1", plate: "ABC222", deactivated: false }],
       deactivate: [],
+      delete: [],
     });
     expect(sets[0]).toMatchObject({ deactivatedAt: null });
   });
@@ -238,5 +245,61 @@ describe("listVehiculosByCliente (R16, restore)", () => {
     const queryFn = vi.fn().mockResolvedValue([]);
     await listVehiculosByCliente("c1", { includeInactive: true }, queryFn);
     expect(queryFn).toHaveBeenCalledWith(true);
+  });
+});
+
+/**
+ * Delete is the plan's FOURTH outcome, not a second endpoint: deactivate says
+ * "the car left the customer, keep the history"; delete says "this row should
+ * never have existed". The two must never collapse into each other, so every
+ * case below also pins what the OTHER lists do not contain.
+ */
+describe("planVehiculoReconcile — permanent delete (D5)", () => {
+  it("plans a delete for an existing id the payload marks deleted, and neither updates nor deactivates it", () => {
+    const existing = [vehiculo({ id: "v1" }), vehiculo({ id: "v2", plate: "BBB222" })];
+    const plan = planVehiculoReconcile(existing, [
+      { id: "v2", plate: "BBB222" },
+      { id: "v1", plate: "ABC111", deleted: true },
+    ]);
+    expect(plan.delete).toEqual(["v1"]);
+    expect(plan.updates.map((u) => u.id)).toEqual(["v2"]);
+    // Deactivating a row that is about to be deleted would write a doomed
+    // tuple and — once the orden_servicio FK lands and delete can be refused —
+    // silently soft-delete a vehicle the staff member asked to keep or remove,
+    // never to deactivate.
+    expect(plan.deactivate).toEqual([]);
+  });
+
+  it("deletes an ALREADY-deactivated vehicle without re-stamping its deactivated_at", () => {
+    const existing = [vehiculo({ id: "v1", deactivatedAt: new Date("2026-01-02") })];
+    const plan = planVehiculoReconcile(existing, [{ id: "v1", plate: "ABC111", deleted: true }]);
+    expect(plan).toEqual({ inserts: [], updates: [], deactivate: [], delete: ["v1"] });
+  });
+
+  it("still rejects a foreign id, even when the payload calls it a delete", () => {
+    const existing = [vehiculo({ id: "v1" })];
+    expect(() =>
+      planVehiculoReconcile(existing, [{ id: "otro-cliente", plate: "ZZZ000", deleted: true }]),
+    ).toThrow(ClienteValidationError);
+  });
+
+  it("ignores an id-less element marked deleted rather than inserting the row it asked to remove", () => {
+    const plan = planVehiculoReconcile([], [{ plate: "XYZ999", deleted: true }]);
+    expect(plan).toEqual({ inserts: [], updates: [], deactivate: [], delete: [] });
+  });
+});
+
+describe("applyVehiculoPlan — permanent delete (D5)", () => {
+  it("scopes the delete to the owning customer, not to the vehicle ids alone", async () => {
+    const { tx, wheres } = recordingTx();
+    await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [], deactivate: [], delete: ["v1", "v2"] });
+    expect(wheres).toHaveLength(1);
+    expect(wheres[0].params).toContain("c1");
+  });
+
+  it("issues no delete statement at all for an empty delete list", async () => {
+    const { tx, wheres } = recordingTx();
+    await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [], deactivate: [], delete: [] });
+    expect(wheres).toHaveLength(0);
   });
 });

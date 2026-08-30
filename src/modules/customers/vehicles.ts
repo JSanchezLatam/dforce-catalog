@@ -21,6 +21,14 @@ import { ClienteValidationError } from "./validation";
  * delete. Restore (`false`) has to be asked for, not inferred from a row
  * being included.
  */
+/**
+ * `deleted` is the OTHER removal, and it is deliberately not a second value of
+ * `deactivated`. Deactivate means "the car is no longer with this customer" —
+ * the row survives because its service history must. Delete means "this row
+ * should never have existed" — a typo'd plate, a duplicate — and takes the row
+ * with it. Only an element WITH an `id` can be deleted; there is nothing to
+ * remove for one the server has never seen.
+ */
 export type VehiculoInput = {
   id?: string;
   plate: string;
@@ -28,8 +36,15 @@ export type VehiculoInput = {
   model?: string;
   year?: number;
   deactivated?: boolean;
+  deleted?: boolean;
 };
-export type VehiculoPlan = { inserts: VehiculoInput[]; updates: VehiculoInput[]; deactivate: string[] };
+export type VehiculoPlan = {
+  inserts: VehiculoInput[];
+  updates: VehiculoInput[];
+  deactivate: string[];
+  /** Ids to remove outright — the fourth outcome, disjoint from all three above. */
+  delete: string[];
+};
 
 /**
  * Drizzle transaction handle — same `deps.database?: { transaction }` seam
@@ -37,7 +52,7 @@ export type VehiculoPlan = { inserts: VehiculoInput[]; updates: VehiculoInput[];
  * raw `execute`), since every write here goes through Drizzle, not
  * hand-written SQL (D5).
  */
-export type TxLike = Pick<typeof db, "insert" | "update" | "select">;
+export type TxLike = Pick<typeof db, "insert" | "update" | "delete" | "select">;
 
 /** D3 — the one active-vehicle filter every read path must apply. */
 export function activeVehiculoFilter(): SQL {
@@ -148,6 +163,8 @@ export async function listVehiculosByCliente(
  * `deactivated: false` on the incoming element — naming an inactive
  * vehicle's id is NOT enough, or resending an unchanged collection would
  * reactivate every soft-deleted row in it (see `VehiculoInput`). A
+ * An element carrying `deleted: true` is the FOURTH outcome — the row is
+ * removed outright, never updated and never deactivated on the way out. A
  * re-added plate with no id becomes a brand new row; this deliberately does
  * not resurrect a deactivated one by plate (ponytail: revive-on-match by
  * plate if history continuity is ever asked for — id-based restore above
@@ -155,7 +172,7 @@ export async function listVehiculosByCliente(
  */
 export function planVehiculoReconcile(existing: Vehiculo[], incoming: VehiculoInput[] | undefined): VehiculoPlan {
   if (incoming === undefined) {
-    return { inserts: [], updates: [], deactivate: [] };
+    return { inserts: [], updates: [], deactivate: [], delete: [] };
   }
 
   const existingIds = new Set(existing.map((v) => v.id));
@@ -163,14 +180,26 @@ export function planVehiculoReconcile(existing: Vehiculo[], incoming: VehiculoIn
   const deactivateAsked = new Set<string>();
   const inserts: VehiculoInput[] = [];
   const updates: VehiculoInput[] = [];
+  const deletions: string[] = [];
 
   for (const item of incoming) {
     if (item.id === undefined) {
-      inserts.push(item);
+      // A row the server has never seen has nothing to delete. Inserting it
+      // because it lacks an id would create exactly the row the payload asked
+      // to remove, so this element is simply nothing.
+      if (item.deleted !== true) inserts.push(item);
       continue;
     }
     if (!existingIds.has(item.id)) {
       throw new ClienteValidationError({ vehicles: `El vehículo ${item.id} no pertenece a este cliente` });
+    }
+    if (item.deleted === true) {
+      // Kept, so the "omitted means deactivate" rule below skips it: a row on
+      // its way out must not also be soft-deleted. It is not an update either
+      // — the columns are about to stop existing.
+      keptIds.add(item.id);
+      deletions.push(item.id);
+      continue;
     }
     keptIds.add(item.id);
     if (item.deactivated === true) deactivateAsked.add(item.id);
@@ -185,14 +214,14 @@ export function planVehiculoReconcile(existing: Vehiculo[], incoming: VehiculoIn
   const deactivate = existing
     .filter((v) => v.deactivatedAt === null && (!keptIds.has(v.id) || deactivateAsked.has(v.id)))
     .map((v) => v.id);
-  return { inserts, updates, deactivate };
+  return { inserts, updates, deactivate, delete: deletions };
 }
 
 /**
  * D5 — executes a plan inside `tx`; the transaction stays a dumb executor of
  * the pure plan above.
  *
- * Every statement is scoped to `clienteId`, including the two that already
+ * Every statement is scoped to `clienteId`, including the three that already
  * carry a primary key. `planVehiculoReconcile` rejects a foreign id, but that
  * is a caller-side invariant — it only holds when the caller handed it the
  * right `existing` set. Ownership is the trust boundary this module's D5
@@ -236,5 +265,25 @@ export async function applyVehiculoPlan(tx: TxLike, clienteId: string, plan: Veh
       .update(vehiculo)
       .set({ deactivatedAt: new Date() })
       .where(and(eq(vehiculo.clienteId, clienteId), inArray(vehiculo.id, plan.deactivate)));
+  }
+
+  if (plan.delete.length > 0) {
+    // SEAM — the referential-integrity check goes HERE, immediately above this
+    // statement, when `orden_servicio` gains its `vehiculo_id` FK (per-vehicle
+    // service history). Today no table references `vehiculo`, so this DELETE
+    // cannot orphan anything and there is nothing to refuse.
+    //
+    // When the FK lands: `select` over `orden_servicio` for
+    // `inArray(ordenServicio.vehiculoId, plan.delete)` inside this same `tx`,
+    // and throw `ClienteValidationError({ vehicles: "..." })` for the ids it
+    // finds — a 400 the form already renders under its bare `vehicles` key.
+    // `TxLike` exposes `select` for exactly that; nothing about this plan, its
+    // payload shape, or `CustomerForm` has to change to add it. Doing it in
+    // the transaction rather than in `planVehiculoReconcile` is deliberate:
+    // the reconcile is pure and cannot read, and a check outside the
+    // transaction would race an order created between the check and the
+    // DELETE. `ON DELETE RESTRICT` on that FK is the backstop; this check is
+    // what turns the resulting error into Spanish copy instead of a 500.
+    await tx.delete(vehiculo).where(and(eq(vehiculo.clienteId, clienteId), inArray(vehiculo.id, plan.delete)));
   }
 }

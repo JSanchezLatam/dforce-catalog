@@ -162,3 +162,22 @@ describe("validateVehiculosInput (per-vehicle, independent)", () => {
     expect(() => validateVehiculosInput("not-an-array")).toThrow(ClienteValidationError);
   });
 });
+
+describe("validateVehiculoInput — permanent delete", () => {
+  it("passes a boolean `deleted` through and ignores a non-boolean one", () => {
+    expect(validateVehiculoInput({ id: "v1", plate: "ABC-123", deleted: true })).toMatchObject({ deleted: true });
+    expect(validateVehiculoInput({ id: "v1", plate: "ABC-123" })).not.toHaveProperty("deleted");
+    expect(validateVehiculoInput({ id: "v1", plate: "ABC-123", deleted: "si" })).not.toHaveProperty("deleted");
+  });
+
+  /**
+   * A delete addresses a row by id; its other columns are about to stop
+   * existing. Requiring a plate here would mean a staff member who blanked the
+   * plate field and THEN asked to remove the row got "La placa es obligatoria"
+   * for a card no longer on screen.
+   */
+  it("does not require a plate on a delete, but still does on every other element", () => {
+    expect(validateVehiculoInput({ id: "v1", deleted: true })).toEqual({ id: "v1", plate: "", deleted: true });
+    expect(() => validateVehiculoInput({ id: "v1", deleted: false })).toThrow(ClienteValidationError);
+  });
+});

@@ -399,3 +399,102 @@ describe("CustomerForm — long dialog scrolling", () => {
     expect(body).not.toContainElement(screen.getByText("Editar cliente"));
   });
 });
+
+/**
+ * Two different operations, deliberately not one control (defect 2):
+ * "Quitar" soft-deletes — the car left the customer, the row survives because
+ * its service history must. "Eliminar definitivamente" removes the row — a
+ * typo'd plate, a duplicate, something that should never have existed.
+ */
+describe("CustomerForm — permanent vehicle deletion", () => {
+  async function openEditWith(user: ReturnType<typeof userEvent.setup>, vehicles: Vehiculo[]) {
+    render(<CustomerForm cliente={CLIENTE} vehicles={vehicles} />);
+    await open(user, "Editar");
+  }
+
+  it("offers deletion alongside deactivation on a saved vehicle, with copy that cannot be confused", async () => {
+    const user = userEvent.setup();
+    await openEditWith(user, [vehiculo()]);
+
+    const group = vehicleGroup(1);
+    expect(within(group).getByRole("button", { name: "Quitar vehículo 1" })).toHaveTextContent(/^Quitar$/);
+    expect(
+      within(group).getByRole("button", { name: "Eliminar vehículo 1 definitivamente" }),
+    ).toHaveTextContent(/^Eliminar definitivamente$/);
+  });
+
+  it("offers deletion on a deactivated vehicle too — otherwise a typo'd plate stays forever once quitado", async () => {
+    const user = userEvent.setup();
+    await openEditWith(user, [vehiculo({ deactivatedAt: new Date("2026-02-01") })]);
+
+    const group = vehicleGroup(1);
+    expect(within(group).getByRole("button", { name: "Restaurar vehículo 1" })).toBeInTheDocument();
+    expect(within(group).getByRole("button", { name: "Eliminar vehículo 1 definitivamente" })).toBeInTheDocument();
+  });
+
+  it("asks for confirmation before removing anything, naming the plate and the reversible alternative", async () => {
+    const user = userEvent.setup();
+    await openEditWith(user, [vehiculo()]);
+
+    await user.click(screen.getByRole("button", { name: "Eliminar vehículo 1 definitivamente" }));
+
+    expect(screen.getByText("Eliminar vehículo definitivamente")).toBeInTheDocument();
+    expect(screen.getByText(/Se va a borrar el vehículo ABC111/)).toBeInTheDocument();
+    expect(screen.getByText(/no se puede deshacer/i)).toBeInTheDocument();
+    // That asking is not doing is proven by the next case, not here: the
+    // confirmation is a modal, so while it is open the form behind it is inert
+    // and its vehicle rows are correctly absent from the accessibility tree.
+  });
+
+  it("leaves the row untouched when the confirmation is cancelled", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    await openEditWith(user, [vehiculo()]);
+
+    await user.click(screen.getByRole("button", { name: "Eliminar vehículo 1 definitivamente" }));
+    await user.click(screen.getByRole("button", { name: "Cancelar eliminación" }));
+
+    expect(screen.queryByText("Eliminar vehículo definitivamente")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(bodyOf(fetchMock).vehicles).toEqual([{ id: "v1", plate: "ABC111", deactivated: false }]);
+  });
+
+  it("sends `deleted: true` for a confirmed deletion and drops the row from the form", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    await openEditWith(user, [vehiculo({ id: "v1" }), vehiculo({ id: "v2", plate: "BBB222" })]);
+
+    await user.click(screen.getByRole("button", { name: "Eliminar vehículo 1 definitivamente" }));
+    await user.click(screen.getByRole("button", { name: "Eliminar definitivamente" }));
+
+    // The surviving vehicle renumbers to 1 — the display index is a position,
+    // not an identity, exactly as `Quitar` on a never-saved row already behaves.
+    expect(within(vehicleGroup(1)).getByLabelText("Placa")).toHaveValue("BBB222");
+    expect(screen.queryByDisplayValue("ABC111")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    // Deletions ride at the END of the array so an active row's index — the
+    // slot a server-side `vehicles.<i>.plate` error names — never shifts.
+    expect(bodyOf(fetchMock).vehicles).toEqual([
+      { id: "v2", plate: "BBB222", deactivated: false },
+      { id: "v1", deleted: true },
+    ]);
+  });
+
+  it("drops a never-saved row outright instead of sending a delete for an id the server has never seen", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    await openEditWith(user, []);
+
+    await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+    await user.click(screen.getByRole("button", { name: "Eliminar vehículo 1 definitivamente" }));
+    await user.click(screen.getByRole("button", { name: "Eliminar definitivamente" }));
+
+    expect(screen.queryByRole("group", { name: /vehículo/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(bodyOf(fetchMock).vehicles).toEqual([]);
+  });
+});

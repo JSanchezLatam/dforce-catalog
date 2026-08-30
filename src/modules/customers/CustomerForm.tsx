@@ -34,6 +34,11 @@ import {
  * `deactivated` mirrors a real `vehiculo.deactivatedAt`, but ALSO doubles as
  * "the staff member just removed this row" for a not-yet-saved vehicle —
  * `removeOrDeactivateVehicle` below tells the two apart by `id`.
+ *
+ * `deleted` is a different thing again, and never a server state: it is a
+ * PENDING permanent removal, staged like every other edit in this form and
+ * only real once Guardar goes through. A deleted row leaves the screen but
+ * stays in state, because its id is what the payload has to carry back.
  */
 type VehiculoRow = {
   key: string;
@@ -43,6 +48,7 @@ type VehiculoRow = {
   model: string;
   year: string;
   deactivated: boolean;
+  deleted: boolean;
 };
 
 type CustomerFormState = {
@@ -55,7 +61,7 @@ type CustomerFormState = {
 };
 
 function emptyVehicleRow(): VehiculoRow {
-  return { key: crypto.randomUUID(), plate: "", make: "", model: "", year: "", deactivated: false };
+  return { key: crypto.randomUUID(), plate: "", make: "", model: "", year: "", deactivated: false, deleted: false };
 }
 
 /**
@@ -80,6 +86,7 @@ function toFormState(cliente?: Cliente | null, allVehicles?: Vehiculo[] | null):
       model: v.model ?? "",
       year: v.year != null ? String(v.year) : "",
       deactivated: v.deactivatedAt !== null,
+      deleted: false,
     })),
     whatsappOptOut: cliente?.whatsappOptOut ?? false,
     emailOptOut: cliente?.emailOptOut ?? false,
@@ -88,7 +95,17 @@ function toFormState(cliente?: Cliente | null, allVehicles?: Vehiculo[] | null):
 
 /** Active rows in submission order — the index a server-side `vehicles.<i>.<field>` error refers to. */
 function activeVehicles(vehicles: VehiculoRow[]) {
-  return vehicles.filter((v) => !v.deactivated);
+  return vehicles.filter((v) => !v.deleted && !v.deactivated);
+}
+
+/** Everything still on screen. A row staged for permanent deletion leaves the UI the moment it is confirmed. */
+function visibleVehicles(vehicles: VehiculoRow[]) {
+  return vehicles.filter((v) => !v.deleted);
+}
+
+/** Saved rows staged for permanent removal — only these carry an id worth sending. */
+function deletedVehicles(vehicles: VehiculoRow[]) {
+  return vehicles.filter((v) => v.deleted);
 }
 
 /** Sends `undefined` (omitted) for blank optional fields — matches validation.ts's `trimmedOrUndefined`. */
@@ -110,13 +127,21 @@ function buildPayload(form: CustomerFormState) {
     // OMITTED means "leave this vehicle's state alone", which is what makes
     // an unchanged resend a no-op for any client (vehicles.ts). An insert has
     // no state to restore, so it carries no flag.
-    vehicles: activeVehicles(form.vehicles).map((v) => ({
-      ...(v.id !== undefined ? { id: v.id, deactivated: false } : {}),
-      plate: v.plate.trim(),
-      make: v.make.trim() || undefined,
-      model: v.model.trim() || undefined,
-      year: v.year.trim() ? Number(v.year) : undefined,
-    })),
+    // Permanent deletions ride at the END of the array on purpose: every
+    // `vehicles.<i>.<field>` error key the server can return is a position in
+    // this array, and appending keeps each surviving row's index exactly where
+    // the active list put it.
+    vehicles: [
+      ...activeVehicles(form.vehicles).map((v) => ({
+        ...(v.id !== undefined ? { id: v.id, deactivated: false } : {}),
+        plate: v.plate.trim(),
+        make: v.make.trim() || undefined,
+        model: v.model.trim() || undefined,
+        year: v.year.trim() ? Number(v.year) : undefined,
+      })),
+      // A delete addresses the row by id; no other column survives it.
+      ...deletedVehicles(form.vehicles).map((v) => ({ id: v.id!, deleted: true })),
+    ],
     whatsappOptOut: form.whatsappOptOut,
     emailOptOut: form.emailOptOut,
   };
@@ -157,6 +182,8 @@ export function CustomerForm({
   const [form, setForm] = useState<CustomerFormState>(() => toFormState(cliente, vehicles));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  /** The row a destructive confirmation is open for — `null` means no confirmation on screen. */
+  const [pendingDelete, setPendingDelete] = useState<VehiculoRow | null>(null);
 
   function update<K extends keyof CustomerFormState>(key: K, value: CustomerFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -202,6 +229,29 @@ export function CustomerForm({
     }));
   }
 
+  /**
+   * The destructive twin of `removeOrDeactivateVehicle`, and deliberately a
+   * separate action rather than a mode of it: "Quitar" means the car left the
+   * customer and its service history has to survive; this means the row should
+   * never have existed. Confirmed first (`pendingDelete`) because it cannot be
+   * undone — `ConfirmGenerateDialog` is this repo's idiom for that.
+   *
+   * A never-saved row has no server row to remove, so it is simply dropped,
+   * exactly as `removeOrDeactivateVehicle` already drops it. A saved one is
+   * staged: off the screen, still in state, its id sent as `deleted: true` on
+   * Guardar. Nothing is destroyed until that save succeeds.
+   */
+  function deleteVehicle(rowKey: string) {
+    clearVehicleIndexedErrors();
+    setForm((prev) => ({
+      ...prev,
+      vehicles: prev.vehicles.flatMap((v) => {
+        if (v.key !== rowKey) return [v];
+        return v.id === undefined ? [] : [{ ...v, deleted: true }];
+      }),
+    }));
+  }
+
   function restoreVehicle(rowKey: string) {
     clearVehicleIndexedErrors();
     setForm((prev) => ({
@@ -212,6 +262,7 @@ export function CustomerForm({
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
+    setPendingDelete(null);
     if (next) {
       setForm(toFormState(cliente, vehicles));
       setErrors({});
@@ -252,7 +303,8 @@ export function CustomerForm({
 
       const body = await response.json();
       setOpen(false);
-      onSaved?.(body.cliente, payload.vehicles.map((v) => v.plate));
+      // Active rows only — a deletion entry is an id with no plate to report.
+      onSaved?.(body.cliente, activeVehicles(form.vehicles).map((v) => v.plate.trim()));
     } finally {
       setIsSubmitting(false);
     }
@@ -311,7 +363,7 @@ export function CustomerForm({
 
             <div className="flex flex-col gap-3">
               <h3 className={SECTION_HEADING}>Vehículos</h3>
-              {indexedVehicleRows(form.vehicles).map(({ row, index, sentIndex }) => {
+              {indexedVehicleRows(visibleVehicles(form.vehicles)).map(({ row, index, sentIndex }) => {
                 // A deactivated vehicle is not editable and is not the row the
                 // staff member came here for: it collapses to plate + state +
                 // the way back, on a muted surface, so the vehicles actually in
@@ -338,6 +390,19 @@ export function CustomerForm({
                       >
                         Restaurar
                       </Button>
+                      {/* Offered here too: a plate typed wrong and then quitado
+                          is exactly the row that should never have existed, and
+                          without this it would stay on the customer forever. */}
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="min-h-11 min-w-11"
+                        aria-label={`Eliminar vehículo ${index} definitivamente`}
+                        onClick={() => setPendingDelete(row)}
+                      >
+                        Eliminar definitivamente
+                      </Button>
                     </div>
                   );
                 }
@@ -347,16 +412,33 @@ export function CustomerForm({
                   <div key={row.key} role="group" aria-label={`Vehículo ${index}`} className={CARD + " flex flex-col gap-3"}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className={PLATE_BADGE}>{row.plate.trim() || "Sin placa"}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="min-h-11 min-w-11"
-                        aria-label={`Quitar vehículo ${index}`}
-                        onClick={() => removeOrDeactivateVehicle(row.key)}
-                      >
-                        Quitar
-                      </Button>
+                      {/* Two removals, two very different meanings, so the copy
+                          carries the difference rather than an icon: the soft one
+                          stays the plain "Quitar" a staff member already knows,
+                          the irreversible one says so in full and wears the
+                          destructive variant. */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="min-h-11 min-w-11"
+                          aria-label={`Quitar vehículo ${index}`}
+                          onClick={() => removeOrDeactivateVehicle(row.key)}
+                        >
+                          Quitar
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="min-h-11 min-w-11"
+                          aria-label={`Eliminar vehículo ${index} definitivamente`}
+                          onClick={() => setPendingDelete(row)}
+                        >
+                          Eliminar definitivamente
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -451,6 +533,46 @@ export function CustomerForm({
             </Button>
           </DialogFooter>
         </form>
+
+        {/* Destructive and irreversible, so it asks first — the same shape
+            `ConfirmGenerateDialog` uses (no close X, the safe action first,
+            the consequence spelled out above both). `account`'s user
+            deactivation asks nothing, correctly: that one is reversible. */}
+        <Dialog open={pendingDelete !== null} onOpenChange={(next) => !next && setPendingDelete(null)}>
+          <DialogContent showCloseButton={false} className="max-w-md">
+            <DialogTitle>Eliminar vehículo definitivamente</DialogTitle>
+            <DialogBody className="flex flex-col gap-2 text-sm text-muted-foreground">
+              <p>
+                Se va a borrar el vehículo {pendingDelete?.plate.trim() || "sin placa"} de este cliente. Esta
+                acción no se puede deshacer.
+              </p>
+              <p>
+                Si el auto simplemente ya no está con el cliente, usá Quitar: queda desactivado y se conserva
+                su historial de servicio.
+              </p>
+            </DialogBody>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                aria-label="Cancelar eliminación"
+                onClick={() => setPendingDelete(null)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => {
+                  if (pendingDelete) deleteVehicle(pendingDelete.key);
+                  setPendingDelete(null);
+                }}
+              >
+                Eliminar definitivamente
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );
