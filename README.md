@@ -10,6 +10,26 @@ Full requirements/design live under `.kiro/specs/dforce-catalog/` and in the
 SDD spec/design artifacts (`sdd/dforce-catalog/*`) this build was generated
 from.
 
+## Running locally (the short way)
+
+```
+./scripts/dev.sh
+```
+
+Brings up Postgres in Docker, applies migrations, seeds a local administrator
+when the `users` table is empty, and starts Next in dev mode on
+`http://localhost:3000` — `admin` / `admin123` by default, overridable with
+`DEV_USER` / `DEV_PASSWORD`. `APP_PORT` moves the port, `SKIP_TYPECHECK=1`
+skips the `tsc` gate.
+
+It orchestrates only: it never installs dependencies and never writes `.env`.
+When a prerequisite is missing it prints what is wrong and the command that
+fixes it, then exits non-zero.
+
+To keep the database out of a Docker volume entirely, see **Running without
+Docker** below. The long form that follows is what these scripts automate, and
+what you want when running the production image rather than dev mode.
+
 ## Running locally (Docker)
 
 1. Copy the env template and fill in real values:
@@ -97,6 +117,27 @@ built `FROM mcr.microsoft.com/playwright:...`).
   else (Postgres, pg-boss, bcrypt/sessions, the Chromium render) runs for
   real.
 
+  **Recreate the database on every run.** The catalog-generation block seeds
+  `e2e-user`/`e2e-admin`/`e2e-other` and never cleans up, so a second run
+  against the same database dies on `Key (username)=(e2e-user) already
+  exists`. Known debt. The customer and vehicle blocks do clean up, and by
+  captured id rather than by name, so a real row sharing a name is untouched.
+
+  **This suite is not optional for database work.** Every unit test in
+  `src/modules/*` injects its query seam, so a fully green `npm run test` is
+  *evidence* that no test executed real SQL — see "Known coverage limit" in
+  `AGENTS.md`. Three defects reached review invisible to the entire unit
+  suite and only ever showed up here: a search predicate that matched nothing
+  after a data migration, a correlated subquery that returned an empty array
+  for every row because Drizzle elides table qualifiers inside a `.select()`
+  field map, and a collection write that resurrected every soft-deleted row.
+
+  Asserting the generated SQL text (`new PgDialect().sqlToQuery(...)`, as
+  `customers/queries.test.ts` does) proves the *shape* of a `WHERE` fragment
+  without a database. It does **not** prove a query returns the right rows,
+  and it does not reproduce qualifier behaviour inside a `.select()` — that
+  is how the second of those three got through.
+
 ## Architecture overview
 
 Next.js App Router, self-hosted with `output: "standalone"` (see
@@ -108,6 +149,11 @@ jobs registered once at server startup via `src/instrumentation.ts`.
 | Module (`src/modules/*`) | Responsibility |
 |---|---|
 | `auth` | DB-backed sessions, bcrypt password hashing, the `can(user, action)` policy seam |
+| `account` | Admin user management: create/edit, forced password change, reversible deactivation via `deactivated_at` — the convention any other soft delete copies |
+| `customers` | `cliente` CRUD, the `vehiculo` collection and its pure reconcile planner, per-vehicle validation, and the accent-insensitive search shared by the list page and the order picker |
+| `service-orders` | Service orders against a customer, status transitions, parts line-items with a price/name snapshot, and the async customer picker |
+| `reminders` | Appointment and service-due reminders over WhatsApp/email, with per-channel opt-out re-checked at fire time, not schedule time |
+| `workshop-config` | The workshop's own identity — name, contact, hours, socials, logo, cover image — as printed on the catalog |
 | `inventory-sync` | Interfuerza API client (rate-limited, retrying), round-trip mapper, the weekly/manual sync job |
 | `inventory-view` | Filtered, paginated read model for browsing inventory |
 | `template-config` | Persisted catalog branding (logo, colors, font, cover text) with live preview |
@@ -142,3 +188,22 @@ a Playwright version bump.
   category snapshot is persisted, not the full product selection).
 - A missing/evicted PDF shows a plain JSON 404 body rather than a styled
   in-app message.
+- Validation errors mix languages: newer messages are Spanish per the
+  language rule, older ones (`"Name is required"`) are still English, so a
+  single 400 can render both. Pre-existing; translating them touches several
+  test files.
+- Customers cannot be deleted or deactivated from the UI. The database
+  already refuses to delete a customer that has service orders
+  (`onDelete: restrict`), but that safety net is never exposed to staff.
+- There is no unique constraint on `cliente.phone`, deliberately. A census of
+  the 364 Interfuerza customers found 9 repeated numbers across 18 records —
+  and three of those groups are *different people sharing a phone*, which a
+  unique index would reject forever. Duplicates are a search problem, not a
+  constraint problem; they were all created weeks apart by staff who could
+  not find the existing record.
+- `producto.category_l1` is upper-cased on sync (`0011_fold_category_case`),
+  so the ERP's `Accesorios` and `ACCESORIOS` collapse into one. The
+  duplicates still exist upstream in Interfuerza.
+- Nothing is deployed anywhere yet. Before a first deploy the PDF queue has
+  to be drained with `scripts/drain-pdf-queue.sh` — the job payload shape
+  changed after those jobs were enqueued.
