@@ -10,15 +10,25 @@ import { count, desc, eq, or, sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import { db } from "@/shared/db/client";
-import { cliente, ordenServicio, type Cliente, type OrdenServicio } from "@/shared/db/schema";
+import { cliente, ordenServicio, type Cliente, type OrdenServicio, type Vehiculo } from "@/shared/db/schema";
+import { listVehiculosByCliente, platesSubquery, vehiculoPlateExists } from "./vehicles";
 
 export const DEFAULT_PAGE_SIZE = 10;
 
 export type ClienteFilters = { search?: string };
 
-export type ClienteListItem = Pick<Cliente, "id" | "name" | "phone" | "email" | "vehiclePlate" | "createdAt">;
+/**
+ * `vehiclePlate` is kept for now alongside `plates` — dropping it would break
+ * `customers/page.tsx` and `CustomerPicker.tsx`, both slice 3 scope
+ * (expand/contract, design.md). It's removed when `cliente`'s inline vehicle
+ * columns are (migration 0014, slice 3).
+ */
+export type ClienteListItem = Pick<Cliente, "id" | "name" | "phone" | "email" | "vehiclePlate" | "createdAt"> & {
+  /** R19/D4 — this customer's active vehicle plates, replacing the single `vehiclePlate` column as the source of truth. */
+  plates: string[];
+};
 
-export type ClienteDetail = { cliente: Cliente; orders: OrdenServicio[] };
+export type ClienteDetail = { cliente: Cliente; orders: OrdenServicio[]; vehicles: Vehiculo[] };
 
 /**
  * `ilike` folds case but NOT accents, so 'María GONZÁLEZ' ilike '%maria%' is
@@ -34,7 +44,19 @@ function unaccentIlike(column: PgColumn, pattern: string): SQL {
   return sql`unaccent(${column}) ilike unaccent(${pattern})`;
 }
 
-/** Pure — R19's "partial, case- and accent-insensitive match against name, phone, or vehicle plate". */
+/**
+ * Pure — R19's "partial, case- and accent-insensitive match against name,
+ * phone, or any active vehicle plate".
+ *
+ * BOTH plate paths are matched, the same expand/contract `validation.ts` and
+ * `ClienteListItem` already apply on the write and read sides: until slice 3
+ * moves `CustomerForm` to the `vehicles` collection, a create sends no
+ * `vehicles` key, so `createCliente` takes its scalar-only branch and the
+ * plate lands in `cliente.vehicle_plate` with NO `vehiculo` row behind it.
+ * With only the `EXISTS`, every customer created between this slice and slice
+ * 3 would be permanently unfindable by plate — and `0013` backfills only rows
+ * that existed before it ran. Removed by `0014` (slice 3).
+ */
 export function buildClienteSearchWhere(search?: string) {
   const term = search?.trim();
   if (!term) return undefined;
@@ -43,6 +65,9 @@ export function buildClienteSearchWhere(search?: string) {
     unaccentIlike(cliente.name, pattern),
     unaccentIlike(cliente.phone, pattern),
     unaccentIlike(cliente.vehiclePlate, pattern),
+    // D4 — `unaccentIlike` is reused verbatim (PR #44), applied to
+    // `vehiculo.plate` inside `vehicles.ts`, which owns that table (D3).
+    vehiculoPlateExists(pattern, unaccentIlike),
   );
 }
 
@@ -58,6 +83,7 @@ export async function listClientes(
         phone: cliente.phone,
         email: cliente.email,
         vehiclePlate: cliente.vehiclePlate,
+        plates: platesSubquery(),
         createdAt: cliente.createdAt,
       })
       .from(cliente)
@@ -92,7 +118,8 @@ export async function getClienteById(
       .from(ordenServicio)
       .where(eq(ordenServicio.clienteId, id))
       .orderBy(desc(ordenServicio.createdAt));
-    return { cliente: clienteRow, orders };
+    const vehicles = await listVehiculosByCliente(id);
+    return { cliente: clienteRow, orders, vehicles };
   },
 ): Promise<ClienteDetail | null> {
   return queryFn();

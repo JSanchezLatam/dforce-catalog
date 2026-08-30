@@ -276,7 +276,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
     await createOrder(
       { clienteId: "c1", appointmentAt: new Date("2026-08-01T10:00:00.000Z") },
       {
-        getClienteById: async () => ({ cliente: clienteRow, orders: [] }),
+        getClienteById: async () => ({ cliente: clienteRow, orders: [], vehicles: [] }),
         db: database as unknown as typeof import("@/shared/db/client").db,
         now: () => new Date("2026-07-26T12:00:00.000Z"),
         scheduleReminder,
@@ -294,7 +294,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
     await createOrder(
       { clienteId: "c1" },
       {
-        getClienteById: async () => ({ cliente: clienteRow, orders: [] }),
+        getClienteById: async () => ({ cliente: clienteRow, orders: [], vehicles: [] }),
         db: database as unknown as typeof import("@/shared/db/client").db,
         scheduleReminder,
       },
@@ -319,7 +319,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
       getById: async () => current,
       db: database as unknown as typeof import("@/shared/db/client").db,
       now: () => new Date("2026-07-26T12:00:00.000Z"),
-      getClienteById: async () => ({ cliente: clienteRow, orders: [] }),
+      getClienteById: async () => ({ cliente: clienteRow, orders: [], vehicles: [] }),
       scheduleReminder,
     });
 
@@ -370,7 +370,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
         getById: async () => current,
         db: database as unknown as typeof import("@/shared/db/client").db,
         now: () => new Date("2026-07-26T12:00:00.000Z"),
-        getClienteById: async () => ({ cliente: clienteRow, orders: [] }),
+        getClienteById: async () => ({ cliente: clienteRow, orders: [], vehicles: [] }),
         cancelRemindersForOrder,
         scheduleReminder,
       },

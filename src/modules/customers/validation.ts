@@ -1,12 +1,25 @@
 /**
- * customers/validation.ts — pure, DB-free validation for `cliente` (R17).
+ * customers/validation.ts — pure, DB-free validation for `cliente` (R17) and,
+ * since vehicles-one-to-many (C3, design.md D6), for each `vehiculo` in a
+ * customer's collection independently. The per-vehicle path is ADDITIVE: the
+ * flat `vehicle*` fields below keep working until slice 3 (see `ClienteInput`).
  *
  * Mirrors template-config/service.ts's `validateTemplateConfigInput`: a
  * single validate function that either returns a fully-typed, normalized
  * input or throws `ClienteValidationError` with ALL field errors collected
  * (not just the first).
  */
+import type { VehiculoInput } from "./vehicles";
 
+/**
+ * The four flat `vehicle*` fields are kept for now alongside the `vehicles`
+ * collection — dropping them would silently discard whatever `CustomerForm`'s
+ * four inline inputs send, which is slice 3 scope (expand/contract, design.md).
+ * They stay authoritative on `cliente`'s own columns until migration `0014`
+ * drops them. Exactly the reasoning `queries.ts` records for
+ * `ClienteListItem.vehiclePlate` on the read side, mirrored here on the write
+ * side.
+ */
 export type ClienteInput = {
   name: string;
   phone: string;
@@ -84,7 +97,8 @@ export function validateClienteInput(input: unknown): ClienteInput {
     typeof value.vehicleYear === "number" && Number.isFinite(value.vehicleYear) ? value.vehicleYear : undefined;
 
   // R17 — "IF any inline vehicle field other than plate is provided, THEN
-  // plate MUST also be provided".
+  // plate MUST also be provided". Still the ONLY thing that shouts on the flat
+  // path, which `CustomerForm` is still the sole caller of until slice 3.
   const hasOtherVehicleField = vehicleMake !== undefined || vehicleModel !== undefined || vehicleYear !== undefined;
   if (hasOtherVehicleField && vehiclePlate === undefined) {
     errors.vehiclePlate = "Plate is required whenever any other vehicle field is present";
@@ -108,4 +122,66 @@ export function validateClienteInput(input: unknown): ClienteInput {
     ...(whatsappOptOut !== undefined ? { whatsappOptOut } : {}),
     ...(emailOptOut !== undefined ? { emailOptOut } : {}),
   };
+}
+
+/** D6 — R17 relocated: `plate` is required per vehicle; make/model/year stay optional. */
+export function validateVehiculoInput(input: unknown): VehiculoInput {
+  const errors: Record<string, string> = {};
+  const value = (input ?? {}) as Partial<Record<string, unknown>>;
+
+  const id = typeof value.id === "string" && value.id.trim() ? value.id.trim() : undefined;
+  const plate = trimmedOrUndefined(value.plate);
+  if (!plate) {
+    errors.plate = "La placa es obligatoria";
+  }
+
+  const make = trimmedOrUndefined(value.make);
+  const model = trimmedOrUndefined(value.model);
+  const year = typeof value.year === "number" && Number.isFinite(value.year) ? value.year : undefined;
+
+  if (Object.keys(errors).length > 0) {
+    throw new ClienteValidationError(errors);
+  }
+
+  return {
+    ...(id !== undefined ? { id } : {}),
+    plate: plate!,
+    ...(make !== undefined ? { make } : {}),
+    ...(model !== undefined ? { model } : {}),
+    ...(year !== undefined ? { year } : {}),
+  };
+}
+
+/**
+ * Validates a customer's whole vehicle payload — each element independently
+ * (R17: "never across the customer's whole collection"), so one invalid
+ * vehicle never changes how a valid sibling's fields are treated. `undefined`
+ * means "vehicles omitted" (collection untouched, R16) and is passed through
+ * unchanged; an explicit `[]` validates to an empty array.
+ */
+export function validateVehiculosInput(input: unknown): VehiculoInput[] | undefined {
+  if (input === undefined) return undefined;
+  if (!Array.isArray(input)) {
+    throw new ClienteValidationError({ vehicles: "Vehículos debe ser una lista" });
+  }
+
+  const errors: Record<string, string> = {};
+  const results: VehiculoInput[] = [];
+
+  input.forEach((item, index) => {
+    try {
+      results.push(validateVehiculoInput(item));
+    } catch (err) {
+      if (!(err instanceof ClienteValidationError)) throw err;
+      for (const [field, message] of Object.entries(err.errors)) {
+        errors[`vehicles.${index}.${field}`] = message;
+      }
+    }
+  });
+
+  if (Object.keys(errors).length > 0) {
+    throw new ClienteValidationError(errors);
+  }
+
+  return results;
 }

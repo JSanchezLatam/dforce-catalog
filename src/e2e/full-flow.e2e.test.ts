@@ -26,7 +26,7 @@
  * render.
  */
 import { execSync } from "node:child_process";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -47,6 +47,7 @@ vi.mock("@/modules/catalog-storage/r2", () => {
 import { hashPassword } from "@/modules/auth/password";
 import { SESSION_COOKIE, validateSession } from "@/modules/auth/session";
 import { resolveAllPrices } from "@/modules/catalog-builder/price-lists";
+import { applyVehiculoPlan } from "@/modules/customers/vehicles";
 import { buildIndexSections } from "@/modules/catalog-builder/selection";
 import { DEFAULT_TEMPLATE_ID } from "@/shared/template/registry";
 import { listCatalogsForUser } from "@/modules/catalog-storage/queries";
@@ -56,7 +57,7 @@ import { runSync } from "@/modules/inventory-sync/job";
 import { registerPdfGenerateWorker } from "@/modules/pdf-generation/worker";
 import { proxy } from "@/proxy";
 import { db } from "@/shared/db/client";
-import { cliente, users } from "@/shared/db/schema";
+import { cliente, users, vehiculo } from "@/shared/db/schema";
 import { getBoss } from "@/shared/jobs/boss";
 
 import { POST as loginPOST } from "../app/api/login/route";
@@ -64,7 +65,8 @@ import { POST as templateConfigPOST } from "../app/api/template-config/route";
 import { POST as productsPOST } from "../app/api/catalog-builder/products/route";
 import { POST as generatePOST } from "../app/api/catalog-builder/generate/route";
 import { GET as filePOST } from "../app/api/catalogs/[id]/file/route";
-import { GET as customersGET } from "../app/api/customers/route";
+import { GET as customersGET, POST as customersPOST } from "../app/api/customers/route";
+import { PATCH as customersPATCH } from "../app/api/customers/[id]/route";
 
 const PASSWORD = "Sup3rSecret!1";
 
@@ -124,6 +126,21 @@ describe("customer search (E2E)", () => {
     nullPlate = row2;
     nullPhone = row3;
     formattedPhone = row4;
+
+    // `mixedCaseName` deliberately carries the SAME plate in both places: the
+    // legacy `cliente.vehicle_plate` from its seed above, and a `vehiculo` row
+    // here. That is exactly the shape migration `0013`'s backfill produced, and
+    // during slices 2-3 search reads BOTH columns, so this row pins that a
+    // customer in that state is found once, not twice.
+    //
+    // It is NOT what makes "matches a partial plate" pass — the flat branch in
+    // `buildClienteSearchWhere` already does that. An earlier version of this
+    // comment claimed search no longer reads the flat column; it does, until
+    // `0014` drops it in slice 3. Whoever writes that slice: deleting the flat
+    // branch is what finally makes this row load-bearing.
+    //
+    // Cascades with `mixedCaseName`'s deletion in `afterAll`, no separate cleanup.
+    await db.insert(vehiculo).values({ clienteId: mixedCaseName.id, plate: "ABC111" });
   }, 60_000);
 
   // Seeded rows are removed by id. Without this the describe is a one-way
@@ -172,6 +189,23 @@ describe("customer search (E2E)", () => {
     expect(body.customers.map((c) => c.id)).toContain(mixedCaseName.id);
   });
 
+  /**
+   * `mixedCaseName` holds "ABC111" in BOTH `cliente.vehicle_plate` and a
+   * `vehiculo` row — the shape migration `0013`'s backfill produced, and the
+   * shape every backfilled customer has during slices 2-3 while search reads
+   * both. Two matching branches in the same `or()` must still yield ONE row.
+   *
+   * This is why `vehiculoPlateExists` is an `EXISTS` subquery and not a
+   * `LEFT JOIN` (design D4): a join would emit one `cliente` row per matching
+   * vehicle and need `DISTINCT` to hide it. `toContain` cannot see that — only
+   * counting can.
+   */
+  it("returns one row for a customer whose plate matches through both paths", async () => {
+    const body = await search("bc11");
+    const hits = body.customers.filter((c) => c.id === mixedCaseName.id);
+    expect(hits).toHaveLength(1);
+  });
+
   it("matches partial digits-only phone (mid-string ilike on phone)", async () => {
     const body = await search("622222");
     expect(body.customers.map((c) => c.id)).toContain(nullPlate.id);
@@ -201,6 +235,238 @@ describe("customer search (E2E)", () => {
     const raw = await search("644-4444");
     expect(raw.relaxedFrom).toBe("6444444");
     expect(raw.customers.map((c) => c.id)).toContain(formattedPhone.id);
+  });
+});
+
+/**
+ * vehicles-one-to-many (C3, design.md Testing Strategy) — the ONE thing every
+ * unit test cannot prove: `service.test.ts`/`queries.test.ts` inject the
+ * query seam, so a green `npm test` proves zero coverage of the real
+ * `EXISTS`/`array_agg` SQL `buildClienteSearchWhere`/`listClientes` build.
+ * Mirrors `customer search (E2E)` exactly: real migrate, seed via captured
+ * ids, `afterAll` deletes those `cliente` ids (`vehiculo` cascades, no
+ * separate cleanup needed).
+ */
+describe("vehicle search (E2E)", () => {
+  let threeVehicles: { id: string };
+  let zeroVehicles: { id: string };
+  let withDeactivated: { id: string };
+  /** `threeVehicles`' seeded rows, in `values()` order — AAA111, BBB222, CCC333. */
+  let threeVehicleIds: string[] = [];
+  /** All created by the tests below through the REAL write path, not seeded here. */
+  let flatPlateOnly: { id: string } | undefined;
+  let collectionWrite: { id: string } | undefined;
+  let collectionPatch: { id: string } | undefined;
+
+  beforeAll(async () => {
+    execSync("npx drizzle-kit migrate", { stdio: "inherit" });
+
+    const [row1, row2, row3] = await db
+      .insert(cliente)
+      .values([
+        { name: "Lucía Fernández", phone: "50763333333" },
+        { name: "Roberto Silva", phone: "50764444444" },
+        { name: "Marta Núñez", phone: "50765555555" },
+      ])
+      .returning({ id: cliente.id });
+    threeVehicles = row1;
+    zeroVehicles = row2;
+    withDeactivated = row3;
+
+    const seededVehicles = await db
+      .insert(vehiculo)
+      .values([
+        { clienteId: threeVehicles.id, plate: "AAA111" },
+        { clienteId: threeVehicles.id, plate: "BBB222" },
+        { clienteId: threeVehicles.id, plate: "CCC333" },
+        { clienteId: withDeactivated.id, plate: "ZZZ999", deactivatedAt: new Date() },
+      ])
+      .returning({ id: vehiculo.id });
+    threeVehicleIds = seededVehicles.slice(0, 3).map((v) => v.id);
+  }, 60_000);
+
+  afterAll(async () => {
+    const seeded = [
+      threeVehicles?.id,
+      zeroVehicles?.id,
+      withDeactivated?.id,
+      flatPlateOnly?.id,
+      collectionWrite?.id,
+      collectionPatch?.id,
+    ].filter(
+      (id): id is string => Boolean(id),
+    );
+    if (seeded.length > 0) await db.delete(cliente).where(inArray(cliente.id, seeded));
+  });
+
+  const headers = { "x-user-id": "e2e-vehicle-search", "x-user-role": "tecnico" };
+
+  async function search(term: string) {
+    const response = await customersGET(
+      new NextRequest(`http://localhost/api/customers?search=${encodeURIComponent(term)}`, { headers }),
+    );
+    expect(response.status).toBe(200);
+    return response.json() as Promise<{ customers: { id: string; plates: string[] }[]; total: number }>;
+  }
+
+  /** A `vehicles`-only PATCH: nothing scalar changes, so the collection write is all that runs. */
+  async function patchVehicles(id: string, vehicles: { id?: string; plate: string }[]) {
+    const response = await customersPATCH(
+      new NextRequest(`http://localhost/api/customers/${id}`, {
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ vehicles }),
+      }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(response.status).toBe(200);
+  }
+
+  it("matches a 3-vehicle customer by the SECOND plate, not only the first", async () => {
+    const body = await search("bbb2");
+    expect(body.customers.map((c) => c.id)).toContain(threeVehicles.id);
+  });
+
+  it("matches a 3-vehicle customer by the THIRD plate", async () => {
+    const body = await search("ccc3");
+    expect(body.customers.map((c) => c.id)).toContain(threeVehicles.id);
+  });
+
+  it("still matches a zero-vehicle customer on name and phone", async () => {
+    const body = await search("Roberto Silva");
+    expect(body.customers.map((c) => c.id)).toContain(zeroVehicles.id);
+  });
+
+  it("excludes a soft-deleted vehicle's plate from search while its customer stays findable by name", async () => {
+    const byPlate = await search("zzz9");
+    expect(byPlate.customers.map((c) => c.id)).not.toContain(withDeactivated.id);
+
+    const byName = await search("Marta Núñez");
+    expect(byName.customers.map((c) => c.id)).toContain(withDeactivated.id);
+  });
+
+  it("finds a customer created through the REAL flat write path, which writes no vehiculo row", async () => {
+    // Every other case in this describe seeds `vehiculo` directly, so none of
+    // them exercises what production actually does today: `CustomerForm` sends
+    // no `vehicles` key, `createCliente` takes its scalar-only branch, the
+    // plate lands in `cliente.vehicle_plate` and NO `vehiculo` row is written.
+    // Search must find that customer until `0014` (slice 3) moves the write.
+    const response = await customersPOST(
+      new NextRequest("http://localhost/api/customers", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Sofía Ledesma", phone: "50766666666", vehiclePlate: "FLT777" }),
+      }),
+    );
+    expect(response.status).toBe(201);
+    flatPlateOnly = ((await response.json()) as { cliente: { id: string } }).cliente;
+
+    const body = await search("flt7");
+    expect(body.customers.map((c) => c.id)).toContain(flatPlateOnly.id);
+  });
+
+  it("writes a vehicles[] payload through the REAL transaction and reads the plates back", async () => {
+    // The newest hand-written SQL in this slice — `db.transaction` +
+    // `applyVehiculoPlan`'s batch insert — has no other automated coverage:
+    // `service.test.ts` injects `deps.database`, so a green `npm test` proves
+    // zero coverage of it (AGENTS.md's "Known coverage limit"). Two plates,
+    // not one, so the batch insert is a real multi-row `values()`.
+    // Sorted before comparing, like the `array_agg` case below: `id` is a
+    // random uuid, so `platesSubquery`'s `(created_at, id)` order is stable
+    // across reads but NOT predictable from the payload — asserting a literal
+    // order here would flake, not pin the ordering fix.
+    const response = await customersPOST(
+      new NextRequest("http://localhost/api/customers", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Diego Ramírez",
+          phone: "50767777777",
+          vehicles: [{ plate: "TRX001" }, { plate: "TRX002" }],
+        }),
+      }),
+    );
+    expect(response.status).toBe(201);
+    collectionWrite = ((await response.json()) as { cliente: { id: string } }).cliente;
+
+    const body = await search("trx00");
+    const row = body.customers.find((c) => c.id === collectionWrite!.id);
+    expect(row?.plates.slice().sort()).toEqual(["TRX001", "TRX002"]);
+  });
+
+  it("returns `plates` as a real multi-element array (array_agg), active vehicles only", async () => {
+    const body = await search("Lucía Fernández");
+    const row = body.customers.find((c) => c.id === threeVehicles.id);
+    expect(row?.plates.slice().sort()).toEqual(["AAA111", "BBB222", "CCC333"]);
+  });
+
+  it("PATCHes the collection through the REAL transaction: an update lands, dropped vehicles deactivate, and a re-added plate becomes a NEW row", async () => {
+    // `applyVehiculoPlan`'s update and deactivate branches are hand-written
+    // SQL with no other automated coverage: `service.test.ts` injects
+    // `deps.database`, and the soft-delete case above seeds `deactivated_at`
+    // by hand instead of going through this path (AGENTS.md's "Known coverage
+    // limit"). One customer, one lifecycle: create three, keep one under a new
+    // plate, then re-add a dropped plate.
+    const created = await customersPOST(
+      new NextRequest("http://localhost/api/customers", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Elena Ortiz",
+          phone: "50768888888",
+          vehicles: [{ plate: "PCH001" }, { plate: "PCH002" }, { plate: "PCH003" }],
+        }),
+      }),
+    );
+    expect(created.status).toBe(201);
+    collectionPatch = ((await created.json()) as { cliente: { id: string } }).cliente;
+
+    const seeded = await db.select().from(vehiculo).where(eq(vehiculo.clienteId, collectionPatch.id));
+    const keep = seeded.find((v) => v.plate === "PCH001")!;
+
+    // Renames the kept vehicle AND drops the other two, so one PATCH exercises
+    // both mutating branches. A plate the payload does not name is not "left
+    // alone" — the reconcile deactivates it.
+    //
+    // The surviving plate deliberately shares NO prefix with the dropped ones:
+    // `relaxSearchTerm` retypes a 6-char term to its first 4 chars, so a
+    // survivor named `PCH009` would answer a `pch002` search through the
+    // near-match pass and the deactivation assertion below would pass whether
+    // or not the row was ever deactivated.
+    await patchVehicles(collectionPatch.id, [{ id: keep.id, plate: "KEP009" }]);
+
+    const afterDrop = await search("kep009");
+    expect(afterDrop.customers.find((c) => c.id === collectionPatch!.id)?.plates).toEqual(["KEP009"]);
+    expect((await search("pch002")).customers.map((c) => c.id)).not.toContain(collectionPatch.id);
+
+    // D5's no-resurrection rule, where `deactivated_at` is real: re-adding
+    // PCH002 with no id must write a brand new row and leave the deactivated
+    // one deactivated — the property `planVehiculoReconcile`'s unit tests
+    // structurally cannot see, since callers only ever hand them ACTIVE rows.
+    await patchVehicles(collectionPatch.id, [{ id: keep.id, plate: "KEP009" }, { plate: "PCH002" }]);
+
+    const rows = await db.select().from(vehiculo).where(eq(vehiculo.clienteId, collectionPatch.id));
+    expect(rows).toHaveLength(4);
+    expect(rows.filter((r) => r.plate === "PCH002")).toHaveLength(2);
+    expect(rows.filter((r) => r.plate === "PCH002" && r.deactivatedAt === null)).toHaveLength(1);
+  });
+
+  it("ignores a plan naming another customer's vehicle — ownership is enforced in SQL, not by the caller", async () => {
+    // No API call can reach this: `planVehiculoReconcile` rejects a foreign id
+    // first. That is exactly the point — the rejection is a caller-side
+    // invariant, so `applyVehiculoPlan` is called directly here with the plan a
+    // buggy caller could hand it. `db` satisfies `TxLike`. Both statements are
+    // scoped to `zeroVehicles`, so both must affect zero rows.
+    const [rename, deactivate] = threeVehicleIds;
+    await applyVehiculoPlan(db, zeroVehicles.id, {
+      inserts: [],
+      updates: [{ id: rename, plate: "HACK01" }],
+      deactivate: [deactivate],
+    });
+
+    const rows = await db.select().from(vehiculo).where(eq(vehiculo.clienteId, threeVehicles.id));
+    expect(rows.map((r) => r.plate).sort()).toEqual(["AAA111", "BBB222", "CCC333"]);
+    expect(rows.filter((r) => r.deactivatedAt !== null)).toHaveLength(0);
   });
 });
 

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { ClienteValidationError, isValidPhoneFormat, normalizePhone, validateClienteInput } from "./validation";
+import {
+  ClienteValidationError,
+  isValidPhoneFormat,
+  normalizePhone,
+  validateClienteInput,
+  validateVehiculoInput,
+  validateVehiculosInput,
+} from "./validation";
 
 const validInput = {
   name: "Juan Pérez",
@@ -30,15 +37,33 @@ describe("validateClienteInput (R17)", () => {
     expect(() => validateClienteInput({ ...validInput, email: "not-an-email" })).toThrow(ClienteValidationError);
   });
 
-  it("accepts a submission with no vehicle fields at all (vehicle is optional)", () => {
-    expect(() => validateClienteInput(validInput)).not.toThrow();
+  /**
+   * The flat vehicle fields stay on `ClienteInput` until migration `0014`
+   * drops `cliente`'s columns (slice 3) — mirrors `queries.ts`'s
+   * `ClienteListItem.vehiclePlate` note on the read side.
+   */
+  it("returns the flat vehicle fields normalized, alongside the scalars", () => {
+    expect(
+      validateClienteInput({
+        ...validInput,
+        vehicleMake: " Toyota ",
+        vehicleModel: "Corolla",
+        vehicleYear: 2020,
+        vehiclePlate: "ABC-123",
+      }),
+    ).toMatchObject({
+      vehicleMake: "Toyota",
+      vehicleModel: "Corolla",
+      vehicleYear: 2020,
+      vehiclePlate: "ABC-123",
+    });
   });
 
-  it("rejects a vehicle make with no plate", () => {
+  it("rejects a flat vehicle make with no plate (R17, flat path)", () => {
     expect(() => validateClienteInput({ ...validInput, vehicleMake: "Toyota" })).toThrow(ClienteValidationError);
   });
 
-  it("accepts a vehicle make when a plate is also given", () => {
+  it("accepts a flat vehicle make when a plate is also given", () => {
     expect(() =>
       validateClienteInput({ ...validInput, vehicleMake: "Toyota", vehiclePlate: "ABC-123" }),
     ).not.toThrow();
@@ -85,5 +110,57 @@ describe("normalizePhone (E.164-ish, needed for Kapso in Phase 7)", () => {
 
   it("keeps a leading + and strips other separators", () => {
     expect(normalizePhone("+52 (55) 1234-5678")).toBe("+525512345678");
+  });
+});
+
+describe("validateVehiculoInput (R17 relocated, D6)", () => {
+  it("accepts a vehicle with only a plate (make/model/year optional)", () => {
+    expect(validateVehiculoInput({ plate: "ABC-123" })).toEqual({ plate: "ABC-123" });
+  });
+
+  it("rejects a vehicle with make but no plate", () => {
+    expect(() => validateVehiculoInput({ make: "Toyota" })).toThrow(ClienteValidationError);
+  });
+
+  it("accepts a fully-populated vehicle and normalizes fields", () => {
+    expect(validateVehiculoInput({ plate: "ABC-123", make: "Toyota", model: "Corolla", year: 2020 })).toEqual({
+      plate: "ABC-123",
+      make: "Toyota",
+      model: "Corolla",
+      year: 2020,
+    });
+  });
+
+  it("preserves a supplied id (identifies an update, never a key by plate)", () => {
+    expect(validateVehiculoInput({ id: "v1", plate: "ABC-123" })).toEqual({ id: "v1", plate: "ABC-123" });
+  });
+});
+
+describe("validateVehiculosInput (per-vehicle, independent)", () => {
+  it("returns undefined when the vehicles key is omitted (collection untouched)", () => {
+    expect(validateVehiculosInput(undefined)).toBeUndefined();
+  });
+
+  it("returns an empty array for an explicit empty list", () => {
+    expect(validateVehiculosInput([])).toEqual([]);
+  });
+
+  it("validates every vehicle independently — one invalid sibling never changes a valid one's fields", () => {
+    expect(() =>
+      validateVehiculosInput([{ plate: "ABC-123" }, { make: "Toyota" }]),
+    ).toThrow(ClienteValidationError);
+
+    try {
+      validateVehiculosInput([{ plate: "ABC-123" }, { make: "Toyota" }]);
+      expect.fail("expected validation to throw");
+    } catch (err) {
+      const validationError = err as ClienteValidationError;
+      // Only the invalid (second, index 1) vehicle is cited.
+      expect(Object.keys(validationError.errors)).toEqual(["vehicles.1.plate"]);
+    }
+  });
+
+  it("rejects a non-array vehicles payload", () => {
+    expect(() => validateVehiculosInput("not-an-array")).toThrow(ClienteValidationError);
   });
 });
