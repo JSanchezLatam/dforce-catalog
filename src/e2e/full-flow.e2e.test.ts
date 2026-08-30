@@ -268,6 +268,7 @@ describe("vehicle search (E2E)", () => {
   let explicitEmptyVehicles: { id: string } | undefined;
   let collectionWrite: { id: string } | undefined;
   let collectionPatch: { id: string } | undefined;
+  let collectionRoundTrip: { id: string } | undefined;
 
   beforeAll(async () => {
     execSync("npx drizzle-kit migrate", { stdio: "inherit" });
@@ -304,6 +305,7 @@ describe("vehicle search (E2E)", () => {
       explicitEmptyVehicles?.id,
       collectionWrite?.id,
       collectionPatch?.id,
+      collectionRoundTrip?.id,
     ].filter(
       (id): id is string => Boolean(id),
     );
@@ -321,7 +323,7 @@ describe("vehicle search (E2E)", () => {
   }
 
   /** A `vehicles`-only PATCH: nothing scalar changes, so the collection write is all that runs. */
-  async function patchVehicles(id: string, vehicles: { id?: string; plate: string }[]) {
+  async function patchVehicles(id: string, vehicles: { id?: string; plate: string; deactivated?: boolean }[]) {
     const response = await customersPATCH(
       new NextRequest(`http://localhost/api/customers/${id}`, {
         method: "PATCH",
@@ -468,6 +470,54 @@ describe("vehicle search (E2E)", () => {
     expect(rows).toHaveLength(4);
     expect(rows.filter((r) => r.plate === "PCH002")).toHaveLength(2);
     expect(rows.filter((r) => r.plate === "PCH002" && r.deactivatedAt === null)).toHaveLength(1);
+  });
+
+  it("re-sending an unchanged collection leaves a soft-deleted vehicle deactivated; only an explicit ask restores it", async () => {
+    // `getClienteById` returns inactive vehicles so restore has an id to act
+    // on, which makes "GET the detail, PATCH the collection back" the most
+    // obvious thing a client can do. It must change nothing. The conditional
+    // `deactivated_at` in `applyVehiculoPlan`'s SET that guarantees it is
+    // hand-written write SQL — `vehicles.test.ts` records that patch through
+    // an injected `TxLike` and never executes it (AGENTS.md's known coverage
+    // limit), so a real `deactivated_at` is the only place this is proven.
+    const created = await customersPOST(
+      new NextRequest("http://localhost/api/customers", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Nadia Bravo",
+          phone: "50769999999",
+          vehicles: [{ plate: "RTR001" }, { plate: "RTR002" }],
+        }),
+      }),
+    );
+    expect(created.status).toBe(201);
+    collectionRoundTrip = ((await created.json()) as { cliente: { id: string } }).cliente;
+
+    const readRows = () => db.select().from(vehiculo).where(eq(vehiculo.clienteId, collectionRoundTrip!.id));
+    const seeded = await readRows();
+    const keep = seeded.find((v) => v.plate === "RTR001")!;
+    const dropped = seeded.find((v) => v.plate === "RTR002")!;
+
+    await patchVehicles(collectionRoundTrip.id, [{ id: keep.id, plate: "RTR001", deactivated: false }]);
+    const deactivatedAt = (await readRows()).find((v) => v.id === dropped.id)!.deactivatedAt;
+    expect(deactivatedAt).not.toBeNull();
+
+    // The round trip: both ids named, neither asking for an activation change.
+    await patchVehicles(collectionRoundTrip.id, [
+      { id: keep.id, plate: "RTR001" },
+      { id: dropped.id, plate: "RTR002" },
+    ]);
+    const afterRoundTrip = await readRows();
+    expect(afterRoundTrip.find((v) => v.id === dropped.id)!.deactivatedAt).toEqual(deactivatedAt);
+    expect(afterRoundTrip.find((v) => v.id === keep.id)!.deactivatedAt).toBeNull();
+
+    // `deactivated: false` — what `CustomerForm`'s restore action sends.
+    await patchVehicles(collectionRoundTrip.id, [
+      { id: keep.id, plate: "RTR001", deactivated: false },
+      { id: dropped.id, plate: "RTR002", deactivated: false },
+    ]);
+    expect((await readRows()).every((v) => v.deactivatedAt === null)).toBe(true);
   });
 
   it("ignores a plan naming another customer's vehicle — ownership is enforced in SQL, not by the caller", async () => {

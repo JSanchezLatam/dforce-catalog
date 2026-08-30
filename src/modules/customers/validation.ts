@@ -109,6 +109,10 @@ export function validateVehiculoInput(input: unknown): VehiculoInput {
   const make = trimmedOrUndefined(value.make);
   const model = trimmedOrUndefined(value.model);
   const year = typeof value.year === "number" && Number.isFinite(value.year) ? value.year : undefined;
+  // Never defaulted: an absent `deactivated` means "leave this vehicle's
+  // activation state alone", which is what makes resending an unchanged
+  // collection a no-op instead of a mass restore (see `VehiculoInput`).
+  const deactivated = typeof value.deactivated === "boolean" ? value.deactivated : undefined;
 
   if (Object.keys(errors).length > 0) {
     throw new ClienteValidationError(errors);
@@ -120,6 +124,7 @@ export function validateVehiculoInput(input: unknown): VehiculoInput {
     ...(make !== undefined ? { make } : {}),
     ...(model !== undefined ? { model } : {}),
     ...(year !== undefined ? { year } : {}),
+    ...(deactivated !== undefined ? { deactivated } : {}),
   };
 }
 

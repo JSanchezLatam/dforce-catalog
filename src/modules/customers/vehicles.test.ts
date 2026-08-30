@@ -78,17 +78,45 @@ describe("planVehiculoReconcile (D5)", () => {
 
   /**
    * Restore (spec: "Vehicle Collection Persistence") means the client resends
-   * a previously-deactivated vehicle's id. `existing` therefore has to carry
-   * BOTH active and inactive vehicles — `getClienteById` now fetches the
-   * whole collection (`listVehiculosByCliente(id, { includeInactive: true })`)
-   * so the ownership check below has something to match against; rejecting an
-   * inactive vehicle's own id as "foreign" would make restore impossible.
+   * a previously-deactivated vehicle's id WITH `deactivated: false`. `existing`
+   * therefore has to carry BOTH active and inactive vehicles — `getClienteById`
+   * now fetches the whole collection (`listVehiculosByCliente(id, {
+   * includeInactive: true })`) so the ownership check below has something to
+   * match against; rejecting an inactive vehicle's own id as "foreign" would
+   * make restore impossible.
    */
   it("plans an update (never a rejection) for an id belonging to an inactive existing vehicle — this is how restore works", () => {
     const existing = [vehiculo({ id: "v1", deactivatedAt: new Date("2026-01-02") })];
-    const incoming: VehiculoInput[] = [{ id: "v1", plate: "ABC111" }];
+    const incoming: VehiculoInput[] = [{ id: "v1", plate: "ABC111", deactivated: false }];
     const plan = planVehiculoReconcile(existing, incoming);
-    expect(plan).toEqual({ inserts: [], updates: [{ id: "v1", plate: "ABC111" }], deactivate: [] });
+    expect(plan).toEqual({
+      inserts: [],
+      updates: [{ id: "v1", plate: "ABC111", deactivated: false }],
+      deactivate: [],
+    });
+  });
+
+  /**
+   * The round trip any client does by default: GET the detail — which now
+   * returns inactive vehicles so restore has an id to act on — and PATCH the
+   * same collection straight back. Nothing changed, so nothing may change.
+   * Including a row is not a restore request; only `deactivated: false` is.
+   */
+  it("plans no change at all for an unchanged payload that carries a deactivated vehicle", () => {
+    const existing = [vehiculo({ id: "v1" }), vehiculo({ id: "v2", deactivatedAt: new Date("2026-01-02") })];
+    const incoming: VehiculoInput[] = [
+      { id: "v1", plate: "ABC111" },
+      { id: "v2", plate: "ZZZ999", deactivated: true },
+    ];
+    const plan = planVehiculoReconcile(existing, incoming);
+    expect(plan.inserts).toEqual([]);
+    expect(plan.deactivate).toEqual([]);
+  });
+
+  it("deactivates an active vehicle the payload marks deactivated, rather than only inferring it from omission", () => {
+    const existing = [vehiculo({ id: "v1" })];
+    const plan = planVehiculoReconcile(existing, [{ id: "v1", plate: "ABC111", deactivated: true }]);
+    expect(plan.deactivate).toEqual(["v1"]);
   });
 
   it("never re-stamps an already-inactive vehicle omitted from incoming — deactivate only ever touches active rows", () => {
@@ -161,14 +189,39 @@ describe("applyVehiculoPlan (D5)", () => {
     expect(wheres[0].params).toContain("c1");
   });
 
-  // D5 restore: an update always clears deactivatedAt, whether the row was
-  // already active (no-op) or inactive (this IS the restore). The reconcile
-  // plans an "update" for both cases (see planVehiculoReconcile above), so
-  // this is the one statement that has to do the reactivating.
-  it("clears deactivatedAt on every update — restoring a vehicle is an ordinary update, not a separate action", async () => {
+  // D5 restore is EXPLICIT: `deactivated: false` on the payload is what
+  // reactivates a row. An update that says nothing about activation state
+  // must leave `deactivated_at` exactly as it found it — otherwise GET the
+  // detail, PATCH it back unchanged silently resurrects every soft delete.
+  it("leaves deactivated_at untouched on an update that does not name an activation state", async () => {
     const { tx, sets } = recordingTx();
     await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [{ id: "v1", plate: "ABC222" }], deactivate: [] });
+    expect(sets[0]).not.toHaveProperty("deactivatedAt");
+  });
+
+  it("clears deactivatedAt only when the payload explicitly asks for the vehicle to be active", async () => {
+    const { tx, sets } = recordingTx();
+    await applyVehiculoPlan(tx, "c1", {
+      inserts: [],
+      updates: [{ id: "v1", plate: "ABC222", deactivated: false }],
+      deactivate: [],
+    });
     expect(sets[0]).toMatchObject({ deactivatedAt: null });
+  });
+
+  /** The whole round trip, plan + apply: the deactivated row survives it. */
+  it("does not resurrect a soft-deleted vehicle when an unchanged collection is sent back", async () => {
+    const existing = [vehiculo({ id: "v1" }), vehiculo({ id: "v2", deactivatedAt: new Date("2026-01-02") })];
+    const { tx, sets } = recordingTx();
+    await applyVehiculoPlan(
+      tx,
+      "c1",
+      planVehiculoReconcile(existing, [
+        { id: "v1", plate: "ABC111" },
+        { id: "v2", plate: "ZZZ999", deactivated: true },
+      ]),
+    );
+    expect(sets.some((patch) => "deactivatedAt" in patch)).toBe(false);
   });
 });
 

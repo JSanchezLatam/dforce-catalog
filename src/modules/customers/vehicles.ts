@@ -11,7 +11,24 @@ import { db } from "@/shared/db/client";
 import { cliente, vehiculo, type Vehiculo } from "@/shared/db/schema";
 import { ClienteValidationError } from "./validation";
 
-export type VehiculoInput = { id?: string; plate: string; make?: string; model?: string; year?: number };
+/**
+ * `deactivated` is the activation state the CALLER asks for, and it is
+ * tri-state on purpose: omitted means "leave this vehicle's activation state
+ * exactly as it is". Without that default, `getClienteById` returning
+ * inactive vehicles (needed for restore) plus an update that clears
+ * `deactivated_at` would make the most obvious client possible — GET the
+ * detail, PATCH the collection straight back — silently resurrect every soft
+ * delete. Restore (`false`) has to be asked for, not inferred from a row
+ * being included.
+ */
+export type VehiculoInput = {
+  id?: string;
+  plate: string;
+  make?: string;
+  model?: string;
+  year?: number;
+  deactivated?: boolean;
+};
 export type VehiculoPlan = { inserts: VehiculoInput[]; updates: VehiculoInput[]; deactivate: string[] };
 
 /**
@@ -104,9 +121,10 @@ export async function listVehiculosByCliente(
  * than silently inserting — a trust boundary, not a data-shape bug. Only
  * ACTIVE vehicles omitted from `incoming` are deactivated — an already-
  * inactive one omitted again is left alone, so its original
- * `deactivated_at` is never overwritten by an unrelated edit. An update
- * always restores (`applyVehiculoPlan` clears `deactivatedAt`), so naming an
- * inactive vehicle's id in `incoming` is how a client restores it. A
+ * `deactivated_at` is never overwritten by an unrelated edit. Restore is
+ * `deactivated: false` on the incoming element — naming an inactive
+ * vehicle's id is NOT enough, or resending an unchanged collection would
+ * reactivate every soft-deleted row in it (see `VehiculoInput`). A
  * re-added plate with no id becomes a brand new row; this deliberately does
  * not resurrect a deactivated one by plate (ponytail: revive-on-match by
  * plate if history continuity is ever asked for — id-based restore above
@@ -119,6 +137,7 @@ export function planVehiculoReconcile(existing: Vehiculo[], incoming: VehiculoIn
 
   const existingIds = new Set(existing.map((v) => v.id));
   const keptIds = new Set<string>();
+  const deactivateAsked = new Set<string>();
   const inserts: VehiculoInput[] = [];
   const updates: VehiculoInput[] = [];
 
@@ -131,11 +150,17 @@ export function planVehiculoReconcile(existing: Vehiculo[], incoming: VehiculoIn
       throw new ClienteValidationError({ vehicles: `El vehículo ${item.id} no pertenece a este cliente` });
     }
     keptIds.add(item.id);
+    if (item.deactivated === true) deactivateAsked.add(item.id);
     updates.push(item);
   }
 
+  // Two ways in, one filter: omitted from `incoming` (the original mechanism)
+  // or included with `deactivated: true` (a round-tripped payload saying "this
+  // one is still deactivated"). Either way only ACTIVE rows are touched, so an
+  // already-inactive vehicle never has its original `deactivated_at`
+  // overwritten by an unrelated edit.
   const deactivate = existing
-    .filter((v) => v.deactivatedAt === null && !keptIds.has(v.id))
+    .filter((v) => v.deactivatedAt === null && (!keptIds.has(v.id) || deactivateAsked.has(v.id)))
     .map((v) => v.id);
   return { inserts, updates, deactivate };
 }
@@ -166,12 +191,20 @@ export async function applyVehiculoPlan(tx: TxLike, clienteId: string, plan: Veh
   }
 
   for (const v of plan.updates) {
-    // `deactivatedAt: null` unconditionally — an update is "this vehicle
-    // exists and is active with these values", whether it was already active
-    // (no-op here) or inactive (this is the restore, D5).
+    // `deactivated_at` is in the SET only when the payload asked for the row
+    // to be active — that clear IS the restore (D5). Omitting the column
+    // otherwise is what keeps a resent, unchanged collection a no-op; the
+    // `true` case is handled by `plan.deactivate` below, which never
+    // re-stamps a row that is already inactive.
     await tx
       .update(vehiculo)
-      .set({ plate: v.plate, make: v.make ?? null, model: v.model ?? null, year: v.year ?? null, deactivatedAt: null })
+      .set({
+        plate: v.plate,
+        make: v.make ?? null,
+        model: v.model ?? null,
+        year: v.year ?? null,
+        ...(v.deactivated === false ? { deactivatedAt: null } : {}),
+      })
       .where(and(eq(vehiculo.clienteId, clienteId), eq(vehiculo.id, v.id!)));
   }
 

@@ -118,6 +118,20 @@ describe("validateVehiculoInput (R17 relocated, D6)", () => {
   it("preserves a supplied id (identifies an update, never a key by plate)", () => {
     expect(validateVehiculoInput({ id: "v1", plate: "ABC-123" })).toEqual({ id: "v1", plate: "ABC-123" });
   });
+
+  /**
+   * The activation state a client asks for. Absent means "leave it as it is",
+   * which is what makes an unchanged round trip a no-op — so it must NOT be
+   * defaulted to `false` here.
+   */
+  it("passes an explicit activation state through, and omits it entirely when the payload is silent", () => {
+    expect(validateVehiculoInput({ plate: "ABC-123", deactivated: false })).toEqual({
+      plate: "ABC-123",
+      deactivated: false,
+    });
+    expect(validateVehiculoInput({ plate: "ABC-123" })).not.toHaveProperty("deactivated");
+    expect(validateVehiculoInput({ plate: "ABC-123", deactivated: "yes" })).not.toHaveProperty("deactivated");
+  });
 });
 
 describe("validateVehiculosInput (per-vehicle, independent)", () => {
