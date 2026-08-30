@@ -1,0 +1,212 @@
+/**
+ * Component tests for `CustomerForm`'s vehicle collection (vehicles-one-to-many,
+ * C3, slice 3). Mirrors `UserForm.test.tsx`'s pattern: `userEvent`, a stubbed
+ * `fetch`, and `within()` to scope each vehicle card's repeated field labels
+ * ("Placa" appears once per row, so a bare `getByLabelText` would throw with
+ * more than one row on screen).
+ */
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+
+import type { Cliente, Vehiculo } from "@/shared/db/schema";
+import { CustomerForm } from "./CustomerForm";
+
+const CLIENTE: Cliente = {
+  id: "c1",
+  name: "Juan Pérez",
+  phone: "+525512345678",
+  email: null,
+  whatsappOptOut: false,
+  emailOptOut: false,
+  createdAt: new Date("2026-01-01"),
+  updatedAt: new Date("2026-01-01"),
+} as unknown as Cliente;
+
+function vehiculo(overrides: Partial<Vehiculo> = {}): Vehiculo {
+  return {
+    id: "v1",
+    clienteId: "c1",
+    make: null,
+    model: null,
+    year: null,
+    plate: "ABC111",
+    deactivatedAt: null,
+    createdAt: new Date("2026-01-01"),
+    ...overrides,
+  };
+}
+
+function mockFetch(response: { status: number; body?: unknown }) {
+  const fetchMock = vi.fn().mockResolvedValue({
+    ok: response.status >= 200 && response.status < 300,
+    status: response.status,
+    json: async () => response.body ?? {},
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+function bodyOf(fetchMock: ReturnType<typeof vi.fn>, call = 0) {
+  return JSON.parse(fetchMock.mock.calls[call][1].body);
+}
+
+async function open(user: ReturnType<typeof userEvent.setup>, label: string) {
+  await user.click(screen.getByRole("button", { name: label }));
+}
+
+function vehicleGroup(index: number) {
+  return screen.getByRole("group", { name: `Vehículo ${index}` });
+}
+
+describe("CustomerForm — vehicle collection (create)", () => {
+  it("shows the Spanish 'Vehículos' section with no rows and no vehicle by default", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm />);
+    await open(user, "Nuevo cliente");
+
+    expect(screen.getByText("Vehículos")).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: /vehículo/i })).not.toBeInTheDocument();
+  });
+
+  it("adds a vehicle row with its own Placa/Marca/Modelo/Año fields", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm />);
+    await open(user, "Nuevo cliente");
+
+    await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+
+    const group = vehicleGroup(1);
+    expect(within(group).getByLabelText("Placa")).toBeInTheDocument();
+    expect(within(group).getByLabelText("Marca")).toBeInTheDocument();
+    expect(within(group).getByLabelText("Modelo")).toBeInTheDocument();
+    expect(within(group).getByLabelText("Año")).toBeInTheDocument();
+  });
+
+  it("fully removes a never-saved row instead of marking it deactivated", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm />);
+    await open(user, "Nuevo cliente");
+
+    await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+    await user.click(screen.getByRole("button", { name: "Quitar vehículo 1" }));
+
+    expect(screen.queryByRole("group", { name: /vehículo/i })).not.toBeInTheDocument();
+  });
+
+  it("sends vehicles: [] when saving with zero rows", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 201, body: { cliente: { id: "c1" } } });
+    render(<CustomerForm />);
+    await open(user, "Nuevo cliente");
+
+    await user.type(screen.getByLabelText("Nombre"), "Juan Pérez");
+    await user.type(screen.getByLabelText("Teléfono"), "+525512345678");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(bodyOf(fetchMock).vehicles).toEqual([]);
+  });
+
+  it("sends each added vehicle's fields, omitting blanks", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 201, body: { cliente: { id: "c1" } } });
+    render(<CustomerForm />);
+    await open(user, "Nuevo cliente");
+
+    await user.type(screen.getByLabelText("Nombre"), "Juan Pérez");
+    await user.type(screen.getByLabelText("Teléfono"), "+525512345678");
+    await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+    const group = vehicleGroup(1);
+    await user.type(within(group).getByLabelText("Placa"), "ABC-123");
+    await user.type(within(group).getByLabelText("Marca"), "Toyota");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(bodyOf(fetchMock).vehicles).toEqual([{ plate: "ABC-123", make: "Toyota" }]);
+  });
+
+  it("shows a plate error on the row it belongs to, independent of a valid sibling", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({
+      status: 400,
+      body: { errors: { "vehicles.1.plate": "La placa es obligatoria" } },
+    });
+    render(<CustomerForm />);
+    await open(user, "Nuevo cliente");
+
+    await user.type(screen.getByLabelText("Nombre"), "Juan Pérez");
+    await user.type(screen.getByLabelText("Teléfono"), "+525512345678");
+    await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+    await user.type(within(vehicleGroup(1)).getByLabelText("Placa"), "ABC-123");
+    await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(within(vehicleGroup(2)).getByRole("alert")).toHaveTextContent("La placa es obligatoria");
+    expect(within(vehicleGroup(1)).queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("passes the just-submitted plates to onSaved, not a hardcoded empty array", async () => {
+    const user = userEvent.setup();
+    mockFetch({ status: 201, body: { cliente: { id: "c1" } } });
+    const onSaved = vi.fn();
+    render(<CustomerForm onSaved={onSaved} />);
+    await open(user, "Nuevo cliente");
+
+    await user.type(screen.getByLabelText("Nombre"), "Juan Pérez");
+    await user.type(screen.getByLabelText("Teléfono"), "+525512345678");
+    await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+    await user.type(within(vehicleGroup(1)).getByLabelText("Placa"), "NEW111");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(onSaved).toHaveBeenCalledWith({ id: "c1" }, ["NEW111"]);
+  });
+});
+
+describe("CustomerForm — vehicle collection (edit)", () => {
+  it("prefills each existing vehicle's fields", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ make: "Toyota", year: 2020 })]} />);
+    await open(user, "Editar");
+
+    const group = vehicleGroup(1);
+    expect(within(group).getByLabelText("Placa")).toHaveValue("ABC111");
+    expect(within(group).getByLabelText("Marca")).toHaveValue("Toyota");
+    expect(within(group).getByLabelText("Año")).toHaveValue(2020);
+  });
+
+  it("deactivating an existing vehicle omits it from the saved payload instead of deleting the row", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo()]} />);
+    await open(user, "Editar");
+
+    await user.click(screen.getByRole("button", { name: "Quitar vehículo 1" }));
+    expect(screen.getByText("Vehículo desactivado")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(bodyOf(fetchMock).vehicles).toEqual([]);
+  });
+
+  it("restoring a deactivated vehicle resends its id, and it stays visible throughout", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ deactivatedAt: new Date("2026-02-01") })]} />);
+    await open(user, "Editar");
+
+    // "Stays visible" (owner's design direction) — no show/hide toggle needed
+    // for a single customer's small collection, unlike UsersTable's list-wide one.
+    expect(vehicleGroup(1)).toBeInTheDocument();
+    expect(screen.getByText("Vehículo desactivado")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Restaurar vehículo 1" }));
+    expect(screen.queryByText("Vehículo desactivado")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(bodyOf(fetchMock).vehicles).toEqual([{ id: "v1", plate: "ABC111" }]);
+  });
+});
