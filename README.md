@@ -54,11 +54,23 @@ from.
 
 ### Running without Docker
 
-`npm install`, set `DATABASE_URL` to a reachable Postgres, `npm run
-db:migrate`, then `npm run dev`. Playwright's Chromium (used to render
-PDFs) must be installed once via `npx playwright install chromium` — the
-Docker image already bundles it (see `Dockerfile`'s `runner` stage, built
-`FROM mcr.microsoft.com/playwright:...`).
+```
+./scripts/standalone.sh
+```
+
+Runs the whole app against a Homebrew Postgres whose data lives in
+`$(brew --prefix)/var/postgresql@17` — an ordinary folder — instead of the
+`db-data` Docker volume, which `docker system prune` and `docker compose
+down -v` delete without warning. It handles the move from an existing
+container, backups and restores, and every step is idempotent: a failed run
+is resumed by running it again. See [STANDALONE.md](STANDALONE.md) for the
+subcommands (`backup`, `restore`, `status`) and the environment variables.
+
+By hand instead: `npm install`, set `DATABASE_URL` to a reachable Postgres,
+`npm run db:migrate`, then `npm run dev`. Playwright's Chromium (used to
+render PDFs) must be installed once via `npx playwright install chromium` —
+the Docker image already bundles it (see `Dockerfile`'s `runner` stage,
+built `FROM mcr.microsoft.com/playwright:...`).
 
 ## Tests
 
