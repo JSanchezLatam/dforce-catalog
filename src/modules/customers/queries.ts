@@ -56,12 +56,29 @@ function vehiculoPlateExists(pattern: string): SQL {
   return sql`exists (select 1 from ${vehiculo} where ${vehiculo.clienteId} = ${cliente.id} and ${activeVehiculoFilter()} and ${unaccentIlike(vehiculo.plate, pattern)})`;
 }
 
-/** Pure — R19's "partial, case- and accent-insensitive match against name, phone, or any active vehicle plate". */
+/**
+ * Pure — R19's "partial, case- and accent-insensitive match against name,
+ * phone, or any active vehicle plate".
+ *
+ * BOTH plate paths are matched, the same expand/contract `validation.ts` and
+ * `ClienteListItem` already apply on the write and read sides: until slice 3
+ * moves `CustomerForm` to the `vehicles` collection, a create sends no
+ * `vehicles` key, so `createCliente` takes its scalar-only branch and the
+ * plate lands in `cliente.vehicle_plate` with NO `vehiculo` row behind it.
+ * With only the `EXISTS`, every customer created between this slice and slice
+ * 3 would be permanently unfindable by plate — and `0013` backfills only rows
+ * that existed before it ran. Removed by `0014` (slice 3).
+ */
 export function buildClienteSearchWhere(search?: string) {
   const term = search?.trim();
   if (!term) return undefined;
   const pattern = `%${term}%`;
-  return or(unaccentIlike(cliente.name, pattern), unaccentIlike(cliente.phone, pattern), vehiculoPlateExists(pattern));
+  return or(
+    unaccentIlike(cliente.name, pattern),
+    unaccentIlike(cliente.phone, pattern),
+    unaccentIlike(cliente.vehiclePlate, pattern),
+    vehiculoPlateExists(pattern),
+  );
 }
 
 /** R19 — paginated + searched customer list, newest first. */

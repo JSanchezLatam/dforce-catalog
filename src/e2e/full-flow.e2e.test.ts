@@ -64,7 +64,7 @@ import { POST as templateConfigPOST } from "../app/api/template-config/route";
 import { POST as productsPOST } from "../app/api/catalog-builder/products/route";
 import { POST as generatePOST } from "../app/api/catalog-builder/generate/route";
 import { GET as filePOST } from "../app/api/catalogs/[id]/file/route";
-import { GET as customersGET } from "../app/api/customers/route";
+import { GET as customersGET, POST as customersPOST } from "../app/api/customers/route";
 
 const PASSWORD = "Sup3rSecret!1";
 
@@ -224,6 +224,8 @@ describe("vehicle search (E2E)", () => {
   let threeVehicles: { id: string };
   let zeroVehicles: { id: string };
   let withDeactivated: { id: string };
+  /** Created by the test below through the REAL write path, not seeded here. */
+  let flatPlateOnly: { id: string } | undefined;
 
   beforeAll(async () => {
     execSync("npx drizzle-kit migrate", { stdio: "inherit" });
@@ -249,7 +251,7 @@ describe("vehicle search (E2E)", () => {
   }, 60_000);
 
   afterAll(async () => {
-    const seeded = [threeVehicles?.id, zeroVehicles?.id, withDeactivated?.id].filter(
+    const seeded = [threeVehicles?.id, zeroVehicles?.id, withDeactivated?.id, flatPlateOnly?.id].filter(
       (id): id is string => Boolean(id),
     );
     if (seeded.length > 0) await db.delete(cliente).where(inArray(cliente.id, seeded));
@@ -286,6 +288,26 @@ describe("vehicle search (E2E)", () => {
 
     const byName = await search("Marta Núñez");
     expect(byName.customers.map((c) => c.id)).toContain(withDeactivated.id);
+  });
+
+  it("finds a customer created through the REAL flat write path, which writes no vehiculo row", async () => {
+    // Every other case in this describe seeds `vehiculo` directly, so none of
+    // them exercises what production actually does today: `CustomerForm` sends
+    // no `vehicles` key, `createCliente` takes its scalar-only branch, the
+    // plate lands in `cliente.vehicle_plate` and NO `vehiculo` row is written.
+    // Search must find that customer until `0014` (slice 3) moves the write.
+    const response = await customersPOST(
+      new NextRequest("http://localhost/api/customers", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Sofía Ledesma", phone: "50766666666", vehiclePlate: "FLT777" }),
+      }),
+    );
+    expect(response.status).toBe(201);
+    flatPlateOnly = ((await response.json()) as { cliente: { id: string } }).cliente;
+
+    const body = await search("flt7");
+    expect(body.customers.map((c) => c.id)).toContain(flatPlateOnly.id);
   });
 
   it("returns `plates` as a real multi-element array (array_agg), active vehicles only", async () => {

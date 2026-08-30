@@ -41,7 +41,20 @@ describe("buildClienteSearchWhere (R19)", () => {
     const { sql, params } = compileSearchWhere("maria gonza");
     expect(sql).toContain(`unaccent("cliente"."name") ilike unaccent($1)`);
     expect(sql).toContain(`unaccent("cliente"."phone") ilike unaccent($2)`);
-    expect(params).toEqual(["%maria gonza%", "%maria gonza%", "%maria gonza%"]);
+    // Four: name, phone, the flat `cliente.vehicle_plate`, and the EXISTS
+    // over `vehiculo.plate`. Drops to three when `0014` removes the flat one.
+    expect(params).toEqual(["%maria gonza%", "%maria gonza%", "%maria gonza%", "%maria gonza%"]);
+  });
+
+  it("still matches the flat cliente.vehicle_plate column until 0014 drops it (slice 3)", () => {
+    // `CustomerForm` sends no `vehicles` key, so `createCliente` takes the
+    // scalar-only branch: the plate lands in `cliente.vehicle_plate` and NO
+    // `vehiculo` row is written. With only the EXISTS branch, every customer
+    // created between this slice and slice 3 becomes unfindable by plate —
+    // exactly the duplicate this change exists to prevent. Expand/contract:
+    // both paths match until `0014`.
+    const { sql } = compileSearchWhere("abc");
+    expect(sql).toContain(`unaccent("cliente"."vehicle_plate") ilike unaccent($3)`);
   });
 
   it("evaluates the plate branch as an EXISTS over vehiculo, active vehicles only (D3/D4)", () => {
@@ -53,7 +66,7 @@ describe("buildClienteSearchWhere (R19)", () => {
       `exists (select 1 from "vehiculo" where "vehiculo"."cliente_id" = "cliente"."id"`,
     );
     expect(sql).toContain(`"vehiculo"."deactivated_at" is null`);
-    expect(sql).toContain(`unaccent("vehiculo"."plate") ilike unaccent($3)`);
+    expect(sql).toContain(`unaccent("vehiculo"."plate") ilike unaccent($4)`);
   });
 });
 
