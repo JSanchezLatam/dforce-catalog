@@ -557,6 +557,40 @@ describe("renderCatalogHtml — product prices", () => {
     );
 
   /**
+   * The page footer names the lists this catalog quotes. It is the line a
+   * customer reads to know what the numbers above it mean, so a footer
+   * promising three lists over cards showing two is worse than no footer.
+   */
+  it("names only the chosen lists in the page footers, on index and product pages alike", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [{ categoryL1: "AUDIO", categoryL2: null, productCount: 1 }],
+      tiers: ["venta", "socio"],
+      productPages: priced({ venta: 120, taller: 100, socio: 90 }),
+    });
+
+    // Unchosen anywhere on the page: not in a card row, not in either footer.
+    expect(html).not.toContain("Taller");
+    expect(html).toContain("Venta · Socio");
+    expect(html).toContain("Lista de precios · Venta · Socio");
+  });
+
+  it("names one list without a separator when only one is chosen", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [{ categoryL1: "AUDIO", categoryL2: null, productCount: 1 }],
+      tiers: ["taller"],
+      productPages: priced({ venta: 120, taller: 100, socio: 90 }),
+    });
+
+    expect(html).toContain("Lista de precios · Taller");
+    expect(html).not.toContain("Taller · ");
+    expect(html).not.toContain("Venta");
+  });
+
+  /**
    * The default exists for one case only: a job enqueued before tier
    * selection shipped carries no `tiers`, and a worker that renders nothing
    * (or throws) turns a queued catalog into a dead job nobody can retry.

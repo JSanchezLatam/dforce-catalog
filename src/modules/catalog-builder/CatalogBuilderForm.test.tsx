@@ -23,7 +23,7 @@ const CANDIDATE = {
   priceLists: { "Precio de venta": "45.00", "PRECIO TALLER": "38.00", "Precio Socio": "0.00" },
 };
 
-function mockFetch() {
+function mockFetch(generateResponse?: { ok: boolean; status: number; json: () => Promise<unknown> }) {
   const fetchMock = vi.fn((url: string) => {
     if (url.includes("/products")) {
       return Promise.resolve({ ok: true, json: async () => ({ products: [CANDIDATE] }) });
@@ -32,11 +32,13 @@ function mockFetch() {
       return Promise.resolve({ ok: true, json: async () => ({ depth: 0 }) });
     }
     if (url.includes("/generate")) {
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        json: async () => ({ jobId: "job-1", queuePosition: 0, evictionWarning: false }),
-      });
+      return Promise.resolve(
+        generateResponse ?? {
+          ok: true,
+          status: 200,
+          json: async () => ({ jobId: "job-1", queuePosition: 0, evictionWarning: false }),
+        },
+      );
     }
     throw new Error(`unexpected fetch: ${url}`);
   });
@@ -49,8 +51,12 @@ beforeEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function reachReviewStep() {
-  const fetchMock = mockFetch();
+async function reachReviewStep(generateResponse?: {
+  ok: boolean;
+  status: number;
+  json: () => Promise<unknown>;
+}) {
+  const fetchMock = mockFetch(generateResponse);
   const user = userEvent.setup();
   render(
     <CatalogBuilderForm
@@ -158,5 +164,27 @@ describe("CatalogBuilderForm — reviewedProducts carries all three tiers (desig
     expect(body.products[0].prices).toEqual({ venta: 45, taller: 38, socio: null });
     expect(body.products[0].price).toBeUndefined();
     expect(body.products[0].priceLists).toBeUndefined();
+  });
+});
+
+/**
+ * The checkbox group cannot produce an invalid selection, so this 400 only
+ * ever comes from a non-UI client or a drifted client/server rule. Either way
+ * the message must land on screen: an error set into state and rendered
+ * nowhere is a dead Generar button with no explanation, which is strictly
+ * worse than the validation not existing.
+ */
+describe("CatalogBuilderForm — a tiers error from the route is shown", () => {
+  it("renders errors.tiers instead of leaving the dialog silently stuck", async () => {
+    const { user } = await reachReviewStep({
+      ok: false,
+      status: 400,
+      json: async () => ({ errors: { tiers: "Elegí 1 o 2 listas de precios" } }),
+    });
+
+    await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
+    await user.click(await screen.findByRole("button", { name: "Generar catálogo" }));
+
+    expect(await screen.findByText("Elegí 1 o 2 listas de precios")).toBeInTheDocument();
   });
 });

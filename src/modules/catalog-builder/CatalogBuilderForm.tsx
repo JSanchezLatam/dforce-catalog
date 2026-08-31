@@ -560,6 +560,15 @@ export function CatalogBuilderForm({
                   );
                 })}
               </div>
+              {/* Only reachable from a non-UI client or a drifted client/server
+                  rule — the group cannot tick three or untick the last. Rendered
+                  anyway: an error set into state and shown nowhere is a dead
+                  Generar button with no explanation. */}
+              {errors.tiers && (
+                <p role="alert" className={`mt-3 ${FIELD_ERROR}`}>
+                  {errors.tiers}
+                </p>
+              )}
             </fieldset>
           </CardContent>
         </Card>

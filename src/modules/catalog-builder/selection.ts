@@ -23,9 +23,13 @@ export type ProductRef = {
   imageType?: "transparent" | "opaque" | "low_res" | null;
   /**
    * All three ERP price tiers, unparsed. The builder holds every tier so the
-   * generate-step selector can switch between them without a refetch; only the
-   * ONE chosen price is resolved into the print payload, so a trade or member
-   * price never travels with a retail catalog.
+   * generate-step checkbox group can switch between them without a refetch.
+   * All three ALSO travel into the print payload: the tier choice is a render
+   * instruction, so the same catalog can be reprinted against a different pair
+   * without re-reading the ERP. (This paragraph used to say the opposite —
+   * "only the ONE chosen price is resolved into the print payload" — which was
+   * the retired single-select's contract. It survived that control's removal
+   * by two changes.)
    */
   priceLists?: PriceListMap | null;
 };

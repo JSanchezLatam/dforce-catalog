@@ -1,5 +1,10 @@
 import { getTemplate } from "./registry";
-import { DEFAULT_PRICE_TIERS, type PriceTier } from "./price-tiers";
+import {
+  DEFAULT_PRICE_TIERS,
+  PRICE_TIER_LABELS,
+  PRICE_TIER_ORDER,
+  type PriceTier,
+} from "./price-tiers";
 import {
   CONTENT_HEIGHT_PX,
   CONTENT_PAD_TOP_PX,
@@ -541,6 +546,14 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
   // The ONE place the tier default is resolved. Everything below takes
   // `tiers` as required, so no card can quietly pick its own row set.
   const printedTiers = tiers?.length ? tiers : DEFAULT_PRICE_TIERS;
+  // The footer names the lists this catalog quotes — the line a customer reads
+  // to know what the numbers above it mean. Derived from the SAME resolved
+  // selection the cards render, never a second hardcoded copy: a footer
+  // promising three lists over cards showing two is worse than no footer at
+  // all. Same canonical-order filter the card uses, so the two agree.
+  const printedTierLabels = PRICE_TIER_ORDER.filter((tier) => printedTiers.includes(tier))
+    .map((tier) => PRICE_TIER_LABELS[tier])
+    .join(" · ");
   const contact = branding?.contact ?? null;
   const coverImageUrl = branding?.coverImageUrl ?? null;
   const red = branding ? template.primaryColors.primary : "#D42027";
@@ -650,7 +663,7 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
             subheading={title}
             logoUrl={branding?.logoUrl ?? null}
             workshopName={workshopName}
-            footerNote="Lista de precios · Venta · Taller · Socio"
+            footerNote={`Lista de precios · ${printedTierLabels}`}
             pageNumber={FIRST_INDEX_PAGE_NUMBER + pageIndex}
             red={red}
             black={black}
@@ -721,7 +734,7 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
               subheading={subtitle}
               logoUrl={branding?.logoUrl ?? null}
               workshopName={workshopName}
-              footerNote="Venta · Taller · Socio"
+              footerNote={printedTierLabels}
               pageNumber={firstProductPage + pageIndex}
               red={red}
               black={black}
