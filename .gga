@@ -54,11 +54,9 @@ STRICT_MODE="true"
 # Timeout in seconds for AI provider response
 # Default: 300 (5 minutes)
 # Increase for large changesets or slow connections
-# Raised to 900: a PR here routinely reaches ~18 files because FILE_PATTERNS
-# includes tests on purpose (see EXCLUDE_PATTERNS above), and 300s timed out
-# mid-review on exactly that shape. A timeout is not a PASS, so the cheap
-# failure is waiting longer.
-TIMEOUT="900"
+# NOTE: this value is INERT — see AGENTS.md known defect #1. Nothing in this
+# file is applied. Use GGA_TIMEOUT=900 on the command line instead.
+TIMEOUT="300"
 
 # OpenCode provider: optional reasoning effort / variant
 # Examples: minimal, low, medium, high, max

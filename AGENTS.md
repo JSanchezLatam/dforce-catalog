@@ -247,10 +247,21 @@ pinned, a hook becomes worth about ten lines. Not before.
 **Known defects (v2.10.1)** — all three verified against the installed source
 and its behaviour, not inferred:
 
-1. **Config is not honoured.** `PROVIDER` is read from neither `.gga` nor
-   `~/.config/gga/config`; `gga run` reports "No provider configured" with
-   `PROVIDER="claude"` sitting in both. `GGA_PROVIDER=claude` as an environment
-   variable does work — hence the command above.
+1. **Config is not honoured** — NOTHING in `.gga` is applied, not just
+   `PROVIDER`. `gga config` finds the file ("Project: .gga") and then reports
+   every value as its default: with `PROVIDER="claude"`, `FILE_PATTERNS=`
+   `"*.ts,*.tsx,*.js,*.jsx"`, `EXCLUDE_PATTERNS="*.d.ts"` and `TIMEOUT="900"`
+   in that file, it prints `Not configured`, `*`, `None` and `300s`. The file
+   itself is fine — `source .gga` in a plain shell sets all four. The `GGA_`
+   environment variables do work; that is the only lever.
+
+   Do not narrow this to `PROVIDER` on a reading of the installed source. A
+   GGA review of this repo did exactly that: it traced `load_config()`,
+   correctly established that `sanitize_config_file` has no allowlist and that
+   the `TIMEOUT="300"` at line 454 is `gga init`'s heredoc rather than a
+   runtime clobber, and concluded the value lands. It does not. Whatever
+   breaks between `source` and the resolved value, `gga config` is the
+   measurement and it says default.
 2. **`--pr-mode` can pass green without reviewing anything.**
    `detect_base_branch()` (`lib/pr_mode.sh:22`) lists LOCAL branches only and
    matches with `grep -qw`, which hits substrings: a branch named
