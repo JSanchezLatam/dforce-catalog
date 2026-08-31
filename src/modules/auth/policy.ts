@@ -1,6 +1,7 @@
 export const ACTIONS = [
   "customers.read",
   "customers.write",
+  "customers.deleteVehicle",
   "service-orders.read",
   "service-orders.write",
   "inventory.read",
@@ -24,6 +25,7 @@ export const MATRIX: { readonly [R in "tecnico" | "administrador"]: Grants } = {
   tecnico: {
     "customers.read": true,
     "customers.write": true,
+    "customers.deleteVehicle": false,
     "service-orders.read": true,
     "service-orders.write": true,
     "inventory.read": true,
@@ -41,6 +43,7 @@ export const MATRIX: { readonly [R in "tecnico" | "administrador"]: Grants } = {
   administrador: {
     "customers.read": true,
     "customers.write": true,
+    "customers.deleteVehicle": true,
     "service-orders.read": true,
     "service-orders.write": true,
     "inventory.read": true,

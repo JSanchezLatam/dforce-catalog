@@ -408,9 +408,27 @@ describe("CustomerForm — long dialog scrolling", () => {
  */
 describe("CustomerForm — permanent vehicle deletion", () => {
   async function openEditWith(user: ReturnType<typeof userEvent.setup>, vehicles: Vehiculo[]) {
-    render(<CustomerForm cliente={CLIENTE} vehicles={vehicles} />);
+    render(<CustomerForm cliente={CLIENTE} vehicles={vehicles} canDeleteVehicle />);
     await open(user, "Editar");
   }
+
+  /**
+   * Permanent deletion is administrador-only (`customers.deleteVehicle`), so
+   * the control has to disappear for a tecnico — the API refuses the request
+   * either way, but a button that always 403s is a worse answer than no
+   * button. The prop defaults to DENY: a caller that forgets to pass it hides
+   * the button, which is the harmless failure. The reverse default would show
+   * an unauthorized destructive control on every page that forgot.
+   */
+  it("hides both deletion controls when the grant is absent, keeping deactivation", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo(), vehiculo({ id: "v2", deactivatedAt: new Date() })]} />);
+    await open(user, "Editar");
+
+    expect(screen.queryByRole("button", { name: /definitivamente/ })).not.toBeInTheDocument();
+    // Deactivation is reversible and stays with every tecnico.
+    expect(screen.getByRole("button", { name: "Quitar vehículo 1" })).toBeInTheDocument();
+  });
 
   it("offers deletion alongside deactivation on a saved vehicle, with copy that cannot be confused", async () => {
     const user = userEvent.setup();

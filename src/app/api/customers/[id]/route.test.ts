@@ -4,13 +4,78 @@ import { describe, expect, it, vi } from "vitest";
 import type { Cliente } from "@/shared/db/schema";
 import { handleUpdateCliente, PATCH } from "./route";
 
-function requestWith(body: unknown) {
+function requestWith(body: unknown, role = "tecnico") {
   return new NextRequest("http://localhost/api/customers/c1", {
     method: "PATCH",
-    headers: { "x-user-id": "user-1", "x-user-role": "tecnico", "Content-Type": "application/json" },
+    headers: { "x-user-id": "user-1", "x-user-role": role, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
+
+describe("permanent vehicle deletion is administrador-only", () => {
+  /** The customer must actually OWN v1, or the reconcile rejects it as foreign (400) before any gate is observable. */
+  const owningV1 = {
+    ...current,
+    vehicles: [
+      { id: "v1", clienteId: "c1", plate: "ABC123", make: null, model: null, year: null, deactivatedAt: null, createdAt: new Date() },
+    ],
+  } as typeof current;
+
+  /**
+   * A vehicle patch is persisted inside a transaction, not through `update`,
+   * so the 200 cases need this seam or they hit a real pool. It returns the
+   * row without running the body on purpose: what these two assert is that
+   * the GATE let the request reach persistence at all, not what was written
+   * — the write itself is covered by service.test.ts and the e2e.
+   */
+  const database = { transaction: async <T>() => current.cliente as T };
+
+  /**
+   * `customers.write` is not enough. Deactivation is reversible and every
+   * tecnico keeps it; destroying the row is not, and this app routes every
+   * other irreversible capability through `policy.ts`. The check reads the
+   * RAW body deliberately — before validation, before the service — because
+   * the grant governs whether the request may be considered at all, not
+   * whether its payload is well-formed.
+   */
+  it("refuses a tecnico with 403 and never reaches the service", async () => {
+    const update = vi.fn();
+
+    const response = await handleUpdateCliente(
+      requestWith({ vehicles: [{ id: "v1", plate: "ABC123", deleted: true }] }),
+      "c1",
+      { getById: async () => owningV1, update, database },
+    );
+
+    expect(response.status).toBe(403);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("lets an administrador through", async () => {
+    const update = vi.fn().mockResolvedValue(current.cliente);
+
+    const response = await handleUpdateCliente(
+      requestWith({ vehicles: [{ id: "v1", plate: "ABC123", deleted: true }] }, "administrador"),
+      "c1",
+      { getById: async () => owningV1, update, database },
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  /** The gate is scoped to deletion: a tecnico's ordinary vehicle edit is untouched. */
+  it("still lets a tecnico deactivate and edit vehicles", async () => {
+    const update = vi.fn().mockResolvedValue(current.cliente);
+
+    const response = await handleUpdateCliente(
+      requestWith({ vehicles: [{ id: "v1", plate: "ABC123", deactivated: true }] }),
+      "c1",
+      { getById: async () => owningV1, update, database },
+    );
+
+    expect(response.status).toBe(200);
+  });
+});
 
 const current = {
   cliente: {

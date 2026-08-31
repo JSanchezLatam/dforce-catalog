@@ -166,6 +166,7 @@ function buildPayload(form: CustomerFormState) {
 export function CustomerForm({
   cliente,
   vehicles,
+  canDeleteVehicle = false,
   triggerLabel,
   onSaved,
 }: {
@@ -173,6 +174,15 @@ export function CustomerForm({
   cliente?: Cliente | null;
   /** The customer's whole vehicle collection (active + inactive) — ignored in create mode. */
   vehicles?: Vehiculo[] | null;
+  /**
+   * `customers.deleteVehicle` — administrador-only. Deactivation stays
+   * available to everyone who can edit a customer; destroying the row does
+   * not. Defaults to DENY so a caller that forgets to pass it hides the
+   * control rather than showing an unauthorized destructive button; the API
+   * refuses the request regardless (`api/customers/[id]/route.ts`), this only
+   * keeps a button that would always 403 off the screen.
+   */
+  canDeleteVehicle?: boolean;
   triggerLabel?: ReactNode;
   /** `plates` is exactly what this save just sent — the API's 201/200 body carries no `vehicles`/`plates` of its own. */
   onSaved?: (cliente: Cliente, plates: string[]) => void;
@@ -407,16 +417,18 @@ export function CustomerForm({
                         {/* Offered here too: a plate typed wrong and then quitado
                             is exactly the row that should never have existed, and
                             without this it would stay on the customer forever. */}
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          className="min-h-11 min-w-11"
-                          aria-label={`Eliminar vehículo ${index} definitivamente`}
-                          onClick={() => setPendingDelete(row)}
-                        >
-                          Eliminar definitivamente
-                        </Button>
+                        {canDeleteVehicle && (
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            className="min-h-11 min-w-11"
+                            aria-label={`Eliminar vehículo ${index} definitivamente`}
+                            onClick={() => setPendingDelete(row)}
+                          >
+                            Eliminar definitivamente
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );
@@ -443,16 +455,18 @@ export function CustomerForm({
                         >
                           Quitar
                         </Button>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          className="min-h-11 min-w-11"
-                          aria-label={`Eliminar vehículo ${index} definitivamente`}
-                          onClick={() => setPendingDelete(row)}
-                        >
-                          Eliminar definitivamente
-                        </Button>
+                        {canDeleteVehicle && (
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            className="min-h-11 min-w-11"
+                            aria-label={`Eliminar vehículo ${index} definitivamente`}
+                            onClick={() => setPendingDelete(row)}
+                          >
+                            Eliminar definitivamente
+                          </Button>
+                        )}
                       </div>
                     </div>
 

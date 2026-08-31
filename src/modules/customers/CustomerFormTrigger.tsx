@@ -17,11 +17,14 @@ import { CustomerForm } from "./CustomerForm";
 export function CustomerFormTrigger({
   cliente,
   vehicles,
+  canDeleteVehicle,
   triggerLabel,
 }: {
   cliente?: Cliente | null;
   /** The customer's whole vehicle collection (active + inactive) — omitted in create mode. */
   vehicles?: Vehiculo[] | null;
+  /** `customers.deleteVehicle`, resolved on the server — see `CustomerForm`. */
+  canDeleteVehicle?: boolean;
   triggerLabel?: ReactNode;
 }) {
   const router = useRouter();
@@ -29,6 +32,7 @@ export function CustomerFormTrigger({
     <CustomerForm
       cliente={cliente}
       vehicles={vehicles}
+      canDeleteVehicle={canDeleteVehicle}
       triggerLabel={triggerLabel}
       onSaved={() => router.refresh()}
     />
