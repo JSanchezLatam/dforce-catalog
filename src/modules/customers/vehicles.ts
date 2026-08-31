@@ -20,8 +20,7 @@ import { ClienteValidationError } from "./validation";
  * detail, PATCH the collection straight back — silently resurrect every soft
  * delete. Restore (`false`) has to be asked for, not inferred from a row
  * being included.
- */
-/**
+ *
  * `deleted` is the OTHER removal, and it is deliberately not a second value of
  * `deactivated`. Deactivate means "the car is no longer with this customer" —
  * the row survives because its service history must. Delete means "this row
@@ -162,10 +161,10 @@ export async function listVehiculosByCliente(
  * `deactivated_at` is never overwritten by an unrelated edit. Restore is
  * `deactivated: false` on the incoming element — naming an inactive
  * vehicle's id is NOT enough, or resending an unchanged collection would
- * reactivate every soft-deleted row in it (see `VehiculoInput`). A
- * An element carrying `deleted: true` is the FOURTH outcome — the row is
- * removed outright, never updated and never deactivated on the way out. A
- * re-added plate with no id becomes a brand new row; this deliberately does
+ * reactivate every soft-deleted row in it (see `VehiculoInput`). An element
+ * carrying `deleted: true` is the FOURTH outcome — the row is removed
+ * outright, never updated and never deactivated on the way out. A re-added
+ * plate with no id becomes a brand new row; this deliberately does
  * not resurrect a deactivated one by plate (ponytail: revive-on-match by
  * plate if history continuity is ever asked for — id-based restore above
  * already covers the explicit case).

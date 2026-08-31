@@ -7,8 +7,8 @@ import type { OrdenServicio, Producto } from "@/shared/db/schema";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
-  DialogClose,
   DialogBody,
+  DialogClose,
   DialogContent,
   DialogFooter,
   DialogHeader,

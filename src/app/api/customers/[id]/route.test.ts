@@ -12,7 +12,6 @@ function requestWith(body: unknown, role = "tecnico") {
   });
 }
 
-
 const current = {
   cliente: {
     id: "c1",
