@@ -623,6 +623,13 @@ export function CatalogBuilderForm({
               <CatalogTemplate
                 title={title}
                 sections={sections}
+                // The preview renders no product cards, so its index-page
+                // FOOTER is the only place the tier choice shows here — and
+                // it sits directly under the checkbox group that sets it.
+                // Without this the preview names the default two lists while
+                // the PDF prints whatever was ticked, on the one screen where
+                // both are visible at once.
+                tiers={tiers}
                 branding={{
                   templateId: getTemplate(templateConfig?.selectedTemplateId).id,
                   // The logo route is session-authenticated (the browser sends

@@ -15,7 +15,6 @@
  * packing. Defaults to the renderer's own default when unset.
  * Output: preview-out/ (gitignored) — one PNG per printed page, plus the PDF.
  */
-import type { PriceTier } from "@/shared/template/price-tiers";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -32,6 +31,7 @@ import { getWorkshopConfig } from "@/modules/workshop-config/service";
 import { getTemplate } from "@/shared/template/registry";
 import type { ProductPrintRef } from "@/shared/template/CatalogTemplate";
 import { CONTENT_HEIGHT_PX, PAGE_HEIGHT_PX, PAGE_WIDTH_PX } from "@/shared/template/page-geometry";
+import { PRICE_TIER_ORDER, type PriceTier } from "@/shared/template/price-tiers";
 
 const OUT = join(process.cwd(), "preview-out");
 
@@ -82,9 +82,18 @@ async function main() {
 
   // Passed through undefined when TIERS is unset, so the preview exercises
   // `CatalogTemplate`'s real default rather than a second copy of it.
-  const tiers = process.env.TIERS?.split(",")
+  const requestedTiers = process.env.TIERS?.split(",")
     .map((tier) => tier.trim())
-    .filter(Boolean) as PriceTier[] | undefined;
+    .filter(Boolean);
+  const unknownTiers = requestedTiers?.filter((tier) => !PRICE_TIER_ORDER.includes(tier as PriceTier)) ?? [];
+  if (unknownTiers.length > 0) {
+    // The real path rejects these; dropping them here would render a card with
+    // fewer rows than asked for and nothing saying why — and card height is
+    // exactly what this script exists to look at.
+    console.error(`TIERS: lista desconocida: ${unknownTiers.join(", ")}. Válidas: ${PRICE_TIER_ORDER.join(", ")}`);
+    process.exit(1);
+  }
+  const tiers = requestedTiers as PriceTier[] | undefined;
 
   const props = {
     title: "Catálogo de productos",

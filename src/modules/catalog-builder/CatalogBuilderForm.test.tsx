@@ -123,6 +123,25 @@ describe("CatalogBuilderForm — review step picks which price lists print (R13)
     expect(isBlocked("Venta")).toBe(true);
   });
 
+  /**
+   * The preview sits directly under the checkbox group — the one screen where
+   * the choice and its consequence are visible at once. Its index page carries
+   * the same footer the PDF does (the preview renders no product cards, which
+   * is why the footer is the ONLY place the choice shows there, and why
+   * "the preview has no price rows" was the wrong reason to skip threading
+   * `tiers` into it).
+   */
+  it("keeps the live preview's footer honest about the choice", async () => {
+    const { user } = await reachReviewStep();
+
+    expect(screen.getByText("Lista de precios · Venta · Taller")).toBeInTheDocument();
+
+    await user.click(box("Taller"));
+
+    expect(screen.getByText("Lista de precios · Venta")).toBeInTheDocument();
+    expect(screen.queryByText("Lista de precios · Venta · Taller")).not.toBeInTheDocument();
+  });
+
   it("POSTs the chosen tiers, and still sends every tier's VALUE", async () => {
     const { fetchMock, user } = await reachReviewStep();
 
