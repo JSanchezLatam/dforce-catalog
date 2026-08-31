@@ -35,13 +35,29 @@ describe("permanent vehicle deletion is administrador-only", () => {
   } as typeof current;
 
   /**
-   * A vehicle patch is persisted inside a transaction, not through `update`,
-   * so the 200 cases need this seam or they hit a real pool. It returns the
-   * row without running the body on purpose: what these two assert is that
-   * the GATE let the request reach persistence at all, not what was written
-   * — the write itself is covered by service.test.ts and the e2e.
+   * `updateCliente` reaches `deps.update` ONLY when the patch carries no
+   * `vehicles` key; any vehicle patch goes through this transaction instead.
+   * So this is the seam every case here actually runs on, and spying it is
+   * what makes "never reaches the service" a claim with teeth — asserting
+   * `update` was not called would hold identically with the gate and without
+   * it, since nothing on this path can ever reach it.
+   *
+   * It returns the row without running the body on purpose: what the 200
+   * cases assert is that the gate let the request reach persistence at all,
+   * not what was written — the write itself is service.test.ts's and the
+   * e2e's job.
    */
-  const database = { transaction: async <T>() => current.cliente as T };
+  const transaction = vi.fn();
+  const database = {
+    // The spy is a separate plain `vi.fn()` rather than the seam itself:
+    // `vi.fn()` erases the generic and the result stops satisfying
+    // `DatabaseDep`. Wrapping keeps the seam correctly typed and the call
+    // still observable.
+    transaction: async <T>(fn: unknown): Promise<T> => {
+      transaction(fn);
+      return current.cliente as T;
+    },
+  };
 
   /**
    * `customers.write` is not enough. Deactivation is reversible and every
@@ -52,41 +68,43 @@ describe("permanent vehicle deletion is administrador-only", () => {
    * whether its payload is well-formed.
    */
   it("refuses a tecnico with 403 and never reaches the service", async () => {
-    const update = vi.fn();
+    transaction.mockClear();
 
     const response = await handleUpdateCliente(
       requestWith({ vehicles: [{ id: "v1", plate: "ABC123", deleted: true }] }),
       "c1",
-      { getById: async () => owningV1, update, database },
+      { getById: async () => owningV1, database },
     );
 
     expect(response.status).toBe(403);
-    expect(update).not.toHaveBeenCalled();
+    expect(transaction).not.toHaveBeenCalled();
   });
 
   it("lets an administrador through", async () => {
-    const update = vi.fn().mockResolvedValue(current.cliente);
+    transaction.mockClear();
 
     const response = await handleUpdateCliente(
       requestWith({ vehicles: [{ id: "v1", plate: "ABC123", deleted: true }] }, "administrador"),
       "c1",
-      { getById: async () => owningV1, update, database },
+      { getById: async () => owningV1, database },
     );
 
     expect(response.status).toBe(200);
+    expect(transaction).toHaveBeenCalled();
   });
 
   /** The gate is scoped to deletion: a tecnico's ordinary vehicle edit is untouched. */
   it("still lets a tecnico deactivate and edit vehicles", async () => {
-    const update = vi.fn().mockResolvedValue(current.cliente);
+    transaction.mockClear();
 
     const response = await handleUpdateCliente(
       requestWith({ vehicles: [{ id: "v1", plate: "ABC123", deactivated: true }] }),
       "c1",
-      { getById: async () => owningV1, update, database },
+      { getById: async () => owningV1, database },
     );
 
     expect(response.status).toBe(200);
+    expect(transaction).toHaveBeenCalled();
   });
 });
 

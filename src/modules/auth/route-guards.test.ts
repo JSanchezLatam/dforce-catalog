@@ -44,6 +44,11 @@ export const ROUTE_GUARDS: Record<
   "/api/catalog-builder/queue-depth": { GET: "catalogs.read" },
   "/api/catalogs/[id]/file": { GET: "catalogs.download" },
   "/customers": { GET: "customers.read" },
+  // Reads `customers.deleteVehicle` too, but only to decide whether to render
+  // a button — it is not required to VIEW the page, and this registry records
+  // what a route requires. The cross-reference test below is one-directional
+  // for exactly this reason: it proves every DECLARED action is evaluated,
+  // never that every evaluated action is declared.
   "/customers/[id]": { GET: "customers.read" },
   "/service-orders": { GET: "service-orders.read" },
   "/service-orders/[id]": { GET: "service-orders.read" },
