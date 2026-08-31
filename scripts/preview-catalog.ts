@@ -22,7 +22,11 @@ import { chromium } from "playwright";
 
 import { resolveAllPrices } from "@/modules/catalog-builder/price-lists";
 import { listCategoryPairs, listProductsInCategories } from "@/modules/catalog-builder/queries";
-import { buildIndexSections } from "@/modules/catalog-builder/selection";
+import {
+  buildIndexSections,
+  CatalogSelectionValidationError,
+  validateCatalogSelection,
+} from "@/modules/catalog-builder/selection";
 import { chunkProducts, renderCatalogHtml } from "@/modules/pdf-generation/render";
 import { measureCardHeights, resolveBranding } from "@/modules/pdf-generation/worker";
 import { getTemplateConfig } from "@/modules/template-config/service";
@@ -31,11 +35,30 @@ import { getWorkshopConfig } from "@/modules/workshop-config/service";
 import { getTemplate } from "@/shared/template/registry";
 import type { ProductPrintRef } from "@/shared/template/CatalogTemplate";
 import { CONTENT_HEIGHT_PX, PAGE_HEIGHT_PX, PAGE_WIDTH_PX } from "@/shared/template/page-geometry";
-import { PRICE_TIER_ORDER, type PriceTier } from "@/shared/template/price-tiers";
+import type { PriceTier } from "@/shared/template/price-tiers";
 
 const OUT = join(process.cwd(), "preview-out");
 
 async function main() {
+  const requestedTiers = process.env.TIERS?.split(",")
+    .map((tier) => tier.trim())
+    .filter(Boolean);
+  const tiers = requestedTiers as PriceTier[] | undefined;
+  try {
+    // The SAME validator the route runs, not a hand-rolled subset of it: an
+    // unknown name, a repeat, or all three at once must fail here too. A
+    // three-row card is taller than anything the shipped UI or route can
+    // produce, and card height is the one thing this script exists to look at
+    // — previewing an impossible card is the wrong answer that matters here.
+    validateCatalogSelection({ includedCategoryCount: 1, totalProductCount: 1, productsPerPage: 6, tiers });
+  } catch (err) {
+    if (err instanceof CatalogSelectionValidationError) {
+      console.error(`TIERS: ${err.errors.tiers ?? "selección inválida"}`);
+      process.exit(1);
+    }
+    throw err;
+  }
+
   // The SAME query the generate step runs — deliberately not a hand-written
   // copy of its SQL. A copy is exactly how this script first "found" that
   // every price was an em-dash: the real query reads Interfuerza's `Precio`
@@ -82,18 +105,6 @@ async function main() {
 
   // Passed through undefined when TIERS is unset, so the preview exercises
   // `CatalogTemplate`'s real default rather than a second copy of it.
-  const requestedTiers = process.env.TIERS?.split(",")
-    .map((tier) => tier.trim())
-    .filter(Boolean);
-  const unknownTiers = requestedTiers?.filter((tier) => !PRICE_TIER_ORDER.includes(tier as PriceTier)) ?? [];
-  if (unknownTiers.length > 0) {
-    // The real path rejects these; dropping them here would render a card with
-    // fewer rows than asked for and nothing saying why — and card height is
-    // exactly what this script exists to look at.
-    console.error(`TIERS: lista desconocida: ${unknownTiers.join(", ")}. Válidas: ${PRICE_TIER_ORDER.join(", ")}`);
-    process.exit(1);
-  }
-  const tiers = requestedTiers as PriceTier[] | undefined;
 
   const props = {
     title: "Catálogo de productos",

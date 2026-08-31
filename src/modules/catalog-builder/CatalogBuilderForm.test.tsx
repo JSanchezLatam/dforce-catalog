@@ -189,12 +189,20 @@ describe("CatalogBuilderForm — reviewedProducts carries all three tiers (desig
 /**
  * The checkbox group cannot produce an invalid selection, so this 400 only
  * ever comes from a non-UI client or a drifted client/server rule. Either way
- * the message must land on screen: an error set into state and rendered
- * nowhere is a dead Generar button with no explanation, which is strictly
- * worse than the validation not existing.
+ * the message must reach the DOM: an error set into state and rendered nowhere
+ * is a dead Generar button with no explanation.
+ *
+ * CEILING, stated because a green run here is otherwise read as more than it
+ * is: this proves the message is RENDERED, not that a user can see it. On a
+ * 400 the confirm dialog stays open and has no error surface of its own, so
+ * the message lands in the review card BEHIND the overlay. jsdom does no
+ * layering, which is the only reason this passes. `errors.total` and
+ * `errors.form` share the defect; the fix is one error surface on the dialog
+ * for all three, tracked in tasks.md. Do not close that follow-up on the
+ * strength of this test.
  */
 describe("CatalogBuilderForm — a tiers error from the route is shown", () => {
-  it("renders errors.tiers instead of leaving the dialog silently stuck", async () => {
+  it("sets errors.tiers into the review card", async () => {
     const { user } = await reachReviewStep({
       ok: false,
       status: 400,

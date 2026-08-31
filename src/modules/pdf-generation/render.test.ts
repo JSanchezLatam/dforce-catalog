@@ -572,8 +572,12 @@ describe("renderCatalogHtml — product prices", () => {
 
     // Unchosen anywhere on the page: not in a card row, not in either footer.
     expect(html).not.toContain("Taller");
-    expect(html).toContain("Venta · Socio");
     expect(html).toContain("Lista de precios · Venta · Socio");
+    // Scoped to the product sheet on purpose: "Lista de precios · Venta ·
+    // Socio" CONTAINS "Venta · Socio", so an unscoped assertion is satisfied
+    // by the index footer alone and the product footer goes unchecked.
+    const productSheet = html.slice(html.indexOf('data-sheet="product-1"'));
+    expect(productSheet).toContain("Venta · Socio");
   });
 
   it("names one list without a separator when only one is chosen", async () => {
@@ -586,6 +590,7 @@ describe("renderCatalogHtml — product prices", () => {
     });
 
     expect(html).toContain("Lista de precios · Taller");
+    expect(html.slice(html.indexOf('data-sheet="product-1"'))).toContain("Taller");
     expect(html).not.toContain("Taller · ");
     expect(html).not.toContain("Venta");
   });
