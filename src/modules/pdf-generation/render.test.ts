@@ -611,7 +611,7 @@ describe("renderCatalogHtml — product prices", () => {
     expect(tiers(html)).toEqual({ Venta: "$120.00", Taller: "$100.00" });
   });
 
-  it("prints all three resolved tiers on the card", async () => {
+  it("prints exactly the tiers it is handed, three included — the card is a dumb renderer", async () => {
     const html = await renderCatalogHtml({
       title: "C",
       branding: null,

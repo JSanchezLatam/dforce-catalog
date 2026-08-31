@@ -13,12 +13,12 @@
  * the lifetime of one `db.transaction()`, auto-released on commit/rollback)
  * so only one enqueue attempt can be inside that decision window at a time.
  */
-import type { PriceTier } from "@/shared/template/price-tiers";
 import { sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { getBoss } from "@/shared/jobs/boss";
 import type { CatalogIndexSection, ProductPrintRef, WorkshopContact } from "@/shared/template/CatalogTemplate";
+import type { PriceTier } from "@/shared/template/price-tiers";
 
 export const PDF_GENERATE_JOB = "pdf-generate";
 export const PDF_UPLOAD_JOB = "pdf-upload";

@@ -105,7 +105,6 @@ async function main() {
 
   // Passed through undefined when TIERS is unset, so the preview exercises
   // `CatalogTemplate`'s real default rather than a second copy of it.
-
   const props = {
     title: "Catálogo de productos",
     branding,
