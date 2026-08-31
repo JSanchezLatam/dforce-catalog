@@ -11,10 +11,13 @@ import { ACTIONS, type Action } from "./policy";
  */
 export const ROUTE_GUARDS: Record<
   string,
-  // An ARRAY means the method requires every listed Action — not one of them.
-  // `/api/customers/[id]` PATCH is the first: `customers.write` admits the
-  // request, and `customers.deleteVehicle` is additionally required when the
-  // payload asks to destroy a vehicle row rather than deactivate it.
+  // An ARRAY means every listed Action is EVALUATED in the handler — which is
+  // exactly what the cross-reference test below proves, and deliberately not
+  // "all are required". `/api/customers/[id]` PATCH is the first: a tecnico
+  // PATCHes customers all day with `customers.write` alone;
+  // `customers.deleteVehicle` is required only when the payload asks to
+  // destroy a vehicle row rather than deactivate it. Reading this registry as
+  // "requires every listed Action" would get this route wrong.
   Partial<Record<"GET" | "POST" | "PATCH" | "DELETE", Action | readonly Action[] | "session-only" | "public">>
 > = {
   // "public" = reachable with NO session at all (excluded by proxy.ts's

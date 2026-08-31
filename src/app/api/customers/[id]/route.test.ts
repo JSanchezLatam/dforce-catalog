@@ -12,6 +12,20 @@ function requestWith(body: unknown, role = "tecnico") {
   });
 }
 
+
+const current = {
+  cliente: {
+    id: "c1",
+    name: "Juan Pérez",
+    phone: "+525512345678",
+    email: null,
+    whatsappOptOut: false,
+    emailOptOut: false,
+  } as unknown as Cliente,
+  orders: [],
+  vehicles: [],
+};
+
 describe("permanent vehicle deletion is administrador-only", () => {
   /** The customer must actually OWN v1, or the reconcile rejects it as foreign (400) before any gate is observable. */
   const owningV1 = {
@@ -76,19 +90,6 @@ describe("permanent vehicle deletion is administrador-only", () => {
     expect(response.status).toBe(200);
   });
 });
-
-const current = {
-  cliente: {
-    id: "c1",
-    name: "Juan Pérez",
-    phone: "+525512345678",
-    email: null,
-    whatsappOptOut: false,
-    emailOptOut: false,
-  } as unknown as Cliente,
-  orders: [],
-  vehicles: [],
-};
 
 describe("PATCH /api/customers/[id] (R16)", () => {
   it("throws when called without session headers", async () => {
