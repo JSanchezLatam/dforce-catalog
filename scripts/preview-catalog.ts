@@ -7,8 +7,15 @@
  * looks right; this is the thing that does.
  *
  * Run: npx tsx scripts/preview-catalog.ts
+ *      TIERS=taller npx tsx scripts/preview-catalog.ts   (one price row)
+ *
+ * `TIERS` is a comma-separated subset of venta,taller,socio — the same choice
+ * the review step offers. It matters here more than anywhere else: a one-row
+ * card is the new minimum card height, and card height is what drives page
+ * packing. Defaults to the renderer's own default when unset.
  * Output: preview-out/ (gitignored) — one PNG per printed page, plus the PDF.
  */
+import type { PriceTier } from "@/shared/template/price-tiers";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -73,10 +80,17 @@ async function main() {
     `workshop: ${workshop?.name ?? "(sin nombre)"} · logo ${branding?.logoUrl ? "ok" : "NO RESUELTO"} · portada ${branding?.coverImageUrl ? "ok" : "NO RESUELTA"}`,
   );
 
+  // Passed through undefined when TIERS is unset, so the preview exercises
+  // `CatalogTemplate`'s real default rather than a second copy of it.
+  const tiers = process.env.TIERS?.split(",")
+    .map((tier) => tier.trim())
+    .filter(Boolean) as PriceTier[] | undefined;
+
   const props = {
     title: "Catálogo de productos",
     branding,
     sections: buildIndexSections(products),
+    tiers,
     defaultImageHandling: (template?.defaultImageHandling ?? null) as "strict" | "adaptive" | null,
   };
 

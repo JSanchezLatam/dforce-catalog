@@ -4,6 +4,47 @@ Modifies `openspec/specs/catalog-generation/spec.md`.
 
 ## MODIFIED Requirements
 
+### Requirement: PDF Catalog Generation (R6)
+
+Amended for one sentence only; every other clause of R6 (the `ProductPrintRef`
+extension, template/workshop branding, image-type card selection, and the
+`productsPerPage`-is-a-maximum rule) stands unchanged.
+
+Every product card SHALL show one price row per tier CHOSEN for that catalog —
+between one and two of `venta`, `taller`, `socio` — in bold, in the canonical
+order `venta, taller, socio`. A chosen tier with no usable price (absent from
+the payload, or an ERP value `<= 0.00`) SHALL render an em-dash (`—`), never
+`$0.00` and never a blank line. A tier that was NOT chosen SHALL be absent from
+the card entirely, with no row and no em-dash: an em-dash states "this catalog
+quotes that list and this product has no price", which is a different and
+false claim.
+
+The page footer SHALL name exactly the chosen tiers, derived from the same
+selection the cards render. A footer naming a list the cards do not carry is
+the one error a customer reads directly off the page.
+
+(Previously: "Every product card SHALL show all three price tiers (Venta,
+Taller, Socio) in bold". This sentence is the reason this entry exists at all —
+amending only R13 would leave R6 asserting the opposite of the shipped code,
+which is precisely how the requirement this change restores was lost.)
+
+#### Scenario: Only the chosen tiers appear
+
+- GIVEN a product with venta=120.00, taller=100.00, socio=90.00
+- AND the catalog chose Venta and Socio
+- WHEN its card renders
+- THEN the Venta and Socio prices MUST appear, each bold and labeled
+- AND no Taller row MUST be present, neither priced nor em-dashed
+
+(Replaces the scenario "All three tiers present", which asserted that all
+three MUST appear.)
+
+#### Scenario: Footer names the chosen lists
+
+- GIVEN the catalog chose Venta and Socio
+- WHEN any index or product page renders
+- THEN its footer MUST read "Venta · Socio" and MUST NOT name Taller
+
 ### Requirement: Review Step (R13)
 
 `CatalogBuilderForm`'s review step MUST offer a price-list control: a checkbox
