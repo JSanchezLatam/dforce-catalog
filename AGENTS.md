@@ -227,8 +227,13 @@ enforces.
 **Invoke it manually, before opening a PR:**
 
 ```
-GGA_PROVIDER=claude gga run --pr-mode --diff-only
+GGA_TIMEOUT=900 GGA_PROVIDER=claude gga run --pr-mode --diff-only
 ```
+
+`GGA_TIMEOUT` is not optional at this repo's changeset size: a review of an
+18-file branch timed out mid-response at the 300s default, and a timeout is
+not a PASS. It must be an environment variable — `TIMEOUT` in `.gga` is inert
+(defect #1 below).
 
 `gga run --ci` reviews just the last commit if that is all you want.
 

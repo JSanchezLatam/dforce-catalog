@@ -55,7 +55,8 @@ STRICT_MODE="true"
 # Default: 300 (5 minutes)
 # Increase for large changesets or slow connections
 # NOTE: this value is INERT — see AGENTS.md known defect #1. Nothing in this
-# file is applied. Use GGA_TIMEOUT=900 on the command line instead.
+# file is applied. The runbook command in AGENTS.md passes GGA_TIMEOUT=900,
+# which is the only lever that works.
 TIMEOUT="300"
 
 # OpenCode provider: optional reasoning effort / variant
