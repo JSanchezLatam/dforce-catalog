@@ -1,4 +1,5 @@
 import { getTemplate } from "./registry";
+import { DEFAULT_PRICE_TIERS, type PriceTier } from "./price-tiers";
 import {
   CONTENT_HEIGHT_PX,
   CONTENT_PAD_TOP_PX,
@@ -193,6 +194,12 @@ export type CatalogTemplateProps = {
   productPages?: ProductPrintRef[][];
   /** 'strict' forces all products to OpaqueProductCard; 'adaptive' selects card based on imageType (default: 'strict' for backward compat). */
   defaultImageHandling?: "strict" | "adaptive" | null;
+  /**
+   * R13 — which price rows every card prints. Absent/empty falls back to
+   * `DEFAULT_PRICE_TIERS`, which is what keeps a job enqueued before tier
+   * selection existed renderable instead of dead in the queue.
+   */
+  tiers?: readonly PriceTier[] | null;
 };
 
 /** One printed row of the index table (mockup page "1 · Índice"). */
@@ -526,11 +533,14 @@ function ContentBox({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function CatalogTemplate({ title, branding, sections, productPages = [], defaultImageHandling }: CatalogTemplateProps) {
+export function CatalogTemplate({ title, branding, sections, productPages = [], defaultImageHandling, tiers }: CatalogTemplateProps) {
   // Card markup is a template concern regardless of whether branding is
   // configured yet (D1) — `getTemplate` always resolves to a real entry.
   const template = getTemplate(branding?.templateId);
   const imageHandling: "strict" | "adaptive" = defaultImageHandling === "adaptive" ? "adaptive" : "strict";
+  // The ONE place the tier default is resolved. Everything below takes
+  // `tiers` as required, so no card can quietly pick its own row set.
+  const printedTiers = tiers?.length ? tiers : DEFAULT_PRICE_TIERS;
   const contact = branding?.contact ?? null;
   const coverImageUrl = branding?.coverImageUrl ?? null;
   const red = branding ? template.primaryColors.primary : "#D42027";
@@ -731,7 +741,7 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
                 }}
               >
                 {page.map((product) => (
-                  <div key={product.id}>{template.Card({ product, imageHandling })}</div>
+                  <div key={product.id}>{template.Card({ product, imageHandling, tiers: printedTiers })}</div>
                 ))}
               </div>
             </ContentBox>

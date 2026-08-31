@@ -556,11 +556,28 @@ describe("renderCatalogHtml — product prices", () => {
       Array.from(html.matchAll(/>(Venta|Taller|Socio)<\/span><span[^>]*>([^<]*)</g), (m) => [m[1], m[2]]),
     );
 
+  /**
+   * The default exists for one case only: a job enqueued before tier
+   * selection shipped carries no `tiers`, and a worker that renders nothing
+   * (or throws) turns a queued catalog into a dead job nobody can retry.
+   */
+  it("falls back to Venta + Taller when the payload names no tiers", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [],
+      productPages: priced({ venta: 120, taller: 100, socio: 90 }),
+    });
+
+    expect(tiers(html)).toEqual({ Venta: "$120.00", Taller: "$100.00" });
+  });
+
   it("prints all three resolved tiers on the card", async () => {
     const html = await renderCatalogHtml({
       title: "C",
       branding: null,
       sections: [],
+      tiers: ["venta", "taller", "socio"],
       productPages: priced({ venta: 120, taller: 100, socio: 90 }),
     });
 
@@ -572,6 +589,7 @@ describe("renderCatalogHtml — product prices", () => {
       title: "C",
       branding: null,
       sections: [],
+      tiers: ["venta", "taller", "socio"],
       productPages: priced({ venta: 120, taller: null, socio: 90 }),
     });
 
@@ -585,6 +603,7 @@ describe("renderCatalogHtml — product prices", () => {
       title: "C",
       branding: null,
       sections: [],
+      tiers: ["venta", "taller", "socio"],
       productPages: priced({ venta: null, taller: null, socio: null }),
     });
 
@@ -597,6 +616,7 @@ describe("renderCatalogHtml — product prices", () => {
       title: "C",
       branding: null,
       sections: [],
+      tiers: ["venta", "taller", "socio"],
       productPages: [[{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null }]],
     });
 
@@ -610,6 +630,7 @@ describe("renderCatalogHtml — product prices", () => {
       title: "C",
       branding: null,
       sections: [],
+      tiers: ["venta", "taller", "socio"],
       productPages: priced({ venta: 0, taller: 100, socio: 0 }),
     });
 

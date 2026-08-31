@@ -13,6 +13,7 @@
  * the lifetime of one `db.transaction()`, auto-released on commit/rollback)
  * so only one enqueue attempt can be inside that decision window at a time.
  */
+import type { PriceTier } from "@/shared/template/price-tiers";
 import { sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
@@ -63,6 +64,8 @@ export type PdfGeneratePayload = {
   sections: CatalogIndexSection[];
   products: ProductPrintRef[];
   productsPerPage: number;
+  /** R13 — the price rows to print. Absent on jobs enqueued before tier selection existed; `CatalogTemplate` defaults those. */
+  tiers?: readonly PriceTier[] | null;
   defaultImageHandling?: "strict" | "adaptive" | null;
 };
 

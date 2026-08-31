@@ -4,6 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckIcon, Search } from "lucide-react";
 
 import { CatalogTemplate } from "@/shared/template/CatalogTemplate";
+import {
+  DEFAULT_PRICE_TIERS,
+  PRICE_TIER_LABELS,
+  PRICE_TIER_ORDER,
+  type PriceTier,
+} from "@/shared/template/price-tiers";
 import { getTemplate } from "@/shared/template/registry";
 import { buildWorkshopContact } from "@/modules/workshop-config/contact";
 import type { TemplateConfig, WorkshopConfig } from "@/shared/db/schema";
@@ -34,7 +40,9 @@ import {
   CatalogSelectionValidationError,
   deriveCatalogTitle,
   DEFAULT_PRODUCTS_PER_PAGE,
+  MAX_PRICE_TIERS,
   MAX_PRODUCTS_PER_PAGE,
+  MIN_PRICE_TIERS,
   MIN_PRODUCTS_PER_PAGE,
   toggleBulkFrame,
   validateCatalogSelection,
@@ -102,6 +110,12 @@ export function CatalogBuilderForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
   const [queueDepth, setQueueDepth] = useState<number | null>(null);
+  /**
+   * R13 — which price lists this catalog PRINTS. Held in canonical order, not
+   * click order, so the POST body and the printed page cannot disagree about
+   * which row comes first.
+   */
+  const [tiers, setTiers] = useState<readonly PriceTier[]>(DEFAULT_PRICE_TIERS);
 
   const categoryRefs = useMemo(() => selectedToCategoryRefs(selectedCategories), [selectedCategories]);
 
@@ -211,12 +225,25 @@ export function CatalogBuilderForm({
 
 
 
+  /**
+   * The cap is enforced by DISABLING the boxes that would break it, so this
+   * only ever runs on a legal transition — an error message shown after the
+   * fact is a worse answer than a control that cannot express the invalid
+   * state. `validateCatalogSelection` still re-checks it on both sides.
+   */
+  function toggleTier(tier: PriceTier) {
+    setTiers((prev) =>
+      PRICE_TIER_ORDER.filter((t) => (t === tier ? !prev.includes(t) : prev.includes(t))),
+    );
+  }
+
   function handleContinue() {
     try {
       validateCatalogSelection({
         includedCategoryCount: categoryRefs.length,
         totalProductCount: finalProducts.length,
         productsPerPage,
+        tiers,
       });
       setErrors({});
       setStep("review");
@@ -241,6 +268,7 @@ export function CatalogBuilderForm({
           products: reviewedProducts,
           productsPerPage,
           includedCategoryCount: categoryRefs.length,
+          tiers,
         }),
       });
 
@@ -501,6 +529,38 @@ export function CatalogBuilderForm({
                 {buttonLabel}
               </Button>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {step === "review" && (
+        <Card size="sm" className="mb-4">
+          <CardContent>
+            <fieldset>
+              <legend className="text-sm font-medium">Listas de precios</legend>
+              <p className="mt-1 mb-3 text-sm text-muted-foreground">
+                Elegí 1 o 2 de las 3. Cada una es una fila de precio en la ficha del producto.
+              </p>
+              <div className="flex flex-wrap gap-x-6 gap-y-3">
+                {PRICE_TIER_ORDER.map((tier) => {
+                  const checked = tiers.includes(tier);
+                  return (
+                    <div key={tier} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`tier-${tier}`}
+                        checked={checked}
+                        // Unticking the last one leaves a card with no price
+                        // row; ticking a third breaks the cap. Both are made
+                        // unreachable rather than reported afterwards.
+                        disabled={checked ? tiers.length === MIN_PRICE_TIERS : tiers.length === MAX_PRICE_TIERS}
+                        onCheckedChange={() => toggleTier(tier)}
+                      />
+                      <Label htmlFor={`tier-${tier}`}>{PRICE_TIER_LABELS[tier]}</Label>
+                    </div>
+                  );
+                })}
+              </div>
+            </fieldset>
           </CardContent>
         </Card>
       )}

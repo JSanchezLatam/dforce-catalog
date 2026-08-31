@@ -25,6 +25,14 @@ function product(prices: ProductPrintRef["prices"]): ProductPrintRef {
  * branch already moved once. */
 const COLORS = getTemplate(DEFAULT_TEMPLATE_ID).primaryColors;
 
+/**
+ * The component is a dumb renderer: it prints the rows it is handed, in
+ * canonical order. The "at most two" rule is a catalog-builder product rule
+ * (`selection.ts`), not a rendering one — pushing it down here would put the
+ * same rule in two places and make the card lie about what it can draw.
+ */
+const ALL_TIERS = ["venta", "taller", "socio"] as const;
+
 const CARDS = [
   ["TransparentProductCard", TransparentProductCard],
   ["OpaqueProductCard", OpaqueProductCard],
@@ -32,7 +40,7 @@ const CARDS = [
 
 describe.each(CARDS)("%s — three-tier price rendering", (_name, Card) => {
   it("renders all three tiers, bold, labeled Venta/Taller/Socio", () => {
-    render(<Card colors={COLORS} product={product({ venta: 120, taller: 100, socio: 90 })} />);
+    render(<Card colors={COLORS} tiers={ALL_TIERS} product={product({ venta: 120, taller: 100, socio: 90 })} />);
 
     expect(screen.getByText(/Venta/)).toBeInTheDocument();
     expect(screen.getByText(/\$120\.00/)).toBeInTheDocument();
@@ -43,7 +51,7 @@ describe.each(CARDS)("%s — three-tier price rendering", (_name, Card) => {
   });
 
   it("renders an em-dash for one missing tier, without touching the other two", () => {
-    render(<Card colors={COLORS} product={product({ venta: 120, taller: null, socio: 90 })} />);
+    render(<Card colors={COLORS} tiers={ALL_TIERS} product={product({ venta: 120, taller: null, socio: 90 })} />);
 
     expect(screen.getByText(/\$120\.00/)).toBeInTheDocument();
     expect(screen.getByText(/\$90\.00/)).toBeInTheDocument();
@@ -55,7 +63,7 @@ describe.each(CARDS)("%s — three-tier price rendering", (_name, Card) => {
   });
 
   it("renders three em-dashes when prices is entirely absent", () => {
-    render(<Card colors={COLORS} product={product(null)} />);
+    render(<Card colors={COLORS} tiers={ALL_TIERS} product={product(null)} />);
 
     expect(screen.getAllByText(/—/)).toHaveLength(3);
     expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
@@ -64,7 +72,7 @@ describe.each(CARDS)("%s — three-tier price rendering", (_name, Card) => {
   // The exact defect this em-dash rule exists to prevent: a hostile/real ERP
   // "0.00" tier must never render as "$0.00" in a customer-facing catalog.
   it("renders a hostile 0 tier as an em-dash, never $0.00", () => {
-    render(<Card colors={COLORS} product={product({ venta: 0, taller: 100, socio: 0 })} />);
+    render(<Card colors={COLORS} tiers={ALL_TIERS} product={product({ venta: 0, taller: 100, socio: 0 })} />);
 
     expect(screen.queryByText(/\$0\.00/)).not.toBeInTheDocument();
     expect(screen.getAllByText(/—/)).toHaveLength(2);
@@ -88,12 +96,12 @@ describe.each(CARDS)("%s — printed copy", (_name, Card) => {
   });
 
   it("prints the ERP id as the product code", () => {
-    render(<Card colors={COLORS} product={withImage("https://x/img.png")} />);
+    render(<Card colors={COLORS} tiers={ALL_TIERS} product={withImage("https://x/img.png")} />);
     expect(screen.getByText("Cód. PS0000570")).toBeInTheDocument();
   });
 
   it("labels a product with no photo in Spanish rather than leaving a blank column", () => {
-    render(<Card colors={COLORS} product={withImage(null)} />);
+    render(<Card colors={COLORS} tiers={ALL_TIERS} product={withImage(null)} />);
     expect(screen.getByText("SIN IMAGEN")).toBeInTheDocument();
   });
 
@@ -103,4 +111,60 @@ describe.each(CARDS)("%s — printed copy", (_name, Card) => {
   // asserting the CSS pixel value here would only restate the source. It is
   // checked where it is observable: `scripts/preview-catalog.ts`, against a
   // real Chromium.
+});
+
+
+describe.each(CARDS)("%s — renders only the chosen tiers (R13)", (_name, Card) => {
+  it("prints one row per chosen tier and omits the rest entirely", () => {
+    render(<Card colors={COLORS} tiers={["venta", "socio"]} product={product({ venta: 120, taller: 100, socio: 90 })} />);
+
+    expect(screen.getByText("Venta")).toBeInTheDocument();
+    expect(screen.getByText("Socio")).toBeInTheDocument();
+    // Omitted means GONE, not blanked: an unchosen tier must not leave an
+    // em-dash row behind, which would read as "we do not offer that price".
+    expect(screen.queryByText("Taller")).not.toBeInTheDocument();
+    expect(screen.queryByText(/\$100\.00/)).not.toBeInTheDocument();
+  });
+
+  it("prints a single row when only one tier is chosen", () => {
+    render(<Card colors={COLORS} tiers={["taller"]} product={product({ venta: 120, taller: 100, socio: 90 })} />);
+
+    expect(screen.getByText("Taller")).toBeInTheDocument();
+    expect(screen.queryByText("Venta")).not.toBeInTheDocument();
+    expect(screen.queryByText("Socio")).not.toBeInTheDocument();
+  });
+
+  it("keeps canonical Venta/Taller/Socio order regardless of the order chosen", () => {
+    const { container } = render(
+      <Card colors={COLORS} tiers={["socio", "venta"]} product={product({ venta: 120, taller: 100, socio: 90 })} />,
+    );
+
+    // The checkbox group cannot impose a meaningful order and the printed page
+    // must not shuffle between catalogs, so the card imposes one.
+    const labels = [...container.querySelectorAll("span")]
+      .map((el) => el.textContent)
+      .filter((t) => t === "Venta" || t === "Taller" || t === "Socio");
+    expect(labels).toEqual(["Venta", "Socio"]);
+  });
+
+  it("still applies the em-dash rule to a chosen tier with no usable price", () => {
+    render(<Card colors={COLORS} tiers={["venta", "taller"]} product={product({ venta: 120, taller: null, socio: 90 })} />);
+
+    expect(screen.getByText("Taller").nextElementSibling).toHaveTextContent("—");
+  });
+
+  /**
+   * The top row is the headline: tinted and printed in the brand primary. That
+   * was Venta by construction when all three always printed. With a choice it
+   * has to follow POSITION, or a Taller-only catalog prints its only price in
+   * the muted trade colour and reads like a footnote.
+   */
+  it("tints the first chosen row even when it is not Venta", () => {
+    const { container } = render(
+      <Card colors={COLORS} tiers={["taller", "socio"]} product={product({ venta: 120, taller: 100, socio: 90 })} />,
+    );
+
+    const amount = [...container.querySelectorAll("span")].find((el) => el.textContent === "$100.00")!;
+    expect(amount).toHaveStyle({ color: COLORS.primary });
+  });
 });

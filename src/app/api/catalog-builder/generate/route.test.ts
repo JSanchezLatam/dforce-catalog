@@ -33,6 +33,19 @@ describe("isGenerateBody — the envelope", () => {
     expect(isGenerateBody("nope")).toBe(false);
   });
 
+  /**
+   * `tiers` is optional, but a WRONG-TYPED one must die in the envelope, not
+   * in the validator: `validateCatalogSelection` calls `.filter` on it, so a
+   * string would throw a TypeError and surface as a 500 — a malformed request
+   * reported as a server fault.
+   */
+  it("rejects a mistyped tiers field while still accepting its absence", () => {
+    expect(isGenerateBody({ ...VALID, tiers: "venta" })).toBe(false);
+    expect(isGenerateBody({ ...VALID, tiers: [1, 2] })).toBe(false);
+    expect(isGenerateBody({ ...VALID, tiers: ["venta"] })).toBe(true);
+    expect(isGenerateBody(VALID)).toBe(true);
+  });
+
   it("rejects a missing or mistyped scalar field", () => {
     expect(isGenerateBody({ ...VALID, title: 42 })).toBe(false);
     expect(isGenerateBody({ ...VALID, productsPerPage: "10" })).toBe(false);
@@ -192,10 +205,10 @@ vi.mock("@/modules/catalog-storage/queries", () => ({
   countUploadedCatalogsForUser: (...args: unknown[]) => mockCountUploaded(...args),
 }));
 
-function generateRequest() {
+function generateRequest(overrides: Record<string, unknown> = {}) {
   return new NextRequest("http://localhost/api/catalog-builder/generate", {
     method: "POST",
-    body: JSON.stringify(VALID),
+    body: JSON.stringify({ ...VALID, ...overrides }),
     headers: { "x-user-id": "user-1", "x-user-role": "administrador", "content-type": "application/json" },
   });
 }
@@ -308,5 +321,48 @@ describe("POST — branding assembly (design D2/D3)", () => {
       website: null,
       socialHandles: { instagram: "@taller" },
     });
+  });
+});
+
+/**
+ * R13 — the route re-runs the SAME pure validator the client ran. The
+ * checkbox group cannot express these states, which is exactly why the server
+ * must still refuse them: the UI is convenience, the route is the boundary.
+ */
+describe("POST — price tier selection", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEnqueue.mockResolvedValue({ jobId: "job-1" });
+    mockGetQueuePosition.mockResolvedValue(0);
+    mockCountUploaded.mockResolvedValue(0);
+    mockGetTemplateConfig.mockResolvedValue({ selectedTemplateId: "dforce-classic" });
+    mockGetWorkshopConfig.mockResolvedValue({});
+  });
+
+  it.each([
+    ["empty", []],
+    ["three", ["venta", "taller", "socio"]],
+    ["repeated", ["venta", "venta"]],
+    ["unknown", ["venta", "mayorista"]],
+  ])("rejects %s with a 400 naming the tiers field, and enqueues nothing", async (_label, tiers) => {
+    const response = await POST(generateRequest({ tiers }));
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).errors.tiers).toBeDefined();
+    expect(mockEnqueue).not.toHaveBeenCalled();
+  });
+
+  it("forwards a valid choice to the job payload", async () => {
+    await POST(generateRequest({ tiers: ["venta", "socio"] }));
+
+    expect(mockEnqueue).toHaveBeenCalledWith(expect.objectContaining({ tiers: ["venta", "socio"] }));
+  });
+
+  /** All three still TRAVEL — the choice prints rows, it does not filter data. */
+  it("still enqueues every tier's value alongside the choice", async () => {
+    await POST(generateRequest({ tiers: ["venta"] }));
+
+    const [payload] = mockEnqueue.mock.calls[0] as [{ products: { prices: unknown }[] }];
+    expect(payload.products[0].prices).toEqual({ venta: 45, taller: 38, socio: 32 });
   });
 });

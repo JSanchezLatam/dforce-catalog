@@ -1,4 +1,5 @@
 import type { ProductPrices as ProductPricesShape, ProductPrintRef } from "./CatalogTemplate";
+import { PRICE_TIER_LABELS, PRICE_TIER_ORDER, type PriceTier } from "./price-tiers";
 
 /**
  * `colors` comes from the registry entry that renders the card (design D1/D2 —
@@ -10,18 +11,15 @@ import type { ProductPrices as ProductPricesShape, ProductPrintRef } from "./Cat
 type CardProps = {
   product: ProductPrintRef;
   colors: { primary: string; secondary: string };
+  /**
+   * Which price rows to print. Required and undefaulted, exactly like
+   * `colors` and for the same reason: a card that falls back on its own when
+   * a caller forgets is the silent half-configured failure the registry
+   * exists to prevent. `CatalogTemplate` resolves the default once and hands
+   * it down.
+   */
+  tiers: readonly PriceTier[];
   style?: React.CSSProperties;
-};
-
-/**
- * Local, not imported from `catalog-builder`'s `PRICE_LIST_LABELS` — that
- * would invert the `shared ← modules` dependency direction (design D4), and
- * the card needs shorter labels than the generate-step selector did.
- */
-const TIER_LABELS: Record<keyof ProductPricesShape, string> = {
-  venta: "Venta",
-  taller: "Taller",
-  socio: "Socio",
 };
 
 /** Mockup card ink (`Template_Catalogo.op`, page "2 · Productos"). */
@@ -43,20 +41,33 @@ function formatTier(value: number | null | undefined): string {
 }
 
 /**
- * The three-tier price table, as the mockup draws it: one row per tier, label
- * left in small caps, amount right. Venta — the headline price — is tinted and
- * printed in the brand red; the trade tiers stay black so a customer reading
- * the page cannot mistake which number is theirs.
+ * The price table, as the mockup draws it: one row per CHOSEN tier, label
+ * left in small caps, amount right. The top row is the headline — tinted and
+ * printed in the brand primary; the rest stay black so a customer reading the
+ * page cannot mistake which number is theirs. That headline follows POSITION,
+ * not the name `venta`: a Taller-only catalog must print its one price as the
+ * headline, or the whole page reads like a footnote.
  *
- * Always renders all three tiers, never fewer, even when every tier is absent
- * (each just shows an em-dash) — a card missing a row would read as a card
- * that does not offer that tier.
+ * A chosen tier with no usable price still prints its row with an em-dash —
+ * that is the em-dash rule, and it is a different statement from omitting the
+ * row. Omitted means "this catalog does not quote that list"; an em-dash means
+ * "we quote it, this product has no price". Filters `PRICE_TIER_ORDER` rather
+ * than mapping the caller's array, so print order is fixed and a duplicate or
+ * unknown entry cannot produce a duplicate or empty row.
  */
-function ProductPrices({ prices, colors }: { prices?: ProductPricesShape | null; colors: CardProps["colors"] }) {
-  const tiers = Object.keys(TIER_LABELS) as (keyof ProductPricesShape)[];
+function ProductPrices({
+  prices,
+  colors,
+  tiers,
+}: {
+  prices?: ProductPricesShape | null;
+  colors: CardProps["colors"];
+  tiers: readonly PriceTier[];
+}) {
+  const chosen = PRICE_TIER_ORDER.filter((tier) => tiers.includes(tier));
   return (
     <div style={{ marginTop: "auto" }}>
-      {tiers.map((tier, index) => (
+      {chosen.map((tier, index) => (
         <div
           key={tier}
           style={{
@@ -69,7 +80,7 @@ function ProductPrices({ prices, colors }: { prices?: ProductPricesShape | null;
           }}
         >
           <span style={{ fontSize: 7, fontWeight: 800, letterSpacing: 1.6, color: INK_MUTED, textTransform: "uppercase" }}>
-            {TIER_LABELS[tier]}
+            {PRICE_TIER_LABELS[tier]}
           </span>
           <span style={{ fontSize: 12, fontWeight: 800, color: index === 0 ? colors.primary : colors.secondary }}>
             {formatTier(prices?.[tier])}
@@ -135,7 +146,7 @@ function ProductImage({ product, fit }: { product: ProductPrintRef; fit: "cover"
   );
 }
 
-function ProductCard({ product, colors, style, fit }: CardProps & { fit: "cover" | "contain" }) {
+function ProductCard({ product, colors, tiers, style, fit }: CardProps & { fit: "cover" | "contain" }) {
   return (
     <div
       style={{
@@ -153,18 +164,18 @@ function ProductCard({ product, colors, style, fit }: CardProps & { fit: "cover"
       <ProductImage product={product} fit={fit} />
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
         <ProductHeading product={product} colors={colors} />
-        <ProductPrices prices={product.prices} colors={colors} />
+        <ProductPrices prices={product.prices} colors={colors} tiers={tiers} />
       </div>
     </div>
   );
 }
 
 /** Cut-out product shot — shown whole, never cropped. */
-export function TransparentProductCard({ product, colors, style }: CardProps) {
-  return <ProductCard product={product} colors={colors} style={style} fit="contain" />;
+export function TransparentProductCard({ product, colors, tiers, style }: CardProps) {
+  return <ProductCard product={product} colors={colors} tiers={tiers} style={style} fit="contain" />;
 }
 
 /** Photographed product — cropped to fill its column. */
-export function OpaqueProductCard({ product, colors, style }: CardProps) {
-  return <ProductCard product={product} colors={colors} style={style} fit="cover" />;
+export function OpaqueProductCard({ product, colors, tiers, style }: CardProps) {
+  return <ProductCard product={product} colors={colors} tiers={tiers} style={style} fit="cover" />;
 }

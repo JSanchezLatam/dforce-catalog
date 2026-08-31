@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 
 import type { ProductPrintRef } from "./CatalogTemplate";
+import type { PriceTier } from "./price-tiers";
 
 /**
  * `CatalogTemplateDef` lives in its own type-only module so `registry.ts`
@@ -28,5 +29,5 @@ export type CatalogTemplateDef = {
   thumbnail?: string;
   font: string;
   primaryColors: { primary: string; secondary: string };
-  Card: (props: { product: ProductPrintRef; imageHandling: "strict" | "adaptive" }) => ReactElement;
+  Card: (props: { product: ProductPrintRef; imageHandling: "strict" | "adaptive"; tiers: readonly PriceTier[] }) => ReactElement;
 };
