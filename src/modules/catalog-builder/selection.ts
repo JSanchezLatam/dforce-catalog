@@ -9,6 +9,7 @@
  * `template-config/service.ts`'s `validateTemplateConfigInput`.
  */
 import type { CatalogIndexSection } from "@/shared/template/CatalogTemplate";
+import { PRICE_TIER_ORDER, type PriceTier } from "@/shared/template/price-tiers";
 import type { PriceListMap } from "./price-lists";
 
 export type CategoryRef = { categoryL1: string; categoryL2?: string | null };
@@ -22,9 +23,13 @@ export type ProductRef = {
   imageType?: "transparent" | "opaque" | "low_res" | null;
   /**
    * All three ERP price tiers, unparsed. The builder holds every tier so the
-   * generate-step selector can switch between them without a refetch; only the
-   * ONE chosen price is resolved into the print payload, so a trade or member
-   * price never travels with a retail catalog.
+   * generate-step checkbox group can switch between them without a refetch.
+   * All three ALSO travel into the print payload: the tier choice is a render
+   * instruction, so the same catalog can be reprinted against a different pair
+   * without re-reading the ERP. (This paragraph used to say the opposite —
+   * "only the ONE chosen price is resolved into the print payload" — which was
+   * the retired single-select's contract. It survived that control's removal
+   * by two changes.)
    */
   priceLists?: PriceListMap | null;
 };
@@ -133,10 +138,21 @@ export function toggleBulkFrame(state: BulkFrameState, products: ProductRef[]): 
   };
 }
 
+/** R13 — a catalog prints one or two of the three ERP price lists. */
+export const MIN_PRICE_TIERS = 1;
+export const MAX_PRICE_TIERS = 2;
+
 export type CatalogSelectionCheck = {
   includedCategoryCount: number;
   totalProductCount: number;
   productsPerPage: number;
+  /**
+   * Omitted is legitimate, not lax: a job enqueued before tier selection
+   * existed carries no `tiers`, and this same function re-validates those
+   * payloads server-side. `CatalogTemplate` owns that default
+   * (`DEFAULT_PRICE_TIERS`) — the rule here only governs an explicit choice.
+   */
+  tiers?: readonly PriceTier[];
 };
 
 /** R5.4/5.7/5.8-9 — throws with ALL field errors collected (same convention as `validateTemplateConfigInput`). */
@@ -161,6 +177,21 @@ export function validateCatalogSelection(check: CatalogSelectionCheck): void {
     check.productsPerPage > MAX_PRODUCTS_PER_PAGE
   ) {
     errors.productsPerPage = `Must be an integer between ${MIN_PRODUCTS_PER_PAGE} and ${MAX_PRODUCTS_PER_PAGE}`; // R5.4
+  }
+
+  if (check.tiers !== undefined) {
+    const unknown = check.tiers.filter((tier) => !PRICE_TIER_ORDER.includes(tier));
+    if (unknown.length > 0) {
+      // Dropping it silently would print a one-row catalog for a request that
+      // asked for two, with nothing anywhere saying why.
+      errors.tiers = `Lista de precios desconocida: ${unknown.join(", ")}`;
+    } else if (new Set(check.tiers).size !== check.tiers.length) {
+      // Two boxes ticked, one row printed — the renderer dedupes, so without
+      // this the count check below would pass on a selection of one.
+      errors.tiers = "No repitas la misma lista de precios";
+    } else if (check.tiers.length < MIN_PRICE_TIERS || check.tiers.length > MAX_PRICE_TIERS) {
+      errors.tiers = `Elegí ${MIN_PRICE_TIERS} o ${MAX_PRICE_TIERS} listas de precios`;
+    }
   }
 
   if (Object.keys(errors).length > 0) {

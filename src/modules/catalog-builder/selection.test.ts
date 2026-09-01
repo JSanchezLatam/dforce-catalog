@@ -202,3 +202,57 @@ describe("toggleBulkFrame", () => {
     expect(state.bulkFramed).toBe(false);
   });
 });
+
+/**
+ * R13 — the catalog prints between one and two price lists, chosen per
+ * generation. The cap lives HERE and nowhere else: `AdaptiveCards` is a dumb
+ * renderer that prints the rows it is handed, and the route re-runs this same
+ * pure function, so client and server cannot drift.
+ */
+describe("validateCatalogSelection — price tiers", () => {
+  const valid = { includedCategoryCount: 1, totalProductCount: 5, productsPerPage: 6 };
+
+  it("accepts one tier", () => {
+    expect(() => validateCatalogSelection({ ...valid, tiers: ["venta"] })).not.toThrow();
+  });
+
+  it("accepts two tiers", () => {
+    expect(() => validateCatalogSelection({ ...valid, tiers: ["venta", "socio"] })).not.toThrow();
+  });
+
+  it("rejects an empty selection — a card with no price row is not a catalog", () => {
+    expect(() => validateCatalogSelection({ ...valid, tiers: [] })).toThrow(CatalogSelectionValidationError);
+  });
+
+  it("rejects three, which is the whole point of the cap", () => {
+    try {
+      validateCatalogSelection({ ...valid, tiers: ["venta", "taller", "socio"] });
+      expect.unreachable("three tiers must be rejected");
+    } catch (err) {
+      expect((err as CatalogSelectionValidationError).errors.tiers).toBeDefined();
+    }
+  });
+
+  it("rejects an unknown tier name rather than silently dropping it", () => {
+    // Silently ignoring it would print a one-row catalog for a request that
+    // asked for two, and nothing would say why.
+    expect(() =>
+      validateCatalogSelection({ ...valid, tiers: ["venta", "mayorista"] as never }),
+    ).toThrow(CatalogSelectionValidationError);
+  });
+
+  it("rejects the same tier twice — two boxes ticked, one row printed", () => {
+    expect(() => validateCatalogSelection({ ...valid, tiers: ["venta", "venta"] })).toThrow(
+      CatalogSelectionValidationError,
+    );
+  });
+
+  /**
+   * Absent is NOT invalid: jobs enqueued before tier selection existed carry
+   * no `tiers`, and `CatalogTemplate` defaults them. Rejecting here would fail
+   * a re-validation of a payload that is legitimately old.
+   */
+  it("accepts an omitted selection and leaves the default to the renderer", () => {
+    expect(() => validateCatalogSelection(valid)).not.toThrow();
+  });
+});

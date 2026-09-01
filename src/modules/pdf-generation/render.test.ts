@@ -556,11 +556,67 @@ describe("renderCatalogHtml — product prices", () => {
       Array.from(html.matchAll(/>(Venta|Taller|Socio)<\/span><span[^>]*>([^<]*)</g), (m) => [m[1], m[2]]),
     );
 
-  it("prints all three resolved tiers on the card", async () => {
+  /**
+   * The page footer names the lists this catalog quotes. It is the line a
+   * customer reads to know what the numbers above it mean, so a footer
+   * promising three lists over cards showing two is worse than no footer.
+   */
+  it("names only the chosen lists in the page footers, on index and product pages alike", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [{ categoryL1: "AUDIO", categoryL2: null, productCount: 1 }],
+      tiers: ["venta", "socio"],
+      productPages: priced({ venta: 120, taller: 100, socio: 90 }),
+    });
+
+    // Unchosen anywhere on the page: not in a card row, not in either footer.
+    expect(html).not.toContain("Taller");
+    expect(html).toContain("Lista de precios · Venta · Socio");
+    // Scoped to the product sheet on purpose: "Lista de precios · Venta ·
+    // Socio" CONTAINS "Venta · Socio", so an unscoped assertion is satisfied
+    // by the index footer alone and the product footer goes unchecked.
+    const productSheet = html.slice(html.indexOf('data-sheet="product-1"'));
+    expect(productSheet).toContain("Venta · Socio");
+  });
+
+  it("names one list without a separator when only one is chosen", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [{ categoryL1: "AUDIO", categoryL2: null, productCount: 1 }],
+      tiers: ["taller"],
+      productPages: priced({ venta: 120, taller: 100, socio: 90 }),
+    });
+
+    expect(html).toContain("Lista de precios · Taller");
+    expect(html.slice(html.indexOf('data-sheet="product-1"'))).toContain("Taller");
+    expect(html).not.toContain("Taller · ");
+    expect(html).not.toContain("Venta");
+  });
+
+  /**
+   * The default exists for one case only: a job enqueued before tier
+   * selection shipped carries no `tiers`, and a worker that renders nothing
+   * (or throws) turns a queued catalog into a dead job nobody can retry.
+   */
+  it("falls back to Venta + Taller when the payload names no tiers", async () => {
     const html = await renderCatalogHtml({
       title: "C",
       branding: null,
       sections: [],
+      productPages: priced({ venta: 120, taller: 100, socio: 90 }),
+    });
+
+    expect(tiers(html)).toEqual({ Venta: "$120.00", Taller: "$100.00" });
+  });
+
+  it("prints exactly the tiers it is handed, three included — the card is a dumb renderer", async () => {
+    const html = await renderCatalogHtml({
+      title: "C",
+      branding: null,
+      sections: [],
+      tiers: ["venta", "taller", "socio"],
       productPages: priced({ venta: 120, taller: 100, socio: 90 }),
     });
 
@@ -572,6 +628,7 @@ describe("renderCatalogHtml — product prices", () => {
       title: "C",
       branding: null,
       sections: [],
+      tiers: ["venta", "taller", "socio"],
       productPages: priced({ venta: 120, taller: null, socio: 90 }),
     });
 
@@ -585,6 +642,7 @@ describe("renderCatalogHtml — product prices", () => {
       title: "C",
       branding: null,
       sections: [],
+      tiers: ["venta", "taller", "socio"],
       productPages: priced({ venta: null, taller: null, socio: null }),
     });
 
@@ -597,6 +655,7 @@ describe("renderCatalogHtml — product prices", () => {
       title: "C",
       branding: null,
       sections: [],
+      tiers: ["venta", "taller", "socio"],
       productPages: [[{ id: "1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null }]],
     });
 
@@ -610,6 +669,7 @@ describe("renderCatalogHtml — product prices", () => {
       title: "C",
       branding: null,
       sections: [],
+      tiers: ["venta", "taller", "socio"],
       productPages: priced({ venta: 0, taller: 100, socio: 0 }),
     });
 

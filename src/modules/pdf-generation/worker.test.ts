@@ -11,7 +11,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { PdfBranding } from "./enqueue";
-import { resolveBranding } from "./worker";
+import { resolveBranding, buildTemplateProps } from "./worker";
 
 describe("resolveBranding — D3 logo data-URI resolution", () => {
   it("returns null branding unchanged", async () => {
@@ -139,5 +139,34 @@ describe("resolveBranding — D6 cover-image data-URI resolution", () => {
     const result = await resolveBranding(branding, { getObject: vi.fn() });
 
     expect(result?.contact).toBeNull();
+  });
+});
+
+/**
+ * The measurement pass and the print pass share one props object, and only
+ * the print pass is observable in a rendered PDF. A field that reaches the
+ * template but not the measurement would paginate against card heights that
+ * never get printed — so what is asserted here is that the payload's
+ * layout-affecting fields survive the hand-off at all.
+ */
+describe("buildTemplateProps — what both render passes are measured against", () => {
+  const payload = {
+    catalogId: "c1",
+    userId: "u1",
+    title: "Catálogo",
+    branding: null,
+    sections: [],
+    products: [{ id: "p1", name: "Woofer", categoryL1: "AUDIO", categoryL2: null }],
+    productsPerPage: 6,
+  };
+
+  it("carries the chosen price tiers through", () => {
+    expect(buildTemplateProps({ ...payload, tiers: ["taller"] }, null).tiers).toEqual(["taller"]);
+  });
+
+  it("leaves absent tiers absent, so CatalogTemplate owns the one default", () => {
+    // Defaulting here too would put the fallback in two places, and the second
+    // copy is the one that drifts.
+    expect(buildTemplateProps(payload, null).tiers).toBeUndefined();
   });
 });

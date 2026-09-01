@@ -31,10 +31,10 @@ export const dforceClassic: CatalogTemplateDef = {
   name: "Dforce Clásico",
   font: "Arial, sans-serif",
   primaryColors: COLORS,
-  Card({ product, imageHandling }) {
+  Card({ product, imageHandling, tiers }) {
     if (imageHandling === "adaptive" && product.imageType === "transparent") {
-      return <TransparentProductCard product={product} colors={COLORS} />;
+      return <TransparentProductCard product={product} colors={COLORS} tiers={tiers} />;
     }
-    return <OpaqueProductCard product={product} colors={COLORS} />;
+    return <OpaqueProductCard product={product} colors={COLORS} tiers={tiers} />;
   },
 };

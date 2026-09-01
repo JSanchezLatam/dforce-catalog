@@ -12,6 +12,7 @@ import { getWorkshopConfig } from "@/modules/workshop-config/service";
 import { buildWorkshopContact } from "@/modules/workshop-config/contact";
 import { getTemplate } from "@/shared/template/registry";
 import type { CatalogIndexSection, ProductPrices, ProductPrintRef } from "@/shared/template/CatalogTemplate";
+import type { PriceTier } from "@/shared/template/price-tiers";
 
 /**
  * R5/R6/R12 — the missing link flagged since PR8: `CatalogBuilderForm`'s
@@ -34,6 +35,13 @@ type GenerateBody = {
   products: ProductPrintRef[];
   productsPerPage: number;
   includedCategoryCount: number;
+  /**
+   * R13 — which of the three resolved tiers each card PRINTS. A render
+   * instruction, not a data filter: `products` still carries all three, so a
+   * catalog can be re-generated with a different pair without re-reading the
+   * ERP. Optional here on purpose — see `CatalogSelectionCheck.tiers`.
+   */
+  tiers?: PriceTier[];
 };
 
 const IMAGE_TYPES = ["transparent", "opaque", "low_res"];
@@ -106,7 +114,14 @@ export function isGenerateBody(value: unknown): value is GenerateBody {
     Array.isArray(body.products) &&
     body.products.every(isPrintProduct) &&
     typeof body.productsPerPage === "number" &&
-    typeof body.includedCategoryCount === "number"
+    typeof body.includedCategoryCount === "number" &&
+    // Absent is legitimate (an old client, an old queued job). Present but
+    // not an array of strings is not: `validateCatalogSelection` calls
+    // `.filter` on it, so a string would throw and surface as a 500 — a
+    // malformed request reported as a server fault. WHICH strings are valid
+    // is that validator's job, not this envelope's.
+    (body.tiers === undefined ||
+      (Array.isArray(body.tiers) && body.tiers.every((tier) => typeof tier === "string")))
   );
 }
 
@@ -126,6 +141,7 @@ export async function POST(request: NextRequest) {
       includedCategoryCount: body.includedCategoryCount,
       totalProductCount: body.products.length,
       productsPerPage: body.productsPerPage,
+      tiers: body.tiers,
     });
   } catch (err) {
     if (err instanceof CatalogSelectionValidationError) {
@@ -161,6 +177,7 @@ export async function POST(request: NextRequest) {
       sections: body.sections,
       products: body.products,
       productsPerPage: body.productsPerPage,
+      tiers: body.tiers,
       defaultImageHandling: (template?.defaultImageHandling ?? null) as "strict" | "adaptive" | null,
     });
     // R12.3/12.4 (queuePosition) and R11.3 (uploadedCount, for the eviction

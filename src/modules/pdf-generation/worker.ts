@@ -45,6 +45,7 @@ import { createPendingCatalog } from "../catalog-storage/queries";
 import { buildIndexSections } from "../catalog-builder/selection";
 import { CONTENT_HEIGHT_PX, PAGE_HEIGHT_PX, PAGE_WIDTH_PX } from "@/shared/template/page-geometry";
 import { PDF_GENERATE_JOB, PDF_UPLOAD_JOB, type PdfBranding, type PdfGeneratePayload } from "./enqueue";
+import type { CatalogTemplateProps } from "@/shared/template/CatalogTemplate";
 import { chunkProducts, renderCatalogHtml } from "./render";
 
 export type PdfUploadPayload = {
@@ -165,17 +166,34 @@ export async function measureCardHeights(page: Page): Promise<number[]> {
  * render — not two browser launches. The first pass exists only so the split
  * is made against real measured heights rather than a guess.
  */
+/**
+ * The template props BOTH passes below share — extracted so the one thing
+ * that cannot be observed through a Chromium render is testable: that every
+ * layout-affecting field reaches the MEASUREMENT pass, not just the print
+ * pass. `tiers` is why this exists. Cards are paginated by measured height,
+ * so measuring three-row cards and printing two-row ones packs every page
+ * against a height that never gets printed — a silently wrong PDF, and the
+ * only mutation of this change that no test caught until this seam existed.
+ */
+export function buildTemplateProps(
+  payload: PdfGeneratePayload,
+  branding: CatalogTemplateProps["branding"],
+): CatalogTemplateProps {
+  return {
+    title: payload.title,
+    branding,
+    sections: payload.sections.length > 0 ? payload.sections : buildIndexSections(payload.products),
+    tiers: payload.tiers,
+    defaultImageHandling: payload.defaultImageHandling,
+  };
+}
+
 export async function renderPdfBuffer(
   payload: PdfGeneratePayload,
   deps: { getObject?: typeof getObject } = {},
 ): Promise<Buffer> {
   const branding = await resolveBranding(payload.branding, deps);
-  const props = {
-    title: payload.title,
-    branding,
-    sections: payload.sections.length > 0 ? payload.sections : buildIndexSections(payload.products),
-    defaultImageHandling: payload.defaultImageHandling,
-  };
+  const props = buildTemplateProps(payload, branding);
 
   const browser = await chromium.launch();
   try {

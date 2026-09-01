@@ -7,6 +7,12 @@
  * looks right; this is the thing that does.
  *
  * Run: npx tsx scripts/preview-catalog.ts
+ *      TIERS=taller npx tsx scripts/preview-catalog.ts   (one price row)
+ *
+ * `TIERS` is a comma-separated subset of venta,taller,socio — the same choice
+ * the review step offers. It matters here more than anywhere else: a one-row
+ * card is the new minimum card height, and card height is what drives page
+ * packing. Defaults to the renderer's own default when unset.
  * Output: preview-out/ (gitignored) — one PNG per printed page, plus the PDF.
  */
 import { mkdir, rm, writeFile } from "node:fs/promises";
@@ -16,7 +22,11 @@ import { chromium } from "playwright";
 
 import { resolveAllPrices } from "@/modules/catalog-builder/price-lists";
 import { listCategoryPairs, listProductsInCategories } from "@/modules/catalog-builder/queries";
-import { buildIndexSections } from "@/modules/catalog-builder/selection";
+import {
+  buildIndexSections,
+  CatalogSelectionValidationError,
+  validateCatalogSelection,
+} from "@/modules/catalog-builder/selection";
 import { chunkProducts, renderCatalogHtml } from "@/modules/pdf-generation/render";
 import { measureCardHeights, resolveBranding } from "@/modules/pdf-generation/worker";
 import { getTemplateConfig } from "@/modules/template-config/service";
@@ -25,10 +35,30 @@ import { getWorkshopConfig } from "@/modules/workshop-config/service";
 import { getTemplate } from "@/shared/template/registry";
 import type { ProductPrintRef } from "@/shared/template/CatalogTemplate";
 import { CONTENT_HEIGHT_PX, PAGE_HEIGHT_PX, PAGE_WIDTH_PX } from "@/shared/template/page-geometry";
+import type { PriceTier } from "@/shared/template/price-tiers";
 
 const OUT = join(process.cwd(), "preview-out");
 
 async function main() {
+  const requestedTiers = process.env.TIERS?.split(",")
+    .map((tier) => tier.trim())
+    .filter(Boolean);
+  const tiers = requestedTiers as PriceTier[] | undefined;
+  try {
+    // The SAME validator the route runs, not a hand-rolled subset of it: an
+    // unknown name, a repeat, or all three at once must fail here too. A
+    // three-row card is taller than anything the shipped UI or route can
+    // produce, and card height is the one thing this script exists to look at
+    // — previewing an impossible card is the wrong answer that matters here.
+    validateCatalogSelection({ includedCategoryCount: 1, totalProductCount: 1, productsPerPage: 6, tiers });
+  } catch (err) {
+    if (err instanceof CatalogSelectionValidationError) {
+      console.error(`TIERS: ${err.errors.tiers ?? "selección inválida"}`);
+      process.exit(1);
+    }
+    throw err;
+  }
+
   // The SAME query the generate step runs — deliberately not a hand-written
   // copy of its SQL. A copy is exactly how this script first "found" that
   // every price was an em-dash: the real query reads Interfuerza's `Precio`
@@ -73,10 +103,13 @@ async function main() {
     `workshop: ${workshop?.name ?? "(sin nombre)"} · logo ${branding?.logoUrl ? "ok" : "NO RESUELTO"} · portada ${branding?.coverImageUrl ? "ok" : "NO RESUELTA"}`,
   );
 
+  // Passed through undefined when TIERS is unset, so the preview exercises
+  // `CatalogTemplate`'s real default rather than a second copy of it.
   const props = {
     title: "Catálogo de productos",
     branding,
     sections: buildIndexSections(products),
+    tiers,
     defaultImageHandling: (template?.defaultImageHandling ?? null) as "strict" | "adaptive" | null,
   };
 

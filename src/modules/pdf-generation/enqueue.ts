@@ -18,6 +18,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/shared/db/client";
 import { getBoss } from "@/shared/jobs/boss";
 import type { CatalogIndexSection, ProductPrintRef, WorkshopContact } from "@/shared/template/CatalogTemplate";
+import type { PriceTier } from "@/shared/template/price-tiers";
 
 export const PDF_GENERATE_JOB = "pdf-generate";
 export const PDF_UPLOAD_JOB = "pdf-upload";
@@ -63,6 +64,8 @@ export type PdfGeneratePayload = {
   sections: CatalogIndexSection[];
   products: ProductPrintRef[];
   productsPerPage: number;
+  /** R13 — the price rows to print. Absent on jobs enqueued before tier selection existed; `CatalogTemplate` defaults those. */
+  tiers?: readonly PriceTier[] | null;
   defaultImageHandling?: "strict" | "adaptive" | null;
 };
 
