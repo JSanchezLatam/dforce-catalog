@@ -81,7 +81,12 @@ export default async function CustomerDetailPage({
       <Card className="mb-6">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{cliente.name}</CardTitle>
-          <CustomerFormTrigger cliente={cliente} vehicles={vehicles} triggerLabel="Editar" />
+          <CustomerFormTrigger
+            cliente={cliente}
+            vehicles={vehicles}
+            canDeleteVehicle={can(user, "customers.deleteVehicle")}
+            triggerLabel="Editar"
+          />
         </CardHeader>
         <CardContent>
           <dl>

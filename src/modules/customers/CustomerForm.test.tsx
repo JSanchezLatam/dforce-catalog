@@ -355,3 +355,164 @@ describe("CustomerForm — vehicle collection (edit)", () => {
     expect(within(vehicleGroup(1)).getByLabelText("Placa")).toHaveValue("ABC111");
   });
 });
+
+/**
+ * The edit dialog is the longest one in the app: a customer with several
+ * vehicles renders more than `DialogContent`'s `max-h-[85vh]` cap allows. The
+ * cap was there; the scroll container was not, so the overflow rendered
+ * OUTSIDE the dialog's surface, over the page behind it.
+ *
+ * jsdom has no layout, so these assert the STRUCTURE that makes the browser
+ * scroll rather than a measured overflow: which element is the scroll box, and
+ * which controls are deliberately outside it. That is the part that regressed
+ * and the part a refactor can silently undo.
+ */
+describe("CustomerForm — long dialog scrolling", () => {
+  it("renders the form body inside a scroll container", async () => {
+    const user = userEvent.setup();
+    render(
+      <CustomerForm
+        cliente={CLIENTE}
+        vehicles={[vehiculo({ id: "v1" }), vehiculo({ id: "v2", plate: "BBB222" }), vehiculo({ id: "v3", plate: "CCC333" })]}
+      />,
+    );
+    await open(user, "Editar");
+
+    const body = document.querySelector('[data-slot="dialog-body"]');
+    expect(body).not.toBeNull();
+    expect(body!.className).toContain("overflow-y-auto");
+    // Without `min-h-0` a flex item refuses to shrink below its content, which
+    // silently disables the overflow — the cap holds and nothing scrolls.
+    expect(body!.className).toContain("min-h-0");
+    expect(body).toContainElement(vehicleGroup(3));
+  });
+
+  it("keeps Guardar and the dialog title out of the scrolling region", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo()]} />);
+    await open(user, "Editar");
+
+    const body = document.querySelector('[data-slot="dialog-body"]')!;
+    // A Guardar button that scrolls out of reach is a different bug, not a fix.
+    expect(body).not.toContainElement(screen.getByRole("button", { name: "Guardar" }));
+    expect(body).not.toContainElement(screen.getByRole("button", { name: "Cancelar" }));
+    expect(body).not.toContainElement(screen.getByText("Editar cliente"));
+  });
+});
+
+/**
+ * Two different operations, deliberately not one control (defect 2):
+ * "Quitar" soft-deletes — the car left the customer, the row survives because
+ * its service history must. "Eliminar definitivamente" removes the row — a
+ * typo'd plate, a duplicate, something that should never have existed.
+ */
+describe("CustomerForm — permanent vehicle deletion", () => {
+  async function openEditWith(user: ReturnType<typeof userEvent.setup>, vehicles: Vehiculo[]) {
+    render(<CustomerForm cliente={CLIENTE} vehicles={vehicles} canDeleteVehicle />);
+    await open(user, "Editar");
+  }
+
+  /**
+   * Permanent deletion is administrador-only (`customers.deleteVehicle`), so
+   * the control has to disappear for a tecnico — the API refuses the request
+   * either way, but a button that always 403s is a worse answer than no
+   * button. The prop defaults to DENY: a caller that forgets to pass it hides
+   * the button, which is the harmless failure. The reverse default would show
+   * an unauthorized destructive control on every page that forgot.
+   */
+  it("hides both deletion controls when the grant is absent, keeping deactivation", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo(), vehiculo({ id: "v2", deactivatedAt: new Date() })]} />);
+    await open(user, "Editar");
+
+    expect(screen.queryByRole("button", { name: /definitivamente/ })).not.toBeInTheDocument();
+    // Deactivation is reversible and stays with every tecnico.
+    expect(screen.getByRole("button", { name: "Quitar vehículo 1" })).toBeInTheDocument();
+  });
+
+  it("offers deletion alongside deactivation on a saved vehicle, with copy that cannot be confused", async () => {
+    const user = userEvent.setup();
+    await openEditWith(user, [vehiculo()]);
+
+    const group = vehicleGroup(1);
+    expect(within(group).getByRole("button", { name: "Quitar vehículo 1" })).toHaveTextContent(/^Quitar$/);
+    expect(
+      within(group).getByRole("button", { name: "Eliminar vehículo 1 definitivamente" }),
+    ).toHaveTextContent(/^Eliminar definitivamente$/);
+  });
+
+  it("offers deletion on a deactivated vehicle too — otherwise a typo'd plate stays forever once quitado", async () => {
+    const user = userEvent.setup();
+    await openEditWith(user, [vehiculo({ deactivatedAt: new Date("2026-02-01") })]);
+
+    const group = vehicleGroup(1);
+    expect(within(group).getByRole("button", { name: "Restaurar vehículo 1" })).toBeInTheDocument();
+    expect(within(group).getByRole("button", { name: "Eliminar vehículo 1 definitivamente" })).toBeInTheDocument();
+  });
+
+  it("asks for confirmation before removing anything, naming the plate and the reversible alternative", async () => {
+    const user = userEvent.setup();
+    await openEditWith(user, [vehiculo()]);
+
+    await user.click(screen.getByRole("button", { name: "Eliminar vehículo 1 definitivamente" }));
+
+    expect(screen.getByText("Eliminar vehículo definitivamente")).toBeInTheDocument();
+    expect(screen.getByText(/Se va a borrar el vehículo ABC111/)).toBeInTheDocument();
+    expect(screen.getByText(/no se puede deshacer/i)).toBeInTheDocument();
+    // That asking is not doing is proven by the next case, not here: the
+    // confirmation is a modal, so while it is open the form behind it is inert
+    // and its vehicle rows are correctly absent from the accessibility tree.
+  });
+
+  it("leaves the row untouched when the confirmation is cancelled", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    await openEditWith(user, [vehiculo()]);
+
+    await user.click(screen.getByRole("button", { name: "Eliminar vehículo 1 definitivamente" }));
+    await user.click(screen.getByRole("button", { name: "Cancelar eliminación" }));
+
+    expect(screen.queryByText("Eliminar vehículo definitivamente")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(bodyOf(fetchMock).vehicles).toEqual([{ id: "v1", plate: "ABC111", deactivated: false }]);
+  });
+
+  it("sends `deleted: true` for a confirmed deletion and drops the row from the form", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    await openEditWith(user, [vehiculo({ id: "v1" }), vehiculo({ id: "v2", plate: "BBB222" })]);
+
+    await user.click(screen.getByRole("button", { name: "Eliminar vehículo 1 definitivamente" }));
+    await user.click(screen.getByRole("button", { name: "Eliminar definitivamente" }));
+
+    // The surviving vehicle renumbers to 1 — the display index is a position,
+    // not an identity, exactly as `Quitar` on a never-saved row already behaves.
+    expect(within(vehicleGroup(1)).getByLabelText("Placa")).toHaveValue("BBB222");
+    expect(screen.queryByDisplayValue("ABC111")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    // Deletions ride at the END of the array so an active row's index — the
+    // slot a server-side `vehicles.<i>.plate` error names — never shifts.
+    expect(bodyOf(fetchMock).vehicles).toEqual([
+      { id: "v2", plate: "BBB222", deactivated: false },
+      { id: "v1", deleted: true },
+    ]);
+  });
+
+  it("drops a never-saved row outright instead of sending a delete for an id the server has never seen", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    await openEditWith(user, []);
+
+    await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+    await user.click(screen.getByRole("button", { name: "Eliminar vehículo 1 definitivamente" }));
+    await user.click(screen.getByRole("button", { name: "Eliminar definitivamente" }));
+
+    expect(screen.queryByRole("group", { name: /vehículo/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(bodyOf(fetchMock).vehicles).toEqual([]);
+  });
+});

@@ -3,7 +3,7 @@
 import { AlertTriangleIcon, LoaderIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogClose, DialogContent, DialogFooter, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogBody, DialogClose, DialogContent, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import type { CategoryRef } from "./selection";
 
 export function ConfirmGenerateDialog({
@@ -42,7 +42,9 @@ export function ConfirmGenerateDialog({
 
         <DialogTitle>Confirmar generación</DialogTitle>
 
-        <div className="space-y-2 text-sm text-muted-foreground">
+        {/* `categories` is as long as the staff member's selection — the one
+            unbounded thing in this dialog, so it is the part that scrolls. */}
+        <DialogBody className="space-y-2 text-sm text-muted-foreground">
           <p>
             Se generará un catálogo con <strong>{productCount} productos</strong> en las
             siguientes categorías:
@@ -58,7 +60,7 @@ export function ConfirmGenerateDialog({
           <p className="pt-1">
             Título: <span className="font-medium text-foreground">{title}</span>
           </p>
-        </div>
+        </DialogBody>
 
         <DialogFooter>
           <DialogClose render={<Button variant="outline" disabled={isSubmitting} />}>

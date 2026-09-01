@@ -269,6 +269,7 @@ describe("vehicle search (E2E)", () => {
   let collectionWrite: { id: string } | undefined;
   let collectionPatch: { id: string } | undefined;
   let collectionRoundTrip: { id: string } | undefined;
+  let collectionDelete: { id: string } | undefined;
 
   beforeAll(async () => {
     execSync("npx drizzle-kit migrate", { stdio: "inherit" });
@@ -306,6 +307,7 @@ describe("vehicle search (E2E)", () => {
       collectionWrite?.id,
       collectionPatch?.id,
       collectionRoundTrip?.id,
+      collectionDelete?.id,
     ].filter(
       (id): id is string => Boolean(id),
     );
@@ -322,17 +324,34 @@ describe("vehicle search (E2E)", () => {
     return response.json() as Promise<{ customers: { id: string; plates: string[] }[]; total: number }>;
   }
 
-  /** A `vehicles`-only PATCH: nothing scalar changes, so the collection write is all that runs. */
-  async function patchVehicles(id: string, vehicles: { id?: string; plate: string; deactivated?: boolean }[]) {
-    const response = await customersPATCH(
+  /**
+   * A `vehicles`-only PATCH: nothing scalar changes, so the collection write
+   * is all that runs. `role` defaults to the describe's tecnico — permanent
+   * deletion needs `customers.deleteVehicle`, which only administrador has.
+   */
+  async function patchVehicles(
+    id: string,
+    vehicles: { id?: string; plate?: string; deactivated?: boolean; deleted?: boolean }[],
+    role: "tecnico" | "administrador" = "tecnico",
+  ) {
+    const response = await patchVehiclesRaw(id, vehicles, role);
+    expect(response.status).toBe(200);
+  }
+
+  /** The same PATCH without the 200 assertion — for the cases whose POINT is a refusal. */
+  async function patchVehiclesRaw(
+    id: string,
+    vehicles: { id?: string; plate?: string; deactivated?: boolean; deleted?: boolean }[],
+    role: "tecnico" | "administrador" = "tecnico",
+  ) {
+    return customersPATCH(
       new NextRequest(`http://localhost/api/customers/${id}`, {
         method: "PATCH",
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: { ...headers, "x-user-role": role, "Content-Type": "application/json" },
         body: JSON.stringify({ vehicles }),
       }),
       { params: Promise.resolve({ id }) },
     );
-    expect(response.status).toBe(200);
   }
 
   it("matches a 3-vehicle customer by the SECOND plate, not only the first", async () => {
@@ -526,16 +545,89 @@ describe("vehicle search (E2E)", () => {
     // invariant, so `applyVehiculoPlan` is called directly here with the plan a
     // buggy caller could hand it. `db` satisfies `TxLike`. Both statements are
     // scoped to `zeroVehicles`, so both must affect zero rows.
-    const [rename, deactivate] = threeVehicleIds;
+    const [rename, deactivate, remove] = threeVehicleIds;
     await applyVehiculoPlan(db, zeroVehicles.id, {
       inserts: [],
       updates: [{ id: rename, plate: "HACK01" }],
       deactivate: [deactivate],
+      // The DELETE is the statement where getting this wrong is unrecoverable:
+      // a mis-scoped update can be edited back, a mis-scoped delete cannot.
+      delete: [remove],
     });
 
     const rows = await db.select().from(vehiculo).where(eq(vehiculo.clienteId, threeVehicles.id));
     expect(rows.map((r) => r.plate).sort()).toEqual(["AAA111", "BBB222", "CCC333"]);
     expect(rows.filter((r) => r.deactivatedAt !== null)).toHaveLength(0);
+  });
+
+  /**
+   * `applyVehiculoPlan`'s DELETE is hand-written write SQL with no other
+   * automated coverage: `vehicles.test.ts` hands it an injected `TxLike` that
+   * records the rendered `where` and never executes it, so a green `npm test`
+   * proves nothing about whether the row actually goes away (AGENTS.md's known
+   * coverage limit). Deleting is also the one operation whose bug cannot be
+   * corrected afterwards, so it gets the real database.
+   */
+  it("PATCHing `deleted: true` removes the row outright, where `deactivated: true` only stamps it", async () => {
+    const created = await customersPOST(
+      new NextRequest("http://localhost/api/customers", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Diego Salas",
+          phone: "50761212121",
+          vehicles: [{ plate: "DEL001" }, { plate: "DEL002" }, { plate: "DEL003" }],
+        }),
+      }),
+    );
+    expect(created.status).toBe(201);
+    collectionDelete = ((await created.json()) as { cliente: { id: string } }).cliente;
+
+    const readRows = () => db.select().from(vehiculo).where(eq(vehiculo.clienteId, collectionDelete!.id));
+    const seeded = await readRows();
+    const doomed = seeded.find((v) => v.plate === "DEL001")!;
+    const quitado = seeded.find((v) => v.plate === "DEL002")!;
+    const kept = seeded.find((v) => v.plate === "DEL003")!;
+
+    // One PATCH, both removals, so the difference between them is what this
+    // asserts rather than two independent facts: DEL001 asks to be deleted,
+    // DEL002 is omitted (the form's Quitar), DEL003 stays.
+    // A tecnico may not destroy the row. Asserted BEFORE the successful
+    // delete so the refusal is proven against a vehicle that demonstrably
+    // still existed — a 403 over an already-gone row proves nothing.
+    const refused = await patchVehiclesRaw(collectionDelete.id, [{ id: doomed.id, deleted: true }]);
+    expect(refused.status).toBe(403);
+    expect((await readRows()).map((v) => v.id)).toContain(doomed.id);
+
+    await patchVehicles(
+      collectionDelete.id,
+      [
+        { id: kept.id, plate: "DEL003", deactivated: false },
+        { id: doomed.id, deleted: true },
+      ],
+      "administrador",
+    );
+
+    const after = await readRows();
+    expect(after.map((v) => v.id)).not.toContain(doomed.id);
+    expect(after).toHaveLength(2);
+    // The soft one survives, stamped — the row a service history would hang off.
+    expect(after.find((v) => v.id === quitado.id)!.deactivatedAt).not.toBeNull();
+    expect(after.find((v) => v.id === kept.id)!.deactivatedAt).toBeNull();
+
+    // Deleting an ALREADY-deactivated vehicle is the typo'd-plate case the
+    // defect was reported for: Quitar first, then discover it never should
+    // have existed. Nothing in the plan re-stamps or skips it.
+    await patchVehicles(
+      collectionDelete.id,
+      [
+        { id: kept.id, plate: "DEL003" },
+        { id: quitado.id, deleted: true },
+      ],
+      "administrador",
+    );
+    const afterSecond = await readRows();
+    expect(afterSecond.map((v) => v.plate)).toEqual(["DEL003"]);
   });
 });
 

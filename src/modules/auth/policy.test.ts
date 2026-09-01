@@ -7,6 +7,7 @@ type Row = { action: Action; grants: Grants };
 const adminGrants: Grants = {
   "customers.read": true,
   "customers.write": true,
+  "customers.deleteVehicle": true,
   "service-orders.read": true,
   "service-orders.write": true,
   "inventory.read": true,
@@ -25,6 +26,7 @@ const adminGrants: Grants = {
 const tecnicoGrants: Grants = {
   "customers.read": true,
   "customers.write": true,
+  "customers.deleteVehicle": false,
   "service-orders.read": true,
   "service-orders.write": true,
   "inventory.read": true,

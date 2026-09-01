@@ -9,7 +9,17 @@ import { ACTIONS, type Action } from "./policy";
  * just a valid session), mapped by URL path to the HTTP methods it handles
  * and the Action it requires.
  */
-export const ROUTE_GUARDS: Record<string, Partial<Record<"GET" | "POST" | "PATCH" | "DELETE", Action | "session-only" | "public">>> = {
+export const ROUTE_GUARDS: Record<
+  string,
+  // An ARRAY means every listed Action is EVALUATED in the handler — which is
+  // exactly what the cross-reference test below proves, and deliberately not
+  // "all are required". `/api/customers/[id]` PATCH is the first: a tecnico
+  // PATCHes customers all day with `customers.write` alone;
+  // `customers.deleteVehicle` is required only when the payload asks to
+  // destroy a vehicle row rather than deactivate it. Reading this registry as
+  // "requires every listed Action" would get this route wrong.
+  Partial<Record<"GET" | "POST" | "PATCH" | "DELETE", Action | readonly Action[] | "session-only" | "public">>
+> = {
   // "public" = reachable with NO session at all (excluded by proxy.ts's
   // config.matcher). Distinct from "session-only", which still requires a
   // valid session and only skips the permission matrix.
@@ -21,7 +31,7 @@ export const ROUTE_GUARDS: Record<string, Partial<Record<"GET" | "POST" | "PATCH
   "/api/login": { POST: "session-only" },
   "/api/logout": { POST: "session-only" },
   "/api/customers": { GET: "customers.read", POST: "customers.write" },
-  "/api/customers/[id]": { PATCH: "customers.write" },
+  "/api/customers/[id]": { PATCH: ["customers.write", "customers.deleteVehicle"] },
   "/api/service-orders": { POST: "service-orders.write" },
   "/api/service-orders/[id]": { PATCH: "service-orders.write" },
   "/api/inventory-sync/manual": { GET: "sync.manual", POST: "sync.manual" },
@@ -34,6 +44,11 @@ export const ROUTE_GUARDS: Record<string, Partial<Record<"GET" | "POST" | "PATCH
   "/api/catalog-builder/queue-depth": { GET: "catalogs.read" },
   "/api/catalogs/[id]/file": { GET: "catalogs.download" },
   "/customers": { GET: "customers.read" },
+  // Reads `customers.deleteVehicle` too, but only to decide whether to render
+  // a button — it is not required to VIEW the page, and this registry records
+  // what a route requires. The cross-reference test below is one-directional
+  // for exactly this reason: it proves every DECLARED action is evaluated,
+  // never that every evaluated action is declared.
   "/customers/[id]": { GET: "customers.read" },
   "/service-orders": { GET: "service-orders.read" },
   "/service-orders/[id]": { GET: "service-orders.read" },
@@ -123,7 +138,7 @@ describe("ROUTE_GUARDS completeness", () => {
   it("every Action with a route in v1 is reachable", () => {
     const usedActions = new Set(
       Object.values(ROUTE_GUARDS)
-        .flatMap((methods) => Object.values(methods))
+        .flatMap((methods) => Object.values(methods).flat())
         .filter((v): v is Action => v !== "session-only" && v !== "public"),
     );
 
@@ -224,8 +239,8 @@ describe("ROUTE_GUARDS declared actions are actually evaluated", () => {
         [...source.matchAll(/\(\s*(?:\w+\s*,\s*)?"([^"]+)"/g)].map((m) => m[1]),
       );
 
-      for (const [method, action] of Object.entries(methods)) {
-        if (action === "session-only" || action === "public") continue;
+      for (const [method, declared] of Object.entries(methods)) {
+        if (declared === "session-only" || declared === "public") continue;
         // Pages have no exported HTTP method function — the whole file IS
         // the GET handler. API routes must actually export that method;
         // otherwise the declared method has no implementation at all,
@@ -233,10 +248,14 @@ describe("ROUTE_GUARDS declared actions are actually evaluated", () => {
         if (!isPage && !new RegExp(`export\\s+(async\\s+)?function\\s+${method}\\b`).test(source)) {
           continue;
         }
-        if (!evaluatedActions.has(action as Action)) {
-          failures.push(
-            `${urlPath} [${method}] declares "${action}" but ${file} only evaluates can(user, ...) for [${[...evaluatedActions].join(", ") || "nothing"}]`,
-          );
+        // Every Action a method declares must be evaluated in its file, so
+        // widening an entry to an array cannot smuggle in an unchecked one.
+        for (const action of [declared].flat()) {
+          if (!evaluatedActions.has(action as Action)) {
+            failures.push(
+              `${urlPath} [${method}] declares "${action}" but ${file} only evaluates can(user, ...) for [${[...evaluatedActions].join(", ") || "nothing"}]`,
+            );
+          }
         }
       }
     }

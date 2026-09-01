@@ -95,14 +95,25 @@ export function validateClienteInput(input: unknown): ClienteInput {
   };
 }
 
-/** D6 — R17 relocated: `plate` is required per vehicle; make/model/year stay optional. */
+/**
+ * D6 — R17 relocated: `plate` is required per vehicle; make/model/year stay
+ * optional.
+ *
+ * One exception: an element asking for permanent deletion (`deleted: true`).
+ * It addresses a row by `id` and every other column is about to stop
+ * existing, so requiring a plate would only mean a staff member who blanked
+ * the plate field and THEN removed the row got "La placa es obligatoria" for
+ * a card no longer on screen. `planVehiculoReconcile` reads nothing but the
+ * `id` off a deletion, so the `""` below is never persisted anywhere.
+ */
 export function validateVehiculoInput(input: unknown): VehiculoInput {
   const errors: Record<string, string> = {};
   const value = (input ?? {}) as Partial<Record<string, unknown>>;
 
   const id = typeof value.id === "string" && value.id.trim() ? value.id.trim() : undefined;
+  const deleted = typeof value.deleted === "boolean" ? value.deleted : undefined;
   const plate = trimmedOrUndefined(value.plate);
-  if (!plate) {
+  if (!plate && deleted !== true) {
     errors.plate = "La placa es obligatoria";
   }
 
@@ -120,11 +131,12 @@ export function validateVehiculoInput(input: unknown): VehiculoInput {
 
   return {
     ...(id !== undefined ? { id } : {}),
-    plate: plate!,
+    plate: plate ?? "",
     ...(make !== undefined ? { make } : {}),
     ...(model !== undefined ? { model } : {}),
     ...(year !== undefined ? { year } : {}),
     ...(deactivated !== undefined ? { deactivated } : {}),
+    ...(deleted !== undefined ? { deleted } : {}),
   };
 }
 

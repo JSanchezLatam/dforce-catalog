@@ -4,10 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { Cliente } from "@/shared/db/schema";
 import { handleUpdateCliente, PATCH } from "./route";
 
-function requestWith(body: unknown) {
+function requestWith(body: unknown, role = "tecnico") {
   return new NextRequest("http://localhost/api/customers/c1", {
     method: "PATCH",
-    headers: { "x-user-id": "user-1", "x-user-role": "tecnico", "Content-Type": "application/json" },
+    headers: { "x-user-id": "user-1", "x-user-role": role, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
@@ -24,6 +24,89 @@ const current = {
   orders: [],
   vehicles: [],
 };
+
+describe("permanent vehicle deletion is administrador-only", () => {
+  /** The customer must actually OWN v1, or the reconcile rejects it as foreign (400) before any gate is observable. */
+  const owningV1 = {
+    ...current,
+    vehicles: [
+      { id: "v1", clienteId: "c1", plate: "ABC123", make: null, model: null, year: null, deactivatedAt: null, createdAt: new Date() },
+    ],
+  } as typeof current;
+
+  /**
+   * `updateCliente` reaches `deps.update` ONLY when the patch carries no
+   * `vehicles` key; any vehicle patch goes through this transaction instead.
+   * So this is the seam every case here actually runs on, and spying it is
+   * what makes "never reaches the service" a claim with teeth — asserting
+   * `update` was not called would hold identically with the gate and without
+   * it, since nothing on this path can ever reach it.
+   *
+   * It returns the row without running the body on purpose: what the 200
+   * cases assert is that the gate let the request reach persistence at all,
+   * not what was written — the write itself is service.test.ts's and the
+   * e2e's job.
+   */
+  const transaction = vi.fn();
+  const database = {
+    // The spy is a separate plain `vi.fn()` rather than the seam itself:
+    // `vi.fn()` erases the generic and the result stops satisfying
+    // `DatabaseDep`. Wrapping keeps the seam correctly typed and the call
+    // still observable.
+    transaction: async <T>(fn: unknown): Promise<T> => {
+      transaction(fn);
+      return current.cliente as T;
+    },
+  };
+
+  /**
+   * `customers.write` is not enough. Deactivation is reversible and every
+   * tecnico keeps it; destroying the row is not, and this app routes every
+   * other irreversible capability through `policy.ts`. The check reads the
+   * RAW body deliberately — before validation, before the service — because
+   * the grant governs whether the request may be considered at all, not
+   * whether its payload is well-formed.
+   */
+  it("refuses a tecnico with 403 and never reaches the service", async () => {
+    transaction.mockClear();
+
+    const response = await handleUpdateCliente(
+      requestWith({ vehicles: [{ id: "v1", plate: "ABC123", deleted: true }] }),
+      "c1",
+      { getById: async () => owningV1, database },
+    );
+
+    expect(response.status).toBe(403);
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it("lets an administrador through", async () => {
+    transaction.mockClear();
+
+    const response = await handleUpdateCliente(
+      requestWith({ vehicles: [{ id: "v1", plate: "ABC123", deleted: true }] }, "administrador"),
+      "c1",
+      { getById: async () => owningV1, database },
+    );
+
+    expect(response.status).toBe(200);
+    expect(transaction).toHaveBeenCalled();
+  });
+
+  /** The gate is scoped to deletion: a tecnico's ordinary vehicle edit is untouched. */
+  it("still lets a tecnico deactivate and edit vehicles", async () => {
+    transaction.mockClear();
+
+    const response = await handleUpdateCliente(
+      requestWith({ vehicles: [{ id: "v1", plate: "ABC123", deactivated: true }] }),
+      "c1",
+      { getById: async () => owningV1, database },
+    );
+
+    expect(response.status).toBe(200);
+    expect(transaction).toHaveBeenCalled();
+  });
+});
 
 describe("PATCH /api/customers/[id] (R16)", () => {
   it("throws when called without session headers", async () => {

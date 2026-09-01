@@ -101,7 +101,39 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-1.5 text-center sm:text-left", className)}
+      className={cn("shrink-0 flex flex-col gap-1.5 text-center sm:text-left", className)}
+      {...props}
+    />
+  )
+}
+
+/**
+ * The scrolling middle of a dialog. `DialogContent` caps height at `85vh` but
+ * nothing inside it scrolled, so a dialog taller than the cap — the customer
+ * edit form with several vehicles, on any short viewport — rendered its
+ * overflow OUTSIDE the surface, floating over the page behind it. The cap was
+ * right; the missing scroll container was the bug.
+ *
+ * It lives here rather than in one form because the cap lives here: EVERY
+ * `DialogContent` inherits `85vh`, so every long dialog has the same defect.
+ * It is opt-in rather than automatic because a call site — not this component
+ * — knows which of its children is the body: three of the four forms nest
+ * `DialogFooter` INSIDE their `<form>`, so a scroll box wrapped blindly around
+ * `DialogContent`'s children would take Guardar with it.
+ *
+ * `min-h-0` is load-bearing: a flex item's default `min-height: auto` refuses
+ * to shrink below its content, which leaves the cap in force and the overflow
+ * silently unscrollable. `-mx-1 px-1` is a net-zero visual offset that keeps a
+ * focus ring on an edge input from being clipped by the scroll box.
+ *
+ * The direct parent must be a `flex flex-col` box with a bounded height —
+ * `DialogContent` itself, or a `<form>` carrying `min-h-0 flex-1`.
+ */
+function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="dialog-body"
+      className={cn("-mx-1 min-h-0 flex-1 overflow-y-auto px-1", className)}
       {...props}
     />
   )
@@ -111,7 +143,7 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-footer"
-      className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)}
+      className={cn("shrink-0 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)}
       {...props}
     />
   )
@@ -145,6 +177,7 @@ export {
   DialogOverlay,
   DialogPopup,
   DialogContent,
+  DialogBody,
   DialogHeader,
   DialogFooter,
   DialogTitle,

@@ -170,3 +170,16 @@ no vehicle field (the `rg` hits there are `tem-plate-s`, not plates).
 - [x] `npm test` / `tsc --noEmit` clean each slice → 1.6, 2.12, 3.11
 - [x] Every write/read site in the plate inventory reads/writes `vehiculo` only → 3.2–3.10 (all W/R rows above now COLLECTION)
 - [x] Restore a deactivated vehicle (spec's "Vehicle Collection Persistence") → `vehicles.ts`/`vehicles.test.ts` + live-smoke-tested against the real dev DB (3.11)
+
+## Follow-ups (raised in review, deliberately not in the defect-fix PR)
+
+- [ ] **A staged permanent deletion is invisible.** `Quitar` keeps the row on
+  screen with `Restaurar`; `Eliminar definitivamente` removes it from
+  `visibleVehicles` with no counterpart. If Guardar then fails (400/409/
+  network), the dialog stays open, the row stays hidden, and nothing says a
+  permanent deletion is still pending — the only way back is Cancelar and
+  reopen. The safety gradient runs backwards: the reversible action has the
+  louder affordance. A line inside `DialogBody` ("1 vehículo se eliminará al
+  guardar") closes it. Low practical impact — the deletion was confirmed in a
+  modal and Cancelar recovers — but it touches the one rule this repo does not
+  simplify away, error handling that prevents data loss.
