@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Search } from "lucide-react";
 
-import type { OrdenServicio, Producto } from "@/shared/db/schema";
+import type { OrdenServicio, Producto, Vehiculo } from "@/shared/db/schema";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -74,12 +74,53 @@ export function ServiceOrderForm({
   const isEdit = Boolean(order);
   const [open, setOpen] = useState(false);
   const [clienteId, setClienteId] = useState(order?.clienteId ?? selectedCustomer?.id ?? "");
+  const [vehiculoId, setVehiculoId] = useState("");
+  const [vehicles, setVehicles] = useState<Vehiculo[]>([]);
+  const [vehiclesLoading, setVehiclesLoading] = useState(false);
   const [description, setDescription] = useState(order?.description ?? "");
   const [appointmentAt, setAppointmentAt] = useState(toDatetimeLocal(order?.appointmentAt));
   const [searchQuery, setSearchQuery] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  /**
+   * D2 — fetches the chosen customer's ACTIVE vehicles on every `clienteId`
+   * change (never seeded alongside the customer: `ClienteListItem.plates` is
+   * plate strings with no vehicle ids). Create mode only — the vehicle is
+   * immutable post-creation, like customer and parts, so an edit-mode order
+   * never needs this list. Only the fetch lives here — clearing the previous
+   * selection/list is not something to observe after the fact, it is what
+   * changing the customer MEANS, so it happens in `handleCustomerSelect`/
+   * `resetForm` below (same convention `CatalogBuilderForm.tsx`'s category
+   * effect already established). `cancelled` guards a slow response for a
+   * customer that is no longer selected from repainting over a faster later
+   * one — the SAME-HANDLER clear is what actually prevents the stale-
+   * selection defect; this guard only prevents a stale vehicle LIST from
+   * flashing in.
+   */
+  useEffect(() => {
+    if (isEdit || !clienteId) return;
+    let cancelled = false;
+    fetch(`/api/customers/${clienteId}/vehicles`)
+      .then((response) => (response.ok ? response.json() : { vehicles: [] }))
+      .then((body: { vehicles: Vehiculo[] }) => {
+        if (!cancelled) setVehicles(body.vehicles);
+      })
+      .finally(() => {
+        if (!cancelled) setVehiclesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clienteId, isEdit]);
+
+  function handleCustomerSelect(customer: ServiceOrderCustomerOption) {
+    setClienteId(customer.id);
+    setVehiculoId("");
+    setVehicles([]);
+    setVehiclesLoading(true);
+  }
 
   const filteredProducts = useMemo(() => {
     if (!searchQuery) return products;
@@ -88,7 +129,13 @@ export function ServiceOrderForm({
   }, [products, searchQuery]);
 
   function resetForm() {
-    setClienteId(order?.clienteId ?? selectedCustomer?.id ?? "");
+    const nextClienteId = order?.clienteId ?? selectedCustomer?.id ?? "";
+    setClienteId(nextClienteId);
+    setVehiculoId("");
+    setVehicles([]);
+    // Mirrors `handleCustomerSelect`: a non-empty clienteId (edit mode, or a
+    // pre-picked `selectedCustomer`) means the fetch effect is about to run.
+    setVehiclesLoading(!isEdit && Boolean(nextClienteId));
     setDescription(order?.description ?? "");
     setAppointmentAt(toDatetimeLocal(order?.appointmentAt));
     setSearchQuery("");
@@ -141,6 +188,7 @@ export function ServiceOrderForm({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               clienteId,
+              vehiculoId,
               description: description.trim() || undefined,
               appointmentAt: appointmentAt ? new Date(appointmentAt).toISOString() : undefined,
               items: cart.map((line) => ({
@@ -191,11 +239,46 @@ export function ServiceOrderForm({
                 <CustomerPicker
                   selectedCustomer={selectedCustomer ?? null}
                   canCreateCustomer={canCreateCustomer}
-                  onSelect={(customer) => setClienteId(customer.id)}
+                  onSelect={handleCustomerSelect}
                 />
                 {errors.clienteId && (
                   <p role="alert" className={FIELD_ERROR}>
                     {errors.clienteId}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {!isEdit && (
+              <div className="grid gap-2">
+                <Label htmlFor="orden-vehiculo">Vehículo</Label>
+                {/* Native <select>, not the base-ui Select this repo otherwise
+                    uses for dropdowns (ServiceOrderFilters.tsx) — no test in
+                    this repo exercises that component yet and this form has
+                    no other reason to add the jsdom shims it needs. */}
+                <select
+                  id="orden-vehiculo"
+                  className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                  value={vehiculoId}
+                  disabled={!clienteId || vehiclesLoading || vehicles.length === 0}
+                  onChange={(e) => setVehiculoId(e.target.value)}
+                >
+                  <option value="">Seleccioná un vehículo</option>
+                  {vehicles.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.plate}
+                      {v.make ? ` — ${[v.make, v.model].filter(Boolean).join(" ")}` : ""}
+                    </option>
+                  ))}
+                </select>
+                {clienteId && !vehiclesLoading && vehicles.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Este cliente no tiene vehículos activos. Agregá uno primero.
+                  </p>
+                )}
+                {errors.vehiculoId && (
+                  <p role="alert" className={FIELD_ERROR}>
+                    {errors.vehiculoId}
                   </p>
                 )}
               </div>
@@ -309,7 +392,7 @@ export function ServiceOrderForm({
             <DialogClose render={<Button type="button" variant="outline" disabled={isSubmitting} />}>
               Cancelar
             </DialogClose>
-            <Button type="submit" disabled={isSubmitting || (!isEdit && !clienteId)}>
+            <Button type="submit" disabled={isSubmitting || (!isEdit && !vehiculoId)}>
               {isSubmitting ? "Guardando…" : "Guardar"}
             </Button>
           </DialogFooter>

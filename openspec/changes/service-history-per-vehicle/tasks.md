@@ -26,21 +26,21 @@ Chain strategy: feature-branch-chain
 
 ## WU1 — Schema, vehicle validation, picker, SEAM, e2e (~420–470 lines) [PR1, base: tracker]
 
-- [ ] 1.1 Re-run `select count(*) from orden_servicio`; must be 0 before generating migration 0015.
-- [ ] 1.2 `schema.ts`: add `vehiculoId` (FK `vehiculo`, NOT NULL, `restrict`), `ordenCategoriaEnum` (5 unaccented slugs: `instalacion`, `mant_preventivo`, `mant_correctivo`, `reparacion`, `revisado`), 3 nullable text note columns, `orden_vehiculo_created_idx` on `(vehiculoId, createdAt)`.
-- [ ] 1.3 `npx drizzle-kit generate --name order_vehiculo_category_notes`; verify `0015_*.sql`; never `--custom`.
-- [ ] 1.4 RED/GREEN `schema.test.ts`: insert without `vehiculoId`/`categoria` violates NOT NULL.
-- [ ] 1.5 RED `service.test.ts`: `createOrder` rejects unknown vehicle, customer-B's vehicle, an inactive vehicle (inject `deps.getClienteById`).
-- [ ] 1.6 GREEN `service.ts`: required `vehiculoId`+`categoria` on `CreateOrdenServicioInput` (enum-typed inline — named `ServiceCategory` alias lands in WU2, required now because migration 0015's NOT NULL must be satisfiable via API/e2e before the UI select ships); ownership check against `clienteDetail.vehicles`; `InvalidVehiculoError`; thread both into the insert.
-- [ ] 1.7 GREEN `route.ts`: map `InvalidVehiculoError` → 400 `{errors:{vehiculoId}}`.
-- [ ] 1.8 RED/GREEN `service.test.ts`: a create payload carrying `hallazgos` never reaches the insert — pins the `.values()` map as the load-bearing whitelist for all 5 new columns.
-- [ ] 1.9 RED/GREEN `vehicles.test.ts`: fake `TxLike.select` returns a row for `plan.delete` → `ClienteValidationError({vehicles})`; `select` uncalled for deactivate-only plans.
-- [ ] 1.10 GREEN `vehicles.ts`: fill the SEAM exactly per D4, inside `tx`, above the DELETE.
-- [ ] 1.11 Create `api/customers/[id]/vehicles/route.ts` (+test): `GET`, `customers.read`, active-only, `listVehiculosByCliente(id)`.
-- [ ] 1.12 RED `ServiceOrderForm.test.tsx`: customer change clears `vehiculoId` in the same handler; zero-vehicle directive message + disabled submit.
-- [ ] 1.13 GREEN `ServiceOrderForm.tsx`: vehicle picker, fetch-on-customer-change with `cancelled`-flag guard, submit gate `|| (!isEdit && !vehiculoId)`.
-- [ ] 1.14 E2E (`full-flow.e2e.test.ts`, extend `vehicle search`): NOT NULL rejects order without `vehiculoId`; FK rejects nonexistent `vehiculoId`; `RESTRICT` blocks a raw vehicle delete; SEAM refuses delete of a vehicle with history (400, row survives); deactivating that same vehicle still succeeds (200), row still present (direct DB check).
-- [ ] 1.15 `npm test` and `npx tsc --noEmit` clean.
+- [x] 1.1 Re-run `select count(*) from orden_servicio`; must be 0 before generating migration 0015. — Owner-verified live against the dev DB on 2026-09-01: 0 rows.
+- [x] 1.2 `schema.ts`: add `vehiculoId` (FK `vehiculo`, NOT NULL, `restrict`), `ordenCategoriaEnum` (5 unaccented slugs: `instalacion`, `mant_preventivo`, `mant_correctivo`, `reparacion`, `revisado`), 3 nullable text note columns, `orden_vehiculo_created_idx` on `(vehiculoId, createdAt)`.
+- [x] 1.3 `npx drizzle-kit generate --name order_vehiculo_category_notes`; verify `0015_*.sql`; never `--custom`. — Snapshot verified as a real diff against 0014 (owner-checked while apply was down).
+- [x] 1.4 RED/GREEN `schema.test.ts`: structural NOT NULL/FK/index/enum assertions for the 5 new columns (mirrors existing `status`/FK test pattern; no live DB in this suite).
+- [x] 1.5 RED `service.test.ts`: `createOrder` rejects unknown vehicle, customer-B's vehicle, an inactive vehicle (inject `deps.getClienteById`).
+- [x] 1.6 GREEN `service.ts`: required `vehiculoId`+`categoria` on `CreateOrdenServicioInput` (enum-typed inline — named `ServiceCategory` alias lands in WU2, required now because migration 0015's NOT NULL must be satisfiable via API/e2e before the UI select ships); ownership check against `clienteDetail.vehicles`; `InvalidVehiculoError`; thread both into the insert.
+- [x] 1.7 GREEN `route.ts`: map `InvalidVehiculoError` → 400 `{errors:{vehiculoId}}`.
+- [x] 1.8 RED/GREEN `service.test.ts`: a create payload carrying `hallazgos` never reaches the insert — pins the `.values()` map as the load-bearing whitelist for all 5 new columns.
+- [x] 1.9 RED/GREEN `vehicles.test.ts`: fake `TxLike.select` returns a row for `plan.delete` → `ClienteValidationError({vehicles})`; `select` uncalled for deactivate-only plans.
+- [x] 1.10 GREEN `vehicles.ts`: fill the SEAM exactly per D4, inside `tx`, above the DELETE.
+- [x] 1.11 Create `api/customers/[id]/vehicles/route.ts` (+test): `GET`, `customers.read`, active-only, `listVehiculosByCliente(id)`.
+- [x] 1.12 RED `ServiceOrderForm.test.tsx`: customer change clears `vehiculoId` in the same handler; zero-vehicle directive message + disabled submit.
+- [x] 1.13 GREEN `ServiceOrderForm.tsx`: vehicle picker, fetch-on-customer-change with `cancelled`-flag guard, submit gate `|| (!isEdit && !vehiculoId)`. — Native `<select>`, not the base-ui `Select` (no existing test/shim exercises it in jsdom); noted as a deviation below.
+- [x] 1.14 E2E (`full-flow.e2e.test.ts`, extend `vehicle search`): NOT NULL rejects order without `vehiculoId`; FK rejects nonexistent `vehiculoId`; `RESTRICT` blocks a raw vehicle delete; SEAM refuses delete of a vehicle with history (400, row survives); deactivating that same vehicle still succeeds (200), row still present (direct DB check). — **Code written, NOT run.** `docker`/`docker.app`, `colima`, and `podman` are all absent from this machine (not merely a stopped daemon — `docker` resolves to a dead symlink, `/Applications/Docker.app` does not exist). A native Postgres answers on `localhost:5432` but is NOT used as a substitute — it may be the real dev DB per this project's own documented two-`dforce_catalog`-databases hazard, and the instruction was explicit: recreate a THROWAWAY database every run, stop rather than report green on a skip. Blocked until Docker (or an equivalent disposable Postgres) is available. — RUN AND GREEN: 29/29 against a freshly created throwaway Postgres. Docker Desktop is broken on this machine (555MB bundle, no `docker` binary), so the disposable database was created on the native Homebrew Postgres as `dforce_c4_e2e` and dropped afterwards; `dforce_catalog` was never touched. Three of the five cases initially failed because Drizzle wraps the driver error in its own `Failed query:` string — rewritten to assert the SQLSTATE (23502 / 23503) and the constraint NAME instead, which is stronger than the message match it replaced. SEAM verified by mutation: disabling the guard turns the 400 into a pass-through and the e2e goes red.
+- [x] 1.15 `npm test` and `npx tsc --noEmit` clean. — 1003/1003 unit+component tests green, tsc clean. Does NOT include e2e (1.14, separately blocked) — per AGENTS.md's known coverage limit, this proves the app-level logic only, zero real-SQL coverage of the FK/NOT NULL/RESTRICT/SEAM.
 - [ ] 1.16 Owner action: open PR1 against the tracker branch.
 - [ ] 1.17 Owner action: `GGA_TIMEOUT=900 GGA_PROVIDER=claude gga run --pr-mode --diff-only`, cap 5 rounds.
 

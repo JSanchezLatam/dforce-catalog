@@ -148,11 +148,16 @@ describe("planVehiculoReconcile (D5)", () => {
  * effects, so no test below can prove a write was actually prevented — that
  * is `vehicle search (E2E)`'s job ("ignores a plan naming another customer's
  * vehicle").
+ *
+ * `selectResult` seeds what the SEAM's `tx.select(...).from(...).where(...).limit(1)`
+ * resolves to — `[]` by default (no blocking orders), overridable per-test to
+ * simulate a vehicle with existing history.
  */
-function recordingTx() {
+function recordingTx(selectResult: { id: string }[] = []) {
   const dialect = new PgDialect();
   const wheres: { sql: string; params: unknown[] }[] = [];
   const sets: Record<string, unknown>[] = [];
+  const selectCalls: unknown[] = [];
   const tx = {
     insert: () => ({ values: async () => undefined }),
     update: () => ({
@@ -170,9 +175,18 @@ function recordingTx() {
         wheres.push(dialect.sqlToQuery(clause));
       },
     }),
-    select: () => undefined,
+    select: (...args: unknown[]) => {
+      selectCalls.push(args);
+      return {
+        from: () => ({
+          where: () => ({
+            limit: async () => selectResult,
+          }),
+        }),
+      };
+    },
   } as unknown as TxLike;
-  return { tx, wheres, sets };
+  return { tx, wheres, sets, selectCalls };
 }
 
 describe("applyVehiculoPlan (D5)", () => {
@@ -301,5 +315,47 @@ describe("applyVehiculoPlan — permanent delete (D5)", () => {
     const { tx, wheres } = recordingTx();
     await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [], deactivate: [], delete: [] });
     expect(wheres).toHaveLength(0);
+  });
+});
+
+/**
+ * The SEAM (C4, design.md D4) — the referential-integrity check
+ * `applyVehiculoPlan`'s docstring specified ~L269, filled once `orden_servicio`
+ * gained `vehiculoId`. Runs inside the same `tx`, immediately above the DELETE.
+ */
+describe("applyVehiculoPlan — SEAM: permanent delete refused when service history exists (C4, D4)", () => {
+  it("throws ClienteValidationError under the bare vehicles key when the select finds a blocking order", async () => {
+    const { tx } = recordingTx([{ id: "orden-1" }]);
+    await expect(
+      applyVehiculoPlan(tx, "c1", { inserts: [], updates: [], deactivate: [], delete: ["v1"] }),
+    ).rejects.toThrow(ClienteValidationError);
+
+    try {
+      await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [], deactivate: [], delete: ["v1"] });
+    } catch (err) {
+      expect(err).toBeInstanceOf(ClienteValidationError);
+      expect((err as ClienteValidationError).errors).toHaveProperty("vehicles");
+    }
+  });
+
+  it("does NOT delete the row when the SEAM refuses — no delete statement is issued", async () => {
+    const { tx, wheres } = recordingTx([{ id: "orden-1" }]);
+    await expect(
+      applyVehiculoPlan(tx, "c1", { inserts: [], updates: [], deactivate: [], delete: ["v1"] }),
+    ).rejects.toThrow(ClienteValidationError);
+    // The delete's own `where` push never runs — the throw happens above it.
+    expect(wheres).toHaveLength(0);
+  });
+
+  it("proceeds with the delete when the select finds no blocking order", async () => {
+    const { tx, wheres } = recordingTx([]);
+    await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [], deactivate: [], delete: ["v1"] });
+    expect(wheres).toHaveLength(1);
+  });
+
+  it("never calls select for a deactivate-only plan — the asymmetry is structural, not conditional", async () => {
+    const { tx, selectCalls } = recordingTx([{ id: "orden-1" }]);
+    await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [], deactivate: ["v1"], delete: [] });
+    expect(selectCalls).toHaveLength(0);
   });
 });

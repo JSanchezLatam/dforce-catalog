@@ -8,7 +8,7 @@ import { and, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import { db } from "@/shared/db/client";
-import { cliente, vehiculo, type Vehiculo } from "@/shared/db/schema";
+import { cliente, ordenServicio, vehiculo, type Vehiculo } from "@/shared/db/schema";
 import { ClienteValidationError } from "./validation";
 
 /**
@@ -267,22 +267,25 @@ export async function applyVehiculoPlan(tx: TxLike, clienteId: string, plan: Veh
   }
 
   if (plan.delete.length > 0) {
-    // SEAM — the referential-integrity check goes HERE, immediately above this
-    // statement, when `orden_servicio` gains its `vehiculo_id` FK (per-vehicle
-    // service history). Today no table references `vehiculo`, so this DELETE
-    // cannot orphan anything and there is nothing to refuse.
-    //
-    // When the FK lands: `select` over `orden_servicio` for
-    // `inArray(ordenServicio.vehiculoId, plan.delete)` inside this same `tx`,
-    // and throw `ClienteValidationError({ vehicles: "..." })` for the ids it
-    // finds — a 400 the form already renders under its bare `vehicles` key.
-    // `TxLike` exposes `select` for exactly that; nothing about this plan, its
-    // payload shape, or `CustomerForm` has to change to add it. Doing it in
-    // the transaction rather than in `planVehiculoReconcile` is deliberate:
-    // the reconcile is pure and cannot read, and a check outside the
-    // transaction would race an order created between the check and the
-    // DELETE. `ON DELETE RESTRICT` on that FK is the backstop; this check is
-    // what turns the resulting error into Spanish copy instead of a 500.
+    // SEAM (C4, design.md D4) — referential-integrity check, filled now that
+    // `orden_servicio.vehiculoId` exists. Runs inside this same `tx`,
+    // immediately above the DELETE: `planVehiculoReconcile` is pure and cannot
+    // read, and a check outside the transaction would race an order created
+    // between the check and the DELETE. `ON DELETE RESTRICT` on that FK is
+    // the backstop; this check is what turns the resulting error into
+    // Spanish copy instead of a raw 500. The asymmetry is structural, not
+    // conditional: this guards `plan.delete` only — `plan.deactivate` above
+    // is untouched, so a vehicle with history stays soft-deletable.
+    const blocked = await tx
+      .select({ id: ordenServicio.id })
+      .from(ordenServicio)
+      .where(inArray(ordenServicio.vehiculoId, plan.delete))
+      .limit(1);
+    if (blocked.length > 0) {
+      throw new ClienteValidationError({
+        vehicles: "No se puede eliminar un vehículo con órdenes de servicio. Desactivalo en su lugar.",
+      });
+    }
     await tx.delete(vehiculo).where(and(eq(vehiculo.clienteId, clienteId), inArray(vehiculo.id, plan.delete)));
   }
 }
