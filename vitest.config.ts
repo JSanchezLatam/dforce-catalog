@@ -13,6 +13,49 @@ export default defineConfig({
     // src/e2e/** needs a REAL reachable Postgres (see vitest.e2e.config.ts +
     // README) — excluded here so plain `npm run test` stays fast/infra-free.
     exclude: [...configDefaults.exclude, "src/e2e/**"],
+    /**
+     * Raised from Vitest's 5000ms default. Issue #54: the suite went red
+     * intermittently, a different set of files each time, always ones the
+     * change under test never touched.
+     *
+     * Measured, not guessed. The slowest tests in a normal parallel run are
+     * ~2.4s (`UserForm > requires a username`) and ~2.0s
+     * (`WorkshopConfigForm > renders and submits every new contact field`) —
+     * legitimately, since a jsdom test that opens a base-ui dialog, picks
+     * from a dropdown and types into a controlled React form re-renders on
+     * every keystroke. Against 5000ms that is barely 2x of headroom, and any
+     * second heavy process on the machine spends it.
+     *
+     * What made it look random is a CASCADE, and it is worth knowing because
+     * this timeout makes it rare rather than impossible. A timed-out test is
+     * failed by Vitest but its `userEvent.type` promise is NEVER cancelled;
+     * the loop keeps dispatching keystrokes, and userEvent sends each one to
+     * `document.activeElement` — which by then belongs to the NEXT test. That
+     * test then fails on interleaved text it never typed. #54 opened on
+     * exactly that evidence: `'lLeurn.-cVoime 9-'`, which de-interleaves into
+     * `Lun-Vie9` + `ler.com` — two adjacent tests of one file writing into one
+     * field. So one timeout takes a victim, and the victim's message points at
+     * innocent code.
+     *
+     * Reproduce (and re-verify any change to this number) by running the
+     * suite against itself — the real-world "GGA is also running" case:
+     *   npm test > /tmp/a.txt 2>&1 & npm test > /tmp/b.txt 2>&1; wait
+     *
+     * How much concurrency it takes depends on how many tests the branch has,
+     * which is itself the warning: the margin shrinks as the suite grows.
+     * Measured at 5000ms — TWO concurrent suites on a feature branch (948
+     * tests) gave 25 timeouts / 26 failures per run; on `main` (928 tests) two
+     * were not enough and THREE gave 4-5 timeouts / 5-6 failures. Note the
+     * failures exceed the timeouts in every one of those runs: the difference
+     * is the cascade taking victims.
+     *
+     * At 15000ms all of the above are clean — three concurrent suites, 928/928
+     * each, zero timeouts.
+     *
+     * The cost is only that a genuinely hung test takes 15s to report. These
+     * were never hung — just slow.
+     */
+    testTimeout: 15_000,
     // Two projects, one `npm test` run (`vitest run`) — see AGENTS.md's
     // Testing section for the full writeup.
     //

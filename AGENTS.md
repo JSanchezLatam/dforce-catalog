@@ -192,6 +192,21 @@ with a live smoke test against a throwaway database before merging.
 What actually gates work:
 
 - `npm test` and `npx tsc --noEmit` must be clean before a PR.
+
+  **Reading a red run.** Timeouts cascade, so the failure count is not the
+  defect count. A test Vitest fails for exceeding `testTimeout` keeps running:
+  its `userEvent.type` promise is never cancelled, and userEvent dispatches
+  each remaining keystroke to `document.activeElement` — which by then belongs
+  to the NEXT test. That test fails on interleaved text it never typed, and
+  its message points at innocent code. Issue #54 was that, at scale: 25
+  timeouts producing 26 failures across eight files, a different set each run.
+
+  So: **the first timeout in a file is the real failure; assertion failures
+  after it in the same file are collateral.** Fix the timeout, re-run, and the
+  rest usually disappear. `testTimeout` is 15s (raised from 5s in #54, with
+  the measurements in `vitest.config.ts`) — enough that this is now rare, not
+  impossible. Reproduce it deliberately with two suites at once:
+  `npm test > /tmp/a.txt 2>&1 & npm test > /tmp/b.txt 2>&1; wait`.
 - Substantial changes go through the gentle-ai review flow
   (`gentle-ai review status --contract gentle-ai.review-integration/v2
   --agent <runtime> --next-transition`), which selects lenses by risk and
