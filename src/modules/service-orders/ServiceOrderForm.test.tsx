@@ -62,6 +62,10 @@ function openDialog() {
   fireEvent.click(screen.getByRole("button", { name: /nueva orden de servicio/i }));
 }
 
+function openEditDialog() {
+  fireEvent.click(screen.getByRole("button", { name: /editar orden/i }));
+}
+
 async function flush() {
   await act(async () => {
     await Promise.resolve();
@@ -177,6 +181,105 @@ describe("ServiceOrderForm", () => {
 
       expect(screen.getByText(/no tiene vehículos activos/i)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled();
+    });
+  });
+
+  /**
+   * Category + notes wiring (C4, task 2.4). Category is required (schema NOT
+   * NULL) and offered in BOTH modes; the 3 note fields are technician
+   * findings that only exist once a technician has examined the vehicle, so
+   * they render `isEdit &&`-gated (spec §"Category and Completion Notes
+   * Editing").
+   */
+  describe("category + notes (C4, task 2.4)", () => {
+    function categorySelect(): HTMLSelectElement {
+      return screen.getByLabelText(/categoría/i) as HTMLSelectElement;
+    }
+
+    it("offers all 5 categories in create mode, with REVISADO as a peer option, no distinct treatment", () => {
+      render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      openDialog();
+
+      const options = Array.from(categorySelect().options).map((o) => o.value);
+      expect(options).toEqual(["instalacion", "mant_preventivo", "mant_correctivo", "reparacion", "revisado"]);
+    });
+
+    it("does not render note fields in create mode", () => {
+      render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      openDialog();
+
+      expect(screen.queryByLabelText(/hallazgos/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/recomendaciones/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/observaciones/i)).not.toBeInTheDocument();
+    });
+
+    it("renders the category select AND the 3 note fields in edit mode, pre-filled from the order", () => {
+      render(
+        <ServiceOrderForm
+          products={[]}
+          order={
+            {
+              id: "o1",
+              clienteId: "c-a",
+              vehiculoId: "v-a",
+              categoria: "mant_preventivo",
+              description: "x",
+              hallazgos: "Correa floja",
+              recomendaciones: "Ajustar tensión",
+              observaciones: "Revisar en 3 meses",
+            } as never
+          }
+          canCreateCustomer={false}
+        />,
+      );
+      openEditDialog();
+
+      expect(categorySelect().value).toBe("mant_preventivo");
+      expect(screen.getByLabelText(/hallazgos/i)).toHaveValue("Correa floja");
+      expect(screen.getByLabelText(/recomendaciones/i)).toHaveValue("Ajustar tensión");
+      expect(screen.getByLabelText(/observaciones/i)).toHaveValue("Revisar en 3 meses");
+    });
+
+    it("includes categoria in the create-mode POST body", async () => {
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (url.includes("/vehicles")) return Promise.resolve(jsonResponse({ vehicles: [vehiculoRow()] }));
+        return Promise.resolve(jsonResponse({ orden: { id: "o1" } }));
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      openDialog();
+      await flush();
+      fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+      fireEvent.change(categorySelect(), { target: { value: "revisado" } });
+      fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+      await flush();
+
+      const call = fetchMock.mock.calls.find(([url]) => url === "/api/service-orders")!;
+      const body = JSON.parse((call[1] as RequestInit).body as string);
+      expect(body.categoria).toBe("revisado");
+    });
+
+    it("includes categoria and the 3 notes in the edit-mode PATCH body", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ orden: { id: "o1" } }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(
+        <ServiceOrderForm
+          products={[]}
+          order={{ id: "o1", clienteId: "c-a", categoria: "instalacion" } as never}
+          canCreateCustomer={false}
+        />,
+      );
+      openEditDialog();
+      fireEvent.change(categorySelect(), { target: { value: "reparacion" } });
+      fireEvent.change(screen.getByLabelText(/hallazgos/i), { target: { value: "Fuga detectada" } });
+      fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+      await flush();
+
+      const [, init] = fetchMock.mock.calls.find(([url]) => url === "/api/service-orders/o1")!;
+      const body = JSON.parse((init as RequestInit).body as string);
+      expect(body).toMatchObject({ categoria: "reparacion", hallazgos: "Fuga detectada" });
     });
   });
 });

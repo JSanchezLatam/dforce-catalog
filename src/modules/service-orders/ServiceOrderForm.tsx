@@ -19,8 +19,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { ClienteListItem } from "@/modules/customers/queries";
+import { CATEGORIA_LABEL, type ServiceCategory } from "./categories";
 import { CustomerPicker } from "./CustomerPicker";
 import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
+
+const CATEGORIA_OPTIONS = Object.entries(CATEGORIA_LABEL) as [ServiceCategory, string][];
+const DEFAULT_CATEGORIA: ServiceCategory = CATEGORIA_OPTIONS[0][0];
 
 /** = `ClienteListItem` — the route body (`GET /api/customers`) maps straight through (design.md). */
 export type ServiceOrderCustomerOption = ClienteListItem;
@@ -77,6 +81,10 @@ export function ServiceOrderForm({
   const [vehiculoId, setVehiculoId] = useState("");
   const [vehicles, setVehicles] = useState<Vehiculo[]>([]);
   const [vehiclesLoading, setVehiclesLoading] = useState(false);
+  const [categoria, setCategoria] = useState<ServiceCategory>(order?.categoria ?? DEFAULT_CATEGORIA);
+  const [hallazgos, setHallazgos] = useState(order?.hallazgos ?? "");
+  const [recomendaciones, setRecomendaciones] = useState(order?.recomendaciones ?? "");
+  const [observaciones, setObservaciones] = useState(order?.observaciones ?? "");
   const [description, setDescription] = useState(order?.description ?? "");
   const [appointmentAt, setAppointmentAt] = useState(toDatetimeLocal(order?.appointmentAt));
   const [searchQuery, setSearchQuery] = useState("");
@@ -136,6 +144,10 @@ export function ServiceOrderForm({
     // Mirrors `handleCustomerSelect`: a non-empty clienteId (edit mode, or a
     // pre-picked `selectedCustomer`) means the fetch effect is about to run.
     setVehiclesLoading(!isEdit && Boolean(nextClienteId));
+    setCategoria(order?.categoria ?? DEFAULT_CATEGORIA);
+    setHallazgos(order?.hallazgos ?? "");
+    setRecomendaciones(order?.recomendaciones ?? "");
+    setObservaciones(order?.observaciones ?? "");
     setDescription(order?.description ?? "");
     setAppointmentAt(toDatetimeLocal(order?.appointmentAt));
     setSearchQuery("");
@@ -181,6 +193,10 @@ export function ServiceOrderForm({
             body: JSON.stringify({
               description: description.trim() || null,
               appointmentAt: appointmentAt ? new Date(appointmentAt).toISOString() : null,
+              categoria,
+              hallazgos: hallazgos.trim() || null,
+              recomendaciones: recomendaciones.trim() || null,
+              observaciones: observaciones.trim() || null,
             }),
           })
         : await fetch("/api/service-orders", {
@@ -189,6 +205,7 @@ export function ServiceOrderForm({
             body: JSON.stringify({
               clienteId,
               vehiculoId,
+              categoria,
               description: description.trim() || undefined,
               appointmentAt: appointmentAt ? new Date(appointmentAt).toISOString() : undefined,
               items: cart.map((line) => ({
@@ -285,6 +302,23 @@ export function ServiceOrderForm({
             )}
 
             <div className="grid gap-2">
+              <Label htmlFor="orden-categoria">Categoría</Label>
+              {/* Native <select>, same rationale as the vehicle picker above. */}
+              <select
+                id="orden-categoria"
+                className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none"
+                value={categoria}
+                onChange={(e) => setCategoria(e.target.value as ServiceCategory)}
+              >
+                {CATEGORIA_OPTIONS.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid gap-2">
               <Label htmlFor="orden-description">Descripción</Label>
               <Input id="orden-description" value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
@@ -298,6 +332,44 @@ export function ServiceOrderForm({
                 onChange={(e) => setAppointmentAt(e.target.value)}
               />
             </div>
+
+            {/*
+             * C4 — technician findings, only meaningful once the vehicle has
+             * actually been examined, so these are edit-only (spec §"Category
+             * and Completion Notes Editing"): never shown/settable at
+             * creation, only through this patch path.
+             */}
+            {isEdit && (
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="orden-hallazgos">Hallazgos</Label>
+                  <textarea
+                    id="orden-hallazgos"
+                    className="min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-base outline-none"
+                    value={hallazgos}
+                    onChange={(e) => setHallazgos(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="orden-recomendaciones">Recomendaciones</Label>
+                  <textarea
+                    id="orden-recomendaciones"
+                    className="min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-base outline-none"
+                    value={recomendaciones}
+                    onChange={(e) => setRecomendaciones(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="orden-observaciones">Observaciones</Label>
+                  <textarea
+                    id="orden-observaciones"
+                    className="min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-base outline-none"
+                    value={observaciones}
+                    onChange={(e) => setObservaciones(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
 
             {!isEdit && (
               <section aria-label="Parts selection">

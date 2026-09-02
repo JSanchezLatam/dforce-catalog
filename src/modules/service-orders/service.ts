@@ -26,10 +26,11 @@
 import { eq } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
-import { ordenCategoriaEnum, ordenServicio, ordenServicioItem, reminder, type Cliente, type OrdenServicio } from "@/shared/db/schema";
+import { ordenServicio, ordenServicioItem, reminder, type Cliente, type OrdenServicio } from "@/shared/db/schema";
 import { getClienteById } from "@/modules/customers/queries";
 import { cancelRemindersForOrder, scheduleReminder } from "@/modules/reminders/job";
 import { planReminders, type ReminderType } from "@/modules/reminders/schedule";
+import type { ServiceCategory } from "./categories";
 import { getOrdenServicioById } from "./queries";
 import { assertTransition, type OrderStatus } from "./transitions";
 
@@ -102,17 +103,10 @@ export type CreateOrdenServicioItemInput = {
   quantity?: number;
 };
 
-/**
- * `categoria` is enum-typed inline against `ordenCategoriaEnum.enumValues`
- * rather than importing the `ServiceCategory` alias — that alias lands in
- * WU2's `categories.ts` (design.md D3); required here because migration
- * `0015`'s NOT NULL must be satisfiable via the API/e2e before the UI select
- * ships (WU2).
- */
 export type CreateOrdenServicioInput = {
   clienteId: string;
   vehiculoId: string;
-  categoria: (typeof ordenCategoriaEnum.enumValues)[number];
+  categoria: ServiceCategory;
   description?: string | null;
   appointmentAt?: Date | null;
   createdBy?: string | null;
@@ -231,6 +225,10 @@ export async function createOrder(
 export type UpdateOrdenServicioPatch = {
   description?: string | null;
   appointmentAt?: Date | null;
+  categoria?: ServiceCategory;
+  hallazgos?: string | null;
+  recomendaciones?: string | null;
+  observaciones?: string | null;
 };
 
 export type UpdateOrdenServicioDeps = {

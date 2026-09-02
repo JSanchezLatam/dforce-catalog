@@ -36,6 +36,10 @@ export async function handleUpdateOrdenServicio(
     if (body.appointmentAt !== undefined) {
       patch.appointmentAt = body.appointmentAt === null ? null : new Date(body.appointmentAt);
     }
+    if (body.categoria !== undefined) patch.categoria = body.categoria;
+    if (body.hallazgos !== undefined) patch.hallazgos = body.hallazgos;
+    if (body.recomendaciones !== undefined) patch.recomendaciones = body.recomendaciones;
+    if (body.observaciones !== undefined) patch.observaciones = body.observaciones;
 
     const orden = await updateOrder(id, patch, deps);
     return NextResponse.json({ orden });

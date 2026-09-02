@@ -17,6 +17,7 @@ import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getClienteById } from "@/modules/customers/queries";
 import { listRemindersForOrder } from "@/modules/reminders/queries";
+import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
 import { OrderStatusControls } from "@/modules/service-orders/OrderStatusControls";
 import { getOrdenServicioById } from "@/modules/service-orders/queries";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
@@ -85,6 +86,11 @@ export default async function ServiceOrderDetailPage({
     getClienteById(orden.clienteId),
     listRemindersForOrder(orden.id),
   ]);
+  // C4 — `includeInactive: true` (getClienteById's own vehicles read) means a
+  // deactivated vehicle is still found here, so its identity+link render
+  // exactly as for an active one (spec §"Service Order Detail Displays
+  // Vehicle, Category, and Notes").
+  const vehiculo = clienteDetail?.vehicles.find((v) => v.id === orden.vehiculoId);
 
   return (
     <div className="p-8">
@@ -122,10 +128,29 @@ export default async function ServiceOrderDetailPage({
                 )}
               </dd>
             </div>
+            <div className="grid grid-cols-3 gap-2 py-2 border-b border-border last:border-0">
+              <dt className="text-sm font-medium text-muted-foreground">Vehículo</dt>
+              <dd className="col-span-2 text-sm text-foreground">
+                {vehiculo ? (
+                  <Link
+                    href={`/customers/${orden.clienteId}/vehicles/${vehiculo.id}`}
+                    className="text-primary hover:underline"
+                  >
+                    {vehiculo.plate}
+                  </Link>
+                ) : (
+                  orden.vehiculoId
+                )}
+              </dd>
+            </div>
+            {field("Categoría", CATEGORIA_LABEL[orden.categoria])}
             {field("Descripción", orden.description)}
             {field("Cita", orden.appointmentAt?.toLocaleString())}
             {field("Completada", orden.completedAt?.toLocaleString())}
             {field("Creada", orden.createdAt.toLocaleString())}
+            {field("Hallazgos", orden.hallazgos ?? "—")}
+            {field("Recomendaciones", orden.recomendaciones ?? "—")}
+            {field("Observaciones", orden.observaciones ?? "—")}
           </dl>
         </CardContent>
       </Card>

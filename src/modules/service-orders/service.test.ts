@@ -271,6 +271,66 @@ describe("updateOrder", () => {
 
     expect(result).toMatchObject({ id: "o1", description: "Cambio de aceite" });
   });
+
+  /**
+   * Task 2.2 — widens `UpdateOrdenServicioPatch` for `categoria` + the 3 note
+   * fields (`hallazgos`/`recomendaciones`/`observaciones`), leaving every
+   * other field's behavior untouched. `updateOrder` already applies `patch`
+   * generically via `.set(patch)`, so the meaningful assertion is that the
+   * TYPE accepts these fields (a stray property here is a `tsc` error before
+   * it is a runtime one) and that all four values actually reach the result.
+   */
+  it("persists categoria and the 3 note fields (task 2.2)", async () => {
+    const current = { orden: { id: "o1", status: "open" } as unknown as OrdenServicio, items: [] };
+    const database = {
+      update: () => ({
+        set: (patch: Record<string, unknown>) => ({
+          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
+        }),
+      }),
+    };
+
+    const result = await updateOrder(
+      "o1",
+      {
+        categoria: "reparacion",
+        hallazgos: "Fuga de aceite en el cárter",
+        recomendaciones: "Cambiar empaque del cárter",
+        observaciones: "Cliente notificado por WhatsApp",
+      },
+      { getById: async () => current, db: database as unknown as typeof import("@/shared/db/client").db },
+    );
+
+    expect(result).toMatchObject({
+      id: "o1",
+      categoria: "reparacion",
+      hallazgos: "Fuga de aceite en el cárter",
+      recomendaciones: "Cambiar empaque del cárter",
+      observaciones: "Cliente notificado por WhatsApp",
+    });
+  });
+
+  it("leaves description untouched when only categoria is patched (task 2.2 — other fields untouched)", async () => {
+    const current = {
+      orden: { id: "o1", status: "open", description: "Original" } as unknown as OrdenServicio,
+      items: [],
+    };
+    const database = {
+      update: () => ({
+        set: (patch: Record<string, unknown>) => ({
+          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
+        }),
+      }),
+    };
+
+    const result = await updateOrder(
+      "o1",
+      { categoria: "instalacion" },
+      { getById: async () => current, db: database as unknown as typeof import("@/shared/db/client").db },
+    );
+
+    expect(result).toMatchObject({ id: "o1", description: "Original", categoria: "instalacion" });
+  });
 });
 
 describe("transitionOrder (R21)", () => {
