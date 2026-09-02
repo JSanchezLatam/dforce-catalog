@@ -35,6 +35,10 @@ describe("formatDateTime", () => {
    * to en-US and every one of them would stay green. This is the only thing in
    * the repo that pins it.
    *
+   * Note what this guards and what it does not: `a. m.` also matches es-MX
+   * and es-419, so it pins es-PA against ENGLISH, not against another Spanish
+   * locale. `formatDate`'s zero-padded `03/09/2026` is the stricter half.
+   *
    * The separator is `\s`, not a literal space: es-PA emits U+00A0 between the
    * meridiem letters here, and newer ICU builds emit U+202F, so a hardcoded
    * space passes on one Node and fails on another.

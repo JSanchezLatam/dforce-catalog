@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Wrench } from "lucide-react";
 
-import { formatDateTime } from "@/shared/datetime";
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { computePageWindow, listInventory, parsePageSize } from "@/modules/inventory-view/queries";
@@ -9,6 +8,7 @@ import { ServiceOrderFilters } from "@/modules/service-orders/ServiceOrderFilter
 import { ServiceOrderFormTrigger } from "@/modules/service-orders/ServiceOrderFormTrigger";
 import { countOrdenesServicio, listOrdenesServicio, type OrdenServicioFilters } from "@/modules/service-orders/queries";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
+import { formatDateTime } from "@/shared/datetime";
 import { Pagination } from "@/shared/ui/Pagination";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 import { PAGE_HEADING } from "@/shared/ui/styles";

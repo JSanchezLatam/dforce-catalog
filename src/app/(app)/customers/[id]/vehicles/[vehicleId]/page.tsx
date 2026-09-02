@@ -10,7 +10,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { formatDateTime } from "@/shared/datetime";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -20,6 +19,7 @@ import { getClienteById } from "@/modules/customers/queries";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import { listOrdenesByVehiculo } from "@/modules/service-orders/queries";
+import { formatDateTime } from "@/shared/datetime";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 import { CHIP, PLATE_BADGE, PLATE_BADGE_MUTED } from "@/shared/ui/styles";
 

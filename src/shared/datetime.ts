@@ -20,7 +20,7 @@
  * are the only thing to change.
  *
  * The parameter is `Date`, never `string`, and that is load-bearing rather
- * than tidy: every one of the eleven call sites already holds a `Date`, and a
+ * than tidy: every one of `formatDateTime`'s eleven call sites (and `formatDate`'s one) already holds a `Date`, and a
  * date-ONLY string like "2026-03-10" parses as UTC midnight, which this module
  * would then render as the 9th — an off-by-a-day inside the helper whose whole
  * job is stopping off-by-a-timezone. `Vehiculo.createdAt` really does cross the wire
