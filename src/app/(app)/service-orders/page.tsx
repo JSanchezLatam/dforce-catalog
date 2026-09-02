@@ -1,7 +1,7 @@
-import { formatDateTime } from "@/shared/datetime";
 import Link from "next/link";
 import { Wrench } from "lucide-react";
 
+import { formatDateTime } from "@/shared/datetime";
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { computePageWindow, listInventory, parsePageSize } from "@/modules/inventory-view/queries";

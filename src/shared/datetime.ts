@@ -16,11 +16,18 @@
  * The zone is HARDCODED, and that is a product decision the owner made: the
  * workshop is in Panama, REVISADO is a Panamanian inspection, and everyone
  * should read the same hour no matter where the server runs. Revisit the day
- * there is a branch in another zone — at which point this one constant is the
- * only thing to change.
+ * there is a branch in another zone — at which point the two constants below
+ * are the only thing to change.
  *
- * Client components are deliberately NOT routed through here: they render in
- * the user's browser, which already knows the user's zone.
+ * Client components are NOT automatically exempt, and the tempting shorthand
+ * — "they render in the browser, which knows the user's zone" — is only true
+ * for some of them. A `"use client"` component is still SERVER-rendered for
+ * the initial HTML, so one that formats a server-supplied `Date` in its render
+ * path produces that first paint in the server's zone and then disagrees with
+ * itself on hydration. `CatalogGrid` was exactly that and is routed through
+ * here now. What is genuinely exempt is a date formatted from browser-side
+ * state that never touches SSR: `ManualSyncButton` formats inside a `fetch`
+ * callback, and `CustomerPicker` formats client-fetched search results.
  */
 const WORKSHOP_LOCALE = "es-PA";
 const WORKSHOP_TIME_ZONE = "America/Panama";
