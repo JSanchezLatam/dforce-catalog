@@ -5,6 +5,7 @@ import { requireSession } from "@/modules/auth/session";
 import {
   createOrder,
   type CreateOrdenServicioDeps,
+  InvalidCategoriaError,
   InvalidVehiculoError,
   UnknownClienteError,
 } from "@/modules/service-orders/service";
@@ -25,6 +26,9 @@ export async function handleCreateOrdenServicio(
   } catch (err) {
     if (err instanceof UnknownClienteError) {
       return NextResponse.json({ error: "unknown_cliente", clienteId: err.clienteId }, { status: 400 }); // R20
+    }
+    if (err instanceof InvalidCategoriaError) {
+      return NextResponse.json({ errors: err.errors }, { status: 400 }); // C4
     }
     if (err instanceof InvalidVehiculoError) {
       return NextResponse.json({ errors: err.errors }, { status: 400 }); // C4

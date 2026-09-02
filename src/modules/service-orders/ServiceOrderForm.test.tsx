@@ -147,11 +147,11 @@ describe("ServiceOrderForm", () => {
       });
 
       render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
-      // The mount fetch settles BEFORE the user opens the dialog — the page
-      // has been sitting there. Flushing after the click instead would let
-      // the in-flight promise repaint the list `resetForm` just cleared, and
-      // the bug would hide behind the ordering.
-      await flush();
+      // No fetch happens at mount — the effect returns early while `open` is
+      // false. What this pins is the opposite: opening must be what triggers
+      // the load, because the effect owns `vehicles`/`vehiclesLoading` and
+      // `open` is in its deps. Before that ownership existed, `resetForm`
+      // emptied the list on open and no dependency ever changed to refill it.
       openDialog();
       await flush();
 
@@ -179,6 +179,38 @@ describe("ServiceOrderForm", () => {
      * this: the visible damage is telling a customer WITH cars to go add one,
      * because a failed request and an empty garage rendered identically.
      */
+    /**
+     * GGA round 3, finding 2. The error message says "probá de nuevo" and
+     * nothing in the dialog could. Re-picking the same customer is a no-op
+     * (React bails on the identical value), so only closing and reopening
+     * recovered — which is not what the copy tells the user to do.
+     */
+    it("retries the failed load from inside the dialog", async () => {
+      let attempt = 0;
+      fetchMock.mockImplementation((url: string) => {
+        if (url.includes("/vehicles")) {
+          attempt += 1;
+          return attempt === 1
+            ? Promise.reject(new Error("network down"))
+            : Promise.resolve(jsonResponse({ vehicles: [vehiculoRow()] }));
+        }
+        return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
+      });
+
+      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      openDialog();
+      await selectCustomer("Cliente A");
+
+      expect(screen.getByText(/no pudimos cargar los vehículos/i)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /reintentar/i }));
+      await flush();
+
+      expect(screen.queryByText(/no pudimos cargar los vehículos/i)).not.toBeInTheDocument();
+      expect(vehicleSelect()).not.toBeDisabled();
+      expect(screen.getByRole("option", { name: /AAA111/ })).toBeInTheDocument();
+    });
+
     it.each([
       ["the network drops", () => Promise.reject(new Error("network down"))],
       ["the API answers 500", () => Promise.resolve({ ok: false, status: 500, json: async () => ({}) } as Response)],

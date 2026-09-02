@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { OrdenServicio, Vehiculo } from "@/shared/db/schema";
+import { ordenCategoriaEnum, type OrdenServicio, type Vehiculo } from "@/shared/db/schema";
 import { OrderTransitionError } from "./transitions";
 import {
   createOrder,
+  InvalidCategoriaError,
   InvalidVehiculoError,
   normalizeOrderItems,
   OrdenServicioNotFoundError,
@@ -195,6 +196,46 @@ describe("createOrder (R20)", () => {
     );
 
     expect(insertedOrders[0]).not.toHaveProperty("hallazgos");
+  });
+
+  describe("categoria validation (C4, GGA round 3)", () => {
+    const detail = { cliente: { id: "c1" }, orders: [], vehicles: [fakeVehiculo()] };
+
+    it("rejects a categoria outside the enum, so Postgres 22P02 never becomes a 500", async () => {
+      const database = { transaction: vi.fn() };
+      const promise = createOrder(
+        { clienteId: "c1", vehiculoId: "v1", categoria: "cualquier_cosa" as never },
+        { getClienteById: async () => detail as never, db: database as never },
+      );
+      await expect(promise).rejects.toBeInstanceOf(InvalidCategoriaError);
+      await expect(promise).rejects.toMatchObject({ errors: { categoria: expect.stringMatching(/[a-záéíóúñ]/i) } });
+      expect(database.transaction).not.toHaveBeenCalled();
+    });
+
+    it("rejects a MISSING categoria — the same defect as a bogus one, arriving as 23502 instead of 22P02", async () => {
+      const database = { transaction: vi.fn() };
+      await expect(
+        createOrder(
+          { clienteId: "c1", vehiculoId: "v1" } as never,
+          { getClienteById: async () => detail as never, db: database as never },
+        ),
+      ).rejects.toBeInstanceOf(InvalidCategoriaError);
+      expect(database.transaction).not.toHaveBeenCalled();
+    });
+
+    it("accepts every value the enum actually declares", async () => {
+      for (const value of ordenCategoriaEnum.enumValues) {
+        const database = {
+          transaction: async (cb: (tx: unknown) => unknown) =>
+            cb({ insert: () => ({ values: (v: object) => ({ returning: async () => [{ id: "o1", ...v }] }) }) }),
+        };
+        const orden = await createOrder(
+          { clienteId: "c1", vehiculoId: "v1", categoria: value },
+          { getClienteById: async () => detail as never, db: database as never },
+        );
+        expect(orden.categoria).toBe(value);
+      }
+    });
   });
 
   describe("vehicle validation (C4, R20)", () => {

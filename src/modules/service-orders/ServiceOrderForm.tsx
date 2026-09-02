@@ -75,9 +75,12 @@ export function ServiceOrderForm({
   const [open, setOpen] = useState(false);
   const [clienteId, setClienteId] = useState(order?.clienteId ?? selectedCustomer?.id ?? "");
   const [vehiculoId, setVehiculoId] = useState("");
-  const [vehicles, setVehicles] = useState<Vehiculo[]>([]);
-  const [vehiclesLoading, setVehiclesLoading] = useState(false);
-  const [vehiclesError, setVehiclesError] = useState(false);
+  const [vehiclesRetry, setVehiclesRetry] = useState(0);
+  const [fetchedVehicles, setFetchedVehicles] = useState<{ key: string; vehicles: Vehiculo[]; failed: boolean }>({
+    key: "",
+    vehicles: [],
+    failed: false,
+  });
   const [description, setDescription] = useState(order?.description ?? "");
   const [appointmentAt, setAppointmentAt] = useState(toDatetimeLocal(order?.appointmentAt));
   const [searchQuery, setSearchQuery] = useState("");
@@ -86,24 +89,30 @@ export function ServiceOrderForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   /**
-   * D2 — fetches the chosen customer's ACTIVE vehicles (never seeded
-   * alongside the customer: `ClienteListItem.plates` is plate strings with no
-   * vehicle ids). Create mode only — the vehicle is immutable post-creation,
-   * like customer and parts, so an edit-mode order never needs this list.
+   * D2 — fetches the chosen customer's ACTIVE vehicles (never seeded alongside
+   * the customer: `ClienteListItem.plates` is plate strings with no vehicle
+   * ids). Create mode only — the vehicle is immutable post-creation, like
+   * customer and parts, so an edit-mode order never needs this list.
    *
-   * This effect OWNS `vehicles` and `vehiclesLoading` and is the only thing
-   * that writes them. It used to share them with `handleCustomerSelect` and
-   * `resetForm`, and that is what made the pre-picked path a dead end: those
-   * two emptied the list and pinned `vehiclesLoading` true, then re-set
-   * `clienteId` to the value it already held. React bails out on an identical
-   * value, so `[clienteId, isEdit]` never changed, the effect never re-ran,
-   * and the dropdown stayed disabled with nothing on screen explaining why.
-   * Re-picking the customer already selected reached the same dead end.
+   * The list is stored KEYED by what it was fetched for, and loading/empty/
+   * error are derived from that key rather than mirrored into their own
+   * useStates. Mirroring is what made this a dead end twice: `resetForm` and
+   * `handleCustomerSelect` emptied the list and pinned "loading", then re-set
+   * `clienteId` to the value it already held — React bails out on an identical
+   * value, no dependency changed, the effect never re-ran, and the dropdown
+   * stayed disabled with nothing on screen explaining why. Resetting the
+   * mirrors from inside the effect instead only traded that for a cascading
+   * render (the `react-hooks` lint error). A key cannot fall out of sync with
+   * the thing it names.
    *
-   * `open` is in the deps because opening is when the list must be fresh; it
-   * also means a closed dialog never fetches. Clearing `vehiculoId` stays in
-   * the handlers — THAT is what changing the customer means, and it is the
-   * component's state, not this effect's bookkeeping.
+   * `open` is in the deps because opening is when the list must be fresh, and
+   * a closed dialog then never fetches at all. `vehiclesRetry` is there so the
+   * error state's "Reintentar" is something the user can actually do:
+   * re-picking the same customer is a no-op React bails on, so without a
+   * dependency that always changes, only closing the dialog recovered.
+   *
+   * Clearing `vehiculoId` stays in the handlers — THAT is what changing the
+   * customer means, and it is the form's state, not this effect's bookkeeping.
    *
    * `cancelled` guards a slow response for a customer that is no longer
    * selected from repainting over a faster later one.
@@ -111,9 +120,7 @@ export function ServiceOrderForm({
   useEffect(() => {
     if (isEdit || !open || !clienteId) return;
     let cancelled = false;
-    setVehicles([]);
-    setVehiclesError(false);
-    setVehiclesLoading(true);
+    const key = `${clienteId}:${vehiclesRetry}`;
     fetch(`/api/customers/${clienteId}/vehicles`)
       .then((response) => {
         // An HTTP error is an error. Folding it into `{ vehicles: [] }` is how
@@ -122,22 +129,25 @@ export function ServiceOrderForm({
         return response.json();
       })
       .then((body: { vehicles: Vehiculo[] }) => {
-        if (!cancelled) setVehicles(body.vehicles);
+        if (!cancelled) setFetchedVehicles({ key, vehicles: body.vehicles, failed: false });
       })
       .catch(() => {
         // A failed request and an empty garage are NOT the same thing: without
         // this the customer with three cars is told to go add one. Covers both
         // halves — a rejected fetch AND a non-ok response, which the `.then`
         // above turns into a rejection precisely so this handler sees it.
-        if (!cancelled) setVehiclesError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setVehiclesLoading(false);
+        if (!cancelled) setFetchedVehicles({ key, vehicles: [], failed: true });
       });
     return () => {
       cancelled = true;
     };
-  }, [clienteId, isEdit, open]);
+  }, [clienteId, isEdit, open, vehiclesRetry]);
+
+  const vehiclesKey = `${clienteId}:${vehiclesRetry}`;
+  const vehiclesSettled = fetchedVehicles.key === vehiclesKey;
+  const vehicles = vehiclesSettled ? fetchedVehicles.vehicles : [];
+  const vehiclesError = vehiclesSettled && fetchedVehicles.failed;
+  const vehiclesLoading = !isEdit && Boolean(clienteId) && !vehiclesSettled;
 
   function handleCustomerSelect(customer: ServiceOrderCustomerOption) {
     setClienteId(customer.id);
@@ -290,9 +300,14 @@ export function ServiceOrderForm({
                   ))}
                 </select>
                 {clienteId && !vehiclesLoading && vehiclesError && (
-                  <p className="text-sm text-muted-foreground">
-                    No pudimos cargar los vehículos de este cliente. Probá de nuevo.
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-muted-foreground">
+                      No pudimos cargar los vehículos de este cliente.
+                    </p>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setVehiclesRetry((n) => n + 1)}>
+                      Reintentar
+                    </Button>
+                  </div>
                 )}
                 {clienteId && !vehiclesLoading && !vehiclesError && vehicles.length === 0 && (
                   <p className="text-sm text-muted-foreground">
