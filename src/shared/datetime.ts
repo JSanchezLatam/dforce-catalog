@@ -19,6 +19,14 @@
  * there is a branch in another zone — at which point the two constants below
  * are the only thing to change.
  *
+ * The parameter is `Date`, never `string`, and that is load-bearing rather
+ * than tidy: every one of the eleven call sites already holds a `Date`, and a
+ * date-ONLY string like "2026-03-10" parses as UTC midnight, which this module
+ * would then render as the 9th — an off-by-a-day inside the helper whose whole
+ * job is stopping off-by-a-timezone. `ClienteListItem.createdAt` really does
+ * cross the wire as an ISO string (follow-up 1.19), so that caller is not
+ * hypothetical; the type makes it a compile error instead of a wrong date.
+ *
  * Client components are NOT automatically exempt, and the tempting shorthand
  * — "they render in the browser, which knows the user's zone" — is only true
  * for some of them. A `"use client"` component is still SERVER-rendered for
@@ -35,16 +43,12 @@ const WORKSHOP_TIME_ZONE = "America/Panama";
 /** Placeholder shared with the pages, so an unset date never renders "Invalid Date". */
 const EMPTY = "—";
 
-export function formatDateTime(value?: Date | string | null): string {
+export function formatDateTime(value: Date | null | undefined): string {
   if (!value) return EMPTY;
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return EMPTY;
-  return date.toLocaleString(WORKSHOP_LOCALE, { timeZone: WORKSHOP_TIME_ZONE });
+  return value.toLocaleString(WORKSHOP_LOCALE, { timeZone: WORKSHOP_TIME_ZONE });
 }
 
-export function formatDate(value?: Date | string | null): string {
+export function formatDate(value: Date | null | undefined): string {
   if (!value) return EMPTY;
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return EMPTY;
-  return date.toLocaleDateString(WORKSHOP_LOCALE, { timeZone: WORKSHOP_TIME_ZONE });
+  return value.toLocaleDateString(WORKSHOP_LOCALE, { timeZone: WORKSHOP_TIME_ZONE });
 }
