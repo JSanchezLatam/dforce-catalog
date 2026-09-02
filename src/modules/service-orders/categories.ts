@@ -9,7 +9,7 @@
  * strings staff read; `revisado` is displayed as the plain term, not a
  * lossy English translation.
  */
-import { ordenCategoriaEnum } from "@/shared/db/schema";
+import type { ordenCategoriaEnum } from "@/shared/db/schema";
 
 export type ServiceCategory = (typeof ordenCategoriaEnum.enumValues)[number];
 
@@ -30,5 +30,14 @@ export const CATEGORIA_LABEL: Record<ServiceCategory, string> = {
  * `status` does NOT have, because `assertTransition` rejects it downstream.
  */
 export function isServiceCategory(value: unknown): value is ServiceCategory {
-  return typeof value === "string" && (ordenCategoriaEnum.enumValues as readonly string[]).includes(value);
+  // Checked against CATEGORIA_LABEL's own keys rather than
+  // `ordenCategoriaEnum.enumValues`, so the schema import above stays a TYPE
+  // import and is fully erased. `ServiceOrderForm.tsx` is a "use client"
+  // component that imports from this module; a value import here would be the
+  // first runtime edge from the browser bundle into the Drizzle schema graph,
+  // and whether that gets tree-shaken across the client boundary is a question
+  // nothing in this repo measures. The map is exhaustive by its own
+  // `Record<ServiceCategory, string>` type, so tsc keeps the two in step.
+  // `Object.hasOwn`, not `in`: "toString" in CATEGORIA_LABEL is true.
+  return typeof value === "string" && Object.hasOwn(CATEGORIA_LABEL, value);
 }

@@ -189,6 +189,18 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
     },
   );
 
+  it("rejects a note longer than the bound, without reaching the update", async () => {
+    const setSpy = vi.fn();
+
+    const response = await handleUpdateOrdenServicio(requestWith({ hallazgos: "x".repeat(5001) }), "o1", {
+      getById: async () => current,
+      db: { update: () => ({ set: setSpy }) } as never,
+    });
+
+    expect(response.status).toBe(400);
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
   it("still accepts null on a note field — clearing one is not the same as smuggling an object", async () => {
     const setSpy = vi.fn(() => ({
       where: () => ({ returning: async () => [{ ...current.orden, hallazgos: null }] }),

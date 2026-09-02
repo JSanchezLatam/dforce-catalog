@@ -38,6 +38,10 @@ describe("isServiceCategory", () => {
     expect(isServiceCategory("banana")).toBe(false);
     expect(isServiceCategory("")).toBe(false);
     expect(isServiceCategory("Instalación")).toBe(false);
+    // The guard reads CATEGORIA_LABEL's own keys, so `in` would have said yes
+    // to every Object.prototype member. Object.hasOwn is why these are false.
+    expect(isServiceCategory("toString")).toBe(false);
+    expect(isServiceCategory("constructor")).toBe(false);
   });
 
   it("rejects non-string input, so a JSON body cannot smuggle one past the guard", () => {

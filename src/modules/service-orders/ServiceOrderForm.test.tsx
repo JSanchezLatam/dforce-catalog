@@ -413,6 +413,21 @@ describe("ServiceOrderForm", () => {
       }
     });
 
+    /**
+     * The vehicle select lives behind `{!isEdit && …}`, so the edit-mode test
+     * above never sees it — and it is the control the original defect was
+     * found on, plus the one every NEW order passes through. Today it is safe
+     * only because it shares NATIVE_FIELD; inline a class on it and nothing
+     * above would go red.
+     */
+    it("gives the create-mode vehicle select a focus ring too", () => {
+      render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      openDialog();
+
+      expect(vehicleSelect().className).toContain("outline-none");
+      expect(vehicleSelect().className).toContain("focus-visible:ring-3");
+    });
+
     it("does not render note fields in create mode", () => {
       render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
       openDialog();

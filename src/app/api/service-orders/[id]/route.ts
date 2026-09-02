@@ -16,6 +16,9 @@ import { OrderTransitionError, type OrderStatus } from "@/modules/service-orders
 /** Nullable `text` columns this route accepts, all guarded the same way. */
 const NULLABLE_TEXT_FIELDS = ["description", "hallazgos", "recomendaciones", "observaciones"] as const;
 
+/** Generous for a technician's notes, finite for everyone else. */
+const MAX_TEXT_LENGTH = 5000;
+
 export type UpdateOrdenServicioRouteDeps = UpdateOrdenServicioDeps & TransitionOrdenServicioDeps;
 
 export async function handleUpdateOrdenServicio(
@@ -44,6 +47,12 @@ export async function handleUpdateOrdenServicio(
       if (body[field] === undefined) continue;
       if (body[field] !== null && typeof body[field] !== "string") {
         return NextResponse.json({ errors: { [field]: "Valor inválido" } }, { status: 400 }); // C4
+      }
+      // These are unbounded `text` columns and this PR tripled how many of them
+      // a client can write. A type check alone lets any authenticated user
+      // PATCH megabytes straight into Postgres.
+      if (typeof body[field] === "string" && body[field].length > MAX_TEXT_LENGTH) {
+        return NextResponse.json({ errors: { [field]: "Texto demasiado largo" } }, { status: 400 });
       }
       patch[field] = body[field];
     }
