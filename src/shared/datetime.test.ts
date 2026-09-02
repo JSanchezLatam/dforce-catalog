@@ -29,6 +29,21 @@ describe("formatDateTime", () => {
     },
   );
 
+  /**
+   * The zone assertions above are all locale-AGNOSTIC — "9:00" appears in both
+   * es-PA and en-US — so `WORKSHOP_LOCALE` could be deleted, misspelled or set
+   * to en-US and every one of them would stay green. This is the only thing in
+   * the repo that pins it.
+   *
+   * The separator is `\s`, not a literal space: es-PA emits U+00A0 between the
+   * meridiem letters here, and newer ICU builds emit U+202F, so a hardcoded
+   * space passes on one Node and fails on another.
+   */
+  it("renders in Panamanian Spanish, not the host's locale", () => {
+    process.env.TZ = "UTC";
+    expect(formatDateTime(APPOINTMENT)).toMatch(/a\.\s?m\./); // en-US would say "AM"
+  });
+
   it("returns the placeholder for a null date, so a caller never renders 'Invalid Date'", () => {
     expect(formatDateTime(null)).toBe("—");
     expect(formatDateTime(undefined)).toBe("—");
@@ -39,6 +54,8 @@ describe("formatDate", () => {
   it("does not slip to the previous day when the host runs east of Panama", () => {
     process.env.TZ = "Asia/Tokyo";
     // 2026-03-10T02:00Z is still 2026-03-09 in Panama, and the 10th in Tokyo.
-    expect(formatDate(new Date("2026-03-10T02:00:00Z"))).toContain("9");
+    // Zero-padded and es-PA-ordered: en-US would render "3/9/2026", so this
+    // pins the locale as well as the day.
+    expect(formatDate(new Date("2026-03-10T02:00:00Z"))).toBe("03/09/2026");
   });
 });
