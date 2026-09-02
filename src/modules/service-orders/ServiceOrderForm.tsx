@@ -24,7 +24,10 @@ import { CustomerPicker } from "./CustomerPicker";
 import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
 
 const CATEGORIA_OPTIONS = Object.entries(CATEGORIA_LABEL) as [ServiceCategory, string][];
-const DEFAULT_CATEGORIA: ServiceCategory = CATEGORIA_OPTIONS[0][0];
+// Named, not derived from the option order: what a new order gets filed as is
+// a product decision, and reordering a label map for readability should never
+// silently change it.
+const DEFAULT_CATEGORIA: ServiceCategory = "instalacion";
 
 /** = `ClienteListItem` — the route body (`GET /api/customers`) maps straight through (design.md). */
 export type ServiceOrderCustomerOption = ClienteListItem;

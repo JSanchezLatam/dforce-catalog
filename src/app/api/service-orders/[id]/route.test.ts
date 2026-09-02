@@ -164,4 +164,60 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
     expect(body.errors).toHaveProperty("categoria");
     expect(setSpy).not.toHaveBeenCalled();
   });
+
+  /**
+   * GGA round 1 on PR2. `categoria` got a guard that explicitly rejects
+   * non-strings — for the one field with a downstream backstop, the PG enum
+   * cast. The three free-text columns have none and got nothing, which is
+   * backwards. `description` is folded in for the same reason: it is the same
+   * column type reached through the same unchecked assignment.
+   */
+  it.each(["hallazgos", "recomendaciones", "observaciones", "description"])(
+    "rejects a non-string %s with 400, without reaching the update",
+    async (field) => {
+      const setSpy = vi.fn();
+
+      const response = await handleUpdateOrdenServicio(requestWith({ [field]: { evil: 1 } }), "o1", {
+        getById: async () => current,
+        db: { update: () => ({ set: setSpy }) } as never,
+      });
+
+      expect(response.status).toBe(400);
+      const body = await response.json();
+      expect(body.errors).toHaveProperty(field);
+      expect(setSpy).not.toHaveBeenCalled();
+    },
+  );
+
+  it("still accepts null on a note field — clearing one is not the same as smuggling an object", async () => {
+    const setSpy = vi.fn(() => ({
+      where: () => ({ returning: async () => [{ ...current.orden, hallazgos: null }] }),
+    }));
+
+    const response = await handleUpdateOrdenServicio(requestWith({ hallazgos: null }), "o1", {
+      getById: async () => current,
+      db: { update: () => ({ set: setSpy }) } as never,
+    });
+
+    expect(response.status).toBe(200);
+    expect(setSpy).toHaveBeenCalledWith({ hallazgos: null });
+  });
+
+  /**
+   * GGA round 1 on PR2, finding 3. Pre-existing — the hole was the same when
+   * the whitelist was description/appointmentAt — but this is the PR that
+   * pinned "read the body freely, drop what you don't recognise" into a tested
+   * contract, so an all-stray body reaching `.set({})` is now this PR's to own.
+   */
+  it("refuses a patch that whitelists down to nothing instead of calling .set({})", async () => {
+    const setSpy = vi.fn();
+
+    const response = await handleUpdateOrdenServicio(requestWith({ vehiculoId: "sneaky-vehicle-swap" }), "o1", {
+      getById: async () => current,
+      db: { update: () => ({ set: setSpy }) } as never,
+    });
+
+    expect(response.status).toBe(400);
+    expect(setSpy).not.toHaveBeenCalled();
+  });
 });
