@@ -36,7 +36,10 @@ describe("GET /api/customers/[id]/vehicles (C4, task 1.11 — the gap D2 found)"
     expect(response.status).toBe(403);
   });
 
-  it("returns active-only vehicles for the customer via listVehiculosByCliente", async () => {
+  // Delegation only. "active-only" is a property of `listVehiculosByCliente`
+  // itself and is proven in `vehicles.test.ts`; injecting a fake here cannot
+  // prove it, and a name claiming otherwise sells coverage that isn't here.
+  it("delegates to listVehiculosByCliente with the customer id and returns its rows", async () => {
     const listVehiculosByCliente = vi.fn().mockResolvedValue([fakeVehiculo()]);
     const response = await handleListVehiculosByCliente(requestFor("c1"), "c1", { listVehiculosByCliente });
 

@@ -30,7 +30,7 @@ import { ordenServicio, ordenServicioItem, reminder, type Cliente, type OrdenSer
 import { getClienteById } from "@/modules/customers/queries";
 import { cancelRemindersForOrder, scheduleReminder } from "@/modules/reminders/job";
 import { planReminders, type ReminderType } from "@/modules/reminders/schedule";
-import type { ServiceCategory } from "./categories";
+import { isServiceCategory, type ServiceCategory } from "./categories";
 import { getOrdenServicioById } from "./queries";
 import { assertTransition, type OrderStatus } from "./transitions";
 
@@ -93,6 +93,19 @@ export class OrdenServicioNotFoundError extends Error {
 export class InvalidVehiculoError extends Error {
   constructor(readonly errors: { vehiculoId: string }) {
     super("Invalid vehiculo");
+  }
+}
+
+/**
+ * `createOrder` receives `await request.json()` — the `CreateOrdenServicioInput`
+ * type is a claim about that body, not a fact, and it is erased at runtime.
+ * `clienteId` and `vehiculoId` are both checked here and answer 400; without
+ * this `categoria` was the one field next to them that reached Postgres raw
+ * and came back a 500 (`22P02` when bogus, `23502` when omitted).
+ */
+export class InvalidCategoriaError extends Error {
+  constructor(readonly errors: { categoria: string }) {
+    super("Invalid categoria");
   }
 }
 
@@ -182,6 +195,10 @@ export async function createOrder(
   const ownsVehicle = clienteDetail.vehicles?.some((v) => v.id === input.vehiculoId && v.deactivatedAt === null);
   if (!ownsVehicle) {
     throw new InvalidVehiculoError({ vehiculoId: "Seleccioná un vehículo válido de este cliente" });
+  }
+
+  if (!isServiceCategory(input.categoria)) {
+    throw new InvalidCategoriaError({ categoria: "Elegí un tipo de servicio válido" });
   }
 
   const items = normalizeOrderItems(input.items ?? []);

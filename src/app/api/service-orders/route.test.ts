@@ -80,20 +80,24 @@ describe("POST /api/service-orders (R20)", () => {
     expect(database.transaction).not.toHaveBeenCalled();
   });
 
-  it("rejects a categoria outside the enum with 400 before touching the DB", async () => {
+  /**
+   * GGA round 5 on PR1. The branch this covers was added in round 3 without a
+   * route test — service.test.ts proves createOrder THROWS, and the form test
+   * mocks a hand-written 400 body. The wire between them, "the service's
+   * categoria error becomes a 400 keyed categoria", was asserted nowhere, and
+   * it is the exact claim task 1.13b rests on.
+   */
+  it("rejects an invalid categoria with 400 under errors.categoria", async () => {
     const database = { transaction: vi.fn() };
 
     const response = await handleCreateOrdenServicio(
-      requestWith({ clienteId: "cli-1", vehiculoId: "v1", categoria: "banana" }),
-      {
-        getClienteById: async () => clienteDetail as never,
-        db: database as never,
-      },
+      requestWith({ clienteId: "cli-1", vehiculoId: "v1", categoria: "cualquier_cosa" }),
+      { getClienteById: async () => clienteDetail as never, db: database as never },
     );
 
     expect(response.status).toBe(400);
     const body = await response.json();
-    expect(body.errors).toHaveProperty("categoria");
+    expect(body.errors).toEqual({ categoria: "Elegí un tipo de servicio válido" });
     expect(database.transaction).not.toHaveBeenCalled();
   });
 

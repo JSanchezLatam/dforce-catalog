@@ -276,6 +276,14 @@ export async function applyVehiculoPlan(tx: TxLike, clienteId: string, plan: Veh
     // Spanish copy instead of a raw 500. The asymmetry is structural, not
     // conditional: this guards `plan.delete` only — `plan.deactivate` above
     // is untouched, so a vehicle with history stays soft-deletable.
+    // Deliberately NOT scoped by clienteId, unlike every write in this
+    // function. This read decides whether to block a delete, so over-matching
+    // is the safe direction and under-matching is not: an orden_servicio row
+    // reaching this vehicle under a different clienteId would be invisible to a
+    // scoped check, the DELETE would proceed, and ON DELETE RESTRICT would
+    // raise the raw 500 this guard exists to replace with Spanish copy. The
+    // DELETE below stays scoped, because a write must never reach another
+    // customer's row.
     const blocked = await tx
       .select({ id: ordenServicio.id })
       .from(ordenServicio)

@@ -132,6 +132,173 @@ describe("ServiceOrderForm", () => {
       vi.unstubAllGlobals();
     });
 
+    /**
+     * GGA round 1, findings 1+5. The pre-picked path is how the customer
+     * detail page opens this form, and it had no behavioural coverage: the
+     * old test asserted only that the customer's NAME rendered. Opening the
+     * dialog runs `resetForm`, which re-set `clienteId` to the value it
+     * already had — React bails out on an identical value, so the fetch
+     * effect never re-ran while `resetForm` had already emptied the list and
+     * pinned `vehiclesLoading` true. Disabled dropdown, no explanation, no
+     * way to submit, forever.
+     */
+    it("loads the pre-picked customer's vehicles when the dialog opens", async () => {
+      fetchMock.mockImplementation((url: string) => {
+        if (url.includes("/api/customers/c-preseleccionado/vehicles")) {
+          return Promise.resolve(jsonResponse({ vehicles: [vehiculoRow({ id: "v-pre", clienteId: "c-preseleccionado" })] }));
+        }
+        return Promise.resolve(jsonResponse({ customers: [], total: 0 }));
+      });
+
+      render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      // No fetch happens at mount — the effect returns early while `open` is
+      // false. What this pins is the opposite: opening must be what triggers
+      // the load, because the effect owns `vehicles`/`vehiclesLoading` and
+      // `open` is in its deps. Before that ownership existed, `resetForm`
+      // emptied the list on open and no dependency ever changed to refill it.
+      openDialog();
+      await flush();
+
+      expect(vehicleSelect()).not.toBeDisabled();
+      expect(screen.getByRole("option", { name: /AAA111/ })).toBeInTheDocument();
+
+      fireEvent.change(vehicleSelect(), { target: { value: "v-pre" } });
+      expect(screen.getByRole("button", { name: "Guardar" })).not.toBeDisabled();
+    });
+
+    /** GGA round 1, finding 2 — same root cause, reached a second way. */
+    it("survives re-picking the customer that is already selected", async () => {
+      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      openDialog();
+
+      await selectCustomer("Cliente A");
+      await selectCustomer("Cliente A");
+
+      expect(vehicleSelect()).not.toBeDisabled();
+      expect(screen.getByRole("option", { name: /AAA111/ })).toBeInTheDocument();
+    });
+
+    /**
+     * GGA round 5, finding 2. The load failure and the zero-vehicles hint are
+     * the only explanation for a disabled dropdown and a dead Guardar, and
+     * neither reached a screen reader — the adjacent field error announces,
+     * these did not. The failure is an alert; the empty garage is guidance,
+     * so it is wired to the select with aria-describedby instead (next test).
+     */
+    it("announces the load failure to a screen reader", async () => {
+      fetchMock.mockImplementation((url: string) => {
+        if (url.includes("/vehicles")) return Promise.reject(new Error("network down"));
+        return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
+      });
+
+      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      openDialog();
+      await selectCustomer("Cliente A");
+
+      expect(screen.getByRole("alert")).toHaveTextContent(/no pudimos cargar los vehículos/i);
+    });
+
+    it("points the select at the empty-garage hint so it is not silently disabled", async () => {
+      fetchMock.mockImplementation((url: string) => {
+        if (url.includes("/vehicles")) return Promise.resolve(jsonResponse({ vehicles: [] }));
+        return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
+      });
+
+      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      openDialog();
+      await selectCustomer("Cliente A");
+
+      const hint = screen.getByText(/no tiene vehículos activos/i);
+      expect(vehicleSelect()).toHaveAttribute("aria-describedby", hint.id);
+      expect(hint.id).not.toBe("");
+    });
+
+    /**
+     * GGA round 3, finding 2. The error message says "probá de nuevo" and
+     * nothing in the dialog could. Re-picking the same customer is a no-op
+     * (React bails on the identical value), so only closing and reopening
+     * recovered — which is not what the copy tells the user to do.
+     */
+    it("retries the failed load from inside the dialog", async () => {
+      let attempt = 0;
+      fetchMock.mockImplementation((url: string) => {
+        if (url.includes("/vehicles")) {
+          attempt += 1;
+          return attempt === 1
+            ? Promise.reject(new Error("network down"))
+            : Promise.resolve(jsonResponse({ vehicles: [vehiculoRow()] }));
+        }
+        return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
+      });
+
+      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      openDialog();
+      await selectCustomer("Cliente A");
+
+      expect(screen.getByText(/no pudimos cargar los vehículos/i)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /reintentar/i }));
+      await flush();
+
+      expect(screen.queryByText(/no pudimos cargar los vehículos/i)).not.toBeInTheDocument();
+      expect(vehicleSelect()).not.toBeDisabled();
+      expect(screen.getByRole("option", { name: /AAA111/ })).toBeInTheDocument();
+    });
+
+    /**
+     * GGA round 4, finding 1. `setErrors(body.errors)` renders only the keys
+     * that have a field: `clienteId` and `vehiculoId`. A 400 keyed on anything
+     * else — `categoria` today, whatever the API adds tomorrow — set state
+     * nobody displays, so the dialog just sat there after Guardar with no
+     * message at all. This pins the CLASS, not the one key.
+     */
+    it("shows an API rejection even when it names a field this form does not render", async () => {
+      fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          return Promise.resolve({
+            ok: false,
+            status: 400,
+            json: async () => ({ errors: { unfieldedKey: "Algo no cierra en el servidor" } }),
+          } as Response);
+        }
+        if (url.includes("/vehicles")) return Promise.resolve(jsonResponse({ vehicles: [vehiculoRow()] }));
+        return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
+      });
+
+      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      openDialog();
+      await selectCustomer("Cliente A");
+      fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+
+      fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+      await flush();
+
+      expect(screen.getByText("Algo no cierra en el servidor")).toBeInTheDocument();
+    });
+
+    /**
+     * GGA round 1, finding 6. An unhandled rejection is the smaller half of
+     * this: the visible damage is telling a customer WITH cars to go add one,
+     * because a failed request and an empty garage rendered identically.
+     */
+    it.each([
+      ["the network drops", () => Promise.reject(new Error("network down"))],
+      ["the API answers 500", () => Promise.resolve({ ok: false, status: 500, json: async () => ({}) } as Response)],
+      ["the API answers 403", () => Promise.resolve({ ok: false, status: 403, json: async () => ({}) } as Response)],
+    ])("does not pass a failed request off as a customer with no vehicles when %s", async (_case, respond) => {
+      fetchMock.mockImplementation((url: string) => {
+        if (url.includes("/vehicles")) return respond();
+        return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
+      });
+
+      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      openDialog();
+      await selectCustomer("Cliente A");
+
+      expect(screen.queryByText(/no tiene vehículos activos/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/no pudimos cargar los vehículos/i)).toBeInTheDocument();
+    });
+
     it("keeps submit disabled until a vehicle is selected, even once a customer is picked", async () => {
       render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
       openDialog();

@@ -53,6 +53,11 @@ function toDatetimeLocal(value?: Date | string | null): string {
  * see `page.tsx`'s `PICKER_LIST_LIMIT`). POSTs to `/api/service-orders`
  * (create) or PATCHes `/api/service-orders/[id]` (edit) — tasks 5.3/5.4.
  */
+/** Error keys this form has a place to show. Anything else routes to `form`. */
+const RENDERED_ERROR_FIELDS = new Set(["clienteId", "vehiculoId", "form"]);
+
+const VEHICLES_EMPTY_HINT_ID = "orden-vehiculo-empty-hint";
+
 export function ServiceOrderForm({
   products,
   order,
@@ -79,8 +84,12 @@ export function ServiceOrderForm({
   const [open, setOpen] = useState(false);
   const [clienteId, setClienteId] = useState(order?.clienteId ?? selectedCustomer?.id ?? "");
   const [vehiculoId, setVehiculoId] = useState("");
-  const [vehicles, setVehicles] = useState<Vehiculo[]>([]);
-  const [vehiclesLoading, setVehiclesLoading] = useState(false);
+  const [vehiclesRetry, setVehiclesRetry] = useState(0);
+  const [fetchedVehicles, setFetchedVehicles] = useState<{ key: string; vehicles: Vehiculo[]; failed: boolean }>({
+    key: "",
+    vehicles: [],
+    failed: false,
+  });
   const [categoria, setCategoria] = useState<ServiceCategory>(order?.categoria ?? DEFAULT_CATEGORIA);
   const [hallazgos, setHallazgos] = useState(order?.hallazgos ?? "");
   const [recomendaciones, setRecomendaciones] = useState(order?.recomendaciones ?? "");
@@ -93,41 +102,73 @@ export function ServiceOrderForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   /**
-   * D2 — fetches the chosen customer's ACTIVE vehicles on every `clienteId`
-   * change (never seeded alongside the customer: `ClienteListItem.plates` is
-   * plate strings with no vehicle ids). Create mode only — the vehicle is
-   * immutable post-creation, like customer and parts, so an edit-mode order
-   * never needs this list. Only the fetch lives here — clearing the previous
-   * selection/list is not something to observe after the fact, it is what
-   * changing the customer MEANS, so it happens in `handleCustomerSelect`/
-   * `resetForm` below (same convention `CatalogBuilderForm.tsx`'s category
-   * effect already established). `cancelled` guards a slow response for a
-   * customer that is no longer selected from repainting over a faster later
-   * one — the SAME-HANDLER clear is what actually prevents the stale-
-   * selection defect; this guard only prevents a stale vehicle LIST from
-   * flashing in.
+   * D2 — fetches the chosen customer's ACTIVE vehicles (never seeded alongside
+   * the customer: `ClienteListItem.plates` is plate strings with no vehicle
+   * ids). Create mode only — the vehicle is immutable post-creation, like
+   * customer and parts, so an edit-mode order never needs this list.
+   *
+   * The list is stored KEYED by what it was fetched for, and loading/empty/
+   * error are derived from that key rather than mirrored into their own
+   * useStates. Mirroring is what made this a dead end twice: `resetForm` and
+   * `handleCustomerSelect` emptied the list and pinned "loading", then re-set
+   * `clienteId` to the value it already held — React bails out on an identical
+   * value, no dependency changed, the effect never re-ran, and the dropdown
+   * stayed disabled with nothing on screen explaining why. Resetting the
+   * mirrors from inside the effect instead only traded that for a cascading
+   * render (the `react-hooks` lint error). A key cannot fall out of sync with
+   * the thing it names.
+   *
+   * `open` is in the deps because opening is when the list must be fresh, and
+   * a closed dialog then never fetches at all. `vehiclesRetry` is there so the
+   * error state's "Reintentar" is something the user can actually do:
+   * re-picking the same customer is a no-op React bails on, so without a
+   * dependency that always changes, only closing the dialog recovered.
+   *
+   * Clearing `vehiculoId` stays in the handlers — THAT is what changing the
+   * customer means, and it is the form's state, not this effect's bookkeeping.
+   *
+   * `cancelled` guards a slow response for a customer that is no longer
+   * selected from repainting over a faster later one.
    */
   useEffect(() => {
-    if (isEdit || !clienteId) return;
+    if (isEdit || !open || !clienteId) return;
     let cancelled = false;
+    const key = `${clienteId}:${vehiclesRetry}`;
     fetch(`/api/customers/${clienteId}/vehicles`)
-      .then((response) => (response.ok ? response.json() : { vehicles: [] }))
-      .then((body: { vehicles: Vehiculo[] }) => {
-        if (!cancelled) setVehicles(body.vehicles);
+      .then((response) => {
+        // An HTTP error is an error. Folding it into `{ vehicles: [] }` is how
+        // a 403 or a 500 used to reach the user as "this customer has no cars".
+        if (!response.ok) throw new Error(`vehicles fetch failed: ${response.status}`);
+        return response.json();
       })
-      .finally(() => {
-        if (!cancelled) setVehiclesLoading(false);
+      .then((body: { vehicles: Vehiculo[] }) => {
+        if (!cancelled) setFetchedVehicles({ key, vehicles: body.vehicles, failed: false });
+      })
+      .catch(() => {
+        // A failed request and an empty garage are NOT the same thing: without
+        // this the customer with three cars is told to go add one. Covers both
+        // halves — a rejected fetch AND a non-ok response, which the `.then`
+        // above turns into a rejection precisely so this handler sees it.
+        if (!cancelled) setFetchedVehicles({ key, vehicles: [], failed: true });
       });
     return () => {
       cancelled = true;
     };
-  }, [clienteId, isEdit]);
+  }, [clienteId, isEdit, open, vehiclesRetry]);
+
+  const vehiclesKey = `${clienteId}:${vehiclesRetry}`;
+  const vehiclesSettled = fetchedVehicles.key === vehiclesKey;
+  const vehicles = vehiclesSettled ? fetchedVehicles.vehicles : [];
+  const vehiclesError = vehiclesSettled && fetchedVehicles.failed;
+  const vehiclesLoading = !isEdit && Boolean(clienteId) && !vehiclesSettled;
+  const showVehiclesEmptyHint = Boolean(clienteId) && !vehiclesLoading && !vehiclesError && vehicles.length === 0;
 
   function handleCustomerSelect(customer: ServiceOrderCustomerOption) {
     setClienteId(customer.id);
     setVehiculoId("");
-    setVehicles([]);
-    setVehiclesLoading(true);
+    // A vehiculoId error from a rejected submit would otherwise stay on screen
+    // pointing at a selection that no longer exists.
+    setErrors({});
   }
 
   const filteredProducts = useMemo(() => {
@@ -140,10 +181,6 @@ export function ServiceOrderForm({
     const nextClienteId = order?.clienteId ?? selectedCustomer?.id ?? "";
     setClienteId(nextClienteId);
     setVehiculoId("");
-    setVehicles([]);
-    // Mirrors `handleCustomerSelect`: a non-empty clienteId (edit mode, or a
-    // pre-picked `selectedCustomer`) means the fetch effect is about to run.
-    setVehiclesLoading(!isEdit && Boolean(nextClienteId));
     setCategoria(order?.categoria ?? DEFAULT_CATEGORIA);
     setHallazgos(order?.hallazgos ?? "");
     setRecomendaciones(order?.recomendaciones ?? "");
@@ -219,8 +256,17 @@ export function ServiceOrderForm({
 
       if (response.status === 400) {
         const body = await response.json();
+        const returned: Record<string, string> =
+          body.errors ?? { clienteId: body.error === "unknown_cliente" ? "Seleccioná un cliente válido" : body.error };
+        // Only clienteId and vehiculoId have a field to render into. A 400 keyed
+        // on anything else used to set state nobody displayed, so the dialog sat
+        // there after Guardar saying nothing. Anything unrendered falls through
+        // to the form-level slot instead of disappearing.
+        const unrendered = Object.entries(returned).filter(([field]) => !RENDERED_ERROR_FIELDS.has(field));
         setErrors(
-          body.errors ?? { clienteId: body.error === "unknown_cliente" ? "Seleccioná un cliente válido" : body.error },
+          unrendered.length > 0
+            ? { ...returned, form: unrendered.map(([, message]) => message).join(" ") }
+            : returned,
         );
         return;
       }
@@ -278,6 +324,7 @@ export function ServiceOrderForm({
                   className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none disabled:cursor-not-allowed disabled:opacity-50"
                   value={vehiculoId}
                   disabled={!clienteId || vehiclesLoading || vehicles.length === 0}
+                  aria-describedby={showVehiclesEmptyHint ? VEHICLES_EMPTY_HINT_ID : undefined}
                   onChange={(e) => setVehiculoId(e.target.value)}
                 >
                   <option value="">Seleccioná un vehículo</option>
@@ -288,8 +335,18 @@ export function ServiceOrderForm({
                     </option>
                   ))}
                 </select>
-                {clienteId && !vehiclesLoading && vehicles.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
+                {clienteId && !vehiclesLoading && vehiclesError && (
+                  <div className="flex items-center gap-2">
+                    <p role="alert" className="text-sm text-muted-foreground">
+                      No pudimos cargar los vehículos de este cliente.
+                    </p>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setVehiclesRetry((n) => n + 1)}>
+                      Reintentar
+                    </Button>
+                  </div>
+                )}
+                {showVehiclesEmptyHint && (
+                  <p id={VEHICLES_EMPTY_HINT_ID} className="text-sm text-muted-foreground">
                     Este cliente no tiene vehículos activos. Agregá uno primero.
                   </p>
                 )}
