@@ -175,18 +175,13 @@ describe("ServiceOrderForm", () => {
     });
 
     /**
-     * GGA round 1, finding 6. An unhandled rejection is the smaller half of
-     * this: the visible damage is telling a customer WITH cars to go add one,
-     * because a failed request and an empty garage rendered identically.
-     */
-    /**
      * GGA round 5, finding 2. The load failure and the zero-vehicles hint are
      * the only explanation for a disabled dropdown and a dead Guardar, and
      * neither reached a screen reader — the adjacent field error announces,
      * these did not. The failure is an alert; the empty garage is guidance,
-     * so it is wired to the select with aria-describedby instead.
+     * so it is wired to the select with aria-describedby instead (next test).
      */
-    it("announces the load failure, and describes the empty-garage case to the select", async () => {
+    it("announces the load failure to a screen reader", async () => {
       fetchMock.mockImplementation((url: string) => {
         if (url.includes("/vehicles")) return Promise.reject(new Error("network down"));
         return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
@@ -277,6 +272,11 @@ describe("ServiceOrderForm", () => {
       expect(screen.getByText("Algo no cierra en el servidor")).toBeInTheDocument();
     });
 
+    /**
+     * GGA round 1, finding 6. An unhandled rejection is the smaller half of
+     * this: the visible damage is telling a customer WITH cars to go add one,
+     * because a failed request and an empty garage rendered identically.
+     */
     it.each([
       ["the network drops", () => Promise.reject(new Error("network down"))],
       ["the API answers 500", () => Promise.resolve({ ok: false, status: 500, json: async () => ({}) } as Response)],
