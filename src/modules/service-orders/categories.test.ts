@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ordenCategoriaEnum } from "@/shared/db/schema";
-import { CATEGORIA_LABEL } from "./categories";
+import { CATEGORIA_LABEL, isServiceCategory } from "./categories";
 
 describe("CATEGORIA_LABEL", () => {
   it("covers every ordenCategoriaEnum.enumValues entry with a non-empty label", () => {
@@ -24,5 +24,27 @@ describe("CATEGORIA_LABEL", () => {
   it("labels mant_preventivo distinctly from mant_correctivo", () => {
     expect(CATEGORIA_LABEL.mant_preventivo).toBe("Mant. Preventivo");
     expect(CATEGORIA_LABEL.mant_correctivo).toBe("Mant. Correctivo");
+  });
+});
+
+describe("isServiceCategory", () => {
+  it("accepts every ordenCategoriaEnum value", () => {
+    for (const value of ordenCategoriaEnum.enumValues) {
+      expect(isServiceCategory(value)).toBe(true);
+    }
+  });
+
+  it("rejects a string that is not one of the enum values", () => {
+    expect(isServiceCategory("banana")).toBe(false);
+    expect(isServiceCategory("")).toBe(false);
+    expect(isServiceCategory("Instalación")).toBe(false);
+  });
+
+  it("rejects non-string input, so a JSON body cannot smuggle one past the guard", () => {
+    expect(isServiceCategory(null)).toBe(false);
+    expect(isServiceCategory(undefined)).toBe(false);
+    expect(isServiceCategory(1)).toBe(false);
+    expect(isServiceCategory(["revisado"])).toBe(false);
+    expect(isServiceCategory({ categoria: "revisado" })).toBe(false);
   });
 });

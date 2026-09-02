@@ -54,7 +54,7 @@ describe("POST /api/service-orders (R20)", () => {
   it("rejects an unknown clienteId with 400 before touching the DB", async () => {
     const database = { transaction: vi.fn() };
 
-    const response = await handleCreateOrdenServicio(requestWith({ clienteId: "missing" }), {
+    const response = await handleCreateOrdenServicio(requestWith({ clienteId: "missing", vehiculoId: "v1", categoria: "revisado" }), {
       getClienteById: async () => null,
       db: database as never,
     });
@@ -77,6 +77,35 @@ describe("POST /api/service-orders (R20)", () => {
     expect(response.status).toBe(400);
     const body = await response.json();
     expect(body.errors).toHaveProperty("vehiculoId");
+    expect(database.transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects a categoria outside the enum with 400 before touching the DB", async () => {
+    const database = { transaction: vi.fn() };
+
+    const response = await handleCreateOrdenServicio(
+      requestWith({ clienteId: "cli-1", vehiculoId: "v1", categoria: "banana" }),
+      {
+        getClienteById: async () => clienteDetail as never,
+        db: database as never,
+      },
+    );
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.errors).toHaveProperty("categoria");
+    expect(database.transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing categoria with 400 — the column is NOT NULL with no default", async () => {
+    const database = { transaction: vi.fn() };
+
+    const response = await handleCreateOrdenServicio(requestWith({ clienteId: "cli-1", vehiculoId: "v1" }), {
+      getClienteById: async () => clienteDetail as never,
+      db: database as never,
+    });
+
+    expect(response.status).toBe(400);
     expect(database.transaction).not.toHaveBeenCalled();
   });
 });

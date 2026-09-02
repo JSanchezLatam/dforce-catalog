@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { can } from "@/modules/auth/policy";
+import { isServiceCategory } from "@/modules/service-orders/categories";
 import { requireSession } from "@/modules/auth/session";
 import {
   OrdenServicioNotFoundError,
@@ -36,7 +37,12 @@ export async function handleUpdateOrdenServicio(
     if (body.appointmentAt !== undefined) {
       patch.appointmentAt = body.appointmentAt === null ? null : new Date(body.appointmentAt);
     }
-    if (body.categoria !== undefined) patch.categoria = body.categoria;
+    if (body.categoria !== undefined) {
+      if (!isServiceCategory(body.categoria)) {
+        return NextResponse.json({ errors: { categoria: "Elegí un tipo de servicio válido" } }, { status: 400 }); // C4
+      }
+      patch.categoria = body.categoria;
+    }
     if (body.hallazgos !== undefined) patch.hallazgos = body.hallazgos;
     if (body.recomendaciones !== undefined) patch.recomendaciones = body.recomendaciones;
     if (body.observaciones !== undefined) patch.observaciones = body.observaciones;

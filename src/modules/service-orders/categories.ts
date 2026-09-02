@@ -20,3 +20,15 @@ export const CATEGORIA_LABEL: Record<ServiceCategory, string> = {
   reparacion: "Reparación",
   revisado: "REVISADO",
 };
+
+/**
+ * The API is the trust boundary: `POST /api/service-orders` hands the raw
+ * JSON body straight to `createOrder`, and PATCH copies `body.categoria`
+ * into the patch, so TypeScript's `ServiceCategory` is a claim about that
+ * body rather than a fact. Without this guard an unknown value reaches
+ * Postgres and the caller gets a 500 where a 400 is owed — the same hole
+ * `status` does NOT have, because `assertTransition` rejects it downstream.
+ */
+export function isServiceCategory(value: unknown): value is ServiceCategory {
+  return typeof value === "string" && (ordenCategoriaEnum.enumValues as readonly string[]).includes(value);
+}

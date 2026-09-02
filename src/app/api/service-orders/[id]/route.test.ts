@@ -151,4 +151,17 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
     expect(response.status).toBe(200);
     expect(setSpy).toHaveBeenCalledWith({ categoria: "revisado" });
   });
+  it("rejects a categoria outside the enum with 400, without ever reaching the update", async () => {
+    const setSpy = vi.fn();
+
+    const response = await handleUpdateOrdenServicio(requestWith({ categoria: "banana" }), "o1", {
+      getById: async () => current,
+      db: { update: () => ({ set: setSpy }) } as never,
+    });
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.errors).toHaveProperty("categoria");
+    expect(setSpy).not.toHaveBeenCalled();
+  });
 });

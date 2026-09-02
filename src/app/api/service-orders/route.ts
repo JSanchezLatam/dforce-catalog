@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { can } from "@/modules/auth/policy";
+import { isServiceCategory } from "@/modules/service-orders/categories";
 import { requireSession } from "@/modules/auth/session";
 import {
   createOrder,
@@ -19,6 +20,10 @@ export async function handleCreateOrdenServicio(
   }
 
   const body = await request.json();
+  if (!isServiceCategory(body?.categoria)) {
+    return NextResponse.json({ errors: { categoria: "Elegí un tipo de servicio válido" } }, { status: 400 }); // C4
+  }
+
   try {
     const orden = await createOrder(body, deps);
     return NextResponse.json({ orden }, { status: 201 });
