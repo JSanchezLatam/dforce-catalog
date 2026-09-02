@@ -110,6 +110,8 @@ describe("POST /api/service-orders (R20)", () => {
     });
 
     expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.errors).toEqual({ categoria: "Elegí un tipo de servicio válido" });
     expect(database.transaction).not.toHaveBeenCalled();
   });
 });

@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { can } from "@/modules/auth/policy";
-import { isServiceCategory } from "@/modules/service-orders/categories";
 import { requireSession } from "@/modules/auth/session";
+import { isServiceCategory } from "@/modules/service-orders/categories";
 import {
   OrdenServicioNotFoundError,
   updateOrder,
@@ -48,7 +48,20 @@ export async function handleUpdateOrdenServicio(
       patch[field] = body[field];
     }
     if (body.appointmentAt !== undefined) {
-      patch.appointmentAt = body.appointmentAt === null ? null : new Date(body.appointmentAt);
+      if (body.appointmentAt === null) {
+        patch.appointmentAt = null;
+      } else {
+        // `new Date(garbage)` is an Invalid Date, not a throw. Beyond the 500 it
+        // used to cause, `updateOrder` compares getTime() against the current
+        // value to decide whether to reschedule reminders — NaN !== null, so an
+        // Invalid Date reads as a CHANGED appointment and would cancel a real
+        // pending reminder the moment the write stopped failing.
+        const parsed = new Date(body.appointmentAt);
+        if (Number.isNaN(parsed.getTime())) {
+          return NextResponse.json({ errors: { appointmentAt: "Fecha inválida" } }, { status: 400 });
+        }
+        patch.appointmentAt = parsed;
+      }
     }
     if (body.categoria !== undefined) {
       if (!isServiceCategory(body.categoria)) {

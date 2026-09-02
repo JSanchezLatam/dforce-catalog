@@ -148,9 +148,9 @@ export default async function ServiceOrderDetailPage({
             {field("Cita", orden.appointmentAt?.toLocaleString())}
             {field("Completada", orden.completedAt?.toLocaleString())}
             {field("Creada", orden.createdAt.toLocaleString())}
-            {field("Hallazgos", orden.hallazgos ?? "—")}
-            {field("Recomendaciones", orden.recomendaciones ?? "—")}
-            {field("Observaciones", orden.observaciones ?? "—")}
+            {field("Hallazgos", orden.hallazgos || "—")}
+            {field("Recomendaciones", orden.recomendaciones || "—")}
+            {field("Observaciones", orden.observaciones || "—")}
           </dl>
         </CardContent>
       </Card>

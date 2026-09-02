@@ -204,6 +204,28 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
   });
 
   /**
+   * GGA round 2 on PR2. `new Date("no soy una fecha")` is an Invalid Date, not
+   * a throw. It reached `.set()` and the driver rejected it — but the wider
+   * damage is `updateOrder`'s reminder logic, which compares
+   * `patch.appointmentAt?.getTime() ?? null` to decide whether to cancel and
+   * reschedule: NaN !== null, so an Invalid Date reads as a CHANGED
+   * appointment and would cancel a real pending reminder if the write landed.
+   */
+  it("rejects an unparseable appointmentAt with 400, without reaching the update", async () => {
+    const setSpy = vi.fn();
+
+    const response = await handleUpdateOrdenServicio(requestWith({ appointmentAt: "no soy una fecha" }), "o1", {
+      getById: async () => current,
+      db: { update: () => ({ set: setSpy }) } as never,
+    });
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.errors).toHaveProperty("appointmentAt");
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
+  /**
    * GGA round 1 on PR2, finding 3. Pre-existing — the hole was the same when
    * the whitelist was description/appointmentAt — but this is the PR that
    * pinned "read the body freely, drop what you don't recognise" into a tested
