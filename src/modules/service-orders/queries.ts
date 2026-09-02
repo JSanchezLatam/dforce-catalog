@@ -59,6 +59,12 @@ export async function countOrdenesServicio(
  * takes `{ offset, limit }` because its screen has a pager; this one has none,
  * so every row goes into the SSR payload. Add a limit the day a fleet vehicle
  * makes the row count matter — not before.
+ *
+ * And it is not the only ceiling on that screen: the page also calls
+ * `getClienteById`, which returns the customer's ENTIRE order history in
+ * `detail.orders` and never reads it (task 3.13). That reuse is deliberate —
+ * it is what makes the ownership 404 free — but a customer with ten vehicles
+ * pays the whole-customer history on every per-vehicle screen.
  */
 export async function listOrdenesByVehiculo(
   vehiculoId: string,
