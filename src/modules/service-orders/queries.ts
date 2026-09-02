@@ -51,7 +51,15 @@ export async function countOrdenesServicio(
   return queryFn();
 }
 
-/** C4 — one vehicle's service-order history, most-recent first (`orden_vehiculo_created_idx`). */
+/**
+ * C4 — one vehicle's service-order history, most-recent first
+ * (`orden_vehiculo_created_idx`).
+ *
+ * ponytail: unbounded on purpose. `listOrdenesServicio` three functions up
+ * takes `{ offset, limit }` because its screen has a pager; this one has none,
+ * so every row goes into the SSR payload. Add a limit the day a fleet vehicle
+ * makes the row count matter — not before.
+ */
 export async function listOrdenesByVehiculo(
   vehiculoId: string,
   queryFn: () => Promise<OrdenServicio[]> = () =>
