@@ -49,6 +49,9 @@ function toDatetimeLocal(value?: Date | string | null): string {
  * see `page.tsx`'s `PICKER_LIST_LIMIT`). POSTs to `/api/service-orders`
  * (create) or PATCHes `/api/service-orders/[id]` (edit) — tasks 5.3/5.4.
  */
+/** Error keys this form has a place to show. Anything else routes to `form`. */
+const RENDERED_ERROR_FIELDS = new Set(["clienteId", "vehiculoId", "form"]);
+
 export function ServiceOrderForm({
   products,
   order,
@@ -230,8 +233,17 @@ export function ServiceOrderForm({
 
       if (response.status === 400) {
         const body = await response.json();
+        const returned: Record<string, string> =
+          body.errors ?? { clienteId: body.error === "unknown_cliente" ? "Seleccioná un cliente válido" : body.error };
+        // Only clienteId and vehiculoId have a field to render into. A 400 keyed
+        // on anything else used to set state nobody displayed, so the dialog sat
+        // there after Guardar saying nothing. Anything unrendered falls through
+        // to the form-level slot instead of disappearing.
+        const unrendered = Object.entries(returned).filter(([field]) => !RENDERED_ERROR_FIELDS.has(field));
         setErrors(
-          body.errors ?? { clienteId: body.error === "unknown_cliente" ? "Seleccioná un cliente válido" : body.error },
+          unrendered.length > 0
+            ? { ...returned, form: unrendered.map(([, message]) => message).join(" ") }
+            : returned,
         );
         return;
       }

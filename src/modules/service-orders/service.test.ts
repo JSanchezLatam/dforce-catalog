@@ -208,7 +208,10 @@ describe("createOrder (R20)", () => {
         { getClienteById: async () => detail as never, db: database as never },
       );
       await expect(promise).rejects.toBeInstanceOf(InvalidCategoriaError);
-      await expect(promise).rejects.toMatchObject({ errors: { categoria: expect.stringMatching(/[a-záéíóúñ]/i) } });
+      // The exact copy, not a "contains a letter" regex: this assertion exists
+      // to go red the day someone ships English at the user, and /[a-z]/i would
+      // happily pass on "Invalid categoria".
+      await expect(promise).rejects.toMatchObject({ errors: { categoria: "Elegí un tipo de servicio válido" } });
       expect(database.transaction).not.toHaveBeenCalled();
     });
 
@@ -249,7 +252,7 @@ describe("createOrder (R20)", () => {
         },
       );
       await expect(promise).rejects.toBeInstanceOf(InvalidVehiculoError);
-      await expect(promise).rejects.toMatchObject({ errors: { vehiculoId: expect.stringMatching(/[a-záéíóúñ]/i) } });
+      await expect(promise).rejects.toMatchObject({ errors: { vehiculoId: "Seleccioná un vehículo válido de este cliente" } });
       expect(database.transaction).not.toHaveBeenCalled();
     });
 

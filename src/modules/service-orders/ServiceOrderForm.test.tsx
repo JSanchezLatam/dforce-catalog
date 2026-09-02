@@ -211,6 +211,37 @@ describe("ServiceOrderForm", () => {
       expect(screen.getByRole("option", { name: /AAA111/ })).toBeInTheDocument();
     });
 
+    /**
+     * GGA round 4, finding 1. `setErrors(body.errors)` renders only the keys
+     * that have a field: `clienteId` and `vehiculoId`. A 400 keyed on anything
+     * else — `categoria` today, whatever the API adds tomorrow — set state
+     * nobody displays, so the dialog just sat there after Guardar with no
+     * message at all. This pins the CLASS, not the one key.
+     */
+    it("shows an API rejection even when it names a field this form does not render", async () => {
+      fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          return Promise.resolve({
+            ok: false,
+            status: 400,
+            json: async () => ({ errors: { unfieldedKey: "Algo no cierra en el servidor" } }),
+          } as Response);
+        }
+        if (url.includes("/vehicles")) return Promise.resolve(jsonResponse({ vehicles: [vehiculoRow()] }));
+        return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
+      });
+
+      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      openDialog();
+      await selectCustomer("Cliente A");
+      fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+
+      fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+      await flush();
+
+      expect(screen.getByText("Algo no cierra en el servidor")).toBeInTheDocument();
+    });
+
     it.each([
       ["the network drops", () => Promise.reject(new Error("network down"))],
       ["the API answers 500", () => Promise.resolve({ ok: false, status: 500, json: async () => ({}) } as Response)],
