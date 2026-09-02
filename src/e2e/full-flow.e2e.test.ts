@@ -54,6 +54,7 @@ import { listCatalogsForUser } from "@/modules/catalog-storage/queries";
 import { registerPdfUploadWorker } from "@/modules/catalog-storage/upload-status";
 import { countAllProducts, listCategoryL1Options, listInventory } from "@/modules/inventory-view/queries";
 import { runSync } from "@/modules/inventory-sync/job";
+import { getClienteById } from "@/modules/customers/queries";
 import { listOrdenesByVehiculo } from "@/modules/service-orders/queries";
 import { registerPdfGenerateWorker } from "@/modules/pdf-generation/worker";
 import { proxy } from "@/proxy";
@@ -746,6 +747,31 @@ describe("vehicle search (E2E)", () => {
 
       const orders = await db.select().from(ordenServicio).where(eq(ordenServicio.vehiculoId, historyVehicleId));
       expect(orders.map((o) => o.id)).toContain(historyOrderId);
+    });
+
+    /**
+     * C4 WU3 (task 3.2), added after GGA round 3 flagged the claim as unearned.
+     * The vehicle detail page has no test file, and the two properties its
+     * docstring leans on had ZERO coverage — the e2e above calls
+     * `listOrdenesByVehiculo` directly and never touches the page, and the
+     * route-guards test only proves the string "customers.read" appears in it.
+     *
+     * This pins the DATA the page's ownership 404 rests on — mutating the
+     * `includeInactive` read to stop filtering by `clienteId` turns THIS test
+     * red and nothing else. The page's other dependency, `getClienteById`
+     * reading with `includeInactive: true`, needed no new test: the same
+     * mutation already turns two existing deactivate/restore cases red, so a
+     * third assertion would have been a second name for them.
+     */
+    it("does not hand a customer another customer's vehicle — the page's ownership 404 is this, not extra code", async () => {
+      const detail = await getClienteById(threeVehicles.id);
+      expect(detail).not.toBeNull();
+      // historyVehicleId belongs to historyCliente. The page does
+      // `detail.vehicles.find(v => v.id === vehicleId)` and calls notFound()
+      // on a miss, so /customers/<threeVehicles>/vehicles/<historyVehicleId>
+      // is a 404 precisely because this read never returns it.
+      expect(detail!.vehicles.map((v) => v.id)).not.toContain(historyVehicleId);
+      expect(detail!.vehicles.map((v) => v.id)).toEqual(expect.arrayContaining(threeVehicleIds));
     });
 
     /**
