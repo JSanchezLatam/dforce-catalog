@@ -180,6 +180,41 @@ describe("ServiceOrderForm", () => {
      * because a failed request and an empty garage rendered identically.
      */
     /**
+     * GGA round 5, finding 2. The load failure and the zero-vehicles hint are
+     * the only explanation for a disabled dropdown and a dead Guardar, and
+     * neither reached a screen reader — the adjacent field error announces,
+     * these did not. The failure is an alert; the empty garage is guidance,
+     * so it is wired to the select with aria-describedby instead.
+     */
+    it("announces the load failure, and describes the empty-garage case to the select", async () => {
+      fetchMock.mockImplementation((url: string) => {
+        if (url.includes("/vehicles")) return Promise.reject(new Error("network down"));
+        return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
+      });
+
+      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      openDialog();
+      await selectCustomer("Cliente A");
+
+      expect(screen.getByRole("alert")).toHaveTextContent(/no pudimos cargar los vehículos/i);
+    });
+
+    it("points the select at the empty-garage hint so it is not silently disabled", async () => {
+      fetchMock.mockImplementation((url: string) => {
+        if (url.includes("/vehicles")) return Promise.resolve(jsonResponse({ vehicles: [] }));
+        return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
+      });
+
+      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      openDialog();
+      await selectCustomer("Cliente A");
+
+      const hint = screen.getByText(/no tiene vehículos activos/i);
+      expect(vehicleSelect()).toHaveAttribute("aria-describedby", hint.id);
+      expect(hint.id).not.toBe("");
+    });
+
+    /**
      * GGA round 3, finding 2. The error message says "probá de nuevo" and
      * nothing in the dialog could. Re-picking the same customer is a no-op
      * (React bails on the identical value), so only closing and reopening

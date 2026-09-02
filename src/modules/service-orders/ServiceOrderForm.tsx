@@ -52,6 +52,8 @@ function toDatetimeLocal(value?: Date | string | null): string {
 /** Error keys this form has a place to show. Anything else routes to `form`. */
 const RENDERED_ERROR_FIELDS = new Set(["clienteId", "vehiculoId", "form"]);
 
+const VEHICLES_EMPTY_HINT_ID = "orden-vehiculo-empty-hint";
+
 export function ServiceOrderForm({
   products,
   order,
@@ -151,10 +153,14 @@ export function ServiceOrderForm({
   const vehicles = vehiclesSettled ? fetchedVehicles.vehicles : [];
   const vehiclesError = vehiclesSettled && fetchedVehicles.failed;
   const vehiclesLoading = !isEdit && Boolean(clienteId) && !vehiclesSettled;
+  const showVehiclesEmptyHint = Boolean(clienteId) && !vehiclesLoading && !vehiclesError && vehicles.length === 0;
 
   function handleCustomerSelect(customer: ServiceOrderCustomerOption) {
     setClienteId(customer.id);
     setVehiculoId("");
+    // A vehiculoId error from a rejected submit would otherwise stay on screen
+    // pointing at a selection that no longer exists.
+    setErrors({});
   }
 
   const filteredProducts = useMemo(() => {
@@ -301,6 +307,7 @@ export function ServiceOrderForm({
                   className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none disabled:cursor-not-allowed disabled:opacity-50"
                   value={vehiculoId}
                   disabled={!clienteId || vehiclesLoading || vehicles.length === 0}
+                  aria-describedby={showVehiclesEmptyHint ? VEHICLES_EMPTY_HINT_ID : undefined}
                   onChange={(e) => setVehiculoId(e.target.value)}
                 >
                   <option value="">Seleccioná un vehículo</option>
@@ -313,7 +320,7 @@ export function ServiceOrderForm({
                 </select>
                 {clienteId && !vehiclesLoading && vehiclesError && (
                   <div className="flex items-center gap-2">
-                    <p className="text-sm text-muted-foreground">
+                    <p role="alert" className="text-sm text-muted-foreground">
                       No pudimos cargar los vehículos de este cliente.
                     </p>
                     <Button type="button" variant="outline" size="sm" onClick={() => setVehiclesRetry((n) => n + 1)}>
@@ -321,8 +328,8 @@ export function ServiceOrderForm({
                     </Button>
                   </div>
                 )}
-                {clienteId && !vehiclesLoading && !vehiclesError && vehicles.length === 0 && (
-                  <p className="text-sm text-muted-foreground">
+                {showVehiclesEmptyHint && (
+                  <p id={VEHICLES_EMPTY_HINT_ID} className="text-sm text-muted-foreground">
                     Este cliente no tiene vehículos activos. Agregá uno primero.
                   </p>
                 )}
