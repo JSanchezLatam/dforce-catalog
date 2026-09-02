@@ -25,6 +25,18 @@ import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
 
 const CATEGORIA_OPTIONS = Object.entries(CATEGORIA_LABEL) as [ServiceCategory, string][];
 
+/**
+ * Shared by every native <select>/<textarea> in this form. `outline-none` is
+ * the load-bearing half of a pair: it defeats the global `*:focus-visible`
+ * ring in globals.css — Tailwind's utilities layer wins over base, and
+ * `.outline-none` also clears the very variable that base rule resolves its
+ * outline style from — so a control that sets it MUST bring its own ring back.
+ * `components/ui/input.tsx` does exactly this; these controls copied the first
+ * half without the second and were invisible to a keyboard user.
+ */
+const NATIVE_FIELD =
+  "w-full min-w-0 rounded-lg border border-input bg-transparent text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+
 /** = `ClienteListItem` — the route body (`GET /api/customers`) maps straight through (design.md). */
 export type ServiceOrderCustomerOption = ClienteListItem;
 export type ServiceOrderProductOption = Pick<Producto, "id" | "name" | "price">;
@@ -320,7 +332,7 @@ export function ServiceOrderForm({
                     no other reason to add the jsdom shims it needs. */}
                 <select
                   id="orden-vehiculo"
-                  className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                  className={`${NATIVE_FIELD} h-8 px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-50`}
                   value={vehiculoId}
                   disabled={!clienteId || vehiclesLoading || vehicles.length === 0}
                   aria-describedby={showVehiclesEmptyHint ? VEHICLES_EMPTY_HINT_ID : undefined}
@@ -362,7 +374,7 @@ export function ServiceOrderForm({
               {/* Native <select>, same rationale as the vehicle picker above. */}
               <select
                 id="orden-categoria"
-                className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none"
+                className={`${NATIVE_FIELD} h-8 px-2.5 py-1`}
                 value={categoria}
                 onChange={(e) => setCategoria(e.target.value as ServiceCategory)}
               >
@@ -407,7 +419,7 @@ export function ServiceOrderForm({
                   <Label htmlFor="orden-hallazgos">Hallazgos</Label>
                   <textarea
                     id="orden-hallazgos"
-                    className="min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-base outline-none"
+                    className={`${NATIVE_FIELD} min-h-16 px-2.5 py-1.5`}
                     value={hallazgos}
                     onChange={(e) => setHallazgos(e.target.value)}
                   />
@@ -416,7 +428,7 @@ export function ServiceOrderForm({
                   <Label htmlFor="orden-recomendaciones">Recomendaciones</Label>
                   <textarea
                     id="orden-recomendaciones"
-                    className="min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-base outline-none"
+                    className={`${NATIVE_FIELD} min-h-16 px-2.5 py-1.5`}
                     value={recomendaciones}
                     onChange={(e) => setRecomendaciones(e.target.value)}
                   />
@@ -425,7 +437,7 @@ export function ServiceOrderForm({
                   <Label htmlFor="orden-observaciones">Observaciones</Label>
                   <textarea
                     id="orden-observaciones"
-                    className="min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-base outline-none"
+                    className={`${NATIVE_FIELD} min-h-16 px-2.5 py-1.5`}
                     value={observaciones}
                     onChange={(e) => setObservaciones(e.target.value)}
                   />

@@ -382,6 +382,37 @@ describe("ServiceOrderForm", () => {
       expect(options).toEqual(["instalacion", "mant_preventivo", "mant_correctivo", "reparacion", "revisado"]);
     });
 
+    /**
+     * GGA round 5 on PR #58. Every native control here sets `outline-none`,
+     * which defeats the global `*:focus-visible` ring in globals.css —
+     * Tailwind's utilities layer wins over base, and `.outline-none` also
+     * clears the very variable that rule resolves its style from. The repo's
+     * own `input.tsx` always pairs the two; these did not, so four fields in
+     * the dialog this WU makes people open after every job were invisible to
+     * a keyboard user. Pins the class, not one control.
+     */
+    it("gives every native control a focus ring, since outline-none kills the global one", () => {
+      render(
+        <ServiceOrderForm
+          products={[]}
+          canCreateCustomer={false}
+          order={{ id: "o1", clienteId: "c-a", categoria: "instalacion" } as never}
+        />,
+      );
+      openEditDialog();
+
+      const controls = [
+        categorySelect(),
+        screen.getByLabelText(/hallazgos/i),
+        screen.getByLabelText(/recomendaciones/i),
+        screen.getByLabelText(/observaciones/i),
+      ];
+      for (const control of controls) {
+        expect(control.className).toContain("outline-none");
+        expect(control.className).toContain("focus-visible:ring-3");
+      }
+    });
+
     it("does not render note fields in create mode", () => {
       render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
       openDialog();
