@@ -23,9 +23,9 @@
  * than tidy: every one of the eleven call sites already holds a `Date`, and a
  * date-ONLY string like "2026-03-10" parses as UTC midnight, which this module
  * would then render as the 9th — an off-by-a-day inside the helper whose whole
- * job is stopping off-by-a-timezone. `ClienteListItem.createdAt` really does
- * cross the wire as an ISO string (follow-up 1.19), so that caller is not
- * hypothetical; the type makes it a compile error instead of a wrong date.
+ * job is stopping off-by-a-timezone. `Vehiculo.createdAt` really does cross the wire
+ * as an ISO string (follow-up 1.19), and `CustomerPicker` already re-hydrates
+ * a client-fetched date by hand, so that caller is not hypothetical; the type makes it a compile error instead of a wrong date.
  *
  * Client components are NOT automatically exempt, and the tempting shorthand
  * — "they render in the browser, which knows the user's zone" — is only true
@@ -48,7 +48,9 @@ export function formatDateTime(value: Date | null | undefined): string {
   return value.toLocaleString(WORKSHOP_LOCALE, { timeZone: WORKSHOP_TIME_ZONE });
 }
 
-export function formatDate(value: Date | null | undefined): string {
-  if (!value) return EMPTY;
+/** Takes a plain `Date`: its only caller is `catalog.createdAt`, which is NOT NULL.
+ *  Widen it the day a nullable caller exists — an untested unreachable branch is
+ *  the thing this repo keeps catching, not the thing it wants. */
+export function formatDate(value: Date): string {
   return value.toLocaleDateString(WORKSHOP_LOCALE, { timeZone: WORKSHOP_TIME_ZONE });
 }

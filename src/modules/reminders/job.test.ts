@@ -326,8 +326,12 @@ describe("runReminder — Phase 7 real provider wiring (default sendViaChannel, 
       vi.mocked(sendEmail).mockResolvedValue({ ok: true });
       const state = {
         reminder: makeReminder({ status: "scheduled", channel: "email", type: "appointment" }),
-        // 14:00Z is 09:00 in Panama. On a UTC host, an unpinned
-        // toLocaleString() renders "14:00" and the customer shows up late.
+        // 14:00Z is 09:00 in Panama. One assertion, on purpose: a
+        // `not.toContain("14:00")` would depend on the host LOCALE, which this
+        // test does not pin — on an en-US machine the unpinned call renders
+        // "2:00:00 PM" and that negative passes with the bug fully present.
+        // The positive assertion already fails on a revert; the dead one would
+        // only look like a second guard.
         orden: makeOrden({ appointmentAt: new Date("2026-07-27T14:00:00.000Z") }),
         cliente: makeCliente(),
       };
@@ -338,7 +342,6 @@ describe("runReminder — Phase 7 real provider wiring (default sendViaChannel, 
 
       const [[sent]] = vi.mocked(sendEmail).mock.calls;
       expect(sent.html).toContain("9:00");
-      expect(sent.html).not.toContain("14:00");
     } finally {
       if (REAL_TZ === undefined) delete process.env.TZ;
       else process.env.TZ = REAL_TZ;
