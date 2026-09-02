@@ -122,7 +122,14 @@ export default async function CustomerDetailPage({
                   <Link
                     key={vehiculo.id}
                     href={`/customers/${cliente.id}/vehicles/${vehiculo.id}`}
-                    className={CARD_MUTED + " flex flex-wrap items-center gap-2 transition-colors hover:bg-muted/70"}
+                    // `hover:bg-muted/70` here LIGHTENED the card: CARD_MUTED already sets
+                    // `bg-muted` at full opacity, and the hover variant wins on
+                    // specificity, resolving to muted at 70% over the page. So the
+                    // active card below darkened on hover while this one faded toward
+                    // the background — two links in one list with opposite
+                    // affordances, and the deactivated one receding exactly when the
+                    // pointer was on it. An overlay darkens both the same way.
+                    className={CARD_MUTED + " flex flex-wrap items-center gap-2 transition-colors hover:bg-muted-foreground/10"}
                   >
                     <span className={PLATE_BADGE_MUTED}>{vehiculo.plate}</span>
                     <span className="text-xs font-medium">Vehículo desactivado</span>
