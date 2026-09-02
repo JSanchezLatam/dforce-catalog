@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/shared/datetime";
 import Link from "next/link";
 import { Wrench } from "lucide-react";
 
@@ -132,7 +133,7 @@ export default async function ServiceOrdersPage({
                         <StatusBadge status={orden.status} label={STATUS_LABEL[orden.status]} />
                       </TableCell>
                       <TableCell>{orden.description ?? "—"}</TableCell>
-                      <TableCell>{orden.appointmentAt ? orden.appointmentAt.toLocaleString() : "—"}</TableCell>
+                      <TableCell>{formatDateTime(orden.appointmentAt)}</TableCell>
                       <TableCell>
                         <Link
                           href={`/service-orders/${orden.id}`}

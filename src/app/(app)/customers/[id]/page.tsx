@@ -1,3 +1,4 @@
+import { formatDateTime } from "@/shared/datetime";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ClipboardList } from "lucide-react";
@@ -178,8 +179,8 @@ export default async function CustomerDetailPage({
                       <StatusBadge status={orden.status} label={ORDER_STATUS_LABEL[orden.status]} />
                     </TableCell>
                     <TableCell>{orden.description ?? "—"}</TableCell>
-                    <TableCell>{orden.appointmentAt ? orden.appointmentAt.toLocaleString() : "—"}</TableCell>
-                    <TableCell>{orden.createdAt.toLocaleString()}</TableCell>
+                    <TableCell>{formatDateTime(orden.appointmentAt)}</TableCell>
+                    <TableCell>{formatDateTime(orden.createdAt)}</TableCell>
                     <TableCell>
                       <Link
                         href={`/service-orders/${orden.id}`}
