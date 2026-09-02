@@ -24,10 +24,6 @@ import { CustomerPicker } from "./CustomerPicker";
 import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
 
 const CATEGORIA_OPTIONS = Object.entries(CATEGORIA_LABEL) as [ServiceCategory, string][];
-// Named, not derived from the option order: what a new order gets filed as is
-// a product decision, and reordering a label map for readability should never
-// silently change it.
-const DEFAULT_CATEGORIA: ServiceCategory = "instalacion";
 
 /** = `ClienteListItem` — the route body (`GET /api/customers`) maps straight through (design.md). */
 export type ServiceOrderCustomerOption = ClienteListItem;
@@ -93,7 +89,7 @@ export function ServiceOrderForm({
     vehicles: [],
     failed: false,
   });
-  const [categoria, setCategoria] = useState<ServiceCategory>(order?.categoria ?? DEFAULT_CATEGORIA);
+  const [categoria, setCategoria] = useState<ServiceCategory | "">(order?.categoria ?? "");
   const [hallazgos, setHallazgos] = useState(order?.hallazgos ?? "");
   const [recomendaciones, setRecomendaciones] = useState(order?.recomendaciones ?? "");
   const [observaciones, setObservaciones] = useState(order?.observaciones ?? "");
@@ -184,7 +180,7 @@ export function ServiceOrderForm({
     const nextClienteId = order?.clienteId ?? selectedCustomer?.id ?? "";
     setClienteId(nextClienteId);
     setVehiculoId("");
-    setCategoria(order?.categoria ?? DEFAULT_CATEGORIA);
+    setCategoria(order?.categoria ?? "");
     setHallazgos(order?.hallazgos ?? "");
     setRecomendaciones(order?.recomendaciones ?? "");
     setObservaciones(order?.observaciones ?? "");
@@ -370,6 +366,12 @@ export function ServiceOrderForm({
                 value={categoria}
                 onChange={(e) => setCategoria(e.target.value as ServiceCategory)}
               >
+                {/* Create mode opens unfilled, like the vehicle field above.
+                    A missing category is visible — the submit is blocked. A
+                    wrong one is invisible forever, and this feature exists to
+                    make the vehicle's history true. Edit mode needs no
+                    placeholder: the order already has one. */}
+                {!isEdit && <option value="">Seleccioná un tipo de servicio</option>}
                 {CATEGORIA_OPTIONS.map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
@@ -524,7 +526,7 @@ export function ServiceOrderForm({
             <DialogClose render={<Button type="button" variant="outline" disabled={isSubmitting} />}>
               Cancelar
             </DialogClose>
-            <Button type="submit" disabled={isSubmitting || (!isEdit && !vehiculoId)}>
+            <Button type="submit" disabled={isSubmitting || (!isEdit && (!vehiculoId || !categoria))}>
               {isSubmitting ? "Guardando…" : "Guardar"}
             </Button>
           </DialogFooter>

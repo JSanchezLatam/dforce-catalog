@@ -89,6 +89,10 @@ function vehicleSelect(): HTMLSelectElement {
   return screen.getByLabelText(/vehículo/i) as HTMLSelectElement;
 }
 
+function categorySelect(): HTMLSelectElement {
+  return screen.getByLabelText(/categoría/i) as HTMLSelectElement;
+}
+
 describe("ServiceOrderForm", () => {
   // A benign default so any component that fetches on mount/open (the vehicle
   // picker's effect) never hits an undefined `fetch` in tests that don't care
@@ -163,6 +167,7 @@ describe("ServiceOrderForm", () => {
       expect(screen.getByRole("option", { name: /AAA111/ })).toBeInTheDocument();
 
       fireEvent.change(vehicleSelect(), { target: { value: "v-pre" } });
+      fireEvent.change(categorySelect(), { target: { value: "revisado" } });
       expect(screen.getByRole("button", { name: "Guardar" })).not.toBeDisabled();
     });
 
@@ -269,6 +274,7 @@ describe("ServiceOrderForm", () => {
       openDialog();
       await selectCustomer("Cliente A");
       fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+      fireEvent.change(categorySelect(), { target: { value: "revisado" } });
 
       fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
       await flush();
@@ -308,6 +314,10 @@ describe("ServiceOrderForm", () => {
       expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled();
 
       fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+      // Two gates now, not one: the category is required as well.
+      expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled();
+
+      fireEvent.change(categorySelect(), { target: { value: "revisado" } });
       expect(screen.getByRole("button", { name: "Guardar" })).not.toBeDisabled();
     });
 
@@ -359,15 +369,16 @@ describe("ServiceOrderForm", () => {
    * Editing").
    */
   describe("category + notes (C4, task 2.4)", () => {
-    function categorySelect(): HTMLSelectElement {
-      return screen.getByLabelText(/categoría/i) as HTMLSelectElement;
-    }
-
     it("offers all 5 categories in create mode, with REVISADO as a peer option, no distinct treatment", () => {
       render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
       openDialog();
 
-      const options = Array.from(categorySelect().options).map((o) => o.value);
+      // The leading "" is the placeholder create mode now opens on, not a
+      // sixth category — it is dropped before comparing so this test keeps
+      // asserting the vocabulary rather than the widget's shape.
+      const options = Array.from(categorySelect().options)
+        .map((o) => o.value)
+        .filter(Boolean);
       expect(options).toEqual(["instalacion", "mant_preventivo", "mant_correctivo", "reparacion", "revisado"]);
     });
 
@@ -405,6 +416,48 @@ describe("ServiceOrderForm", () => {
       expect(screen.getByLabelText(/hallazgos/i)).toHaveValue("Correa floja");
       expect(screen.getByLabelText(/recomendaciones/i)).toHaveValue("Ajustar tensión");
       expect(screen.getByLabelText(/observaciones/i)).toHaveValue("Revisar en 3 meses");
+    });
+
+    /**
+     * Owner decision after GGA round 3 on PR #58. The select used to open on
+     * "Instalación", so a technician who never touched it filed the order as
+     * one. A MISSING category is visible — the submit is blocked and the user
+     * picks. A WRONG one is invisible forever, and REVISADO is Panama's
+     * mandatory ATTT inspection, so a mis-filed order makes the vehicle's
+     * history lie about something with legal consequence. Same pattern the
+     * vehicle field one row above already uses.
+     */
+    it("starts create mode on a placeholder and blocks submit until a category is chosen", async () => {
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (url.includes("/vehicles")) return Promise.resolve(jsonResponse({ vehicles: [vehiculoRow()] }));
+        return Promise.resolve(jsonResponse({ orden: { id: "o1" } }));
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      openDialog();
+      await flush();
+
+      expect(categorySelect()).toHaveValue("");
+      fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+      expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled();
+
+      fireEvent.change(categorySelect(), { target: { value: "revisado" } });
+      expect(screen.getByRole("button", { name: "Guardar" })).not.toBeDisabled();
+    });
+
+    it("offers no placeholder in edit mode — the order already has a category", async () => {
+      render(
+        <ServiceOrderForm
+          products={[]}
+          canCreateCustomer={false}
+          order={{ id: "o1", clienteId: "c-a", categoria: "reparacion" } as never}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /editar orden/i }));
+
+      expect(categorySelect()).toHaveValue("reparacion");
+      expect(screen.queryByRole("option", { name: /seleccioná un tipo de servicio/i })).not.toBeInTheDocument();
     });
 
     it("includes categoria in the create-mode POST body", async () => {
