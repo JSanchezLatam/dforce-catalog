@@ -561,96 +561,96 @@ describe("ServiceOrderForm", () => {
     });
   });
 
-    /**
-     * Task 2.10 — the appointmentAt drift, found by GGA round 3 on PR #58 and
-     * reproduced in America/Panama before this fix.
-     *
-     * `toDatetimeLocal` built the input value from `toISOString()`, a UTC wall
-     * clock, and `handleSubmit` read it back with `new Date()`, which parses an
-     * offset-less date-TIME string as LOCAL. So the input showed 14:00 for an
-     * appointment stored at 14:00Z, and saving turned it into 19:00Z. Reopen,
-     * save again, 00:00Z the next day. It compounded.
-     *
-     * The TZ is pinned rather than inherited: on a UTC machine (CI) the
-     * assertion below would pass with the bug still in place.
-     */
-    describe("appointmentAt round-trip (task 2.10)", () => {
-      const REAL_TZ = process.env.TZ;
-      beforeEach(() => {
-        process.env.TZ = "America/Panama";
-      });
-      afterEach(() => {
-        // DELETE, never `= REAL_TZ`. This machine has no TZ set, so REAL_TZ is
-        // undefined, and assigning undefined to process.env stores the STRING
-        // "undefined" — which Node reads as an invalid zone and falls back to
-        // UTC. Restoring that way would leave every later test running on the
-        // exact UTC machine this describe pins the zone to avoid.
-        if (REAL_TZ === undefined) delete process.env.TZ;
-        else process.env.TZ = REAL_TZ;
-      });
+  /**
+   * Task 2.10 — the appointmentAt drift, found by GGA round 3 on PR #58 and
+   * reproduced in America/Panama before this fix.
+   *
+   * `toDatetimeLocal` built the input value from `toISOString()`, a UTC wall
+   * clock, and `handleSubmit` read it back with `new Date()`, which parses an
+   * offset-less date-TIME string as LOCAL. So the input showed 14:00 for an
+   * appointment stored at 14:00Z, and saving turned it into 19:00Z. Reopen,
+   * save again, 00:00Z the next day. It compounded.
+   *
+   * The TZ is pinned rather than inherited: on a UTC machine (CI) the
+   * assertion below would pass with the bug still in place.
+   */
+  describe("appointmentAt round-trip (task 2.10)", () => {
+    const REAL_TZ = process.env.TZ;
+    beforeEach(() => {
+      process.env.TZ = "America/Panama";
+    });
+    afterEach(() => {
+      // DELETE, never `= REAL_TZ`. This machine has no TZ set, so REAL_TZ is
+      // undefined, and assigning undefined to process.env stores the STRING
+      // "undefined" — which Node reads as an invalid zone and falls back to
+      // UTC. Restoring that way would leave every later test running on the
+      // exact UTC machine this describe pins the zone to avoid.
+      if (REAL_TZ === undefined) delete process.env.TZ;
+      else process.env.TZ = REAL_TZ;
+    });
 
-      const STORED = new Date("2026-03-10T14:00:00Z");
+    const STORED = new Date("2026-03-10T14:00:00Z");
 
-      it("shows the appointment in local wall-clock time, not UTC", () => {
-        render(
-          <ServiceOrderForm
-            products={[]}
-            canCreateCustomer={false}
-            order={{ id: "o1", clienteId: "c-a", categoria: "instalacion", appointmentAt: STORED } as never}
-          />,
-        );
-        openEditDialog();
+    it("shows the appointment in local wall-clock time, not UTC", () => {
+      render(
+        <ServiceOrderForm
+          products={[]}
+          canCreateCustomer={false}
+          order={{ id: "o1", clienteId: "c-a", categoria: "instalacion", appointmentAt: STORED } as never}
+        />,
+      );
+      openEditDialog();
 
-        // 14:00Z is 09:00 in Panama (UTC-5). The old code rendered "14:00".
-        expect(screen.getByLabelText(/cita/i)).toHaveValue("2026-03-10T09:00");
-      });
+      // 14:00Z is 09:00 in Panama (UTC-5). The old code rendered "14:00".
+      expect(screen.getByLabelText(/cita/i)).toHaveValue("2026-03-10T09:00");
+    });
 
-      it("does not send appointmentAt at all when the user never touched it", async () => {
-        const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ orden: { id: "o1" } }));
-        vi.stubGlobal("fetch", fetchMock);
+    it("does not send appointmentAt at all when the user never touched it", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ orden: { id: "o1" } }));
+      vi.stubGlobal("fetch", fetchMock);
 
-        render(
-          <ServiceOrderForm
-            products={[]}
-            canCreateCustomer={false}
-            order={{ id: "o1", clienteId: "c-a", categoria: "instalacion", appointmentAt: STORED } as never}
-          />,
-        );
-        openEditDialog();
-        fireEvent.change(screen.getByLabelText(/hallazgos/i), { target: { value: "Correa cambiada" } });
-        fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
-        await flush();
+      render(
+        <ServiceOrderForm
+          products={[]}
+          canCreateCustomer={false}
+          order={{ id: "o1", clienteId: "c-a", categoria: "instalacion", appointmentAt: STORED } as never}
+        />,
+      );
+      openEditDialog();
+      fireEvent.change(screen.getByLabelText(/hallazgos/i), { target: { value: "Correa cambiada" } });
+      fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+      await flush();
 
-        const [, init] = fetchMock.mock.calls.find(([url]) => url === "/api/service-orders/o1")!;
-        const body = JSON.parse((init as RequestInit).body as string);
-        // Omitted, not merely equal. updateOrder compares getTime() to decide
-        // whether to cancel and reschedule the customer's reminder, and the
-        // input truncates seconds — so an untouched field that still gets sent
-        // reads as a CHANGED appointment for any order stored with seconds.
-        expect(body).not.toHaveProperty("appointmentAt");
-        expect(body).toMatchObject({ hallazgos: "Correa cambiada" });
-      });
+      const [, init] = fetchMock.mock.calls.find(([url]) => url === "/api/service-orders/o1")!;
+      const body = JSON.parse((init as RequestInit).body as string);
+      // Omitted, not merely equal. updateOrder compares getTime() to decide
+      // whether to cancel and reschedule the customer's reminder, and the
+      // input truncates seconds — so an untouched field that still gets sent
+      // reads as a CHANGED appointment for any order stored with seconds.
+      expect(body).not.toHaveProperty("appointmentAt");
+      expect(body).toMatchObject({ hallazgos: "Correa cambiada" });
+    });
 
-      it("still sends appointmentAt, as the right instant, when the user does change it", async () => {
-        const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ orden: { id: "o1" } }));
-        vi.stubGlobal("fetch", fetchMock);
+    it("still sends appointmentAt, as the right instant, when the user does change it", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ orden: { id: "o1" } }));
+      vi.stubGlobal("fetch", fetchMock);
 
-        render(
-          <ServiceOrderForm
-            products={[]}
-            canCreateCustomer={false}
-            order={{ id: "o1", clienteId: "c-a", categoria: "instalacion", appointmentAt: STORED } as never}
-          />,
-        );
-        openEditDialog();
-        fireEvent.change(screen.getByLabelText(/cita/i), { target: { value: "2026-03-10T11:30" } });
-        fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
-        await flush();
+      render(
+        <ServiceOrderForm
+          products={[]}
+          canCreateCustomer={false}
+          order={{ id: "o1", clienteId: "c-a", categoria: "instalacion", appointmentAt: STORED } as never}
+        />,
+      );
+      openEditDialog();
+      fireEvent.change(screen.getByLabelText(/cita/i), { target: { value: "2026-03-10T11:30" } });
+      fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+      await flush();
 
-        const [, init] = fetchMock.mock.calls.find(([url]) => url === "/api/service-orders/o1")!;
-        const body = JSON.parse((init as RequestInit).body as string);
-        // 11:30 in Panama is 16:30Z.
-        expect(body.appointmentAt).toBe("2026-03-10T16:30:00.000Z");
-      });
+      const [, init] = fetchMock.mock.calls.find(([url]) => url === "/api/service-orders/o1")!;
+      const body = JSON.parse((init as RequestInit).body as string);
+      // 11:30 in Panama is 16:30Z.
+      expect(body.appointmentAt).toBe("2026-03-10T16:30:00.000Z");
+    });
   });
 });

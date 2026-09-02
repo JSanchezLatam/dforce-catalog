@@ -223,6 +223,20 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
    * reschedule: NaN !== null, so an Invalid Date reads as a CHANGED
    * appointment and would cancel a real pending reminder if the write landed.
    */
+  it("rejects an unparseable appointmentAt with 400, without reaching the update", async () => {
+    const setSpy = vi.fn();
+
+    const response = await handleUpdateOrdenServicio(requestWith({ appointmentAt: "no soy una fecha" }), "o1", {
+      getById: async () => current,
+      db: { update: () => ({ set: setSpy }) } as never,
+    });
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.errors).toHaveProperty("appointmentAt");
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
   /**
    * The client omitting `appointmentAt` (task 2.10) is only safe because the
    * route leaves it out of the patch, and `updateOrder` then skips the
@@ -243,18 +257,25 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
     expect(setSpy).toHaveBeenCalledWith({ hallazgos: "x" });
   });
 
-  it("rejects an unparseable appointmentAt with 400, without reaching the update", async () => {
-    const setSpy = vi.fn();
+  /**
+   * `new Date(null)` is the epoch, not an Invalid Date, so round 2's
+   * Number.isNaN guard would wave a clear straight through to a 1970 write —
+   * and, by updateOrder's getTime() comparison, cancel the customer's reminder
+   * and reschedule it there. The route checks for null BEFORE parsing, which
+   * is what makes that safe; nothing asserted it.
+   */
+  it("clears the appointment as null, never as the epoch", async () => {
+    const setSpy = vi.fn(() => ({
+      where: () => ({ returning: async () => [{ ...current.orden, appointmentAt: null }] }),
+    }));
 
-    const response = await handleUpdateOrdenServicio(requestWith({ appointmentAt: "no soy una fecha" }), "o1", {
+    const response = await handleUpdateOrdenServicio(requestWith({ appointmentAt: null }), "o1", {
       getById: async () => current,
       db: { update: () => ({ set: setSpy }) } as never,
     });
 
-    expect(response.status).toBe(400);
-    const body = await response.json();
-    expect(body.errors).toHaveProperty("appointmentAt");
-    expect(setSpy).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect(setSpy).toHaveBeenCalledWith({ appointmentAt: null });
   });
 
   /**
