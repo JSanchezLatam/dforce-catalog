@@ -493,13 +493,25 @@ describe("ServiceOrderForm", () => {
       );
       openEditDialog();
       fireEvent.change(categorySelect(), { target: { value: "reparacion" } });
+      // All three notes, not one. `toMatchObject` is non-exhaustive, so a test
+      // that changes only `hallazgos` stays green if someone drops the other
+      // two from the PATCH body — and this form is the only thing that puts
+      // them on the wire. route.test.ts covers the route's handling of all
+      // three; nothing covered the form's wiring of them.
       fireEvent.change(screen.getByLabelText(/hallazgos/i), { target: { value: "Fuga detectada" } });
+      fireEvent.change(screen.getByLabelText(/recomendaciones/i), { target: { value: "Cambiar el empaque" } });
+      fireEvent.change(screen.getByLabelText(/observaciones/i), { target: { value: "Cliente avisado" } });
       fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
       await flush();
 
       const [, init] = fetchMock.mock.calls.find(([url]) => url === "/api/service-orders/o1")!;
       const body = JSON.parse((init as RequestInit).body as string);
-      expect(body).toMatchObject({ categoria: "reparacion", hallazgos: "Fuga detectada" });
+      expect(body).toMatchObject({
+        categoria: "reparacion",
+        hallazgos: "Fuga detectada",
+        recomendaciones: "Cambiar el empaque",
+        observaciones: "Cliente avisado",
+      });
     });
   });
 });
