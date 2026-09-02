@@ -116,7 +116,9 @@ export function ServiceOrderForm({
   const [recomendaciones, setRecomendaciones] = useState(order?.recomendaciones ?? "");
   const [observaciones, setObservaciones] = useState(order?.observaciones ?? "");
   const [description, setDescription] = useState(order?.description ?? "");
-  const [appointmentAt, setAppointmentAt] = useState(toDatetimeLocal(order?.appointmentAt));
+  /** The value the field starts at — the whole omission contract hangs on it. */
+  const originalAppointmentAt = toDatetimeLocal(order?.appointmentAt);
+  const [appointmentAt, setAppointmentAt] = useState(originalAppointmentAt);
   const [searchQuery, setSearchQuery] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -207,7 +209,7 @@ export function ServiceOrderForm({
     setRecomendaciones(order?.recomendaciones ?? "");
     setObservaciones(order?.observaciones ?? "");
     setDescription(order?.description ?? "");
-    setAppointmentAt(toDatetimeLocal(order?.appointmentAt));
+    setAppointmentAt(originalAppointmentAt);
     setSearchQuery("");
     setCart([]);
     setErrors({});
@@ -255,7 +257,7 @@ export function ServiceOrderForm({
               // the customer's reminder, and this input has no seconds — so an
               // appointment stored at 14:30:45 would come back as 14:30:00 and
               // read as CHANGED on every save that never touched the field.
-              ...(appointmentAt !== toDatetimeLocal(order?.appointmentAt)
+              ...(appointmentAt !== originalAppointmentAt
                 ? { appointmentAt: appointmentAt ? new Date(appointmentAt).toISOString() : null }
                 : {}),
               categoria,

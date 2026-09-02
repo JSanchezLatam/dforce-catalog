@@ -134,6 +134,12 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
    * immutable post-creation per design.md) must never reach `updateOrder`'s
    * patch, even though the route reads `body` freely.
    */
+  // Also the pin for task 2.10's client-side contract: the form OMITS
+  // appointmentAt when untouched, and that is only safe because an absent
+  // key never reaches the patch — updateOrder then skips the reminder
+  // cancel/reschedule entirely. Asserting `.set()` was called with EXACTLY
+  // the whitelisted fields is what proves it; a separate test for the same
+  // mutation would have been a second name for this assertion.
   it("whitelists exactly description/appointmentAt/categoria/3 notes — a stray field is ignored", async () => {
     const setSpy = vi.fn(() => ({
       where: () => ({ returning: async () => [{ ...current.orden, categoria: "revisado" }] }),
@@ -235,26 +241,6 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
     const body = await response.json();
     expect(body.errors).toHaveProperty("appointmentAt");
     expect(setSpy).not.toHaveBeenCalled();
-  });
-
-  /**
-   * The client omitting `appointmentAt` (task 2.10) is only safe because the
-   * route leaves it out of the patch, and `updateOrder` then skips the
-   * reminder cancel/reschedule entirely. That behaviour is now load-bearing
-   * and rested on one unasserted `!== undefined`.
-   */
-  it("leaves appointmentAt out of the patch when the body omits it", async () => {
-    const setSpy = vi.fn(() => ({
-      where: () => ({ returning: async () => [{ ...current.orden, hallazgos: "x" }] }),
-    }));
-
-    const response = await handleUpdateOrdenServicio(requestWith({ hallazgos: "x" }), "o1", {
-      getById: async () => current,
-      db: { update: () => ({ set: setSpy }) } as never,
-    });
-
-    expect(response.status).toBe(200);
-    expect(setSpy).toHaveBeenCalledWith({ hallazgos: "x" });
   });
 
   /**
