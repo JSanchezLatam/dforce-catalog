@@ -223,6 +223,26 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
    * reschedule: NaN !== null, so an Invalid Date reads as a CHANGED
    * appointment and would cancel a real pending reminder if the write landed.
    */
+  /**
+   * The client omitting `appointmentAt` (task 2.10) is only safe because the
+   * route leaves it out of the patch, and `updateOrder` then skips the
+   * reminder cancel/reschedule entirely. That behaviour is now load-bearing
+   * and rested on one unasserted `!== undefined`.
+   */
+  it("leaves appointmentAt out of the patch when the body omits it", async () => {
+    const setSpy = vi.fn(() => ({
+      where: () => ({ returning: async () => [{ ...current.orden, hallazgos: "x" }] }),
+    }));
+
+    const response = await handleUpdateOrdenServicio(requestWith({ hallazgos: "x" }), "o1", {
+      getById: async () => current,
+      db: { update: () => ({ set: setSpy }) } as never,
+    });
+
+    expect(response.status).toBe(200);
+    expect(setSpy).toHaveBeenCalledWith({ hallazgos: "x" });
+  });
+
   it("rejects an unparseable appointmentAt with 400, without reaching the update", async () => {
     const setSpy = vi.fn();
 
