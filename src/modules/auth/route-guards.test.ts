@@ -52,6 +52,8 @@ export const ROUTE_GUARDS: Record<
   // for exactly this reason: it proves every DECLARED action is evaluated,
   // never that every evaluated action is declared.
   "/customers/[id]": { GET: "customers.read" },
+  // C4 — the vehicle detail screen (design.md D6).
+  "/customers/[id]/vehicles/[vehicleId]": { GET: "customers.read" },
   "/service-orders": { GET: "service-orders.read" },
   "/service-orders/[id]": { GET: "service-orders.read" },
   "/inventory": { GET: "inventory.read" },

@@ -51,6 +51,15 @@ export async function countOrdenesServicio(
   return queryFn();
 }
 
+/** C4 — one vehicle's service-order history, most-recent first (`orden_vehiculo_created_idx`). */
+export async function listOrdenesByVehiculo(
+  vehiculoId: string,
+  queryFn: () => Promise<OrdenServicio[]> = () =>
+    db.select().from(ordenServicio).where(eq(ordenServicio.vehiculoId, vehiculoId)).orderBy(desc(ordenServicio.createdAt)),
+): Promise<OrdenServicio[]> {
+  return queryFn();
+}
+
 /** R20 — service-order detail + its line items. */
 export async function getOrdenServicioById(
   id: string,

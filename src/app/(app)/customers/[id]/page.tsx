@@ -125,12 +125,20 @@ export default async function CustomerDetailPage({
             <div className="flex flex-col gap-3">
               {vehicles.map((vehiculo) =>
                 vehiculo.deactivatedAt ? (
-                  <div key={vehiculo.id} className={CARD_MUTED + " flex flex-wrap items-center gap-2"}>
+                  <Link
+                    key={vehiculo.id}
+                    href={`/customers/${cliente.id}/vehicles/${vehiculo.id}`}
+                    className={CARD_MUTED + " flex flex-wrap items-center gap-2 transition-colors hover:bg-muted/70"}
+                  >
                     <span className={PLATE_BADGE_MUTED}>{vehiculo.plate}</span>
                     <span className="text-xs font-medium">Vehículo desactivado</span>
-                  </div>
+                  </Link>
                 ) : (
-                  <div key={vehiculo.id} className={CARD + " flex flex-col gap-2"}>
+                  <Link
+                    key={vehiculo.id}
+                    href={`/customers/${cliente.id}/vehicles/${vehiculo.id}`}
+                    className={CARD + " flex flex-col gap-2 transition-colors hover:bg-muted/40"}
+                  >
                     <span className={PLATE_BADGE + " self-start"}>{vehiculo.plate}</span>
                     {(vehiculo.make || vehiculo.model || vehiculo.year) && (
                       <div className="flex flex-wrap gap-1.5">
@@ -139,7 +147,7 @@ export default async function CustomerDetailPage({
                         {vehiculo.year && <span className={CHIP}>{vehiculo.year}</span>}
                       </div>
                     )}
-                  </div>
+                  </Link>
                 ),
               )}
             </div>

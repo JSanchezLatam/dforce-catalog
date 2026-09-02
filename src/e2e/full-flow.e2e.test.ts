@@ -54,6 +54,7 @@ import { listCatalogsForUser } from "@/modules/catalog-storage/queries";
 import { registerPdfUploadWorker } from "@/modules/catalog-storage/upload-status";
 import { countAllProducts, listCategoryL1Options, listInventory } from "@/modules/inventory-view/queries";
 import { runSync } from "@/modules/inventory-sync/job";
+import { listOrdenesByVehiculo } from "@/modules/service-orders/queries";
 import { registerPdfGenerateWorker } from "@/modules/pdf-generation/worker";
 import { proxy } from "@/proxy";
 import { db } from "@/shared/db/client";
@@ -745,6 +746,34 @@ describe("vehicle search (E2E)", () => {
 
       const orders = await db.select().from(ordenServicio).where(eq(ordenServicio.vehiculoId, historyVehicleId));
       expect(orders.map((o) => o.id)).toContain(historyOrderId);
+    });
+
+    /**
+     * C4 WU3 (task 3.4) — `listOrdenesByVehiculo`'s `queryFn`-less default is
+     * hand-written SQL (`where(eq(vehiculoId, …))`) with no other automated
+     * coverage: `queries.test.ts` injects `queryFn` and never runs it against
+     * real Postgres. Reuses `threeVehicles` (seeded above, three vehicles on
+     * ONE customer) so a bug scoping by `clienteId` instead of `vehiculoId`
+     * would still pass — the real risk this proves against.
+     */
+    it("scopes history to one vehicle: two vehicles on the same customer, each with orders, return only the queried vehicle's rows", async () => {
+      const [firstVehicleId, secondVehicleId] = threeVehicleIds;
+      const [firstOrder] = await db
+        .insert(ordenServicio)
+        .values({ clienteId: threeVehicles.id, vehiculoId: firstVehicleId, categoria: "reparacion" })
+        .returning({ id: ordenServicio.id });
+      const [secondOrder] = await db
+        .insert(ordenServicio)
+        .values({ clienteId: threeVehicles.id, vehiculoId: secondVehicleId, categoria: "instalacion" })
+        .returning({ id: ordenServicio.id });
+
+      const firstVehicleHistory = await listOrdenesByVehiculo(firstVehicleId);
+      expect(firstVehicleHistory.map((o) => o.id)).toContain(firstOrder.id);
+      expect(firstVehicleHistory.map((o) => o.id)).not.toContain(secondOrder.id);
+
+      const secondVehicleHistory = await listOrdenesByVehiculo(secondVehicleId);
+      expect(secondVehicleHistory.map((o) => o.id)).toContain(secondOrder.id);
+      expect(secondVehicleHistory.map((o) => o.id)).not.toContain(firstOrder.id);
     });
   });
 });
