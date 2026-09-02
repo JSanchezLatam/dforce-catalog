@@ -179,9 +179,13 @@ describe("ServiceOrderForm", () => {
      * this: the visible damage is telling a customer WITH cars to go add one,
      * because a failed request and an empty garage rendered identically.
      */
-    it("does not pass a failed request off as a customer with no vehicles", async () => {
+    it.each([
+      ["the network drops", () => Promise.reject(new Error("network down"))],
+      ["the API answers 500", () => Promise.resolve({ ok: false, status: 500, json: async () => ({}) } as Response)],
+      ["the API answers 403", () => Promise.resolve({ ok: false, status: 403, json: async () => ({}) } as Response)],
+    ])("does not pass a failed request off as a customer with no vehicles when %s", async (_case, respond) => {
       fetchMock.mockImplementation((url: string) => {
-        if (url.includes("/vehicles")) return Promise.reject(new Error("network down"));
+        if (url.includes("/vehicles")) return respond();
         return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
       });
 

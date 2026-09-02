@@ -115,13 +115,20 @@ export function ServiceOrderForm({
     setVehiclesError(false);
     setVehiclesLoading(true);
     fetch(`/api/customers/${clienteId}/vehicles`)
-      .then((response) => (response.ok ? response.json() : { vehicles: [] }))
+      .then((response) => {
+        // An HTTP error is an error. Folding it into `{ vehicles: [] }` is how
+        // a 403 or a 500 used to reach the user as "this customer has no cars".
+        if (!response.ok) throw new Error(`vehicles fetch failed: ${response.status}`);
+        return response.json();
+      })
       .then((body: { vehicles: Vehiculo[] }) => {
         if (!cancelled) setVehicles(body.vehicles);
       })
       .catch(() => {
         // A failed request and an empty garage are NOT the same thing: without
-        // this the customer with three cars is told to go add one.
+        // this the customer with three cars is told to go add one. Covers both
+        // halves — a rejected fetch AND a non-ok response, which the `.then`
+        // above turns into a rejection precisely so this handler sees it.
         if (!cancelled) setVehiclesError(true);
       })
       .finally(() => {
