@@ -17,18 +17,12 @@ import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getClienteById } from "@/modules/customers/queries";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
+import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import { listOrdenesByVehiculo } from "@/modules/service-orders/queries";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
-import { CHIP, PLATE_BADGE } from "@/shared/ui/styles";
+import { CHIP, PLATE_BADGE, PLATE_BADGE_MUTED } from "@/shared/ui/styles";
 
 export const dynamic = "force-dynamic";
-
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  open: "Abierta",
-  in_progress: "En progreso",
-  done: "Completada",
-  cancelled: "Cancelada",
-};
 
 /**
  * C4/design.md D6 — nested under `customers/[id]` because `vehiculo` has no
@@ -46,7 +40,7 @@ export default async function VehicleDetailPage({
   const { id, vehicleId } = await params;
   const user = await requireSessionFromHeaders();
   if (!can(user, "customers.read")) {
-    return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
+    return <div className="p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
   }
 
   const detail = await getClienteById(id);
@@ -79,11 +73,19 @@ export default async function VehicleDetailPage({
 
       <Card className="mb-6">
         <CardHeader>
+          {/* The customer list tells active from deactivated by WEIGHT, not by a
+              caption (design.md D6) — the first question a workshop asks is
+              which of these it can work on. Task 3.3 made the muted card a
+              link, so this screen has to keep that distinction instead of
+              rendering a retired car exactly like a working one. */}
           <CardTitle className="flex flex-wrap items-center gap-2">
-            <span className={PLATE_BADGE}>{vehiculo.plate}</span>
+            <span className={vehiculo.deactivatedAt ? PLATE_BADGE_MUTED : PLATE_BADGE}>{vehiculo.plate}</span>
             {vehiculo.make && <span className={CHIP}>{vehiculo.make}</span>}
             {vehiculo.model && <span className={CHIP}>{vehiculo.model}</span>}
             {vehiculo.year && <span className={CHIP}>{vehiculo.year}</span>}
+            {vehiculo.deactivatedAt && (
+              <span className="text-sm font-normal text-muted-foreground">Vehículo desactivado</span>
+            )}
           </CardTitle>
         </CardHeader>
       </Card>

@@ -767,9 +767,25 @@ describe("vehicle search (E2E)", () => {
         .values({ clienteId: threeVehicles.id, vehiculoId: secondVehicleId, categoria: "instalacion" })
         .returning({ id: ordenServicio.id });
 
+      // A SECOND order on the first vehicle, explicitly older. With one order
+      // per vehicle the ordering is unobservable — flip `desc` to `asc` and
+      // every test in this repo stays green. This is the only place the
+      // index-backed "most-recent first" can be proven at all, because the
+      // unit test injects `queryFn` and never runs the real clause.
+      const [olderOrder] = await db
+        .insert(ordenServicio)
+        .values({
+          clienteId: threeVehicles.id,
+          vehiculoId: firstVehicleId,
+          categoria: "mant_preventivo",
+          createdAt: new Date("2020-01-01T00:00:00Z"),
+        })
+        .returning({ id: ordenServicio.id });
+
       const firstVehicleHistory = await listOrdenesByVehiculo(firstVehicleId);
       expect(firstVehicleHistory.map((o) => o.id)).toContain(firstOrder.id);
       expect(firstVehicleHistory.map((o) => o.id)).not.toContain(secondOrder.id);
+      expect(firstVehicleHistory.map((o) => o.id)).toEqual([firstOrder.id, olderOrder.id]);
 
       const secondVehicleHistory = await listOrdenesByVehiculo(secondVehicleId);
       expect(secondVehicleHistory.map((o) => o.id)).toContain(secondOrder.id);

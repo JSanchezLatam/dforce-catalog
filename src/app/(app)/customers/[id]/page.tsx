@@ -17,17 +17,11 @@ import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
 import { getClienteById } from "@/modules/customers/queries";
+import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 import { CARD, CARD_MUTED, CHIP, PLATE_BADGE, PLATE_BADGE_MUTED } from "@/shared/ui/styles";
 
 export const dynamic = "force-dynamic";
-
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  open: "Abierta",
-  in_progress: "En progreso",
-  done: "Completada",
-  cancelled: "Cancelada",
-};
 
 function field(label: string, value: unknown) {
   if (value == null || value === "") return null;
