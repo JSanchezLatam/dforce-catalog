@@ -77,6 +77,7 @@ export function ServiceOrderForm({
   const [vehiculoId, setVehiculoId] = useState("");
   const [vehicles, setVehicles] = useState<Vehiculo[]>([]);
   const [vehiclesLoading, setVehiclesLoading] = useState(false);
+  const [vehiclesError, setVehiclesError] = useState(false);
   const [description, setDescription] = useState(order?.description ?? "");
   const [appointmentAt, setAppointmentAt] = useState(toDatetimeLocal(order?.appointmentAt));
   const [searchQuery, setSearchQuery] = useState("");
@@ -85,27 +86,43 @@ export function ServiceOrderForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   /**
-   * D2 — fetches the chosen customer's ACTIVE vehicles on every `clienteId`
-   * change (never seeded alongside the customer: `ClienteListItem.plates` is
-   * plate strings with no vehicle ids). Create mode only — the vehicle is
-   * immutable post-creation, like customer and parts, so an edit-mode order
-   * never needs this list. Only the fetch lives here — clearing the previous
-   * selection/list is not something to observe after the fact, it is what
-   * changing the customer MEANS, so it happens in `handleCustomerSelect`/
-   * `resetForm` below (same convention `CatalogBuilderForm.tsx`'s category
-   * effect already established). `cancelled` guards a slow response for a
-   * customer that is no longer selected from repainting over a faster later
-   * one — the SAME-HANDLER clear is what actually prevents the stale-
-   * selection defect; this guard only prevents a stale vehicle LIST from
-   * flashing in.
+   * D2 — fetches the chosen customer's ACTIVE vehicles (never seeded
+   * alongside the customer: `ClienteListItem.plates` is plate strings with no
+   * vehicle ids). Create mode only — the vehicle is immutable post-creation,
+   * like customer and parts, so an edit-mode order never needs this list.
+   *
+   * This effect OWNS `vehicles` and `vehiclesLoading` and is the only thing
+   * that writes them. It used to share them with `handleCustomerSelect` and
+   * `resetForm`, and that is what made the pre-picked path a dead end: those
+   * two emptied the list and pinned `vehiclesLoading` true, then re-set
+   * `clienteId` to the value it already held. React bails out on an identical
+   * value, so `[clienteId, isEdit]` never changed, the effect never re-ran,
+   * and the dropdown stayed disabled with nothing on screen explaining why.
+   * Re-picking the customer already selected reached the same dead end.
+   *
+   * `open` is in the deps because opening is when the list must be fresh; it
+   * also means a closed dialog never fetches. Clearing `vehiculoId` stays in
+   * the handlers — THAT is what changing the customer means, and it is the
+   * component's state, not this effect's bookkeeping.
+   *
+   * `cancelled` guards a slow response for a customer that is no longer
+   * selected from repainting over a faster later one.
    */
   useEffect(() => {
-    if (isEdit || !clienteId) return;
+    if (isEdit || !open || !clienteId) return;
     let cancelled = false;
+    setVehicles([]);
+    setVehiclesError(false);
+    setVehiclesLoading(true);
     fetch(`/api/customers/${clienteId}/vehicles`)
       .then((response) => (response.ok ? response.json() : { vehicles: [] }))
       .then((body: { vehicles: Vehiculo[] }) => {
         if (!cancelled) setVehicles(body.vehicles);
+      })
+      .catch(() => {
+        // A failed request and an empty garage are NOT the same thing: without
+        // this the customer with three cars is told to go add one.
+        if (!cancelled) setVehiclesError(true);
       })
       .finally(() => {
         if (!cancelled) setVehiclesLoading(false);
@@ -113,13 +130,11 @@ export function ServiceOrderForm({
     return () => {
       cancelled = true;
     };
-  }, [clienteId, isEdit]);
+  }, [clienteId, isEdit, open]);
 
   function handleCustomerSelect(customer: ServiceOrderCustomerOption) {
     setClienteId(customer.id);
     setVehiculoId("");
-    setVehicles([]);
-    setVehiclesLoading(true);
   }
 
   const filteredProducts = useMemo(() => {
@@ -132,10 +147,6 @@ export function ServiceOrderForm({
     const nextClienteId = order?.clienteId ?? selectedCustomer?.id ?? "";
     setClienteId(nextClienteId);
     setVehiculoId("");
-    setVehicles([]);
-    // Mirrors `handleCustomerSelect`: a non-empty clienteId (edit mode, or a
-    // pre-picked `selectedCustomer`) means the fetch effect is about to run.
-    setVehiclesLoading(!isEdit && Boolean(nextClienteId));
     setDescription(order?.description ?? "");
     setAppointmentAt(toDatetimeLocal(order?.appointmentAt));
     setSearchQuery("");
@@ -271,7 +282,12 @@ export function ServiceOrderForm({
                     </option>
                   ))}
                 </select>
-                {clienteId && !vehiclesLoading && vehicles.length === 0 && (
+                {clienteId && !vehiclesLoading && vehiclesError && (
+                  <p className="text-sm text-muted-foreground">
+                    No pudimos cargar los vehículos de este cliente. Probá de nuevo.
+                  </p>
+                )}
+                {clienteId && !vehiclesLoading && !vehiclesError && vehicles.length === 0 && (
                   <p className="text-sm text-muted-foreground">
                     Este cliente no tiene vehículos activos. Agregá uno primero.
                   </p>
