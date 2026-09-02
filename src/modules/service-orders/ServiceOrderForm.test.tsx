@@ -589,7 +589,11 @@ describe("ServiceOrderForm", () => {
       else process.env.TZ = REAL_TZ;
     });
 
-    const STORED = new Date("2026-03-10T14:00:00Z");
+    // Non-zero SECONDS on purpose. `updateOrder` compares getTime(), and this
+    // input has no seconds field — so an appointment stored at :45 is the only
+    // case the client-side omission uniquely defends. A :00 fixture proves the
+    // mechanism but not the reason for it.
+    const STORED = new Date("2026-03-10T14:00:45Z");
 
     it("shows the appointment in local wall-clock time, not UTC", () => {
       render(
