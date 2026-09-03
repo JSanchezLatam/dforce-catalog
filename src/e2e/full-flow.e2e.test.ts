@@ -54,6 +54,8 @@ import { listCatalogsForUser } from "@/modules/catalog-storage/queries";
 import { registerPdfUploadWorker } from "@/modules/catalog-storage/upload-status";
 import { countAllProducts, listCategoryL1Options, listInventory } from "@/modules/inventory-view/queries";
 import { runSync } from "@/modules/inventory-sync/job";
+import { getClienteById } from "@/modules/customers/queries";
+import { listOrdenesByVehiculo } from "@/modules/service-orders/queries";
 import { registerPdfGenerateWorker } from "@/modules/pdf-generation/worker";
 import { proxy } from "@/proxy";
 import { db } from "@/shared/db/client";
@@ -745,6 +747,75 @@ describe("vehicle search (E2E)", () => {
 
       const orders = await db.select().from(ordenServicio).where(eq(ordenServicio.vehiculoId, historyVehicleId));
       expect(orders.map((o) => o.id)).toContain(historyOrderId);
+    });
+
+    /**
+     * C4 WU3 (task 3.2), added after GGA round 3 flagged the claim as unearned.
+     * The vehicle detail page has no test file, and the two properties its
+     * docstring leans on had ZERO coverage — the e2e above calls
+     * `listOrdenesByVehiculo` directly and never touches the page, and the
+     * route-guards test only proves the string "customers.read" appears in it.
+     *
+     * This pins the DATA the page's ownership 404 rests on — mutating the
+     * `includeInactive` read to stop filtering by `clienteId` turns THIS test
+     * red and nothing else. The page's other dependency, `getClienteById`
+     * reading with `includeInactive: true`, needed no new test: the same
+     * mutation already turns two existing deactivate/restore cases red, so a
+     * third assertion would have been a second name for them.
+     */
+    it("does not hand a customer another customer's vehicle — the page's ownership 404 is this, not extra code", async () => {
+      const detail = await getClienteById(threeVehicles.id);
+      expect(detail).not.toBeNull();
+      // historyVehicleId belongs to historyCliente. The page does
+      // `detail.vehicles.find(v => v.id === vehicleId)` and calls notFound()
+      // on a miss, so /customers/<threeVehicles>/vehicles/<historyVehicleId>
+      // is a 404 precisely because this read never returns it.
+      expect(detail!.vehicles.map((v) => v.id)).not.toContain(historyVehicleId);
+      expect(detail!.vehicles.map((v) => v.id)).toEqual(expect.arrayContaining(threeVehicleIds));
+    });
+
+    /**
+     * C4 WU3 (task 3.4) — `listOrdenesByVehiculo`'s `queryFn`-less default is
+     * hand-written SQL (`where(eq(vehiculoId, …))`) with no other automated
+     * coverage: `queries.test.ts` injects `queryFn` and never runs it against
+     * real Postgres. Reuses `threeVehicles` (seeded above, three vehicles on
+     * ONE customer) so a bug scoping by `clienteId` instead of `vehiculoId`
+     * would still pass — the real risk this proves against.
+     */
+    it("scopes history to one vehicle: two vehicles on the same customer, each with orders, return only the queried vehicle's rows", async () => {
+      const [firstVehicleId, secondVehicleId] = threeVehicleIds;
+      const [firstOrder] = await db
+        .insert(ordenServicio)
+        .values({ clienteId: threeVehicles.id, vehiculoId: firstVehicleId, categoria: "reparacion" })
+        .returning({ id: ordenServicio.id });
+      const [secondOrder] = await db
+        .insert(ordenServicio)
+        .values({ clienteId: threeVehicles.id, vehiculoId: secondVehicleId, categoria: "instalacion" })
+        .returning({ id: ordenServicio.id });
+
+      // A SECOND order on the first vehicle, explicitly older. With one order
+      // per vehicle the ordering is unobservable — flip `desc` to `asc` and
+      // every test in this repo stays green. This is the only place the
+      // index-backed "most-recent first" can be proven at all, because the
+      // unit test injects `queryFn` and never runs the real clause.
+      const [olderOrder] = await db
+        .insert(ordenServicio)
+        .values({
+          clienteId: threeVehicles.id,
+          vehiculoId: firstVehicleId,
+          categoria: "mant_preventivo",
+          createdAt: new Date("2020-01-01T00:00:00Z"),
+        })
+        .returning({ id: ordenServicio.id });
+
+      const firstVehicleHistory = await listOrdenesByVehiculo(firstVehicleId);
+      expect(firstVehicleHistory.map((o) => o.id)).toContain(firstOrder.id);
+      expect(firstVehicleHistory.map((o) => o.id)).not.toContain(secondOrder.id);
+      expect(firstVehicleHistory.map((o) => o.id)).toEqual([firstOrder.id, olderOrder.id]);
+
+      const secondVehicleHistory = await listOrdenesByVehiculo(secondVehicleId);
+      expect(secondVehicleHistory.map((o) => o.id)).toContain(secondOrder.id);
+      expect(secondVehicleHistory.map((o) => o.id)).not.toContain(firstOrder.id);
     });
   });
 });

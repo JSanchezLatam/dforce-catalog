@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import type { OrdenServicio, OrdenServicioItem } from "@/shared/db/schema";
-import { buildOrdenServicioWhere, countOrdenesServicio, getOrdenServicioById, listOrdenesServicio } from "./queries";
+import {
+  buildOrdenServicioWhere,
+  countOrdenesServicio,
+  getOrdenServicioById,
+  listOrdenesByVehiculo,
+  listOrdenesServicio,
+} from "./queries";
 
 describe("buildOrdenServicioWhere (R21)", () => {
   it("returns undefined when no status filter is given", () => {
@@ -25,6 +31,13 @@ describe("listOrdenesServicio (R21)", () => {
 describe("countOrdenesServicio (R21)", () => {
   it("returns whatever the injected queryFn resolves", async () => {
     await expect(countOrdenesServicio({}, async () => 7)).resolves.toBe(7);
+  });
+});
+
+describe("listOrdenesByVehiculo (C4)", () => {
+  it("returns whatever the injected queryFn resolves", async () => {
+    const rows = [{ id: "o1", vehiculoId: "v1" }] as unknown as OrdenServicio[];
+    await expect(listOrdenesByVehiculo("v1", async () => rows)).resolves.toEqual(rows);
   });
 });
 
