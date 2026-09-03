@@ -94,8 +94,25 @@ built `FROM mcr.microsoft.com/playwright:...`).
 
 ## Tests
 
-- `npm run test` — unit tests (Vitest). Fast, no external services; DB/queue
-  calls are faked or dependency-injected.
+- `npm run test` — unit and component tests (Vitest). No external services;
+  DB/queue calls are faked or dependency-injected.
+
+  One command, **two projects**: `node` for `*.test.ts` and `jsdom` for
+  `*.test.tsx` (component and page tests). The jsdom project is capped at
+  `maxWorkers: 2` with its own `sequence.groupOrder`, and that is load-bearing
+  rather than tuning — a component test that opens a dialog and types into a
+  controlled form re-renders on every keystroke, and enough of them in
+  parallel starve each other past any `testTimeout` you pick. Measured: the
+  uncapped suite failed 5 tests, then 1 different one; the same files run
+  isolated pass 89/89; capped, the whole suite is green run after run. The
+  `node` project keeps full parallelism. See `vitest.config.ts` for the
+  numbers and `AGENTS.md` for how to read a red run.
+
+  **Server components are testable, and there is no harness.** A page is an
+  async function returning JSX, so `render(await Page({ params:
+  Promise.resolve({...}) }))` runs it under jsdom with only the request-scoped
+  and data edges mocked — see
+  `src/app/(app)/customers/[id]/vehicles/[vehicleId]/page.test.tsx`.
 - `npm run test:e2e` — full-flow E2E (`src/e2e/full-flow.e2e.test.ts`):
   login → sync inventory → filter/view → configure template → build a
   selection → enqueue → real pg-boss processing + a real Chromium PDF
@@ -111,6 +128,16 @@ built `FROM mcr.microsoft.com/playwright:...`).
     npm run test:e2e
 
   docker rm -f dforce-e2e-pg
+  ```
+
+  Without Docker, any local Postgres does — create the throwaway database and
+  drop it afterwards. **Never reuse the dev database name**; this repo has two
+  `dforce_catalog` databases on different ports and the whole point is that
+  the e2e one is disposable:
+  ```
+  psql -d postgres -c 'CREATE DATABASE dforce_e2e'
+  DATABASE_URL=postgres://$USER@localhost:5432/dforce_e2e npm run test:e2e
+  psql -d postgres -c 'DROP DATABASE dforce_e2e'
   ```
   The only two things this suite mocks are the Interfuerza API and
   Cloudflare R2 — both genuinely external network services; everything
@@ -150,8 +177,8 @@ jobs registered once at server startup via `src/instrumentation.ts`.
 |---|---|
 | `auth` | DB-backed sessions, bcrypt password hashing, the `can(user, action)` policy seam |
 | `account` | Admin user management: create/edit, forced password change, reversible deactivation via `deactivated_at` — the convention any other soft delete copies |
-| `customers` | `cliente` CRUD, the `vehiculo` collection and its pure reconcile planner, per-vehicle validation, and the accent-insensitive search shared by the list page and the order picker |
-| `service-orders` | Service orders against a customer, status transitions, parts line-items with a price/name snapshot, and the async customer picker |
+| `customers` | `cliente` CRUD, the `vehiculo` collection and its pure reconcile planner, per-vehicle validation, the accent-insensitive search shared by the list page and the order picker, and the per-vehicle service-history screen (`customers/[id]/vehicles/[vehicleId]`) |
+| `service-orders` | Service orders against a customer **and exactly one of that customer's vehicles** (`vehiculo_id` is `NOT NULL`, `ON DELETE RESTRICT`), a five-value service category (Instalación, Mant. Preventivo, Mant. Correctivo, Reparación, REVISADO), completion notes recorded after the work (`hallazgos`/`recomendaciones`/`observaciones`, patch-only), status transitions, parts line-items with a price/name snapshot, and the async customer picker |
 | `reminders` | Appointment and service-due reminders over WhatsApp/email, with per-channel opt-out re-checked at fire time, not schedule time |
 | `workshop-config` | The workshop's own identity — name, contact, hours, socials, logo, cover image — as printed on the catalog |
 | `inventory-sync` | Interfuerza API client (rate-limited, retrying), round-trip mapper, the weekly/manual sync job |
@@ -207,3 +234,8 @@ a Playwright version bump.
 - Nothing is deployed anywhere yet. Before a first deploy the PDF queue has
   to be drained with `scripts/drain-pdf-queue.sh` — the job payload shape
   changed after those jobs were enqueued.
+- Smaller deferrals from completed changes are registered in
+  `openspec/changes/archive/README.md`, each labelled with the review round
+  that raised it. They live outside the archived change folders on purpose:
+  a follow-up buried in an archive nobody opens is the same loss as a
+  deleted one.
