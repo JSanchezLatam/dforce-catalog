@@ -17,6 +17,50 @@ specs must be applied in.
 follow-up change". Those are a deferral register, not open work: all four units
 shipped as `user-lifecycle-management`. See the note there.
 
+## Open follow-ups carried forward
+
+Archived `tasks.md` files sometimes carry unchecked boxes that are a
+deliberate deferral register, not undone implementation work. Losing a
+written follow-up inside an archived folder nobody reopens is how this
+project lost a requirement twice before; this section exists so a follow-up
+survives being found.
+
+### `service-history-per-vehicle` (C4, archived 2026-09-03)
+
+8 open follow-ups, full text at
+`archive/2026-09-03-service-history-per-vehicle/tasks.md`:
+
+- **1.18 — CLOSED 2026-09-03**, branch `fix/created-by-from-session`. Was:
+  `createOrder` took `createdBy` straight from the request body
+  (`src/modules/service-orders/service.ts:216`), so an API client could
+  attribute an order to another user — the audit trail said whatever the
+  caller wanted. Fixed at the route, which already held the session and simply
+  was not using it for this: `createOrder({ ...body, createdBy: user.id })`.
+  The spread ORDER is the fix — session after body, so a client-supplied value
+  cannot win — and it is mutation-verified: reverse the two and the test
+  reddens. Pre-existing, not introduced by C4.
+- 1.19 — `GET /api/customers/[id]/vehicles` types its response as
+  `Vehiculo[]`, but `createdAt`/`deactivatedAt` cross the wire as ISO
+  strings, not `Date`. Nothing reads them today.
+- 2.11 — `POST /api/service-orders` never got the PATCH route's text-field
+  and `appointmentAt` parse hardening; same unchecked-assignment shape PATCH
+  already closed for `description`/`appointmentAt`/`categoria`.
+- 2.12 — the `categoria` submit gate is silent: `Guardar` disables on a
+  missing `categoria` with no error slot and no `RENDERED_ERROR_FIELDS`
+  entry.
+- 3.10 — `customers/[id]/page.tsx` still renders an English
+  permission-denied string; the identical string was fixed on the sibling
+  page this change added.
+- 3.11 — the order-history table markup is now duplicated between
+  `customers/[id]/page.tsx` and `vehicles/[vehicleId]/page.tsx`; extract on
+  the third copy, not before.
+- 3.13 — the vehicle detail page runs two unbounded reads: its own history
+  query, plus `getClienteById`'s full customer order history, fetched and
+  discarded on every load.
+- 3.15 — `datetime.test.ts`'s `it.each` runs 3 redundant host-zone
+  assertions that all check the same string; trim to one the next time that
+  file is opened.
+
 ## Where the current spec actually lives
 
 There is no `openspec/specs/` baseline in this repo, and these deltas do not
