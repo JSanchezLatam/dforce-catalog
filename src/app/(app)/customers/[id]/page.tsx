@@ -18,6 +18,7 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
 import { getClienteById } from "@/modules/customers/queries";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
+import { formatDateTime } from "@/shared/datetime";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 import { CARD, CARD_MUTED, CHIP, PLATE_BADGE, PLATE_BADGE_MUTED } from "@/shared/ui/styles";
 
@@ -185,8 +186,8 @@ export default async function CustomerDetailPage({
                       <StatusBadge status={orden.status} label={ORDER_STATUS_LABEL[orden.status]} />
                     </TableCell>
                     <TableCell>{orden.description ?? "—"}</TableCell>
-                    <TableCell>{orden.appointmentAt ? orden.appointmentAt.toLocaleString() : "—"}</TableCell>
-                    <TableCell>{orden.createdAt.toLocaleString()}</TableCell>
+                    <TableCell>{formatDateTime(orden.appointmentAt)}</TableCell>
+                    <TableCell>{formatDateTime(orden.createdAt)}</TableCell>
                     <TableCell>
                       <Link
                         href={`/service-orders/${orden.id}`}

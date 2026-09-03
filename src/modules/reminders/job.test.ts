@@ -307,6 +307,47 @@ describe("runReminder — Phase 7 real provider wiring (default sendViaChannel, 
     expect(state.reminder.status).toBe("sent");
   });
 
+  /**
+   * Task 3.12. This is the only call site of `formatDateTime` that leaves the
+   * building — it is the hour the CUSTOMER reads. The helper's own test cannot
+   * cover it, because that test can't see which call sites use the helper:
+   * revert `job.ts` to a bare `toLocaleString()` and every other test in this
+   * repo stays green, which is the "mutation that does not mutate" shape task
+   * 3.9 exists to prevent.
+   *
+   * TZ is pinned to UTC on purpose — the wrong answer — and restored with
+   * `delete`, never `= REAL_TZ`: assigning undefined stores the STRING
+   * "undefined", which Node reads as an invalid zone and falls back to UTC.
+   */
+  it("tells the customer the workshop's hour, not the server's", async () => {
+    const REAL_TZ = process.env.TZ;
+    process.env.TZ = "UTC";
+    try {
+      vi.mocked(sendEmail).mockResolvedValue({ ok: true });
+      const state = {
+        reminder: makeReminder({ status: "scheduled", channel: "email", type: "appointment" }),
+        // 14:00Z is 09:00 in Panama. One assertion, on purpose: a
+        // `not.toContain("14:00")` would depend on the host LOCALE, which this
+        // test does not pin — on an en-US machine the unpinned call renders
+        // "2:00:00 PM" and that negative passes with the bug fully present.
+        // The positive assertion already fails on a revert; the dead one would
+        // only look like a second guard.
+        orden: makeOrden({ appointmentAt: new Date("2026-07-27T14:00:00.000Z") }),
+        cliente: makeCliente(),
+      };
+      const { fakeDb, refillSelectQueue } = makeFakeDb(state);
+
+      refillSelectQueue();
+      await runReminder("reminder-1", { db: fakeDb as unknown as typeof db, now: () => NOW });
+
+      const [[sent]] = vi.mocked(sendEmail).mock.calls;
+      expect(sent.html).toContain("9:00");
+    } finally {
+      if (REAL_TZ === undefined) delete process.env.TZ;
+      else process.env.TZ = REAL_TZ;
+    }
+  });
+
   it("dispatches a whatsapp-channel reminder to sendWhatsAppTemplate using the cliente's phone and the type-specific template name", async () => {
     vi.mocked(sendWhatsAppTemplate).mockReset().mockResolvedValue({ ok: true });
     const state = {

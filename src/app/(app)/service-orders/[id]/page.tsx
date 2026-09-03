@@ -20,6 +20,7 @@ import { listRemindersForOrder } from "@/modules/reminders/queries";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
 import { OrderStatusControls } from "@/modules/service-orders/OrderStatusControls";
 import { getOrdenServicioById } from "@/modules/service-orders/queries";
+import { formatDateTime } from "@/shared/datetime";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 
 export const dynamic = "force-dynamic";
@@ -145,9 +146,9 @@ export default async function ServiceOrderDetailPage({
             </div>
             {field("Categoría", CATEGORIA_LABEL[orden.categoria])}
             {field("Descripción", orden.description)}
-            {field("Cita", orden.appointmentAt?.toLocaleString())}
-            {field("Completada", orden.completedAt?.toLocaleString())}
-            {field("Creada", orden.createdAt.toLocaleString())}
+            {field("Cita", orden.appointmentAt && formatDateTime(orden.appointmentAt))}
+            {field("Completada", orden.completedAt && formatDateTime(orden.completedAt))}
+            {field("Creada", formatDateTime(orden.createdAt))}
             {field("Hallazgos", orden.hallazgos || "—")}
             {field("Recomendaciones", orden.recomendaciones || "—")}
             {field("Observaciones", orden.observaciones || "—")}
@@ -214,8 +215,8 @@ export default async function ServiceOrderDetailPage({
                     <TableCell>
                       <StatusBadge status={reminder.status} label={REMINDER_STATUS_LABEL[reminder.status]} />
                     </TableCell>
-                    <TableCell>{reminder.scheduledFor.toLocaleString()}</TableCell>
-                    <TableCell>{reminder.sentAt ? reminder.sentAt.toLocaleString() : "—"}</TableCell>
+                    <TableCell>{formatDateTime(reminder.scheduledFor)}</TableCell>
+                    <TableCell>{formatDateTime(reminder.sentAt)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

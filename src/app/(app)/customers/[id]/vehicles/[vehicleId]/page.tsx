@@ -19,6 +19,7 @@ import { getClienteById } from "@/modules/customers/queries";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import { listOrdenesByVehiculo } from "@/modules/service-orders/queries";
+import { formatDateTime } from "@/shared/datetime";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 import { CHIP, PLATE_BADGE, PLATE_BADGE_MUTED } from "@/shared/ui/styles";
 
@@ -121,8 +122,8 @@ export default async function VehicleDetailPage({
                     </TableCell>
                     <TableCell>{CATEGORIA_LABEL[orden.categoria]}</TableCell>
                     <TableCell>{orden.description ?? "—"}</TableCell>
-                    <TableCell>{orden.appointmentAt ? orden.appointmentAt.toLocaleString() : "—"}</TableCell>
-                    <TableCell>{orden.createdAt.toLocaleString()}</TableCell>
+                    <TableCell>{formatDateTime(orden.appointmentAt)}</TableCell>
+                    <TableCell>{formatDateTime(orden.createdAt)}</TableCell>
                     <TableCell>
                       <Link
                         href={`/service-orders/${orden.id}`}
