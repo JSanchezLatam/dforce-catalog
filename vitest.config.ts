@@ -75,6 +75,13 @@ export default defineConfig({
           name: "node",
           environment: "node",
           exclude: [...configDefaults.exclude, "src/e2e/**", "**/*.test.tsx"],
+          // Distinct groupOrder is REQUIRED once the two projects differ on
+          // maxWorkers ("Projects ... have different 'maxWorkers' but same
+          // 'sequence.groupOrder'"). Splitting them is the point, not a
+          // workaround: the groups run one after the other, so ~450 fast node
+          // tests at full parallelism no longer compete with jsdom for the
+          // machine while jsdom is the thing timing out.
+          sequence: { groupOrder: 0 },
         },
       },
       {
@@ -86,6 +93,37 @@ export default defineConfig({
           environment: "jsdom",
           include: ["**/*.test.tsx"],
           setupFiles: ["./vitest.setup.ts"],
+          /**
+           * The cause behind issue #54, measured 2026-09-03 rather than
+           * inferred. Two full runs on `main` failed 5 tests and then 1 — a
+           * DIFFERENT one — every failure a 15-30s timeout, never a logic
+           * error, and always from the same handful of jsdom files. Those
+           * same files run ISOLATED at 89/89, fast. The whole suite at
+           * `--maxWorkers=2` runs 1069/1069.
+           *
+           * So it is contention, not slow tests: a jsdom component test that
+           * opens a dialog and types into a controlled form re-renders on
+           * every keystroke, and enough of them in parallel starve each other
+           * past the timeout. PR #55 raised `testTimeout` to 15s, which made
+           * the cascade rare instead of impossible — that treated the
+           * symptom. This is the cause.
+           *
+           * Capped only for THIS project: the `node` project has ~450 fast
+           * tests and no reason to give up its parallelism.
+           *
+           * 2 was measured, not guessed. On this 8-CPU machine with 15 jsdom
+           * files: at 2, three consecutive runs took 35.3s / 33.8s / 34.8s. At
+           * 4 and 6 everything still passed but the spread blew out — 39s,
+           * 108s, 60s, 36s. Fewer workers is both more reliable AND faster
+           * here, because these files thrash rather than scale.
+           *
+           * The honest cost: a green run used to finish in ~12s when the
+           * stars aligned. It is ~34s now, every time. A suite that is green
+           * in 34s beats one that is green in 12s and needs a second run to
+           * find out.
+           */
+          maxWorkers: 2,
+          sequence: { groupOrder: 1 },
         },
       },
     ],

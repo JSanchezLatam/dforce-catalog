@@ -204,9 +204,21 @@ What actually gates work:
   So: **the first timeout in a file is the real failure; assertion failures
   after it in the same file are collateral.** Fix the timeout, re-run, and the
   rest usually disappear. `testTimeout` is 15s (raised from 5s in #54, with
-  the measurements in `vitest.config.ts`) — enough that this is now rare, not
-  impossible. Reproduce it deliberately with two suites at once:
+  the measurements in `vitest.config.ts`). Reproduce it deliberately with two
+  suites at once:
   `npm test > /tmp/a.txt 2>&1 & npm test > /tmp/b.txt 2>&1; wait`.
+
+  **The trigger is contention, and it is now capped.** Raising the timeout
+  treated the symptom; the cause is jsdom parallelism. Measured on `main`
+  after C4 landed: two full runs failed 5 tests and then 1 — a DIFFERENT one —
+  every failure a 15-30s timeout and never a logic error, while those same
+  files run isolated at 89/89. The jsdom project is now capped at
+  `maxWorkers: 2` with its own `sequence.groupOrder`, so it no longer competes
+  with the ~450 node tests. Three consecutive runs at 35.3s / 33.8s / 34.8s,
+  all green. Raising the cap to 4 or 6 still passes but the spread blows out
+  (39s, 108s, 60s, 36s) — these files thrash rather than scale. A green run
+  costs ~34s now instead of ~12s on a lucky day, which is the right trade: a
+  run you can trust beats a fast one you have to repeat.
 - Substantial changes go through the gentle-ai review flow
   (`gentle-ai review status --contract gentle-ai.review-integration/v2
   --agent <runtime> --next-transition`), which selects lenses by risk and
