@@ -43,12 +43,22 @@ export type ServiceOrderProductOption = Pick<Producto, "id" | "name" | "price">;
 
 type CartLine = { productoId: string; productName: string; unitPrice: number | null; quantity: number };
 
-/** `datetime-local` needs `YYYY-MM-DDTHH:mm`, no timezone suffix. */
+/**
+ * `datetime-local` needs `YYYY-MM-DDTHH:mm` with no timezone suffix — and the
+ * browser reads that as LOCAL time. Built from local getters for exactly that
+ * reason. It used to be `toISOString().slice(0, 16)`, a UTC wall clock, while
+ * `handleSubmit` parsed the same string back with `new Date()`, which per
+ * ECMAScript treats an offset-less date-TIME string as local (date-ONLY strings
+ * are UTC — that asymmetry is the trap). The two halves disagreed by the UTC
+ * offset, so every save shifted the appointment and the shifts compounded:
+ * in Panama, 14:00Z → 19:00Z → 00:00Z the next day (task 2.10).
+ */
 function toDatetimeLocal(value?: Date | string | null): string {
   if (!value) return "";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 16);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 /**
@@ -106,7 +116,9 @@ export function ServiceOrderForm({
   const [recomendaciones, setRecomendaciones] = useState(order?.recomendaciones ?? "");
   const [observaciones, setObservaciones] = useState(order?.observaciones ?? "");
   const [description, setDescription] = useState(order?.description ?? "");
-  const [appointmentAt, setAppointmentAt] = useState(toDatetimeLocal(order?.appointmentAt));
+  /** The value the field starts at — the whole omission contract hangs on it. */
+  const originalAppointmentAt = toDatetimeLocal(order?.appointmentAt);
+  const [appointmentAt, setAppointmentAt] = useState(originalAppointmentAt);
   const [searchQuery, setSearchQuery] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -197,7 +209,7 @@ export function ServiceOrderForm({
     setRecomendaciones(order?.recomendaciones ?? "");
     setObservaciones(order?.observaciones ?? "");
     setDescription(order?.description ?? "");
-    setAppointmentAt(toDatetimeLocal(order?.appointmentAt));
+    setAppointmentAt(originalAppointmentAt);
     setSearchQuery("");
     setCart([]);
     setErrors({});
@@ -240,7 +252,14 @@ export function ServiceOrderForm({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               description: description.trim() || null,
-              appointmentAt: appointmentAt ? new Date(appointmentAt).toISOString() : null,
+              // Omitted when untouched, not sent-as-equal. `updateOrder`
+              // compares getTime() to decide whether to cancel and reschedule
+              // the customer's reminder, and this input has no seconds — so an
+              // appointment stored at 14:30:45 would come back as 14:30:00 and
+              // read as CHANGED on every save that never touched the field.
+              ...(appointmentAt !== originalAppointmentAt
+                ? { appointmentAt: appointmentAt ? new Date(appointmentAt).toISOString() : null }
+                : {}),
               categoria,
               hallazgos: hallazgos.trim() || null,
               recomendaciones: recomendaciones.trim() || null,

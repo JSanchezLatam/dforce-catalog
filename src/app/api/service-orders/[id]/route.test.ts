@@ -134,6 +134,12 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
    * immutable post-creation per design.md) must never reach `updateOrder`'s
    * patch, even though the route reads `body` freely.
    */
+  // Also the pin for task 2.10's client-side contract: the form OMITS
+  // appointmentAt when untouched, and that is only safe because an absent
+  // key never reaches the patch — updateOrder then skips the reminder
+  // cancel/reschedule entirely. Asserting `.set()` was called with EXACTLY
+  // the whitelisted fields is what proves it; a separate test for the same
+  // mutation would have been a second name for this assertion.
   it("whitelists exactly description/appointmentAt/categoria/3 notes — a stray field is ignored", async () => {
     const setSpy = vi.fn(() => ({
       where: () => ({ returning: async () => [{ ...current.orden, categoria: "revisado" }] }),
@@ -235,6 +241,27 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
     const body = await response.json();
     expect(body.errors).toHaveProperty("appointmentAt");
     expect(setSpy).not.toHaveBeenCalled();
+  });
+
+  /**
+   * `new Date(null)` is the epoch, not an Invalid Date, so round 2's
+   * Number.isNaN guard would wave a clear straight through to a 1970 write —
+   * and, by updateOrder's getTime() comparison, cancel the customer's reminder
+   * and reschedule it there. The route checks for null BEFORE parsing, which
+   * is what makes that safe; nothing asserted it.
+   */
+  it("clears the appointment as null, never as the epoch", async () => {
+    const setSpy = vi.fn(() => ({
+      where: () => ({ returning: async () => [{ ...current.orden, appointmentAt: null }] }),
+    }));
+
+    const response = await handleUpdateOrdenServicio(requestWith({ appointmentAt: null }), "o1", {
+      getById: async () => current,
+      db: { update: () => ({ set: setSpy }) } as never,
+    });
+
+    expect(response.status).toBe(200);
+    expect(setSpy).toHaveBeenCalledWith({ appointmentAt: null });
   });
 
   /**
