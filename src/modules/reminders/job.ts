@@ -15,6 +15,7 @@
 import { and, eq } from "drizzle-orm";
 import type { PgBoss } from "pg-boss";
 
+import { formatDateTime } from "@/shared/datetime";
 import { env } from "@/shared/config/env";
 import { db } from "@/shared/db/client";
 import { cliente, ordenServicio, reminder, type Cliente, type OrdenServicio, type Reminder } from "@/shared/db/schema";
@@ -117,7 +118,7 @@ function emailSubject(ctx: ReminderContext): string {
 
 function emailHtml(ctx: ReminderContext): string {
   if (ctx.reminder.type === "appointment") {
-    const when = ctx.orden.appointmentAt ? ctx.orden.appointmentAt.toLocaleString() : "próximamente";
+    const when = ctx.orden.appointmentAt ? formatDateTime(ctx.orden.appointmentAt) : "próximamente";
     return `<p>Hola ${ctx.cliente.name},</p><p>Te recordamos tu cita de servicio programada para ${when}.</p>`;
   }
   return `<p>Hola ${ctx.cliente.name},</p><p>Ya pasaron 90 días desde tu último servicio — es un buen momento para agendar el próximo mantenimiento.</p>`;

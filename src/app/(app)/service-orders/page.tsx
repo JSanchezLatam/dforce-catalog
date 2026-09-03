@@ -8,6 +8,7 @@ import { ServiceOrderFilters } from "@/modules/service-orders/ServiceOrderFilter
 import { ServiceOrderFormTrigger } from "@/modules/service-orders/ServiceOrderFormTrigger";
 import { countOrdenesServicio, listOrdenesServicio, type OrdenServicioFilters } from "@/modules/service-orders/queries";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
+import { formatDateTime } from "@/shared/datetime";
 import { Pagination } from "@/shared/ui/Pagination";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 import { PAGE_HEADING } from "@/shared/ui/styles";
@@ -132,7 +133,7 @@ export default async function ServiceOrdersPage({
                         <StatusBadge status={orden.status} label={STATUS_LABEL[orden.status]} />
                       </TableCell>
                       <TableCell>{orden.description ?? "—"}</TableCell>
-                      <TableCell>{orden.appointmentAt ? orden.appointmentAt.toLocaleString() : "—"}</TableCell>
+                      <TableCell>{formatDateTime(orden.appointmentAt)}</TableCell>
                       <TableCell>
                         <Link
                           href={`/service-orders/${orden.id}`}

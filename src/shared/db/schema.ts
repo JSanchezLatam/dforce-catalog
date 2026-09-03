@@ -220,6 +220,22 @@ export type Catalog = typeof catalogs.$inferSelect;
  * restrict, ADR-7 line-item snapshot, ADR-8 retry idempotency).
  */
 export const orderStatusEnum = pgEnum("order_status", ["open", "in_progress", "done", "cancelled"]);
+/**
+ * `orden_categoria` — service type vocabulary (C4, design.md D3). Unaccented
+ * Spanish slugs, same convention `roleEnum` already established
+ * (`"tecnico"`, not `"técnico"`). REVISADO is Panama's mandatory annual ATTT
+ * technical inspection, modeled as a peer service type, not a status — it is
+ * independent of `orderStatusEnum`. Append-only once real orders exist:
+ * renaming/removing a value needs a hand-written migration (drizzle-kit
+ * cannot infer an enum-value rename, precedent: `roleEnum`'s rename).
+ */
+export const ordenCategoriaEnum = pgEnum("orden_categoria", [
+  "instalacion",
+  "mant_preventivo",
+  "mant_correctivo",
+  "reparacion",
+  "revisado",
+]);
 export const reminderTypeEnum = pgEnum("reminder_type", ["service_due", "appointment"]);
 export const reminderChannelEnum = pgEnum("reminder_channel", ["email", "whatsapp"]);
 export const reminderStatusEnum = pgEnum("reminder_status", [
@@ -314,7 +330,12 @@ export const vehiculo = pgTable(
 
 export type Vehiculo = typeof vehiculo.$inferSelect;
 
-/** `orden_servicio` — service order. */
+/**
+ * `orden_servicio` — service order. `vehiculoId`/`categoria`/the three note
+ * columns land in C4 (design.md D5, migration `0015`) — added once `orden_servicio`
+ * held 0 rows, which is why `vehiculoId`/`categoria` can be NOT NULL with no
+ * backfill.
+ */
 export const ordenServicio = pgTable(
   "orden_servicio",
   {
@@ -324,10 +345,23 @@ export const ordenServicio = pgTable(
     clienteId: text("cliente_id")
       .notNull()
       .references(() => cliente.id, { onDelete: "restrict" }), // protect history (ADR-6)
+    // C4 — every order names exactly one vehicle of its customer's; RESTRICT
+    // is the backstop, `customers/vehicles.ts#applyVehiculoPlan`'s SEAM is
+    // what turns a blocked delete into Spanish copy instead of a raw 500.
+    vehiculoId: text("vehiculo_id")
+      .notNull()
+      .references(() => vehiculo.id, { onDelete: "restrict" }),
     status: orderStatusEnum("status").notNull().default("open"),
+    // C4 — no default: silently mis-filing an order under a guessed category
+    // is worse than forcing staff to choose one (design.md D5).
+    categoria: ordenCategoriaEnum("categoria").notNull(),
     description: text("description"),
     appointmentAt: timestamp("appointment_at", { withTimezone: true }), // basis for "appointment" reminders
     completedAt: timestamp("completed_at", { withTimezone: true }), // set on -> done; basis for "service_due"
+    // C4 — technician findings, written only at completion (never at creation).
+    hallazgos: text("hallazgos"),
+    recomendaciones: text("recomendaciones"),
+    observaciones: text("observaciones"),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -336,6 +370,9 @@ export const ordenServicio = pgTable(
     // per-customer history, mirrors catalogs_user_created_idx
     index("orden_cliente_created_idx").on(table.clienteId, table.createdAt),
     index("orden_status_idx").on(table.status),
+    // C4 — per-vehicle history (WU3's listOrdenesByVehiculo), the SEAM's
+    // inArray check, and ON DELETE RESTRICT's per-delete referencing scan.
+    index("orden_vehiculo_created_idx").on(table.vehiculoId, table.createdAt),
   ],
 );
 

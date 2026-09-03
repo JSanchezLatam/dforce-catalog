@@ -2,6 +2,7 @@
 
 import { Eye, Download, Printer } from "lucide-react";
 
+import { formatDate } from "@/shared/datetime";
 import type { Catalog } from "@/shared/db/schema";
 import { StatusBadge, type BadgeStatus } from "@/shared/ui/StatusBadge";
 import { Badge } from "@/components/ui/badge";
@@ -55,7 +56,7 @@ function CatalogCard({ catalog, gradient }: { catalog: Catalog; gradient: string
       </div>
       <CardContent className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-muted-foreground">{catalog.createdAt.toLocaleDateString()}</span>
+          <span className="text-xs text-muted-foreground">{formatDate(catalog.createdAt)}</span>
           <StatusBadge status={catalog.uploadStatus as BadgeStatus} label={statusLabel(catalog.uploadStatus)} />
         </div>
 

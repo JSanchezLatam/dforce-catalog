@@ -54,10 +54,12 @@ import { listCatalogsForUser } from "@/modules/catalog-storage/queries";
 import { registerPdfUploadWorker } from "@/modules/catalog-storage/upload-status";
 import { countAllProducts, listCategoryL1Options, listInventory } from "@/modules/inventory-view/queries";
 import { runSync } from "@/modules/inventory-sync/job";
+import { getClienteById } from "@/modules/customers/queries";
+import { listOrdenesByVehiculo } from "@/modules/service-orders/queries";
 import { registerPdfGenerateWorker } from "@/modules/pdf-generation/worker";
 import { proxy } from "@/proxy";
 import { db } from "@/shared/db/client";
-import { cliente, users, vehiculo } from "@/shared/db/schema";
+import { cliente, ordenServicio, users, vehiculo } from "@/shared/db/schema";
 import { getBoss } from "@/shared/jobs/boss";
 
 import { POST as loginPOST } from "../app/api/login/route";
@@ -270,6 +272,15 @@ describe("vehicle search (E2E)", () => {
   let collectionPatch: { id: string } | undefined;
   let collectionRoundTrip: { id: string } | undefined;
   let collectionDelete: { id: string } | undefined;
+  /**
+   * C4 — one customer with one vehicle that has real service history, for the
+   * NOT NULL/FK/RESTRICT/SEAM proofs below. `historyOrderId` is what makes the
+   * SEAM's check find a blocking row and what makes RESTRICT bite on a raw
+   * vehicle delete.
+   */
+  let historyCliente: { id: string };
+  let historyVehicleId: string;
+  let historyOrderId: string;
 
   beforeAll(async () => {
     execSync("npx drizzle-kit migrate", { stdio: "inherit" });
@@ -296,6 +307,24 @@ describe("vehicle search (E2E)", () => {
       ])
       .returning({ id: vehiculo.id });
     threeVehicleIds = seededVehicles.slice(0, 3).map((v) => v.id);
+
+    const [historyClienteRow] = await db
+      .insert(cliente)
+      .values({ name: "Marcos Peña", phone: "50761313131" })
+      .returning({ id: cliente.id });
+    historyCliente = historyClienteRow;
+    const [historyVehiculoRow] = await db
+      .insert(vehiculo)
+      .values({ clienteId: historyCliente.id, plate: "HIS001" })
+      .returning({ id: vehiculo.id });
+    historyVehicleId = historyVehiculoRow.id;
+    // Real orden_servicio insert (full column round trip) — proves the whole
+    // migration 0015 shape (vehiculoId FK + categoria NOT NULL) as a byproduct.
+    const [historyOrderRow] = await db
+      .insert(ordenServicio)
+      .values({ clienteId: historyCliente.id, vehiculoId: historyVehicleId, categoria: "revisado" })
+      .returning({ id: ordenServicio.id });
+    historyOrderId = historyOrderRow.id;
   }, 60_000);
 
   afterAll(async () => {
@@ -308,10 +337,16 @@ describe("vehicle search (E2E)", () => {
       collectionPatch?.id,
       collectionRoundTrip?.id,
       collectionDelete?.id,
+      historyCliente?.id,
     ].filter(
       (id): id is string => Boolean(id),
     );
-    if (seeded.length > 0) await db.delete(cliente).where(inArray(cliente.id, seeded));
+    if (seeded.length === 0) return;
+    // `ordenServicio.clienteId` is RESTRICT (ADR-6, protect history) — the
+    // cliente delete below would itself be blocked by the very constraint
+    // this describe exists to prove, unless the order row goes first.
+    await db.delete(ordenServicio).where(inArray(ordenServicio.clienteId, seeded));
+    await db.delete(cliente).where(inArray(cliente.id, seeded));
   });
 
   const headers = { "x-user-id": "e2e-vehicle-search", "x-user-role": "tecnico" };
@@ -628,6 +663,160 @@ describe("vehicle search (E2E)", () => {
     );
     const afterSecond = await readRows();
     expect(afterSecond.map((v) => v.plate)).toEqual(["DEL003"]);
+  });
+
+  /**
+   * C4 (service-history-per-vehicle, WU1 task 1.14) — the FK/NOT NULL/RESTRICT/
+   * SEAM behaviour AGENTS.md's known coverage limit says no unit test can
+   * prove: `service.test.ts`/`vehicles.test.ts` both inject their seam, so a
+   * green `npm test` proves zero coverage of the real constraints migration
+   * `0015` added. These raw `db.insert`/`db.delete` calls deliberately bypass
+   * `createOrder`'s app-level ownership check — the point is the DATABASE
+   * constraint, not the validation layer already proven in service.test.ts.
+   */
+  describe("service history per vehicle — NOT NULL, FK, RESTRICT, and the SEAM (C4, real Postgres)", () => {
+    /**
+     * Asserts the SQLSTATE, not the message text. Drizzle wraps the driver
+     * error in its own `Failed query: ...` string, so matching on the outer
+     * message fails — and loosening the matcher until it passes would make
+     * these assert "the insert failed somehow", which every one of them would
+     * satisfy for the wrong reason. The code names the exact constraint:
+     * 23502 not_null_violation, 23503 foreign_key_violation.
+     */
+    async function rejectsWithSqlState(operation: Promise<unknown>, sqlState: string, constraint?: string) {
+      const error = await operation.then(
+        () => null,
+        (err: unknown) => err,
+      );
+      expect(error, "expected the database to reject this, but it succeeded").not.toBeNull();
+      const cause = (error as { cause?: { code?: string; constraint?: string } }).cause;
+      expect(cause?.code).toBe(sqlState);
+      if (constraint) expect(cause?.constraint).toBe(constraint);
+    }
+
+    it("rejects an orden_servicio insert with no vehiculoId — real NOT NULL", async () => {
+      await rejectsWithSqlState(
+        db.insert(ordenServicio).values({ clienteId: historyCliente.id, categoria: "revisado" } as never),
+        "23502",
+      );
+    });
+
+    it("rejects an orden_servicio insert with a nonexistent vehiculoId — real FK", async () => {
+      await rejectsWithSqlState(
+        db.insert(ordenServicio).values({
+          clienteId: historyCliente.id,
+          vehiculoId: "00000000-0000-0000-0000-000000000000",
+          categoria: "revisado",
+        }),
+        "23503",
+        "orden_servicio_vehiculo_id_vehiculo_id_fk",
+      );
+    });
+
+    it("RESTRICT blocks a raw vehicle delete while an order still references it — the SEAM's backstop", async () => {
+      // Names the constraint: this must fail because of the ORDER's FK, not
+      // some other one the row happens to participate in.
+      await rejectsWithSqlState(
+        db.delete(vehiculo).where(eq(vehiculo.id, historyVehicleId)),
+        "23503",
+        "orden_servicio_vehiculo_id_vehiculo_id_fk",
+      );
+      const rows = await db.select().from(vehiculo).where(eq(vehiculo.id, historyVehicleId));
+      expect(rows).toHaveLength(1);
+    });
+
+    it("SEAM: refuses permanent deletion of a vehicle with service-order history — Spanish 400, row survives", async () => {
+      const response = await patchVehiclesRaw(historyCliente.id, [{ id: historyVehicleId, deleted: true }], "administrador");
+      expect(response.status).toBe(400);
+      const body = await response.json();
+      expect(body.errors).toHaveProperty("vehicles");
+
+      const rows = await db.select().from(vehiculo).where(eq(vehiculo.id, historyVehicleId));
+      expect(rows).toHaveLength(1);
+      expect(rows[0].deactivatedAt).toBeNull();
+    });
+
+    it("asymmetry: deactivating that SAME vehicle still succeeds — 200, row survives, history stays queryable", async () => {
+      // Omitting historyVehicleId from the payload deactivates it (D5) —
+      // historyCliente has exactly one vehicle, so `vehicles: []` targets it.
+      await patchVehicles(historyCliente.id, []);
+
+      const rows = await db.select().from(vehiculo).where(eq(vehiculo.id, historyVehicleId));
+      expect(rows).toHaveLength(1);
+      expect(rows[0].deactivatedAt).not.toBeNull();
+
+      const orders = await db.select().from(ordenServicio).where(eq(ordenServicio.vehiculoId, historyVehicleId));
+      expect(orders.map((o) => o.id)).toContain(historyOrderId);
+    });
+
+    /**
+     * C4 WU3 (task 3.2), added after GGA round 3 flagged the claim as unearned.
+     * The vehicle detail page has no test file, and the two properties its
+     * docstring leans on had ZERO coverage — the e2e above calls
+     * `listOrdenesByVehiculo` directly and never touches the page, and the
+     * route-guards test only proves the string "customers.read" appears in it.
+     *
+     * This pins the DATA the page's ownership 404 rests on — mutating the
+     * `includeInactive` read to stop filtering by `clienteId` turns THIS test
+     * red and nothing else. The page's other dependency, `getClienteById`
+     * reading with `includeInactive: true`, needed no new test: the same
+     * mutation already turns two existing deactivate/restore cases red, so a
+     * third assertion would have been a second name for them.
+     */
+    it("does not hand a customer another customer's vehicle — the page's ownership 404 is this, not extra code", async () => {
+      const detail = await getClienteById(threeVehicles.id);
+      expect(detail).not.toBeNull();
+      // historyVehicleId belongs to historyCliente. The page does
+      // `detail.vehicles.find(v => v.id === vehicleId)` and calls notFound()
+      // on a miss, so /customers/<threeVehicles>/vehicles/<historyVehicleId>
+      // is a 404 precisely because this read never returns it.
+      expect(detail!.vehicles.map((v) => v.id)).not.toContain(historyVehicleId);
+      expect(detail!.vehicles.map((v) => v.id)).toEqual(expect.arrayContaining(threeVehicleIds));
+    });
+
+    /**
+     * C4 WU3 (task 3.4) — `listOrdenesByVehiculo`'s `queryFn`-less default is
+     * hand-written SQL (`where(eq(vehiculoId, …))`) with no other automated
+     * coverage: `queries.test.ts` injects `queryFn` and never runs it against
+     * real Postgres. Reuses `threeVehicles` (seeded above, three vehicles on
+     * ONE customer) so a bug scoping by `clienteId` instead of `vehiculoId`
+     * would still pass — the real risk this proves against.
+     */
+    it("scopes history to one vehicle: two vehicles on the same customer, each with orders, return only the queried vehicle's rows", async () => {
+      const [firstVehicleId, secondVehicleId] = threeVehicleIds;
+      const [firstOrder] = await db
+        .insert(ordenServicio)
+        .values({ clienteId: threeVehicles.id, vehiculoId: firstVehicleId, categoria: "reparacion" })
+        .returning({ id: ordenServicio.id });
+      const [secondOrder] = await db
+        .insert(ordenServicio)
+        .values({ clienteId: threeVehicles.id, vehiculoId: secondVehicleId, categoria: "instalacion" })
+        .returning({ id: ordenServicio.id });
+
+      // A SECOND order on the first vehicle, explicitly older. With one order
+      // per vehicle the ordering is unobservable — flip `desc` to `asc` and
+      // every test in this repo stays green. This is the only place the
+      // index-backed "most-recent first" can be proven at all, because the
+      // unit test injects `queryFn` and never runs the real clause.
+      const [olderOrder] = await db
+        .insert(ordenServicio)
+        .values({
+          clienteId: threeVehicles.id,
+          vehiculoId: firstVehicleId,
+          categoria: "mant_preventivo",
+          createdAt: new Date("2020-01-01T00:00:00Z"),
+        })
+        .returning({ id: ordenServicio.id });
+
+      const firstVehicleHistory = await listOrdenesByVehiculo(firstVehicleId);
+      expect(firstVehicleHistory.map((o) => o.id)).toContain(firstOrder.id);
+      expect(firstVehicleHistory.map((o) => o.id)).not.toContain(secondOrder.id);
+      expect(firstVehicleHistory.map((o) => o.id)).toEqual([firstOrder.id, olderOrder.id]);
+
+      const secondVehicleHistory = await listOrdenesByVehiculo(secondVehicleId);
+      expect(secondVehicleHistory.map((o) => o.id)).toContain(secondOrder.id);
+      expect(secondVehicleHistory.map((o) => o.id)).not.toContain(firstOrder.id);
+    });
   });
 });
 

@@ -17,17 +17,12 @@ import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
 import { getClienteById } from "@/modules/customers/queries";
+import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
+import { formatDateTime } from "@/shared/datetime";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 import { CARD, CARD_MUTED, CHIP, PLATE_BADGE, PLATE_BADGE_MUTED } from "@/shared/ui/styles";
 
 export const dynamic = "force-dynamic";
-
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  open: "Abierta",
-  in_progress: "En progreso",
-  done: "Completada",
-  cancelled: "Cancelada",
-};
 
 function field(label: string, value: unknown) {
   if (value == null || value === "") return null;
@@ -125,12 +120,27 @@ export default async function CustomerDetailPage({
             <div className="flex flex-col gap-3">
               {vehicles.map((vehiculo) =>
                 vehiculo.deactivatedAt ? (
-                  <div key={vehiculo.id} className={CARD_MUTED + " flex flex-wrap items-center gap-2"}>
+                  <Link
+                    key={vehiculo.id}
+                    href={`/customers/${cliente.id}/vehicles/${vehiculo.id}`}
+                    // `hover:bg-muted/70` here LIGHTENED the card: CARD_MUTED already sets
+                    // `bg-muted` at full opacity, and the hover variant wins on
+                    // specificity, resolving to muted at 70% over the page. So the
+                    // active card below darkened on hover while this one faded toward
+                    // the background — two links in one list with opposite
+                    // affordances, and the deactivated one receding exactly when the
+                    // pointer was on it. An overlay darkens both the same way.
+                    className={CARD_MUTED + " flex flex-wrap items-center gap-2 transition-colors hover:bg-muted-foreground/10"}
+                  >
                     <span className={PLATE_BADGE_MUTED}>{vehiculo.plate}</span>
                     <span className="text-xs font-medium">Vehículo desactivado</span>
-                  </div>
+                  </Link>
                 ) : (
-                  <div key={vehiculo.id} className={CARD + " flex flex-col gap-2"}>
+                  <Link
+                    key={vehiculo.id}
+                    href={`/customers/${cliente.id}/vehicles/${vehiculo.id}`}
+                    className={CARD + " flex flex-col gap-2 transition-colors hover:bg-muted/40"}
+                  >
                     <span className={PLATE_BADGE + " self-start"}>{vehiculo.plate}</span>
                     {(vehiculo.make || vehiculo.model || vehiculo.year) && (
                       <div className="flex flex-wrap gap-1.5">
@@ -139,7 +149,7 @@ export default async function CustomerDetailPage({
                         {vehiculo.year && <span className={CHIP}>{vehiculo.year}</span>}
                       </div>
                     )}
-                  </div>
+                  </Link>
                 ),
               )}
             </div>
@@ -176,8 +186,8 @@ export default async function CustomerDetailPage({
                       <StatusBadge status={orden.status} label={ORDER_STATUS_LABEL[orden.status]} />
                     </TableCell>
                     <TableCell>{orden.description ?? "—"}</TableCell>
-                    <TableCell>{orden.appointmentAt ? orden.appointmentAt.toLocaleString() : "—"}</TableCell>
-                    <TableCell>{orden.createdAt.toLocaleString()}</TableCell>
+                    <TableCell>{formatDateTime(orden.appointmentAt)}</TableCell>
+                    <TableCell>{formatDateTime(orden.createdAt)}</TableCell>
                     <TableCell>
                       <Link
                         href={`/service-orders/${orden.id}`}

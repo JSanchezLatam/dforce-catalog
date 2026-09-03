@@ -32,6 +32,8 @@ export const ROUTE_GUARDS: Record<
   "/api/logout": { POST: "session-only" },
   "/api/customers": { GET: "customers.read", POST: "customers.write" },
   "/api/customers/[id]": { PATCH: ["customers.write", "customers.deleteVehicle"] },
+  // C4 — the vehicle picker's data source (design.md D2's gap).
+  "/api/customers/[id]/vehicles": { GET: "customers.read" },
   "/api/service-orders": { POST: "service-orders.write" },
   "/api/service-orders/[id]": { PATCH: "service-orders.write" },
   "/api/inventory-sync/manual": { GET: "sync.manual", POST: "sync.manual" },
@@ -50,6 +52,8 @@ export const ROUTE_GUARDS: Record<
   // for exactly this reason: it proves every DECLARED action is evaluated,
   // never that every evaluated action is declared.
   "/customers/[id]": { GET: "customers.read" },
+  // C4 — the vehicle detail screen (design.md D6).
+  "/customers/[id]/vehicles/[vehicleId]": { GET: "customers.read" },
   "/service-orders": { GET: "service-orders.read" },
   "/service-orders/[id]": { GET: "service-orders.read" },
   "/inventory": { GET: "inventory.read" },

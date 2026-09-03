@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   cliente,
   orderStatusEnum,
+  ordenCategoriaEnum,
   ordenServicio,
   ordenServicioItem,
   reminder,
@@ -224,6 +225,42 @@ describe("schema — orden_servicio table (Phase 1, task 1.3)", () => {
       "created_at",
     ]);
     expect(statusIdx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["status"]);
+  });
+
+  it("vehiculoId is NOT NULL and FKs to vehiculo with onDelete restrict (C4, D5 — 0015)", () => {
+    expect(findColumn(config.columns, "vehiculo_id").notNull).toBe(true);
+    const fk = config.foreignKeys.find((f) => f.reference().columns.some((c) => c.name === "vehiculo_id"));
+    if (!fk) throw new Error("vehiculo_id foreign key not found");
+    expect(fk.onDelete).toBe("restrict");
+  });
+
+  it("categoria is NOT NULL with no default — no category is a safe default (C4, D5)", () => {
+    const categoria = findColumn(config.columns, "categoria");
+    expect(categoria.notNull).toBe(true);
+    expect(categoria.default).toBeUndefined();
+  });
+
+  it("hallazgos/recomendaciones/observaciones are nullable text — written only at completion (C4)", () => {
+    expect(findColumn(config.columns, "hallazgos").notNull).toBe(false);
+    expect(findColumn(config.columns, "recomendaciones").notNull).toBe(false);
+    expect(findColumn(config.columns, "observaciones").notNull).toBe(false);
+  });
+
+  it("has an (vehiculoId, createdAt) composite index mirroring orden_cliente_created_idx (C4)", () => {
+    const idx = findIndex(config.indexes, "orden_vehiculo_created_idx");
+    expect(idx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["vehiculo_id", "created_at"]);
+  });
+});
+
+describe("schema — orden_categoria enum (C4, D3 — unaccented Spanish slugs, roleEnum precedent)", () => {
+  it("has exactly the 5 slug values, REVISADO included as a peer service type", () => {
+    expect(ordenCategoriaEnum.enumValues).toEqual([
+      "instalacion",
+      "mant_preventivo",
+      "mant_correctivo",
+      "reparacion",
+      "revisado",
+    ]);
   });
 });
 

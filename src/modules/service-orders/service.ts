@@ -30,6 +30,7 @@ import { ordenServicio, ordenServicioItem, reminder, type Cliente, type OrdenSer
 import { getClienteById } from "@/modules/customers/queries";
 import { cancelRemindersForOrder, scheduleReminder } from "@/modules/reminders/job";
 import { planReminders, type ReminderType } from "@/modules/reminders/schedule";
+import { isServiceCategory, type ServiceCategory } from "./categories";
 import { getOrdenServicioById } from "./queries";
 import { assertTransition, type OrderStatus } from "./transitions";
 
@@ -81,6 +82,33 @@ export class OrdenServicioNotFoundError extends Error {
   }
 }
 
+/**
+ * C4 — thrown when `vehiculoId` does not resolve to one of `input.clienteId`'s
+ * OWN active vehicles: unknown id, another customer's vehicle (cross-ownership
+ * trust boundary, not merely a missing-record check), or an inactive one (the
+ * picker cannot offer one, so this is a deliberate tightening at create time).
+ * One error for all three — the ownership check is a single array lookup
+ * against `clienteDetail.vehicles`, already fetched for `UnknownClienteError`.
+ */
+export class InvalidVehiculoError extends Error {
+  constructor(readonly errors: { vehiculoId: string }) {
+    super("Invalid vehiculo");
+  }
+}
+
+/**
+ * `createOrder` receives `await request.json()` — the `CreateOrdenServicioInput`
+ * type is a claim about that body, not a fact, and it is erased at runtime.
+ * `clienteId` and `vehiculoId` are both checked here and answer 400; without
+ * this `categoria` was the one field next to them that reached Postgres raw
+ * and came back a 500 (`22P02` when bogus, `23502` when omitted).
+ */
+export class InvalidCategoriaError extends Error {
+  constructor(readonly errors: { categoria: string }) {
+    super("Invalid categoria");
+  }
+}
+
 export type CreateOrdenServicioItemInput = {
   productoId?: string | null;
   productName: string;
@@ -90,6 +118,8 @@ export type CreateOrdenServicioItemInput = {
 
 export type CreateOrdenServicioInput = {
   clienteId: string;
+  vehiculoId: string;
+  categoria: ServiceCategory;
   description?: string | null;
   appointmentAt?: Date | null;
   createdBy?: string | null;
@@ -159,6 +189,18 @@ export async function createOrder(
     throw new UnknownClienteError(input.clienteId);
   }
 
+  // C4 — ownership check reuses clienteDetail.vehicles, already fetched above
+  // for the unknown-cliente check: zero extra queries. Only an ACTIVE vehicle
+  // of THIS customer is accepted (design.md's deliberate tightening).
+  const ownsVehicle = clienteDetail.vehicles?.some((v) => v.id === input.vehiculoId && v.deactivatedAt === null);
+  if (!ownsVehicle) {
+    throw new InvalidVehiculoError({ vehiculoId: "Seleccioná un vehículo válido de este cliente" });
+  }
+
+  if (!isServiceCategory(input.categoria)) {
+    throw new InvalidCategoriaError({ categoria: "Elegí un tipo de servicio válido" });
+  }
+
   const items = normalizeOrderItems(input.items ?? []);
   const database = deps.db ?? db;
 
@@ -167,6 +209,8 @@ export async function createOrder(
       .insert(ordenServicio)
       .values({
         clienteId: input.clienteId,
+        vehiculoId: input.vehiculoId,
+        categoria: input.categoria,
         description: input.description ?? null,
         appointmentAt: input.appointmentAt ?? null,
         createdBy: input.createdBy ?? null,
@@ -198,6 +242,10 @@ export async function createOrder(
 export type UpdateOrdenServicioPatch = {
   description?: string | null;
   appointmentAt?: Date | null;
+  categoria?: ServiceCategory;
+  hallazgos?: string | null;
+  recomendaciones?: string | null;
+  observaciones?: string | null;
 };
 
 export type UpdateOrdenServicioDeps = {

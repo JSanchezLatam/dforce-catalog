@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Search } from "lucide-react";
 
-import type { OrdenServicio, Producto } from "@/shared/db/schema";
+import type { OrdenServicio, Producto, Vehiculo } from "@/shared/db/schema";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,8 +19,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { ClienteListItem } from "@/modules/customers/queries";
+import { CATEGORIA_LABEL, type ServiceCategory } from "./categories";
 import { CustomerPicker } from "./CustomerPicker";
 import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
+
+const CATEGORIA_OPTIONS = Object.entries(CATEGORIA_LABEL) as [ServiceCategory, string][];
+
+/**
+ * Shared by every native <select>/<textarea> in this form. `outline-none` is
+ * the load-bearing half of a pair: it defeats the global `*:focus-visible`
+ * ring in globals.css — Tailwind's utilities layer wins over base, and
+ * `.outline-none` also clears the very variable that base rule resolves its
+ * outline style from — so a control that sets it MUST bring its own ring back.
+ * `components/ui/input.tsx` does exactly this; these controls copied the first
+ * half without the second and were invisible to a keyboard user.
+ */
+const NATIVE_FIELD =
+  "w-full min-w-0 rounded-lg border border-input bg-transparent text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 /** = `ClienteListItem` — the route body (`GET /api/customers`) maps straight through (design.md). */
 export type ServiceOrderCustomerOption = ClienteListItem;
@@ -28,12 +43,22 @@ export type ServiceOrderProductOption = Pick<Producto, "id" | "name" | "price">;
 
 type CartLine = { productoId: string; productName: string; unitPrice: number | null; quantity: number };
 
-/** `datetime-local` needs `YYYY-MM-DDTHH:mm`, no timezone suffix. */
+/**
+ * `datetime-local` needs `YYYY-MM-DDTHH:mm` with no timezone suffix — and the
+ * browser reads that as LOCAL time. Built from local getters for exactly that
+ * reason. It used to be `toISOString().slice(0, 16)`, a UTC wall clock, while
+ * `handleSubmit` parsed the same string back with `new Date()`, which per
+ * ECMAScript treats an offset-less date-TIME string as local (date-ONLY strings
+ * are UTC — that asymmetry is the trap). The two halves disagreed by the UTC
+ * offset, so every save shifted the appointment and the shifts compounded:
+ * in Panama, 14:00Z → 19:00Z → 00:00Z the next day (task 2.10).
+ */
 function toDatetimeLocal(value?: Date | string | null): string {
   if (!value) return "";
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 16);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 /**
@@ -49,6 +74,11 @@ function toDatetimeLocal(value?: Date | string | null): string {
  * see `page.tsx`'s `PICKER_LIST_LIMIT`). POSTs to `/api/service-orders`
  * (create) or PATCHes `/api/service-orders/[id]` (edit) — tasks 5.3/5.4.
  */
+/** Error keys this form has a place to show. Anything else routes to `form`. */
+const RENDERED_ERROR_FIELDS = new Set(["clienteId", "vehiculoId", "form"]);
+
+const VEHICLES_EMPTY_HINT_ID = "orden-vehiculo-empty-hint";
+
 export function ServiceOrderForm({
   products,
   order,
@@ -74,12 +104,95 @@ export function ServiceOrderForm({
   const isEdit = Boolean(order);
   const [open, setOpen] = useState(false);
   const [clienteId, setClienteId] = useState(order?.clienteId ?? selectedCustomer?.id ?? "");
+  const [vehiculoId, setVehiculoId] = useState("");
+  const [vehiclesRetry, setVehiclesRetry] = useState(0);
+  const [fetchedVehicles, setFetchedVehicles] = useState<{ key: string; vehicles: Vehiculo[]; failed: boolean }>({
+    key: "",
+    vehicles: [],
+    failed: false,
+  });
+  const [categoria, setCategoria] = useState<ServiceCategory | "">(order?.categoria ?? "");
+  const [hallazgos, setHallazgos] = useState(order?.hallazgos ?? "");
+  const [recomendaciones, setRecomendaciones] = useState(order?.recomendaciones ?? "");
+  const [observaciones, setObservaciones] = useState(order?.observaciones ?? "");
   const [description, setDescription] = useState(order?.description ?? "");
-  const [appointmentAt, setAppointmentAt] = useState(toDatetimeLocal(order?.appointmentAt));
+  /** The value the field starts at — the whole omission contract hangs on it. */
+  const originalAppointmentAt = toDatetimeLocal(order?.appointmentAt);
+  const [appointmentAt, setAppointmentAt] = useState(originalAppointmentAt);
   const [searchQuery, setSearchQuery] = useState("");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  /**
+   * D2 — fetches the chosen customer's ACTIVE vehicles (never seeded alongside
+   * the customer: `ClienteListItem.plates` is plate strings with no vehicle
+   * ids). Create mode only — the vehicle is immutable post-creation, like
+   * customer and parts, so an edit-mode order never needs this list.
+   *
+   * The list is stored KEYED by what it was fetched for, and loading/empty/
+   * error are derived from that key rather than mirrored into their own
+   * useStates. Mirroring is what made this a dead end twice: `resetForm` and
+   * `handleCustomerSelect` emptied the list and pinned "loading", then re-set
+   * `clienteId` to the value it already held — React bails out on an identical
+   * value, no dependency changed, the effect never re-ran, and the dropdown
+   * stayed disabled with nothing on screen explaining why. Resetting the
+   * mirrors from inside the effect instead only traded that for a cascading
+   * render (the `react-hooks` lint error). A key cannot fall out of sync with
+   * the thing it names.
+   *
+   * `open` is in the deps because opening is when the list must be fresh, and
+   * a closed dialog then never fetches at all. `vehiclesRetry` is there so the
+   * error state's "Reintentar" is something the user can actually do:
+   * re-picking the same customer is a no-op React bails on, so without a
+   * dependency that always changes, only closing the dialog recovered.
+   *
+   * Clearing `vehiculoId` stays in the handlers — THAT is what changing the
+   * customer means, and it is the form's state, not this effect's bookkeeping.
+   *
+   * `cancelled` guards a slow response for a customer that is no longer
+   * selected from repainting over a faster later one.
+   */
+  useEffect(() => {
+    if (isEdit || !open || !clienteId) return;
+    let cancelled = false;
+    const key = `${clienteId}:${vehiclesRetry}`;
+    fetch(`/api/customers/${clienteId}/vehicles`)
+      .then((response) => {
+        // An HTTP error is an error. Folding it into `{ vehicles: [] }` is how
+        // a 403 or a 500 used to reach the user as "this customer has no cars".
+        if (!response.ok) throw new Error(`vehicles fetch failed: ${response.status}`);
+        return response.json();
+      })
+      .then((body: { vehicles: Vehiculo[] }) => {
+        if (!cancelled) setFetchedVehicles({ key, vehicles: body.vehicles, failed: false });
+      })
+      .catch(() => {
+        // A failed request and an empty garage are NOT the same thing: without
+        // this the customer with three cars is told to go add one. Covers both
+        // halves — a rejected fetch AND a non-ok response, which the `.then`
+        // above turns into a rejection precisely so this handler sees it.
+        if (!cancelled) setFetchedVehicles({ key, vehicles: [], failed: true });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [clienteId, isEdit, open, vehiclesRetry]);
+
+  const vehiclesKey = `${clienteId}:${vehiclesRetry}`;
+  const vehiclesSettled = fetchedVehicles.key === vehiclesKey;
+  const vehicles = vehiclesSettled ? fetchedVehicles.vehicles : [];
+  const vehiclesError = vehiclesSettled && fetchedVehicles.failed;
+  const vehiclesLoading = !isEdit && Boolean(clienteId) && !vehiclesSettled;
+  const showVehiclesEmptyHint = Boolean(clienteId) && !vehiclesLoading && !vehiclesError && vehicles.length === 0;
+
+  function handleCustomerSelect(customer: ServiceOrderCustomerOption) {
+    setClienteId(customer.id);
+    setVehiculoId("");
+    // A vehiculoId error from a rejected submit would otherwise stay on screen
+    // pointing at a selection that no longer exists.
+    setErrors({});
+  }
 
   const filteredProducts = useMemo(() => {
     if (!searchQuery) return products;
@@ -88,9 +201,15 @@ export function ServiceOrderForm({
   }, [products, searchQuery]);
 
   function resetForm() {
-    setClienteId(order?.clienteId ?? selectedCustomer?.id ?? "");
+    const nextClienteId = order?.clienteId ?? selectedCustomer?.id ?? "";
+    setClienteId(nextClienteId);
+    setVehiculoId("");
+    setCategoria(order?.categoria ?? "");
+    setHallazgos(order?.hallazgos ?? "");
+    setRecomendaciones(order?.recomendaciones ?? "");
+    setObservaciones(order?.observaciones ?? "");
     setDescription(order?.description ?? "");
-    setAppointmentAt(toDatetimeLocal(order?.appointmentAt));
+    setAppointmentAt(originalAppointmentAt);
     setSearchQuery("");
     setCart([]);
     setErrors({});
@@ -133,7 +252,18 @@ export function ServiceOrderForm({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               description: description.trim() || null,
-              appointmentAt: appointmentAt ? new Date(appointmentAt).toISOString() : null,
+              // Omitted when untouched, not sent-as-equal. `updateOrder`
+              // compares getTime() to decide whether to cancel and reschedule
+              // the customer's reminder, and this input has no seconds — so an
+              // appointment stored at 14:30:45 would come back as 14:30:00 and
+              // read as CHANGED on every save that never touched the field.
+              ...(appointmentAt !== originalAppointmentAt
+                ? { appointmentAt: appointmentAt ? new Date(appointmentAt).toISOString() : null }
+                : {}),
+              categoria,
+              hallazgos: hallazgos.trim() || null,
+              recomendaciones: recomendaciones.trim() || null,
+              observaciones: observaciones.trim() || null,
             }),
           })
         : await fetch("/api/service-orders", {
@@ -141,6 +271,8 @@ export function ServiceOrderForm({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               clienteId,
+              vehiculoId,
+              categoria,
               description: description.trim() || undefined,
               appointmentAt: appointmentAt ? new Date(appointmentAt).toISOString() : undefined,
               items: cart.map((line) => ({
@@ -154,8 +286,17 @@ export function ServiceOrderForm({
 
       if (response.status === 400) {
         const body = await response.json();
+        const returned: Record<string, string> =
+          body.errors ?? { clienteId: body.error === "unknown_cliente" ? "Seleccioná un cliente válido" : body.error };
+        // Only clienteId and vehiculoId have a field to render into. A 400 keyed
+        // on anything else used to set state nobody displayed, so the dialog sat
+        // there after Guardar saying nothing. Anything unrendered falls through
+        // to the form-level slot instead of disappearing.
+        const unrendered = Object.entries(returned).filter(([field]) => !RENDERED_ERROR_FIELDS.has(field));
         setErrors(
-          body.errors ?? { clienteId: body.error === "unknown_cliente" ? "Seleccioná un cliente válido" : body.error },
+          unrendered.length > 0
+            ? { ...returned, form: unrendered.map(([, message]) => message).join(" ") }
+            : returned,
         );
         return;
       }
@@ -191,7 +332,7 @@ export function ServiceOrderForm({
                 <CustomerPicker
                   selectedCustomer={selectedCustomer ?? null}
                   canCreateCustomer={canCreateCustomer}
-                  onSelect={(customer) => setClienteId(customer.id)}
+                  onSelect={handleCustomerSelect}
                 />
                 {errors.clienteId && (
                   <p role="alert" className={FIELD_ERROR}>
@@ -200,6 +341,75 @@ export function ServiceOrderForm({
                 )}
               </div>
             )}
+
+            {!isEdit && (
+              <div className="grid gap-2">
+                <Label htmlFor="orden-vehiculo">Vehículo</Label>
+                {/* Native <select>, not the base-ui Select this repo otherwise
+                    uses for dropdowns (ServiceOrderFilters.tsx) — no test in
+                    this repo exercises that component yet and this form has
+                    no other reason to add the jsdom shims it needs. */}
+                <select
+                  id="orden-vehiculo"
+                  className={`${NATIVE_FIELD} h-8 px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-50`}
+                  value={vehiculoId}
+                  disabled={!clienteId || vehiclesLoading || vehicles.length === 0}
+                  aria-describedby={showVehiclesEmptyHint ? VEHICLES_EMPTY_HINT_ID : undefined}
+                  onChange={(e) => setVehiculoId(e.target.value)}
+                >
+                  <option value="">Seleccioná un vehículo</option>
+                  {vehicles.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.plate}
+                      {v.make ? ` — ${[v.make, v.model].filter(Boolean).join(" ")}` : ""}
+                    </option>
+                  ))}
+                </select>
+                {clienteId && !vehiclesLoading && vehiclesError && (
+                  <div className="flex items-center gap-2">
+                    <p role="alert" className="text-sm text-muted-foreground">
+                      No pudimos cargar los vehículos de este cliente.
+                    </p>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setVehiclesRetry((n) => n + 1)}>
+                      Reintentar
+                    </Button>
+                  </div>
+                )}
+                {showVehiclesEmptyHint && (
+                  <p id={VEHICLES_EMPTY_HINT_ID} className="text-sm text-muted-foreground">
+                    Este cliente no tiene vehículos activos. Agregá uno primero.
+                  </p>
+                )}
+                {errors.vehiculoId && (
+                  <p role="alert" className={FIELD_ERROR}>
+                    {errors.vehiculoId}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="grid gap-2">
+              <Label htmlFor="orden-categoria">Categoría</Label>
+              {/* Native <select>, same rationale as the vehicle picker above. */}
+              <select
+                id="orden-categoria"
+                className={`${NATIVE_FIELD} h-8 px-2.5 py-1`}
+                value={categoria}
+                onChange={(e) => setCategoria(e.target.value as ServiceCategory)}
+              >
+                {/* Create mode opens unfilled, like the vehicle field above.
+                    A missing category is visible — the submit is blocked. A
+                    wrong one is invisible forever, and this feature exists to
+                    make the vehicle's history true. Edit mode needs no
+                    placeholder: the order already has one. */}
+                {!isEdit && <option value="">Seleccioná un tipo de servicio</option>}
+                {CATEGORIA_OPTIONS.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <div className="grid gap-2">
               <Label htmlFor="orden-description">Descripción</Label>
@@ -215,6 +425,44 @@ export function ServiceOrderForm({
                 onChange={(e) => setAppointmentAt(e.target.value)}
               />
             </div>
+
+            {/*
+             * C4 — technician findings, only meaningful once the vehicle has
+             * actually been examined, so these are edit-only (spec §"Category
+             * and Completion Notes Editing"): never shown/settable at
+             * creation, only through this patch path.
+             */}
+            {isEdit && (
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="orden-hallazgos">Hallazgos</Label>
+                  <textarea
+                    id="orden-hallazgos"
+                    className={`${NATIVE_FIELD} min-h-16 px-2.5 py-1.5`}
+                    value={hallazgos}
+                    onChange={(e) => setHallazgos(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="orden-recomendaciones">Recomendaciones</Label>
+                  <textarea
+                    id="orden-recomendaciones"
+                    className={`${NATIVE_FIELD} min-h-16 px-2.5 py-1.5`}
+                    value={recomendaciones}
+                    onChange={(e) => setRecomendaciones(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="orden-observaciones">Observaciones</Label>
+                  <textarea
+                    id="orden-observaciones"
+                    className={`${NATIVE_FIELD} min-h-16 px-2.5 py-1.5`}
+                    value={observaciones}
+                    onChange={(e) => setObservaciones(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
 
             {!isEdit && (
               <section aria-label="Parts selection">
@@ -309,7 +557,7 @@ export function ServiceOrderForm({
             <DialogClose render={<Button type="button" variant="outline" disabled={isSubmitting} />}>
               Cancelar
             </DialogClose>
-            <Button type="submit" disabled={isSubmitting || (!isEdit && !clienteId)}>
+            <Button type="submit" disabled={isSubmitting || (!isEdit && (!vehiculoId || !categoria))}>
               {isSubmitting ? "Guardando…" : "Guardar"}
             </Button>
           </DialogFooter>
