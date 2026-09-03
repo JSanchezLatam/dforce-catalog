@@ -30,10 +30,15 @@ survives being found.
 8 open follow-ups, full text at
 `archive/2026-09-03-service-history-per-vehicle/tasks.md`:
 
-- **1.18 — has real teeth.** `createOrder` passes `createdBy` straight
-  through from the request body (`src/modules/service-orders/service.ts:216`),
-  so an API client can attribute an order to another user. Pre-existing, not
-  introduced by C4.
+- **1.18 — CLOSED 2026-09-03**, branch `fix/created-by-from-session`. Was:
+  `createOrder` took `createdBy` straight from the request body
+  (`src/modules/service-orders/service.ts:216`), so an API client could
+  attribute an order to another user — the audit trail said whatever the
+  caller wanted. Fixed at the route, which already held the session and simply
+  was not using it for this: `createOrder({ ...body, createdBy: user.id })`.
+  The spread ORDER is the fix — session after body, so a client-supplied value
+  cannot win — and it is mutation-verified: reverse the two and the test
+  reddens. Pre-existing, not introduced by C4.
 - 1.19 — `GET /api/customers/[id]/vehicles` types its response as
   `Vehiculo[]`, but `createdAt`/`deactivatedAt` cross the wire as ISO
   strings, not `Date`. Nothing reads them today.
