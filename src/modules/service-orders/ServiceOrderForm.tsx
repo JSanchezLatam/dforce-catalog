@@ -19,8 +19,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { ClienteListItem } from "@/modules/customers/queries";
+import { CATEGORIA_LABEL, type ServiceCategory } from "./categories";
 import { CustomerPicker } from "./CustomerPicker";
 import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
+
+const CATEGORIA_OPTIONS = Object.entries(CATEGORIA_LABEL) as [ServiceCategory, string][];
+
+/**
+ * Shared by every native <select>/<textarea> in this form. `outline-none` is
+ * the load-bearing half of a pair: it defeats the global `*:focus-visible`
+ * ring in globals.css — Tailwind's utilities layer wins over base, and
+ * `.outline-none` also clears the very variable that base rule resolves its
+ * outline style from — so a control that sets it MUST bring its own ring back.
+ * `components/ui/input.tsx` does exactly this; these controls copied the first
+ * half without the second and were invisible to a keyboard user.
+ */
+const NATIVE_FIELD =
+  "w-full min-w-0 rounded-lg border border-input bg-transparent text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 /** = `ClienteListItem` — the route body (`GET /api/customers`) maps straight through (design.md). */
 export type ServiceOrderCustomerOption = ClienteListItem;
@@ -86,6 +101,10 @@ export function ServiceOrderForm({
     vehicles: [],
     failed: false,
   });
+  const [categoria, setCategoria] = useState<ServiceCategory | "">(order?.categoria ?? "");
+  const [hallazgos, setHallazgos] = useState(order?.hallazgos ?? "");
+  const [recomendaciones, setRecomendaciones] = useState(order?.recomendaciones ?? "");
+  const [observaciones, setObservaciones] = useState(order?.observaciones ?? "");
   const [description, setDescription] = useState(order?.description ?? "");
   const [appointmentAt, setAppointmentAt] = useState(toDatetimeLocal(order?.appointmentAt));
   const [searchQuery, setSearchQuery] = useState("");
@@ -173,6 +192,10 @@ export function ServiceOrderForm({
     const nextClienteId = order?.clienteId ?? selectedCustomer?.id ?? "";
     setClienteId(nextClienteId);
     setVehiculoId("");
+    setCategoria(order?.categoria ?? "");
+    setHallazgos(order?.hallazgos ?? "");
+    setRecomendaciones(order?.recomendaciones ?? "");
+    setObservaciones(order?.observaciones ?? "");
     setDescription(order?.description ?? "");
     setAppointmentAt(toDatetimeLocal(order?.appointmentAt));
     setSearchQuery("");
@@ -218,6 +241,10 @@ export function ServiceOrderForm({
             body: JSON.stringify({
               description: description.trim() || null,
               appointmentAt: appointmentAt ? new Date(appointmentAt).toISOString() : null,
+              categoria,
+              hallazgos: hallazgos.trim() || null,
+              recomendaciones: recomendaciones.trim() || null,
+              observaciones: observaciones.trim() || null,
             }),
           })
         : await fetch("/api/service-orders", {
@@ -226,6 +253,7 @@ export function ServiceOrderForm({
             body: JSON.stringify({
               clienteId,
               vehiculoId,
+              categoria,
               description: description.trim() || undefined,
               appointmentAt: appointmentAt ? new Date(appointmentAt).toISOString() : undefined,
               items: cart.map((line) => ({
@@ -304,7 +332,7 @@ export function ServiceOrderForm({
                     no other reason to add the jsdom shims it needs. */}
                 <select
                   id="orden-vehiculo"
-                  className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                  className={`${NATIVE_FIELD} h-8 px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-50`}
                   value={vehiculoId}
                   disabled={!clienteId || vehiclesLoading || vehicles.length === 0}
                   aria-describedby={showVehiclesEmptyHint ? VEHICLES_EMPTY_HINT_ID : undefined}
@@ -342,6 +370,29 @@ export function ServiceOrderForm({
             )}
 
             <div className="grid gap-2">
+              <Label htmlFor="orden-categoria">Categoría</Label>
+              {/* Native <select>, same rationale as the vehicle picker above. */}
+              <select
+                id="orden-categoria"
+                className={`${NATIVE_FIELD} h-8 px-2.5 py-1`}
+                value={categoria}
+                onChange={(e) => setCategoria(e.target.value as ServiceCategory)}
+              >
+                {/* Create mode opens unfilled, like the vehicle field above.
+                    A missing category is visible — the submit is blocked. A
+                    wrong one is invisible forever, and this feature exists to
+                    make the vehicle's history true. Edit mode needs no
+                    placeholder: the order already has one. */}
+                {!isEdit && <option value="">Seleccioná un tipo de servicio</option>}
+                {CATEGORIA_OPTIONS.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid gap-2">
               <Label htmlFor="orden-description">Descripción</Label>
               <Input id="orden-description" value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
@@ -355,6 +406,44 @@ export function ServiceOrderForm({
                 onChange={(e) => setAppointmentAt(e.target.value)}
               />
             </div>
+
+            {/*
+             * C4 — technician findings, only meaningful once the vehicle has
+             * actually been examined, so these are edit-only (spec §"Category
+             * and Completion Notes Editing"): never shown/settable at
+             * creation, only through this patch path.
+             */}
+            {isEdit && (
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="orden-hallazgos">Hallazgos</Label>
+                  <textarea
+                    id="orden-hallazgos"
+                    className={`${NATIVE_FIELD} min-h-16 px-2.5 py-1.5`}
+                    value={hallazgos}
+                    onChange={(e) => setHallazgos(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="orden-recomendaciones">Recomendaciones</Label>
+                  <textarea
+                    id="orden-recomendaciones"
+                    className={`${NATIVE_FIELD} min-h-16 px-2.5 py-1.5`}
+                    value={recomendaciones}
+                    onChange={(e) => setRecomendaciones(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="orden-observaciones">Observaciones</Label>
+                  <textarea
+                    id="orden-observaciones"
+                    className={`${NATIVE_FIELD} min-h-16 px-2.5 py-1.5`}
+                    value={observaciones}
+                    onChange={(e) => setObservaciones(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
 
             {!isEdit && (
               <section aria-label="Parts selection">
@@ -449,7 +538,7 @@ export function ServiceOrderForm({
             <DialogClose render={<Button type="button" variant="outline" disabled={isSubmitting} />}>
               Cancelar
             </DialogClose>
-            <Button type="submit" disabled={isSubmitting || (!isEdit && !vehiculoId)}>
+            <Button type="submit" disabled={isSubmitting || (!isEdit && (!vehiculoId || !categoria))}>
               {isSubmitting ? "Guardando…" : "Guardar"}
             </Button>
           </DialogFooter>

@@ -62,6 +62,10 @@ function openDialog() {
   fireEvent.click(screen.getByRole("button", { name: /nueva orden de servicio/i }));
 }
 
+function openEditDialog() {
+  fireEvent.click(screen.getByRole("button", { name: /editar orden/i }));
+}
+
 async function flush() {
   await act(async () => {
     await Promise.resolve();
@@ -83,6 +87,10 @@ async function selectCustomer(name: string) {
 
 function vehicleSelect(): HTMLSelectElement {
   return screen.getByLabelText(/vehículo/i) as HTMLSelectElement;
+}
+
+function categorySelect(): HTMLSelectElement {
+  return screen.getByLabelText(/categoría/i) as HTMLSelectElement;
 }
 
 describe("ServiceOrderForm", () => {
@@ -159,6 +167,7 @@ describe("ServiceOrderForm", () => {
       expect(screen.getByRole("option", { name: /AAA111/ })).toBeInTheDocument();
 
       fireEvent.change(vehicleSelect(), { target: { value: "v-pre" } });
+      fireEvent.change(categorySelect(), { target: { value: "revisado" } });
       expect(screen.getByRole("button", { name: "Guardar" })).not.toBeDisabled();
     });
 
@@ -265,6 +274,7 @@ describe("ServiceOrderForm", () => {
       openDialog();
       await selectCustomer("Cliente A");
       fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+      fireEvent.change(categorySelect(), { target: { value: "revisado" } });
 
       fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
       await flush();
@@ -304,6 +314,10 @@ describe("ServiceOrderForm", () => {
       expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled();
 
       fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+      // Two gates now, not one: the category is required as well.
+      expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled();
+
+      fireEvent.change(categorySelect(), { target: { value: "revisado" } });
       expect(screen.getByRole("button", { name: "Guardar" })).not.toBeDisabled();
     });
 
@@ -344,6 +358,206 @@ describe("ServiceOrderForm", () => {
 
       expect(screen.getByText(/no tiene vehículos activos/i)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled();
+    });
+  });
+
+  /**
+   * Category + notes wiring (C4, task 2.4). Category is required (schema NOT
+   * NULL) and offered in BOTH modes; the 3 note fields are technician
+   * findings that only exist once a technician has examined the vehicle, so
+   * they render `isEdit &&`-gated (spec §"Category and Completion Notes
+   * Editing").
+   */
+  describe("category + notes (C4, task 2.4)", () => {
+    it("offers all 5 categories in create mode, with REVISADO as a peer option, no distinct treatment", () => {
+      render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      openDialog();
+
+      // The leading "" is the placeholder create mode now opens on, not a
+      // sixth category — it is dropped before comparing so this test keeps
+      // asserting the vocabulary rather than the widget's shape.
+      const options = Array.from(categorySelect().options)
+        .map((o) => o.value)
+        .filter(Boolean);
+      expect(options).toEqual(["instalacion", "mant_preventivo", "mant_correctivo", "reparacion", "revisado"]);
+    });
+
+    /**
+     * GGA round 5 on PR #58. Every native control here sets `outline-none`,
+     * which defeats the global `*:focus-visible` ring in globals.css —
+     * Tailwind's utilities layer wins over base, and `.outline-none` also
+     * clears the very variable that rule resolves its style from. The repo's
+     * own `input.tsx` always pairs the two; these did not, so four fields in
+     * the dialog this WU makes people open after every job were invisible to
+     * a keyboard user. Pins the class, not one control.
+     */
+    it("gives every native control a focus ring, since outline-none kills the global one", () => {
+      render(
+        <ServiceOrderForm
+          products={[]}
+          canCreateCustomer={false}
+          order={{ id: "o1", clienteId: "c-a", categoria: "instalacion" } as never}
+        />,
+      );
+      openEditDialog();
+
+      const controls = [
+        categorySelect(),
+        screen.getByLabelText(/hallazgos/i),
+        screen.getByLabelText(/recomendaciones/i),
+        screen.getByLabelText(/observaciones/i),
+      ];
+      for (const control of controls) {
+        expect(control.className).toContain("outline-none");
+        expect(control.className).toContain("focus-visible:ring-3");
+      }
+    });
+
+    /**
+     * The vehicle select lives behind `{!isEdit && …}`, so the edit-mode test
+     * above never sees it — and it is the control the original defect was
+     * found on, plus the one every NEW order passes through. Today it is safe
+     * only because it shares NATIVE_FIELD; inline a class on it and nothing
+     * above would go red.
+     */
+    it("gives the create-mode vehicle select a focus ring too", () => {
+      render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      openDialog();
+
+      expect(vehicleSelect().className).toContain("outline-none");
+      expect(vehicleSelect().className).toContain("focus-visible:ring-3");
+    });
+
+    it("does not render note fields in create mode", () => {
+      render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      openDialog();
+
+      expect(screen.queryByLabelText(/hallazgos/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/recomendaciones/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/observaciones/i)).not.toBeInTheDocument();
+    });
+
+    it("renders the category select AND the 3 note fields in edit mode, pre-filled from the order", () => {
+      render(
+        <ServiceOrderForm
+          products={[]}
+          order={
+            {
+              id: "o1",
+              clienteId: "c-a",
+              vehiculoId: "v-a",
+              categoria: "mant_preventivo",
+              description: "x",
+              hallazgos: "Correa floja",
+              recomendaciones: "Ajustar tensión",
+              observaciones: "Revisar en 3 meses",
+            } as never
+          }
+          canCreateCustomer={false}
+        />,
+      );
+      openEditDialog();
+
+      expect(categorySelect().value).toBe("mant_preventivo");
+      expect(screen.getByLabelText(/hallazgos/i)).toHaveValue("Correa floja");
+      expect(screen.getByLabelText(/recomendaciones/i)).toHaveValue("Ajustar tensión");
+      expect(screen.getByLabelText(/observaciones/i)).toHaveValue("Revisar en 3 meses");
+    });
+
+    /**
+     * Owner decision after GGA round 3 on PR #58. The select used to open on
+     * "Instalación", so a technician who never touched it filed the order as
+     * one. A MISSING category is visible — the submit is blocked and the user
+     * picks. A WRONG one is invisible forever, and REVISADO is Panama's
+     * mandatory ATTT inspection, so a mis-filed order makes the vehicle's
+     * history lie about something with legal consequence. Same pattern the
+     * vehicle field one row above already uses.
+     */
+    it("starts create mode on a placeholder and blocks submit until a category is chosen", async () => {
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (url.includes("/vehicles")) return Promise.resolve(jsonResponse({ vehicles: [vehiculoRow()] }));
+        return Promise.resolve(jsonResponse({ orden: { id: "o1" } }));
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      openDialog();
+      await flush();
+
+      expect(categorySelect()).toHaveValue("");
+      fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+      expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled();
+
+      fireEvent.change(categorySelect(), { target: { value: "revisado" } });
+      expect(screen.getByRole("button", { name: "Guardar" })).not.toBeDisabled();
+    });
+
+    it("offers no placeholder in edit mode — the order already has a category", async () => {
+      render(
+        <ServiceOrderForm
+          products={[]}
+          canCreateCustomer={false}
+          order={{ id: "o1", clienteId: "c-a", categoria: "reparacion" } as never}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /editar orden/i }));
+
+      expect(categorySelect()).toHaveValue("reparacion");
+      expect(screen.queryByRole("option", { name: /seleccioná un tipo de servicio/i })).not.toBeInTheDocument();
+    });
+
+    it("includes categoria in the create-mode POST body", async () => {
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (url.includes("/vehicles")) return Promise.resolve(jsonResponse({ vehicles: [vehiculoRow()] }));
+        return Promise.resolve(jsonResponse({ orden: { id: "o1" } }));
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      openDialog();
+      await flush();
+      fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+      fireEvent.change(categorySelect(), { target: { value: "revisado" } });
+      fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+      await flush();
+
+      const call = fetchMock.mock.calls.find(([url]) => url === "/api/service-orders")!;
+      const body = JSON.parse((call[1] as RequestInit).body as string);
+      expect(body.categoria).toBe("revisado");
+    });
+
+    it("includes categoria and the 3 notes in the edit-mode PATCH body", async () => {
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ orden: { id: "o1" } }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(
+        <ServiceOrderForm
+          products={[]}
+          order={{ id: "o1", clienteId: "c-a", categoria: "instalacion" } as never}
+          canCreateCustomer={false}
+        />,
+      );
+      openEditDialog();
+      fireEvent.change(categorySelect(), { target: { value: "reparacion" } });
+      // All three notes, not one. `toMatchObject` is non-exhaustive, so a test
+      // that changes only `hallazgos` stays green if someone drops the other
+      // two from the PATCH body — and this form is the only thing that puts
+      // them on the wire. route.test.ts covers the route's handling of all
+      // three; nothing covered the form's wiring of them.
+      fireEvent.change(screen.getByLabelText(/hallazgos/i), { target: { value: "Fuga detectada" } });
+      fireEvent.change(screen.getByLabelText(/recomendaciones/i), { target: { value: "Cambiar el empaque" } });
+      fireEvent.change(screen.getByLabelText(/observaciones/i), { target: { value: "Cliente avisado" } });
+      fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+      await flush();
+
+      const [, init] = fetchMock.mock.calls.find(([url]) => url === "/api/service-orders/o1")!;
+      const body = JSON.parse((init as RequestInit).body as string);
+      expect(body).toMatchObject({
+        categoria: "reparacion",
+        hallazgos: "Fuga detectada",
+        recomendaciones: "Cambiar el empaque",
+        observaciones: "Cliente avisado",
+      });
     });
   });
 });

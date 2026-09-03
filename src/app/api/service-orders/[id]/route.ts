@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
+import { isServiceCategory } from "@/modules/service-orders/categories";
 import {
   OrdenServicioNotFoundError,
   updateOrder,
@@ -11,6 +12,12 @@ import {
   type UpdateOrdenServicioPatch,
 } from "@/modules/service-orders/service";
 import { OrderTransitionError, type OrderStatus } from "@/modules/service-orders/transitions";
+
+/** Nullable `text` columns this route accepts, all guarded the same way. */
+const NULLABLE_TEXT_FIELDS = ["description", "hallazgos", "recomendaciones", "observaciones"] as const;
+
+/** Generous for a technician's notes, finite for everyone else. */
+const MAX_TEXT_LENGTH = 5000;
 
 export type UpdateOrdenServicioRouteDeps = UpdateOrdenServicioDeps & TransitionOrdenServicioDeps;
 
@@ -32,9 +39,52 @@ export async function handleUpdateOrdenServicio(
     }
 
     const patch: UpdateOrdenServicioPatch = {};
-    if (body.description !== undefined) patch.description = body.description;
+    // Every text column reached through this route, guarded in one place. The
+    // enum field below can lean on a PG cast if this misses; these cannot, so
+    // leaving them to `string | null` — a claim about the body, not a fact
+    // about it — was the weaker half getting the weaker treatment.
+    for (const field of NULLABLE_TEXT_FIELDS) {
+      if (body[field] === undefined) continue;
+      if (body[field] !== null && typeof body[field] !== "string") {
+        return NextResponse.json({ errors: { [field]: "Valor inválido" } }, { status: 400 }); // C4
+      }
+      // These are unbounded `text` columns and this PR tripled how many of them
+      // a client can write. A type check alone lets any authenticated user
+      // PATCH megabytes straight into Postgres.
+      if (typeof body[field] === "string" && body[field].length > MAX_TEXT_LENGTH) {
+        return NextResponse.json({ errors: { [field]: "Texto demasiado largo" } }, { status: 400 });
+      }
+      patch[field] = body[field];
+    }
     if (body.appointmentAt !== undefined) {
-      patch.appointmentAt = body.appointmentAt === null ? null : new Date(body.appointmentAt);
+      if (body.appointmentAt === null) {
+        patch.appointmentAt = null;
+      } else {
+        // `new Date(garbage)` is an Invalid Date, not a throw. Beyond the 500 it
+        // used to cause, `updateOrder` compares getTime() against the current
+        // value to decide whether to reschedule reminders — NaN !== null, so an
+        // Invalid Date reads as a CHANGED appointment and would cancel a real
+        // pending reminder the moment the write stopped failing.
+        const parsed = new Date(body.appointmentAt);
+        if (Number.isNaN(parsed.getTime())) {
+          return NextResponse.json({ errors: { appointmentAt: "Fecha inválida" } }, { status: 400 });
+        }
+        patch.appointmentAt = parsed;
+      }
+    }
+    if (body.categoria !== undefined) {
+      if (!isServiceCategory(body.categoria)) {
+        return NextResponse.json({ errors: { categoria: "Elegí un tipo de servicio válido" } }, { status: 400 }); // C4
+      }
+      patch.categoria = body.categoria;
+    }
+
+    // A body of nothing but unrecognised fields whitelists down to `{}`, and
+    // `.set({})` is either a driver error or a SET-less UPDATE — a 500 either
+    // way, for a request that deserves an answer. Pre-existing; this is the PR
+    // that turned "read the body freely, drop the rest" into a pinned contract.
+    if (Object.keys(patch).length === 0) {
+      return NextResponse.json({ errors: { form: "No hay cambios para guardar" } }, { status: 400 });
     }
 
     const orden = await updateOrder(id, patch, deps);
