@@ -21,7 +21,11 @@ export async function handleCreateOrdenServicio(
 
   const body = await request.json();
   try {
-    const orden = await createOrder(body, deps);
+    // Follow-up 1.18. `createdBy` comes from the SESSION, never from the
+    // body — spreading it AFTER `body` is what makes a client-supplied value
+    // unable to win. The route is the only place that knows who is acting;
+    // everything the body says about identity is a claim, not a fact.
+    const orden = await createOrder({ ...body, createdBy: user.id }, deps);
     return NextResponse.json({ orden }, { status: 201 });
   } catch (err) {
     if (err instanceof UnknownClienteError) {
