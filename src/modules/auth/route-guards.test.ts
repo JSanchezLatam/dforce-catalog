@@ -32,6 +32,8 @@ export const ROUTE_GUARDS: Record<
   "/api/logout": { POST: "session-only" },
   "/api/customers": { GET: "customers.read", POST: "customers.write" },
   "/api/customers/[id]": { PATCH: ["customers.write", "customers.deleteVehicle"] },
+  // C4 — the vehicle picker's data source (design.md D2's gap).
+  "/api/customers/[id]/vehicles": { GET: "customers.read" },
   "/api/service-orders": { POST: "service-orders.write" },
   "/api/service-orders/[id]": { PATCH: "service-orders.write" },
   "/api/inventory-sync/manual": { GET: "sync.manual", POST: "sync.manual" },

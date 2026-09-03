@@ -26,7 +26,7 @@
 import { eq } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
-import { ordenServicio, ordenServicioItem, reminder, type Cliente, type OrdenServicio } from "@/shared/db/schema";
+import { ordenCategoriaEnum, ordenServicio, ordenServicioItem, reminder, type Cliente, type OrdenServicio } from "@/shared/db/schema";
 import { getClienteById } from "@/modules/customers/queries";
 import { cancelRemindersForOrder, scheduleReminder } from "@/modules/reminders/job";
 import { planReminders, type ReminderType } from "@/modules/reminders/schedule";
@@ -81,6 +81,33 @@ export class OrdenServicioNotFoundError extends Error {
   }
 }
 
+/**
+ * C4 — thrown when `vehiculoId` does not resolve to one of `input.clienteId`'s
+ * OWN active vehicles: unknown id, another customer's vehicle (cross-ownership
+ * trust boundary, not merely a missing-record check), or an inactive one (the
+ * picker cannot offer one, so this is a deliberate tightening at create time).
+ * One error for all three — the ownership check is a single array lookup
+ * against `clienteDetail.vehicles`, already fetched for `UnknownClienteError`.
+ */
+export class InvalidVehiculoError extends Error {
+  constructor(readonly errors: { vehiculoId: string }) {
+    super("Invalid vehiculo");
+  }
+}
+
+/**
+ * `createOrder` receives `await request.json()` — the `CreateOrdenServicioInput`
+ * type is a claim about that body, not a fact, and it is erased at runtime.
+ * `clienteId` and `vehiculoId` are both checked here and answer 400; without
+ * this `categoria` was the one field next to them that reached Postgres raw
+ * and came back a 500 (`22P02` when bogus, `23502` when omitted).
+ */
+export class InvalidCategoriaError extends Error {
+  constructor(readonly errors: { categoria: string }) {
+    super("Invalid categoria");
+  }
+}
+
 export type CreateOrdenServicioItemInput = {
   productoId?: string | null;
   productName: string;
@@ -88,8 +115,17 @@ export type CreateOrdenServicioItemInput = {
   quantity?: number;
 };
 
+/**
+ * `categoria` is enum-typed inline against `ordenCategoriaEnum.enumValues`
+ * rather than importing the `ServiceCategory` alias — that alias lands in
+ * WU2's `categories.ts` (design.md D3); required here because migration
+ * `0015`'s NOT NULL must be satisfiable via the API/e2e before the UI select
+ * ships (WU2).
+ */
 export type CreateOrdenServicioInput = {
   clienteId: string;
+  vehiculoId: string;
+  categoria: (typeof ordenCategoriaEnum.enumValues)[number];
   description?: string | null;
   appointmentAt?: Date | null;
   createdBy?: string | null;
@@ -159,6 +195,18 @@ export async function createOrder(
     throw new UnknownClienteError(input.clienteId);
   }
 
+  // C4 — ownership check reuses clienteDetail.vehicles, already fetched above
+  // for the unknown-cliente check: zero extra queries. Only an ACTIVE vehicle
+  // of THIS customer is accepted (design.md's deliberate tightening).
+  const ownsVehicle = clienteDetail.vehicles?.some((v) => v.id === input.vehiculoId && v.deactivatedAt === null);
+  if (!ownsVehicle) {
+    throw new InvalidVehiculoError({ vehiculoId: "Seleccioná un vehículo válido de este cliente" });
+  }
+
+  if (!(ordenCategoriaEnum.enumValues as readonly string[]).includes(input.categoria)) {
+    throw new InvalidCategoriaError({ categoria: "Elegí un tipo de servicio válido" });
+  }
+
   const items = normalizeOrderItems(input.items ?? []);
   const database = deps.db ?? db;
 
@@ -167,6 +215,8 @@ export async function createOrder(
       .insert(ordenServicio)
       .values({
         clienteId: input.clienteId,
+        vehiculoId: input.vehiculoId,
+        categoria: input.categoria,
         description: input.description ?? null,
         appointmentAt: input.appointmentAt ?? null,
         createdBy: input.createdBy ?? null,

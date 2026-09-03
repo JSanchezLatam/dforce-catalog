@@ -11,9 +11,12 @@ function requestWith(body: unknown) {
   });
 }
 
-const clienteDetail = { cliente: { id: "cli-1" }, orders: [] } as unknown as {
+const vehiculo1 = { id: "v1", clienteId: "cli-1", deactivatedAt: null };
+
+const clienteDetail = { cliente: { id: "cli-1" }, orders: [], vehicles: [vehiculo1] } as unknown as {
   cliente: { id: string };
   orders: unknown[];
+  vehicles: unknown[];
 };
 
 describe("POST /api/service-orders (R20)", () => {
@@ -35,10 +38,13 @@ describe("POST /api/service-orders (R20)", () => {
         }),
     };
 
-    const response = await handleCreateOrdenServicio(requestWith({ clienteId: "cli-1" }), {
-      getClienteById: async () => clienteDetail as never,
-      db: database as never,
-    });
+    const response = await handleCreateOrdenServicio(
+      requestWith({ clienteId: "cli-1", vehiculoId: "v1", categoria: "revisado" }),
+      {
+        getClienteById: async () => clienteDetail as never,
+        db: database as never,
+      },
+    );
 
     expect(response.status).toBe(201);
     const body = await response.json();
@@ -54,6 +60,44 @@ describe("POST /api/service-orders (R20)", () => {
     });
 
     expect(response.status).toBe(400);
+    expect(database.transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid vehiculoId with 400 under errors.vehiculoId (C4, task 1.7)", async () => {
+    const database = { transaction: vi.fn() };
+
+    const response = await handleCreateOrdenServicio(
+      requestWith({ clienteId: "cli-1", vehiculoId: "not-owned", categoria: "revisado" }),
+      {
+        getClienteById: async () => clienteDetail as never,
+        db: database as never,
+      },
+    );
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.errors).toHaveProperty("vehiculoId");
+    expect(database.transaction).not.toHaveBeenCalled();
+  });
+
+  /**
+   * GGA round 5. The branch this covers was added in round 3 without a route
+   * test — service.test.ts proves createOrder THROWS, and the form test mocks
+   * a hand-written 400 body. The wire between them, "the service's categoria
+   * error becomes a 400 keyed categoria", was asserted nowhere, and it is the
+   * exact claim task 1.13b rests on.
+   */
+  it("rejects an invalid categoria with 400 under errors.categoria", async () => {
+    const database = { transaction: vi.fn() };
+
+    const response = await handleCreateOrdenServicio(
+      requestWith({ clienteId: "cli-1", vehiculoId: "v1", categoria: "cualquier_cosa" }),
+      { getClienteById: async () => clienteDetail as never, db: database as never },
+    );
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.errors).toEqual({ categoria: "Elegí un tipo de servicio válido" });
     expect(database.transaction).not.toHaveBeenCalled();
   });
 });
