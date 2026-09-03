@@ -54,9 +54,14 @@ describe("VehicleDetailPage", () => {
     expect(screen.getByRole("link", { name: "Ana Gómez" })).toHaveAttribute("href", "/customers/c1");
   });
 
-  it("shows an empty state instead of a bare table when the vehicle has no history", async () => {
+  it("shows an empty-state MESSAGE instead of a bare table when the vehicle has no history", async () => {
     render(await renderPage());
 
+    // Both halves of the spec sentence: "MUST show an explicit empty-state
+    // message INSTEAD OF an empty table". Asserting only the missing table
+    // passes on a page that renders nothing at all, which is the failure the
+    // scenario is actually about.
+    expect(screen.getByText(/todav[ií]a no tiene [óo]rdenes/i)).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
