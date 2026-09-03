@@ -114,4 +114,34 @@ describe("POST /api/service-orders (R20)", () => {
     expect(body.errors).toEqual({ categoria: "Elegí un tipo de servicio válido" });
     expect(database.transaction).not.toHaveBeenCalled();
   });
+  /**
+   * Follow-up 1.18, raised by GGA round 3 on PR #57 and carried through the
+   * C4 archive. `createOrder` took `createdBy` from its input and the route
+   * handed it `await request.json()`, so a client could attribute an order to
+   * anyone by putting their id in the body. The session is the only thing
+   * that knows who is acting; the body is a claim.
+   */
+  it("attributes the order to the SESSION user, not to whoever the body names", async () => {
+    let inserted: Record<string, unknown> = {};
+    const database = {
+      transaction: async (cb: (tx: unknown) => unknown) =>
+        cb({
+          insert: () => ({
+            values: (values: Record<string, unknown>) => {
+              inserted = values;
+              return { returning: async () => [{ id: "o1", status: "open", ...values }] };
+            },
+          }),
+        }),
+    };
+
+    const response = await handleCreateOrdenServicio(
+      requestWith({ clienteId: "cli-1", vehiculoId: "v1", categoria: "revisado", createdBy: "otro-usuario" }),
+      { getClienteById: async () => clienteDetail as never, db: database as never },
+    );
+
+    expect(response.status).toBe(201);
+    // "user-1" is the x-user-id header requestWith() sends.
+    expect(inserted.createdBy).toBe("user-1");
+  });
 });
