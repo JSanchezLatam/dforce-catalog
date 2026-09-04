@@ -44,3 +44,10 @@ next-env.d.ts
 
 # catalog visual gate output (scripts/preview-catalog.ts)
 /preview-out
+
+# CodeGraph index — local to each machine (SQLite db, daemon pid, socket, logs).
+# Ignore the whole directory: .codegraph/.gitignore could not exclude itself,
+# so it showed up as untracked forever.
+/.codegraph/
+# Local AI runtime state
+.atl/
