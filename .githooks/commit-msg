@@ -1,0 +1,28 @@
+#!/bin/sh
+# Strip AI attribution from commit messages.
+#
+# This repo's rule is that commits carry no AI co-author or session metadata.
+# That rule lived only in AGENTS.md, where it is advice an agent can be talked
+# out of — and on 2026-09-04 an agent was. This is the enforcement layer: it
+# runs for Claude Code, OpenCode, Codex, an IDE, and a plain `git commit`
+# alike, because git applies it to the finished message.
+#
+# It strips rather than rejects: a blocked commit invites a retry that re-adds
+# the trailer, a stripped one just lands clean.
+#
+# POSIX grep/awk on purpose — a committed hook has to run on any machine.
+#
+# Human Co-authored-by trailers are preserved; only Claude/Anthropic ones go.
+
+msg="$1"
+tmp="$msg.tmp"
+
+grep -v -E \
+  '^(Co-[Aa]uthored-[Bb]y:[[:space:]]*.*(Claude|noreply@anthropic\.com)|Claude-Session:|(🤖[[:space:]]*)?Generated with \[Claude Code\]|https://claude\.ai/code/session_)' \
+  "$msg" > "$tmp"
+
+# Drop the trailing blank lines the removal leaves behind.
+awk '{l[NR]=$0} END {n=NR; while (n>0 && l[n] ~ /^[[:space:]]*$/) n--; for (i=1;i<=n;i++) print l[i]}' \
+  "$tmp" > "$msg"
+
+rm -f "$tmp"

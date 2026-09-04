@@ -85,6 +85,23 @@ Every reply addresses or greets the user as **"thanos"**, in every response and
 every session. Conversation text only — never in code, comments, commits, PRs,
 or specs. Same audience split as the language rule above.
 
+## Commits
+
+Conventional commits, and **no AI attribution** — no `Co-Authored-By` naming
+Claude, no `Claude-Session`, no "Generated with Claude Code".
+
+This rule lived only in prose until 2026-09-04, when an agent was talked out of
+it by a runtime directive and four commits shipped carrying it. Prose is advice;
+`.githooks/commit-msg` is enforcement. It strips those trailers from the
+finished message, so it covers Claude Code, OpenCode, Codex, an IDE, and a plain
+`git commit` alike. Human `Co-authored-by` trailers are preserved.
+
+`core.hooksPath` is per-clone local config, so a fresh clone must enable it once:
+
+```
+git config core.hooksPath .githooks
+```
+
 ## Simplicity & scope discipline
 
 Smallest change that solves the actual ask. Before adding code:
