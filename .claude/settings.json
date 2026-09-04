@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit)",
+      "Bash(npx tsc --noEmit *)",
+      "Bash(npm test)",
+      "Bash(npm test *)",
+      "Bash(npm run lint)",
+      "Bash(npx vitest run)",
+      "Bash(npx vitest run *)",
+      "Bash(bat *)",
+      "Bash(gga run *)",
+      "Bash(gga config)",
+      "mcp__plugin_engram_engram__mem_search",
+      "mcp__engram__mem_search"
+    ]
+  }
+}
