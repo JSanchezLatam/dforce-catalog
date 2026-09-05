@@ -56,6 +56,7 @@ import { countAllProducts, listCategoryL1Options, listInventory } from "@/module
 import { runSync } from "@/modules/inventory-sync/job";
 import { getClienteById } from "@/modules/customers/queries";
 import { deactivateCliente, reactivateCliente } from "@/modules/customers/service";
+import { runCustomerImport } from "@/modules/customer-import/job";
 import { listOrdenesByVehiculo } from "@/modules/service-orders/queries";
 import { registerPdfGenerateWorker } from "@/modules/pdf-generation/worker";
 import { proxy } from "@/proxy";
@@ -941,6 +942,146 @@ describe("customer deactivation (E2E)", () => {
     const detail = await getClienteById(target.id);
     expect(detail!.cliente.deactivatedAt).toBeNull();
     expect(detail!.vehicles.map((v) => v.id)).toContain(vehicleId);
+  });
+});
+
+/**
+ * customer-import WU5 (design.md D6, tasks.md 5.1-5.3) — the coverage the
+ * injected-DB seam structurally cannot give. Every unit test for
+ * `runCustomerImport` supplies `deps.database`/`deps.listExisting`, so the
+ * real transactional `UPDATE`/`INSERT` — the statement that could clobber
+ * `deactivatedAt` or an opt-out flag — never executes under `npm test`
+ * (AGENTS.md's "Known coverage limit"). Only `fetchCustomers` is injected
+ * here; the database seam is left to its real default so this suite proves
+ * the actual SQL, not a fake standing in for it.
+ *
+ * Real Interfuerza row shape (measured live, proposal.md): `{ Cliente,
+ * Nombre, Email, Telefono_1, Cellular, Telefono_2, Token, Tipo, Status }` —
+ * `Cliente` is the external id, `Token` is empty on every real row,
+ * `Telefono_1` is the phone `mapCustomerRow` prefers.
+ */
+describe("customer import (E2E)", () => {
+  const seededIds: string[] = [];
+
+  beforeAll(async () => {
+    execSync("npx drizzle-kit migrate", { stdio: "inherit" });
+  }, 60_000);
+
+  // Same one-way-write risk `customer search (E2E)` documents above: without
+  // this, every row this describe's `runCustomerImport` calls actually
+  // INSERT survives in whatever database ran the suite. `vehiculo` would
+  // cascade if any import ever created one, but this import never does.
+  afterAll(async () => {
+    if (seededIds.length > 0) {
+      await db.delete(cliente).where(inArray(cliente.id, seededIds));
+    }
+  });
+
+  /** One raw Interfuerza wrapper row, verbatim field names, `Token` always empty. */
+  function rawRow(externalId: string, nombre: string, telefono1: string, email = "") {
+    return {
+      Cliente: externalId,
+      Nombre: nombre,
+      Email: email,
+      Telefono_1: telefono1,
+      Cellular: "",
+      Telefono_2: "",
+      Token: "",
+      Tipo: "cliente",
+      Status: "activo",
+    };
+  }
+
+  async function fetchByExternalId(externalId: string) {
+    const rows = await db.select().from(cliente).where(eq(cliente.externalId, externalId));
+    return rows[0];
+  }
+
+  it("is idempotent: a second run over the same rows creates nothing and leaves the row count unchanged", async () => {
+    const externalId = `imp-idem-${Date.now()}`;
+    async function* oneBatch() {
+      yield [rawRow(externalId, "Importado Idempotente", "50771111111")];
+    }
+
+    const first = await runCustomerImport({ fetchCustomers: oneBatch });
+    expect(first.created).toBe(1);
+    expect(first.skipped).toEqual([]);
+
+    const created = await fetchByExternalId(externalId);
+    expect(created).toBeDefined();
+    seededIds.push(created!.id);
+
+    const countBefore = (await db.select().from(cliente).where(eq(cliente.externalId, externalId))).length;
+
+    const second = await runCustomerImport({ fetchCustomers: oneBatch });
+    expect(second.created).toBe(0);
+
+    const countAfter = (await db.select().from(cliente).where(eq(cliente.externalId, externalId))).length;
+    expect(countAfter).toBe(countBefore);
+  });
+
+  /**
+   * The row that matters most in the whole change (task 5.2). A re-import
+   * must never resurrect a customer staff deliberately deactivated —
+   * `applyUserPatchTx`/`setActivation`-style hand-written SQL has no other
+   * automated coverage (AGENTS.md's known coverage limit), so this is the
+   * only place `deactivatedAt` surviving a real `UPDATE` is proven at all.
+   */
+  it("does not resurrect a customer deactivated locally after a re-run", async () => {
+    const externalId = `imp-noresurrect-${Date.now()}`;
+    async function* oneBatch() {
+      yield [rawRow(externalId, "Importado Desactivado", "50772222222")];
+    }
+
+    await runCustomerImport({ fetchCustomers: oneBatch });
+    const created = await fetchByExternalId(externalId);
+    expect(created).toBeDefined();
+    seededIds.push(created!.id);
+
+    await deactivateCliente(created!.id);
+    const deactivated = await fetchByExternalId(externalId);
+    expect(deactivated!.deactivatedAt).not.toBeNull();
+
+    await runCustomerImport({ fetchCustomers: oneBatch });
+    const afterReimport = await fetchByExternalId(externalId);
+    expect(afterReimport!.deactivatedAt).not.toBeNull();
+    expect(afterReimport!.deactivatedAt).toEqual(deactivated!.deactivatedAt);
+  });
+
+  it("does not reverse a locally-set whatsapp opt-out after a re-run", async () => {
+    const externalId = `imp-optout-${Date.now()}`;
+    async function* oneBatch() {
+      yield [rawRow(externalId, "Importado Opt Out", "50773333333")];
+    }
+
+    await runCustomerImport({ fetchCustomers: oneBatch });
+    const created = await fetchByExternalId(externalId);
+    expect(created).toBeDefined();
+    seededIds.push(created!.id);
+
+    await db.update(cliente).set({ whatsappOptOut: true }).where(eq(cliente.id, created!.id));
+
+    await runCustomerImport({ fetchCustomers: oneBatch });
+    const afterReimport = await fetchByExternalId(externalId);
+    expect(afterReimport!.whatsappOptOut).toBe(true);
+  });
+
+  it("skips a phone-less row by name and reason, and creates no cliente for it", async () => {
+    const externalId = `imp-nophone-${Date.now()}`;
+    async function* oneBatch() {
+      yield [rawRow(externalId, "Sin Telefono", "")];
+    }
+
+    const result = await runCustomerImport({ fetchCustomers: oneBatch });
+    expect(result.created).toBe(0);
+    expect(result.skipped).toContainEqual({
+      externalId,
+      name: "Sin Telefono",
+      reason: "missing_phone",
+    });
+
+    const created = await fetchByExternalId(externalId);
+    expect(created).toBeUndefined();
   });
 });
 

@@ -111,19 +111,19 @@ Files: `src/shared/db/schema.ts`, `migrations/0018_*.sql`, `customer-import/plan
 
 Files: `customer-import/job.ts`(+test), route, a manual trigger.
 
-- [ ] 4.1 One transaction: all or nothing (D6).
-- [ ] 4.2 Result reports created / updated / skipped-with-reason.
-- [ ] 4.3 Route gated on `customers.write`; the manual trigger mirrors
+- [x] 4.1 One transaction: all or nothing (D6).
+- [x] 4.2 Result reports created / updated / skipped-with-reason.
+- [x] 4.3 Route gated on `customers.write`; the manual trigger mirrors
   `ManualSyncButton`.
 
 ## WU5 — the coverage the seam cannot give
 
-- [ ] 5.1 e2e — run the import twice against real Postgres; the second run
+- [x] 5.1 e2e — run the import twice against real Postgres; the second run
   creates nothing and the row count is unchanged.
-- [ ] 5.2 e2e — deactivate an imported customer, re-run, confirm
+- [x] 5.2 e2e — deactivate an imported customer, re-run, confirm
   `deactivatedAt` SURVIVES. Unit tests inject the DB seam, so the real `SET`
   list never executes under `npm test`.
-- [ ] 5.3 e2e — a customer edited locally keeps their opt-out flags across a
+- [x] 5.3 e2e — a customer edited locally keeps their opt-out flags across a
   re-run.
 
 ## WU6 — the writing-down
@@ -319,6 +319,39 @@ files.
   NOT type-checked anywhere in the tests. `tsc` was clean before and after
   `externalId`, which is exactly the problem. Pre-existing and repo-wide, so
   it needs its own change; recorded rather than widened into this one.
+
+## WU4 + WU5 — two agents in parallel over a contract I fixed first
+
+They are NOT naturally independent: WU5's e2e tests the job WU4 writes. Split
+by writing the exported signature of `runCustomerImport` into BOTH prompts
+verbatim, so each worked one side of it. The e2e agent was told explicitly not
+to stub the job and not to weaken an assertion to make its file run — it wrote
+what it could, said plainly what was waiting, and I ran the suite after both
+landed.
+
+**Verified here, not taken from their reports:**
+- `npm test` 1215/1215, tsc clean, lint at the baseline.
+- **e2e 43/43 TWICE on clean databases** (39 before this work unit), 0 rows
+  left behind either time. A single green run is not the standard in this repo.
+- **The mutation that matters**: making the re-import's `UPDATE` carry
+  `deactivatedAt: null` and `whatsappOptOut: false` turns TWO e2e rows red by
+  name — *"does not resurrect a customer deactivated locally after a re-run"*
+  and *"does not reverse a locally-set whatsapp opt-out after a re-run"*.
+  **No unit test in this repo can prove that**: every one injects the DB seam,
+  so the real `UPDATE` never runs under `npm test`.
+- Route: neutralising the `customers.write` gate, and deleting the
+  `InterfuerzaAbortError → 502` mapping, each turn a test red.
+
+- [ ] **Not proven, and it cannot be here**: the transactional rollback itself
+  is `db.transaction()`'s guarantee, and an injected fake cannot demonstrate
+  it. `inventory-sync/job.test.ts` documents the same limit.
+- [ ] **Scope the WU4 agent reported rather than hid**: adding the manual
+  trigger broke 14 pre-existing tests two ways — `route-guards.test.ts` has a
+  completeness check that requires every route be registered, and
+  `customers/page.test.tsx` crashed because the button calls `useToast()`
+  outside a provider. Fixed by registering the route and stubbing the button
+  the way `CustomerFormTrigger` already is. Outside the four files it was
+  given, and necessary to leave the suite green.
 
 ## Known before starting
 

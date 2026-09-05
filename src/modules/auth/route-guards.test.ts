@@ -31,6 +31,8 @@ export const ROUTE_GUARDS: Record<
   "/api/login": { POST: "session-only" },
   "/api/logout": { POST: "session-only" },
   "/api/customers": { GET: "customers.read", POST: "customers.write" },
+  // R21 — manual Interfuerza customer import trigger (customer-import).
+  "/api/customer-import": { POST: "customers.write" },
   "/api/customers/[id]": { PATCH: ["customers.write", "customers.deleteVehicle"] },
   // C4 — the vehicle picker's data source (design.md D2's gap).
   "/api/customers/[id]/vehicles": { GET: "customers.read" },

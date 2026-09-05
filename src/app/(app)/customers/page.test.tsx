@@ -16,6 +16,9 @@ vi.mock("@/modules/auth/session", () => ({
 }));
 vi.mock("@/modules/auth/policy", () => ({ can: vi.fn(() => true) }));
 vi.mock("@/modules/customers/CustomerFormTrigger", () => ({ CustomerFormTrigger: () => null }));
+// Irrelevant to R20 (this file's subject) and requires a ToastProvider this
+// unit render doesn't set up — same reason CustomerFormTrigger is stubbed.
+vi.mock("@/modules/customer-import/CustomerImportButton", () => ({ CustomerImportButton: () => null }));
 vi.mock("@/modules/customers/CustomerFilters", () => ({ CustomerFilters: () => null }));
 
 const listClientes = vi.hoisted(() => vi.fn());

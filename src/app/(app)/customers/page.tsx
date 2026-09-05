@@ -3,6 +3,7 @@ import { Users } from "lucide-react";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
+import { CustomerImportButton } from "@/modules/customer-import/CustomerImportButton";
 import { CustomerFilters } from "@/modules/customers/CustomerFilters";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
 import { countClientes, listClientes, type ClienteFilters } from "@/modules/customers/queries";
@@ -78,7 +79,11 @@ export default async function CustomersPage({
     <div className="p-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className={PAGE_HEADING}>Clientes</h1>
-        <CustomerFormTrigger triggerLabel="Nuevo cliente" />
+        <div className="flex items-center gap-2">
+          {/* R21 — manual import trigger, same `customers.write` gate as the create form (both tecnico and administrador hold it). */}
+          {can(user, "customers.write") && <CustomerImportButton />}
+          <CustomerFormTrigger triggerLabel="Nuevo cliente" />
+        </div>
       </div>
 
       <Card size="sm" className="mb-4">
