@@ -183,6 +183,40 @@ down about itself.
   this branch 46 — stale the moment the diff lands. The count is dropped; the
   reasoning stands without it.
 
+## WU12 — GGA round 5 on C2 (my own round-4 fix was wrong)
+
+- [x] 12.1 **WU11.1 narrowed the race; it did not close it, and the comment I
+  shipped claimed otherwise.** It said `window.location.search` is "current by
+  definition". Verified against the installed Next **16.2.11** and it is false:
+  `router.push` only dispatches into the React action queue, and
+  `window.history.pushState` runs from a `useEffect` keyed on `appRouterState`
+  (`next/dist/client/components/app-router.js:64,70`). On a server-component
+  page the URL therefore lands only after the RSC payload arrives — so the fix
+  traded a 300ms race against a re-render for a 300ms race against a network
+  round trip, over a list query this repo documents as a sequential scan.
+  Now a ref written at PUSH time: `applyFilter` is the only writer of this
+  component's query string, so what it last pushed is authoritative the instant
+  it pushes it. The `useEffect` reset covers external navigation (back button,
+  `<Link>`), which is not racing a debounce the user just started.
+- [x] 12.2 **My test could not have caught 12.1**, and this is the part worth
+  remembering: the `push` mock called `replaceState` SYNCHRONOUSLY, which is
+  more synchronous than the real router. It manufactured the property under
+  test. The mock now navigates late, and the race test sets the delay LONGER
+  than the debounce — the case that separates a correct fix from one that
+  merely narrows the window. Verified against all three versions: the original
+  closure read, the `window.location`-only read, and the ref. **Only the ref
+  passes.** With the fast mock, the `window.location` version passed too, which
+  is exactly how it shipped.
+- [x] 12.3 The async mock leaked a pending navigation into the NEXT test and
+  rewrote its URL. Handles are tracked and cleared in `afterEach`.
+- [x] 12.4 **Deactivating an already-deactivated customer restamped the date.**
+  Two staff on one record — A deactivates, B's stale page still shows
+  "Desactivar", B clicks — and D1's "since when?" was gone. Fixed with
+  `coalesce` inside the UPDATE rather than a read-then-write: one statement has
+  no window between check and write, and `returning()` still distinguishes
+  "no such row". Only real SQL can prove it, so the test is an e2e row —
+  mutation-verified.
+
 ## Known and NOT fixed here
 
 - [ ] **`gga run --pr-mode` ignored `PR_BASE_BRANCH` as an environment

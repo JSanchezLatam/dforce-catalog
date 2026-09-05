@@ -7,15 +7,31 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// The mock NAVIGATES, like the real router does. Without this no test in this
-// file can observe a stale-read bug at all: every push would leave the URL
-// exactly as it was.
+/**
+ * The mock navigates, and navigates LATE — because the real one does.
+ *
+ * `router.push` in Next 16 only dispatches into the React action queue;
+ * `window.history.pushState` runs from a `useEffect` keyed on `appRouterState`
+ * (`app-router.js:64,70`), so on a server-component page the URL lands only
+ * after the RSC payload arrives.
+ *
+ * The previous version of this mock called `replaceState` synchronously, which
+ * is MORE synchronous than the real router — it manufactured the very property
+ * the race test claims to check, so no test in this file could fail on it. The
+ * delay here is what makes that test able to fail.
+ */
+const searchParams = vi.hoisted(() => ({ value: new URLSearchParams() }));
+/**
+ * Handles are tracked so `afterEach` can cancel them. A late navigation left
+ * pending by one test lands during the NEXT one and rewrites its URL — which
+ * is exactly what happened the first time this mock was made asynchronous.
+ */
+const pending = vi.hoisted(() => ({ timers: [] as ReturnType<typeof setTimeout>[], delay: 20 }));
 const push = vi.hoisted(() =>
   vi.fn((url: string) => {
-    window.history.replaceState({}, "", url);
+    pending.timers.push(setTimeout(() => window.history.replaceState({}, "", url), pending.delay));
   }),
 );
-const searchParams = vi.hoisted(() => ({ value: new URLSearchParams() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
   usePathname: () => "/customers",
@@ -33,6 +49,9 @@ function seedUrl(query: string) {
 }
 
 afterEach(() => {
+  pending.delay = 20;
+  for (const timer of pending.timers) clearTimeout(timer);
+  pending.timers = [];
   push.mockClear();
   searchParams.value = new URLSearchParams();
   window.history.replaceState({}, "", "/customers");
@@ -107,13 +126,20 @@ describe("CustomerFilters — ver desactivados (R20)", () => {
  */
 describe("CustomerFilters — the debounce must not clobber a newer filter", () => {
   it("keeps includeInactive when the search debounce fires after it", async () => {
+    // Navigation SLOWER than the 300ms debounce. This is the case that
+    // separates a correct fix from one that merely narrows the window: with a
+    // fast mock, the URL lands before the timeout and even a
+    // `window.location`-only read passes. On a server-component page the push
+    // waits for the RSC payload over a list query that is a sequential scan,
+    // so "slower than 300ms" is the realistic shape, not the exotic one.
+    pending.delay = 450;
     const user = userEvent.setup();
     render(<CustomerFilters selected={{}} pageSize={10} />);
 
     await user.type(screen.getByLabelText(/Buscar/), "perez");
     // Inside the 300ms window — this is the interaction that lost the flag.
     await user.click(screen.getByRole("checkbox", { name: "Ver desactivados" }));
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 350));
 
     const last = push.mock.calls.at(-1)?.[0] as string;
     expect(last).toContain("search=perez");

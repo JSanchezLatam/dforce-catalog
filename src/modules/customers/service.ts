@@ -10,7 +10,7 @@
  * create/update. See apply-progress for this deviation from the original
  * assumption that a DB constraint existed.
  */
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { cliente, type Cliente, type Vehiculo } from "@/shared/db/schema";
@@ -275,7 +275,18 @@ export type ActivationDeps = {
  * difference between deactivation and deletion.
  */
 async function setDeactivatedAtDb(id: string, at: Date | null): Promise<Cliente | undefined> {
-  const [row] = await db.update(cliente).set({ deactivatedAt: at }).where(eq(cliente.id, id)).returning();
+  // `coalesce`, not a bare assignment: deactivating an ALREADY deactivated
+  // customer must not restamp the date. Two staff on the same record — A
+  // deactivates, B's stale page still shows "Desactivar", B clicks — and a
+  // plain `set` would erase when it actually happened. D1's whole argument for
+  // a timestamp over a boolean is that it answers "since when?", and a value
+  // that any later click overwrites does not.
+  //
+  // Done in the UPDATE rather than as a read-then-write: one statement has no
+  // window between the check and the write, and `returning()` still
+  // distinguishes "no such row" for the not-found path.
+  const value = at === null ? null : sql`coalesce(${cliente.deactivatedAt}, ${at})`;
+  const [row] = await db.update(cliente).set({ deactivatedAt: value }).where(eq(cliente.id, id)).returning();
   return row;
 }
 

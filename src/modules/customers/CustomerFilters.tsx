@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Checkbox } from "@/components/ui/checkbox";
@@ -31,35 +31,44 @@ export function CustomerFilters({
   const searchParams = useSearchParams();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
-   * Read at FIRE time, not at schedule time — and from `window.location`
-   * rather than the `searchParams` hook.
+   * `applyFilter` is the ONLY writer of this component's query string, so the
+   * params it last pushed are authoritative the instant it pushes them. That
+   * is what makes this ref synchronous by construction, and it is the only
+   * thing here that is.
    *
-   * `applyFilter` used to read `searchParams` from the closure of the render
-   * that created it, and `applyDebounced` schedules that closure 300ms out. Any
-   * push landing inside that window was then overwritten by the stale
-   * snapshot: type "perez", tick "Ver desactivados" within 300ms, and the
-   * pushes came out as
-   *   ["/customers?includeInactive=1", "/customers?search=perez"]
-   * — the operator ticks the box and watches it come back unticked.
+   * Two earlier attempts were both wrong, and the second one shipped:
    *
-   * A ref refreshed each render was the first fix and is not enough: it still
-   * depends on the re-render from the previous `router.push` having landed
-   * before the timeout fires, which is the same race one step smaller.
-   * `window.location.search` is current by definition. `searchParams` stays as
-   * the hook that SUBSCRIBES this component to URL changes; this is only the
-   * read at the moment of writing.
+   *  1. Reading `searchParams` from the closure. `applyDebounced` schedules
+   *     that closure 300ms out, so a push landing inside the window was
+   *     overwritten by the stale snapshot — the operator ticked "Ver
+   *     desactivados" and watched it come back unticked.
+   *  2. Reading `window.location.search` at fire time, with a comment claiming
+   *     it is "current by definition". It is not. In Next 16,
+   *     `router.push` only dispatches into the React action queue;
+   *     `window.history.pushState` runs from a `useEffect` keyed on
+   *     `appRouterState` (`next/dist/client/components/app-router.js:64,70`),
+   *     so the URL lands only after React commits the navigation — which on a
+   *     server-component page means after the RSC payload arrives. That turned
+   *     a 300ms race against a re-render into a 300ms race against a network
+   *     round trip over a list query that is a sequential scan. Narrower, not
+   *     closed.
    *
-   * Covers all three filters, not just the new one.
+   * `null` means "no push of ours is outstanding, trust the URL". The effect
+   * resets it when an EXTERNAL navigation changes `searchParams` — a back
+   * button or a `<Link>` — which is the one case that is not racing a debounce
+   * the user just started.
    */
-  function currentParams(): URLSearchParams {
-    return new URLSearchParams(typeof window === "undefined" ? searchParams.toString() : window.location.search);
-  }
+  const pushedParamsRef = useRef<URLSearchParams | null>(null);
+  useEffect(() => {
+    pushedParamsRef.current = null;
+  }, [searchParams]);
 
   function applyFilter(key: string, value: string) {
-    const params = currentParams();
+    const params = new URLSearchParams(pushedParamsRef.current ?? window.location.search);
     if (value) params.set(key, value);
     else params.delete(key);
     if (key !== "pageSize") params.delete("page");
+    pushedParamsRef.current = params;
     router.push(`${pathname}?${params.toString()}`);
   }
 

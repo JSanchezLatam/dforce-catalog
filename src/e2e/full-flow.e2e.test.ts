@@ -920,6 +920,20 @@ describe("customer deactivation (E2E)", () => {
     expect(rows[0].deactivatedAt).toBeNull();
   });
 
+  // D1's whole argument for a timestamp over a boolean is that it answers
+  // "since when?". Two staff on the same record — A deactivates, B's stale
+  // page still shows "Desactivar", B clicks — and a plain `set` would erase
+  // when it actually happened. Only real SQL can prove the `coalesce`.
+  it("does not restamp the date when an already-deactivated customer is deactivated again", async () => {
+    const first = (await getClienteById(target.id))!.cliente.deactivatedAt;
+    expect(first).toBeTruthy();
+
+    await deactivateCliente(target.id);
+
+    const second = (await getClienteById(target.id))!.cliente.deactivatedAt;
+    expect(second?.getTime()).toBe(first?.getTime());
+  });
+
   it("brings them back on reactivation, with everything still attached", async () => {
     await reactivateCliente(target.id);
 
