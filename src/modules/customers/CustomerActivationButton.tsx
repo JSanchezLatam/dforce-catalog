@@ -23,6 +23,7 @@ export function CustomerActivationButton({ clienteId, isActive }: { clienteId: s
   async function toggle() {
     setIsSubmitting(true);
     setError(null);
+    const failure = isActive ? "No se pudo desactivar el cliente." : "No se pudo reactivar el cliente.";
     try {
       const response = await fetch(`/api/customers/${clienteId}`, {
         method: "PATCH",
@@ -30,12 +31,15 @@ export function CustomerActivationButton({ clienteId, isActive }: { clienteId: s
         body: JSON.stringify({ active: !isActive }),
       });
       if (!response.ok) {
-        setError(
-          isActive ? "No se pudo desactivar el cliente." : "No se pudo reactivar el cliente.",
-        );
+        setError(failure);
         return;
       }
       router.refresh();
+    } catch {
+      // `fetch` REJECTS on a network failure rather than returning a non-ok
+      // response, so without this the button re-enabled with nothing on
+      // screen and the operator clicked again into the same silence.
+      setError(failure);
     } finally {
       setIsSubmitting(false);
     }

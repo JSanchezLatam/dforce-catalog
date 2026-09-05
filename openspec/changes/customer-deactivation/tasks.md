@@ -46,10 +46,10 @@ Files: `src/modules/reminders/job.ts`(+test).
 
 Files: `CustomerFilters.tsx`(+test), `customers/page.tsx`, `customers/[id]/page.tsx`(+test), `CustomerFormTrigger.tsx`.
 
-- [x] 4.1 RED/GREEN `CustomerFilters` — `?includeInactive=1` toggle, URL state, matching the debounced `router.push` idiom already there (D6).
+- [x] 4.1 `CustomerFilters` — `?includeInactive=1` toggle, URL state. **This task was marked complete in an earlier commit with NO test written** — GGA caught the false claim. `CustomerFilters.test.tsx` now exists: 6 tests over the pushed URL, including that unticking REMOVES the key rather than setting `0`, and that the toggle returns to page 1.
 - [x] 4.2 GREEN `customers/page.tsx` — read the flag, pass it through, mark deactivated rows.
 - [x] 4.3 RED/GREEN `customers/[id]/page.tsx` — deactivated banner, "Reactivar" offered, "Editar" NOT offered (D5).
-- [x] 4.4 GREEN — the deactivate action on an active customer's detail.
+- [x] 4.4 `CustomerActivationButton` — likewise claimed complete with only `page.test.tsx` asserting which LABEL renders. `CustomerActivationButton.test.tsx` now covers the payload shape, `router.refresh()` on success, both failure paths, and that the button re-enables so the action can be retried.
 
 ## WU5 — the real-SQL coverage
 
@@ -75,6 +75,30 @@ Files: `CustomerFilters.tsx`(+test), `customers/page.tsx`, `customers/[id]/page.
 - [x] 7.2 Lint went 15 → 23 warnings: eight `_id`/`_at` parameters added only
   to type a mock. Replaced with `vi.fn<SetDeactivatedAt>()`, which carries the
   signature without declaring parameters. Back at the documented baseline.
+
+## WU8 — GGA round 1 on C2 (three findings, all real)
+
+- [x] 8.1 **LIVE BUG — `buildPageHref` dropped `includeInactive`.** Turn on
+  "Ver desactivados", page to 2, and the flag vanished: the list silently
+  narrowed to active-only, which reads as the records having disappeared
+  rather than the filter having reset. **The same failure class as WU7, one
+  function over** — a flag wired into one layer and not the next. Fixed, and
+  `src/app/(app)/customers/page.test.tsx` now exists (the file GGA noted was
+  missing entirely); the pagination test is mutation-verified by removing the
+  line again.
+- [x] 8.2 **The route's 404 test asserted the mock, not the route.** Verified:
+  I replaced `setActivation`'s throw with a silent `return undefined` and all
+  17 route tests still passed, because the test hand-feeds the rejection.
+  Renamed to what it actually proves — the error-to-status MAPPING, which IS
+  the route's job. The "does not write blind" claim belongs to
+  `service.test.ts`, where an injected `setDeactivatedAt` makes it real.
+- [x] 8.3 `CustomerActivationButton` had no `catch`. `fetch` REJECTS on a
+  network failure rather than returning a non-ok response, so the button
+  re-enabled with nothing on screen and staff clicked into the same silence.
+  Fixed and mutation-verified.
+- [x] 8.4 The "Desactivado" chip used `CHIP`, the class that marks neutral
+  metadata (make, model, year) — a retired customer read with the same weight
+  as "Toyota". Now a destructive-tinted badge.
 
 ## Follow-ups (out of scope here)
 

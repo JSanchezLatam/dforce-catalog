@@ -8,7 +8,7 @@ import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
 import { countClientes, listClientes, type ClienteFilters } from "@/modules/customers/queries";
 import { computePageWindow, parsePageSize } from "@/modules/inventory-view/queries";
 import { Pagination } from "@/shared/ui/Pagination";
-import { CHIP, PAGE_HEADING } from "@/shared/ui/styles";
+import { PAGE_HEADING } from "@/shared/ui/styles";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -107,7 +107,12 @@ export default async function CustomersPage({
                       <TableCell className="font-medium">
                         {item.name}
                         {item.deactivatedAt && (
-                          <span className={CHIP + " ml-2"}>Desactivado</span>
+                          // NOT `CHIP`: that class marks neutral metadata
+                          // (make, model, year), so a retired customer would
+                          // read with the same weight as "Toyota".
+                          <span className="ml-2 rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+                            Desactivado
+                          </span>
                         )}
                       </TableCell>
                       <TableCell>{item.phone ?? "—"}</TableCell>
@@ -148,6 +153,10 @@ function buildPageHref(params: SearchParams, page: number): string {
   const search = new URLSearchParams();
   if (typeof params.search === "string" && params.search) search.set("search", params.search);
   if (typeof params.pageSize === "string" && params.pageSize) search.set("pageSize", params.pageSize);
+  // R20 — every filter in the URL has to survive paging. Dropped here, "Ver
+  // desactivados" would silently switch itself off on page 2, which reads as
+  // the records having disappeared rather than the filter having reset.
+  if (params.includeInactive === "1") search.set("includeInactive", "1");
   search.set("page", String(page));
   return `/customers?${search.toString()}`;
 }

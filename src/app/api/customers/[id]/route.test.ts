@@ -262,7 +262,13 @@ describe("PATCH /api/customers/[id] — activation (R20)", () => {
     expect(response.status).toBe(200);
   });
 
-  it("maps a missing cliente to 404 rather than writing blind", async () => {
+  // Named for what it actually proves: the route's job here is the
+  // error-to-status MAPPING. That the service refuses to write blind is a
+  // service-level claim, tested in `service.test.ts` with an injected
+  // `setDeactivatedAt` - and verified by mutation, unlike this one, which
+  // hand-feeds the rejection and would pass even if the service stopped
+  // throwing.
+  it("maps ClienteNotFoundError to 404", async () => {
     const deactivateCliente = vi.fn().mockRejectedValue(new ClienteNotFoundError("missing"));
 
     const response = await handleUpdateCliente(requestWith({ active: false }), "missing", {
