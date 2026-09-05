@@ -4,8 +4,18 @@ import { fetchAllCustomers } from "./client";
 
 const OPTS = { baseUrl: "https://ifx.test/api/v4/", token: "t" };
 
+/**
+ * `count` as a STRING, because that is what Interfuerza sends — measured live
+ * as `"370"` for this action.
+ *
+ * The numeric version this replaces is why WU2d's strict-`typeof` guard was
+ * invisible here: restoring that guard left all four tests green, in the one
+ * module whose whole job is fetching those 370 customers. `tasks.md` WU2d.2
+ * then claimed "fixtures now produce the wire shape by default", which was
+ * true two files over and false in this one.
+ */
 function page(rows: unknown[], count: number) {
-  return { ok: true, status: 200, json: async () => ({ customers: rows, count }) } as Response;
+  return { ok: true, status: 200, json: async () => ({ customers: rows, count: String(count) }) } as Response;
 }
 
 async function drain(gen: AsyncGenerator<unknown[]>) {

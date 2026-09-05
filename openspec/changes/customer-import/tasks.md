@@ -205,6 +205,34 @@ Files: `customer-import/job.ts`(+test), route, a manual trigger.
   capability's spec. The shared string now names the action instead, and each
   caller's docstring owns its own citation.
 
+## WU2e — GGA round 4 on C6
+
+- [x] 2e.1 **My own WU2d.2 claim was false in the file that matters most.**
+  It said "fixtures now produce the wire shape by default" — true in
+  `shared/interfuerza/client.test.ts`, partly true in `inventory-sync`, and
+  FALSE in `customer-import/client.test.ts`, the module whose entire job is
+  fetching those 370 customers. Proven: restoring the strict `typeof` guard
+  left all 4 of its tests green. Fixture fixed.
+  Same class as C2 round 10 and C6 round 2 — an artifact affirming something
+  the code does not do, and the claim is what makes it invisible.
+- [x] 2e.2 Two different `R20`s cited three lines apart in
+  `api/service-orders/route.ts`: `customer-management` R20 (deactivation) and
+  `service-orders` R20 (order creation with parts). Both exist; the labels did
+  not say which. **WU2d.4 had just removed `R1.9` from the shared abort message
+  for exactly this reason and then I reintroduced the ambiguity here.** Both
+  citations, and both test describes, now name their capability.
+- [x] 2e.3 **The `pendingPushes` concern: investigated, mock made faithful, NO
+  failing case found.** The mock notified every listener unconditionally, so a
+  push that does not change the url was indistinguishable from one that does —
+  the fourth mock-fidelity gap of this shape. Fixed: an unchanged url now
+  notifies nobody, as the real router does not.
+  With that in place the leak still could not be demonstrated. The next
+  navigation decrements the stray count to zero and releases the ref anyway,
+  so the skew is transient. The one-line guard stays as precision, its comment
+  says exactly that, and **the test that could not distinguish it was deleted
+  rather than kept as a placebo** — passing with and without the fix is the
+  signature this branch has been catching all session.
+
 ## Known before starting
 
 - [ ] **353 imported customers will not be able to receive a WhatsApp

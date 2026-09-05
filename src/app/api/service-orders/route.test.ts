@@ -19,7 +19,7 @@ const clienteDetail = { cliente: { id: "cli-1" }, orders: [], vehicles: [vehicul
   vehicles: unknown[];
 };
 
-describe("POST /api/service-orders (R20)", () => {
+describe("POST /api/service-orders (service-orders R20)", () => {
   it("throws when called without session headers", async () => {
     const request = new NextRequest("http://localhost/api/service-orders", {
       method: "POST",
@@ -151,7 +151,7 @@ describe("POST /api/service-orders (R20)", () => {
  * back as a 409 rather than an unhandled 500. Its twin in
  * `api/customers/[id]/route.test.ts` exists for the same reason.
  */
-describe("POST /api/service-orders — a deactivated cliente (R20)", () => {
+describe("POST /api/service-orders — a deactivated cliente (customer-management R20)", () => {
   const deactivated = {
     cliente: { id: "cli-1", deactivatedAt: new Date("2026-09-01") },
     orders: [],

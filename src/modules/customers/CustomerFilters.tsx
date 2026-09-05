@@ -89,10 +89,25 @@ export function CustomerFilters({
    * `router.push` to create.
    */
   function commit(params: URLSearchParams) {
-    pushedParamsRef.current = params;
-    pendingPushes.current += 1;
     const query = params.toString();
-    router.push(query ? `${pathname}?${query}` : pathname);
+    const href = query ? `${pathname}?${query}` : pathname;
+
+    pushedParamsRef.current = params;
+    // Only count a push that will actually CHANGE the url: a push to the url
+    // we are already on produces no new `searchParams`, so the effect below
+    // never fires for it and the increment would never come back down.
+    //
+    // Precision, NOT a fix for a demonstrated bug — and the distinction is
+    // worth the words. The concern was raised in review, the test mock was
+    // made faithful to it (an unchanged url now notifies nobody, as the real
+    // router does not), and no failing case could be constructed: the next
+    // navigation decrements the stray count to zero and releases the ref
+    // anyway, so the skew is transient. This keeps the counter meaning what
+    // its name says; it is not standing between the user and a defect.
+    if (href !== `${pathname}${window.location.search}`) {
+      pendingPushes.current += 1;
+    }
+    router.push(href);
   }
 
   function applyFilter(key: string, value: string) {
