@@ -1,314 +1,199 @@
 # Agent Instructions — Dforce Catálogo
 
-This file is read by coding agents (OpenCode, Claude Code, and others) working
-in this repository. Keep it current — it should describe standing
-conventions and decisions, not a session log. For stack/API/DB reference see
-`STACK.md`. For a specific change's detailed rationale, read that change's
-`openspec/changes/<name>/design.md` — do not assume this file has the full
-story.
+Read by coding agents (Claude Code, OpenCode, GGA) working in this repository.
+Standing conventions and decisions only — not a session log, not a war-story
+archive. Rationale and measurements belong next to the code they explain or in
+Engram. Stack/API/DB reference: `STACK.md`. A change's detailed rationale:
+`openspec/changes/<name>/design.md`.
 
 ## Cross-tool memory and task sharing (Claude Code ↔ OpenCode)
 
-This project is worked on from both Claude Code and OpenCode on the same
-machine. Two things carry state between them automatically — verified
-2026-07-27, don't re-litigate this without checking again first:
+Verified 2026-07-27 — don't re-litigate without re-checking first.
 
-1. **Engram memory is ALREADY shared, not tool-specific.** Both tools talk to
-   the same local `engram serve` process (a Homebrew-installed Go binary,
-   HTTP on `127.0.0.1:7437`, SQLite-backed) — Claude Code via its Engram MCP
-   plugin, OpenCode via `~/.config/opencode/plugins/engram.ts` (a global
-   plugin, loaded for every OpenCode project automatically — it does NOT
-   need to be listed in this repo's `opencode.json`). Both resolve the same
-   project key (`dforce-catalog`, from `git remote get-url origin`), so a
-   `mem_save` from either tool is visible to the other with zero extra
-   config. If cross-tool recall ever seems to fail, the fix is almost
-   certainly "the engram server isn't running" (`curl
-   http://127.0.0.1:7437/health` should return `{"status":"ok"}`), not
-   "wire up a bridge" — the bridge already exists.
-2. **SDD task/plan state lives in committed files**, not just in Engram:
-   `openspec/changes/<name>/{proposal,spec,design,tasks}.md`. OpenCode has a
-   mirrored SDD skill/command set installed
-   (`~/.config/opencode/skills/sdd-*`, `~/.config/opencode/commands/sdd-*.md`)
-   that reads/writes these same files, so a change proposed/planned in one
-   tool can be picked up and implemented in the other by pointing it at the
-   change's `tasks.md` checklist.
-
-**What this does NOT guarantee**: whether a given agent persona *actually
-calls* `mem_save`/`mem_search` proactively depends on that session's own
-system prompt including the memory instructions (both tools inject this by
-default, but a custom persona/plugin — e.g. ponytail's "lazy" mode — can
-still choose not to be proactive about it). If a past session's decisions
-don't show up in memory, check whether that session was likely to have
-skipped saving, not just assume the plumbing is broken.
+- **Engram is already shared.** Both tools hit the same local server and
+  resolve the same project key (`dforce-catalog`), so a `mem_save` from either
+  is visible to the other with zero config. If cross-tool recall seems broken,
+  the server is down (`curl http://127.0.0.1:7437/health` → `{"status":"ok"}`)
+  — do not wire up a bridge, one exists.
+- **SDD task state lives in committed files**, not only in Engram. Either tool
+  can pick up a change by pointing at its `openspec/changes/<name>/tasks.md`.
+- Whether a session *actually* calls `mem_save` depends on its persona. A
+  missing memory is more often a session that skipped saving than broken
+  plumbing.
 
 ## SDD workflow
 
-Substantial changes go through Spec-Driven Development: `proposal.md` →
-`spec.md` (delta specs, `openspec/changes/<name>/specs/<capability>/spec.md`)
-→ `design.md` → `tasks.md`, all under `openspec/changes/<name>/`. Completed
-changes get merged into main specs and archived (see `openspec/` for
-in-progress and archived changes). Some changes were run with a
-Claude-Code-specific hybrid backend (Engram + files); others (this session's
-work) are file-only — check for an `openspec/changes/<name>/` directory
-before assuming a feature was never planned.
+Substantial changes: `proposal.md` → `spec.md` (delta specs under
+`openspec/changes/<name>/specs/<capability>/`) → `design.md` → `tasks.md`.
+Completed changes merge into the main specs and get archived. Check for an
+`openspec/changes/<name>/` directory before assuming a feature was never
+planned.
 
-**Large changes are delivered as chained PRs** (feature-branch-chain
-strategy): a draft tracker branch/PR off `main` accumulates the full
-feature; each work-unit PR targets the previous PR's branch, in order; only
-the tracker merges to `main` once every child PR has landed. See
-`openspec/changes/archive/crm-workshop-management/tasks.md`'s Review Workload
-Forecast for the template this repo uses to decide when a change needs this.
+**Large changes ship as chained PRs**: a draft tracker branch off `main`
+accumulates the feature; each work-unit PR targets the previous PR's branch, in
+order; the tracker merges to `main` only once every child has landed. Template
+for deciding when a change needs this:
+`openspec/changes/archive/crm-workshop-management/tasks.md` (Review Workload
+Forecast).
 
 ## Standing architectural decisions
 
-- **Auth**: DB-backed opaque session tokens (`users`/`sessions` tables,
-  `src/modules/auth/session.ts`) — not JWT. There is no signing-secret
-  fallback class of bug to worry about here.
-- **Theme**: shadcn's stock neutral palette, both light and dark populated in
-  `src/app/globals.css`, toggled at runtime via `next-themes`
-  (`src/components/theme-provider.tsx`, `src/modules/layout/ThemeToggle.tsx`
-  in the sidebar user menu). This has flipped direction twice before (a
-  custom "Kanagawa Dragon" theme, then a custom violet/gold brand palette,
-  now shadcn stock) — don't assume any specific color value is permanent;
-  read the current `globals.css` before changing it.
-- **CRM/workshop features are built natively**, not by integrating the
-  separate `github.com/Hainrixz/auto-crm` repo — that project runs on SQLite
-  (this app is Postgres) and is a generic sales-CRM, not workshop-shaped.
-  `openspec/changes/archive/crm-workshop-management/` documents the customer
-  (`cliente`), service-order (`orden_servicio`), and reminder (`reminder`,
-  pg-boss `sendAfter` + Resend/Kapso) modules built instead.
-- **Reminders**: WhatsApp and email opt-out are two independent booleans on
-  `cliente` (`whatsappOptOut`/`emailOptOut`) — they are legally distinct
-  consent regimes, never collapse them into one flag. `runReminder` re-checks
-  the row's status before dispatching to a provider (idempotent against
-  pg-boss retries) — see `src/modules/reminders/job.ts`.
-- **No real-time stock deduction** anywhere in this app — `producto.stock` is
-  only ever overwritten wholesale by the weekly/manual inventory sync. Don't
-  add stock-decrementing logic to a new feature (e.g. service orders) unless
-  explicitly asked; it would be new scope, not a bug fix.
-- **Component testing** — `vitest.config.ts` uses `test.projects` (Vitest 4;
-  `environmentMatchGlobs` was removed, this is the supported replacement) to
-  split ONE `npm test` run into two projects:
-  - `node` — everything except `*.test.tsx`. Same DB-free unit tests as
-    always, unchanged `environment: "node"`.
-  - `jsdom` — only `*.test.tsx` files, `environment: "jsdom"`, loads
-    `vitest.setup.ts` (jest-dom matchers via `@testing-library/jest-dom/vitest`,
-    a `window.matchMedia` shim for `use-mobile.ts`, and manual RTL `cleanup()`
-    registered via `afterEach` from `"vitest"` — NOT automatic, because this
-    repo does not set `test.globals: true`; `@testing-library/react`'s
-    built-in auto-cleanup only registers when `afterEach` exists as an
-    ambient global).
-  - **Naming convention**: give a component test the `.test.tsx` extension
-    (not `.test.ts`) to route it to the `jsdom` project. Everything else
-    (`.test.ts`) stays on `node`.
-  - To write one: `render()` from `@testing-library/react` inside a
-    `<SidebarProvider>` (or whatever context the component needs), query
-    with `screen`/`within` by role, interact with `@testing-library/user-event`.
-    See `src/components/app-sidebar.test.tsx` for a full example (collapsible
-    sidebar groups — aria-expanded, aria-controls, keyboard activation,
-    independent group state).
-  - Deps: `jsdom`, `@testing-library/react`, `@testing-library/user-event`,
-    `@testing-library/jest-dom` (devDependencies).
-- **Security headers** are set in `next.config.ts`. CSP is deliberately not
-  configured yet — it needs the actual R2/Interfuerza image hosts allowlisted
-  first, or it silently breaks product images app-wide.
+Each of these has been re-litigated at least once. Don't reopen without new
+evidence.
+
+- **Auth**: DB-backed opaque session tokens (`users`/`sessions`,
+  `src/modules/auth/session.ts`) — not JWT. No signing-secret class of bug here.
+- **Theme**: shadcn stock neutral palette, light and dark in
+  `src/app/globals.css`, toggled via `next-themes`. This flipped twice before
+  (Kanagawa Dragon, then a violet/gold brand palette) — read the current
+  `globals.css` before changing any color.
+- **CRM/workshop is built natively**, not by integrating `Hainrixz/auto-crm`
+  (SQLite, generic sales-CRM — this app is Postgres and workshop-shaped). See
+  `openspec/changes/archive/crm-workshop-management/`.
+- **Reminders**: `whatsappOptOut` and `emailOptOut` on `cliente` are two
+  independent booleans — legally distinct consent regimes, never collapse them.
+  `runReminder` re-checks row status before dispatch (idempotent against
+  pg-boss retries), `src/modules/reminders/job.ts`.
+- **No real-time stock deduction** anywhere — `producto.stock` is only
+  overwritten wholesale by the inventory sync. Adding stock-decrementing logic
+  to a new feature is new scope, not a bug fix.
+- **Security headers** in `next.config.ts`. CSP is deliberately unconfigured:
+  it needs the R2/Interfuerza image hosts allowlisted first, or it silently
+  breaks product images app-wide.
+
+Writing a component test is a procedure, not a decision — see the
+`component-testing` skill.
 
 ## Language: Spanish for the user, English for the code
 
-Decided 2026-08-12, final.
+Decided 2026-08-12, final. The split is by AUDIENCE, not by file: a
+`"use client"` component holds Spanish strings and English identifiers on the
+same line, and that is correct.
 
-**Everything the user sees is in Spanish.** UI copy, form labels, `aria-label`s,
-validation and error messages, empty states, the generated PDF, and anything
-printed by `scripts/dev.sh`. Rioplatense, matching the rest of the app
-(`Clientes`, `Órdenes de servicio`, `Gestión de usuarios`).
+- **Spanish** — UI copy, labels, `aria-label`s, validation and error messages,
+  empty states, the generated PDF, `scripts/dev.sh` output. Rioplatense, to
+  match `Clientes` / `Órdenes de servicio` / `Gestión de usuarios`.
+- **English** — identifiers, comments, test names, commit messages, PR
+  descriptions, this file, openspec artifacts.
 
-**Everything else stays English.** Identifiers, comments, docstrings, test
-names, commit messages, PR descriptions, this file, and the openspec artifacts.
-The codebase is English today and a mixed-language identifier space is worse
-than either language chosen consistently.
+Tests assert the Spanish string. Those are what catch an untranslated screen —
+never loosen them to match both languages.
 
-The split is by AUDIENCE, not by file: a `"use client"` component holds Spanish
-strings and English variable names in the same line, and that is correct.
+## Addressing the user
 
-When a test asserts on user-facing copy it asserts the Spanish string — those
-tests are the ones that catch an untranslated screen, so do not loosen them to
-regex-match both languages.
+Every reply addresses or greets the user as **"thanos"**, in every response and
+every session. Conversation text only — never in code, comments, commits, PRs,
+or specs. Same audience split as the language rule above.
+
+## Commits
+
+Conventional commits, and **no AI attribution** — no `Co-Authored-By` naming
+Claude, no `Claude-Session`, no "Generated with Claude Code".
+
+This rule lived only in prose until 2026-09-04, when an agent was talked out of
+it by a runtime directive and four commits shipped carrying it. Prose is advice;
+`.githooks/commit-msg` is enforcement. It strips those trailers from the
+finished message, so it covers Claude Code, OpenCode, Codex, an IDE, and a plain
+`git commit` alike. Human `Co-authored-by` trailers are preserved.
+
+`core.hooksPath` is per-clone local config, so a fresh clone must enable it once:
+
+```
+git config core.hooksPath .githooks
+```
 
 ## Simplicity & scope discipline
 
-This repo enforces "smallest change that solves the actual ask" as a standing
-rule, not a style preference — see the "no real-time stock deduction" decision
-above for the canonical example.
+Smallest change that solves the actual ask. Before adding code:
 
-Before adding code, check in this order:
+1. Does a module in `src/modules/*` already do this? `auth/session.ts` and
+   `reminders/job.ts` are the reference patterns for injectable seams and
+   idempotent job handling.
+2. Does the stdlib, or something already in `package.json`, solve it?
+3. Is this the actual scope, or a speculative future need?
 
-1. Does an existing module already do this? Look in `src/modules/*` first —
-   `auth/session.ts` and `reminders/job.ts` are the reference patterns for
-   injectable seams and idempotent job handling respectively.
-2. Does the stdlib, or a dependency already in `package.json`, solve it? Read
-   `package.json` before adding anything new.
-3. Is this solving the actual change scope, or a speculative future need? If
-   speculative — skip it and note it in the PR description instead of
-   building it.
+**Do not expand scope silently.** A tempting related improvement goes in the
+change's `tasks.md` as a follow-up and in the PR description — not into the
+current PR. This applies doubly to chained PRs.
 
-**Do not expand scope silently.** If implementing a change surfaces a tempting
-related improvement ("while I'm here, let's also refactor X"), it goes in the
-change's `tasks.md` as a follow-up and in the PR description, not into the
-current PR. This applies doubly to chained-PR features (see
-"feature-branch-chain strategy" above) — each child PR stays scoped to its own
-`tasks.md` entry.
-
-This is tool-agnostic: it describes what the repo expects, not a setting in
-any particular agent harness. Note the one standing exception — Strict TDD
-(below) is not scaffolding to be trimmed. A change is not smaller for having
-skipped its RED test.
+One standing exception: Strict TDD is not scaffolding to be trimmed. A change
+is not smaller for having skipped its RED test.
 
 ## Testing
 
-`npm test` (`vitest run`) — runs BOTH the `node` project (DB-free unit
-tests) and the `jsdom` project (component tests, see "Component testing"
-above) in one command; safe to run anywhere. `src/e2e/**` needs a real
-reachable Postgres (see `README.md`) and is excluded from the default run.
-Strict TDD is the norm in this repo: RED test first (confirm it fails), then
-GREEN implementation — for a retrofit test on already-shipped code where a
-real RED phase isn't possible, verify the test is meaningful instead by
-temporarily breaking the implementation and confirming the test fails, then
-reverting.
+`npm test` (`vitest run`) runs both projects — `node` (DB-free unit tests) and
+`jsdom` (`*.test.tsx` component tests) — in one command, safe to run anywhere.
+`src/e2e/**` needs a reachable Postgres (see `README.md`) and is excluded.
 
-**Known coverage limit — do not mistake a green run for verified SQL.** Most
-of `src/modules/*/service.ts` uses an injected-dependency seam
-(`deps?.thing ?? realDbCall`). Every unit test supplies the dep, so the
-`else` branch — the one holding the actual column names, `WHERE` clauses and
-casts — never executes. `vitest.config.ts` points `DATABASE_URL` at a
-nonexistent database, so any test that did reach a real branch would fail
-loudly; a fully green suite therefore *proves* zero real-SQL coverage. Hand-
-built SQL (e.g. `applyUserPatchTx`'s dynamic `SET` and its `::role` enum
-cast) is the risky case: it compiles, the suite passes, and it can still be
-wrong at runtime. Until a Postgres testcontainer exists, verify those paths
-with a live smoke test against a throwaway database before merging.
+**Strict TDD**: RED test first, confirm it fails, then GREEN. For a retrofit
+test on shipped code where a real RED isn't possible, verify the test is
+meaningful by temporarily breaking the implementation and confirming it fails.
+
+**Known coverage limit — a green run does not mean verified SQL.** Most of
+`src/modules/*/service.ts` uses an injected-dependency seam
+(`deps?.thing ?? realDbCall`). Every unit test supplies the dep, so the `else`
+branch — the one holding the real column names, `WHERE` clauses and casts —
+never executes. `vitest.config.ts` points `DATABASE_URL` at a nonexistent
+database, so anything reaching a real branch would fail loudly: a fully green
+suite therefore *proves* zero real-SQL coverage. Hand-built SQL (e.g.
+`applyUserPatchTx`'s dynamic `SET` and `::role` cast) compiles, passes, and can
+still be wrong at runtime. Until a Postgres testcontainer exists, smoke-test
+those paths against a throwaway database before merging.
 
 ## Code quality gate
 
-What actually gates work:
+- **`npm test` and `npx tsc --noEmit` clean before a PR.**
 
-- `npm test` and `npx tsc --noEmit` must be clean before a PR.
+  Reading a red run: timeouts cascade, so the failure count is not the defect
+  count. A test that blows `testTimeout` keeps running and its `userEvent.type`
+  keystrokes land on the NEXT test's `document.activeElement`, which then fails
+  on text it never typed. **The first timeout in a file is the real failure;
+  assertion failures after it are collateral.** Fix the timeout, re-run.
 
-  **Reading a red run.** Timeouts cascade, so the failure count is not the
-  defect count. A test Vitest fails for exceeding `testTimeout` keeps running:
-  its `userEvent.type` promise is never cancelled, and userEvent dispatches
-  each remaining keystroke to `document.activeElement` — which by then belongs
-  to the NEXT test. That test fails on interleaved text it never typed, and
-  its message points at innocent code. Issue #54 was that, at scale: 25
-  timeouts producing 26 failures across eight files, a different set each run.
+  `testTimeout` is 15s and the `jsdom` project is capped at `maxWorkers: 2`.
+  Both numbers were measured, and the measurements live in `vitest.config.ts`
+  next to the settings — read them there, not here.
 
-  So: **the first timeout in a file is the real failure; assertion failures
-  after it in the same file are collateral.** Fix the timeout, re-run, and the
-  rest usually disappear. `testTimeout` is 15s (raised from 5s in #54, with
-  the measurements in `vitest.config.ts`). Reproduce it deliberately with two
-  suites at once:
-  `npm test > /tmp/a.txt 2>&1 & npm test > /tmp/b.txt 2>&1; wait`.
+- **`npm run lint`**: 0 errors, 15 warnings (verified 2026-08-28), all
+  pre-existing. Don't add to them; clearing them is its own change. Re-run
+  before trusting that count.
 
-  **The trigger is contention, and it is now capped.** Raising the timeout
-  treated the symptom; the cause is jsdom parallelism. Measured on `main`
-  after C4 landed: two full runs failed 5 tests and then 1 — a DIFFERENT one —
-  every failure a 15-30s timeout and never a logic error, while those same
-  files run isolated at 89/89. The jsdom project is now capped at
-  `maxWorkers: 2` with its own `sequence.groupOrder`, so it no longer competes
-  with the ~450 node tests. Three consecutive runs at 35.3s / 33.8s / 34.8s,
-  all green. Raising the cap to 4 or 6 still passes but the spread blows out
-  (39s, 108s, 60s, 36s) — these files thrash rather than scale. A green run
-  costs ~34s now instead of ~12s on a lucky day, which is the right trade: a
-  run you can trust beats a fast one you have to repeat.
-- Substantial changes go through the gentle-ai review flow
-  (`gentle-ai review status --contract gentle-ai.review-integration/v2
-  --agent <runtime> --next-transition`), which selects lenses by risk and
-  produces a receipt. It found a merge-blocking defect in
-  `user-lifecycle-management` WU3 that the full test suite passed over.
-- `npm run lint` currently reports **0 errors and 15 warnings** (verified
-  2026-08-28), all pre-existing: `@typescript-eslint/no-unused-vars`,
-  `@next/next/no-img-element`, and one `react-hooks/exhaustive-deps`. The five
-  `react-hooks/set-state-in-effect` errors this line used to claim are gone.
-  Don't add to the warnings; clearing them is its own change — and re-run the
-  command before trusting any count written here.
+- **Substantial changes go through the gentle-ai review flow**
+  (`gentle-ai review status --contract gentle-ai.review-integration/v2 --agent
+  <runtime> --next-transition`), which selects lenses by risk and produces a
+  receipt. It caught a merge-blocking defect in `user-lifecycle-management` WU3
+  that the full suite passed over.
 
 ### GGA — run it before opening a PR
 
-Configured in `.gga` at the repo root (Gentleman Guardian Angel v2.10.1):
-
-| Setting | Value |
-|---|---|
-| `PROVIDER` | `claude` |
-| `FILE_PATTERNS` | `*.ts,*.tsx,*.js,*.jsx` |
-| `EXCLUDE_PATTERNS` | `*.d.ts` only |
-| `RULES_FILE` | this file |
-| `STRICT_MODE` | `true` |
-
-**Tests are deliberately NOT excluded.** This repo runs strict TDD and whole
-work units ship as test-only commits — excluding `*.test.ts` would mean the
-reviewer sees nothing at all on those. A test asserting the wrong thing is a
-real defect, and this project has already shipped one.
-
-GGA reads THIS file as its rulebook, so a rule written here is a rule it
-enforces.
-
-**Invoke it manually, before opening a PR:**
-
 ```
-GGA_TIMEOUT=900 GGA_PROVIDER=claude gga run --pr-mode --diff-only
+gga run --pr-mode --diff-only
 ```
 
-`GGA_TIMEOUT` is not optional at this repo's changeset size: a review of an
-18-file branch timed out mid-response at the 300s default, and a timeout is
-not a PASS. It must be an environment variable — `TIMEOUT` in `.gga` is inert
-(defect #1 below).
+Configured in `.gga` (v2.10.1): provider `claude`, `*.ts,*.tsx,*.js,*.jsx`,
+excluding only `*.d.ts`, rules from this file, `TIMEOUT="900"`. No environment
+variables needed. `gga run --ci` reviews just the last commit.
 
-`gga run --ci` reviews just the last commit if that is all you want.
+- **Run `gga config` first on any new machine.** GGA loads `.gga` via
+  `source <(…)`, which is a silent no-op on the bash 3.2 macOS ships — every
+  value reverts to its default and GGA reviews every changed file. Fixed here
+  with `brew install bash`; a machine without one fails silently.
+- **900s is not optional** at this repo's changeset size. An 18-file branch
+  timed out mid-response at the 300s default, and a timeout is not a PASS.
+- **Tests are deliberately not excluded.** Work units ship as test-only
+  commits; excluding `*.test.ts` would mean the reviewer sees nothing at all on
+  those. A test asserting the wrong thing is a real defect, and this project
+  has shipped one.
+- **Never name a branch `*main*`, `*master*` or `*develop*`.**
+  `detect_base_branch()` matches with `grep -qw` and `/`/`-` are word
+  boundaries, so `feat/main-nav` satisfies the check for `main`; the range then
+  breaks, zero files are found, and gga exits 0 having reviewed nothing.
+- **There is deliberately no git hook.** A run takes two to four minutes and
+  this repo commits in small work units — automating the trigger added
+  maintenance, not findings. Every real finding came from a manual run.
+- `--pr-mode` auto-detect always resolves to `main`, so a chained branch
+  re-reviews every ancestor commit. Pin `PR_BASE_BRANCH` per-branch when it
+  matters.
 
-**There is deliberately no git hook.** A pre-commit hook was rejected because a
-run takes two to four minutes and this project commits in small work units —
-it would charge that several times per branch and punish exactly the habit we
-want. A pre-push hook was built, and then abandoned after four review rounds:
-it reached a hundred lines, fifty-six of them guards, and still could not
-reliably scope what it reviewed (see the defects below). Every real finding GGA
-has produced here came from a manual run. Automating the trigger added
-maintenance, not findings.
-
-If the config defect below is fixed upstream so `PR_BASE_BRANCH` can be
-pinned, a hook becomes worth about ten lines. Not before.
-
-**Known defects (v2.10.1)** — all three verified against the installed source
-and its behaviour, not inferred:
-
-1. **Config is not honoured** — NOTHING in `.gga` is applied, not just
-   `PROVIDER`. `gga config` finds the file ("Project: .gga") and then reports
-   every value as its default: with `PROVIDER="claude"`, `FILE_PATTERNS=`
-   `"*.ts,*.tsx,*.js,*.jsx"`, `EXCLUDE_PATTERNS="*.d.ts"` and `TIMEOUT="900"`
-   in that file, it prints `Not configured`, `*`, `None` and `300s`. The file
-   itself is fine — `source .gga` in a plain shell sets all four. The `GGA_`
-   environment variables do work; that is the only lever.
-
-   Do not narrow this to `PROVIDER` on a reading of the installed source. A
-   GGA review of this repo did exactly that: it traced `load_config()`,
-   correctly established that `sanitize_config_file` has no allowlist and that
-   the `TIMEOUT="300"` at line 454 is `gga init`'s heredoc rather than a
-   runtime clobber, and concluded the value lands. It does not. Whatever
-   breaks between `source` and the resolved value, `gga config` is the
-   measurement and it says default.
-2. **`--pr-mode` can pass green without reviewing anything.**
-   `detect_base_branch()` (`lib/pr_mode.sh:22`) lists LOCAL branches only and
-   matches with `grep -qw`, which hits substrings: a branch named
-   `feat/main-nav` satisfies the check for `main`. On a bogus match the range
-   breaks, `git diff` exits 128, the error is swallowed, zero files are found
-   and gga exits 0.
-3. **The base cannot be pinned to work around #2.** `PR_BASE_BRANCH` has no
-   `GGA_` environment override (only `GGA_PROVIDER`, `GGA_TIMEOUT`,
-   `GGA_OPENCODE_VARIANT`, `GGA_OPENCODE_AGENT` exist), and #1 means the config
-   file cannot supply it either.
-
-Consequence worth knowing: `--pr-mode` always resolves to `main`, but this repo
-uses chained PRs whose base is the parent branch — so a chained branch
-re-reviews every ancestor commit.
-
-This runs *in addition to* the gentle-ai receipt flow above — GGA on commit,
-RDD before delivery. Two AI reviews per change is deliberate, not an accident
-of configuration.
+GGA runs *in addition to* the gentle-ai receipt flow above — GGA on commit, RDD
+before delivery. Two AI reviews per change is deliberate.
