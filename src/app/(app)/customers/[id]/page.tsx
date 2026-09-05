@@ -130,6 +130,12 @@ export default async function CustomerDetailPage({
        * list is "which of these can I work on", so that has to be answerable
        * without reading. Restoring one happens from "Editar" (`CustomerForm`
        * carries the actual restore action); this view is read-only.
+       *
+       * R20 — for a DEACTIVATED customer "Editar" is absent (D5), so vehicle
+       * restore is unreachable until the customer is reactivated. That is the
+       * intended consequence, not an oversight: a retired customer's vehicle
+       * collection is not a thing to be edited, and reactivation is offered
+       * right above.
        */}
       <Card className="mb-6">
         <CardHeader>

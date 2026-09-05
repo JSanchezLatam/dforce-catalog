@@ -326,7 +326,39 @@ down about itself.
   includes every mistyped search. The comment now states the real cost and why
   it is acceptable, rather than a claim that flatters it.
 
+## WU17 — GGA round 10 on C2
+
+- [x] 17.1 **R19 was left affirming the opposite of the code, in the MAIN
+  spec.** `spec.md:63` still demanded a `phone = null` row that migration
+  `0016` makes unconstructible.
+
+  The sharp part: **the C1 delta already knew.** Its R17 rationale says R19
+  "STANDS UNCHANGED" because "no phone on record" is now spelled `''` — but
+  that sentence lives inside R17, and **the archiver replaces R17 without ever
+  touching R19**. The acknowledgement would have been archived while the stale
+  scenario stayed. Code, e2e and fixtures all got this right; only the spec was
+  left behind, one requirement over from the one being edited.
+
+  R19 is now restated in full in BOTH deltas: `customer-shared-phones` changes
+  the scenario's data shape, `customer-deactivation` adds `includeInactive` to
+  the route's parameter enumeration, which R20 states the rule for but does not
+  list. C2 archives after C1 and carries both edits, so branch order is also
+  archive order — noted in the delta itself.
+
+  **The reusable lesson: full-restatement discipline follows the DATA SHAPE,
+  not only the requirement you are editing.** Before archiving, grep every
+  requirement in the capability for the old shape.
+- [x] 17.2 The Vehículos docstring said restore "happens from Editar" without
+  noting that D5 removes "Editar" for a deactivated customer, making vehicle
+  restore unreachable until reactivation. That is intended; the comment now
+  says so rather than leaving it to be rediscovered as a bug.
+
 ## Known and NOT fixed here
+
+- [ ] The service-order detail page links a customer's name with no deactivated
+  marker. R20 does not require it and adding it means threading `deactivatedAt`
+  through the service-orders read path — a decision, recorded here rather than
+  taken silently at the end of a review round.
 
 - [ ] The empty state renders on `items.length === 0` while `hasDeactivated`
   gates on `total === 0`. Past the last page of a search that DOES match, the
