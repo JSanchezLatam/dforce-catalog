@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -22,7 +23,7 @@ export function CustomerFilters({
   selected,
   pageSize,
 }: {
-  selected: { search?: string };
+  selected: { search?: string; includeInactive?: boolean };
   pageSize: number;
 }) {
   const router = useRouter();
@@ -55,7 +56,18 @@ export function CustomerFilters({
           className="w-64"
         />
       </div>
-      {selected.search && (
+      {/* R20 — URL state like `search` and `pageSize`, not client state. A
+          filter that does not survive a refresh or a shared link is one staff
+          will not trust. Undebounced: a checkbox has no keystrokes to wait
+          out. */}
+      <label className="flex items-center gap-2 self-end pb-2 text-sm font-medium text-foreground">
+        <Checkbox
+          checked={selected.includeInactive === true}
+          onCheckedChange={(checked) => applyFilter("includeInactive", checked === true ? "1" : "")}
+        />
+        Ver desactivados
+      </label>
+      {(selected.search || selected.includeInactive) && (
         <button
           type="button"
           onClick={() => router.push(pathname)}

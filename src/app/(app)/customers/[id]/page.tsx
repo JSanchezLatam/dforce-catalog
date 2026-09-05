@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
+import { CustomerActivationButton } from "@/modules/customers/CustomerActivationButton";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
 import { getClienteById } from "@/modules/customers/queries";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
@@ -58,6 +59,7 @@ export default async function CustomerDetailPage({
   if (!detail) notFound();
 
   const { cliente, orders, vehicles } = detail;
+  const isActive = !cliente.deactivatedAt;
 
   return (
     <div className="p-8">
@@ -76,14 +78,31 @@ export default async function CustomerDetailPage({
       <Card className="mb-6">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{cliente.name}</CardTitle>
-          <CustomerFormTrigger
-            cliente={cliente}
-            vehicles={vehicles}
-            canDeleteVehicle={can(user, "customers.deleteVehicle")}
-            triggerLabel="Editar"
-          />
+          {/* R20/D5 — "Editar" is not merely disabled for a deactivated
+              customer, it is absent. The server refuses the edit with a 409
+              (`ClienteDeactivatedError`), so offering the control would put a
+              button on screen whose only outcome is an error the operator was
+              given no way to see coming. Reactivation is the way forward and
+              is always offered. */}
+          <div className="flex items-center gap-2">
+            {isActive && (
+              <CustomerFormTrigger
+                cliente={cliente}
+                vehicles={vehicles}
+                canDeleteVehicle={can(user, "customers.deleteVehicle")}
+                triggerLabel="Editar"
+              />
+            )}
+            <CustomerActivationButton clienteId={cliente.id} isActive={isActive} />
+          </div>
         </CardHeader>
         <CardContent>
+          {!isActive && (
+            <p role="alert" className={CARD_MUTED + " mb-4 text-sm"}>
+              Cliente desactivado. No aparece en el listado ni en el selector de órdenes, y no recibe
+              recordatorios. Sus vehículos y su historial siguen intactos.
+            </p>
+          )}
           <dl>
             {field("Teléfono", cliente.phone)}
             {field("Email", cliente.email)}

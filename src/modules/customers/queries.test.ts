@@ -118,6 +118,7 @@ describe("listClientes (R19)", () => {
         name: "Juan",
         phone: "+525512345678",
         email: null,
+        deactivatedAt: null,
         plates: [],
         createdAt: new Date(),
       },

@@ -24,6 +24,7 @@ const CUSTOMER: ClienteListItem = {
   name: "Ya Elegido",
   phone: "50761111111",
   email: null,
+  deactivatedAt: null,
   plates: ["ABC111"],
   createdAt: new Date("2026-01-01T00:00:00Z"),
 };
@@ -31,6 +32,7 @@ const CUSTOMER: ClienteListItem = {
 function clienteRow(overrides: Partial<ClienteListItem> = {}): ClienteListItem {
   return {
     id: "c-a",
+    deactivatedAt: null,
     name: "Cliente A",
     phone: "50762222222",
     email: null,

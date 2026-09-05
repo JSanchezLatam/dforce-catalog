@@ -25,7 +25,7 @@ export type ClienteFilters = {
   includeInactive?: boolean;
 };
 
-export type ClienteListItem = Pick<Cliente, "id" | "name" | "phone" | "email" | "createdAt"> & {
+export type ClienteListItem = Pick<Cliente, "id" | "name" | "phone" | "email" | "deactivatedAt" | "createdAt"> & {
   /** R19/D4 — this customer's active vehicle plates. */
   plates: string[];
 };
@@ -98,6 +98,10 @@ export async function listClientes(
         name: cliente.name,
         phone: cliente.phone,
         email: cliente.email,
+        // Only ever non-null when the caller passed `includeInactive` — the
+        // row needs it to mark itself, and R20 requires a listed deactivated
+        // customer to be visibly deactivated rather than silently mixed in.
+        deactivatedAt: cliente.deactivatedAt,
         plates: platesSubquery(),
         createdAt: cliente.createdAt,
       })

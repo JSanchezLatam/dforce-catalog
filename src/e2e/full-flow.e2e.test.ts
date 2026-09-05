@@ -55,6 +55,7 @@ import { registerPdfUploadWorker } from "@/modules/catalog-storage/upload-status
 import { countAllProducts, listCategoryL1Options, listInventory } from "@/modules/inventory-view/queries";
 import { runSync } from "@/modules/inventory-sync/job";
 import { getClienteById } from "@/modules/customers/queries";
+import { deactivateCliente, reactivateCliente } from "@/modules/customers/service";
 import { listOrdenesByVehiculo } from "@/modules/service-orders/queries";
 import { registerPdfGenerateWorker } from "@/modules/pdf-generation/worker";
 import { proxy } from "@/proxy";
@@ -267,6 +268,96 @@ describe("customer search (E2E)", () => {
  * ids, `afterAll` deletes those `cliente` ids (`vehiculo` cascades, no
  * separate cleanup needed).
  */
+/**
+ * R20 (customer-deactivation) — the rows that actually execute the `WHERE`.
+ * AGENTS.md's injected-seam limit means a fully green `npm test` proves ZERO
+ * coverage of the real SQL, and this whole change IS a `WHERE` clause, so the
+ * unit tests above are compile-checks and these are the verification.
+ */
+describe("customer deactivation (E2E)", () => {
+  const headers = { "x-user-id": "e2e-deactivation", "x-user-role": "tecnico" };
+  let target: { id: string };
+  let bystander: { id: string };
+  let vehicleId: string;
+
+  beforeAll(async () => {
+    execSync("npx drizzle-kit migrate", { stdio: "inherit" });
+
+    const [row1, row2] = await db
+      .insert(cliente)
+      .values([
+        { name: "Retirado Perez", phone: "50770000001" },
+        { name: "Retirado Vecino", phone: "50770000002" },
+      ])
+      .returning();
+    target = row1;
+    bystander = row2;
+
+    const [v] = await db.insert(vehiculo).values({ clienteId: target.id, plate: "DEACT01" }).returning();
+    vehicleId = v.id;
+  });
+
+  async function list(query: string) {
+    const response = await customersGET(new NextRequest(`http://localhost/api/customers?${query}`, { headers }));
+    expect(response.status).toBe(200);
+    return response.json() as Promise<{ customers: { id: string; deactivatedAt: string | null }[] }>;
+  }
+
+  const idsOf = (body: { customers: { id: string }[] }) => body.customers.map((c) => c.id);
+
+  it("lists the customer while active", async () => {
+    expect(idsOf(await list("search=Retirado"))).toContain(target.id);
+  });
+
+  it("drops them from the default list once deactivated, and keeps the bystander", async () => {
+    await deactivateCliente(target.id);
+
+    const body = await list("search=Retirado");
+    expect(idsOf(body)).not.toContain(target.id);
+    // The filter has to be a predicate on the row, not something that empties
+    // the result set - a `WHERE` bug that removed everyone would pass a test
+    // asserting only the first line.
+    expect(idsOf(body)).toContain(bystander.id);
+  });
+
+  // The whole reason D3 put the filter in the shared read path: the
+  // service-order customer picker reads this exact route, so no new order can
+  // be opened against a retired customer without the picker changing at all.
+  it("hides them from the picker's route with no search term either", async () => {
+    expect(idsOf(await list("pageSize=100"))).not.toContain(target.id);
+  });
+
+  it("lists them, marked, when the operator asks for deactivated records", async () => {
+    const body = await list("search=Retirado&includeInactive=1");
+    expect(idsOf(body)).toContain(target.id);
+    expect(body.customers.find((c) => c.id === target.id)?.deactivatedAt).toBeTruthy();
+  });
+
+  // D3's deliberate exception, and the one place a filter here would be a bug:
+  // you cannot reactivate a record you cannot open.
+  it("still returns the customer by id, with vehicles and history intact", async () => {
+    const detail = await getClienteById(target.id);
+    expect(detail).not.toBeNull();
+    expect(detail!.cliente.deactivatedAt).toBeTruthy();
+    expect(detail!.vehicles.map((v) => v.id)).toContain(vehicleId);
+  });
+
+  it("destroys nothing — the vehicle row survives deactivation", async () => {
+    const rows = await db.select().from(vehiculo).where(eq(vehiculo.id, vehicleId));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].deactivatedAt).toBeNull();
+  });
+
+  it("brings them back on reactivation, with everything still attached", async () => {
+    await reactivateCliente(target.id);
+
+    expect(idsOf(await list("search=Retirado"))).toContain(target.id);
+    const detail = await getClienteById(target.id);
+    expect(detail!.cliente.deactivatedAt).toBeNull();
+    expect(detail!.vehicles.map((v) => v.id)).toContain(vehicleId);
+  });
+});
+
 describe("vehicle search (E2E)", () => {
   let threeVehicles: { id: string };
   let zeroVehicles: { id: string };

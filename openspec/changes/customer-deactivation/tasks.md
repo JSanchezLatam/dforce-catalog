@@ -46,21 +46,35 @@ Files: `src/modules/reminders/job.ts`(+test).
 
 Files: `CustomerFilters.tsx`(+test), `customers/page.tsx`, `customers/[id]/page.tsx`(+test), `CustomerFormTrigger.tsx`.
 
-- [ ] 4.1 RED/GREEN `CustomerFilters` — `?includeInactive=1` toggle, URL state, matching the debounced `router.push` idiom already there (D6).
-- [ ] 4.2 GREEN `customers/page.tsx` — read the flag, pass it through, mark deactivated rows.
-- [ ] 4.3 RED/GREEN `customers/[id]/page.tsx` — deactivated banner, "Reactivar" offered, "Editar" NOT offered (D5).
-- [ ] 4.4 GREEN — the deactivate action on an active customer's detail.
+- [x] 4.1 RED/GREEN `CustomerFilters` — `?includeInactive=1` toggle, URL state, matching the debounced `router.push` idiom already there (D6).
+- [x] 4.2 GREEN `customers/page.tsx` — read the flag, pass it through, mark deactivated rows.
+- [x] 4.3 RED/GREEN `customers/[id]/page.tsx` — deactivated banner, "Reactivar" offered, "Editar" NOT offered (D5).
+- [x] 4.4 GREEN — the deactivate action on an active customer's detail.
 
 ## WU5 — the real-SQL coverage
 
-- [ ] 5.1 e2e — the default exclusion through `GET /api/customers` against real Postgres, and the customer reappearing after reactivation. **This is the row that matters**: AGENTS.md's injected-seam limit means a green unit run proves ZERO coverage of the actual `WHERE`, and this whole change is a `WHERE`.
-- [ ] 5.2 e2e — the picker inherits the exclusion (same route, no picker change).
-- [ ] 5.3 Live smoke: apply `0017` against a real database, confirm every existing row reads as active.
+- [x] 5.1 e2e — the default exclusion through `GET /api/customers` against real Postgres, and the customer reappearing after reactivation. **This is the row that matters**: AGENTS.md's injected-seam limit means a green unit run proves ZERO coverage of the actual `WHERE`, and this whole change is a `WHERE`.
+- [x] 5.2 e2e — the picker inherits the exclusion (same route, no picker change).
+- [x] 5.3 Live smoke: apply `0017` against a real database, confirm every existing row reads as active.
 
 ## WU6 — the writing-down
 
 - [x] 6.1 Delta spec: R16 restated IN FULL (the archiver replaces, it does not merge — the exact trap GGA caught on #68), plus new R20.
 - [x] 6.2 `design.md` records why no new policy action and why `skipped` over `opted_out`.
+
+## WU7 — what the e2e caught that every unit test missed
+
+- [x] 7.1 **`includeInactive` was wired into the PAGE but not into the API
+  route.** `normalizeClienteFilters` read it; `handleListClientes` did not, so
+  "Ver desactivados" silently returned the active list. Every unit test was
+  green: they inject `listClientes`, so nothing exercised the query-string
+  parse. Exactly the AGENTS.md injected-seam limit, and exactly why 5.1 exists.
+  Fixed, plus four route unit tests added for the parse itself — including one
+  for the relaxed near-match pass, which rebuilds the filter object and would
+  drop the flag one branch deeper.
+- [x] 7.2 Lint went 15 → 23 warnings: eight `_id`/`_at` parameters added only
+  to type a mock. Replaced with `vi.fn<SetDeactivatedAt>()`, which carries the
+  signature without declaring parameters. Back at the documented baseline.
 
 ## Follow-ups (out of scope here)
 

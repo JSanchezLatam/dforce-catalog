@@ -8,7 +8,7 @@ import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
 import { countClientes, listClientes, type ClienteFilters } from "@/modules/customers/queries";
 import { computePageWindow, parsePageSize } from "@/modules/inventory-view/queries";
 import { Pagination } from "@/shared/ui/Pagination";
-import { PAGE_HEADING } from "@/shared/ui/styles";
+import { CHIP, PAGE_HEADING } from "@/shared/ui/styles";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -21,7 +21,10 @@ function firstValue(value: string | string[] | undefined): string | undefined {
 /** Pure — R19's single combined name/phone/plate search term, read from `searchParams`. */
 function normalizeClienteFilters(searchParams: SearchParams): ClienteFilters {
   const search = firstValue(searchParams.search);
-  return search ? { search } : {};
+  // R20 — opt IN, so the default list is active-only. `=== "1"` rather than
+  // truthiness: `?includeInactive=0` must mean off, not "a non-empty string".
+  const includeInactive = firstValue(searchParams.includeInactive) === "1";
+  return { ...(search ? { search } : {}), ...(includeInactive ? { includeInactive } : {}) };
 }
 
 /**
@@ -101,7 +104,12 @@ export default async function CustomersPage({
                 <TableBody>
                   {items.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell className="font-medium">
+                        {item.name}
+                        {item.deactivatedAt && (
+                          <span className={CHIP + " ml-2"}>Desactivado</span>
+                        )}
+                      </TableCell>
                       <TableCell>{item.phone ?? "—"}</TableCell>
                       <TableCell>{item.email ?? "—"}</TableCell>
                       <TableCell>{item.plates.length > 0 ? item.plates.join(", ") : "—"}</TableCell>

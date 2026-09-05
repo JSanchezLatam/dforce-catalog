@@ -42,6 +42,9 @@ export async function handleListClientes(
 
   const params = request.nextUrl.searchParams;
   const search = params.get("search")?.trim() || undefined;
+  // R20 — opt IN. `=== "1"` rather than truthiness, so `includeInactive=0`
+  // means off; the page's `normalizeClienteFilters` reads it the same way.
+  const includeInactive = params.get("includeInactive") === "1";
   const pageSize = parsePageSize(params.get("pageSize") ?? undefined);
   const pageWindow = computePageWindow(params.get("page") ?? undefined, pageSize);
 
@@ -50,7 +53,8 @@ export async function handleListClientes(
 
   // Both round-trips at once, as `customers/page.tsx:49` does — the search is
   // a sequential scan, so serialising them doubles every keystroke's latency.
-  let [customers, total] = await Promise.all([list({ search }, pageWindow), countFn({ search })]);
+  const filters = { search, includeInactive };
+  let [customers, total] = await Promise.all([list(filters, pageWindow), countFn(filters)]);
   let relaxedFrom: string | undefined;
 
   // `total === 0`, NOT `customers.length === 0`: an empty PAGE is not an empty
@@ -61,8 +65,8 @@ export async function handleListClientes(
     const relaxed = relaxSearchTerm(search);
     if (relaxed) {
       const [relaxedCustomers, relaxedTotal] = await Promise.all([
-        list({ search: relaxed }, pageWindow),
-        countFn({ search: relaxed }),
+        list({ ...filters, search: relaxed }, pageWindow),
+        countFn({ ...filters, search: relaxed }),
       ]);
       // Adopted whole or not at all. Taking `relaxedTotal` while its rows are
       // empty would publish a count for a term the caller never asked about,

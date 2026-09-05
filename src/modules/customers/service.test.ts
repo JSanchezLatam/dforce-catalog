@@ -351,17 +351,18 @@ describe("updateCliente (R16, R18)", () => {
  * vehicle or service order is touched on the way.
  */
 describe("deactivateCliente / reactivateCliente (R20)", () => {
+  type SetDeactivatedAt = (id: string, at: Date | null) => Promise<Cliente | undefined>;
   const CLIENTE = { id: "c1", name: "Juan", phone: "+525512345678" } as unknown as Cliente;
 
   it("stamps deactivatedAt with a timestamp, not a boolean", async () => {
-    const setDeactivatedAt = vi.fn(async (_id: string, _at: Date | null) => CLIENTE);
+    const setDeactivatedAt = vi.fn<SetDeactivatedAt>(async () => CLIENTE);
     await deactivateCliente("c1", { setDeactivatedAt });
 
     expect(setDeactivatedAt).toHaveBeenCalledWith("c1", expect.any(Date));
   });
 
   it("clears deactivatedAt on reactivation", async () => {
-    const setDeactivatedAt = vi.fn(async (_id: string, _at: Date | null) => CLIENTE);
+    const setDeactivatedAt = vi.fn<SetDeactivatedAt>(async () => CLIENTE);
     await reactivateCliente("c1", { setDeactivatedAt });
 
     expect(setDeactivatedAt).toHaveBeenCalledWith("c1", null);
@@ -373,7 +374,7 @@ describe("deactivateCliente / reactivateCliente (R20)", () => {
   // Postgres - a unit test with an injected seam cannot prove a row it never
   // wrote still exists.
   it("performs exactly one write and reads nothing else", async () => {
-    const setDeactivatedAt = vi.fn(async (_id: string, _at: Date | null) => CLIENTE);
+    const setDeactivatedAt = vi.fn<SetDeactivatedAt>(async () => CLIENTE);
     const row = await deactivateCliente("c1", { setDeactivatedAt });
 
     expect(setDeactivatedAt).toHaveBeenCalledOnce();
@@ -381,7 +382,7 @@ describe("deactivateCliente / reactivateCliente (R20)", () => {
   });
 
   it("throws ClienteNotFoundError rather than writing blind for an unknown id", async () => {
-    const setDeactivatedAt = vi.fn(async (_id: string, _at: Date | null) => undefined);
+    const setDeactivatedAt = vi.fn<SetDeactivatedAt>(async () => undefined);
     await expect(deactivateCliente("missing", { setDeactivatedAt })).rejects.toBeInstanceOf(ClienteNotFoundError);
   });
 
