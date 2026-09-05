@@ -45,6 +45,16 @@ export async function handleUpdateCliente(
   // body, before validation and before the service: the grant decides whether
   // the request may be considered at all, so a malformed payload asking for a
   // deletion must be refused, not corrected and then executed.
+  //
+  // Deliberate ordering (fix 2, customer-import-fixes): this gate runs BEFORE
+  // the active/fields mutual-exclusion check below, so `{ active: false,
+  // vehicles: [{ deleted: true }] }` from a role without `customers.deleteVehicle`
+  // gets 403, never the mutual-exclusion 400 — the permission question wins.
+  // Consistent with the paragraph above: authorization decides whether the
+  // request may be considered AT ALL, so it must not be shadowed by a 400 a
+  // validation rule further down would otherwise raise first. If a role ever
+  // gains `customers.deleteVehicle`, this ordering stops mattering for it —
+  // the mutual-exclusion check still runs, just next.
   if (asksForVehicleDeletion(body) && !can(user, "customers.deleteVehicle")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

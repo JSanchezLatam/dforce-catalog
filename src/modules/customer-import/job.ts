@@ -29,22 +29,26 @@ import { planImport, type LocalCustomer } from "./plan";
  * (design D2), so nothing downstream would catch the duplicate. Two layers
  * guard against this, and only one of them is the actual guarantee:
  *
- *  - Layer 1 (best-effort, BEFORE the fetch): `hasActiveImportRun` reads
- *    `customer_import_runs.status = 'running'`, mirroring
- *    `inventory-sync/job.ts`'s `hasActiveSyncRun`/`sync_runs`. This exists
- *    only to reject a second run FAST, before it spends another ~15
- *    Interfuerza requests against an API that carries a real 1h IP ban. A
- *    check-then-act against a plain table row is TOCTOU on its own — two
- *    requests can both pass this check in the gap before either has written
- *    its own `running` row — so this is NOT what prevents duplicate
- *    customers.
- *  - Layer 2 (the actual guarantee): `pg_advisory_xact_lock`, taken as the
- *    very first statement inside the write transaction, before
- *    `listExisting` runs. A second concurrent transaction blocks on this
- *    exact statement until the first commits or rolls back, then its own
- *    `listExisting` sees the now-committed rows and plans an UPDATE instead
- *    of a second INSERT. Same idiom as `pdf-generation/enqueue.ts` and
- *    `catalog-storage/retention.ts`.
+ *  - Layer 1 (fast rejection, BEFORE the fetch): `defaultStartImportRunIfNotActive`
+ *    (see its own docstring) is ONE statement — `INSERT ... SELECT ...
+ *    WHERE NOT EXISTS (...) RETURNING id` — so there is no gap between
+ *    "is one running?" and "mark one running" for a second click to land
+ *    in. This is what makes rejecting a second click actually cost nothing
+ *    against Interfuerza: fix 1 (customer-import-fixes) replaced the
+ *    previous two-await `hasActiveImportRun()` THEN `startImportRun()`
+ *    shape, whose gap let two concurrent clicks both pass the check and
+ *    both spend a full ~15-request fetch against an API that carries a real
+ *    1h IP ban — exactly the cost this layer exists to avoid. A residual,
+ *    much narrower race is still possible and is documented on
+ *    `defaultStartImportRunIfNotActive` itself, not claimed away here.
+ *  - Layer 2 (the actual guarantee against a duplicate `cliente` row):
+ *    `pg_advisory_xact_lock`, taken as the very first statement inside the
+ *    write transaction, before `listExisting` runs. A second concurrent
+ *    transaction blocks on this exact statement until the first commits or
+ *    rolls back, then its own `listExisting` sees the now-committed rows and
+ *    plans an UPDATE instead of a second INSERT. Same idiom as
+ *    `pdf-generation/enqueue.ts` and `catalog-storage/retention.ts`. This is
+ *    what still catches layer 1's residual race, if it is ever lost.
  */
 
 export type ImportSkip = { externalId: string | null; name: string | null; reason: SkipReason };
@@ -66,8 +70,20 @@ export type RunCustomerImportDeps = {
   fetchCustomers?: () => AsyncGenerator<unknown[]>;
   database?: { transaction: <T>(fn: (tx: TxLike) => Promise<T>) => Promise<T> };
   listExisting?: (tx: TxLike) => Promise<LocalCustomer[]>;
+  /**
+   * `hasActiveImportRun`/`startImportRun` stay here ONLY as a back-compat
+   * seam for `src/e2e/full-flow.e2e.test.ts`'s layer-2 race test, which
+   * deliberately reconstructs the OLD check-then-act shape (via
+   * `hasActiveImportRun: async () => false`) to bypass layer 1 entirely and
+   * exercise layer 2 (`pg_advisory_xact_lock`) in isolation. Providing
+   * EITHER one routes `runCustomerImport` through that legacy two-step path
+   * below — production and every other caller never sets either, so they
+   * always take `startImportRunIfNotActive`, fix 1's atomic default.
+   */
   hasActiveImportRun?: typeof hasActiveImportRun;
   startImportRun?: () => Promise<{ id: string }>;
+  /** Fix 1's real seam: ONE statement, see `defaultStartImportRunIfNotActive`. */
+  startImportRunIfNotActive?: () => Promise<{ id: string } | null>;
   finishImportRun?: (id: string, patch: ImportRunPatch) => Promise<void>;
 };
 
@@ -124,9 +140,11 @@ export function buildActiveImportRunQuery() {
 }
 
 /**
- * Layer 1 — same shape as `inventory-sync/job.ts`'s `hasActiveSyncRun`.
- * Best-effort only; see the module docstring for why this is not the
- * correctness guarantee.
+ * Retained for `src/e2e/full-flow.e2e.test.ts`'s layer-2 race test (see
+ * `RunCustomerImportDeps`'s docstring) and for its own direct unit tests
+ * below. No longer called by `runCustomerImport`'s default path — that path
+ * uses `defaultStartImportRunIfNotActive` instead, which folds this same
+ * check into the write itself so there is no gap between them.
  */
 export async function hasActiveImportRun(
   queryFn: () => Promise<{ id: string }[]> = () => buildActiveImportRunQuery(),
@@ -135,6 +153,7 @@ export async function hasActiveImportRun(
   return rows.length > 0;
 }
 
+/** Legacy-path default; unconditional, never rejects. See `RunCustomerImportDeps`. */
 async function defaultStartImportRun(): Promise<{ id: string }> {
   const [run] = await db
     .insert(customerImportRuns)
@@ -143,25 +162,90 @@ async function defaultStartImportRun(): Promise<{ id: string }> {
   return run;
 }
 
+/**
+ * Fix 1 — the real correctness fix for layer 1's TOCTOU window (module
+ * docstring). ONE statement: the "is a run active?" check and the "mark one
+ * running" write happen inside the same `INSERT ... SELECT`, so there is no
+ * gap between them for a second click to land in. `null` means a run is
+ * already active — same condition `buildActiveImportRunQuery` compiles,
+ * copied verbatim so the 45-minute staleness bound is unchanged: a killed
+ * process still stops blocking new imports after 45 minutes, not forever.
+ *
+ * Residual window (named, not claimed away): this single statement is not a
+ * unique constraint or an explicit lock. Under READ COMMITTED, two of these
+ * statements issued from two different connections each take their own MVCC
+ * snapshot; neither sees the other's row until it commits, so if both
+ * snapshots are taken before either commits, BOTH can pass `WHERE NOT
+ * EXISTS` and both insert. What this fix buys is shrinking that window from
+ * "the whole ~15-page fetch loop, 7.5s to 120s" (the bug) down to "the round
+ * trip of one INSERT statement to Postgres" — realistically low
+ * single-digit milliseconds, not seconds or minutes. A double-click can
+ * still rarely land inside that much smaller window; when it does, layer 2
+ * (`pg_advisory_xact_lock`, still the actual guarantee against a duplicate
+ * `cliente` row) is what catches it, and the loser just re-spends its own
+ * ~15 Interfuerza requests instead of a rejected one costing nothing.
+ */
+async function defaultStartImportRunIfNotActive(): Promise<{ id: string } | null> {
+  // `customer_import_runs.id` has no DB-level default (schema.ts's
+  // `$defaultFn(() => crypto.randomUUID())` only runs through drizzle's own
+  // `.insert().values()`, which this raw statement bypasses) — generated
+  // here instead, or every row from this path would fail its NOT NULL
+  // constraint.
+  const id = crypto.randomUUID();
+  const result = await db.execute<{ id: string }>(sql`
+    insert into customer_import_runs (id, status)
+    select ${id}, 'running'::customer_import_status
+    where not exists (
+      select 1 from customer_import_runs
+      where status = 'running' and started_at > now() - interval '45 minutes'
+    )
+    returning id
+  `);
+  const [row] = result.rows;
+  return row ? { id: row.id } : null;
+}
+
 async function defaultFinishImportRun(id: string, patch: ImportRunPatch): Promise<void> {
   await db.update(customerImportRuns).set(patch).where(eq(customerImportRuns.id, id));
+}
+
+/**
+ * Layer 1's gate. Two paths:
+ *
+ *  - Legacy (only when a caller explicitly overrides `hasActiveImportRun`
+ *    and/or `startImportRun`): reproduces the exact pre-fix check-then-act
+ *    shape. Exists only for `src/e2e/full-flow.e2e.test.ts`'s layer-2 race
+ *    test — see `RunCustomerImportDeps`.
+ *  - Default (every other caller, including production): fix 1's atomic
+ *    `startImportRunIfNotActive`. One statement, no window.
+ */
+async function startRunOrThrow(deps: RunCustomerImportDeps): Promise<{ id: string }> {
+  if (deps.hasActiveImportRun || deps.startImportRun) {
+    const checkActive = deps.hasActiveImportRun ?? hasActiveImportRun;
+    if (await checkActive()) {
+      throw new ImportAlreadyRunningError();
+    }
+    return (deps.startImportRun ?? defaultStartImportRun)();
+  }
+
+  const started = await (deps.startImportRunIfNotActive ?? defaultStartImportRunIfNotActive)();
+  if (!started) {
+    throw new ImportAlreadyRunningError();
+  }
+  return started;
 }
 
 export async function runCustomerImport(deps: RunCustomerImportDeps = {}): Promise<ImportResult> {
   const fetchCustomers = deps.fetchCustomers ?? fetchAllCustomers;
   const database = deps.database ?? db;
   const listExisting = deps.listExisting ?? defaultListExisting;
-  const checkActive = deps.hasActiveImportRun ?? hasActiveImportRun;
-  const startRun = deps.startImportRun ?? defaultStartImportRun;
   const finishRun = deps.finishImportRun ?? defaultFinishImportRun;
 
-  // Layer 1 — see module docstring. Rejects BEFORE fetchCustomers() is even
-  // called, so a second concurrent click costs nothing against Interfuerza.
-  if (await checkActive()) {
-    throw new ImportAlreadyRunningError();
-  }
-
-  const run = await startRun();
+  // Layer 1 — see module docstring and `startRunOrThrow`. Rejects BEFORE
+  // fetchCustomers() is even called, so a second concurrent click costs
+  // nothing against Interfuerza (barring the residual window documented on
+  // `defaultStartImportRunIfNotActive`).
+  const run = await startRunOrThrow(deps);
 
   try {
     const mapped: MappedRow[] = [];

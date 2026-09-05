@@ -61,6 +61,11 @@ Files: `CustomerFilters.tsx`(+test), `customers/page.tsx`, `customers/[id]/page.
 - [x] 4.1 `CustomerFilters` — `?includeInactive=1` toggle, URL state. **This task was marked complete in an earlier commit with NO test written** — GGA caught the false claim. `CustomerFilters.test.tsx` now exists: 6 tests over the pushed URL, including that unticking REMOVES the key rather than setting `0`, and that the toggle returns to page 1.
 - [x] 4.2 GREEN `customers/page.tsx` — read the flag, pass it through, mark deactivated rows.
 - [x] 4.3 RED/GREEN `customers/[id]/page.tsx` — deactivated banner, "Reactivar" offered, "Editar" NOT offered (D5).
+  **Amended**: this was checked before the activation button carried a
+  `customers.write` gate. `customer-import` later added a GATED button on the
+  list page beside this ungated one, which made the inconsistency visible and
+  it was closed there (WU4h.3). Recorded here rather than left reading as
+  though 4.3 had shipped complete.
 - [x] 4.4 `CustomerActivationButton` — likewise claimed complete with only `page.test.tsx` asserting which LABEL renders. `CustomerActivationButton.test.tsx` now covers the payload shape, `router.refresh()` on success, both failure paths, and that the button re-enables so the action can be retried.
 
 ## WU5 — the real-SQL coverage

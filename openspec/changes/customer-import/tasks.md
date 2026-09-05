@@ -351,13 +351,15 @@ landed.
 - [ ] **Not proven, and it cannot be here**: the transactional rollback itself
   is `db.transaction()`'s guarantee, and an injected fake cannot demonstrate
   it. `inventory-sync/job.test.ts` documents the same limit.
-- [ ] **Scope the WU4 agent reported rather than hid**: adding the manual
+- [x] **Scope the WU4 agent reported rather than hid**: adding the manual
   trigger broke 14 pre-existing tests two ways — `route-guards.test.ts` has a
   completeness check that requires every route be registered, and
   `customers/page.test.tsx` crashed because the button calls `useToast()`
-  outside a provider. Fixed by registering the route and stubbing the button
-  the way `CustomerFormTrigger` already is. Outside the four files it was
-  given, and necessary to leave the suite green.
+  outside a provider. Both fixed in the same work unit; the route is registered
+  and the button stubbed the way `CustomerFormTrigger` already is.
+  **It shipped as an open `[ ]` for six review rounds while being done** — the
+  third time on this branch that an unchecked box described nothing real, and
+  this same file says why that costs the next reader twenty minutes.
 
 ## WU4b — GGA round 1 on the full change (six findings, four of them repeats)
 
@@ -588,21 +590,67 @@ Re-run properly, it goes red.
   the inconsistency it then filed as known. Gated, with both cases tested.
   Mutation-verified.
 
+## WU4i — GGA round 8, and a hole the review did not find
+
+- [x] 4i.1 **Layer 1's TOCTOU cost exactly what layer 1 existed to prevent, and
+  the comment did not say so.** `checkActive()` and `startRun()` were two
+  separate awaits; two clicks landing between them both passed, both spent ~15
+  Interfuerza requests against an API with a documented 1-hour ban, and both
+  wrote a `running` row. The docstring promised "a second concurrent click
+  costs nothing against Interfuerza" — false in exactly the window it named.
+  *"An invariant asserted in a comment is not an invariant"*, one module over
+  from where this branch learned it.
+  Collapsed into ONE statement: `INSERT … SELECT … WHERE NOT EXISTS (running
+  within 45 minutes) RETURNING id`, null meaning already active.
+  **The residual window is named, not claimed away**: under READ COMMITTED two
+  such statements can still both pass without a unique constraint. What the fix
+  buys is the window shrinking from "the whole 15-page fetch, 7.5s–120s" to one
+  INSERT round trip, and layer 2 still catches the consequence — the loser
+  re-spends its requests instead of being rejected free. A partial unique index
+  on `status = 'running'` would close it structurally; not taken at review round
+  8, recorded below.
+- [x] 4i.2 **A hole GGA did not find, and the most important thing in this
+  round.** I neutered the `WHERE NOT EXISTS` — `where true or not exists (…)` —
+  and **nothing went red**: 1240 unit tests and 44 e2e rows, all green,
+  mutation confirmed applied, checked twice.
+  The unit tests inject `startImportRunIfNotActive`, so that SQL never runs
+  under `npm test`; and the one e2e touching concurrency deliberately injects
+  `hasActiveImportRun: async () => false` to prove layer 2 in isolation — right
+  for what it tests, and exactly why layer 1 was uncovered. **The whole
+  fast-rejection layer rested on a clause nothing proved.**
+  Three e2e rows now exercise the real default: a `running` row rejects AND
+  `fetchCustomers` is never called (the actual point of layer 1); a `running`
+  row older than 45 minutes does NOT block; a `completed` row does not block.
+  Each predicate independently mutation-verified, and the mutation that used to
+  pass 44/44 now goes red by name.
+- [x] 4i.3 The 403 vehicle-deletion gate winning over the 400 mutual-exclusion
+  check is now deliberate and commented, with a test for that exact body shape,
+  rather than an accident of ordering.
+
 ## Gates at the final state
 
 Re-recorded because the `Outcome so far` section above stopped at WU1+WU2 while
 WU4b, WU4d, WU4e and WU4f each added production code. In a document this
 careful about verification, silence reads as "not run".
 
-- `npm test` — **1238/1238**
+- `npm test` — **1240/1240**
 - `npx tsc --noEmit` — clean
 - `npm run lint` — 0 errors, 15 warnings (the documented baseline)
-- `npm run test:e2e` — **44/44** against a clean throwaway database, 0 rows left
+- `npm run test:e2e` — **47/47** against a clean throwaway database, 0 rows in either table
 - GGA — five failed rounds after the WU1+WU2 pass; every finding closed and
   mutation-verified, and every mutation re-run here rather than taken from a
   subagent's report
 
 ## Known and NOT fixed here
+
+- [ ] **Layer 1's residual race.** `INSERT … WHERE NOT EXISTS` is not atomic
+  under READ COMMITTED: two connections whose snapshots both predate either
+  commit can both insert. A partial unique index (`… ON customer_import_runs
+  (status) WHERE status = 'running'`) plus catching the 23505 would close it
+  structurally. Not taken here — it is a migration added at review round 8 to
+  close a window measured in milliseconds whose only cost is one loser
+  re-spending its API requests, and layer 2 still guarantees the customer data.
+  Its own change.
 
 - [x] ~~`CLAUDE.md`'s delegation-policy rewrite rides on this branch~~ —
   **split out into #71 and reverted here.** I had argued that removing it cost

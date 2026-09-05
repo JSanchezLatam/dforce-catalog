@@ -56,7 +56,7 @@ import { countAllProducts, listCategoryL1Options, listInventory } from "@/module
 import { runSync } from "@/modules/inventory-sync/job";
 import { getClienteById } from "@/modules/customers/queries";
 import { deactivateCliente, reactivateCliente } from "@/modules/customers/service";
-import { runCustomerImport } from "@/modules/customer-import/job";
+import { ImportAlreadyRunningError, runCustomerImport } from "@/modules/customer-import/job";
 import { listOrdenesByVehiculo } from "@/modules/service-orders/queries";
 import { registerPdfGenerateWorker } from "@/modules/pdf-generation/worker";
 import { proxy } from "@/proxy";
@@ -963,6 +963,15 @@ describe("customer deactivation (E2E)", () => {
 describe("customer import (E2E)", () => {
   const seededIds: string[] = [];
   /**
+   * Cleanup for `customer_import_runs` rows this describe inserts DIRECTLY
+   * (layer-1 tests below) rather than through `runCustomerImport` itself.
+   * The time-scoped delete in `afterAll` only catches rows whose
+   * `started_at` is `>= suiteStartedAt` — a row seeded with a deliberately
+   * OLD `started_at` (the staleness-bound test) predates that boundary and
+   * would survive it otherwise.
+   */
+  const seededRunIds: string[] = [];
+  /**
    * Boundary for the run-row cleanup below (see `afterAll`) — read from
    * Postgres itself (`select now()`) inside `beforeAll`, not `new Date()` at
    * describe-collection time. Fixes two real bugs the previous `new Date()`
@@ -1020,6 +1029,9 @@ describe("customer import (E2E)", () => {
   afterAll(async () => {
     if (seededIds.length > 0) {
       await db.delete(cliente).where(inArray(cliente.id, seededIds));
+    }
+    if (seededRunIds.length > 0) {
+      await db.delete(customerImportRuns).where(inArray(customerImportRuns.id, seededRunIds));
     }
     await db.delete(customerImportRuns).where(gte(customerImportRuns.startedAt, suiteStartedAt));
   });
@@ -1184,6 +1196,93 @@ describe("customer import (E2E)", () => {
 
     expect(resultA.created + resultB.created).toBe(1);
     expect(rows).toHaveLength(1);
+  });
+
+  /**
+   * Proves layer 1's real `WHERE NOT EXISTS` clause (`defaultStartImportRunIfNotActive`,
+   * job.ts) — unlike the race test above, this exercises the DEFAULT path
+   * with no `hasActiveImportRun`/`startImportRun` override, since that
+   * legacy seam is exactly what the unit tests already cover and this gap
+   * is about the real SQL running for real. A `WHERE NOT EXISTS` neutered
+   * into `WHERE TRUE OR NOT EXISTS (...)` would make this test pass through
+   * to `fetchCustomers` instead of rejecting first.
+   *
+   * Cleans up the inserted `running` row immediately (not just via
+   * `seededRunIds`/`afterAll`) because leaving it in `running` status would
+   * falsely block every `runCustomerImport` call the OTHER two tests below
+   * make.
+   */
+  it("rejects a second import while a running row is already active, before spending any Interfuerza requests (layer 1)", async () => {
+    const [activeRun] = await db
+      .insert(customerImportRuns)
+      .values({ status: "running" })
+      .returning({ id: customerImportRuns.id });
+    seededRunIds.push(activeRun.id);
+
+    const fetchCustomers = vi.fn(async function* () {
+      yield [];
+    });
+
+    try {
+      await expect(runCustomerImport({ fetchCustomers })).rejects.toThrow(ImportAlreadyRunningError);
+      expect(fetchCustomers).not.toHaveBeenCalled();
+    } finally {
+      await db.delete(customerImportRuns).where(eq(customerImportRuns.id, activeRun.id));
+    }
+  });
+
+  /**
+   * Proves the 45-minute staleness bound in the same real `WHERE NOT
+   * EXISTS` clause: a `running` row older than the bound must NOT count as
+   * active. Widening the bound (e.g. to `100 years`) would make this test
+   * see a false rejection instead of a completed import.
+   *
+   * `startedAt` is seeded 2 hours in the past — well past the 45-minute
+   * bound — using Node's clock; the margin is wide enough that ordinary
+   * clock drift between this process and Postgres cannot make it flaky.
+   */
+  it("does not block a new import when the only running row is older than the 45-minute staleness bound (layer 1)", async () => {
+    const [staleRun] = await db
+      .insert(customerImportRuns)
+      .values({ status: "running", startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) })
+      .returning({ id: customerImportRuns.id });
+    seededRunIds.push(staleRun.id);
+
+    const externalId = `imp-stalerun-${Date.now()}`;
+    async function* oneBatch() {
+      yield [rawRow(externalId, "Importado Tras Corrida Vencida", "50775555555")];
+    }
+
+    const result = await runCustomerImport({ fetchCustomers: oneBatch });
+    const createdRows = await registerByExternalId(externalId);
+
+    expect(result.created).toBe(1);
+    expect(createdRows).toHaveLength(1);
+  });
+
+  /**
+   * Proves the clause's `status = 'running'` predicate: a `completed` row
+   * must never count as active, no matter how recent. Dropping that
+   * predicate would make this test see a false rejection instead of a
+   * completed import.
+   */
+  it("does not block a new import when the only customer_import_runs row is completed (layer 1)", async () => {
+    const [completedRun] = await db
+      .insert(customerImportRuns)
+      .values({ status: "completed", finishedAt: new Date() })
+      .returning({ id: customerImportRuns.id });
+    seededRunIds.push(completedRun.id);
+
+    const externalId = `imp-completedrun-${Date.now()}`;
+    async function* oneBatch() {
+      yield [rawRow(externalId, "Importado Tras Corrida Completa", "50776666666")];
+    }
+
+    const result = await runCustomerImport({ fetchCustomers: oneBatch });
+    const createdRows = await registerByExternalId(externalId);
+
+    expect(result.created).toBe(1);
+    expect(createdRows).toHaveLength(1);
   });
 });
 

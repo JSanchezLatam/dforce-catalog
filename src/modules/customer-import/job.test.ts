@@ -388,3 +388,50 @@ describe("runCustomerImport — run bookkeeping backs layer 1's source of truth"
     await expect(runCustomerImport(deps)).rejects.toBe(originalError);
   });
 });
+
+describe("runCustomerImport — fix 1: the default path is ONE statement, not check-then-act", () => {
+  it("lets exactly one of two concurrent calls reach fetchCustomers; the other gets ImportAlreadyRunningError", async () => {
+    // Fakes exactly what the real `INSERT ... SELECT ... WHERE NOT EXISTS
+    // ... RETURNING id` statement guarantees: the check and the write happen
+    // with no `await` between them, so nothing can interleave. This is what
+    // the mutation check (job.test.ts's own header, AGENTS.md's mutation
+    // discipline) verifies below — splitting job.ts's call to this seam back
+    // into a separate check-then-insert reopens exactly the window this test
+    // exists to close.
+    let running = false;
+    const startImportRunIfNotActive = async () => {
+      if (running) return null;
+      running = true;
+      return { id: "run-1" };
+    };
+    const finishImportRun = async () => {
+      running = false;
+    };
+    const fetchCustomers = vi.fn(async function* () {
+      yield [];
+    });
+    const database = {
+      transaction: async <T>(fn: (tx: TxLike) => Promise<T>): Promise<T> =>
+        fn({ execute: async () => ({ rows: [] }) } as unknown as TxLike),
+    };
+    // Deliberately NOT `hasActiveImportRun`/`startImportRun` — those two stay
+    // wired only for src/e2e/full-flow.e2e.test.ts's layer-2 race test, which
+    // reproduces the OLD two-step shape on purpose. Leaving them unset here
+    // is what routes this call through the new atomic default instead.
+    const deps: RunCustomerImportDeps = {
+      fetchCustomers,
+      database,
+      listExisting: async () => [],
+      startImportRunIfNotActive,
+      finishImportRun,
+    };
+
+    const [a, b] = await Promise.allSettled([runCustomerImport(deps), runCustomerImport(deps)]);
+
+    expect(fetchCustomers).toHaveBeenCalledTimes(1);
+    const settled = [a, b];
+    expect(settled.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const rejected = settled.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
+    expect(rejected?.reason).toBeInstanceOf(ImportAlreadyRunningError);
+  });
+});
