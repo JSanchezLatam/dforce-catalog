@@ -266,6 +266,34 @@ Files: `customer-import/job.ts`(+test), route, a manual trigger.
   and stack trace. Nothing reads it — both callers use `instanceof` — so it now
   matches the class.
 
+## Outcome so far
+
+**GGA PASSED on round 6** (WU1 + WU2). Five failed rounds before it. What they
+caught, none of it style:
+
+- a production **infinite loop** on a malformed `count`, in the file WU1 had
+  just extracted
+- my fix for THAT, which required `typeof "number"` and would have aborted the
+  weekly inventory sync and this import on page one of every run — because
+  `count` is a **string** on the wire, measured live
+- an unbounded fetch mock that HUNG instead of failing, reproducing WU1.5's own
+  lesson one commit after writing it
+- a task marked complete with no test behind it (the second time on this
+  branch)
+- three artifacts affirming things the code did not do
+
+Two nits from the passing round were fixed after it, with gates re-run:
+`PageResult` typed `count` as `number` while the file itself proved it a
+string, and the no-search "Ver desactivados" link dropped `pageSize` one branch
+over from where WU14.2 fixed exactly that. Both mutation-verified.
+
+## Still to do — the feature is NOT complete
+
+WU3 (the `externalId` column and the insert/update/skip planner), WU4 (the
+transactional run and its route), and WU5 (the e2e that proves a re-run does
+not resurrect a deactivated customer) are unwritten. This slice is the
+transport and the mapping only: **nothing imports anything yet.**
+
 ## Known before starting
 
 - [ ] **353 imported customers will not be able to receive a WhatsApp

@@ -68,8 +68,16 @@ export type InterfuerzaOptions = {
 
 const defaultSleep: SleepImpl = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** One page's raw envelope. The list lives under a key named after the action. */
-type PageResult = { count: number } & Record<string, unknown>;
+/**
+ * One page's raw envelope. The list lives under a key named after the action.
+ *
+ * `count: unknown`, deliberately. It was `number`, which asserted the opposite
+ * of what a live call measured — the wire sends `"370"` and `"699"`, strings.
+ * A type that claims what the code below proved false is the same failure this
+ * branch spent every review round on, just moved into the type system.
+ * `parseCount` already takes `unknown`; this is what makes the compiler agree.
+ */
+type PageResult = { count: unknown } & Record<string, unknown>;
 
 /**
  * Accepts what the API actually sends (a numeric string) and what a typed

@@ -128,7 +128,10 @@ export default async function CustomersPage({
                   // hides them is the same failure with no surface to point at.
                   <>
                     No hay clientes activos.{" "}
-                    <Link href="/customers?includeInactive=1" className="text-primary hover:underline">
+                    {/* Through `buildPageHref`, like the widen-search link
+                        above — hardcoded, this one dropped `pageSize`, which
+                        is the defect WU14.2 fixed one branch over. */}
+                    <Link href={buildPageHref({ ...params, includeInactive: "1" }, 1)} className="text-primary hover:underline">
                       Ver desactivados
                     </Link>
                   </>

@@ -177,4 +177,18 @@ describe("CustomersPage — deactivated customers (R20)", () => {
 
     expect(countClientes).toHaveBeenCalledOnce();
   });
+
+  // The no-search branch's link was hardcoded and dropped `pageSize`, one
+  // branch over from where WU14.2 fixed exactly that. Both links go through
+  // `buildPageHref` now, and this is what keeps them from drifting apart
+  // again.
+  it("keeps pageSize on the no-search Ver desactivados link too", async () => {
+    listClientes.mockResolvedValue([]);
+    countClientes.mockResolvedValueOnce(0).mockResolvedValueOnce(3);
+    render(await CustomersPage({ searchParams: Promise.resolve({ pageSize: "50" }) }));
+
+    const href = screen.getByRole("link", { name: /desactivados/i }).getAttribute("href")!;
+    expect(href).toContain("pageSize=50");
+    expect(href).toContain("includeInactive=1");
+  });
 });
