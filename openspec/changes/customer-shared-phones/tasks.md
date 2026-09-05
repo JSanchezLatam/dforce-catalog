@@ -84,6 +84,32 @@ was verified before acting on it; none was taken on the reviewer's word.
   to `phone` rather than the whole table, so an unrelated future unique index
   on `email` does not produce a misleading red under a phone-named test.
 
+## WU5 — GGA round 2 findings (four, all verified, all fixed)
+
+Round 2 returned **FAILED** with four convention/process findings and no
+correctness ones. Each was checked against the codebase before acting.
+
+- [x] 5.1 `CustomerForm.tsx` — `role="alert"` wrapped a link and a button.
+  Counted: the repo has **43** `<p role="alert">` and exactly one `<div>` —
+  mine. A live region announces changed text; it is not a container for
+  focusable children with their own semantics, and that matters most here
+  because those two controls are the ONLY way past the refusal. Moved to the
+  paragraph.
+- [x] 5.2 `CustomerForm.tsx` — raw `<a>` where 10 files use `next/link` and
+  only one raw anchor existed. Not just convention: this renders inside an
+  OPEN dialog, so a full page reload throws away everything the operator has
+  typed. Now `<Link>`.
+- [x] 5.3 `.atl/skill-registry.md` had slipped into commit `699e640` through a
+  bare `git add -A` — an auto-generated date bump with nothing to do with this
+  change. It had been deliberately excluded from the first two commits and was
+  lost on the third. Restored to `main`'s version.
+- [x] 5.4 `design.md` was missing. Checked: **every other change in
+  `openspec/changes`, archive included, has one** — this was the sole
+  exception. Written, holding the four decisions that were previously split
+  between `proposal.md` and code comments: the override's shape and the
+  `persistedPatch` trap, the confirmation's lifetime as a structural
+  guarantee, the accepted race, and why `NOT NULL` deleted nothing.
+
 ## Follow-ups (out of scope here)
 
 - [ ] The six genuinely fragmented duplicate pairs are still two records each. Merging them is a data task with no code in it, and needs the owner to say which record wins per pair.

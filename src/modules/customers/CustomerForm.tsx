@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
+import Link from "next/link";
 
 import type { Cliente, Vehiculo } from "@/shared/db/schema";
 import { Button } from "@/components/ui/button";
@@ -387,12 +388,21 @@ export function CustomerForm({
                 </p>
               )}
               {sharedPhoneWith && (
-                <div role="alert" className={CARD_MUTED + " flex flex-col gap-2"}>
-                  <p className="text-sm">
+                // `role="alert"` sits on the PARAGRAPH, not this wrapper — the
+                // repo's other 43 alerts are all text-only <p>, and a live
+                // region is for announcing changed text, not a container whose
+                // focusable children have their own semantics. That matters
+                // more here than anywhere else: the link and the button below
+                // are the ONLY way past the refusal.
+                <div className={CARD_MUTED + " flex flex-col gap-2"}>
+                  <p role="alert" className="text-sm">
                     Ya hay un cliente con este teléfono.{" "}
-                    <a href={`/customers/${sharedPhoneWith}`} className="font-medium underline">
+                    {/* `Link`, not a raw <a>: this renders inside an OPEN
+                        dialog, so a full page reload would throw away
+                        everything the operator has typed. */}
+                    <Link href={`/customers/${sharedPhoneWith}`} className="font-medium underline">
                       Ver el cliente existente
-                    </a>
+                    </Link>
                     . Si son dos personas distintas que comparten el número, guardá igual.
                   </p>
                   <Button
