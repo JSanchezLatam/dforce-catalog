@@ -93,7 +93,16 @@ export default async function CustomerDetailPage({
                 triggerLabel="Editar"
               />
             )}
-            <CustomerActivationButton clienteId={cliente.id} isActive={isActive} />
+            {/* Gated the same way as `CustomerFormTrigger` above and
+                `CustomerImportButton` on the customer list (R21) —
+                `CustomerForm`'s own convention (its `canDeleteVehicle`
+                docstring) is that a button that always 403s is a worse answer
+                than no button. Both roles hold `customers.write` today, so
+                this is currently a no-op; it stops being one the day a
+                read-only role exists. */}
+            {can(user, "customers.write") && (
+              <CustomerActivationButton clienteId={cliente.id} isActive={isActive} />
+            )}
           </div>
         </CardHeader>
         <CardContent>

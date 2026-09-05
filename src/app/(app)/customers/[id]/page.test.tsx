@@ -13,7 +13,8 @@ const notFound = vi.hoisted(() => vi.fn(() => { throw new Error("NEXT_NOT_FOUND"
 const refresh = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ notFound, useRouter: () => ({ refresh }) }));
 vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders: vi.fn(async () => ({ id: "u1", role: "tecnico" })) }));
-vi.mock("@/modules/auth/policy", () => ({ can: vi.fn(() => true) }));
+const can = vi.hoisted(() => vi.fn<(user: unknown, action: string) => boolean>(() => true));
+vi.mock("@/modules/auth/policy", () => ({ can }));
 vi.mock("@/modules/customers/CustomerFormTrigger", () => ({
   CustomerFormTrigger: ({ triggerLabel }: { triggerLabel?: React.ReactNode }) => <button>{triggerLabel}</button>,
 }));
@@ -33,6 +34,7 @@ function renderPage() {
 
 describe("CustomerDetailPage", () => {
   beforeEach(() => {
+    can.mockReturnValue(true);
     getClienteById.mockResolvedValue({
       cliente: { id: "c1", name: "Ana Gómez", phone: "50761111111", email: null, createdAt: new Date("2026-01-01") },
       orders: [],
@@ -102,5 +104,38 @@ describe("CustomerDetailPage — deactivated customer (R20)", () => {
     expect(screen.getByRole("button", { name: "Desactivar" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reactivar" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Editar" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * R21 — the activation button is gated on `customers.write`, the same gate
+ * `CustomerImportButton` gets on the customer list. A button that always
+ * 403s is a worse answer than no button (`CustomerForm`'s own
+ * `canDeleteVehicle` docstring states this convention); both roles happen to
+ * hold `customers.write` today, so this is the only place the gate is
+ * actually exercised.
+ */
+describe("CustomerDetailPage — activation button permission gate (R21)", () => {
+  beforeEach(() => {
+    getClienteById.mockResolvedValue({
+      cliente: { id: "c1", name: "Ana Gómez", phone: "50761111111", email: null, createdAt: new Date("2026-01-01") },
+      orders: [],
+      vehicles: [],
+    });
+  });
+
+  it("shows the activation button for a user with customers.write", async () => {
+    can.mockReturnValue(true);
+    render(await renderPage());
+
+    expect(screen.getByRole("button", { name: "Desactivar" })).toBeInTheDocument();
+  });
+
+  it("hides the activation button for a user without customers.write", async () => {
+    can.mockImplementation((_user, action) => action !== "customers.write");
+    render(await renderPage());
+
+    expect(screen.queryByRole("button", { name: "Desactivar" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reactivar" })).not.toBeInTheDocument();
   });
 });

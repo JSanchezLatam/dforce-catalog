@@ -566,13 +566,35 @@ Re-run properly, it goes red.
   part of the key, and the test asserts on `console.error` rather than settling
   for "both rows render": mutation-verified against the old key.
 
+## WU4h — GGA round 7
+
+- [x] 4h.1 A comment in the e2e `afterAll` was **cut mid-sentence** — my own
+  edit left the tail of the block it replaced. In a file where the comments
+  ARE the contract, that is an artifact that does not say what it means to.
+  Completed with what is actually true, checked by grep.
+- [x] 4h.2 **The cleanup boundary was looser than its own comment claimed**,
+  and the comment was mine. `suiteStartedAt = new Date()` is the NODE clock at
+  COLLECTION time, while `started_at` defaults to Postgres `now()`. Two gaps:
+  a database clock trailing Node's would let a row this block created land
+  BEFORE the boundary and survive, and the boundary was captured before every
+  other describe in the file ran, so anything else writing that table fell
+  inside the window. The comment said "it deletes only rows this describe could
+  have created" — false on both counts.
+  Now read from the database inside this describe's own `beforeAll`, which
+  fixes the clock and the width together. **Proven both ways**: a clean run
+  leaves 0 rows, and a row seeded at 2020-01-01 survives.
+- [x] 4h.3 `CustomerActivationButton` rendered ungated while this same change
+  put a GATED `CustomerImportButton` on the list page — so the change created
+  the inconsistency it then filed as known. Gated, with both cases tested.
+  Mutation-verified.
+
 ## Gates at the final state
 
 Re-recorded because the `Outcome so far` section above stopped at WU1+WU2 while
 WU4b, WU4d, WU4e and WU4f each added production code. In a document this
 careful about verification, silence reads as "not run".
 
-- `npm test` — **1236/1236**
+- `npm test` — **1238/1238**
 - `npx tsc --noEmit` — clean
 - `npm run lint` — 0 errors, 15 warnings (the documented baseline)
 - `npm run test:e2e` — **44/44** against a clean throwaway database, 0 rows left
@@ -582,15 +604,12 @@ careful about verification, silence reads as "not run".
 
 ## Known and NOT fixed here
 
-- [ ] **`CustomerActivationButton` is not gated on `customers.write`** while
-  `CustomerImportButton` two files over is, and `CustomerForm`'s own docstring
-  states the convention ("a button that always 403s is a worse answer than no
-  button"). Harmless today — both roles hold that grant — and it becomes a live
-  inconsistency the day a read-only role exists. Pre-existing; its own change.
-- [ ] `CLAUDE.md`'s delegation-policy rewrite rides on this branch. It is its
-  own commit (`758be8c`) and unrelated to importing customers — it landed here
-  because the owner asked for it mid-change. Flagged rather than rewritten out
-  of history.
+- [x] ~~`CLAUDE.md`'s delegation-policy rewrite rides on this branch~~ —
+  **split out into #71 and reverted here.** I had argued that removing it cost
+  "rewriting history on a branch two PRs deep", which was wrong: the commit was
+  isolated, so it cost one cherry-pick. AGENTS.md's remedy is "not into the
+  current PR", and documenting a deviation is not the same as following the
+  rule — GGA flagged it three rounds running before I acted on it.
 
 ## Known before starting
 

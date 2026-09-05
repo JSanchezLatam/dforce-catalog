@@ -26,7 +26,7 @@
  * render.
  */
 import { execSync } from "node:child_process";
-import { eq, gte, inArray } from "drizzle-orm";
+import { eq, gte, inArray, sql } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -962,11 +962,34 @@ describe("customer deactivation (E2E)", () => {
  */
 describe("customer import (E2E)", () => {
   const seededIds: string[] = [];
-  /** Boundary for the run-row cleanup below — see this describe's `afterAll`. */
-  const suiteStartedAt = new Date();
+  /**
+   * Boundary for the run-row cleanup below (see `afterAll`) — read from
+   * Postgres itself (`select now()`) inside `beforeAll`, not `new Date()` at
+   * describe-collection time. Fixes two real bugs the previous `new Date()`
+   * version had:
+   *
+   *   - Two clocks: `customer_import_runs.started_at` defaults to Postgres
+   *     `now()`. Comparing it against a boundary taken from Node's clock is
+   *     wrong whenever the two drift (a container, a remote host) — if the
+   *     DB clock trails Node's, a row this describe just inserted can land
+   *     BEFORE the boundary and survive the delete below, which is exactly
+   *     the one-way write this cleanup exists to prevent. Reading the
+   *     boundary from Postgres removes the second clock entirely.
+   *   - Too wide: `new Date()` at the top of a `describe` body runs at
+   *     COLLECTION time — before every OTHER describe in this file executes
+   *     — so the old boundary sat before all of them, not just this one.
+   *     Taking it inside `beforeAll` instead moves it to immediately before
+   *     this describe's own tests run.
+   */
+  let suiteStartedAt: Date;
 
   beforeAll(async () => {
     execSync("npx drizzle-kit migrate", { stdio: "inherit" });
+    // `db.execute` returns the raw driver row: node-postgres does not parse
+    // this timestamptz for a manually-built query the way Drizzle's typed
+    // column mapping does, so `now` arrives as a string, not a `Date`.
+    const [{ now }] = (await db.execute<{ now: string }>(sql`select now()`)).rows;
+    suiteStartedAt = new Date(now);
   }, 60_000);
 
   // Same one-way-write risk `customer search (E2E)` documents above: without
@@ -976,13 +999,17 @@ describe("customer import (E2E)", () => {
   //
   // Every `runCustomerImport` call below also writes a `customer_import_runs`
   // row through the real default `startImportRun`/`finishImportRun` (none of
-  // these calls inject those two), and this is the only describe in the
-  // Scoped BY TIME, not by wiping the table.
+  // these calls inject those two), and this is the only describe in the file
+  // that writes to that table at all — so a delete scoped BY TIME here cannot
+  // catch another describe's rows the way an unscoped delete would. See
+  // `suiteStartedAt` above for what makes the boundary itself trustworthy
+  // (the database's own clock, taken right before this describe's tests run).
   //
   // `runCustomerImport` does not return the run ids it creates, so there is
-  // nothing to collect the way `seededIds` collects customers. A timestamp
-  // taken before the first run is the next best boundary, and it is a real
-  // one: it deletes only rows this describe could have created.
+  // nothing to collect the way `seededIds` collects customers. The
+  // `suiteStartedAt` boundary is the next best thing, and — with both bugs
+  // above fixed — a real one: it deletes only rows this describe could have
+  // created.
   //
   // An earlier version deleted the whole table, arguing that was "exactly as
   // scoped as deleting seededIds from cliente". It is not. `seededIds` touches
