@@ -4,14 +4,26 @@
 
 | Field | Value |
 |-------|-------|
-| Estimated changed lines | ~380 `src/` |
-| 400-line budget risk | Medium |
+| Estimated changed lines | ~380 `src/` (forecast) — **actual: 572 production, 1343 test** |
+| 400-line budget risk | Medium (forecast); realised over budget |
 | Chained PRs recommended | No — one PR, chained off #68's branch |
 | Delivery strategy | single PR targeting `feat/customer-shared-phones` |
 
 Chained off `feat/customer-shared-phones` because that branch adds migration
 `0016`; generating this one from `main` would produce a second `0016` and
 collide on merge. Targets #68's branch, merges after it.
+
+### Forecast vs. reality — recorded so the next one calibrates against something true
+
+The ~380 forecast was for production code and came in at **572**. The gap is
+not scope creep: it is twelve GGA rounds, eleven of which failed and every one
+of which added code or tests. The test total went from a planned handful to
+**1343 lines**, because six occurrences of one failure class and three
+mock-fidelity failures each needed a test that could actually fail.
+
+**A forecast made before review is a forecast of the happy path.** If the next
+change uses this one to size a chained-PR decision, use the production number
+and assume review adds to it.
 
 ## WU1 — the column and the default exclusion
 
@@ -379,7 +391,23 @@ down about itself.
   **Caught by mutation, not by review**: removing the fix left 32/32 green,
   which is the signature of an untested fix. The test came after.
 
+## Outcome
+
+**GGA PASSED on round 12.** Eleven failed rounds before it, and none of the
+findings were style — they were a live pagination bug, a non-atomic PATCH, a
+missing server guard on order creation, two placebo tests of mine, three
+mock-fidelity failures, and a spec left affirming the opposite of the code.
+
 ## Known and NOT fixed here
+
+- [ ] `pendingPushes` can be decremented by an EXTERNAL navigation landing
+  while one of our pushes is in flight, nulling the ref early. Much narrower
+  than what 16.1 closed — it needs a back-button press inside a 300ms debounce
+  window — and closing it properly means identifying our own navigations rather
+  than counting them. Recorded rather than patched at the end of a review.
+- [ ] `service-orders/service.test.ts` passes `descripcion` where the type
+  wants `description`. Behind `as never`, so it compiles and the test still
+  proves what it claims. Cosmetic.
 
 - [ ] The service-order detail page links a customer's name with no deactivated
   marker. R20 does not require it and adding it means threading `deactivatedAt`
