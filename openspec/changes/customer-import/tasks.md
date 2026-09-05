@@ -177,6 +177,34 @@ Files: `customer-import/job.ts`(+test), route, a manual trigger.
   nothing needing restatement, and says so explicitly: "nothing needed
   changing" and "nobody looked" are indistinguishable in an archive.
 
+## WU2d — GGA round 3 on C6
+
+- [x] 2d.1 **My round-2 fix broke the working products path, and I measured it
+  rather than argued it.** The guard rejected anything not `typeof "number"`.
+  A live call says `count` is a **STRING** on the wire — `"370"` for customers,
+  `"699"` for products, both actions. So that guard would have aborted the
+  weekly inventory sync, and the customer import, on page one of every run.
+  The original comparison worked by COERCION (`25 >= "370"` is false), which
+  is why nobody had noticed the type.
+  Now `parseCount` accepts a number or a non-empty numeric string and rejects
+  `undefined`, `null`, `""` and non-numeric text — the four shapes that either
+  loop forever or truncate the run silently.
+- [x] 2d.2 **The third mock-fidelity failure of this session, and the same
+  root**: every fixture in every file handed back a numeric `count` that the
+  API never sends. No test could see the guard reject reality. Fixtures now
+  produce the wire shape by default.
+- [x] 2d.3 **D1's proof expired and is corrected in place.** "Untouched tests
+  prove the extraction" held for the extraction commit and stopped holding when
+  a later commit changed behaviour underneath them.
+  `inventory-sync/client.test.ts` now carries one post-extraction case for the
+  wire shape and is deliberately no longer "untouched" — it stopped being able
+  to earn the word. **An untouched test file is proof only while nothing
+  underneath it changed.**
+- [x] 2d.4 The shared abort message cited `R1.9`, an inventory-sync
+  requirement, so a customer-import failure sent its reader into the wrong
+  capability's spec. The shared string now names the action instead, and each
+  caller's docstring owns its own citation.
+
 ## Known before starting
 
 - [ ] **353 imported customers will not be able to receive a WhatsApp

@@ -4,8 +4,22 @@ import { fetchAllPages, InterfuerzaAbortError, MAX_ATTEMPTS, PAGE_SIZE } from ".
 
 const OPTS = { baseUrl: "https://ifx.test/api/v4/", token: "t" };
 
-/** One page envelope. `count` is the GRAND TOTAL, not this page's length. */
+/**
+ * One page envelope, in the shape the API ACTUALLY sends.
+ *
+ * `count` is a STRING on the wire — measured live as `"370"` for customers and
+ * `"699"` for products. Every fixture in this repo used to hand back a number,
+ * which is why a strict `typeof === "number"` guard shipped and no test could
+ * see that it aborted both callers on page one.
+ *
+ * `count` is also the GRAND TOTAL, not this page's length.
+ */
 function page(listKey: string, rows: unknown[], count: number) {
+  return { ok: true, status: 200, json: async () => ({ [listKey]: rows, count: String(count) }) } as Response;
+}
+
+/** For the cases that are specifically about a malformed or numeric `count`. */
+function pageWithRawCount(listKey: string, rows: unknown[], count: unknown) {
   return { ok: true, status: 200, json: async () => ({ [listKey]: rows, count }) } as Response;
 }
 
@@ -181,6 +195,45 @@ describe("fetchAllPages — refuses to call without credentials", () => {
  * `tasks.md` WU1.5 recorded "a test must fail, not hang" about a fetch MOCK.
  * The production loop had the same shape and nobody looked.
  */
+describe("fetchAllPages — the wire shape of `count`", () => {
+  // The shape that actually arrives. A strict `typeof === "number"` guard
+  // rejected it and would have aborted every run of both callers on page one.
+  it("accepts the numeric STRING the API really sends", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(pageWithRawCount("customers", rows(PAGE_SIZE), "370"));
+    const sleepImpl = vi.fn().mockResolvedValue(undefined);
+
+    const gen = fetchAllPages("customers", "customers", [], { ...OPTS, fetchImpl, sleepImpl });
+    await gen.next();
+    await gen.next(); // would have thrown under the strict guard
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("still accepts a plain number, which typed fixtures produce", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(pageWithRawCount("customers", rows(1), 1));
+
+    expect(await drain(fetchAllPages("customers", "customers", [], { ...OPTS, fetchImpl }))).toEqual([rows(1)]);
+  });
+
+  it("aborts on a non-numeric string rather than treating it as zero", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(pageWithRawCount("customers", rows(PAGE_SIZE), "unknown"));
+
+    const gen = fetchAllPages("customers", "customers", [], { ...OPTS, fetchImpl });
+    await gen.next();
+    await expect(gen.next()).rejects.toBeInstanceOf(InterfuerzaAbortError);
+  });
+
+  // `Number("") === 0`, so an empty string silently ends the run after one
+  // page — the same shape as `null`, reached a different way.
+  it("aborts on an empty-string count", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(pageWithRawCount("customers", rows(PAGE_SIZE), ""));
+
+    const gen = fetchAllPages("customers", "customers", [], { ...OPTS, fetchImpl });
+    await gen.next();
+    await expect(gen.next()).rejects.toBeInstanceOf(InterfuerzaAbortError);
+  });
+});
+
 describe("fetchAllPages — a `count` the envelope did not actually provide", () => {
   it("aborts instead of looping forever when `count` is missing", async () => {
     const fetchImpl = vi.fn().mockResolvedValue({

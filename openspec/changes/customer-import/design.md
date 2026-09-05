@@ -13,9 +13,22 @@ Two copies drift; the second one drifts silently.
 
 So the machinery moves to `src/shared/interfuerza/client.ts`, parameterised by
 `action` and by the response's list key. `inventory-sync/client.ts` keeps its
-exact public API and delegates. **Its existing tests are the proof the
-extraction changed no behaviour** — if they need editing, the refactor was
-wrong.
+exact public API and delegates. **Its existing tests passing unmodified is the
+proof the EXTRACTION changed no behaviour** — if they had needed editing, the
+refactor was wrong. They did not, and 47/47 passed with an empty `git diff`.
+
+**That claim expired one commit later, and the correction belongs here rather
+than in a new document.** WU2c added a `count` guard INSIDE the shared
+transport — a behaviour change on the products path that those untouched tests
+structurally could not see, because every fixture in them hands back a NUMERIC
+`count`. The API sends a STRING (`"699"` for products, `"370"` for customers,
+measured live), so the first version of that guard would have aborted every run
+of both callers on page one. Nothing was red.
+
+The lesson generalises past this file: **an untouched test file is proof only
+while nothing underneath it changed.** `inventory-sync/client.test.ts` now
+carries one post-extraction case for the wire shape, and it is deliberately no
+longer "untouched" — it stopped being able to earn that word.
 
 Rejected: a second client under `customer-import/`. Rejected: generalising
 further than two callers need. Two is the number that justifies the seam.

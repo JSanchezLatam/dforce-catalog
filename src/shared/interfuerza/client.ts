@@ -65,6 +65,19 @@ const defaultSleep: SleepImpl = (ms) => new Promise((resolve) => setTimeout(reso
 /** One page's raw envelope. The list lives under a key named after the action. */
 type PageResult = { count: number } & Record<string, unknown>;
 
+/**
+ * Accepts what the API actually sends (a numeric string) and what a typed
+ * fixture sends (a number). Everything else — absent, null, empty, or
+ * non-numeric — is `null`, because each of those either loops forever or
+ * silently truncates the run.
+ */
+function parseCount(raw: unknown): number | null {
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
+  if (typeof raw !== "string" || raw.trim() === "") return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 async function fetchPage(
   action: string,
   page: number,
@@ -111,8 +124,11 @@ async function fetchPageWithRetry(
       }
     }
   }
+  // No requirement id here. `R1.9` belongs to inventory-sync, and a
+  // customer-import failure logging it sends whoever reads that line into the
+  // wrong capability's spec. Each caller's docstring owns its own citation.
   throw new InterfuerzaAbortError(
-    `Page ${page} failed after ${MAX_ATTEMPTS} attempts — aborting sync, prior DB state preserved (R1.9)`,
+    `Interfuerza \`${action}\` page ${page} failed after ${MAX_ATTEMPTS} attempts — aborting, prior DB state preserved`,
     lastError,
   );
 }
@@ -153,23 +169,32 @@ export async function* fetchAllPages(
     const rows = result[listKey];
     yield Array.isArray(rows) ? rows : [];
 
-    // `count` is `await response.json()`, so its type is a CLAIM, not a fact.
-    // The two malformed shapes fail in OPPOSITE directions, which is why this
-    // one guard covers both:
+    // MEASURED, not assumed: `count` arrives as a STRING on the wire —
+    // `"370"` for customers and `"699"` for products, `typeof === "string"`
+    // for both, confirmed by a live call. This API stringifies its numbers
+    // generally (`mapper.ts` reads `Available: "-3.0000"`, prices arrive as
+    // `"10.00"`), so a numeric `count` is the shape that never occurs.
+    //
+    // The original comparison worked by COERCION — `25 >= "370"` is false —
+    // and a strict `typeof === "number"` guard would have aborted every run of
+    // both callers on page one. That version shipped briefly; the mocks in
+    // every test file handed back a numeric `count`, so nothing could see it.
+    //
+    // What the guard is actually for, since the type alone proves nothing:
     //   - `undefined` → `25 >= undefined` is false FOREVER. No page cap and no
-    //     retry ceiling on this path (the budget only covers a page that
-    //     FAILS, and every one of these succeeds), so it hammers an API with a
-    //     ~20 req/10s limit and a real 1-hour ban.
-    //   - `null` → `25 >= null` is TRUE, because null coerces to 0. It stops
-    //     after page one, imports 25 of 370 and reports success.
+    //     retry ceiling here (that budget covers a page that FAILS, and every
+    //     one of these succeeds), so it hammers an API with a ~20 req/10s
+    //     limit and a real 1-hour ban.
+    //   - `null` and `""` → both coerce to 0, so the loop stops after page
+    //     one, imports 25 of 370, and reports success.
     //
     // Abort rather than `break`: a run that ends early and calls itself
     // complete is the "imports nobody, reports success" failure the customers
-    // client's docstring already names. `count: 0` is legitimate and passes.
-    const total = result.count;
-    if (typeof total !== "number" || !Number.isFinite(total)) {
+    // client's docstring names. A genuine `0` still passes.
+    const total = parseCount(result.count);
+    if (total === null) {
       throw new InterfuerzaAbortError(
-        `Page ${page} returned an envelope with no usable \`count\` — aborting, prior DB state preserved`,
+        `Page ${page} returned an envelope with no usable count — aborting, prior DB state preserved`,
       );
     }
 
