@@ -115,6 +115,12 @@ Files: `customer-import/job.ts`(+test), route, a manual trigger.
 - [x] 4.2 Result reports created / updated / skipped-with-reason.
 - [x] 4.3 Route gated on `customers.write`; the manual trigger mirrors
   `ManualSyncButton`.
+  **This was marked complete when only the ROUTE half had tests** — five of
+  them — and the trigger had none at all. Caught by GGA. That is the THIRD
+  time on this branch a task was checked off with nothing behind half of it
+  (`customer-deactivation` WU4.1 and WU4.4, `customer-import` WU2f.3 are the
+  others), and the first two are written down in this same PR. The trigger now
+  has 6 tests.
 
 ## WU5 — the coverage the seam cannot give
 
@@ -352,6 +358,49 @@ landed.
   outside a provider. Fixed by registering the route and stubbing the button
   the way `CustomerFormTrigger` already is. Outside the four files it was
   given, and necessary to leave the suite green.
+
+## WU4b — GGA round 1 on the full change (six findings, four of them repeats)
+
+The repeats are the point. Four classes this branch had already caught, named,
+and written into these very files came back in new code.
+
+- [x] 4b.1 **`CustomerImportButton` had no `catch`** — `fetch` REJECTS on a
+  network failure rather than returning a non-ok response, so the button
+  re-enabled with nothing on screen and the operator clicked into the same
+  silence. **Verbatim the defect `customer-deactivation` WU8.3 records fixing
+  in `CustomerActivationButton`** — whose test file already contains
+  *"shows an error when fetch itself rejects"*. The new component was written
+  without reading it.
+- [x] 4b.2 **It shipped with ZERO tests while task 4.3 was checked.** See 4.3
+  above. Six tests now; removing the `catch` turns two red by name.
+- [x] 4b.3 **English error text rendered to Spanish-speaking staff.** The route
+  passed `err.message` through and the button rendered it verbatim — so on the
+  one failure path that fires in production, the workshop read
+  *"aborting, prior DB state preserved"*. The English detail is now
+  `console.error`'d, where it belongs, and the operator gets Rioplatense
+  Spanish. Mutation-verified.
+- [x] 4b.4 A test named *"when no deps are given"* that passed all three deps.
+  Renamed to what it proves, with an honest note that the `??` defaults are
+  covered only by the e2e. **Third time this branch fixed a false test name.**
+- [x] 4b.5 **The skip report was collapsed to a count.** D5 says the skip path
+  exists so "the result lists them by name and external id so the owner can add
+  the real number" — and the UI showed "9 omitidos" with no surface naming
+  which nine. The names now render. Same shape as `customer-deactivation`
+  WU11.2 and WU13.3, both fixed on this branch for the same reason.
+- [x] 4b.6 **The whole import ran inside one open transaction, inside a
+  synchronous HTTP handler.** All 15 page fetches held a Postgres connection
+  idle-in-transaction; one flaky page meant **120 seconds** of retry
+  `setTimeout` with that connection still held. D6's all-or-nothing guarantee
+  never required the fetch to be inside — mapping is fully materialised before
+  the writes. The fetch is now drained first and the transaction covers only
+  `listExisting`, the plan, and the writes.
+  Mutation-verified by putting the fetch back inside: *"never opens the
+  transaction at all when a later page aborts"* goes red.
+
+**A correction of my own verification**: I first reported the English-error
+mutation as "not caught". It never applied — my pattern was single-line and the
+code spans several. Same class as the `timeout` incident earlier on this branch.
+Re-run properly, it goes red.
 
 ## Known before starting
 

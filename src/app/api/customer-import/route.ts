@@ -31,8 +31,14 @@ export async function handleCustomerImport(
     if (err instanceof InterfuerzaAbortError) {
       // D6/R21 — the run aborted with nothing persisted; not a validation
       // error on the caller's request, so 502 (upstream failure) rather than
-      // 400/500.
-      return NextResponse.json({ error: err.message }, { status: 502 });
+      // 400/500. `err.message` is an English diagnostic built in
+      // shared/interfuerza/client.ts — logged for whoever debugs this, never
+      // rendered: AGENTS.md requires Spanish for anything staff read.
+      console.error("[customer-import] aborted:", err.message);
+      return NextResponse.json(
+        { error: "No se pudo completar la importación. No se guardó ningún cambio; probá de nuevo más tarde." },
+        { status: 502 },
+      );
     }
     throw err;
   }

@@ -123,13 +123,48 @@ describe("runCustomerImport — an abort mid-run leaves nothing new to persist",
     // so page 1's row was inserted at most once and no update ever ran.
     expect(inserted.length).toBeLessThanOrEqual(1);
   });
+
+  it("never opens the transaction at all when a later page aborts, so no write is ever attempted", async () => {
+    async function* fetchCustomers() {
+      yield [{ Cliente: "1", Nombre: "Rosa", Telefono_1: "6111-1111" }];
+      throw new InterfuerzaAbortError("customers page 2 failed after 3 attempts");
+    }
+    // `vi.fn()` erases the generic on `database.transaction`'s signature, so
+    // this uses a plain counter instead of a spy to stay type-correct.
+    let transactionCalls = 0;
+    const deps: RunCustomerImportDeps = {
+      fetchCustomers,
+      database: {
+        transaction: async <T>(fn: (tx: TxLike) => Promise<T>): Promise<T> => {
+          transactionCalls++;
+          return fn({} as unknown as TxLike);
+        },
+      },
+      listExisting: async () => [],
+    };
+
+    await expect(runCustomerImport(deps)).rejects.toBeInstanceOf(InterfuerzaAbortError);
+
+    // Fetch/map now run before the transaction opens (design.md D6 does not
+    // require the fetch itself to be transactional — only the writes). If
+    // this ever regresses back to fetching inside the transaction, this is
+    // the assertion that catches it: no connection was ever opened for a
+    // page-2 abort, let alone held idle-in-transaction for it.
+    expect(transactionCalls).toBe(0);
+  });
 });
 
 describe("runCustomerImport — default deps", () => {
-  it("calls the real fetchAllCustomers, db and listExisting when no deps are given", async () => {
-    // Placebo check per repo rule: revert the `fetchCustomers ?? fetchAllCustomers`
-    // default to something that ignores the injected value and this test
-    // would still pass — so it must actually inject to prove the wiring.
+  it("calls the given fetchCustomers and listExisting exactly once each, not zero and not per-row", async () => {
+    // This does NOT exercise the `?? fetchAllCustomers` / `?? db` /
+    // `?? defaultListExisting` defaults — every dep below is given, so the
+    // defaults are never reached. `defaultListExisting` is the only
+    // hand-written `tx.select(...).from(cliente)` in this module; per
+    // AGENTS.md's injected-seam coverage limit, its only real coverage is
+    // the E2E "customer import (E2E)" describe in
+    // `src/e2e/full-flow.e2e.test.ts`, which deliberately leaves
+    // `database`/`listExisting` at their real defaults and injects only
+    // `fetchCustomers`.
     const fetchCustomers = vi.fn(async function* () {
       yield [];
     });

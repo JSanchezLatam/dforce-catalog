@@ -42,13 +42,22 @@ describe("POST /api/customer-import — customers.write gating (R21)", () => {
     expect(runCustomerImport).toHaveBeenCalledTimes(1);
   });
 
-  it("maps an aborted run (InterfuerzaAbortError) to a 502 naming the failure, never a bare 500", async () => {
+  it("maps an aborted run (InterfuerzaAbortError) to a 502 with a Spanish message for staff, and logs the English detail", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const runCustomerImport = vi.fn().mockRejectedValue(new InterfuerzaAbortError("customers page 3 failed after 3 attempts"));
 
     const response = await handleCustomerImport(requestAs("administrador"), { runCustomerImport });
 
     expect(response.status).toBe(502);
-    expect((await response.json()).error).toMatch(/failed after 3 attempts/);
+    // AGENTS.md: error messages shown to staff are Spanish, never the raw
+    // English diagnostic from shared/interfuerza/client.ts.
+    const body = await response.json();
+    expect(body.error).not.toMatch(/failed after 3 attempts/);
+    expect(body.error).toMatch(/no se (pudo|guardó)/i);
+    // The English detail is not deleted — it goes to the log instead, where
+    // a failure stays diagnosable.
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("customer-import"), expect.stringContaining("failed after 3 attempts"));
+    consoleError.mockRestore();
   });
 
   it("rethrows an unrecognised error rather than swallowing it", async () => {
