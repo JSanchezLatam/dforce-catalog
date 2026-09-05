@@ -120,6 +120,34 @@ Files: `customer-import/job.ts`(+test), route, a manual trigger.
   identity — not only the one being added. That is the lesson C2 learned at
   round 10, when R19 was left affirming the opposite of the code.
 
+## WU2b — GGA round 1 on C6 (three findings, all repo rules, two of them ours)
+
+- [x] 2b.1 **I reproduced WU1.5's own lesson one commit after writing it.**
+  `customer-import/client.test.ts` used an unbounded fetch mock — a full page
+  forever, leaning on the `page * PAGE_SIZE >= count` arithmetic to terminate.
+  Under a length-based rule that never stops. Bounded now.
+
+  **And correcting my own verification, which was worse than the bug:** I first
+  "confirmed the hang" with `timeout 45 npx vitest`, read the empty output as a
+  hang, and reported it as measured. `timeout` does not exist on macOS — the
+  command never ran. The finding was real; my evidence for it was not.
+- [x] 2b.2 **That test does not prove the rule it looks like it proves**, found
+  while re-verifying properly. 370 is 14 full pages plus a 20-row remainder, so
+  BOTH termination rules stop at page 15 — with the rule mutated, the file
+  still passes 4/4. The rule is proven in `shared/interfuerza/client.test.ts`
+  against an exact multiple, the only shape where the two disagree. The comment
+  now says that instead of claiming a failure it cannot produce.
+- [x] 2b.3 `mapper.ts` read a THIRD phone fallback, `Telefono_2`, which design
+  D4 does not name and which was measured empty on all 370 rows. No fixture
+  could populate it and no mutation could prove it — a branch dead by
+  measurement. Removed, and the test that said "three fields" no longer names
+  a field the code does not consult.
+- [x] 2b.4 `service-orders/service.test.ts` had `descripcion` where the type
+  wants `description`. C2's tasks.md had filed it as "cosmetic, not fixed" —
+  wrong call: the language rule splits by AUDIENCE, and a test fixture key has
+  no user audience. "Recorded rather than patched" is right for a race, not for
+  a one-word typo.
+
 ## Known before starting
 
 - [ ] **353 imported customers will not be able to receive a WhatsApp

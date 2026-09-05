@@ -41,7 +41,28 @@ describe("fetchAllCustomers", () => {
   // 370 over 25 is 14.8 pages: the live shape, and the one where an
   // off-by-one drops the last 20 customers.
   it("pages through a 370-row total exactly, without a wasted final request", async () => {
-    const fetchImpl = vi.fn(async () => page(Array.from({ length: 25 }, (_, i) => ({ i })), 370));
+    // BOUNDED, and for one reason only: so this can never HANG. An unbounded
+    // mock returns a full page forever, which under a length-based
+    // termination rule never satisfies `rows.length < PAGE_SIZE` and loops
+    // until the worker dies — the lesson `tasks.md` WU1.5 recorded, which this
+    // file then reproduced one commit later.
+    //
+    // What this does NOT do is prove the termination rule, and saying so
+    // matters more than the fix: 370 is 14 full pages plus a 20-row
+    // remainder, so `page * PAGE_SIZE >= count` and `rows.length < PAGE_SIZE`
+    // BOTH stop at page 15. Measured — with the rule mutated, this file still
+    // passes 4/4. The rule is proven in `shared/interfuerza/client.test.ts`,
+    // against an exact multiple of the page size, which is the only shape
+    // where the two rules disagree.
+    //
+    // This test's job is the realistic arithmetic: 370 rows must arrive as 15
+    // pages, not 14.
+    let call = 0;
+    const fetchImpl = vi.fn(async () => {
+      call += 1;
+      const size = call <= 14 ? 25 : call === 15 ? 20 : 0;
+      return page(Array.from({ length: size }, (_, i) => ({ i })), 370);
+    });
     const sleepImpl = vi.fn().mockResolvedValue(undefined);
 
     const batches = await drain(fetchAllCustomers({ ...OPTS, fetchImpl, sleepImpl }));

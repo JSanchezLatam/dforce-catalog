@@ -100,8 +100,11 @@ describe("mapCustomerRow — the phone (D4: verbatim, and it costs something)", 
   // D5 — 9 of the 370 have nothing in any field. `phone` is NOT NULL and R17
   // requires it, so the alternatives were inventing a number or writing rows
   // the app's own form would reject.
-  it("skips a row with no phone in any of the three fields, and says why", () => {
-    const mapped = mapCustomerRow(row({ Telefono_1: "", Telefono_2: "", Cellular: "" }));
+  // "both", not "three": `Telefono_2` is measured empty on all 370 rows and is
+  // deliberately not read. The earlier wording named a field the code does not
+  // consult, which is the kind of test description that outlives its code.
+  it("skips a row with no phone in either read field, and says why", () => {
+    const mapped = mapCustomerRow(row({ Telefono_1: "", Cellular: "" }));
 
     expect(mapped).toMatchObject({ kind: "skip", reason: "missing_phone" });
   });
