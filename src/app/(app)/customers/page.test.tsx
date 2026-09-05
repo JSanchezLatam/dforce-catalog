@@ -101,4 +101,20 @@ describe("CustomersPage — deactivated customers (R20)", () => {
     render(await renderPage({ includeInactive: "1" }));
     expect(screen.getByText("Desactivado")).toBeInTheDocument();
   });
+
+  // Migration `0016` made `phone` NOT NULL, so "no phone on record" became
+  // `""` — and the cell used `??`, which is NULLISH. The phone column rendered
+  // blank while every other column showed an em dash. `design.md` D4 audited
+  // this class and enumerated the consumers; it missed this one.
+  it("renders an em dash for a customer with no phone on record", async () => {
+    listClientes.mockResolvedValue([row({ phone: "", email: "a@b.com", plates: ["ABC111"] })]);
+    countClientes.mockResolvedValue(1);
+    render(await CustomersPage({ searchParams: Promise.resolve({}) }));
+
+    const cells = screen.getAllByRole("cell").map((c) => c.textContent);
+    // Positional: only the phone column can be the empty one here, since the
+    // row seeds a real email and a real plate.
+    expect(cells).not.toContain("");
+    expect(cells).toContain("—");
+  });
 });

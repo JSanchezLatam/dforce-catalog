@@ -115,7 +115,13 @@ export default async function CustomersPage({
                           </span>
                         )}
                       </TableCell>
-                      <TableCell>{item.phone ?? "—"}</TableCell>
+                      {/* `||`, not `??`. Migration `0016` made `phone` NOT
+                          NULL, so "no phone on record" is now `""` — and `??`
+                          is NULLISH, so an empty string sailed straight past
+                          the fallback and rendered a blank cell while every
+                          other column showed an em dash. `email` is still
+                          nullable and keeps `??`. */}
+                      <TableCell>{item.phone || "—"}</TableCell>
                       <TableCell>{item.email ?? "—"}</TableCell>
                       <TableCell>{item.plates.length > 0 ? item.plates.join(", ") : "—"}</TableCell>
                       <TableCell>
@@ -156,7 +162,7 @@ function buildPageHref(params: SearchParams, page: number): string {
   // R20 — every filter in the URL has to survive paging. Dropped here, "Ver
   // desactivados" would silently switch itself off on page 2, which reads as
   // the records having disappeared rather than the filter having reset.
-  if (params.includeInactive === "1") search.set("includeInactive", "1");
+  if (firstValue(params.includeInactive) === "1") search.set("includeInactive", "1");
   search.set("page", String(page));
   return `/customers?${search.toString()}`;
 }

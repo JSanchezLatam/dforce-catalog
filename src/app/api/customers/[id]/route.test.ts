@@ -296,3 +296,39 @@ describe("PATCH /api/customers/[id] — activation (R20)", () => {
     expect(body.error).toBe("cliente_deactivated");
   });
 });
+
+/**
+ * R20 — a malformed `active` used to fall through all three branches and
+ * answer 200 having written nothing. `CustomerActivationButton` reads
+ * `response.ok`, refreshes, and the operator watches the state not change with
+ * no message anywhere: the same silence the network-failure `catch` exists to
+ * prevent, one layer up.
+ */
+describe("PATCH /api/customers/[id] — a malformed `active` (R20)", () => {
+  it.each([["false"], [1], [null], [{}]])("rejects active: %o with 400 and writes nothing", async (value) => {
+    const update = vi.fn();
+    const deactivateCliente = vi.fn();
+    const reactivateCliente = vi.fn();
+
+    const response = await handleUpdateCliente(requestWith({ active: value }), "c1", {
+      getById: async () => current,
+      update,
+      deactivateCliente,
+      reactivateCliente,
+    });
+
+    expect(response.status).toBe(400);
+    expect(update).not.toHaveBeenCalled();
+    expect(deactivateCliente).not.toHaveBeenCalled();
+    expect(reactivateCliente).not.toHaveBeenCalled();
+  });
+
+  it("still accepts a real boolean", async () => {
+    const deactivateCliente = vi.fn().mockResolvedValue(current.cliente);
+    const response = await handleUpdateCliente(requestWith({ active: false }), "c1", {
+      getById: async () => current,
+      deactivateCliente,
+    });
+    expect(response.status).toBe(200);
+  });
+});

@@ -54,6 +54,19 @@ export async function handleUpdateCliente(
   // become a SET on one that does not exist. Same split as
   // `api/users/[id]/route.ts`, and the same reason `vehicles` is stripped.
   const { active, ...fields } = (body ?? {}) as { active?: unknown } & Record<string, unknown>;
+  // The three branches below are `true`, `undefined` and `false`. Anything else
+  // fell through all of them and answered 200 having written nothing — the
+  // button sees `response.ok`, refreshes, and the operator watches the state
+  // not change with no message anywhere. That is the same silence the network
+  // -failure `catch` was just added to eliminate, one layer up.
+  //
+  // Rejected rather than coerced, matching `confirmsSharedPhone`'s strict
+  // `=== true` in `service.ts`: a truthy `"false"` from a form encoding or a
+  // query string must not be read as an intent.
+  if (active !== undefined && typeof active !== "boolean") {
+    return NextResponse.json({ errors: { active: "Debe ser un booleano" } }, { status: 400 });
+  }
+
   const deactivate = deps.deactivateCliente ?? deactivateClienteService;
   const reactivate = deps.reactivateCliente ?? reactivateClienteService;
 

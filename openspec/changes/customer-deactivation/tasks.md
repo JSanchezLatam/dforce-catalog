@@ -100,6 +100,30 @@ Files: `CustomerFilters.tsx`(+test), `customers/page.tsx`, `customers/[id]/page.
   metadata (make, model, year) — a retired customer read with the same weight
   as "Toyota". Now a destructive-tinted badge.
 
+## WU9 — GGA round 2 on C2 (two defects, both proven with probes)
+
+- [x] 9.1 **A regression C1 introduced and this diff surfaced.** The list cell
+  read `item.phone ?? "—"`, and `??` is NULLISH. Migration `0016` made `phone`
+  NOT NULL, so "no phone on record" became `""` — which sails past the
+  fallback, rendering a blank cell while Email and Vehículos both showed an em
+  dash. Fixed to `||`, mutation-verified. **`customer-shared-phones/design.md`
+  D4 claimed this class was swept and enumerated the consumers; it missed this
+  one.** That claim is now corrected in place, with the complete sweep, rather
+  than left standing in an archive.
+- [x] 9.2 **A malformed `active` answered 200 having written nothing.** The
+  branches were `true`, `undefined`, `false`; anything else fell through all
+  three. Proven with a probe: `{ active: "false" }` returned `200` with body
+  `{}` and zero calls to update/deactivate/reactivate. The button reads
+  `response.ok`, refreshes, and the operator watches the state not change with
+  nothing on screen — the same silence WU8's `catch` exists to prevent, one
+  layer up. Now a 400, rejected rather than coerced, matching
+  `confirmsSharedPhone`'s strict `=== true` in the same module.
+- [x] 9.3 `buildPageHref` read `params.includeInactive` directly while
+  `normalizeClienteFilters` used `firstValue()`. Now both use the helper —
+  WU8's bug one input shape over.
+- [x] 9.4 The deactivated banner was `role="alert"`; it is server-rendered and
+  present on load, not a change being announced. `role="status"`.
+
 ## Follow-ups (out of scope here)
 
 - [ ] No hard delete for customers, and none planned. If one is ever wanted it needs its own change and its own administrador-only grant, on `customers.deleteVehicle`'s reasoning.
