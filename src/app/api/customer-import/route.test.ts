@@ -53,7 +53,12 @@ describe("POST /api/customer-import — customers.write gating (R21)", () => {
     // English diagnostic from shared/interfuerza/client.ts.
     const body = await response.json();
     expect(body.error).not.toMatch(/failed after 3 attempts/);
-    expect(body.error).toMatch(/no se (pudo|guardó)/i);
+    // Pins the exact Spanish string the operator reads — not a loose pattern
+    // that would pass for any wording containing "pudo" or "guardó". This is
+    // the literal `CustomerImportButton.test.tsx` also pins on the UI side.
+    expect(body.error).toBe(
+      "No se pudo completar la importación. No se guardó ningún cambio; probá de nuevo más tarde.",
+    );
     // The English detail is not deleted — it goes to the log instead, where
     // a failure stays diagnosable.
     expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("customer-import"), expect.stringContaining("failed after 3 attempts"));

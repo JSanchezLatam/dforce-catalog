@@ -402,6 +402,30 @@ mutation as "not caught". It never applied — my pattern was single-line and th
 code spans several. Same class as the `timeout` incident earlier on this branch.
 Re-run properly, it goes red.
 
+## WU4c — GGA round 2 (two findings, both the same family)
+
+- [x] 4c.1 **Three different Spanish strings for one failure, none matching.**
+  The component rendered `"No se pudo importar a los clientes."`, the test's
+  mock body invented `"No se pudo importar los clientes."` (no `a`), and the
+  ROUTE actually returns `"No se pudo completar la importación…"`. The non-ok
+  test therefore rendered a string its own mock had made up — it would pass
+  whatever the route said — and the `catch` test asserted a PREFIX that matched
+  all three.
+  **"A mock more convenient than reality" for the fourth time on this branch.**
+  Fixtures now carry the route's real body, every assertion pins the exact
+  string, and `route.test.ts` pins the route literal instead of a loose regex.
+  Before this, no test anywhere fixed the text the operator actually reads on
+  the import failure path.
+- [x] 4c.2 `job.test.ts`'s `fakeTx()` recorded `id: "unknown"` because it could
+  not read the id out of `eq(cliente.id, id)` — so the assertion would have
+  passed identically had the job updated the WRONG row. The comment claimed the
+  id was "threaded in by the caller below", which no call did: a comment
+  asserting what the code does not do, for the fourth time in this PR.
+  Fixed properly rather than by correcting the comment: the fake now extracts
+  the id from the SQL fragment via drizzle's `Param`, so the assertion means
+  what it looks like. **Verified by pointing `job.ts` at a different customer —
+  the test goes red**, which it could not have done before.
+
 ## Known before starting
 
 - [ ] **353 imported customers will not be able to receive a WhatsApp

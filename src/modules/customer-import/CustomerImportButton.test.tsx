@@ -21,6 +21,16 @@ function mockFetch(impl: () => unknown) {
 
 const ok = (body: object) => ({ ok: true, status: 200, json: async () => body });
 
+// Literal from `src/app/api/customer-import/route.ts`'s `InterfuerzaAbortError`
+// branch. Pinning this — rather than a string this test file invents — is
+// what would actually catch drift between what the route sends and what the
+// operator reads; `route.test.ts` pins the same literal on the route side.
+const ABORTED_IMPORT_MESSAGE =
+  "No se pudo completar la importación. No se guardó ningún cambio; probá de nuevo más tarde.";
+// The component's own fallback, used both when a non-ok response carries no
+// `error` field and when `fetch` itself rejects (CustomerImportButton.tsx).
+const GENERIC_IMPORT_ERROR = "No se pudo importar a los clientes.";
+
 function renderButton() {
   return render(
     <ToastProvider>
@@ -57,16 +67,27 @@ describe("CustomerImportButton (R21)", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("2 nuevos, 1 actualizados, 1 omitidos");
   });
 
-  it("shows an error and does not report success when the response is not ok", async () => {
+  it("shows the server's exact failure message when the response is not ok and carries one", async () => {
     const user = userEvent.setup();
-    mockFetch(() => ({ ok: false, status: 502, json: async () => ({ error: "No se pudo importar los clientes." }) }));
+    mockFetch(() => ({ ok: false, status: 502, json: async () => ({ error: ABORTED_IMPORT_MESSAGE }) }));
     renderButton();
 
     await user.click(screen.getByRole("button", { name: "Importar clientes" }));
 
     const status = await screen.findByRole("status");
-    expect(status).toHaveTextContent("No se pudo importar los clientes.");
+    expect(status.textContent).toBe(ABORTED_IMPORT_MESSAGE);
     expect(status).not.toHaveTextContent("nuevos");
+  });
+
+  it("shows the generic fallback when the response is not ok and carries no server message", async () => {
+    const user = userEvent.setup();
+    mockFetch(() => ({ ok: false, status: 500, json: async () => ({}) }));
+    renderButton();
+
+    await user.click(screen.getByRole("button", { name: "Importar clientes" }));
+
+    const status = await screen.findByRole("status");
+    expect(status.textContent).toBe(GENERIC_IMPORT_ERROR);
   });
 
   // The path that had no branch at all: `fetch` REJECTS on a network failure
@@ -82,7 +103,8 @@ describe("CustomerImportButton (R21)", () => {
 
     await user.click(screen.getByRole("button", { name: "Importar clientes" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent("No se pudo importar");
+    const status = await screen.findByRole("status");
+    expect(status.textContent).toBe(GENERIC_IMPORT_ERROR);
   });
 
   it("re-enables the button after a failure so the action can be retried", async () => {

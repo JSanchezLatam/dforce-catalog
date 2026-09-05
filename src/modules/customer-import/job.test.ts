@@ -1,3 +1,4 @@
+import { Param } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 
 import type { TxLike } from "@/modules/customers/vehicles";
@@ -22,11 +23,18 @@ function fakeTx() {
     }),
     update: () => ({
       set: (set: unknown) => ({
-        where: async () => {
-          // `where` only ever receives `eq(cliente.id, id)` in job.ts — the id
-          // itself isn't recoverable from the drizzle SQL object here, so the
-          // planned row's `id` is threaded in by the caller below instead.
-          updated.push({ id: "unknown", set });
+        // `where` only ever receives `eq(cliente.id, id)` in job.ts. `eq(...)`
+        // compiles to a drizzle `SQL` fragment whose bound value is wrapped in
+        // drizzle's own (publicly exported) `Param` class inside
+        // `queryChunks` — reading it back here is what lets the assertion
+        // below prove the UPDATE targets the right row, instead of recording
+        // a placeholder that would look identical no matter which id job.ts
+        // actually passed in.
+        where: async (condition: { queryChunks: unknown[] }) => {
+          const param = condition.queryChunks.find(
+            (chunk): chunk is InstanceType<typeof Param> => chunk instanceof Param,
+          );
+          updated.push({ id: String(param?.value), set });
         },
       }),
     }),
@@ -72,7 +80,7 @@ describe("runCustomerImport — insert, update and skip in one pass", () => {
       skipped: [{ externalId: "3", name: "Sin Telefono", reason: "missing_phone" }],
     });
     expect(inserted).toEqual([{ externalId: "1", name: "Rosa", phone: "6111-1111", email: null }]);
-    expect(updated).toEqual([{ id: "unknown", set: { name: "Beto", phone: "6222-2222", email: null } }]);
+    expect(updated).toEqual([{ id: "local-2", set: { name: "Beto", phone: "6222-2222", email: null } }]);
   });
 
   it("never lets an update's patch carry whatsappOptOut, emailOptOut or deactivatedAt", async () => {
