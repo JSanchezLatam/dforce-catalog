@@ -113,6 +113,13 @@
       "when": 1788294332038,
       "tag": "0015_order_vehiculo_category_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788590707320,
+      "tag": "0016_cliente_phone_not_null",
+      "breakpoints": true
     }
   ]
 }

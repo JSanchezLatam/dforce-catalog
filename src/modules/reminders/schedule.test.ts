@@ -85,7 +85,7 @@ describe("planReminders — R23 timing", () => {
 
   it("skips the whatsapp channel when the cliente has no phone", () => {
     const orden = makeOrden({ appointmentAt: new Date("2026-08-01T10:00:00.000Z") });
-    const plans = planReminders(orden, makeCliente({ phone: null }), NOW);
+    const plans = planReminders(orden, makeCliente({ phone: "" }), NOW);
     expect(plans).toHaveLength(1);
     expect(plans[0].channel).toBe("email");
   });

@@ -127,10 +127,25 @@ describe("schema — cliente table (Phase 1, task 1.2)", () => {
     expect(whatsappOptOut.name).not.toBe(emailOptOut.name);
   });
 
-  it("has nullable contact fields (name is the only required field)", () => {
+  it("requires name and phone; email stays optional (0016)", () => {
     expect(findColumn(config.columns, "name").notNull).toBe(true);
-    expect(findColumn(config.columns, "phone").notNull).toBe(false);
+    // Migration `0016` — `validation.ts` has always required a phone
+    // ("Phone is required"); the column finally agrees.
+    expect(findColumn(config.columns, "phone").notNull).toBe(true);
     expect(findColumn(config.columns, "email").notNull).toBe(false);
+  });
+
+  /**
+   * The load-bearing half of `customer-shared-phones`, and the easiest thing
+   * for a later change to "tidy up" into existence: a phone can legitimately
+   * belong to two people, so uniqueness is enforced NOWHERE — not as a unique
+   * index, not as a unique() column marker. `service.ts` refuses a duplicate
+   * and lets the operator confirm past it; a constraint here would make that
+   * confirmation impossible to honour.
+   */
+  it("does NOT enforce phone uniqueness at the database level", () => {
+    expect(findColumn(config.columns, "phone").isUnique).toBeFalsy();
+    expect(config.indexes.some((i) => i.config.unique)).toBe(false);
   });
 
   it("has name/createdAt indexes for list search + newest-first listing", () => {

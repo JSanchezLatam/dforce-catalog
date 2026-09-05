@@ -266,8 +266,14 @@ export const cliente = pgTable(
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
     name: text("name").notNull(),
-    /** E.164 preferred (WhatsApp needs it); validated in modules/customers/validation.ts. */
-    phone: text("phone"),
+    /**
+     * E.164 preferred (WhatsApp needs it); validated in
+     * modules/customers/validation.ts, which has always REQUIRED it — the
+     * column only stopped disagreeing in migration `0016`. Not UNIQUE, and
+     * deliberately so: a phone can belong to two people (a house line, a
+     * shared handset). See `customer-shared-phones`.
+     */
+    phone: text("phone").notNull(),
     email: text("email"),
     /**
      * Two INDEPENDENT opt-out flags (R26, design ADR-5) — WhatsApp and email

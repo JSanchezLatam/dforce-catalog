@@ -117,7 +117,7 @@ describe("customer search (E2E)", () => {
       .values([
         { name: "María GONZÁLEZ", phone: "50761111111" },
         { name: "Carlos Ruiz", phone: "50762222222" },
-        { name: "Ana Torres", phone: null },
+        { name: "Ana Torres", phone: "" },
         // Stored with a leading "+" — `normalizePhone`'s real output shape
         // for an international number (validation.ts:47-51), i.e. what a
         // production row genuinely looks like, not a hand-formatted stub.
