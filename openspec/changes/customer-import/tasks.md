@@ -32,14 +32,26 @@ regression came from.
 
 Files: `src/shared/interfuerza/client.ts`(new)(+test), `src/modules/inventory-sync/client.ts`.
 
-- [ ] 1.1 Move pagination, retry, `RATE_LIMIT_SPACING_MS` and `SyncAbortError`
+- [x] 1.1 Move pagination, retry, `RATE_LIMIT_SPACING_MS` and `SyncAbortError`
   into `shared/interfuerza/client.ts`, parameterised by `action` and list key.
-- [ ] 1.2 `inventory-sync/client.ts` delegates, keeping its exact public API.
-- [ ] 1.3 **`inventory-sync/client.test.ts` must pass UNCHANGED.** If it needs
-  editing, the extraction changed behaviour and is wrong.
-- [ ] 1.4 Tests for the shared client's own contract: the `page * 25 >= count`
-  rule, sequential ordering (never `Promise.all`), the sleep between pages, and
-  `SyncAbortError` after `MAX_ATTEMPTS`.
+- [x] 1.2 `inventory-sync/client.ts` delegates, keeping its exact public API.
+- [x] 1.3 **`inventory-sync/client.test.ts` and `job.test.ts` pass UNCHANGED** — 47/47, and `git diff` over those files is EMPTY. That is the assertion, not a claim.
+- [x] 1.4 11 tests for the shared client's own contract, covering what only IT
+  can be asked (the `action` and `listKey` parameters, which exist because
+  there are two callers) plus the rules that carry the IP-ban risk. Pagination
+  through the products path is NOT duplicated — `inventory-sync`'s untouched
+  tests already own it.
+  **Five mutations, all now failing by name**: hardcoding the action, ignoring
+  `listKey`, ending pagination on page length instead of the `count`
+  arithmetic, dropping the inter-page sleep, and treating a non-2xx response
+  as an empty page (`clients` really does answer 401 on the live API — an
+  empty page there would import nothing and report success).
+- [x] 1.5 UNPLANNED, found by that mutation run: the page-length mutation
+  originally **HUNG the worker for 32s** instead of failing, because the sleep
+  test returned a full page forever and leaned on the very arithmetic being
+  mutated to stop it. The hang masked the clean assertion in the test above it
+  behind an "Errors 1" line. That fetch is now bounded. **A test must fail, not
+  hang** — a hang names nothing.
 
 ## WU2 — the customers client and mapper
 
