@@ -17,30 +17,30 @@ collide on merge. Targets #68's branch, merges after it.
 
 Files: `src/shared/db/schema.ts`, `migrations/0017_*.sql`, `queries.ts`(+test).
 
-- [ ] 1.1 `schema.ts` — `deactivatedAt` nullable timestamptz on `cliente` (D1).
-- [ ] 1.2 Generate migration `0017_*`, rename off drizzle-kit's random tag.
-- [ ] 1.3 RED `queries.test.ts` — `listClientes`/`countClientes` exclude deactivated rows by default and include them under `includeInactive` (D3).
-- [ ] 1.4 GREEN `queries.ts` — the filter, mirroring `activeVehiculoFilter()`'s shape and `listVehiculosByCliente`'s `includeInactive` option name.
-- [ ] 1.5 RED/GREEN — `getClienteById` still returns a deactivated customer (D3's deliberate exception; without it reactivation is unreachable).
+- [x] 1.1 `schema.ts` — `deactivatedAt` nullable timestamptz on `cliente` (D1).
+- [x] 1.2 Generate migration `0017_*`, rename off drizzle-kit's random tag.
+- [x] 1.3 RED `queries.test.ts` — `listClientes`/`countClientes` exclude deactivated rows by default and include them under `includeInactive` (D3).
+- [x] 1.4 GREEN `queries.ts` — the filter, mirroring `activeVehiculoFilter()`'s shape and `listVehiculosByCliente`'s `includeInactive` option name.
+- [x] 1.5 `getClienteById` is untouched, so it still returns a deactivated customer. **No unit test written on purpose**: it reads through the injected `queryFn` seam, so a unit test would assert against a fake and could not fail if a real filter were added. Covered in WU5 against real Postgres instead.
 
 ## WU2 — the two actions
 
 Files: `service.ts`(+test), `api/customers/[id]/route.ts`(+test).
 
-- [ ] 2.1 RED `service.test.ts` — `deactivateCliente` sets a timestamp; `reactivateCliente` clears it; both use the injected-deps seam.
-- [ ] 2.2 GREEN `service.ts`.
-- [ ] 2.3 RED — deactivating touches no `vehiculo` and no `orden_servicio` row (R20's core promise).
-- [ ] 2.4 RED `route.test.ts` — both gated on `customers.write` (D2, no new action); 404 on an unknown id rather than a blind write.
-- [ ] 2.5 GREEN route.
-- [ ] 2.6 RED — a deactivated customer cannot be edited through PATCH (D5). Server-side, not only hidden in the UI.
+- [x] 2.1 RED `service.test.ts` — `deactivateCliente` sets a timestamp; `reactivateCliente` clears it; both use the injected-deps seam.
+- [x] 2.2 GREEN `service.ts`.
+- [x] 2.3 Unit: exactly one write, nothing else read. That the vehicles and orders SURVIVE is an e2e claim (5.1) — a unit test with an injected seam cannot prove a row it never wrote still exists.
+- [x] 2.4 RED `route.test.ts` — both gated on `customers.write` (D2, no new action); 404 on an unknown id rather than a blind write.
+- [x] 2.5 GREEN route.
+- [x] 2.6 RED — a deactivated customer cannot be edited through PATCH (D5). Server-side, not only hidden in the UI.
 
 ## WU3 — reminders
 
 Files: `src/modules/reminders/job.ts`(+test).
 
-- [ ] 3.1 RED `job.test.ts` — `runReminder` on a deactivated cliente sends nothing and marks `skipped`.
-- [ ] 3.2 RED — it marks `skipped`, NOT `opted_out` (D4). Asserted separately: collapsing the two corrupts the status that carries legal meaning.
-- [ ] 3.3 GREEN — one guard beside the existing cancelled-order check, at FIRE time.
+- [x] 3.1 RED `job.test.ts` — `runReminder` on a deactivated cliente sends nothing and marks `skipped`.
+- [x] 3.2 RED — it marks `skipped`, NOT `opted_out` (D4). Asserted separately: collapsing the two corrupts the status that carries legal meaning.
+- [x] 3.3 GREEN — one guard beside the existing cancelled-order check, at FIRE time.
 
 ## WU4 — the screens
 
@@ -59,8 +59,8 @@ Files: `CustomerFilters.tsx`(+test), `customers/page.tsx`, `customers/[id]/page.
 
 ## WU6 — the writing-down
 
-- [ ] 6.1 Delta spec: R16 restated IN FULL (the archiver replaces, it does not merge — the exact trap GGA caught on #68), plus new R20.
-- [ ] 6.2 `design.md` records why no new policy action and why `skipped` over `opted_out`.
+- [x] 6.1 Delta spec: R16 restated IN FULL (the archiver replaces, it does not merge — the exact trap GGA caught on #68), plus new R20.
+- [x] 6.2 `design.md` records why no new policy action and why `skipped` over `opted_out`.
 
 ## Follow-ups (out of scope here)
 

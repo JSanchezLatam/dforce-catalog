@@ -213,6 +213,52 @@ describe("runReminder — R23/R26 re-check at fire time", () => {
     expect(state.reminder.status).toBe("skipped");
   });
 
+  /**
+   * R20 — the reason customer deactivation is not merely a hidden list row.
+   * Without this guard the workshop keeps WhatsApping a person whose record it
+   * has explicitly retired, which is a message sent to a real human on the
+   * strength of a record that no longer stands.
+   *
+   * Checked at FIRE time, like every other guard in this function: deactivation
+   * almost always happens AFTER the orders and their reminders already exist,
+   * so a schedule-time check would miss the only case that occurs.
+   */
+  it("skips a reminder for a deactivated cliente and dispatches nothing", async () => {
+    const state = {
+      reminder: makeReminder({ status: "scheduled" }),
+      orden: makeOrden(),
+      cliente: makeCliente({ deactivatedAt: new Date("2026-09-01T00:00:00.000Z") }),
+    };
+    const { fakeDb, refillSelectQueue } = makeFakeDb(state);
+    const sendViaChannel = vi.fn();
+
+    refillSelectQueue();
+    await runReminder("reminder-1", { db: fakeDb as unknown as typeof db, now: () => NOW, sendViaChannel });
+
+    expect(sendViaChannel).not.toHaveBeenCalled();
+    expect(state.reminder.status).toBe("skipped");
+  });
+
+  // Asserted on its own, not folded into the test above. `opted_out` records a
+  // consent decision the CUSTOMER made per channel and carries legal weight;
+  // this is the WORKSHOP retiring a record. AGENTS.md already forbids
+  // collapsing the two opt-out regimes, and this is the same mistake one level
+  // up: a deactivation logged as consent would misreport why nothing was sent.
+  it("records the deactivated skip as skipped, NOT as opted_out", async () => {
+    const state = {
+      reminder: makeReminder({ status: "scheduled", channel: "whatsapp" }),
+      orden: makeOrden(),
+      cliente: makeCliente({ deactivatedAt: new Date("2026-09-01T00:00:00.000Z"), whatsappOptOut: false }),
+    };
+    const { fakeDb, refillSelectQueue } = makeFakeDb(state);
+
+    refillSelectQueue();
+    await runReminder("reminder-1", { db: fakeDb as unknown as typeof db, now: () => NOW, sendViaChannel: vi.fn() });
+
+    expect(state.reminder.status).not.toBe("opted_out");
+    expect(state.reminder.status).toBe("skipped");
+  });
+
   it("records opted_out (distinct from skipped) for a whatsapp reminder when the cliente has whatsappOptOut=true", async () => {
     const state = {
       reminder: makeReminder({ status: "scheduled", channel: "whatsapp" }),

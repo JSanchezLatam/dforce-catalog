@@ -37,6 +37,13 @@ export class ClienteNotFoundError extends Error {
   }
 }
 
+/** R20/D5 — a deactivated cliente is read-only until reactivated; the route maps this to 409. */
+export class ClienteDeactivatedError extends Error {
+  constructor(id: string) {
+    super(`Cliente ${id} is deactivated and cannot be edited`);
+  }
+}
+
 export type DatabaseDep = { transaction: <T>(fn: (tx: TxLike) => Promise<T>) => Promise<T> };
 
 function extractVehiclesRaw(input: unknown): unknown {
@@ -182,6 +189,12 @@ export async function updateCliente(
   if (!current) {
     throw new ClienteNotFoundError(id);
   }
+  // D5 — enforced here rather than only in the UI. `getClienteById` returns a
+  // deactivated customer on purpose (reactivation needs to open the record),
+  // so without this guard a direct PATCH would edit one.
+  if (current.cliente.deactivatedAt) {
+    throw new ClienteDeactivatedError(id);
+  }
 
   // Validate the MERGED scalar record so cross-field rules see the full
   // picture — but only the patch's own keys get persisted below (R16).
@@ -239,4 +252,48 @@ export async function updateCliente(
     await applyVehiculoPlan(tx, id, plan);
     return row;
   });
+}
+
+/**
+ * R20 — activation state, deliberately NOT reachable through `updateCliente`.
+ * Folding it into the patch would make `deactivatedAt` just another editable
+ * column, and D5 requires the opposite: a deactivated record accepts no edits
+ * at all. Same split `account/service.ts` already makes between `updateUser`
+ * and `deactivateUser`/`reactivateUser`.
+ */
+export type ActivationDeps = {
+  setDeactivatedAt?: (id: string, at: Date | null) => Promise<Cliente | undefined>;
+};
+
+/**
+ * One UPDATE, no preceding read: `returning()` already distinguishes "row
+ * updated" from "no such row", so a separate existence check would be a
+ * second query answering a question this one answers.
+ *
+ * Touches `cliente` and nothing else. Every `vehiculo` and every
+ * `orden_servicio` of this customer survives untouched — that is the whole
+ * difference between deactivation and deletion.
+ */
+async function setDeactivatedAtDb(id: string, at: Date | null): Promise<Cliente | undefined> {
+  const [row] = await db.update(cliente).set({ deactivatedAt: at }).where(eq(cliente.id, id)).returning();
+  return row;
+}
+
+async function setActivation(id: string, at: Date | null, deps: ActivationDeps): Promise<Cliente> {
+  const setDeactivatedAt = deps.setDeactivatedAt ?? setDeactivatedAtDb;
+  const row = await setDeactivatedAt(id, at);
+  if (!row) {
+    throw new ClienteNotFoundError(id);
+  }
+  return row;
+}
+
+/** R20 — hide the customer from the list and the order picker, and stop their reminders. */
+export async function deactivateCliente(id: string, deps: ActivationDeps = {}): Promise<Cliente> {
+  return setActivation(id, new Date(), deps);
+}
+
+/** R20 — the exact inverse; the customer returns with vehicles and history intact. */
+export async function reactivateCliente(id: string, deps: ActivationDeps = {}): Promise<Cliente> {
+  return setActivation(id, null, deps);
 }

@@ -204,6 +204,18 @@ export async function runReminder(reminderId: string, deps: RunReminderDeps = {}
     await markSkipped();
     return;
   }
+  // R20 — the workshop retired this customer, so nothing goes out to them.
+  // `markSkipped`, NOT `markOptedOut`: `opted_out` records a consent decision
+  // the CUSTOMER made per channel and carries legal meaning, while this is an
+  // operational state of the record, exactly like the cancelled order above.
+  //
+  // At fire time, like every guard here. Deactivation almost always happens
+  // after the orders and their reminders already exist, so a schedule-time
+  // check would miss the only case that actually occurs.
+  if (ctx.cliente.deactivatedAt) {
+    await markSkipped();
+    return;
+  }
   if (ctx.reminder.type === "appointment" && (!ctx.orden.appointmentAt || ctx.orden.appointmentAt.getTime() <= now().getTime())) {
     await markSkipped();
     return;

@@ -1,14 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import type { Cliente } from "@/shared/db/schema";
+
 import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import {
+  ClienteDeactivatedError,
   ClienteNotFoundError,
+  deactivateCliente as deactivateClienteService,
   DuplicatePhoneError,
+  reactivateCliente as reactivateClienteService,
   updateCliente,
   type UpdateClienteDeps,
 } from "@/modules/customers/service";
 import { ClienteValidationError } from "@/modules/customers/validation";
+
+/** R20 — the route's own seam, extending the service's with the two activation calls. */
+export type ClienteRouteDeps = UpdateClienteDeps & {
+  deactivateCliente?: (id: string) => Promise<Cliente>;
+  reactivateCliente?: (id: string) => Promise<Cliente>;
+};
 
 /** Any element of an incoming `vehicles` array asking for permanent deletion. */
 function asksForVehicleDeletion(body: unknown): boolean {
@@ -19,7 +30,7 @@ function asksForVehicleDeletion(body: unknown): boolean {
 export async function handleUpdateCliente(
   request: NextRequest,
   id: string,
-  deps: UpdateClienteDeps = {},
+  deps: ClienteRouteDeps = {},
 ): Promise<NextResponse> {
   const user = requireSession(request);
   if (!can(user, "customers.write")) {
@@ -38,8 +49,32 @@ export async function handleUpdateCliente(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // R20 — activation is routed to its own service calls, never folded into the
+  // patch. `active` is not a column; forwarded to `updateCliente` it would
+  // become a SET on one that does not exist. Same split as
+  // `api/users/[id]/route.ts`, and the same reason `vehicles` is stripped.
+  const { active, ...fields } = (body ?? {}) as { active?: unknown } & Record<string, unknown>;
+  const deactivate = deps.deactivateCliente ?? deactivateClienteService;
+  const reactivate = deps.reactivateCliente ?? reactivateClienteService;
+
   try {
-    const cliente = await updateCliente(id, body, deps);
+    // ORDER IS LOAD-BEARING. `updateCliente` refuses to edit a deactivated
+    // record (D5), so reactivation lands BEFORE the field edits — otherwise an
+    // "edit and reactivate" save would be rejected by its own first step.
+    // Deactivation goes last for the mirror reason: edits applied to a record
+    // on its way out are still edits to an active one.
+    let cliente = active === true ? await reactivate(id) : undefined;
+
+    // `active === undefined` means this is an ordinary edit and behaves
+    // exactly as it did before R20 — including an empty body.
+    if (active === undefined || Object.keys(fields).length > 0) {
+      cliente = await updateCliente(id, fields, deps);
+    }
+
+    if (active === false) {
+      cliente = await deactivate(id);
+    }
+
     return NextResponse.json({ cliente });
   } catch (err) {
     if (err instanceof ClienteValidationError) {
@@ -50,6 +85,11 @@ export async function handleUpdateCliente(
     }
     if (err instanceof ClienteNotFoundError) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+    if (err instanceof ClienteDeactivatedError) {
+      // 409, not 403: the caller is allowed to do this, the RECORD's state is
+      // what refuses. A 403 would send them looking for a missing permission.
+      return NextResponse.json({ error: "cliente_deactivated" }, { status: 409 }); // R20/D5
     }
     throw err;
   }

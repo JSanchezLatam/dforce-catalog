@@ -283,6 +283,18 @@ export const cliente = pgTable(
      */
     whatsappOptOut: boolean("whatsapp_opt_out").notNull().default(false),
     emailOptOut: boolean("email_opt_out").notNull().default(false),
+    /**
+     * NULL = active; stamped on deactivation (`customer-deactivation` D1).
+     * A nullable timestamp, NOT a boolean — the third table in this codebase
+     * to spell soft delete this way, after `users` and `vehiculo`.
+     *
+     * Deactivation is REVERSIBLE and nothing is ever destroyed: every
+     * `vehiculo` and every `orden_servicio` of a deactivated customer
+     * survives untouched. `queries.ts` owns the default exclusion; a customer
+     * is hidden from the list and the service-order picker, and
+     * `reminders/job.ts` refuses to send to them at fire time.
+     */
+    deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
