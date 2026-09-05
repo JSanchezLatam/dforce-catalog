@@ -59,8 +59,21 @@ export function CustomerFilters({
    * the user just started.
    */
   const pushedParamsRef = useRef<URLSearchParams | null>(null);
+  /**
+   * How many of OUR pushes have not committed yet. Releasing the ref on the
+   * first navigation to land was wrong whenever two were outstanding:
+   * `useSearchParams()` reflects the COMMITTED url, so push A landing nulled
+   * the ref that was holding push B, and the next debounce rebuilt from
+   * `window.location` — which still showed A. The checkbox came back unticked.
+   *
+   * Only the LAST of our pushes releases it. An external navigation — back
+   * button, `<Link>` — arrives with the counter at zero and releases it
+   * immediately, which is the case this effect is actually for.
+   */
+  const pendingPushes = useRef(0);
   useEffect(() => {
-    pushedParamsRef.current = null;
+    if (pendingPushes.current > 0) pendingPushes.current -= 1;
+    if (pendingPushes.current === 0) pushedParamsRef.current = null;
   }, [searchParams]);
 
   /** The search box is uncontrolled, so clearing the URL is not enough to clear what is on screen. */
@@ -77,6 +90,7 @@ export function CustomerFilters({
    */
   function commit(params: URLSearchParams) {
     pushedParamsRef.current = params;
+    pendingPushes.current += 1;
     const query = params.toString();
     router.push(query ? `${pathname}?${query}` : pathname);
   }

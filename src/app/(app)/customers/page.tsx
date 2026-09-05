@@ -51,11 +51,22 @@ export default async function CustomersPage({
 
   const [items, total] = await Promise.all([listClientes(filters, pageWindow), countClientes(filters)]);
 
-  // Only when the active list came back empty, so it costs nothing in the
-  // normal case. Without it a genuinely empty database offered "Ver
-  // desactivados" — a link to another empty page — while "Todavía no hay
-  // clientes registrados" became reachable only WITH `includeInactive=1`,
-  // which is the one case where it is least true.
+  // Without this a genuinely empty database offered "Ver desactivados" — a
+  // link to another empty page — while "Todavía no hay clientes registrados"
+  // became reachable only WITH `includeInactive=1`, the one case where it is
+  // least true.
+  //
+  // Cost, stated honestly rather than as "nothing in the normal case": this is
+  // a second sequential scan, issued serially, and it runs on EVERY empty
+  // result — which on this screen includes every mistyped search, not only the
+  // empty-database case it exists for. Acceptable because it runs only when
+  // the first count already returned zero, i.e. when there is nothing to
+  // render and no list query competing with it.
+  //
+  // `total`, not `items.length`: an empty PAGE is not an empty RESULT SET
+  // (`api/customers/route.ts` documents the same distinction). Past the last
+  // page of a search that does match, the result set is not empty and no offer
+  // belongs on screen.
   const hasDeactivated =
     total === 0 && !filters.includeInactive
       ? (await countClientes({ ...filters, includeInactive: true })) > 0

@@ -22,21 +22,52 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  */
 const searchParams = vi.hoisted(() => ({ value: new URLSearchParams() }));
 /**
- * Handles are tracked so `afterEach` can cancel them. A late navigation left
- * pending by one test lands during the NEXT one and rewrites its URL — which
- * is exactly what happened the first time this mock was made asynchronous.
+ * Subscribers to the mocked `useSearchParams`. Next re-renders every consumer
+ * when a navigation COMMITS; without this the mocked hook returns one frozen
+ * object forever, the component's `useEffect([searchParams])` never fires, and
+ * an entire class of bug — anything about what happens when a navigation lands
+ * — is inexpressible. That is exactly how the two-pushes-outstanding defect
+ * survived a test written to catch it.
  */
-const pending = vi.hoisted(() => ({ timers: [] as ReturnType<typeof setTimeout>[], delay: 20 }));
+const listeners = vi.hoisted(() => new Set<() => void>());
+const pending = vi.hoisted(() => ({
+  timers: [] as ReturnType<typeof setTimeout>[],
+  delay: 20,
+  /** Per-push delays, consumed in order, so two pushes can be outstanding with
+   *  the FIRST landing before the second. */
+  delays: [] as number[],
+}));
+
+/** Commits a navigation the way Next does: URL first, then every consumer of the hook. */
+const land = vi.hoisted(() => (url: string) => {
+  window.history.replaceState({}, "", url);
+  searchParams.value = new URLSearchParams(url.split("?")[1] ?? "");
+  for (const notify of listeners) notify();
+});
+
 const push = vi.hoisted(() =>
   vi.fn((url: string) => {
-    pending.timers.push(setTimeout(() => window.history.replaceState({}, "", url), pending.delay));
+    const delay = pending.delays.length > 0 ? pending.delays.shift()! : pending.delay;
+    pending.timers.push(setTimeout(() => land(url), delay));
   }),
 );
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push }),
-  usePathname: () => "/customers",
-  useSearchParams: () => searchParams.value,
-}));
+vi.mock("next/navigation", async () => {
+  const { useReducer, useEffect } = await import("react");
+  return {
+    useRouter: () => ({ push }),
+    usePathname: () => "/customers",
+    useSearchParams: () => {
+      const [, force] = useReducer((n: number) => n + 1, 0);
+      useEffect(() => {
+        listeners.add(force);
+        return () => {
+          listeners.delete(force);
+        };
+      }, []);
+      return searchParams.value;
+    },
+  };
+});
 
 import { CustomerFilters } from "./CustomerFilters";
 
@@ -50,6 +81,7 @@ function seedUrl(query: string) {
 
 afterEach(() => {
   pending.delay = 20;
+  pending.delays = [];
   for (const timer of pending.timers) clearTimeout(timer);
   pending.timers = [];
   push.mockClear();
@@ -197,5 +229,33 @@ describe("CustomerFilters — Limpiar goes through the same writer", () => {
     await user.click(screen.getByRole("button", { name: "Limpiar" }));
 
     expect(input.value).toBe("");
+  });
+});
+
+/**
+ * Two pushes outstanding at once, which the single-push race test above cannot
+ * express. `useSearchParams()` reflects the COMMITTED url, so the first
+ * navigation landing used to null the ref that was holding the SECOND one —
+ * and the next debounce then rebuilt from `window.location`, which still
+ * showed the first. The checkbox came back unticked.
+ */
+describe("CustomerFilters — two pushes outstanding", () => {
+  it("keeps every filter when an earlier navigation lands while a later one is still pending", async () => {
+    const user = userEvent.setup();
+    // First push lands quickly; the second stays in flight for the whole test.
+    pending.delays = [100, 5000];
+    render(<CustomerFilters selected={{}} pageSize={10} />);
+
+    await user.type(screen.getByLabelText(/Buscar/), "perez");
+    await new Promise((resolve) => setTimeout(resolve, 320)); // debounce fires → push A
+    await user.click(screen.getByRole("checkbox", { name: "Ver desactivados" })); // → push B
+    await new Promise((resolve) => setTimeout(resolve, 200)); // A lands, B still pending
+
+    await user.type(screen.getByLabelText(/Buscar/), "x");
+    await new Promise((resolve) => setTimeout(resolve, 350));
+
+    const last = push.mock.calls.at(-1)?.[0] as string;
+    expect(last).toContain("search=perezx");
+    expect(last).toContain("includeInactive=1");
   });
 });

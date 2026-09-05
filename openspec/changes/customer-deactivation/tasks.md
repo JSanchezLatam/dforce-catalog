@@ -301,7 +301,38 @@ down about itself.
 - [x] 15.5 Import ordering in two files put `@/modules/customers/service` above
   `vitest` and between the two `@/modules/auth/*` imports.
 
+## WU16 — GGA round 9 on C2
+
+- [x] 16.1 **The ref invariant still had a hole with TWO pushes outstanding.**
+  `useSearchParams()` reflects the COMMITTED url, so push A landing nulled the
+  ref holding push B, and the next debounce rebuilt from `window.location` —
+  which still showed A. The checkbox came back unticked. Sixth occurrence of
+  one class in this change, and the repo already documents that this list's
+  RSC round trip is slower than the 300ms debounce, so it is the normal shape.
+  Fixed with a pending-push counter: only the LAST of our own pushes releases
+  the ref, while an external navigation arrives with the counter at zero.
+- [x] 16.2 **The test could not express the bug, and that is the finding worth
+  keeping.** `useSearchParams` was mocked as a frozen object, so the
+  component's `useEffect([searchParams])` NEVER fired — every question about
+  what happens when a navigation commits was unaskable. Written the first time,
+  the two-push test passed against the broken code. The mock now commits like
+  Next does: URL first, then notify every consumer of the hook, forcing the
+  re-render. Only then did the defect appear; mutation-verified afterwards.
+  **This is the third mock-fidelity failure in this change** (a `push` that did
+  not navigate, a `push` that navigated synchronously, and now a hook that
+  never updated). Each one hid a real defect behind a green test.
+- [x] 16.3 The `hasDeactivated` comment claimed the second count "costs nothing
+  in the normal case". It runs on every empty result, which on this screen
+  includes every mistyped search. The comment now states the real cost and why
+  it is acceptable, rather than a claim that flatters it.
+
 ## Known and NOT fixed here
+
+- [ ] The empty state renders on `items.length === 0` while `hasDeactivated`
+  gates on `total === 0`. Past the last page of a search that DOES match, the
+  screen says "Ningún cliente coincide con la búsqueda" — wrong, and
+  pre-existing. The new offer correctly stays hidden there; fixing the message
+  is its own change.
 
 - [ ] **The "Ver desactivados" checkbox is controlled by a server prop**, so it
   stays visually unticked for a full RSC round trip over a query documented as
