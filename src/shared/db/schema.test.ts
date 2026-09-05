@@ -144,8 +144,24 @@ describe("schema — cliente table (Phase 1, task 1.2)", () => {
    * confirmation impossible to honour.
    */
   it("does NOT enforce phone uniqueness at the database level", () => {
+    // Drizzle spells uniqueness THREE ways and they land in three different
+    // places on `getTableConfig`. The first version of this test checked only
+    // the first two, and a table-level `unique().on(table.phone)` probe passed
+    // it 44/44 - the guard had a hole exactly where the tidy-up is most likely
+    // to be written.
+    // 1. column-level `.unique()`
     expect(findColumn(config.columns, "phone").isUnique).toBeFalsy();
-    expect(config.indexes.some((i) => i.config.unique)).toBe(false);
+    // 2. table-level `unique("...").on(table.phone)` in the extras array
+    expect(
+      config.uniqueConstraints.some((c) => c.columns.some((col) => col.name === "phone")),
+    ).toBe(false);
+    // 3. `uniqueIndex("...").on(table.phone)`
+    // Scoped to phone, not to the whole table: a future unique index on, say,
+    // `email` is nobody's bug, and failing a test named for PHONE uniqueness
+    // would send the next reader hunting the wrong thing.
+    expect(
+      config.indexes.some((i) => i.config.unique && i.config.columns.some((col) => (col as { name?: string }).name === "phone")),
+    ).toBe(false);
   });
 
   it("has name/createdAt indexes for list search + newest-first listing", () => {

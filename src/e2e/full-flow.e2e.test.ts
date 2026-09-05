@@ -92,12 +92,19 @@ async function loginAs(username: string): Promise<{ id: string; role: "tecnico" 
  * AGENTS.md's "Known coverage limit" — every unit test for `listClientes`/
  * `countClientes` injects `queryFn`, so a fully green `npm test` proves ZERO
  * coverage of the real `ilike`/`or()` SQL `buildClienteSearchWhere` builds.
- * Specifically: `NULL ILIKE x` is NULL, not false, so a customer with a null
- * `phone` or `vehicle_plate` could in principle be silently dropped from the
- * `or()`. This describe calls the real `GET /api/customers` handler (no
- * injected deps) against a real Postgres to prove: mid-string case-
- * insensitive matching on name/plate, that a NULL column does not drop a row
- * matched through a different column, mid-string digit matching on phone,
+ * The original motive was `NULL ILIKE x` evaluating to NULL rather than false,
+ * which could silently drop a row from the `or()`. Migration `0016` closed
+ * that off: `cliente.phone` and `vehiculo.plate` are both NOT NULL, so no
+ * branch of `buildClienteSearchWhere`'s `or()` can yield NULL any more. What
+ * remains reachable — and is what the row below now covers — is the EMPTY
+ * STRING, which R19 still has to render as an identifiable row. `'' ILIKE x`
+ * is false, a strictly weaker property than the NULL case, so this is a
+ * narrower guarantee than it once was; kept because `''` is the shape a
+ * phone-less customer actually takes now. This describe calls the real
+ * `GET /api/customers` handler (no injected deps) against a real Postgres to
+ * prove: mid-string case-insensitive matching on name/plate, that an empty
+ * column does not drop a row matched through a different column,
+ * mid-string digit matching on phone,
  * and that the `relaxSearchTerm` near-match pass finds a row the raw
  * (unrelaxed) term cannot. Runs before the catalog-generation describe below
  * so `db.$client.end()` in that describe's `afterAll` — its own connection
@@ -106,7 +113,7 @@ async function loginAs(username: string): Promise<{ id: string; role: "tecnico" 
 describe("customer search (E2E)", () => {
   let mixedCaseName: { id: string };
   let noVehicles: { id: string };
-  let nullPhone: { id: string };
+  let emptyPhone: { id: string };
   let formattedPhone: { id: string };
 
   beforeAll(async () => {
@@ -126,7 +133,7 @@ describe("customer search (E2E)", () => {
       .returning({ id: cliente.id });
     mixedCaseName = row1;
     noVehicles = row2;
-    nullPhone = row3;
+    emptyPhone = row3;
     formattedPhone = row4;
 
     // Migration `0014` (slice 3) dropped `cliente.vehicle_plate`, so a plate
@@ -157,7 +164,7 @@ describe("customer search (E2E)", () => {
   afterAll(async () => {
     // Optional chaining because a throwing `beforeAll` leaves these undefined,
     // and a TypeError in here would mask the real seed error underneath it.
-    const seeded = [mixedCaseName?.id, noVehicles?.id, nullPhone?.id, formattedPhone?.id].filter(
+    const seeded = [mixedCaseName?.id, noVehicles?.id, emptyPhone?.id, formattedPhone?.id].filter(
       (id): id is string => Boolean(id),
     );
     if (seeded.length > 0) await db.delete(cliente).where(inArray(cliente.id, seeded));
@@ -229,9 +236,9 @@ describe("customer search (E2E)", () => {
     expect(body.customers.map((c) => c.id)).toContain(noVehicles.id);
   });
 
-  it("does not silently drop a row with a NULL phone from the or() when matched by name", async () => {
+  it("does not drop a row with an EMPTY phone from the or() when matched by name", async () => {
     const body = await search("Torres");
-    expect(body.customers.map((c) => c.id)).toContain(nullPhone.id);
+    expect(body.customers.map((c) => c.id)).toContain(emptyPhone.id);
   });
 
   it("finds a customer only through the relaxed near-match pass, not the raw term", async () => {

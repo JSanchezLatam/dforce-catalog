@@ -54,6 +54,36 @@ Files: `src/shared/db/schema.ts`, `src/shared/db/migrations/0016_*.sql`.
 - [x] 3.1 Delta spec: R18 rewritten (block → refuse-then-confirm), R17 amended for the column. Both already drafted.
 - [x] 3.2 `proposal.md` records the accepted race, so the next change contradicts a decision instead of discovering a gap.
 
+## WU4 — GGA round 1 findings (all three real, all three fixed)
+
+GGA `--pr-mode --diff-only` returned **FAILED** on the first run. Every finding
+was verified before acting on it; none was taken on the reviewer's word.
+
+- [x] 4.1 **BLOCKING — the R17 delta was a fragment, not a restatement.** The
+  archiver REPLACES the matching requirement in the main spec; it does not
+  merge. Confirmed against the archived `customer-search-and-picker` delta,
+  which restates R19's entire paragraph and re-lists every scenario, including
+  ones marked `(unchanged)`. My R17 block carried only the `NOT NULL`
+  amendment, so archiving it would have silently deleted the required/optional
+  field set, the per-vehicle `plate` rule, both format rules and all 7 existing
+  scenarios. **This is the exact failure this project has already shipped
+  twice.** R17 is now restated in full: 7 original scenarios + 2 new.
+- [x] 4.2 `full-flow.e2e.test.ts` — the fixture moved to `phone: ""` in WU2 but
+  the variable was still `nullPhone`, the test was still named "…with a NULL
+  phone", and the describe's docstring still justified itself with
+  `NULL ILIKE x`. With `0016`, no branch of `buildClienteSearchWhere`'s `or()`
+  can yield NULL at all. Renamed to what it now proves — an EMPTY phone does
+  not drop the row — and the docstring now says plainly that this is a
+  narrower guarantee than the one it replaced.
+- [x] 4.3 **The anti-uniqueness guard had a hole, and it was the load-bearing
+  test.** Drizzle spells uniqueness three ways landing in three different
+  places on `getTableConfig`; the original checked two. Verified empirically:
+  a table-level `unique("cliente_phone_unique").on(table.phone)` passed it
+  **44/44**. Now checks `uniqueConstraints` as well, and all three shapes were
+  re-probed — each fails the test by name. The index assertion is also scoped
+  to `phone` rather than the whole table, so an unrelated future unique index
+  on `email` does not produce a misleading red under a phone-named test.
+
 ## Follow-ups (out of scope here)
 
 - [ ] The six genuinely fragmented duplicate pairs are still two records each. Merging them is a data task with no code in it, and needs the owner to say which record wins per pair.
