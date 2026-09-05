@@ -30,9 +30,33 @@ export function CustomerFilters({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * Read at FIRE time, not at schedule time — and from `window.location`
+   * rather than the `searchParams` hook.
+   *
+   * `applyFilter` used to read `searchParams` from the closure of the render
+   * that created it, and `applyDebounced` schedules that closure 300ms out. Any
+   * push landing inside that window was then overwritten by the stale
+   * snapshot: type "perez", tick "Ver desactivados" within 300ms, and the
+   * pushes came out as
+   *   ["/customers?includeInactive=1", "/customers?search=perez"]
+   * — the operator ticks the box and watches it come back unticked.
+   *
+   * A ref refreshed each render was the first fix and is not enough: it still
+   * depends on the re-render from the previous `router.push` having landed
+   * before the timeout fires, which is the same race one step smaller.
+   * `window.location.search` is current by definition. `searchParams` stays as
+   * the hook that SUBSCRIBES this component to URL changes; this is only the
+   * read at the moment of writing.
+   *
+   * Covers all three filters, not just the new one.
+   */
+  function currentParams(): URLSearchParams {
+    return new URLSearchParams(typeof window === "undefined" ? searchParams.toString() : window.location.search);
+  }
 
   function applyFilter(key: string, value: string) {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = currentParams();
     if (value) params.set(key, value);
     else params.delete(key);
     if (key !== "pageSize") params.delete("page");

@@ -155,6 +155,45 @@ down about itself.
   `?search=a&search=b` filtered by "a" and paged with no search at all. 9.3
   claimed the function was swept and it was not — only the one key was.
 
+## WU11 — GGA round 4 on C2
+
+- [x] 11.1 **BLOCKING, and the THIRD instance of the same failure class** (after
+  8.1 and 10.5): a filter surviving one layer and not the next. Here it is a
+  RACE rather than a missing line. `applyFilter` read `searchParams` from the
+  closure of the render that created it, and `applyDebounced` schedules that
+  closure 300ms out — so a push landing inside the window was overwritten by
+  the stale snapshot. Proven with a probe:
+  `["/customers?includeInactive=1", "/customers?search=perez"]`. The operator
+  ticks the box and watches it come back unticked.
+  The mechanism is PRE-EXISTING (`pageSize` was always exposed to it); what
+  this change adds is a third filter falling into it, in the one feature whose
+  entire value is that filter surviving. Fixed at the read: `applyFilter` now
+  reads `window.location.search`, which is current by definition. A ref
+  refreshed each render was the first attempt and is NOT enough — it still
+  depends on the previous `router.push`'s re-render landing before the timeout,
+  which is the same race one step smaller.
+  The test file's `push` mock now actually navigates; without that no test here
+  could observe a stale-read bug at all, since every push left the URL
+  unchanged. Mutation-verified.
+- [x] 11.2 The empty state said "Todavía no hay clientes registrados." when
+  every customer was deactivated — a false claim, and the one place this change
+  let a retired record be silently invisible. Now names the state and links to
+  "Ver desactivados".
+- [x] 11.3 Two comments asserted "the repo's 43 alerts". Measured: main 43,
+  this branch 46 — stale the moment the diff lands. The count is dropped; the
+  reasoning stands without it.
+
+## Known and NOT fixed here
+
+- [ ] **`gga run --pr-mode` ignored `PR_BASE_BRANCH` as an environment
+  variable.** All four rounds reviewed `main...HEAD`, i.e. C1 AND C2 together,
+  despite `PR_BASE_BRANCH=feat/customer-shared-phones` being exported.
+  AGENTS.md says to "pin `PR_BASE_BRANCH` per-branch when it matters" without
+  saying it only takes effect from `.gga`, which is committed and shared and
+  therefore cannot hold a branch name. Not harmful here — it surfaced a real C1
+  regression in round 2 — but the guidance is incomplete and belongs in its own
+  change.
+
 ## Follow-ups (out of scope here)
 
 - [ ] No hard delete for customers, and none planned. If one is ever wanted it needs its own change and its own administrador-only grant, on `customers.deleteVehicle`'s reasoning.

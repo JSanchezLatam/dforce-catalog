@@ -80,6 +80,18 @@ export default async function CustomersPage({
                       Limpiar filtro
                     </Link>
                   </>
+                ) : !filters.includeInactive ? (
+                  // R20 — "no hay clientes" is a claim, and it is false when
+                  // every customer is deactivated. The rest of this change is
+                  // careful never to let a retired record be silently
+                  // invisible (the chip, the banner); an empty screen that
+                  // hides them is the same failure with no surface to point at.
+                  <>
+                    No hay clientes activos.{" "}
+                    <Link href="/customers?includeInactive=1" className="text-primary hover:underline">
+                      Ver desactivados
+                    </Link>
+                  </>
                 ) : (
                   "Todavía no hay clientes registrados."
                 )}

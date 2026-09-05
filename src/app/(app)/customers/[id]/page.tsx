@@ -98,8 +98,8 @@ export default async function CustomerDetailPage({
         </CardHeader>
         <CardContent>
           {/* `status`, not `alert`: this is server-rendered and present on
-              load, not a change being announced. The repo's 43 `alert`s are
-              all dynamic errors. */}
+              load, not a change being announced. Every other `role="alert"` in
+              this repo marks a dynamic error. */}
           {!isActive && (
             <p role="status" className={CARD_MUTED + " mb-4 text-sm"}>
               Cliente desactivado. No aparece en el listado ni en el selector de órdenes, y no recibe

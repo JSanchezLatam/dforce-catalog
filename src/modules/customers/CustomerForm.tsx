@@ -388,8 +388,8 @@ export function CustomerForm({
                 </p>
               )}
               {sharedPhoneWith && (
-                // `role="alert"` sits on the PARAGRAPH, not this wrapper — the
-                // repo's other 43 alerts are all text-only <p>, and a live
+                // `role="alert"` sits on the PARAGRAPH, not this wrapper —
+                // every other alert in this repo is a text-only <p>, and a live
                 // region is for announcing changed text, not a container whose
                 // focusable children have their own semantics. That matters
                 // more here than anywhere else: the link and the button below
