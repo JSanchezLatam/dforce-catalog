@@ -123,7 +123,9 @@ describe("CustomersPage — deactivated customers (R20)", () => {
   // record was one query-string key away and nothing said so.
   it("offers to widen a search that matched no ACTIVE customer, keeping the term", async () => {
     listClientes.mockResolvedValue([]);
-    countClientes.mockResolvedValue(0);
+    // Two counts: the active one is 0, the second (includeInactive) proves
+    // there is actually something behind the offer.
+    countClientes.mockResolvedValueOnce(0).mockResolvedValueOnce(3);
     render(await CustomersPage({ searchParams: Promise.resolve({ search: "Retirado Perez" }) }));
 
     // Semantics, not an exact string: the href goes through `buildPageHref`,
@@ -139,7 +141,7 @@ describe("CustomersPage — deactivated customers (R20)", () => {
 
   it("keeps pageSize on the widen-search link, like the pagination links do", async () => {
     listClientes.mockResolvedValue([]);
-    countClientes.mockResolvedValue(0);
+    countClientes.mockResolvedValueOnce(0).mockResolvedValueOnce(3);
     render(await CustomersPage({ searchParams: Promise.resolve({ search: "x", pageSize: "50" }) }));
 
     const href = screen.getByRole("link", { name: /desactivados/i }).getAttribute("href")!;
@@ -153,5 +155,26 @@ describe("CustomersPage — deactivated customers (R20)", () => {
 
     expect(screen.queryByRole("link", { name: /desactivados/i })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Limpiar filtro" })).toBeInTheDocument();
+  });
+
+  // A genuinely empty database must not offer a link to another empty page,
+  // and must be able to say so — before this, "Todavía no hay clientes
+  // registrados" was reachable only WITH `includeInactive=1`, the one case
+  // where it is least true.
+  it("does not offer Ver desactivados when there are none to see", async () => {
+    listClientes.mockResolvedValue([]);
+    countClientes.mockResolvedValue(0);
+    render(await CustomersPage({ searchParams: Promise.resolve({}) }));
+
+    expect(screen.queryByRole("link", { name: /desactivados/i })).not.toBeInTheDocument();
+    expect(screen.getByText("Todavía no hay clientes registrados.")).toBeInTheDocument();
+  });
+
+  it("does not run the second count when the active list is not empty", async () => {
+    listClientes.mockResolvedValue([row()]);
+    countClientes.mockResolvedValue(1);
+    render(await CustomersPage({ searchParams: Promise.resolve({}) }));
+
+    expect(countClientes).toHaveBeenCalledOnce();
   });
 });

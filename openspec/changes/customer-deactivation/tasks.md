@@ -274,6 +274,33 @@ down about itself.
   It now goes through `buildPageHref`, so it cannot drift from the pagination
   links beside it.
 
+## WU15 — GGA round 8 on C2
+
+- [x] 15.1 **The route now answers 409 for TWO reasons and the form only knew
+  one.** WU14 added `cliente_deactivated`, whose body carries no
+  `existingClienteId` — so `setSharedPhoneWith(undefined)` armed nothing, the
+  block stayed hidden, `errors` had been cleared at the top of `submit()`, and
+  the dialog sat there saying nothing. **A path this change created.** And it
+  is precisely the one D5 exists for: hiding "Editar" removes the FRESH path
+  and does nothing for the stale one, which is the only one the 409 catches.
+  Branched on `body.error`; mutation-verified.
+- [x] 15.2 **A second placebo test of mine.** "records the deactivated skip as
+  skipped, NOT as opted_out" used `whatsappOptOut: false`, which makes
+  `markOptedOut()` unreachable no matter where the guard sits — moving the
+  guard BELOW the opt-out check left all 22 tests green. `not.toBe()` on a
+  value the code cannot produce is a placebo. Now `whatsappOptOut: TRUE`, so
+  the two reasons actually compete and deactivation has to win; the same
+  mutation now goes red.
+- [x] 15.3 `ClienteDeactivatedError → 409` on the service-orders route had no
+  test. Its twin on the customers route did. Added, mutation-verified.
+- [x] 15.4 A genuinely empty database offered "Ver desactivados" — a link to
+  another empty page — while "Todavía no hay clientes registrados" became
+  reachable only WITH `includeInactive=1`, the one case where it is least
+  true. The offer is now gated on a second count that runs ONLY when the
+  active list came back empty, so it costs nothing in the normal case.
+- [x] 15.5 Import ordering in two files put `@/modules/customers/service` above
+  `vitest` and between the two `@/modules/auth/*` imports.
+
 ## Known and NOT fixed here
 
 - [ ] **The "Ver desactivados" checkbox is controlled by a server prop**, so it

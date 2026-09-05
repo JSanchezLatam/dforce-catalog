@@ -239,16 +239,25 @@ describe("runReminder — R23/R26 re-check at fire time", () => {
     expect(state.reminder.status).toBe("skipped");
   });
 
-  // Asserted on its own, not folded into the test above. `opted_out` records a
-  // consent decision the CUSTOMER made per channel and carries legal weight;
-  // this is the WORKSHOP retiring a record. AGENTS.md already forbids
-  // collapsing the two opt-out regimes, and this is the same mistake one level
-  // up: a deactivation logged as consent would misreport why nothing was sent.
-  it("records the deactivated skip as skipped, NOT as opted_out", async () => {
+  /**
+   * `whatsappOptOut: TRUE`, and that is the whole test.
+   *
+   * The first version used `false`, which made `markOptedOut()` unreachable no
+   * matter where the deactivation guard sat — moving the guard BELOW the
+   * opt-out check left all 22 tests green. `not.toBe()` on a value the code
+   * cannot produce is a placebo.
+   *
+   * With the opt-out actually set, the two reasons compete and the assertion
+   * has a failing input: deactivation must win, because `opted_out` records a
+   * consent decision the CUSTOMER made per channel and carries legal weight,
+   * while this is the WORKSHOP retiring a record. Logging one as the other
+   * misreports why nothing was sent.
+   */
+  it("records a deactivated customer's skip as skipped even when they ALSO opted out", async () => {
     const state = {
       reminder: makeReminder({ status: "scheduled", channel: "whatsapp" }),
       orden: makeOrden(),
-      cliente: makeCliente({ deactivatedAt: new Date("2026-09-01T00:00:00.000Z"), whatsappOptOut: false }),
+      cliente: makeCliente({ deactivatedAt: new Date("2026-09-01T00:00:00.000Z"), whatsappOptOut: true }),
     };
     const { fakeDb, refillSelectQueue } = makeFakeDb(state);
 

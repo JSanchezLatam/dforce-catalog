@@ -1,5 +1,6 @@
-import { ClienteDeactivatedError } from "@/modules/customers/service";
 import { describe, expect, it, vi } from "vitest";
+
+import { ClienteDeactivatedError } from "@/modules/customers/service";
 
 import { ordenCategoriaEnum, type OrdenServicio, type Vehiculo } from "@/shared/db/schema";
 import { OrderTransitionError } from "./transitions";

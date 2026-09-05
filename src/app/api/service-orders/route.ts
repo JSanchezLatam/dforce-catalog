@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { can } from "@/modules/auth/policy";
-import { ClienteDeactivatedError } from "@/modules/customers/service";
 import { requireSession } from "@/modules/auth/session";
+import { ClienteDeactivatedError } from "@/modules/customers/service";
 import {
   createOrder,
   type CreateOrdenServicioDeps,

@@ -610,3 +610,45 @@ describe("CustomerForm — shared phone confirmation", () => {
     expect(bodyOf(fetchMock, 1).allowDuplicatePhone).toBeUndefined();
   });
 });
+
+/**
+ * R20/D5 — the route answers 409 for TWO different reasons now. The form used
+ * to arm the shared-phone block unconditionally, so the deactivated case set
+ * `undefined`, rendered nothing, and left the operator watching a dialog that
+ * did not move.
+ */
+describe("CustomerForm — a deactivated customer's 409", () => {
+  function mockFetchOnce(response: { status: number; body?: unknown }) {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: response.status >= 200 && response.status < 300,
+      status: response.status,
+      json: async () => response.body ?? {},
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("says the record is deactivated instead of showing nothing at all", async () => {
+    const user = userEvent.setup();
+    mockFetchOnce({ status: 409, body: { error: "cliente_deactivated" } });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[]} />);
+
+    await open(user, "Editar");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/desactivado/i);
+    // The shared-phone way out must NOT appear: there is no number to confirm.
+    expect(screen.queryByRole("button", { name: "Guardar igual" })).not.toBeInTheDocument();
+  });
+
+  it("still arms the shared-phone confirmation for the other 409", async () => {
+    const user = userEvent.setup();
+    mockFetchOnce({ status: 409, body: { error: "duplicate_phone", existingClienteId: "existing-1" } });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[]} />);
+
+    await open(user, "Editar");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(await screen.findByRole("button", { name: "Guardar igual" })).toBeInTheDocument();
+  });
+});

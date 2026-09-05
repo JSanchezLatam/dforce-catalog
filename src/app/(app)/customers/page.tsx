@@ -51,6 +51,16 @@ export default async function CustomersPage({
 
   const [items, total] = await Promise.all([listClientes(filters, pageWindow), countClientes(filters)]);
 
+  // Only when the active list came back empty, so it costs nothing in the
+  // normal case. Without it a genuinely empty database offered "Ver
+  // desactivados" — a link to another empty page — while "Todavía no hay
+  // clientes registrados" became reachable only WITH `includeInactive=1`,
+  // which is the one case where it is least true.
+  const hasDeactivated =
+    total === 0 && !filters.includeInactive
+      ? (await countClientes({ ...filters, includeInactive: true })) > 0
+      : false;
+
   const pageCount = Math.max(1, Math.ceil(total / pageWindow.limit));
 
   return (
@@ -73,7 +83,7 @@ export default async function CustomersPage({
               <Users className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
               <h2 className="text-lg font-semibold text-foreground">No se encontraron clientes</h2>
               <p className="text-sm text-muted-foreground">
-                {filters.search && !filters.includeInactive ? (
+                {filters.search && !filters.includeInactive && hasDeactivated ? (
                   // R20 — searching a name is how staff actually reach ONE
                   // customer, far more than opening a bare list. Without this
                   // branch, searching a deactivated customer said they did not
@@ -99,7 +109,7 @@ export default async function CustomersPage({
                       Limpiar filtro
                     </Link>
                   </>
-                ) : !filters.includeInactive ? (
+                ) : !filters.includeInactive && hasDeactivated ? (
                   // R20 — "no hay clientes" is a claim, and it is false when
                   // every customer is deactivated. The rest of this change is
                   // careful never to let a retired record be silently
