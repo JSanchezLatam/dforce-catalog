@@ -276,6 +276,19 @@ export const cliente = pgTable(
     phone: text("phone").notNull(),
     email: text("email"),
     /**
+     * Interfuerza's `Cliente` value (customer-import D2) — nullable because
+     * every customer created through the app has none, and that stays the
+     * normal case going forward; this column marks provenance, not a
+     * requirement. Not UNIQUE at the database level, for the same reason
+     * `phone` above is not: the import matches on it in application code, and
+     * one more unique index is one more thing that rejects a legitimate row
+     * later.
+     *
+     * `Token` is NOT the identifier despite the name — it is empty on all 370
+     * live rows. Written here because the next person will reach for it.
+     */
+    externalId: text("external_id"),
+    /**
      * Two INDEPENDENT opt-out flags (R26, design ADR-5) — WhatsApp and email
      * are legally distinct consent regimes, so a customer can decline one
      * channel without losing the other. Re-checked at reminder fire time,

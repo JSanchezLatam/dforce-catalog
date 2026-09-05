@@ -93,12 +93,17 @@ Files: `src/modules/customer-import/{client,mapper}.ts`(+tests).
 
 Files: `src/shared/db/schema.ts`, `migrations/0018_*.sql`, `customer-import/plan.ts`(+test).
 
-- [ ] 3.1 `cliente.externalId` nullable text, migration `0018`.
-- [ ] 3.2 RED/GREEN planner — external id present → update, absent → insert,
+- [x] 3.1 `cliente.externalId` nullable text, migration `0018_cliente_external_id`.
+  Not unique, guarded in `schema.test.ts` against all THREE ways Drizzle spells
+  uniqueness — the hole C1 had to fix on `phone` at review round 1.
+  **Verified against a real database, not just the schema**: the column is
+  `text`, nullable, carries no unique index, and two rows with the SAME
+  `external_id` insert cleanly.
+- [x] 3.2 RED/GREEN planner — external id present → update, absent → insert,
   no phone → skip.
-- [ ] 3.3 RED — matching is on `externalId` ONLY. A test that two customers
+- [x] 3.3 RED — matching is on `externalId` ONLY. A test that two customers
   sharing a phone are not conflated, using the real 9-shared-by-18 shape.
-- [ ] 3.4 RED — an update leaves `whatsappOptOut`, `emailOptOut`,
+- [x] 3.4 RED — an update leaves `whatsappOptOut`, `emailOptOut`,
   `deactivatedAt` and the vehicle collection untouched (D3). **The one that
   keeps a re-run from resurrecting a deactivated customer.**
 
@@ -293,6 +298,27 @@ WU3 (the `externalId` column and the insert/update/skip planner), WU4 (the
 transactional run and its route), and WU5 (the e2e that proves a re-run does
 not resurrect a deactivated customer) are unwritten. This slice is the
 transport and the mapping only: **nothing imports anything yet.**
+
+## WU3 — delivered by two parallel agents, verified independently
+
+Split by disjoint file ownership: one agent took `schema.ts` + the migration +
+fixtures, the other took the new pure `plan.ts`. Neither touched the other's
+files.
+
+**Their reports were not taken at face value.** Re-run here:
+- Leaking `deactivatedAt` or `whatsappOptOut` into the update patch → **red**,
+  on the exact-key assertion (`Object.keys(patch).sort()`, not
+  `toMatchObject`, which would pass with an extra field present).
+- All three Drizzle uniqueness shapes on `externalId` → **red**.
+- Migration `0018` applied to a real database: column `text`, nullable, no
+  unique index, and two rows sharing an `external_id` insert cleanly.
+
+- [ ] **A real coverage gap the schema agent found and reported honestly**:
+  every `cliente` fixture in the suite goes through `as unknown as Cliente`,
+  which bypasses missing-property checks — so adding a column to `cliente` is
+  NOT type-checked anywhere in the tests. `tsc` was clean before and after
+  `externalId`, which is exactly the problem. Pre-existing and repo-wide, so
+  it needs its own change; recorded rather than widened into this one.
 
 ## Known before starting
 

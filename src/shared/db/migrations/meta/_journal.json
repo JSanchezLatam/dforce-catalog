@@ -127,6 +127,13 @@
       "when": 1788617222217,
       "tag": "0017_cliente_deactivated_at",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788638393021,
+      "tag": "0018_cliente_external_id",
+      "breakpoints": true
     }
   ]
 }

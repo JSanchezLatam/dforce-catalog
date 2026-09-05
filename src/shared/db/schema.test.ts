@@ -164,6 +164,23 @@ describe("schema — cliente table (Phase 1, task 1.2)", () => {
     ).toBe(false);
   });
 
+  it("has a nullable external_id column, not unique at the database level (customer-import D2)", () => {
+    const externalId = findColumn(config.columns, "external_id");
+    expect(externalId.columnType).toBe("PgText");
+    expect(externalId.notNull).toBe(false);
+
+    // Same three ways uniqueness can be spelled as the phone guard above.
+    expect(externalId.isUnique).toBeFalsy();
+    expect(
+      config.uniqueConstraints.some((c) => c.columns.some((col) => col.name === "external_id")),
+    ).toBe(false);
+    expect(
+      config.indexes.some(
+        (i) => i.config.unique && i.config.columns.some((col) => (col as { name?: string }).name === "external_id"),
+      ),
+    ).toBe(false);
+  });
+
   it("has name/createdAt indexes for list search + newest-first listing", () => {
     const nameIdx = findIndex(config.indexes, "cliente_name_idx");
     const createdIdx = findIndex(config.indexes, "cliente_created_idx");
