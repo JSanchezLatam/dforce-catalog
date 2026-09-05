@@ -194,6 +194,16 @@ export function CustomerForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   /** The row a destructive confirmation is open for — `null` means no confirmation on screen. */
   const [pendingDelete, setPendingDelete] = useState<VehiculoRow | null>(null);
+  /**
+   * R18 (rewritten) — the id of the customer who already holds this phone,
+   * set by a `409` and cleared by anything that changes the question: editing
+   * the phone, or reopening the dialog. `null` means no refusal on screen.
+   *
+   * This is what arms the override, so its lifetime IS the guarantee that the
+   * confirmation answers one attempt and no other. Held here rather than in
+   * `errors` because it drives a link and a button, not a message.
+   */
+  const [sharedPhoneWith, setSharedPhoneWith] = useState<string | null>(null);
 
   function update<K extends keyof CustomerFormState>(key: K, value: CustomerFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -276,11 +286,22 @@ export function CustomerForm({
     if (next) {
       setForm(toFormState(cliente, vehicles));
       setErrors({});
+      setSharedPhoneWith(null);
     }
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // A plain save never carries the override — it has to be asked for.
+    return submit(false);
+  }
+
+  /**
+   * `confirmSharedPhone` is passed per call rather than read from
+   * `sharedPhoneWith`, so the flag can only ride a save the operator started
+   * from the confirmation button itself.
+   */
+  async function submit(confirmSharedPhone: boolean) {
     setIsSubmitting(true);
     setErrors({});
 
@@ -289,7 +310,7 @@ export function CustomerForm({
       const response = await fetch(isEdit ? `/api/customers/${cliente!.id}` : "/api/customers", {
         method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(confirmSharedPhone ? { ...payload, allowDuplicatePhone: true } : payload),
       });
 
       if (response.status === 400) {
@@ -300,9 +321,10 @@ export function CustomerForm({
 
       if (response.status === 409) {
         const body = await response.json();
-        setErrors({
-          phone: `Ya existe un cliente con este teléfono (ver /customers/${body.existingClienteId})`,
-        });
+        // No `errors.phone` here: the refusal renders its own block below,
+        // with the link and the way past it. Setting both would print the
+        // same fact twice, once as an error the operator cannot act on.
+        setSharedPhoneWith(body.existingClienteId);
         return;
       }
 
@@ -348,11 +370,42 @@ export function CustomerForm({
 
             <div className="grid gap-2">
               <Label htmlFor="cliente-phone">Teléfono</Label>
-              <Input id="cliente-phone" value={form.phone} onChange={(e) => update("phone", e.target.value)} />
+              <Input
+                id="cliente-phone"
+                value={form.phone}
+                onChange={(e) => {
+                  update("phone", e.target.value);
+                  // Correcting the number is the other way out of the refusal.
+                  // Clearing here is what stops a confirmation armed for the
+                  // OLD phone from applying to whatever is typed next.
+                  setSharedPhoneWith(null);
+                }}
+              />
               {errors.phone && (
                 <p role="alert" className={FIELD_ERROR}>
                   {errors.phone}
                 </p>
+              )}
+              {sharedPhoneWith && (
+                <div role="alert" className={CARD_MUTED + " flex flex-col gap-2"}>
+                  <p className="text-sm">
+                    Ya hay un cliente con este teléfono.{" "}
+                    <a href={`/customers/${sharedPhoneWith}`} className="font-medium underline">
+                      Ver el cliente existente
+                    </a>
+                    . Si son dos personas distintas que comparten el número, guardá igual.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="min-h-11 self-start"
+                    disabled={isSubmitting}
+                    onClick={() => submit(true)}
+                  >
+                    Guardar igual
+                  </Button>
+                </div>
               )}
             </div>
 

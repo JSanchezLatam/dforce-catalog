@@ -516,3 +516,97 @@ describe("CustomerForm — permanent vehicle deletion", () => {
     expect(bodyOf(fetchMock).vehicles).toEqual([]);
   });
 });
+
+/**
+ * R18 (rewritten) — a phone can legitimately belong to two people. The `409`
+ * still refuses the first attempt; what these cover is the way past it.
+ */
+describe("CustomerForm — shared phone confirmation", () => {
+  /** Two responses in order: the refusal, then the save that follows the confirmation. */
+  function mockFetchSequence(...responses: { status: number; body?: unknown }[]) {
+    const fetchMock = vi.fn();
+    for (const response of responses) {
+      fetchMock.mockResolvedValueOnce({
+        ok: response.status >= 200 && response.status < 300,
+        status: response.status,
+        json: async () => response.body ?? {},
+      });
+    }
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  const DUPLICATE = { status: 409, body: { error: "duplicate_phone", existingClienteId: "existing-1" } };
+
+  async function openCreateAndSubmit(user: ReturnType<typeof userEvent.setup>) {
+    render(<CustomerForm />);
+    await open(user, "Nuevo cliente");
+    await user.type(screen.getByLabelText("Nombre"), "Ana Pérez");
+    await user.type(screen.getByLabelText("Teléfono"), "+525512345678");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+  }
+
+  it("links to the existing customer instead of printing a bare path", async () => {
+    const user = userEvent.setup();
+    mockFetchSequence(DUPLICATE);
+
+    await openCreateAndSubmit(user);
+
+    const link = await screen.findByRole("link", { name: /cliente existente/i });
+    expect(link).toHaveAttribute("href", "/customers/existing-1");
+  });
+
+  it("saves once the operator confirms the number is shared", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetchSequence(DUPLICATE, { status: 201, body: { cliente: { id: "c9" } } });
+
+    await openCreateAndSubmit(user);
+    await user.click(await screen.findByRole("button", { name: "Guardar igual" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(bodyOf(fetchMock, 0).allowDuplicatePhone).toBeUndefined();
+    expect(bodyOf(fetchMock, 1).allowDuplicatePhone).toBe(true);
+  });
+
+  // The confirmation answers ONE attempt. Left in state, the next save would
+  // carry it silently and the refusal would never fire again for this form.
+  it("does not carry the confirmation into a later save", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetchSequence(
+      DUPLICATE,
+      { status: 201, body: { cliente: { id: "c9" } } },
+      DUPLICATE,
+    );
+
+    await openCreateAndSubmit(user);
+    await user.click(await screen.findByRole("button", { name: "Guardar igual" }));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    // The dialog closed on the save above; reopening starts a fresh attempt.
+    await open(user, "Nuevo cliente");
+    await user.type(screen.getByLabelText("Nombre"), "Otra Persona");
+    await user.type(screen.getByLabelText("Teléfono"), "+525512345678");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(bodyOf(fetchMock, 2).allowDuplicatePhone).toBeUndefined();
+  });
+
+  // Correcting the phone is the other way out of the refusal, and it must not
+  // leave the confirmation armed behind it.
+  it("drops the confirmation when the phone is corrected instead", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetchSequence(DUPLICATE, { status: 201, body: { cliente: { id: "c9" } } });
+
+    await openCreateAndSubmit(user);
+    await screen.findByRole("button", { name: "Guardar igual" });
+
+    await user.clear(screen.getByLabelText("Teléfono"));
+    await user.type(screen.getByLabelText("Teléfono"), "+525599998888");
+    expect(screen.queryByRole("button", { name: "Guardar igual" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(bodyOf(fetchMock, 1).allowDuplicatePhone).toBeUndefined();
+  });
+});

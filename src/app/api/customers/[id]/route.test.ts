@@ -155,6 +155,21 @@ describe("PATCH /api/customers/[id] (R16)", () => {
     expect(response.status).toBe(409);
   });
 
+  // Same guarantee as the POST route: the body is forwarded whole, and this is
+  // what keeps it that way.
+  it("carries the shared-phone confirmation through to the service on edit (R18)", async () => {
+    const update = vi.fn().mockResolvedValue(current.cliente);
+
+    const response = await handleUpdateCliente(
+      requestWith({ phone: "+525599998888", allowDuplicatePhone: true }),
+      "c1",
+      { getById: async () => current, findByPhone: async () => ({ id: "c2" }) as unknown as Cliente, update },
+    );
+
+    expect(response.status).toBe(200);
+    expect(update).toHaveBeenCalledOnce();
+  });
+
   it("returns 400 on a validation error", async () => {
     const response = await handleUpdateCliente(requestWith({ name: "" }), "c1", {
       getById: async () => current,

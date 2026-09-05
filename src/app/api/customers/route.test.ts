@@ -56,6 +56,22 @@ describe("POST /api/customers (R16)", () => {
     expect(body.existingClienteId).toBe("existing-1");
   });
 
+  // The route forwards the raw body whole, so the confirmation needs no route
+  // plumbing of its own. This test is what makes that a guarantee instead of
+  // an accident: a refactor that starts picking named fields off the body
+  // would silently drop the override and re-block the shared-phone case.
+  it("carries the shared-phone confirmation through to the service (R18)", async () => {
+    const insert = vi.fn().mockResolvedValue({ id: "c2", ...validInput, phone: "+525512345678" });
+
+    const response = await handleCreateCliente(
+      requestWith({ ...validInput, allowDuplicatePhone: true }),
+      { findByPhone: async () => ({ id: "existing-1" }) as unknown as Cliente, insert },
+    );
+
+    expect(response.status).toBe(201);
+    expect(insert).toHaveBeenCalledOnce();
+  });
+
   it("returns 400 for a vehicle missing its plate, unchanged error mapping (D5/D6)", async () => {
     const response = await handleCreateCliente(requestWith({ ...validInput, vehicles: [{ make: "Toyota" }] }), {
       findByPhone: async () => null,
@@ -73,10 +89,13 @@ function getReq(role: string, query = "") {
   });
 }
 
+// `phone: ""`, not `null` — migration `0016` made the column NOT NULL, and
+// NOT NULL forbids null but NOT the empty string. "No phone on record" is
+// still a reachable state, and R19 still guarantees such a row renders.
 const ROW: ClienteListItem = {
   id: "c1",
   name: "Juan",
-  phone: null,
+  phone: "",
   email: null,
   plates: [],
   createdAt: new Date("2026-01-01"),

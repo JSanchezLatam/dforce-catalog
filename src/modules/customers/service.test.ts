@@ -83,6 +83,45 @@ describe("createCliente (R16, R18)", () => {
     ).rejects.toMatchObject({ existingClienteId: "existing-1" });
   });
 
+  // R18 (rewritten) — a phone can legitimately belong to two people. The
+  // refusal above still fires first; this is the operator's way past it.
+  it("creates the customer anyway once the operator confirms the number is shared", async () => {
+    const insert = vi.fn(async (value) => ({ id: "new-1", ...value }) as unknown as Cliente);
+
+    const row = await createCliente(
+      { ...validInput, allowDuplicatePhone: true },
+      { findByPhone: async () => ({ id: "existing-1" }) as unknown as Cliente, insert },
+    );
+
+    expect(row.id).toBe("new-1");
+    expect(insert).toHaveBeenCalledOnce();
+  });
+
+  // The flag is an override, not a field. It must not reach the insert as a
+  // column — `cliente` has no such column, so a leak fails only at runtime.
+  it("does not persist the shared-phone confirmation as a column", async () => {
+    const insert = vi.fn(async (value) => value as unknown as Cliente);
+
+    await createCliente(
+      { ...validInput, allowDuplicatePhone: true },
+      { findByPhone: async () => ({ id: "existing-1" }) as unknown as Cliente, insert },
+    );
+
+    expect(insert.mock.calls[0][0]).not.toHaveProperty("allowDuplicatePhone");
+  });
+
+  // Absent flag, absent override — the refusal is still the default answer.
+  it("still refuses a duplicate phone when the confirmation is false", async () => {
+    const insert = vi.fn();
+    await expect(
+      createCliente(
+        { ...validInput, allowDuplicatePhone: false },
+        { findByPhone: async () => ({ id: "existing-1" }) as unknown as Cliente, insert },
+      ),
+    ).rejects.toBeInstanceOf(DuplicatePhoneError);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
   it("creates the cliente (normalized phone) when the phone is not a duplicate", async () => {
     const insert = vi.fn().mockResolvedValue({ id: "c1", ...validInput, phone: "+525512345678" });
     const result = await createCliente(validInput, { findByPhone: async () => null, insert });
@@ -202,6 +241,43 @@ describe("updateCliente (R16, R18)", () => {
         { getById: async () => current, findByPhone: async () => ({ id: "c2" }) as unknown as Cliente },
       ),
     ).rejects.toBeInstanceOf(DuplicatePhoneError);
+  });
+
+  it("applies the edit once the operator confirms the number is shared", async () => {
+    const current = {
+      cliente: { id: "c1", name: "Juan", phone: "+525512345678" } as unknown as Cliente,
+      orders: [],
+      vehicles: [],
+    };
+    const update = vi.fn().mockResolvedValue(current.cliente);
+
+    await updateCliente(
+      "c1",
+      { phone: "+525599998888", allowDuplicatePhone: true },
+      { getById: async () => current, findByPhone: async () => ({ id: "c2" }) as unknown as Cliente, update },
+    );
+
+    expect(update).toHaveBeenCalledOnce();
+  });
+
+  // Same trap as create, and worse here: `persistedPatch` is what reaches
+  // `db.update(cliente).set(...)`, so a leaked flag becomes a SET on a column
+  // that does not exist.
+  it("does not persist the shared-phone confirmation as a column on edit", async () => {
+    const current = {
+      cliente: { id: "c1", name: "Juan", phone: "+525512345678" } as unknown as Cliente,
+      orders: [],
+      vehicles: [],
+    };
+    const update = vi.fn().mockResolvedValue(current.cliente);
+
+    await updateCliente(
+      "c1",
+      { phone: "+525599998888", allowDuplicatePhone: true },
+      { getById: async () => current, findByPhone: async () => ({ id: "c2" }) as unknown as Cliente, update },
+    );
+
+    expect(update.mock.calls[0][1]).not.toHaveProperty("allowDuplicatePhone");
   });
 
   it("rejects an update whose vehicles entry is missing a plate, without touching the DB", async () => {
