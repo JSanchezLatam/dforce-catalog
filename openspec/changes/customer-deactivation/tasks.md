@@ -405,9 +405,12 @@ mock-fidelity failures, and a spec left affirming the opposite of the code.
   than what 16.1 closed — it needs a back-button press inside a 300ms debounce
   window — and closing it properly means identifying our own navigations rather
   than counting them. Recorded rather than patched at the end of a review.
-- [ ] `service-orders/service.test.ts` passes `descripcion` where the type
-  wants `description`. Behind `as never`, so it compiles and the test still
-  proves what it claims. Cosmetic.
+- [x] ~~`service-orders/service.test.ts` passes `descripcion`~~ — **fixed in
+  `customer-import`, and filing it here as "cosmetic" was the wrong call.**
+  The language rule splits by AUDIENCE and a test fixture key has no user
+  audience. Left unchecked, this entry described a defect that no longer
+  exists — the next person spends twenty minutes hunting a typo that was never
+  shipped.
 
 - [ ] The service-order detail page links a customer's name with no deactivated
   marker. R20 does not require it and adding it means threading `deactivatedAt`

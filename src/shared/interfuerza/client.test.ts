@@ -162,3 +162,59 @@ describe("fetchAllPages — refuses to call without credentials", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The envelope is `await response.json()`, so `count: number` is a CLAIM, not
+ * a fact — the same reason `service-orders/service.ts` validates `categoria`
+ * rather than trusting its type. The extraction hardened the list key and left
+ * `count` alone.
+ *
+ * The two malformed shapes fail in OPPOSITE directions, which is why one guard
+ * has to cover both:
+ *   - `undefined` — `25 >= undefined` is false, forever. No page cap, no retry
+ *     ceiling (the budget only covers a FAILING page and every one of these
+ *     succeeds), so it hammers an API with a documented ~20 req/10s limit and
+ *     a real 1-hour ban.
+ *   - `null` — `25 >= null` is TRUE, because null coerces to 0. It stops after
+ *     page one, imports 25 of 370, and reports success.
+ *
+ * `tasks.md` WU1.5 recorded "a test must fail, not hang" about a fetch MOCK.
+ * The production loop had the same shape and nobody looked.
+ */
+describe("fetchAllPages — a `count` the envelope did not actually provide", () => {
+  it("aborts instead of looping forever when `count` is missing", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ customers: rows(PAGE_SIZE) }), // no `count`
+    } as Response);
+    const sleepImpl = vi.fn().mockResolvedValue(undefined);
+
+    const gen = fetchAllPages("customers", "customers", [], { ...OPTS, fetchImpl, sleepImpl });
+    await gen.next(); // the first page still yields
+    await expect(gen.next()).rejects.toBeInstanceOf(InterfuerzaAbortError);
+
+    // The point is the bound: without it this number is unbounded.
+    expect(fetchImpl.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+
+  it("aborts instead of silently importing one page when `count` is null", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ customers: rows(PAGE_SIZE), count: null }),
+    } as Response);
+
+    const gen = fetchAllPages("customers", "customers", [], { ...OPTS, fetchImpl });
+    await gen.next();
+    // `25 >= null` is true, so the un-guarded version ENDED here and reported
+    // a complete run over 25 of 370 customers.
+    await expect(gen.next()).rejects.toBeInstanceOf(InterfuerzaAbortError);
+  });
+
+  it("still accepts a legitimate count of 0", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(page("customers", [], 0));
+
+    expect(await drain(fetchAllPages("customers", "customers", [], { ...OPTS, fetchImpl }))).toEqual([[]]);
+  });
+});

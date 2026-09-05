@@ -153,7 +153,27 @@ export async function* fetchAllPages(
     const rows = result[listKey];
     yield Array.isArray(rows) ? rows : [];
 
-    const done = page * PAGE_SIZE >= result.count;
+    // `count` is `await response.json()`, so its type is a CLAIM, not a fact.
+    // The two malformed shapes fail in OPPOSITE directions, which is why this
+    // one guard covers both:
+    //   - `undefined` → `25 >= undefined` is false FOREVER. No page cap and no
+    //     retry ceiling on this path (the budget only covers a page that
+    //     FAILS, and every one of these succeeds), so it hammers an API with a
+    //     ~20 req/10s limit and a real 1-hour ban.
+    //   - `null` → `25 >= null` is TRUE, because null coerces to 0. It stops
+    //     after page one, imports 25 of 370 and reports success.
+    //
+    // Abort rather than `break`: a run that ends early and calls itself
+    // complete is the "imports nobody, reports success" failure the customers
+    // client's docstring already names. `count: 0` is legitimate and passes.
+    const total = result.count;
+    if (typeof total !== "number" || !Number.isFinite(total)) {
+      throw new InterfuerzaAbortError(
+        `Page ${page} returned an envelope with no usable \`count\` — aborting, prior DB state preserved`,
+      );
+    }
+
+    const done = page * PAGE_SIZE >= total;
     if (done) {
       break;
     }

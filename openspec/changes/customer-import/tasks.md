@@ -115,7 +115,7 @@ Files: `customer-import/job.ts`(+test), route, a manual trigger.
 
 ## WU6 — the writing-down
 
-- [ ] 6.1 New requirement in the delta. **Grep every requirement in the
+- [x] 6.1 New requirement in the delta (R21), written BEFORE WU3 moves the shape. **Grep every requirement in the
   capability for the shapes this change touches** — `phone`, `cliente`
   identity — not only the one being added. That is the lesson C2 learned at
   round 10, when R19 was left affirming the opposite of the code.
@@ -143,10 +143,39 @@ Files: `customer-import/job.ts`(+test), route, a manual trigger.
   measurement. Removed, and the test that said "three fields" no longer names
   a field the code does not consult.
 - [x] 2b.4 `service-orders/service.test.ts` had `descripcion` where the type
-  wants `description`. C2's tasks.md had filed it as "cosmetic, not fixed" —
-  wrong call: the language rule splits by AUDIENCE, and a test fixture key has
-  no user audience. "Recorded rather than patched" is right for a race, not for
-  a one-word typo.
+  wants `description`. Fixed here; `rg descripcion src/` now returns zero.
+  C2's tasks.md had filed it as "cosmetic, not fixed" — the wrong call, since
+  the language rule splits by AUDIENCE and a test fixture key has no user
+  audience. **That C2 entry is now corrected too**: left as an open `[ ]`, it
+  described a defect that no longer exists, and two artifacts in one PR
+  contradicting each other about a line that is not there is the same class as
+  round 10's "R19 left affirming the opposite of the code".
+
+## WU2c — GGA round 2 on C6
+
+- [x] 2c.1 **A production infinite loop, in the file WU1 extracted.** `count`
+  comes from `await response.json()`, so its `number` type is a CLAIM. The
+  extraction hardened the list key and left `count` alone, and the two
+  malformed shapes fail in OPPOSITE directions:
+  `undefined` → `25 >= undefined` is false FOREVER, with no page cap and no
+  retry ceiling (the budget only covers a page that FAILS, and every one of
+  these succeeds) — hammering an API with a ~20 req/10s limit and a real
+  1-hour ban; `null` → `25 >= null` is TRUE, because null coerces to 0, so it
+  stops after page one, imports 25 of 370 and reports success.
+  One guard covers both, aborting rather than breaking. `count: 0` still
+  passes. **The irony is the finding**: WU1.5 recorded "a test must fail, not
+  hang" about a fetch MOCK, and the production loop had the same shape and
+  nobody looked.
+- [x] 2c.2 Two artifacts in one PR contradicted each other about a line that
+  does not exist — C2 filed `descripcion` as an open follow-up, C6 claimed it
+  fixed. `rg descripcion src/` returns zero. Both corrected. Same class as
+  round 10: an unchecked `[ ]` describing nothing real costs the next person
+  twenty minutes hunting a typo that was never shipped.
+- [x] 2c.3 The delta spec directory was empty while design and tasks existed.
+  Written now rather than at WU6 — the capability-wide grep it owes is
+  cheapest BEFORE `externalId` moves the shape, not after. The grep found
+  nothing needing restatement, and says so explicitly: "nothing needed
+  changing" and "nobody looked" are indistinguishable in an archive.
 
 ## Known before starting
 
