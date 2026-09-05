@@ -2,7 +2,7 @@
 
 Modifies `openspec/specs/customer-management/spec.md`.
 
-## The grep this change owes (WU6.1)
+**The capability-wide grep this change owes (WU6.1).**
 
 C2 learned at review round 10 that **full-restatement discipline follows the
 DATA SHAPE, not only the requirement being edited** — R19 was left demanding a

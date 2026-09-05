@@ -519,6 +519,45 @@ Re-run properly, it goes red.
   Now scoped by a timestamp captured before the first run. **Proven**: seeded a
   run row dated two days earlier, ran the suite, and it survived.
 
+## WU4f — GGA round 5
+
+- [x] 4f.1 **The race test leaked the very rows it exists to prevent.** It
+  asserted before registering for cleanup, so on the failure mode under test —
+  "the lock broke, two rows exist" — the assertion threw, `seededIds` stayed
+  empty, and two `cliente` rows survived permanently in whatever database ran
+  the suite. `rows[0]` would have captured only one of the two anyway.
+  A test that cleans up only when it passes is not cleaned up.
+  Fixed across **five** tests in that describe, not the two the review named —
+  the same ordering defect was in the deactivation, opt-out and phone-less
+  rows. **Proven**: with the lock removed, three full-suite runs left **0**
+  `cliente` rows behind, including the two that failed.
+- [x] 4f.2 The delta spec opened with a third top-level `##` heading that no
+  archived delta in this repo has ever carried — every one uses only
+  `## MODIFIED Requirements` and `## ADDED Requirements`. This project has
+  shipped a spec affirming the opposite of the code twice; betting on the
+  archiver ignoring an unfamiliar heading is not a bet worth taking. Demoted to
+  intro prose, where C1 and C2 put their context. The grep record survives
+  intact.
+- [x] 4f.3 `CLAUDE.md`'s scope deviation is now in the PR description as well
+  as here — AGENTS.md's remedy is "not into the current PR", and an
+  acknowledged deviation is not the same as a hidden one. Not split out:
+  rewriting history on a branch two PRs deep in a chain costs more than it
+  returns.
+
+## Gates at the final state
+
+Re-recorded because the `Outcome so far` section above stopped at WU1+WU2 while
+WU4b, WU4d, WU4e and WU4f each added production code. In a document this
+careful about verification, silence reads as "not run".
+
+- `npm test` — **1235/1235**
+- `npx tsc --noEmit` — clean
+- `npm run lint` — 0 errors, 15 warnings (the documented baseline)
+- `npm run test:e2e` — **44/44** against a clean throwaway database, 0 rows left
+- GGA — five failed rounds after the WU1+WU2 pass; every finding closed and
+  mutation-verified, and every mutation re-run here rather than taken from a
+  subagent's report
+
 ## Known and NOT fixed here
 
 - [ ] `CLAUDE.md`'s delegation-policy rewrite rides on this branch. It is its

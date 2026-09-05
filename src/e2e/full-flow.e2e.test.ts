@@ -1017,6 +1017,23 @@ describe("customer import (E2E)", () => {
     return rows[0];
   }
 
+  /**
+   * Registration-before-assertion pattern for this describe: every test
+   * below that creates a `cliente` row must register it for cleanup BEFORE
+   * running any assertion that could throw. The failure mode under test
+   * (a broken lock, a resurrected row, a duplicate insert) is exactly what
+   * makes the very next assertion throw — if `seededIds.push` sits after
+   * that assertion, it never runs, and the row(s) survive permanently in
+   * whatever database this suite ran against. Registers every match, not
+   * just the first: `rows[0]` alone would miss a duplicate-row regression's
+   * second row.
+   */
+  async function registerByExternalId(externalId: string) {
+    const rows = await db.select().from(cliente).where(eq(cliente.externalId, externalId));
+    rows.forEach((row) => seededIds.push(row.id));
+    return rows;
+  }
+
   it("is idempotent: a second run over the same rows creates nothing and leaves the row count unchanged", async () => {
     const externalId = `imp-idem-${Date.now()}`;
     async function* oneBatch() {
@@ -1024,20 +1041,17 @@ describe("customer import (E2E)", () => {
     }
 
     const first = await runCustomerImport({ fetchCustomers: oneBatch });
+    const afterFirst = await registerByExternalId(externalId);
     expect(first.created).toBe(1);
     expect(first.skipped).toEqual([]);
+    expect(afterFirst).toHaveLength(1);
 
-    const created = await fetchByExternalId(externalId);
-    expect(created).toBeDefined();
-    seededIds.push(created!.id);
-
-    const countBefore = (await db.select().from(cliente).where(eq(cliente.externalId, externalId))).length;
+    const countBefore = afterFirst.length;
 
     const second = await runCustomerImport({ fetchCustomers: oneBatch });
+    const afterSecond = await registerByExternalId(externalId);
     expect(second.created).toBe(0);
-
-    const countAfter = (await db.select().from(cliente).where(eq(cliente.externalId, externalId))).length;
-    expect(countAfter).toBe(countBefore);
+    expect(afterSecond).toHaveLength(countBefore);
   });
 
   /**
@@ -1054,16 +1068,18 @@ describe("customer import (E2E)", () => {
     }
 
     await runCustomerImport({ fetchCustomers: oneBatch });
-    const created = await fetchByExternalId(externalId);
-    expect(created).toBeDefined();
-    seededIds.push(created!.id);
+    const createdRows = await registerByExternalId(externalId);
+    expect(createdRows).toHaveLength(1);
+    const created = createdRows[0];
 
-    await deactivateCliente(created!.id);
+    await deactivateCliente(created.id);
     const deactivated = await fetchByExternalId(externalId);
     expect(deactivated!.deactivatedAt).not.toBeNull();
 
     await runCustomerImport({ fetchCustomers: oneBatch });
-    const afterReimport = await fetchByExternalId(externalId);
+    // Re-registers in case a resurrection regression also duplicated the row.
+    const afterReimport = (await registerByExternalId(externalId)).find((row) => row.id === created.id);
+    expect(afterReimport).toBeDefined();
     expect(afterReimport!.deactivatedAt).not.toBeNull();
     expect(afterReimport!.deactivatedAt).toEqual(deactivated!.deactivatedAt);
   });
@@ -1075,15 +1091,15 @@ describe("customer import (E2E)", () => {
     }
 
     await runCustomerImport({ fetchCustomers: oneBatch });
-    const created = await fetchByExternalId(externalId);
-    expect(created).toBeDefined();
-    seededIds.push(created!.id);
+    const createdRows = await registerByExternalId(externalId);
+    expect(createdRows).toHaveLength(1);
+    const created = createdRows[0];
 
-    await db.update(cliente).set({ whatsappOptOut: true }).where(eq(cliente.id, created!.id));
+    await db.update(cliente).set({ whatsappOptOut: true }).where(eq(cliente.id, created.id));
 
     await runCustomerImport({ fetchCustomers: oneBatch });
-    const afterReimport = await fetchByExternalId(externalId);
-    expect(afterReimport!.whatsappOptOut).toBe(true);
+    const afterReimport = await registerByExternalId(externalId);
+    expect(afterReimport.find((row) => row.id === created.id)?.whatsappOptOut).toBe(true);
   });
 
   it("skips a phone-less row by name and reason, and creates no cliente for it", async () => {
@@ -1093,15 +1109,15 @@ describe("customer import (E2E)", () => {
     }
 
     const result = await runCustomerImport({ fetchCustomers: oneBatch });
+    const createdRows = await registerByExternalId(externalId);
+
     expect(result.created).toBe(0);
     expect(result.skipped).toContainEqual({
       externalId,
       name: "Sin Telefono",
       reason: "missing_phone",
     });
-
-    const created = await fetchByExternalId(externalId);
-    expect(created).toBeUndefined();
+    expect(createdRows).toHaveLength(0);
   });
 
   /**
@@ -1134,11 +1150,13 @@ describe("customer import (E2E)", () => {
       runCustomerImport({ fetchCustomers: batchB, hasActiveImportRun: async () => false }),
     ]);
 
-    expect(resultA.created + resultB.created).toBe(1);
+    // Register before asserting: this is precisely the test whose whole
+    // point is a regression that creates TWO rows instead of one, so the
+    // very next assertion is the one expected to throw under regression.
+    const rows = await registerByExternalId(externalId);
 
-    const rows = await db.select().from(cliente).where(eq(cliente.externalId, externalId));
+    expect(resultA.created + resultB.created).toBe(1);
     expect(rows).toHaveLength(1);
-    seededIds.push(rows[0].id);
   });
 });
 
