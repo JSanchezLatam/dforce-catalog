@@ -38,7 +38,15 @@ Files: `src/shared/interfuerza/client.ts`(new)(+test), `src/modules/inventory-sy
 - [x] 1.1 Move pagination, retry, `RATE_LIMIT_SPACING_MS` and `SyncAbortError`
   into `shared/interfuerza/client.ts`, parameterised by `action` and list key.
 - [x] 1.2 `inventory-sync/client.ts` delegates, keeping its exact public API.
-- [x] 1.3 **`inventory-sync/client.test.ts` and `job.test.ts` pass UNCHANGED** — 47/47, and `git diff` over those files is EMPTY. That is the assertion, not a claim.
+- [x] 1.3 **At the extraction commit**, `inventory-sync/client.test.ts` and
+  `job.test.ts` passed UNCHANGED — 47/47, with an EMPTY `git diff`. That was
+  the assertion the refactor rested on, and it held.
+  **It no longer describes this PR.** WU2d added a `count` guard inside the
+  shared transport, which those numeric-`count` fixtures structurally could not
+  see, so `client.test.ts` now carries one post-extraction case and its diff is
+  35 lines. `design.md` D1 was corrected in place and this line was left
+  standing — two artifacts in one PR disagreeing about whether a file was
+  touched, which is the class WU2c.2 was opened for.
 - [x] 1.4 11 tests for the shared client's own contract, covering what only IT
   can be asked (the `action` and `listKey` parameters, which exist because
   there are two callers) plus the rules that carry the IP-ban risk. Pagination
@@ -232,6 +240,31 @@ Files: `customer-import/job.ts`(+test), route, a manual trigger.
   says exactly that, and **the test that could not distinguish it was deleted
   rather than kept as a placebo** — passing with and without the fix is the
   signature this branch has been catching all session.
+
+## WU2f — GGA round 5 on C6 (three findings, all mine, all one class)
+
+- [x] 2f.1 `tasks.md` 1.3 still claimed an EMPTY diff over
+  `inventory-sync/client.test.ts`. It is 35 lines. D1 retracted the claim in
+  place; this line did not.
+- [x] 2f.2 `design.md`'s Testing-strategy table repeated the same expired claim
+  — BELOW the paragraph that withdraws it. A reader reaching the table first is
+  told the opposite of what the file just corrected.
+- [x] 2f.3 **Task 2.7 was checked with no test behind it.** Every case in
+  `mapper.test.ts` went through `row()`, which always spreads a well-formed
+  object, so nothing ever reached the `(raw ?? {})` guard or `text()`'s
+  `typeof` check. The guard was real; the claim it was PROVEN was not.
+  Seven cases now: `null`, `undefined`, a string, a number, an array, an empty
+  object, and a row with right names and wrong types. Mutation-verified by
+  removing the `?? {}`. This matters more than usual here — the mapper's whole
+  contract is "never abort over one bad row", and the import is all-or-nothing,
+  so one throw takes all 370 down.
+  **Same as C2's WU4.1**: "marked complete in an earlier commit with NO test
+  written". Second time on this branch.
+- [x] 2f.4 `InterfuerzaAbortError.name` was still `"SyncAbortError"`. WU2d.4
+  removed `R1.9` from the abort MESSAGE so a customer-import failure stops
+  citing inventory-sync's spec; the `name` did the same thing in every log line
+  and stack trace. Nothing reads it — both callers use `instanceof` — so it now
+  matches the class.
 
 ## Known before starting
 

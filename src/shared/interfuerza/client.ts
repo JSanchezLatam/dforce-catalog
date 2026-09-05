@@ -42,7 +42,13 @@ export class InterfuerzaAbortError extends Error {
     readonly cause?: unknown,
   ) {
     super(message);
-    this.name = "SyncAbortError";
+    // Matches the class. It used to read "SyncAbortError", which put
+    // inventory-sync's vocabulary into every customer-import log line and
+    // stack trace — the same misdirection the `R1.9` citation was removed
+    // from the message for. Nothing reads `.name`; both callers use
+    // `instanceof`, and `inventory-sync` re-exports this class under its old
+    // NAME, which is what keeps those checks working.
+    this.name = "InterfuerzaAbortError";
   }
 }
 

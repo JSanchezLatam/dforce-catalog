@@ -128,3 +128,36 @@ describe("mapCustomerRow — email", () => {
     expect(mapCustomerRow(row({ Email: "   " }))).toMatchObject({ email: null });
   });
 });
+
+/**
+ * The mapper's whole contract is "never abort the run over one bad row", and
+ * the import is all-or-nothing (D6) — so ONE throw takes all 370 customers
+ * down with it.
+ *
+ * Every other case in this file goes through `row()`, which always spreads a
+ * well-formed object, so none of them ever reached the `(raw ?? {})` guard or
+ * `text()`'s `typeof` check. Task 2.7 was checked off claiming this was
+ * proven; it was not. Written after GGA pointed that out.
+ */
+describe("mapCustomerRow — never throws, whatever arrives", () => {
+  it.each([
+    ["null", null],
+    ["undefined", undefined],
+    ["a bare string", "nonsense"],
+    ["a number", 42],
+    ["an array", [1, 2, 3]],
+    ["an empty object", {}],
+  ])("turns %s into a skip rather than throwing", (_label, input) => {
+    const mapped = mapCustomerRow(input);
+
+    expect(mapped).toMatchObject({ kind: "skip", reason: "missing_external_id" });
+  });
+
+  // A row whose fields are the right names and the wrong TYPES — the shape a
+  // JSON envelope can produce and a `Record<string, unknown>` cast cannot stop.
+  it("skips a row whose fields are present but not strings", () => {
+    const mapped = mapCustomerRow({ Cliente: 1042, Nombre: ["Rosa"], Telefono_1: {} });
+
+    expect(mapped).toMatchObject({ kind: "skip", reason: "missing_external_id" });
+  });
+});

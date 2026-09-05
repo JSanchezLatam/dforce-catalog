@@ -105,7 +105,7 @@ missing. Mirrors `inventory-sync/job.ts`, and is what makes `SyncAbortError`'s
 
 | Surface | How |
 |---|---|
-| the extracted client | `inventory-sync/client.test.ts` UNCHANGED — that is the assertion |
+| the extracted client | `inventory-sync/client.test.ts` unchanged **at the extraction commit** — see D1, which records why that stopped being the proof and what replaced it |
 | the customers client | unit, injected `fetchImpl`/`sleepImpl`, page-count arithmetic against `count = 370` |
 | the mapper | unit, over the real field shapes recorded in `proposal.md` |
 | insert vs update vs skip | unit on the planner, with the DB seam injected |
