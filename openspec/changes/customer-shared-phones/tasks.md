@@ -35,7 +35,16 @@ Files: `src/shared/db/schema.ts`, `src/shared/db/migrations/0016_*.sql`.
 
 - [x] 2.1 `schema.ts` — `phone: text("phone").notNull()`.
 - [x] 2.2 Migration `0016_cliente_phone_not_null.sql` (renamed from drizzle-kit's generated `0016_clear_husk`, journal tag updated to match).
-- [ ] 2.3 Live smoke against the real 364-row data: `SELECT count(*) FROM cliente WHERE phone IS NULL OR phone = ''` BEFORE migrating. **If it returns anything but 0, stop and report — do not invent phone numbers to satisfy the constraint.** The rows belong to the owner.
+- [x] 2.3 Live smoke, run against the Docker dev DB (`proyectocatalogo-db-1`, port **5433** — the native Postgres on 5432 is an empty scaffold stuck at migration 7 and holds nothing). Pre-check returned **0** rows with a null or empty phone, so `0016` applied cleanly; 17 migrations, the one existing customer intact. Six assertions against the real database, each write rolled back:
+  1. `information_schema` reports `is_nullable=NO`
+  2. the existing row survived
+  3. a null `phone` is REJECTED — *the first attempt at this test was invalid and passed for the wrong reason: `cliente.id` has no database default (`$defaultFn` is application-side), so an insert omitting it fails on `id`, never reaching `phone`. Re-run with `gen_random_uuid()`.*
+  4. an EMPTY STRING is ACCEPTED — R19's phone-less row still representable
+  5. two customers with the SAME phone are ACCEPTED — no UNIQUE, the load-bearing decision
+  6. no unique index on `cliente` besides the primary key
+- [x] 2.3b `npm run test:e2e` — 31/31 against a throwaway `dforce_e2e_smoke` database, dropped afterwards. This is what actually exercises the changed e2e fixture (`phone: ""`) through real Drizzle, real pg-boss and a real Chromium render; it had been edited in WU2 and never run.
+
+> **NOT covered by any of the above: the owner's 364-record dataset is not in any local database.** The dev DB holds one customer. The pre-check that matters — null or empty phones among those 364 — still has to run wherever that data actually lives, BEFORE `0016` is applied there.
 
 - [x] 2.4 UNPLANNED, found by the compiler: `NOT NULL` broke five fixtures built with `phone: null`, in `route.test.ts`, `schedule.test.ts`, `CustomerPicker.test.tsx` and the e2e seed. Each covers a real behaviour — R19's phone-less row, and `planReminders` skipping WhatsApp. **NOT NULL forbids a null, not an empty string**, and both guards test truthiness (`schedule.ts:51`, `CustomerPicker.tsx:25`), so the fixtures moved to `phone: ""` and every branch stays live. Nothing was deleted and no guarantee was dropped.
 - [x] 2.5 `schema.test.ts` — the nullable-contact-fields assertion now states the new contract, plus a new test that phone is NOT unique anywhere (mutation-verified with a temporary `.unique()`). That decision is the easiest thing for a later change to tidy into existence.
