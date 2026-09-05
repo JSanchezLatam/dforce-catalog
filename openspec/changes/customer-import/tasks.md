@@ -6,16 +6,19 @@
 |-------|-------|
 | Estimated production `src/` lines | ~450 |
 | 400-line budget risk | High |
-| Chained PRs recommended | **Yes — WU1 separately** |
-| Delivery strategy | WU1 (refactor) as its own PR, then the feature |
+| Chained PRs recommended | No — **owner chose one PR** (2026-09-05) |
+| Delivery strategy | single PR targeting `feat/customer-deactivation` |
 
 `customer-deactivation` forecast ~380 and delivered 572 production lines
 because eleven GGA rounds each added code. That is now the calibration point:
 **assume review adds to a forecast rather than confirming it.**
 
-WU1 is a behaviour-preserving refactor of a reviewed module and is worth
-landing alone — mixed into the feature, a reviewer cannot tell which diff a
-regression came from.
+WU1 is a behaviour-preserving refactor of a reviewed module, and the original
+plan was to land it alone so a reviewer could tell which diff a regression came
+from. **The owner chose one PR instead.** Recorded rather than silently
+followed: the mitigation is that WU1 is its own commit and
+`inventory-sync`'s tests are untouched in it, so `git diff` over that commit
+still isolates the refactor.
 
 ## WU0 — the contract, already done
 
@@ -28,7 +31,7 @@ regression came from.
 - [x] 0.3 Probe scripts print AGGREGATES only — no name, phone, email or
   address of a real customer was written to a log.
 
-## WU1 — extract the shared Interfuerza client (its own PR)
+## WU1 — extract the shared Interfuerza client
 
 Files: `src/shared/interfuerza/client.ts`(new)(+test), `src/modules/inventory-sync/client.ts`.
 
@@ -57,16 +60,26 @@ Files: `src/shared/interfuerza/client.ts`(new)(+test), `src/modules/inventory-sy
 
 Files: `src/modules/customer-import/{client,mapper}.ts`(+tests).
 
-- [ ] 2.1 RED/GREEN client — `action: "customers"`, list key `customers`,
+- [x] 2.1 RED/GREEN client — `action: "customers"`, list key `customers`,
   pagination arithmetic against a `count` of 370.
-- [ ] 2.2 RED mapper — `Nombre` → `name`; `Telefono_1` then `Cellular` →
+- [x] 2.2 RED mapper — `Nombre` → `name`; `Telefono_1` then `Cellular` →
   `phone`, VERBATIM (D4); `Email` → `email` or null; `Cliente` → `externalId`.
-- [ ] 2.3 RED mapper — a row with no phone in any of the three fields yields a
+- [x] 2.3 RED mapper — a row with no phone in any of the three fields yields a
   SKIP with a reason, not a row and not a throw (D5).
-- [ ] 2.4 RED mapper — `Token` is never read. A guard test, because it is named
+- [x] 2.4 RED mapper — `Token` is never read. A guard test, because it is named
   like an id and is empty on all 370 rows.
-- [ ] 2.5 RED mapper — `Contacto` is never used as a name fallback (D2); a row
+- [x] 2.5 RED mapper — `Contacto` is never used as a name fallback (D2); a row
   with a blank `Nombre` is a skip, not a silently-renamed customer.
+- [x] 2.6 **Eight mutations, all failing by name.** Mapper: `Token` as the id,
+  `Contacto` as a name fallback, normalising the phone to `+507`, preferring
+  `Cellular` over `Telefono_1`, an empty-string email instead of `null`, and
+  importing a phone-less row. Client: the `clients` action and the `contacts`
+  list key — **the two that fail SILENTLY**, since a wrong action answers 401
+  or an empty list and a wrong list key yields no rows, so the import finishes
+  and reports success having imported nobody.
+- [x] 2.7 The mapper NEVER throws. A row it cannot represent becomes a skip
+  carrying a reason; a throw would abort an import of 370 customers over one
+  bad row.
 
 ## WU3 — the column and the plan
 
