@@ -157,8 +157,14 @@ export default async function CustomersPage({
 
 function buildPageHref(params: SearchParams, page: number): string {
   const search = new URLSearchParams();
-  if (typeof params.search === "string" && params.search) search.set("search", params.search);
-  if (typeof params.pageSize === "string" && params.pageSize) search.set("pageSize", params.pageSize);
+  // `firstValue` for every key, matching `normalizeClienteFilters`. The
+  // `typeof === "string"` checks these replace saw `?search=a&search=b` as an
+  // array and dropped it, so the page filtered by "a" while page 2's link
+  // carried no search at all — the same shape of bug one line below.
+  const term = firstValue(params.search);
+  const size = firstValue(params.pageSize);
+  if (term) search.set("search", term);
+  if (size) search.set("pageSize", size);
   // R20 — every filter in the URL has to survive paging. Dropped here, "Ver
   // desactivados" would silently switch itself off on page 2, which reads as
   // the records having disappeared rather than the filter having reset.

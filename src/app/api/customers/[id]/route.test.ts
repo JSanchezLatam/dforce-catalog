@@ -224,27 +224,37 @@ describe("PATCH /api/customers/[id] — activation (R20)", () => {
     expect(reactivateCliente).toHaveBeenCalledWith("c1");
   });
 
-  // The order is not arbitrary. `updateCliente` refuses to edit a deactivated
-  // record (D5), so reactivation has to land BEFORE the field edits or an
-  // "edit and reactivate" save would be rejected by its own first step.
-  it("reactivates BEFORE applying field edits in the same request", async () => {
-    const calls: string[] = [];
-    const reactivateCliente = vi.fn(async () => {
-      calls.push("reactivate");
-      return current.cliente;
-    });
-    const update = vi.fn(async () => {
-      calls.push("update");
-      return current.cliente;
-    });
+  // Ordering these was the previous design: reactivate, then edit, then
+  // deactivate. It only held when everything succeeded —
+  // `{ active: true, name: "" }` reactivated the customer and THEN answered
+  // 400 for the invalid name, so the operator saw a rejection while the record
+  // went live. Rejecting the combination removes the hazard and the ordering
+  // it existed to serve; no UI sends both.
+  it("refuses to change activation and edit fields in one request, writing nothing", async () => {
+    const update = vi.fn();
+    const reactivateCliente = vi.fn();
 
-    await handleUpdateCliente(requestWith({ active: true, name: "Nuevo" }), "c1", {
+    const response = await handleUpdateCliente(requestWith({ active: true, name: "Nuevo" }), "c1", {
       getById: async () => current,
       update,
       reactivateCliente,
     });
 
-    expect(calls).toEqual(["reactivate", "update"]);
+    expect(response.status).toBe(400);
+    expect(reactivateCliente).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("still applies an ordinary edit that carries no `active` at all", async () => {
+    const update = vi.fn().mockResolvedValue(current.cliente);
+
+    const response = await handleUpdateCliente(requestWith({ name: "Nuevo" }), "c1", {
+      getById: async () => current,
+      update,
+    });
+
+    expect(response.status).toBe(200);
+    expect(update).toHaveBeenCalledOnce();
   });
 
   it("lets a tecnico deactivate — no grant of its own (D2)", async () => {

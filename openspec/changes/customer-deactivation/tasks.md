@@ -124,6 +124,37 @@ Files: `CustomerFilters.tsx`(+test), `customers/page.tsx`, `customers/[id]/page.
 - [x] 9.4 The deactivated banner was `role="alert"`; it is server-rendered and
   present on load, not a change being announced. `role="status"`.
 
+## WU10 — GGA round 3 on C2 (four findings, all real)
+
+Three of the four were in the e2e file, against conventions that file writes
+down about itself.
+
+- [x] 10.1 **The new e2e describe had no `afterAll`.** Every neighbouring
+  describe has one, and `customer search` spells out why: without it the block
+  is a one-way write against whatever database ran the suite. Worse here —
+  `reactivateCliente` only runs in the LAST test, so any earlier failure would
+  have left "Retirado Perez" permanently deactivated. Added; verified
+  empirically by querying the throwaway database after a run (0 rows left).
+- [x] 10.2 `beforeAll` shells out to `drizzle-kit migrate` and closed with
+  `});` while every other one in the file closes `}, 60_000);`. A flake waiting
+  for the first slow box.
+- [x] 10.3 The new describe had been inserted BETWEEN the C3 docstring and the
+  `vehicle search` describe it documents, orphaning it. Block moved below
+  `vehicle search`.
+- [x] 10.4 **A non-atomic PATCH.** `{ active: true, name: "" }` reactivated the
+  customer and THEN answered 400 for the invalid name — the operator saw a
+  rejection while the record went live. The mirror case wrote nothing, because
+  deactivation ran last: same request shape, opposite outcome on failure.
+  The ordering comment argued the order was load-bearing, and it was — but
+  only when everything succeeded. **Fixed by rejecting the combination**, which
+  removes the hazard AND the ordering it existed to serve: no UI sends both,
+  since D5 hides "Editar" while deactivated and the activation button sends
+  `active` alone. The route is shorter than before.
+- [x] 10.5 `buildPageHref` still read `search`/`pageSize` with
+  `typeof === "string"` while `normalizeClienteFilters` used `firstValue()`, so
+  `?search=a&search=b` filtered by "a" and paged with no search at all. 9.3
+  claimed the function was swept and it was not — only the one key was.
+
 ## Follow-ups (out of scope here)
 
 - [ ] No hard delete for customers, and none planned. If one is ever wanted it needs its own change and its own administrador-only grant, on `customers.deleteVehicle`'s reasoning.

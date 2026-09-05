@@ -67,26 +67,39 @@ export async function handleUpdateCliente(
     return NextResponse.json({ errors: { active: "Debe ser un booleano" } }, { status: 400 });
   }
 
+  // Activation and field edits are mutually exclusive, and this is the whole
+  // fix for a non-atomic PATCH rather than a transaction around it.
+  //
+  // Ordering them was the previous attempt: reactivate, then edit, then
+  // deactivate. That argument only holds when everything succeeds.
+  // `{ active: true, name: "" }` reactivated the customer and THEN answered
+  // 400 for the invalid name — the operator saw a rejection while the record
+  // went live. The mirror case wrote nothing, because deactivation ran last.
+  // Same request shape, opposite outcome on failure.
+  //
+  // Rejecting the combination removes the hazard AND the ordering it existed
+  // to serve: no UI sends both (D5 hides "Editar" while deactivated, and the
+  // activation button sends `active` alone), so nothing is lost.
+  if (active !== undefined && Object.keys(fields).length > 0) {
+    return NextResponse.json(
+      { errors: { active: "No se puede cambiar el estado y editar datos en la misma operación" } },
+      { status: 400 },
+    );
+  }
+
   const deactivate = deps.deactivateCliente ?? deactivateClienteService;
   const reactivate = deps.reactivateCliente ?? reactivateClienteService;
 
   try {
-    // ORDER IS LOAD-BEARING. `updateCliente` refuses to edit a deactivated
-    // record (D5), so reactivation lands BEFORE the field edits — otherwise an
-    // "edit and reactivate" save would be rejected by its own first step.
-    // Deactivation goes last for the mirror reason: edits applied to a record
-    // on its way out are still edits to an active one.
-    let cliente = active === true ? await reactivate(id) : undefined;
-
-    // `active === undefined` means this is an ordinary edit and behaves
-    // exactly as it did before R20 — including an empty body.
-    if (active === undefined || Object.keys(fields).length > 0) {
-      cliente = await updateCliente(id, fields, deps);
-    }
-
-    if (active === false) {
-      cliente = await deactivate(id);
-    }
+    // Exactly one of these runs, so there is no partial state to unwind.
+    // `active === undefined` is an ordinary edit and behaves exactly as it did
+    // before R20, including for an empty body.
+    const cliente =
+      active === true
+        ? await reactivate(id)
+        : active === false
+          ? await deactivate(id)
+          : await updateCliente(id, fields, deps);
 
     return NextResponse.json({ cliente });
   } catch (err) {
