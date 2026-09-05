@@ -660,3 +660,59 @@ describe("ServiceOrderForm", () => {
     });
   });
 });
+
+/**
+ * R20/D5 — `POST /api/service-orders` gained a 409 in this change and this
+ * form, its only client, was not touched: the refusal fell through to the
+ * generic "Intentalo de nuevo", which sends the operator round a loop that
+ * returns the identical answer forever. The wire between the route's mapping
+ * and this screen was asserted nowhere.
+ */
+describe("ServiceOrderForm — a deactivated customer's 409 (R20)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  async function submitAgainst(response: { status: number; body: unknown }) {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        return Promise.resolve({
+          ok: response.status >= 200 && response.status < 300,
+          status: response.status,
+          json: async () => response.body,
+        } as Response);
+      }
+      if (url.includes("/vehicles")) {
+        return Promise.resolve(jsonResponse({ vehicles: [vehiculoRow({ id: "v-pre", clienteId: "c-preseleccionado" })] }));
+      }
+      return Promise.resolve(jsonResponse({ customers: [], total: 0 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+    openDialog();
+    await flush();
+    fireEvent.change(vehicleSelect(), { target: { value: "v-pre" } });
+    fireEvent.change(categorySelect(), { target: { value: "revisado" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await flush();
+  }
+
+  it("names the deactivation instead of telling the operator to retry", async () => {
+    await submitAgainst({ status: 409, body: { error: "cliente_deactivated" } });
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(/desactivado/i);
+    // The generic copy is the defect: this refusal is deterministic, so
+    // "Intentalo de nuevo" is an instruction that cannot ever work.
+    expect(alert).not.toHaveTextContent(/Intentalo de nuevo/i);
+  });
+
+  it("still shows the generic message for a failure that IS worth retrying", async () => {
+    await submitAgainst({ status: 500, body: {} });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/Intentalo de nuevo/i);
+  });
+});

@@ -651,4 +651,35 @@ describe("CustomerForm — a deactivated customer's 409", () => {
 
     expect(await screen.findByRole("button", { name: "Guardar igual" })).toBeInTheDocument();
   });
+
+  // Reachable inside ONE open dialog: the first save hits `duplicate_phone`
+  // and arms the block, the customer is deactivated meanwhile, the operator
+  // clicks "Guardar igual" and gets `cliente_deactivated`. Without disarming,
+  // both blocks render and "Guardar igual" stays clickable against a save that
+  // can never succeed.
+  it("takes the shared-phone way out off screen when the second 409 is a deactivation", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn();
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: async () => ({ error: "duplicate_phone", existingClienteId: "existing-1" }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        json: async () => ({ error: "cliente_deactivated" }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<CustomerForm cliente={CLIENTE} vehicles={[]} />);
+    await open(user, "Editar");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await user.click(await screen.findByRole("button", { name: "Guardar igual" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/desactivado/i);
+    expect(screen.queryByRole("button", { name: "Guardar igual" })).not.toBeInTheDocument();
+  });
 });

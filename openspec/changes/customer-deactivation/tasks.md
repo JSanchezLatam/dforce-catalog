@@ -353,6 +353,32 @@ down about itself.
   restore unreachable until reactivation. That is intended; the comment now
   says so rather than leaving it to be rediscovered as a bug.
 
+## WU18 — GGA round 11 on C2
+
+- [x] 18.1 **WU15.1 again, one route over — and I caused it the same way.**
+  WU14 gave `POST /api/service-orders` a new 409 and I did not touch its only
+  client. `ServiceOrderForm` fell through to "No se pudo guardar la orden de
+  servicio. **Intentalo de nuevo**" — an instruction that can never work,
+  because this refusal is deterministic: retrying returns the identical 409
+  forever, and nothing on screen ever names the deactivation or points at
+  reactivation.
+  It fires in exactly one scenario, and it is the one the server guard exists
+  for: staff A has the picker open, staff B deactivates the customer, staff A
+  submits. **The refusal worked; the screen at that moment did not.**
+  Fixed and mutation-verified, with a second test pinning that a 500 — a
+  failure that IS worth retrying — still gets the generic copy.
+
+  The pattern to carry forward: **adding a status code to a route is not done
+  until every client of that route has been opened.** Twice now I added one and
+  stopped at the route.
+- [x] 18.2 `CustomerForm`'s deactivated branch set an error but left
+  `sharedPhoneWith` armed, so both blocks rendered and "Guardar igual" stayed
+  clickable against a save that could never succeed. Reachable inside one open
+  dialog: `duplicate_phone` arms it, the customer is deactivated, the operator
+  clicks through to `cliente_deactivated`.
+  **Caught by mutation, not by review**: removing the fix left 32/32 green,
+  which is the signature of an untested fix. The test came after.
+
 ## Known and NOT fixed here
 
 - [ ] The service-order detail page links a customer's name with no deactivated

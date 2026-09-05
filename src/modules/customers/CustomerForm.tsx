@@ -339,6 +339,12 @@ export function CustomerForm({
           // fact twice, once as an error the operator cannot act on.
           setSharedPhoneWith(body.existingClienteId);
         } else {
+          // Disarm, don't just add a message. Reachable: a `duplicate_phone`
+          // 409 arms the block, the customer is deactivated, the operator
+          // clicks "Guardar igual" and gets `cliente_deactivated`. Without
+          // this both blocks render and "Guardar igual" stays clickable
+          // against a save that can never succeed.
+          setSharedPhoneWith(null);
           setErrors({
             form: "Este cliente fue desactivado y no se puede editar. Reactivalo primero.",
           });
