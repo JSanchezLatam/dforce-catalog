@@ -21,6 +21,12 @@ export type ClienteFilters = {
    * R20 — opt IN to deactivated customers. Same option name and same default
    * as `listVehiculosByCliente(id, { includeInactive })` in `vehicles.ts`:
    * one word for one concept across both soft-deleted tables.
+   *
+   * `undefined` and `false` are DELIBERATELY equivalent, and callers differ on
+   * which they send: the page omits the key when off, the API route always
+   * sends a boolean. Both are correct against `buildClienteListWhere`, and
+   * their tests assert the shape each one actually produces rather than a
+   * shape agreed in advance.
    */
   includeInactive?: boolean;
 };

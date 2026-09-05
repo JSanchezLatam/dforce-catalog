@@ -79,7 +79,9 @@ describe("CustomerFilters — ver desactivados (R20)", () => {
 
     await user.click(screen.getByRole("checkbox", { name: "Ver desactivados" }));
 
-    expect(push).toHaveBeenCalledWith("/customers?");
+    // `/customers`, not `/customers?` — `commit` omits the separator for an
+    // empty query rather than pushing a bare "?".
+    expect(push).toHaveBeenCalledWith("/customers");
   });
 
   it("keeps an active search term when the toggle changes", async () => {
@@ -144,5 +146,56 @@ describe("CustomerFilters — the debounce must not clobber a newer filter", () 
     const last = push.mock.calls.at(-1)?.[0] as string;
     expect(last).toContain("search=perez");
     expect(last).toContain("includeInactive=1");
+  });
+});
+
+/**
+ * "Limpiar" bypassed `applyFilter` entirely with its own `router.push`, so it
+ * updated neither the ref nor the pending debounce — while the comment above
+ * `applyFilter` claimed it was "the ONLY writer". The fifth occurrence of one
+ * failure class in this change, and the first where the invariant was asserted
+ * in prose rather than enforced.
+ */
+describe("CustomerFilters — Limpiar goes through the same writer", () => {
+  it("does not resurrect a cleared filter on the next keystroke", async () => {
+    const user = userEvent.setup();
+    pending.delay = 450; // navigation slower than the debounce, as in production
+    // `selected` is what the SERVER already rendered, so seeding it on is how
+    // the screen looks when Limpiar is reachable at all.
+    seedUrl("includeInactive=1");
+    render(<CustomerFilters selected={{ includeInactive: true }} pageSize={10} />);
+
+    await user.click(screen.getByRole("checkbox", { name: "Ver desactivados" }));
+    await user.click(screen.getByRole("button", { name: "Limpiar" }));
+    // Before the clear's navigation lands — the ordinary "clear, then search
+    // again" rhythm.
+    await user.type(screen.getByLabelText(/Buscar/), "ana");
+    await new Promise((resolve) => setTimeout(resolve, 350));
+
+    const last = push.mock.calls.at(-1)?.[0] as string;
+    expect(last).toContain("search=ana");
+    expect(last).not.toContain("includeInactive");
+  });
+
+  it("cancels a pending search instead of letting it re-push the cleared term", async () => {
+    const user = userEvent.setup();
+    pending.delay = 450;
+    render(<CustomerFilters selected={{ search: "perez" }} pageSize={10} />);
+
+    await user.type(screen.getByLabelText(/Buscar/), "z");
+    await user.click(screen.getByRole("button", { name: "Limpiar" }));
+    await new Promise((resolve) => setTimeout(resolve, 350));
+
+    expect(push.mock.calls.at(-1)?.[0]).toBe("/customers");
+  });
+
+  it("empties the search box, so the screen matches the list it produced", async () => {
+    const user = userEvent.setup();
+    render(<CustomerFilters selected={{ search: "perez" }} pageSize={10} />);
+
+    const input = screen.getByLabelText(/Buscar/) as HTMLInputElement;
+    await user.click(screen.getByRole("button", { name: "Limpiar" }));
+
+    expect(input.value).toBe("");
   });
 });

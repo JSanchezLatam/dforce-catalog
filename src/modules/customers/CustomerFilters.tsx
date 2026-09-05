@@ -63,13 +63,42 @@ export function CustomerFilters({
     pushedParamsRef.current = null;
   }, [searchParams]);
 
+  /** The search box is uncontrolled, so clearing the URL is not enough to clear what is on screen. */
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * The ONE `router.push` in this file, and that is the point rather than a
+   * coincidence. The comment above used to CLAIM `applyFilter` was the only
+   * writer while "Limpiar" pushed on its own forty lines below — updating
+   * neither the ref nor the pending debounce, so a cleared filter came back on
+   * the next keystroke. An invariant asserted in prose is not an invariant;
+   * this makes a second writer something you would have to add a second
+   * `router.push` to create.
+   */
+  function commit(params: URLSearchParams) {
+    pushedParamsRef.current = params;
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname);
+  }
+
   function applyFilter(key: string, value: string) {
     const params = new URLSearchParams(pushedParamsRef.current ?? window.location.search);
     if (value) params.set(key, value);
     else params.delete(key);
     if (key !== "pageSize") params.delete("page");
-    pushedParamsRef.current = params;
-    router.push(`${pathname}?${params.toString()}`);
+    commit(params);
+  }
+
+  /**
+   * Cancels the pending search, unlike `applyFilter`. An immediate filter must
+   * NOT cancel a debounced one — typing "perez" and then ticking the box has to
+   * keep both — but clearing must, or the timer fires afterwards and re-pushes
+   * the very term the operator just cleared.
+   */
+  function clearFilters() {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (searchInputRef.current) searchInputRef.current.value = "";
+    commit(new URLSearchParams());
   }
 
   function applyDebounced(key: string, value: string) {
@@ -83,6 +112,7 @@ export function CustomerFilters({
         <Label htmlFor="filter-search">Buscar (nombre, teléfono o placa)</Label>
         <Input
           id="filter-search"
+          ref={searchInputRef}
           placeholder="Buscar cliente..."
           defaultValue={selected.search ?? ""}
           onChange={(e) => applyDebounced("search", e.target.value)}
@@ -103,7 +133,7 @@ export function CustomerFilters({
       {(selected.search || selected.includeInactive) && (
         <button
           type="button"
-          onClick={() => router.push(pathname)}
+          onClick={clearFilters}
           className="rounded border border-border px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-muted/20"
         >
           Limpiar

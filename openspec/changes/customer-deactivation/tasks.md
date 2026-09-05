@@ -217,6 +217,42 @@ down about itself.
   "no such row". Only real SQL can prove it, so the test is an e2e row —
   mutation-verified.
 
+## WU13 — GGA round 6 on C2
+
+- [x] 13.1 **"Limpiar" was a SECOND writer, and the fifth occurrence of one
+  failure class in this change.** `applyFilter`'s docstring claimed it was
+  "the ONLY writer of this component's query string" while the button pushed
+  on its own forty lines below — updating neither `pushedParamsRef` nor the
+  pending debounce. Two live failures: clear the filter and the next keystroke
+  rebuilt from the stale ref and brought it back; and a debounce armed before
+  the clear fired afterwards and re-pushed the very term just cleared. Neither
+  needs an exotic window — "clear, then search again" is the ordinary rhythm.
+
+  **The lesson is the one this change kept re-learning: an invariant asserted
+  in a comment is not an invariant.** `applyFilter`, `clearFilters` and the
+  debounce now all funnel through one `commit()`, and there is exactly ONE
+  `router.push` in the file — a second writer is now something you would have
+  to add a second push to create.
+
+  `clearFilters` cancels the pending debounce and `applyFilter` deliberately
+  does not: typing "perez" then ticking the box must keep both, while clearing
+  must not be undone by a timer.
+- [x] 13.2 "Limpiar" left the typed term visible in the box, because the input
+  is uncontrolled — so the screen disagreed with the list it had just
+  produced, and made 13.1's race look like the input "just didn't take".
+  Cleared imperatively through a ref rather than by remounting on a `key`,
+  which would steal focus mid-typing.
+- [x] 13.3 **A searched deactivated customer was still silently invisible** —
+  the exact rule WU11.2 wrote down, one branch over. Searching a name is how
+  staff reach ONE customer, far more than opening a bare list; the screen said
+  they did not match and offered only a link that clears the search. Now
+  "Ningún cliente activo coincide… Buscar también entre los desactivados",
+  preserving the term.
+- [x] 13.4 `ClienteFilters.includeInactive` now documents that `undefined` and
+  `false` are deliberately equivalent, and that the page and the API route
+  legitimately send different shapes — the per-caller divergence that produced
+  7.1 and 10.5.
+
 ## Known and NOT fixed here
 
 - [ ] **`gga run --pr-mode` ignored `PR_BASE_BRANCH` as an environment

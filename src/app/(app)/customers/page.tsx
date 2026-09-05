@@ -73,7 +73,23 @@ export default async function CustomersPage({
               <Users className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
               <h2 className="text-lg font-semibold text-foreground">No se encontraron clientes</h2>
               <p className="text-sm text-muted-foreground">
-                {filters.search ? (
+                {filters.search && !filters.includeInactive ? (
+                  // R20 — searching a name is how staff actually reach ONE
+                  // customer, far more than opening a bare list. Without this
+                  // branch, searching a deactivated customer said they did not
+                  // match and offered only a link that clears the search: the
+                  // record is one query-string key away and nothing said so.
+                  // The term is preserved, or the offer costs the search.
+                  <>
+                    Ningún cliente activo coincide con la búsqueda.{" "}
+                    <Link
+                      href={`/customers?search=${encodeURIComponent(filters.search)}&includeInactive=1`}
+                      className="text-primary hover:underline"
+                    >
+                      Buscar también entre los desactivados
+                    </Link>
+                  </>
+                ) : filters.search ? (
                   <>
                     Ningún cliente coincide con la búsqueda.{" "}
                     <Link href="/customers" className="text-primary hover:underline">

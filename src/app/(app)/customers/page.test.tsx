@@ -117,4 +117,25 @@ describe("CustomersPage — deactivated customers (R20)", () => {
     expect(cells).not.toContain("");
     expect(cells).toContain("—");
   });
+
+  // R20 — searching is how staff reach one specific customer. Before this the
+  // screen said they did not match and offered only "Limpiar filtro": the
+  // record was one query-string key away and nothing said so.
+  it("offers to widen a search that matched no ACTIVE customer, keeping the term", async () => {
+    listClientes.mockResolvedValue([]);
+    countClientes.mockResolvedValue(0);
+    render(await CustomersPage({ searchParams: Promise.resolve({ search: "Retirado Perez" }) }));
+
+    const link = screen.getByRole("link", { name: /desactivados/i });
+    expect(link).toHaveAttribute("href", "/customers?search=Retirado%20Perez&includeInactive=1");
+  });
+
+  it("does not offer it again once deactivated records are already included", async () => {
+    listClientes.mockResolvedValue([]);
+    countClientes.mockResolvedValue(0);
+    render(await CustomersPage({ searchParams: Promise.resolve({ search: "nadie", includeInactive: "1" }) }));
+
+    expect(screen.queryByRole("link", { name: /desactivados/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Limpiar filtro" })).toBeInTheDocument();
+  });
 });
