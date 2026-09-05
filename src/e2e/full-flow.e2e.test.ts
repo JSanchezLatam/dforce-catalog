@@ -1083,6 +1083,43 @@ describe("customer import (E2E)", () => {
     const created = await fetchByExternalId(externalId);
     expect(created).toBeUndefined();
   });
+
+  /**
+   * Proves layer 2 (job.ts module docstring), the actual duplicate-insert
+   * guarantee — `pg_advisory_xact_lock` taken as the first statement inside
+   * the write transaction. The unit tests only assert call ORDER against a
+   * fake `tx`; nothing there proves the lock serialises two real Postgres
+   * connections. Racing two real `runCustomerImport` calls over the same rows
+   * is the only way to exercise that.
+   *
+   * Layer 1 (`hasActiveImportRun`) is deliberately bypassed here by injecting
+   * `hasActiveImportRun: async () => false` on both calls: layer 1 is a
+   * check-then-act TOCTOU that would just as happily "pass" this test by
+   * rejecting the second run outright, which would prove layer 1 works and
+   * say nothing about layer 2 — the thing this row exists to verify. No
+   * `setTimeout`/sleep is used: both calls are launched together via
+   * `Promise.all` and the assertion is the resulting row count, not timing.
+   */
+  it("serialises two racing runs over the same external id into one row (proves the advisory lock, not layer 1)", async () => {
+    const externalId = `imp-race-${Date.now()}`;
+    async function* batchA() {
+      yield [rawRow(externalId, "Importado En Carrera", "50774444444")];
+    }
+    async function* batchB() {
+      yield [rawRow(externalId, "Importado En Carrera", "50774444444")];
+    }
+
+    const [resultA, resultB] = await Promise.all([
+      runCustomerImport({ fetchCustomers: batchA, hasActiveImportRun: async () => false }),
+      runCustomerImport({ fetchCustomers: batchB, hasActiveImportRun: async () => false }),
+    ]);
+
+    expect(resultA.created + resultB.created).toBe(1);
+
+    const rows = await db.select().from(cliente).where(eq(cliente.externalId, externalId));
+    expect(rows).toHaveLength(1);
+    seededIds.push(rows[0].id);
+  });
 });
 
 describe("full catalog-generation flow (E2E)", () => {

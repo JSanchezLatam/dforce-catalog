@@ -133,6 +133,39 @@ describe("CustomerImportButton (R21)", () => {
 
     await user.click(screen.getByRole("button", { name: "Importar clientes" }));
 
-    expect(await screen.findByText("Sin Telefono")).toBeInTheDocument();
+    expect(await screen.findByText("Sin Telefono — sin teléfono")).toBeInTheDocument();
+  });
+
+  // Finding 1 — `mapCustomerRow` (mapper.ts) emits THREE reasons, not one.
+  // The heading used to hard-code "Omitidos por falta de teléfono:" for every
+  // row regardless of `reason`, so a `missing_name` or `missing_external_id`
+  // skip rendered under a false claim. One fixture per `SkipReason` (job.ts)
+  // so each reason's copy is actually asserted, not just `missing_phone`.
+  it("names the reason for a customer skipped for a missing name", async () => {
+    const user = userEvent.setup();
+    mockFetch(() =>
+      ok({ created: 0, updated: 0, skipped: [{ externalId: "9", name: null, reason: "missing_name" }] }),
+    );
+    renderButton();
+
+    await user.click(screen.getByRole("button", { name: "Importar clientes" }));
+
+    expect(await screen.findByText("9 — sin nombre")).toBeInTheDocument();
+  });
+
+  it("names the reason for a customer skipped for a missing external id", async () => {
+    const user = userEvent.setup();
+    mockFetch(() =>
+      ok({
+        created: 0,
+        updated: 0,
+        skipped: [{ externalId: null, name: "Sin Externo", reason: "missing_external_id" }],
+      }),
+    );
+    renderButton();
+
+    await user.click(screen.getByRole("button", { name: "Importar clientes" }));
+
+    expect(await screen.findByText("Sin Externo — sin identificador externo")).toBeInTheDocument();
   });
 });

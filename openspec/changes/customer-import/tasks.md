@@ -426,6 +426,56 @@ Re-run properly, it goes red.
   what it looks like. **Verified by pointing `job.ts` at a different customer —
   the test goes red**, which it could not have done before.
 
+## WU4d — GGA round 3: the most serious defect in C6
+
+- [x] 4d.1 **No concurrency guard — two clicks would have created 740 customers
+  instead of 370.** Postgres is READ COMMITTED, so a second transaction's
+  `listExisting` cannot see the first's uncommitted inserts; both plan INSERT
+  for the same external ids and both commit. `external_id` deliberately carries
+  no unique index (D2), so nothing downstream catches it. The run is ~7.5s on
+  the happy path and up to 120s per retried page, so the window is ordinary.
+  **`inventory-sync` already solved this** — `syncRuns` exists precisely because
+  "an already-in-progress response needs its own source of truth" — and this
+  module copied its transaction while dropping its guard.
+
+  Fixed in two layers, kept explicitly distinct in the code:
+  - **Layer 1, best-effort**: `customer_import_runs` (migration `0019`) read
+    before the fetch, so a second click does not burn ~15 more Interfuerza
+    requests against an API with a documented 1-hour ban. Documented in the
+    module docstring AND inline as TOCTOU — **not** the correctness mechanism.
+  - **Layer 2, the guarantee**: `pg_advisory_xact_lock` as the FIRST statement
+    of the write transaction, before `listExisting`. A second run blocks there,
+    then reads committed rows and plans UPDATEs.
+
+  7 mutations, all red by name — including one that only MOVES the lock after
+  `listExisting`, which is what separates "the lock exists" from "the lock is
+  where it has to be".
+
+  **Proven against real Postgres, twice over.** By hand first: two psql
+  connections, the second waited exactly the 3 seconds the first had left to
+  hold. Then made permanent, because a one-time manual check rots — an e2e row
+  races two `runCustomerImport` calls with `Promise.all` and asserts ONE row
+  survives. Layer 1 is deliberately bypassed in it, with a comment saying why:
+  a test that let layer 1 reject the second run would prove layer 1 and say
+  nothing about layer 2. **No sleeps, no timing assumptions.** Removing the
+  lock turns it red — verified independently here, not taken from the report.
+- [x] 4d.2 **The skip list told the operator something false.** Every skipped
+  row rendered under `"Omitidos por falta de teléfono:"` while `mapCustomerRow`
+  emits THREE reasons. A customer skipped for a blank `Nombre` appeared there —
+  and since the mapper sets `name: null` on that path, as a bare external id
+  under a heading that was wrong about why it was on screen. R21 requires the
+  reason, and it stopped at the JSON.
+  Each row now carries its own reason, and the heading is neutral.
+- [x] 4d.3 **The type widening that hid 4d.2**, and the placebo it created. The
+  component redeclared the skip type with `reason: string` instead of importing
+  the closed union, so nothing pointed at the heading — and every fixture fed
+  `missing_phone`, making the copy untestable by construction. Fifth time this
+  PR caught that class.
+  Now `Record<SkipReason, string>`, which is the structural fix: **a fourth
+  reason added to the mapper becomes a compile error** until someone writes its
+  copy. `import type` is erased at build, so no database code reaches the client
+  bundle.
+
 ## Known before starting
 
 - [ ] **353 imported customers will not be able to receive a WhatsApp

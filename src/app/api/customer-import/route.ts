@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
-import { runCustomerImport as runCustomerImportJob } from "@/modules/customer-import/job";
+import { ImportAlreadyRunningError, runCustomerImport as runCustomerImportJob } from "@/modules/customer-import/job";
 import { InterfuerzaAbortError } from "@/shared/interfuerza/client";
 
 /**
@@ -28,6 +28,15 @@ export async function handleCustomerImport(
     const result = await (deps.runCustomerImport ?? runCustomerImportJob)();
     return NextResponse.json(result);
   } catch (err) {
+    if (err instanceof ImportAlreadyRunningError) {
+      // job.ts's layer-1 guard (best-effort, checked BEFORE the fetch) —
+      // 409 same as inventory-sync's SyncAlreadyRunningError mapping, but a
+      // real Spanish message: staff read this, not a raw diagnostic.
+      return NextResponse.json(
+        { error: "Ya hay una importación de clientes en curso. Esperá a que termine antes de iniciar otra." },
+        { status: 409 },
+      );
+    }
     if (err instanceof InterfuerzaAbortError) {
       // D6/R21 — the run aborted with nothing persisted; not a validation
       // error on the caller's request, so 502 (upstream failure) rather than

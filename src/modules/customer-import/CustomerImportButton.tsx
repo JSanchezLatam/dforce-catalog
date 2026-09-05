@@ -4,14 +4,31 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/shared/ui/ToastProvider";
-
-type ImportSkip = { externalId: string | null; name: string | null; reason: string };
+// Type-only import — erased at build, pulls no DB code into the client
+// bundle. Restating this union by hand (as `reason: string`) is what let the
+// heading below claim a false reason for two of the three `SkipReason`s.
+import type { ImportSkip } from "./job";
+import type { SkipReason } from "./mapper";
 
 type ImportResponse = {
   created: number;
   updated: number;
   skipped: ImportSkip[];
 };
+
+// Finding 1 — `mapCustomerRow` (mapper.ts) emits three reasons, and the
+// operator needs to know which one applies to each row, not a single
+// heading that is only true for `missing_phone`.
+const SKIP_REASON_LABEL: Record<SkipReason, string> = {
+  missing_phone: "sin teléfono",
+  missing_name: "sin nombre",
+  missing_external_id: "sin identificador externo",
+};
+
+function skipLabel(s: ImportSkip): string {
+  const who = s.name ?? s.externalId ?? "registro sin datos";
+  return `${who} — ${SKIP_REASON_LABEL[s.reason]}`;
+}
 
 /**
  * R21/D6 — admin manual trigger for the Interfuerza customer import.
@@ -60,12 +77,14 @@ export function CustomerImportButton() {
       </Button>
       {skipped.length > 0 && (
         // D5 — the skip report exists so "the owner can add the real
-        // number"; a bare count names nobody.
+        // number"; a bare count names nobody. Each row states its own reason
+        // (Finding 1) instead of a single heading that was only true for
+        // `missing_phone`.
         <div className="text-sm text-muted-foreground">
-          <p>Omitidos por falta de teléfono:</p>
+          <p>Clientes omitidos:</p>
           <ul className="list-disc pl-5">
             {skipped.map((s, i) => (
-              <li key={s.externalId ?? `${s.name}-${i}`}>{s.name ?? s.externalId ?? "—"}</li>
+              <li key={s.externalId ?? `${s.name}-${i}`}>{skipLabel(s)}</li>
             ))}
           </ul>
         </div>

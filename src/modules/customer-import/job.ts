@@ -1,8 +1,8 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
-import type { TxLike } from "@/modules/customers/vehicles";
+import type { TxLike as BaseTxLike } from "@/modules/customers/vehicles";
 import { db } from "@/shared/db/client";
-import { cliente } from "@/shared/db/schema";
+import { cliente, customerImportRuns } from "@/shared/db/schema";
 import { fetchAllCustomers } from "./client";
 import { mapCustomerRow, type MappedRow, type SkipReason } from "./mapper";
 import { planImport, type LocalCustomer } from "./plan";
@@ -20,53 +20,161 @@ import { planImport, type LocalCustomer } from "./plan";
  * plan, and every insert/update are all inside it and either all commit or
  * none do (mirrors `inventory-sync/job.ts`'s `runSync`). A skip is not an
  * abort: the run completes and reports it (D5, R21).
+ *
+ * CONCURRENCY (two operators, or one with two tabs, both clicking import
+ * while a first run is still draining pages): Postgres defaults to READ
+ * COMMITTED, so a second run's `listExisting` cannot see a first run's
+ * uncommitted inserts — both would plan `insert` for the same external id,
+ * both commit, and `external_id` deliberately carries no unique index
+ * (design D2), so nothing downstream would catch the duplicate. Two layers
+ * guard against this, and only one of them is the actual guarantee:
+ *
+ *  - Layer 1 (best-effort, BEFORE the fetch): `hasActiveImportRun` reads
+ *    `customer_import_runs.status = 'running'`, mirroring
+ *    `inventory-sync/job.ts`'s `hasActiveSyncRun`/`sync_runs`. This exists
+ *    only to reject a second run FAST, before it spends another ~15
+ *    Interfuerza requests against an API that carries a real 1h IP ban. A
+ *    check-then-act against a plain table row is TOCTOU on its own — two
+ *    requests can both pass this check in the gap before either has written
+ *    its own `running` row — so this is NOT what prevents duplicate
+ *    customers.
+ *  - Layer 2 (the actual guarantee): `pg_advisory_xact_lock`, taken as the
+ *    very first statement inside the write transaction, before
+ *    `listExisting` runs. A second concurrent transaction blocks on this
+ *    exact statement until the first commits or rolls back, then its own
+ *    `listExisting` sees the now-committed rows and plans an UPDATE instead
+ *    of a second INSERT. Same idiom as `pdf-generation/enqueue.ts` and
+ *    `catalog-storage/retention.ts`.
  */
 
 export type ImportSkip = { externalId: string | null; name: string | null; reason: SkipReason };
 export type ImportResult = { created: number; updated: number; skipped: ImportSkip[] };
 
+/** Widens `customers/vehicles.ts`'s `TxLike` with `execute`, needed for the layer-2 advisory lock statement below. */
+type TxLike = BaseTxLike & { execute: (query: ReturnType<typeof sql>) => Promise<{ rows: Record<string, unknown>[] }> };
+
+type ImportRunPatch = {
+  status: "completed" | "failed";
+  finishedAt: Date;
+  created?: number;
+  updated?: number;
+  skippedCount?: number;
+  error?: string;
+};
+
 export type RunCustomerImportDeps = {
   fetchCustomers?: () => AsyncGenerator<unknown[]>;
   database?: { transaction: <T>(fn: (tx: TxLike) => Promise<T>) => Promise<T> };
   listExisting?: (tx: TxLike) => Promise<LocalCustomer[]>;
+  hasActiveImportRun?: typeof hasActiveImportRun;
+  startImportRun?: () => Promise<{ id: string }>;
+  finishImportRun?: (id: string, patch: ImportRunPatch) => Promise<void>;
 };
 
 async function defaultListExisting(tx: TxLike): Promise<LocalCustomer[]> {
   return tx.select({ id: cliente.id, externalId: cliente.externalId }).from(cliente);
 }
 
+/** R21 — thrown by layer 1 (see the module docstring above) when a run is already in progress. */
+export class ImportAlreadyRunningError extends Error {
+  constructor(message = "A customer import is already in progress") {
+    super(message);
+    this.name = "ImportAlreadyRunningError";
+  }
+}
+
+/**
+ * Layer 1's own query — same shape as `inventory-sync/job.ts`'s
+ * `hasActiveSyncRun`. Best-effort only; see the module docstring for why
+ * this is not the correctness guarantee.
+ */
+export async function hasActiveImportRun(
+  queryFn: () => Promise<{ id: string }[]> = () =>
+    db
+      .select({ id: customerImportRuns.id })
+      .from(customerImportRuns)
+      .where(eq(customerImportRuns.status, "running"))
+      .limit(1),
+): Promise<boolean> {
+  const rows = await queryFn();
+  return rows.length > 0;
+}
+
+async function defaultStartImportRun(): Promise<{ id: string }> {
+  const [run] = await db
+    .insert(customerImportRuns)
+    .values({ status: "running" })
+    .returning({ id: customerImportRuns.id });
+  return run;
+}
+
+async function defaultFinishImportRun(id: string, patch: ImportRunPatch): Promise<void> {
+  await db.update(customerImportRuns).set(patch).where(eq(customerImportRuns.id, id));
+}
+
 export async function runCustomerImport(deps: RunCustomerImportDeps = {}): Promise<ImportResult> {
   const fetchCustomers = deps.fetchCustomers ?? fetchAllCustomers;
   const database = deps.database ?? db;
   const listExisting = deps.listExisting ?? defaultListExisting;
+  const checkActive = deps.hasActiveImportRun ?? hasActiveImportRun;
+  const startRun = deps.startImportRun ?? defaultStartImportRun;
+  const finishRun = deps.finishImportRun ?? defaultFinishImportRun;
 
-  const mapped: MappedRow[] = [];
-  for await (const page of fetchCustomers()) {
-    for (const raw of page) mapped.push(mapCustomerRow(raw));
+  // Layer 1 — see module docstring. Rejects BEFORE fetchCustomers() is even
+  // called, so a second concurrent click costs nothing against Interfuerza.
+  if (await checkActive()) {
+    throw new ImportAlreadyRunningError();
   }
 
-  return database.transaction(async (tx) => {
-    // `listExisting` stays inside the transaction, alongside the writes: the
-    // plan must be built against what this same transaction will see.
-    const existing = await listExisting(tx);
-    const plan = planImport(mapped, existing);
+  const run = await startRun();
 
-    let created = 0;
-    let updated = 0;
-    const skipped: ImportSkip[] = [];
-
-    for (const row of plan) {
-      if (row.kind === "skip") {
-        skipped.push({ externalId: row.externalId, name: row.name, reason: row.reason });
-      } else if (row.kind === "insert") {
-        await tx.insert(cliente).values({ externalId: row.externalId, ...row.data });
-        created++;
-      } else {
-        await tx.update(cliente).set(row.patch).where(eq(cliente.id, row.id));
-        updated++;
-      }
+  try {
+    const mapped: MappedRow[] = [];
+    for await (const page of fetchCustomers()) {
+      for (const raw of page) mapped.push(mapCustomerRow(raw));
     }
 
-    return { created, updated, skipped };
-  });
+    const result = await database.transaction(async (tx) => {
+      // Layer 2 — the actual guarantee (see module docstring). Must run
+      // BEFORE `listExisting`: taking it after the read would let a second
+      // transaction's read race in ahead of this one's writes, which is
+      // exactly the bug being fixed.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('customer-import'))`);
+
+      // `listExisting` stays inside the transaction, alongside the writes:
+      // the plan must be built against what this same transaction will see.
+      const existing = await listExisting(tx);
+      const plan = planImport(mapped, existing);
+
+      let created = 0;
+      let updated = 0;
+      const skipped: ImportSkip[] = [];
+
+      for (const row of plan) {
+        if (row.kind === "skip") {
+          skipped.push({ externalId: row.externalId, name: row.name, reason: row.reason });
+        } else if (row.kind === "insert") {
+          await tx.insert(cliente).values({ externalId: row.externalId, ...row.data });
+          created++;
+        } else {
+          await tx.update(cliente).set(row.patch).where(eq(cliente.id, row.id));
+          updated++;
+        }
+      }
+
+      return { created, updated, skipped };
+    });
+
+    await finishRun(run.id, {
+      status: "completed",
+      finishedAt: new Date(),
+      created: result.created,
+      updated: result.updated,
+      skippedCount: result.skipped.length,
+    });
+    return result;
+  } catch (error) {
+    await finishRun(run.id, { status: "failed", finishedAt: new Date(), error: String(error) });
+    throw error;
+  }
 }

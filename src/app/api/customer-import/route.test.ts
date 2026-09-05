@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { InterfuerzaAbortError } from "@/shared/interfuerza/client";
-import type { ImportResult } from "@/modules/customer-import/job";
+import { ImportAlreadyRunningError, type ImportResult } from "@/modules/customer-import/job";
 import { handleCustomerImport, POST } from "./route";
 
 function requestAs(role: string) {
@@ -69,5 +69,19 @@ describe("POST /api/customer-import — customers.write gating (R21)", () => {
     const runCustomerImport = vi.fn().mockRejectedValue(new Error("boom"));
 
     await expect(handleCustomerImport(requestAs("administrador"), { runCustomerImport })).rejects.toThrow("boom");
+  });
+
+  it("maps a concurrent run (ImportAlreadyRunningError) to a 409 with a clear Rioplatense Spanish message — not a generic failure", async () => {
+    const runCustomerImport = vi.fn().mockRejectedValue(new ImportAlreadyRunningError());
+
+    const response = await handleCustomerImport(requestAs("administrador"), { runCustomerImport });
+
+    expect(response.status).toBe(409);
+    // Pins the exact Spanish string the operator reads, same convention as
+    // the 502 message above — not a loose pattern that would also match a
+    // generic "no se pudo" failure.
+    expect((await response.json()).error).toBe(
+      "Ya hay una importación de clientes en curso. Esperá a que termine antes de iniciar otra.",
+    );
   });
 });

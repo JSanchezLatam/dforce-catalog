@@ -1,21 +1,36 @@
-import { Param } from "drizzle-orm";
+import { Param, sql } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 
-import type { TxLike } from "@/modules/customers/vehicles";
+import type { TxLike as BaseTxLike } from "@/modules/customers/vehicles";
 import { InterfuerzaAbortError } from "@/shared/interfuerza/client";
+
+// Widened the exact same way job.ts's own (module-local, unexported)
+// `TxLike` is — with `execute`, needed by the layer-2 advisory lock statement.
+type TxLike = BaseTxLike & { execute: (query: ReturnType<typeof sql>) => Promise<{ rows: Record<string, unknown>[] }> };
 import type { LocalCustomer } from "./plan";
-import { runCustomerImport, type RunCustomerImportDeps } from "./job";
+import {
+  hasActiveImportRun,
+  ImportAlreadyRunningError,
+  runCustomerImport,
+  type RunCustomerImportDeps,
+} from "./job";
 
 /**
  * Fake `tx`: records every insert/update call so assertions can check the
  * EXACT patch shape reaching the DB seam, not just planImport's pure output
  * (already covered in plan.test.ts) — this is the boundary where a stray
  * `whatsappOptOut`/`deactivatedAt` would actually reach Postgres.
+ *
+ * `execute` is stubbed too — job.ts now issues `pg_advisory_xact_lock` as the
+ * first statement inside the transaction (the concurrency fix's layer 2), so
+ * any test whose fetch succeeds and reaches the transaction body needs this,
+ * or it hits a real `tx.execute is not a function` at runtime.
  */
 function fakeTx() {
   const inserted: unknown[] = [];
   const updated: { id: string; set: unknown }[] = [];
   const tx = {
+    execute: async () => ({ rows: [] }),
     insert: () => ({
       values: async (values: unknown) => {
         inserted.push(values);
@@ -54,6 +69,15 @@ function baseDeps(overrides: Partial<RunCustomerImportDeps> = {}): {
   const deps: RunCustomerImportDeps = {
     database,
     listExisting: async () => [],
+    // Layer-1 bookkeeping (the "already running?" source of truth) is
+    // orthogonal to what most of these tests exercise — stubbed to no-ops so
+    // the default (real `db`) is never reached, same reasoning as
+    // `defaultListExisting` in the "default deps" describe below: the real
+    // `db` would try to open a Postgres connection this test suite doesn't
+    // have (vitest.config.ts points DATABASE_URL at a nonexistent database).
+    hasActiveImportRun: async () => false,
+    startImportRun: async () => ({ id: "run-1" }),
+    finishImportRun: async () => {},
     ...overrides,
   };
   return { deps, inserted, updated };
@@ -149,6 +173,9 @@ describe("runCustomerImport — an abort mid-run leaves nothing new to persist",
         },
       },
       listExisting: async () => [],
+      hasActiveImportRun: async () => false,
+      startImportRun: async () => ({ id: "run-1" }),
+      finishImportRun: async () => {},
     };
 
     await expect(runCustomerImport(deps)).rejects.toBeInstanceOf(InterfuerzaAbortError);
@@ -178,13 +205,148 @@ describe("runCustomerImport — default deps", () => {
     });
     const listExisting = vi.fn(async () => []);
     const database = {
-      transaction: async <T>(fn: (tx: TxLike) => Promise<T>) => fn({} as unknown as TxLike),
+      transaction: async <T>(fn: (tx: TxLike) => Promise<T>) =>
+        fn({ execute: async () => ({ rows: [] }) } as unknown as TxLike),
     };
 
-    const result = await runCustomerImport({ fetchCustomers, database, listExisting });
+    const result = await runCustomerImport({
+      fetchCustomers,
+      database,
+      listExisting,
+      hasActiveImportRun: async () => false,
+      startImportRun: async () => ({ id: "run-1" }),
+      finishImportRun: async () => {},
+    });
 
     expect(fetchCustomers).toHaveBeenCalledTimes(1);
     expect(listExisting).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ created: 0, updated: 0, skipped: [] });
+  });
+});
+
+describe("hasActiveImportRun — layer 1's own query (best-effort, not the guarantee)", () => {
+  it("reflects whatever the query returns", async () => {
+    await expect(hasActiveImportRun(async () => [{ id: "run-1" }])).resolves.toBe(true);
+    await expect(hasActiveImportRun(async () => [])).resolves.toBe(false);
+  });
+});
+
+describe("runCustomerImport — layer 1: fast rejection BEFORE the fetch (best-effort, TOCTOU-prone on its own)", () => {
+  it("rejects with ImportAlreadyRunningError and never calls fetchCustomers when a run is already in progress", async () => {
+    const fetchCustomers = vi.fn(async function* () {
+      yield [];
+    });
+    const { deps } = baseDeps({ fetchCustomers, hasActiveImportRun: async () => true });
+
+    await expect(runCustomerImport(deps)).rejects.toBeInstanceOf(ImportAlreadyRunningError);
+
+    // The whole point of layer 1: reject BEFORE spending another ~15
+    // Interfuerza requests against an API this repo's docstrings describe as
+    // carrying a real 1h IP ban.
+    expect(fetchCustomers).not.toHaveBeenCalled();
+  });
+});
+
+describe("runCustomerImport — layer 2: pg_advisory_xact_lock is the actual correctness guarantee", () => {
+  it("takes the lock as the very first statement inside the write transaction, before listExisting reads anything", async () => {
+    const order: string[] = [];
+    const tx = {
+      execute: vi.fn(async () => {
+        order.push("lock");
+        return { rows: [] };
+      }),
+      insert: () => ({
+        values: async () => {
+          order.push("insert");
+        },
+      }),
+      update: () => ({
+        set: () => ({
+          where: async () => {
+            order.push("update");
+          },
+        }),
+      }),
+    };
+    const database = {
+      transaction: async <T>(fn: (tx: TxLike) => Promise<T>): Promise<T> => fn(tx as unknown as TxLike),
+    };
+    const listExisting = vi.fn(async () => {
+      order.push("listExisting");
+      return [] as LocalCustomer[];
+    });
+    async function* fetchCustomers() {
+      yield [{ Cliente: "1", Nombre: "Rosa", Telefono_1: "6111-1111" }];
+    }
+
+    await runCustomerImport({
+      fetchCustomers,
+      database,
+      listExisting,
+      hasActiveImportRun: async () => false,
+      startImportRun: async () => ({ id: "run-1" }),
+      finishImportRun: async () => {},
+    });
+
+    // Exactly one lock acquisition, and it happens before listExisting and
+    // before any write — this ordering (lock BEFORE the read that plans
+    // insert-vs-update) is what makes a second concurrent transaction block
+    // until this one commits, then see the committed rows instead of racing
+    // past them under READ COMMITTED. Verifying the actual cross-connection
+    // serialization needs a live Postgres instance (same integration gap
+    // `inventory-sync`/`pdf-generation` already document).
+    expect(tx.execute).toHaveBeenCalledTimes(1);
+    expect(order[0]).toBe("lock");
+    expect(order.indexOf("lock")).toBeLessThan(order.indexOf("listExisting"));
+    expect(order.indexOf("listExisting")).toBeLessThan(order.indexOf("insert"));
+  });
+});
+
+describe("runCustomerImport — run bookkeeping backs layer 1's source of truth", () => {
+  it("marks the run completed with created/updated/skippedCount after a successful import", async () => {
+    async function* fetchCustomers() {
+      yield [{ Cliente: "1", Nombre: "Rosa", Telefono_1: "6111-1111" }];
+    }
+    const finishImportRun = vi.fn(async () => {});
+    const { deps } = baseDeps({
+      fetchCustomers,
+      startImportRun: async () => ({ id: "run-42" }),
+      finishImportRun,
+    });
+
+    const result = await runCustomerImport(deps);
+
+    expect(finishImportRun).toHaveBeenCalledWith(
+      "run-42",
+      expect.objectContaining({
+        status: "completed",
+        created: result.created,
+        updated: result.updated,
+        skippedCount: result.skipped.length,
+      }),
+    );
+  });
+
+  it("marks the run failed (never completed) and still rethrows when the write transaction throws", async () => {
+    async function* fetchCustomers() {
+      yield [{ Cliente: "1", Nombre: "Rosa", Telefono_1: "6111-1111" }];
+    }
+    const finishImportRun = vi.fn(async () => {});
+    const boom = new Error("boom");
+    const deps: RunCustomerImportDeps = {
+      fetchCustomers,
+      database: { transaction: async () => Promise.reject(boom) },
+      listExisting: async () => [],
+      hasActiveImportRun: async () => false,
+      startImportRun: async () => ({ id: "run-42" }),
+      finishImportRun,
+    };
+
+    await expect(runCustomerImport(deps)).rejects.toThrow("boom");
+
+    expect(finishImportRun).toHaveBeenCalledWith(
+      "run-42",
+      expect.objectContaining({ status: "failed", error: expect.stringContaining("boom") }),
+    );
   });
 });

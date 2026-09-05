@@ -134,6 +134,13 @@
       "when": 1788638393021,
       "tag": "0018_cliente_external_id",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788646459078,
+      "tag": "0019_customer_import_runs",
+      "breakpoints": true
     }
   ]
 }
