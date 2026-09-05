@@ -126,8 +126,24 @@ describe("CustomersPage — deactivated customers (R20)", () => {
     countClientes.mockResolvedValue(0);
     render(await CustomersPage({ searchParams: Promise.resolve({ search: "Retirado Perez" }) }));
 
-    const link = screen.getByRole("link", { name: /desactivados/i });
-    expect(link).toHaveAttribute("href", "/customers?search=Retirado%20Perez&includeInactive=1");
+    // Semantics, not an exact string: the href goes through `buildPageHref`,
+    // which encodes a space as `+` and pins `page=1`. Asserting the literal
+    // would break on a formatting change that costs the operator nothing.
+    const href = new URL(
+      screen.getByRole("link", { name: /desactivados/i }).getAttribute("href")!,
+      "http://localhost",
+    );
+    expect(href.searchParams.get("search")).toBe("Retirado Perez");
+    expect(href.searchParams.get("includeInactive")).toBe("1");
+  });
+
+  it("keeps pageSize on the widen-search link, like the pagination links do", async () => {
+    listClientes.mockResolvedValue([]);
+    countClientes.mockResolvedValue(0);
+    render(await CustomersPage({ searchParams: Promise.resolve({ search: "x", pageSize: "50" }) }));
+
+    const href = screen.getByRole("link", { name: /desactivados/i }).getAttribute("href")!;
+    expect(href).toContain("pageSize=50");
   });
 
   it("does not offer it again once deactivated records are already included", async () => {

@@ -253,7 +253,36 @@ down about itself.
   legitimately send different shapes — the per-caller divergence that produced
   7.1 and 10.5.
 
+## WU14 — GGA round 7 on C2
+
+- [x] 14.1 **`createOrder` refused a soft-deleted VEHICLE and not a
+  soft-deleted CUSTOMER.** `getClienteById` deliberately returns deactivated
+  customers, and the only check was `!clienteDetail` — so
+  `POST /api/service-orders` accepted a retired customer, with the picker's
+  exclusion as the sole defence. That is exactly what D5 and task 2.6 rule out
+  for edits ("server-side, not only hidden in the UI") and it was never applied
+  here. The stale-page scenario is the same one WU12.4's `coalesce` exists for:
+  A opens "Nueva orden" and picks Juan, B deactivates Juan, A submits — and the
+  order's reminders then log `skipped` for a customer only visible behind
+  `?includeInactive=1`.
+  Guarded beside the existing vehicle check, reusing `ClienteDeactivatedError`
+  and mapped to 409 like the customers route. **The delta spec was
+  strengthened too**: R20 framed the refusal as a CONSEQUENCE of the picker
+  exclusion, which is a UI-only guarantee; it now requires the server refusal
+  in its own sentence, with its own scenario.
+- [x] 14.2 The "Buscar también entre los desactivados" link dropped `pageSize`.
+  It now goes through `buildPageHref`, so it cannot drift from the pagination
+  links beside it.
+
 ## Known and NOT fixed here
+
+- [ ] **The "Ver desactivados" checkbox is controlled by a server prop**, so it
+  stays visually unticked for a full RSC round trip over a query documented as
+  a sequential scan. Same pattern as the `pageSize` select, so it is at least
+  consistent — but it is the one control this whole feature hangs on. Making it
+  optimistic means holding client state that can disagree with the URL, which
+  is the class of bug this change spent five rounds on; it deserves its own
+  change rather than a late addition to this one.
 
 - [ ] **`gga run --pr-mode` ignored `PR_BASE_BRANCH` as an environment
   variable.** All four rounds reviewed `main...HEAD`, i.e. C1 AND C2 together,

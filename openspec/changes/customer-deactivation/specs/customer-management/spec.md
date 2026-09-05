@@ -42,12 +42,19 @@ survive untouched, and reactivation MUST restore the customer to exactly the
 state deactivation left, with no data re-entry.
 
 A deactivated `cliente` MUST be excluded from the customer list and from the
-service-order customer picker by default, so that no new service order can be
-opened against them. That exclusion MUST be applied in the shared customer
-read path, not separately per screen. *Rationale: the picker reads the same
-`GET /api/customers` the list does; filtering per caller leaves every future
-caller to remember, and a deactivation that still admits new orders is
-decorative.*
+service-order customer picker by default. That exclusion MUST be applied in the
+shared customer read path, not separately per screen. *Rationale: the picker
+reads the same `GET /api/customers` the list does; filtering per caller leaves
+every future caller to remember.*
+
+Independently of that exclusion, the system MUST REFUSE to create a service
+order whose `cliente` is deactivated, and MUST refuse it on the server rather
+than only by hiding the customer from the picker. *Rationale: the exclusion is
+a convenience and cannot be the guarantee. Staff A opens "Nueva orden" and
+picks a customer, staff B deactivates them, staff A submits — a stale page is
+enough to defeat any UI-only rule. The same requirement already applies to
+editing a deactivated customer, and order creation already refuses a
+soft-deleted `vehiculo`; this is the customer's missing half of that rule.*
 
 A deactivated `cliente` MUST NOT receive reminders. The check MUST happen when
 the reminder FIRES, not when it is scheduled, so a customer deactivated after
@@ -66,6 +73,7 @@ way forward.
 - GIVEN an active `cliente` WHEN staff deactivates it THEN the system MUST record `deactivated_at` and leave every vehicle and service order of that customer unchanged
 - GIVEN a deactivated `cliente` WHEN staff reactivates it THEN the system MUST clear `deactivated_at` and the customer MUST reappear in the default list with its vehicles and history intact
 - GIVEN a deactivated `cliente` WHEN staff searches for them in the service-order customer picker THEN the system MUST NOT offer that customer
+- GIVEN a page opened while a `cliente` was still active WHEN staff submits a new service order for them after they have been deactivated THEN the system MUST refuse it on the server and create no order
 - GIVEN a deactivated `cliente` WHEN staff asks the customer list to include deactivated records THEN the system MUST list that customer, marked as deactivated
 - GIVEN a reminder already scheduled for a `cliente` WHEN that customer is deactivated before the reminder fires THEN `runReminder` MUST send nothing and MUST mark the reminder `skipped`
 - GIVEN a reminder for a deactivated `cliente` WHEN it is suppressed THEN the system MUST NOT mark it `opted_out`

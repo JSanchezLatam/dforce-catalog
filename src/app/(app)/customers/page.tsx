@@ -83,7 +83,10 @@ export default async function CustomersPage({
                   <>
                     Ningún cliente activo coincide con la búsqueda.{" "}
                     <Link
-                      href={`/customers?search=${encodeURIComponent(filters.search)}&includeInactive=1`}
+                      // Through `buildPageHref` so this link cannot drift from
+                      // the pagination links beside it — it kept `pageSize`
+                      // and this one had dropped it.
+                      href={buildPageHref({ ...params, includeInactive: "1" }, 1)}
                       className="text-primary hover:underline"
                     >
                       Buscar también entre los desactivados
