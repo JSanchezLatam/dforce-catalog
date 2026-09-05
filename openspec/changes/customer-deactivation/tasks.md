@@ -1,0 +1,67 @@
+# Tasks: enable and disable a customer
+
+## Review Workload Forecast
+
+| Field | Value |
+|-------|-------|
+| Estimated changed lines | ~380 `src/` |
+| 400-line budget risk | Medium |
+| Chained PRs recommended | No — one PR, chained off #68's branch |
+| Delivery strategy | single PR targeting `feat/customer-shared-phones` |
+
+Chained off `feat/customer-shared-phones` because that branch adds migration
+`0016`; generating this one from `main` would produce a second `0016` and
+collide on merge. Targets #68's branch, merges after it.
+
+## WU1 — the column and the default exclusion
+
+Files: `src/shared/db/schema.ts`, `migrations/0017_*.sql`, `queries.ts`(+test).
+
+- [ ] 1.1 `schema.ts` — `deactivatedAt` nullable timestamptz on `cliente` (D1).
+- [ ] 1.2 Generate migration `0017_*`, rename off drizzle-kit's random tag.
+- [ ] 1.3 RED `queries.test.ts` — `listClientes`/`countClientes` exclude deactivated rows by default and include them under `includeInactive` (D3).
+- [ ] 1.4 GREEN `queries.ts` — the filter, mirroring `activeVehiculoFilter()`'s shape and `listVehiculosByCliente`'s `includeInactive` option name.
+- [ ] 1.5 RED/GREEN — `getClienteById` still returns a deactivated customer (D3's deliberate exception; without it reactivation is unreachable).
+
+## WU2 — the two actions
+
+Files: `service.ts`(+test), `api/customers/[id]/route.ts`(+test).
+
+- [ ] 2.1 RED `service.test.ts` — `deactivateCliente` sets a timestamp; `reactivateCliente` clears it; both use the injected-deps seam.
+- [ ] 2.2 GREEN `service.ts`.
+- [ ] 2.3 RED — deactivating touches no `vehiculo` and no `orden_servicio` row (R20's core promise).
+- [ ] 2.4 RED `route.test.ts` — both gated on `customers.write` (D2, no new action); 404 on an unknown id rather than a blind write.
+- [ ] 2.5 GREEN route.
+- [ ] 2.6 RED — a deactivated customer cannot be edited through PATCH (D5). Server-side, not only hidden in the UI.
+
+## WU3 — reminders
+
+Files: `src/modules/reminders/job.ts`(+test).
+
+- [ ] 3.1 RED `job.test.ts` — `runReminder` on a deactivated cliente sends nothing and marks `skipped`.
+- [ ] 3.2 RED — it marks `skipped`, NOT `opted_out` (D4). Asserted separately: collapsing the two corrupts the status that carries legal meaning.
+- [ ] 3.3 GREEN — one guard beside the existing cancelled-order check, at FIRE time.
+
+## WU4 — the screens
+
+Files: `CustomerFilters.tsx`(+test), `customers/page.tsx`, `customers/[id]/page.tsx`(+test), `CustomerFormTrigger.tsx`.
+
+- [ ] 4.1 RED/GREEN `CustomerFilters` — `?includeInactive=1` toggle, URL state, matching the debounced `router.push` idiom already there (D6).
+- [ ] 4.2 GREEN `customers/page.tsx` — read the flag, pass it through, mark deactivated rows.
+- [ ] 4.3 RED/GREEN `customers/[id]/page.tsx` — deactivated banner, "Reactivar" offered, "Editar" NOT offered (D5).
+- [ ] 4.4 GREEN — the deactivate action on an active customer's detail.
+
+## WU5 — the real-SQL coverage
+
+- [ ] 5.1 e2e — the default exclusion through `GET /api/customers` against real Postgres, and the customer reappearing after reactivation. **This is the row that matters**: AGENTS.md's injected-seam limit means a green unit run proves ZERO coverage of the actual `WHERE`, and this whole change is a `WHERE`.
+- [ ] 5.2 e2e — the picker inherits the exclusion (same route, no picker change).
+- [ ] 5.3 Live smoke: apply `0017` against a real database, confirm every existing row reads as active.
+
+## WU6 — the writing-down
+
+- [ ] 6.1 Delta spec: R16 restated IN FULL (the archiver replaces, it does not merge — the exact trap GGA caught on #68), plus new R20.
+- [ ] 6.2 `design.md` records why no new policy action and why `skipped` over `opted_out`.
+
+## Follow-ups (out of scope here)
+
+- [ ] No hard delete for customers, and none planned. If one is ever wanted it needs its own change and its own administrador-only grant, on `customers.deleteVehicle`'s reasoning.
