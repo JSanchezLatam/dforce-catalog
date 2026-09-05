@@ -76,6 +76,48 @@ describe("planImport — matches on externalId only (D3)", () => {
   });
 });
 
+describe("planImport — collapses duplicate external ids within one fetch (paging can repeat a row)", () => {
+  it("plans exactly one INSERT when two rows in the same fetch share an external id neither holds locally, keeping the LAST occurrence's values", () => {
+    const rows: MappedRow[] = [
+      customer({ externalId: "1042", name: "Rosa Martínez", phone: "6123-4567", email: "rosa@old.com" }),
+      customer({ externalId: "1042", name: "Rosa M.", phone: "6111-2222", email: "rosa@new.com" }),
+    ];
+
+    const plan = planImport(rows, []);
+
+    // "Last one wins": a repeated page is a fresher read of the same customer
+    // than the first, so its values are the ones that should be written —
+    // never both, since `external_id` carries no unique index (D2) and a
+    // second insert here would create two `cliente` rows for one customer.
+    expect(plan).toEqual([
+      {
+        kind: "insert",
+        externalId: "1042",
+        data: { name: "Rosa M.", phone: "6111-2222", email: "rosa@new.com" },
+      },
+    ]);
+  });
+
+  it("collapses a duplicate external id that already exists locally into exactly one UPDATE, keeping the LAST occurrence's values", () => {
+    const existing = [local({ id: "app-created-1", externalId: "1042" })];
+    const rows: MappedRow[] = [
+      customer({ externalId: "1042", phone: "6123-4567" }),
+      customer({ externalId: "1042", phone: "6111-2222" }),
+    ];
+
+    const plan = planImport(rows, existing);
+
+    expect(plan).toEqual([
+      {
+        kind: "update",
+        id: "app-created-1",
+        externalId: "1042",
+        patch: { name: "Rosa Martínez", phone: "6111-2222", email: "rosa@example.com" },
+      },
+    ]);
+  });
+});
+
 describe("planImport — a skip stays a skip", () => {
   it("carries the skip through with its reason and identity, untouched", () => {
     const skipped = skip({ reason: "missing_phone", externalId: "1042", name: "Rosa Martínez" });

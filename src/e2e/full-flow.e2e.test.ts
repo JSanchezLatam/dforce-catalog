@@ -26,7 +26,7 @@
  * render.
  */
 import { execSync } from "node:child_process";
-import { eq, inArray } from "drizzle-orm";
+import { eq, gte, inArray } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -61,7 +61,7 @@ import { listOrdenesByVehiculo } from "@/modules/service-orders/queries";
 import { registerPdfGenerateWorker } from "@/modules/pdf-generation/worker";
 import { proxy } from "@/proxy";
 import { db } from "@/shared/db/client";
-import { cliente, ordenServicio, users, vehiculo } from "@/shared/db/schema";
+import { cliente, customerImportRuns, ordenServicio, users, vehiculo } from "@/shared/db/schema";
 import { getBoss } from "@/shared/jobs/boss";
 
 import { POST as loginPOST } from "../app/api/login/route";
@@ -962,6 +962,8 @@ describe("customer deactivation (E2E)", () => {
  */
 describe("customer import (E2E)", () => {
   const seededIds: string[] = [];
+  /** Boundary for the run-row cleanup below — see this describe's `afterAll`. */
+  const suiteStartedAt = new Date();
 
   beforeAll(async () => {
     execSync("npx drizzle-kit migrate", { stdio: "inherit" });
@@ -971,10 +973,28 @@ describe("customer import (E2E)", () => {
   // this, every row this describe's `runCustomerImport` calls actually
   // INSERT survives in whatever database ran the suite. `vehiculo` would
   // cascade if any import ever created one, but this import never does.
+  //
+  // Every `runCustomerImport` call below also writes a `customer_import_runs`
+  // row through the real default `startImportRun`/`finishImportRun` (none of
+  // these calls inject those two), and this is the only describe in the
+  // Scoped BY TIME, not by wiping the table.
+  //
+  // `runCustomerImport` does not return the run ids it creates, so there is
+  // nothing to collect the way `seededIds` collects customers. A timestamp
+  // taken before the first run is the next best boundary, and it is a real
+  // one: it deletes only rows this describe could have created.
+  //
+  // An earlier version deleted the whole table, arguing that was "exactly as
+  // scoped as deleting seededIds from cliente". It is not. `seededIds` touches
+  // only rows this block made; an unscoped delete also removes rows it never
+  // made — and this suite runs against whatever `DATABASE_URL` points at, with
+  // no guard that it is a throwaway. A test that can erase real import history
+  // when someone points it at the wrong database is not cleanup, it is a trap.
   afterAll(async () => {
     if (seededIds.length > 0) {
       await db.delete(cliente).where(inArray(cliente.id, seededIds));
     }
+    await db.delete(customerImportRuns).where(gte(customerImportRuns.startedAt, suiteStartedAt));
   });
 
   /** One raw Interfuerza wrapper row, verbatim field names, `Token` always empty. */

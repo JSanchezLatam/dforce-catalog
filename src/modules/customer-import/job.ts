@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 
 import type { TxLike as BaseTxLike } from "@/modules/customers/vehicles";
 import { db } from "@/shared/db/client";
@@ -84,17 +84,52 @@ export class ImportAlreadyRunningError extends Error {
 }
 
 /**
- * Layer 1's own query — same shape as `inventory-sync/job.ts`'s
- * `hasActiveSyncRun`. Best-effort only; see the module docstring for why
- * this is not the correctness guarantee.
+ * Layer 1's own query builder — pure (not executed), so a unit test can
+ * inspect the compiled SQL via drizzle's `.toSQL()` without a live Postgres
+ * connection. Exported only for that reason.
+ *
+ * `status = 'running'` is deliberately NOT the whole condition: a kill
+ * between `startRun()`'s write and `finishRun` (a deploy, an OOM, the host
+ * reaping a long request — this module runs synchronously inside an HTTP
+ * handler, per the module docstring) leaves that row `running` forever, and
+ * with no time bound every later import would answer 409 forever for a run
+ * that already died.
+ *
+ * The 45-minute window is sized against the real worst case this module's
+ * own fetch loop can produce, not guessed: `MAX_ATTEMPTS` (client.ts) is 3,
+ * so a page that keeps failing sleeps `RETRY_INTERVAL_MS` (60s) twice before
+ * `fetchPageWithRetry` gives up — 120s of pure retry sleep per retried page.
+ * Across all 15 customer pages (`PAGE_SIZE`/measured `count`, client.ts)
+ * failing every single attempt, that is 15 * 120s = 1800s = 30 minutes of
+ * sleep alone, BEFORE counting the network time each of the up-to-3 attempts
+ * per page actually takes, or the write-transaction phase (`listExisting`
+ * plus one insert/update per row) that only starts after the fetch loop
+ * finishes. 45 minutes keeps a 15-minute margin over that 30-minute
+ * sleep-only floor for those uncounted phases, so a run that is merely
+ * slow — not dead — is never reaped out from under itself; a run that
+ * really did die stops blocking new imports after at most 45 minutes
+ * instead of forever.
+ */
+export function buildActiveImportRunQuery() {
+  return db
+    .select({ id: customerImportRuns.id })
+    .from(customerImportRuns)
+    .where(
+      and(
+        eq(customerImportRuns.status, "running"),
+        gt(customerImportRuns.startedAt, sql`now() - interval '45 minutes'`),
+      ),
+    )
+    .limit(1);
+}
+
+/**
+ * Layer 1 — same shape as `inventory-sync/job.ts`'s `hasActiveSyncRun`.
+ * Best-effort only; see the module docstring for why this is not the
+ * correctness guarantee.
  */
 export async function hasActiveImportRun(
-  queryFn: () => Promise<{ id: string }[]> = () =>
-    db
-      .select({ id: customerImportRuns.id })
-      .from(customerImportRuns)
-      .where(eq(customerImportRuns.status, "running"))
-      .limit(1),
+  queryFn: () => Promise<{ id: string }[]> = () => buildActiveImportRunQuery(),
 ): Promise<boolean> {
   const rows = await queryFn();
   return rows.length > 0;
@@ -174,7 +209,15 @@ export async function runCustomerImport(deps: RunCustomerImportDeps = {}): Promi
     });
     return result;
   } catch (error) {
-    await finishRun(run.id, { status: "failed", finishedAt: new Date(), error: String(error) });
+    // If `finishRun` itself rejects (finding 2), do not let that rejection
+    // REPLACE `error` — the operator needs the real cause, not a secondary
+    // bookkeeping failure, and losing it also compounds finding 1 (the row
+    // stays `running` with no record of why).
+    try {
+      await finishRun(run.id, { status: "failed", finishedAt: new Date(), error: String(error) });
+    } catch {
+      // Swallowed deliberately — `error` below is still the original cause.
+    }
     throw error;
   }
 }

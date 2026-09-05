@@ -476,6 +476,56 @@ Re-run properly, it goes red.
   copy. `import type` is erased at build, so no database code reaches the client
   bundle.
 
+## WU4e — GGA round 4: the other half of the bug I thought I had fixed
+
+- [x] 4e.1 **`planImport` deduped ACROSS runs and not WITHIN one.** The previous
+  round closed "two concurrent runs create 740 customers" with an advisory
+  lock. That lock serialises RUNS — it says nothing about one run handing
+  itself the same id twice. The map was built from `existing` and never updated
+  while mapping, so two rows in the same fetch sharing a `Cliente` both planned
+  INSERT, and nothing downstream caught it: `external_id` has no unique index
+  by design, and the NEXT run then matches whichever twin `listExisting`
+  returned and the other becomes invisible forever.
+  Reachable, not exotic: 15 sequential page requests over ~8 seconds, paging by
+  number against a `count` that is a snapshot. A customer created or deleted
+  mid-run shifts a page boundary and a row repeats.
+  There was no test either — `plan.test.ts` had "two rows sharing one phone",
+  the right shape with the wrong key, and none for the one key the whole change
+  rests on. Fixed with "last occurrence wins", stated in the code and asserted,
+  and mutation-verified here independently.
+- [x] 4e.2 **A killed import bricked the feature permanently.** `startRun`
+  writes `running` before the fetch; `finishRun` only runs on success or in the
+  `catch`. A deploy, an OOM, or a reaped request in between left that row
+  `running` with no expiry, so every later import answered 409 forever about a
+  run that died days ago — and only direct SQL could clear it. Worse here than
+  in `inventory-sync` because this runs synchronously inside an HTTP handler,
+  which is exactly what a platform kills.
+  Bounded to 45 minutes, sized against the real constants rather than guessed:
+  15 pages × (`MAX_ATTEMPTS` − 1) × `RETRY_INTERVAL_MS` = **30 minutes** of
+  pure retry sleep in the worst case, plus margin for the round trips and the
+  write phase. Verified that arithmetic here.
+- [x] 4e.3 `finishRun` rejecting inside the `catch` REPLACED the original
+  error, so the operator lost the real cause and the row stayed `running` —
+  compounding 4e.2.
+- [x] 4e.4 The e2e left `customer_import_runs` rows behind, the convention that
+  file writes down about itself twice.
+  **The first fix was worse than the gap**: `db.delete(customerImportRuns)`
+  unscoped, with a comment arguing it was "exactly as scoped as deleting
+  seededIds from cliente". It is not — `seededIds` touches only rows this block
+  made, and an unscoped delete also removes rows it never made. This suite runs
+  against whatever `DATABASE_URL` points at, with no guard that it is a
+  throwaway, so that is a test that erases real import history when someone
+  points it at the wrong database.
+  Now scoped by a timestamp captured before the first run. **Proven**: seeded a
+  run row dated two days earlier, ran the suite, and it survived.
+
+## Known and NOT fixed here
+
+- [ ] `CLAUDE.md`'s delegation-policy rewrite rides on this branch. It is its
+  own commit (`758be8c`) and unrelated to importing customers — it landed here
+  because the owner asked for it mid-change. Flagged rather than rewritten out
+  of history.
+
 ## Known before starting
 
 - [ ] **353 imported customers will not be able to receive a WhatsApp

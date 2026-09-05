@@ -9,6 +9,7 @@ import { InterfuerzaAbortError } from "@/shared/interfuerza/client";
 type TxLike = BaseTxLike & { execute: (query: ReturnType<typeof sql>) => Promise<{ rows: Record<string, unknown>[] }> };
 import type { LocalCustomer } from "./plan";
 import {
+  buildActiveImportRunQuery,
   hasActiveImportRun,
   ImportAlreadyRunningError,
   runCustomerImport,
@@ -231,6 +232,23 @@ describe("hasActiveImportRun — layer 1's own query (best-effort, not the guara
   });
 });
 
+describe("hasActiveImportRun — default query bounds `running` by age (finding 1)", () => {
+  it("bounds the default query to status = 'running' AND startedAt within the window, not status alone", () => {
+    // A killed process (deploy, OOM, host reaping a long request) between
+    // `startRun()` and `finishRun` leaves a `running` row forever. Without a
+    // time bound, `hasActiveImportRun`'s default query answers 409 forever
+    // for a run that died last week. `buildActiveImportRunQuery` is a pure
+    // query BUILDER (not executed) so this can inspect its compiled SQL via
+    // drizzle's own `.toSQL()` without a live Postgres connection — same
+    // "no real DB reachable under `npm test`" constraint AGENTS.md documents
+    // for this module's other real-SQL defaults.
+    const { sql: compiled } = buildActiveImportRunQuery().toSQL();
+
+    expect(compiled).toMatch(/"status" = \$1/);
+    expect(compiled).toMatch(/"started_at" > now\(\) - interval '45 minutes'/);
+  });
+});
+
 describe("runCustomerImport — layer 1: fast rejection BEFORE the fetch (best-effort, TOCTOU-prone on its own)", () => {
   it("rejects with ImportAlreadyRunningError and never calls fetchCustomers when a run is already in progress", async () => {
     const fetchCustomers = vi.fn(async function* () {
@@ -348,5 +366,25 @@ describe("runCustomerImport — run bookkeeping backs layer 1's source of truth"
       "run-42",
       expect.objectContaining({ status: "failed", error: expect.stringContaining("boom") }),
     );
+  });
+
+  it("propagates the ORIGINAL error, not finishRun's own rejection, when the catch-path bookkeeping itself throws (finding 2)", async () => {
+    async function* fetchCustomers() {
+      yield [{ Cliente: "1", Nombre: "Rosa", Telefono_1: "6111-1111" }];
+    }
+    const originalError = new Error("original transaction failure");
+    const bookkeepingError = new Error("finishImportRun DB write failed");
+    const deps: RunCustomerImportDeps = {
+      fetchCustomers,
+      database: { transaction: async () => Promise.reject(originalError) },
+      listExisting: async () => [],
+      hasActiveImportRun: async () => false,
+      startImportRun: async () => ({ id: "run-42" }),
+      finishImportRun: async () => {
+        throw bookkeepingError;
+      },
+    };
+
+    await expect(runCustomerImport(deps)).rejects.toBe(originalError);
   });
 });

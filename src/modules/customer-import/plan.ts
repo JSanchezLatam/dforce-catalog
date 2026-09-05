@@ -52,14 +52,43 @@ export function planImport(rows: MappedRow[], existing: LocalCustomer[]): Planne
     }
   }
 
-  return rows.map((row): PlannedRow => {
-    if (row.kind === "skip") return row;
+  // Index into `planned` for an external id already emitted as insert/update
+  // IN THIS SAME PASS. Interfuerza paging is by page number against a `count`
+  // snapshot (design.md), so a customer created or deleted mid-run shifts a
+  // page boundary and the same `Cliente` value can arrive twice in one fetch.
+  // `external_id` deliberately carries no unique index (D2), so nothing
+  // downstream catches two inserts for the same id — the map must see its
+  // own prior decision for that id and overwrite it in place, "last one
+  // wins", rather than appending a second plan entry.
+  const plannedIndexByExternalId = new Map<string, number>();
+  const planned: PlannedRow[] = [];
+
+  for (const row of rows) {
+    if (row.kind === "skip") {
+      planned.push(row);
+      continue;
+    }
 
     const patch: CustomerPatch = { name: row.name, phone: row.phone, email: row.email };
-    const match = localByExternalId.get(row.externalId);
+    const repeatIndex = plannedIndexByExternalId.get(row.externalId);
 
-    return match
+    if (repeatIndex !== undefined) {
+      const previous = planned[repeatIndex] as PlannedInsert | PlannedUpdate;
+      planned[repeatIndex] =
+        previous.kind === "insert"
+          ? { kind: "insert", externalId: row.externalId, data: patch }
+          : { kind: "update", id: previous.id, externalId: row.externalId, patch };
+      continue;
+    }
+
+    const match = localByExternalId.get(row.externalId);
+    const result: PlannedRow = match
       ? { kind: "update", id: match.id, externalId: row.externalId, patch }
       : { kind: "insert", externalId: row.externalId, data: patch };
-  });
+
+    plannedIndexByExternalId.set(row.externalId, planned.length);
+    planned.push(result);
+  }
+
+  return planned;
 }
