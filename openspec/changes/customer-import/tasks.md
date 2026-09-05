@@ -544,13 +544,35 @@ Re-run properly, it goes red.
   rewriting history on a branch two PRs deep in a chain costs more than it
   returns.
 
+## WU4g — GGA round 6
+
+- [x] 4g.1 **The same expired claim, in the file a reader opens FIRST.**
+  `inventory-sync/client.ts`'s docstring still said `client.test.ts` "passes
+  without a single edit, and that is the assertion this extraction preserved
+  behaviour". That file IS edited in this PR — 35 lines.
+  I had retracted that exact claim in THREE places when it expired (`design.md`
+  D1, `tasks.md` 1.3, the design testing table) and missed the fourth. Someone
+  reading the module is told the extraction is proven by an untouched test
+  file, walks past the `count` guard sitting in the shared transport, and never
+  checks whether anything changed under those fixtures — which is the
+  generalised lesson D1 itself writes down.
+  Retracted in place, matching D1's register and pointing at the
+  post-extraction describe that closed the gap.
+- [x] 4g.2 **A duplicate React key, caused by an earlier fix of mine.** Two
+  skipped rows sharing an external id collided, because WU4e.1's within-run
+  dedupe covers inserts and updates and **passes skips through untouched** —
+  so the very page-boundary repeat that motivated that dedupe produces this
+  shape. Cosmetic (React warns and renders) but real. The index is now always
+  part of the key, and the test asserts on `console.error` rather than settling
+  for "both rows render": mutation-verified against the old key.
+
 ## Gates at the final state
 
 Re-recorded because the `Outcome so far` section above stopped at WU1+WU2 while
 WU4b, WU4d, WU4e and WU4f each added production code. In a document this
 careful about verification, silence reads as "not run".
 
-- `npm test` — **1235/1235**
+- `npm test` — **1236/1236**
 - `npx tsc --noEmit` — clean
 - `npm run lint` — 0 errors, 15 warnings (the documented baseline)
 - `npm run test:e2e` — **44/44** against a clean throwaway database, 0 rows left
@@ -560,6 +582,11 @@ careful about verification, silence reads as "not run".
 
 ## Known and NOT fixed here
 
+- [ ] **`CustomerActivationButton` is not gated on `customers.write`** while
+  `CustomerImportButton` two files over is, and `CustomerForm`'s own docstring
+  states the convention ("a button that always 403s is a worse answer than no
+  button"). Harmless today — both roles hold that grant — and it becomes a live
+  inconsistency the day a read-only role exists. Pre-existing; its own change.
 - [ ] `CLAUDE.md`'s delegation-policy rewrite rides on this branch. It is its
   own commit (`758be8c`) and unrelated to importing customers — it landed here
   because the owner asked for it mid-change. Flagged rather than rewritten out

@@ -84,7 +84,10 @@ export function CustomerImportButton() {
           <p>Clientes omitidos:</p>
           <ul className="list-disc pl-5">
             {skipped.map((s, i) => (
-              <li key={s.externalId ?? `${s.name}-${i}`}>{skipLabel(s)}</li>
+              // `i` is always in the key: two skipped rows can share the same
+              // `externalId` (planImport dedupes insert/update rows but
+              // passes skips through untouched), which collided here.
+              <li key={`${s.externalId ?? s.name}-${i}`}>{skipLabel(s)}</li>
             ))}
           </ul>
         </div>

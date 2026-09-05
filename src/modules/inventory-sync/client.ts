@@ -17,9 +17,15 @@ import {
  * when `customer-import` became a second caller. What stays here is the only
  * thing that is actually product-specific: the category filter shape.
  *
- * The public API below is UNCHANGED, deliberately. `client.test.ts` passes
- * without a single edit, and that is the assertion that this extraction
- * preserved behaviour rather than a claim that it did.
+ * The public API below is UNCHANGED, deliberately. `client.test.ts` passed
+ * without a single edit AT THE EXTRACTION COMMIT — that was the proof the
+ * extraction itself changed no behaviour. It stopped being true one commit
+ * later: a `count` guard added INSIDE the shared transport changed behaviour
+ * on the products path (the API sends `count` as a STRING, not the numeric
+ * value every fixture here hands back), and this file's untouched tests
+ * structurally could not see it. See the `describe("fetchAllProducts — the
+ * wire shape of \`count\` (post-extraction)")` block at the bottom of
+ * `client.test.ts` for the case that closed that gap.
  */
 
 export { MAX_ATTEMPTS, PAGE_SIZE, RATE_LIMIT_SPACING_MS, RETRY_INTERVAL_MS };

@@ -153,6 +153,40 @@ describe("CustomerImportButton (R21)", () => {
     expect(await screen.findByText("9 — sin nombre")).toBeInTheDocument();
   });
 
+  // Regression: `planImport` dedupes insert/update rows within a run but
+  // passes skips through untouched, so a page-boundary repeat can produce two
+  // skipped rows sharing one `externalId`. The old key (`externalId ?? name-i`)
+  // collided on those; both rows still render (React only warns on a
+  // duplicate key, it doesn't drop the row), so this asserts both text
+  // labels AND that React logged no duplicate-key warning for the render.
+  it("renders both rows and logs no duplicate-key warning when two skips share an externalId", async () => {
+    const user = userEvent.setup();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockFetch(() =>
+      ok({
+        created: 0,
+        updated: 0,
+        skipped: [
+          { externalId: "9", name: "Cliente Uno", reason: "missing_phone" },
+          { externalId: "9", name: "Cliente Dos", reason: "missing_phone" },
+        ],
+      }),
+    );
+    renderButton();
+
+    await user.click(screen.getByRole("button", { name: "Importar clientes" }));
+
+    expect(await screen.findByText("Cliente Uno — sin teléfono")).toBeInTheDocument();
+    expect(screen.getByText("Cliente Dos — sin teléfono")).toBeInTheDocument();
+
+    const duplicateKeyWarnings = consoleError.mock.calls.filter(
+      (args) => typeof args[0] === "string" && /key/i.test(args[0]),
+    );
+    expect(duplicateKeyWarnings).toHaveLength(0);
+
+    consoleError.mockRestore();
+  });
+
   it("names the reason for a customer skipped for a missing external id", async () => {
     const user = userEvent.setup();
     mockFetch(() =>
