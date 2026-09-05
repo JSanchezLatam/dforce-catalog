@@ -45,6 +45,12 @@ next-env.d.ts
 # catalog visual gate output (scripts/preview-catalog.ts)
 /preview-out
 
+# Skill registry fingerprint cache — the gentle-ai UserPromptSubmit hook
+# rewrites it on EVERY prompt, so tracking it left the working tree
+# permanently dirty and dragged the file into unrelated feature commits.
+# .atl/skill-registry.md is the real artifact and stays tracked.
+.atl/.skill-registry.cache.json
+
 # CodeGraph index — local to each machine (SQLite db, daemon pid, socket, logs).
 # Ignore the whole directory: .codegraph/.gitignore could not exclude itself,
 # so it showed up as untracked forever.
