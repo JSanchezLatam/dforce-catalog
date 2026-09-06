@@ -679,6 +679,15 @@ describe("CustomerForm — a network failure has to say so", () => {
     expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled();
   });
 
+  // NOT tested here, and it cannot be: `setOpen`/`onSaved` moved out of the
+  // `try` so the catch stops speaking for a save that already succeeded. Put
+  // them back inside and this file stays green — verified, 33/33 — because
+  // `setOpen(false)` has already run by then, so the wrong message renders
+  // into a closed dialog nobody can read. The change is right and its effect
+  // is invisible from a component test; a test written for it passed with the
+  // change reverted, so it was deleted rather than kept as a placebo. See
+  // tasks.md WU9.2.
+
   // The entry point R18 added. Nothing awaits this promise, so without the
   // catch the dialog simply sits there having done nothing.
   it("says the same thing when the network drops on Guardar igual", async () => {

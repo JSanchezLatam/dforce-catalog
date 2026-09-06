@@ -111,8 +111,9 @@ export type CreateClienteDeps = {
  * record, unless the caller carries the operator's `allowDuplicatePhone`
  * confirmation that the number is genuinely shared. When `vehicles` is
  * present in the input, the cliente row and its vehicle collection are
- * written in one transaction (D5) — both succeed or both roll back. `vehicles` omitted behaves exactly as before (scalar-only,
- * no transaction).
+ * written in one transaction (D5) — both succeed or both roll back.
+ * `vehicles` omitted behaves exactly as before (scalar-only, no
+ * transaction).
  */
 export async function createCliente(input: unknown, deps: CreateClienteDeps = {}): Promise<Cliente> {
   const { value, vehicles: vehiclesInput } = validateClienteAndVehicles(input, extractVehiclesRaw(input));

@@ -218,7 +218,46 @@ mutation-verified here before being fixed, not taken from the report.
   rejects an empty phone, so it closes the last door, not the first), and one
   comment line at 117 cols re-wrapped to the ~78 the block around it uses.
 
+## WU9 — GGA round 5
+
+- [x] 9.1 **WU8.4's own re-wrap left a worse line than the one it fixed** —
+  129 cols inside a comment block that wraps at ~76, in the same file. Fixed.
+  Not chased further: the repo has no enforced line width (no prettier config,
+  ESLint does not check it) and 36 lines across these four files already exceed
+  110. The defect was local inconsistency inside one block, not a repo rule.
+- [x] 9.2 **The `catch` was wider than the message it prints.** `setOpen(false)`
+  and `onSaved?.()` sat inside the `try`, so a parent's `onSaved` throwing
+  printed "No se pudo conectar" over a customer that had just been created
+  successfully. Both moved below the `try/catch`; the catch now covers the
+  request and its body and nothing else.
+  **NOT proven by a test, and the attempt is recorded rather than hidden.** I
+  wrote one, then put the two lines back inside the `try` and the file stayed
+  **33/33 green** — because `setOpen(false)` has already run by then, so the
+  wrong message renders into a closed dialog nobody can read. GGA's own report
+  says the same ("nobody sees it"). The change is correct and its effect is
+  invisible from a component test, so the test was **deleted** under AGENTS.md's
+  rule — *a test that passes with the fix reverted is a placebo* — and the
+  reason left in the file where the test would have been.
+  `UserForm.tsx:167` has the identical shape; not fixed here, recorded below.
+- [x] 9.3 **Two comments were review-session changelog.** One narrated a
+  previous version of the comment above it (14 lines about what an earlier
+  comment used to claim); the other cited "the repo's other **43** alerts" — a
+  census that WU8.1 itself re-measured at 45 three lines away, and that rots
+  every time anyone adds an alert. Both cut to the rule they buy: nothing
+  focusable inside a live region, and why `Link` rather than `<a>`. AGENTS.md's
+  first paragraph, applied to code comments.
+- [x] 9.4 **Gates re-run and recorded here**, which 6.4 was the last to do
+  before WU7 and WU8 changed four files: `npm test` **1084/1084** (79 files),
+  `npx tsc --noEmit` clean, `npm run lint` 0 errors / 15 warnings — the
+  documented baseline.
+
 ## Follow-ups (out of scope here)
+
+- [ ] **`UserForm.tsx:167` has the same over-wide `catch`** — `setOpen`/
+  `onSaved`-equivalent work sits inside its `try`, so a parent throwing after a
+  successful save gets blamed on the network. Same fix, two lines, but that
+  file belongs to `user-lifecycle-management`, not this change. Raised at GGA
+  round 5.
 
 - [ ] **`ServiceOrderForm.handleSubmit` has the same `try/finally` shape** with
   no `catch` (`src/modules/service-orders/ServiceOrderForm.tsx:248`). Raised in
