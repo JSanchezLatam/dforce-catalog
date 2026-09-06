@@ -656,6 +656,28 @@ Re-run properly, it goes red.
   and stamped inside `defaultFinishImportRun` — the only function that knows a
   run just finished. A fake can no longer forget it.
 
+## Review round 10 (GGA) — the same file came back a third time
+
+- [x] 4k.1 **`.atl/skill-registry.md` slipped into a feature commit again**, for
+  the third time on this branch — this round through my own `git add -A` in the
+  round-8 commit. Round 1 restored it and recorded the fix; that closed the
+  instance and nothing closed the class, so it returned.
+  It is not a portable artifact: the gentle-ai hook rewrites it on EVERY prompt,
+  it stores ABSOLUTE skill paths, and it titles itself after the checkout
+  directory. This branch's copy pointed `component-testing` — the skill
+  AGENTS.md routes people to — at
+  `…/Proyecto Catalogo-worktrees/customer-import-fixes/…`, a directory that
+  stops existing the moment the worktree is removed. Merging that ships a
+  registry entry `main` cannot resolve.
+  Restored to `main`'s version AND untracked. `.gitignore` already ignored
+  `.atl/` wholesale; the stale "the real artifact and stays tracked" exemption
+  above it is now gone, with the reasoning in its place. Every machine
+  regenerates the file on its next prompt.
+- [x] 4k.2 `TxLike` and `ImportRunPatch` were module-private while appearing in
+  the exported `RunCustomerImportDeps`, so `job.test.ts` hand-redeclared the
+  widened `TxLike` — two definitions in lockstep with nothing enforcing it.
+  Both exported, as `customers/vehicles.ts` already does for its own.
+
 ## Gates at the final state
 
 Re-recorded because the `Outcome so far` section above stopped at WU1+WU2 while
@@ -671,6 +693,15 @@ careful about verification, silence reads as "not run".
   subagent's report
 
 ## Known and NOT fixed here
+
+- [ ] **`/desactivado/i` where the branch elsewhere pins the exact literal.**
+  `ServiceOrderForm.test.tsx` and `CustomerForm.test.tsx` match the
+  deactivation copy with a case-insensitive regex on one word;
+  `CustomerImportButton.test.tsx` and `customer-import/route.test.ts` pin the
+  full Spanish string on both sides. Raised at GGA round 10 and called not a
+  failure there. Left alone deliberately: both files belong to the C2 branch
+  two PRs down, and tightening them here would put a change to #69's files in
+  #70 — the exact chained-PR hazard AGENTS.md warns about doubly.
 
 - [ ] **`customers/page.tsx` issues a second `countClientes` for one boolean.**
   On an empty result — including every mistyped search — it runs a serial

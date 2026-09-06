@@ -54,10 +54,19 @@ import { planImport, type LocalCustomer } from "./plan";
 export type ImportSkip = { externalId: string | null; name: string | null; reason: SkipReason };
 export type ImportResult = { created: number; updated: number; skipped: ImportSkip[] };
 
-/** Widens `customers/vehicles.ts`'s `TxLike` with `execute`, needed for the layer-2 advisory lock statement below. */
-type TxLike = BaseTxLike & { execute: (query: ReturnType<typeof sql>) => Promise<{ rows: Record<string, unknown>[] }> };
+/**
+ * Widens `customers/vehicles.ts`'s `TxLike` with `execute`, needed for the
+ * layer-2 advisory lock statement below. Exported for the same reason
+ * `vehicles.ts` exports its own: it appears in `RunCustomerImportDeps`, so a
+ * caller building a fake `tx` would otherwise have to hand-redeclare it and
+ * keep the copy in lockstep with nothing enforcing it.
+ */
+export type TxLike = BaseTxLike & {
+  execute: (query: ReturnType<typeof sql>) => Promise<{ rows: Record<string, unknown>[] }>;
+};
 
-type ImportRunPatch = {
+/** The patch `finishImportRun` receives. Exported alongside `TxLike`, and for the same reason. */
+export type ImportRunPatch = {
   status: "completed" | "failed";
   created?: number;
   updated?: number;

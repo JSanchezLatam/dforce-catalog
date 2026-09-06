@@ -1,20 +1,16 @@
-import { Param, sql } from "drizzle-orm";
+import { Param } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it, vi } from "vitest";
 
-import type { TxLike as BaseTxLike } from "@/modules/customers/vehicles";
 import { InterfuerzaAbortError } from "@/shared/interfuerza/client";
-
-// Widened the exact same way job.ts's own (module-local, unexported)
-// `TxLike` is — with `execute`, needed by the layer-2 advisory lock statement.
-type TxLike = BaseTxLike & { execute: (query: ReturnType<typeof sql>) => Promise<{ rows: Record<string, unknown>[] }> };
-import type { LocalCustomer } from "./plan";
 import {
   buildStartImportRunStatement,
   ImportAlreadyRunningError,
   runCustomerImport,
   type RunCustomerImportDeps,
+  type TxLike,
 } from "./job";
+import type { LocalCustomer } from "./plan";
 
 /**
  * Fake `tx`: records every insert/update call so assertions can check the
