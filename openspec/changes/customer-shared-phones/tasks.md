@@ -246,6 +246,13 @@ mutation-verified here before being fixed, not taken from the report.
   every time anyone adds an alert. Both cut to the rule they buy: nothing
   focusable inside a live region, and why `Link` rather than `<a>`. AGENTS.md's
   first paragraph, applied to code comments.
+- [x] 9.5 **The first-deploy check moved out of the change folder.** GGA's
+  round-5 pass flagged that the `select count(*) … where phone is null or
+  btrim(phone) = ''` lived only here, and this folder gets archived — so the
+  one instruction that stands between `0016` and someone's real data would
+  have evaporated with it. It is now in `README.md`'s "before a first deploy"
+  list, beside the PDF-queue drain, with why `0016` hard-fails rather than
+  coerces.
 - [x] 9.4 **Gates re-run and recorded here**, which 6.4 was the last to do
   before WU7 and WU8 changed four files: `npm test` **1084/1084** (79 files),
   `npx tsc --noEmit` clean, `npm run lint` 0 errors / 15 warnings — the
