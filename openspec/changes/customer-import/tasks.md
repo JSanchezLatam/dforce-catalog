@@ -688,11 +688,29 @@ careful about verification, silence reads as "not run".
 - `npx tsc --noEmit` — clean
 - `npm run lint` — 0 errors, 15 warnings (the documented baseline)
 - `npm run test:e2e` — **47/47** against a clean throwaway database, 0 rows in either table
-- GGA — five failed rounds after the WU1+WU2 pass; every finding closed and
-  mutation-verified, and every mutation re-run here rather than taken from a
-  subagent's report
+- GGA — **PASSED at round 11**, after seven failed rounds following the WU1+WU2
+  pass. Every finding closed and mutation-verified, and every mutation re-run
+  here rather than taken from a subagent's report. The round-11 pass carries one
+  non-blocking finding, recorded under "Known and NOT fixed here" because it
+  belongs to #68's files
 
 ## Known and NOT fixed here
+
+- [ ] **`CustomerForm.submit()` is `try/finally` with no `catch` — and C1 gave
+  it a second entry point.** `fetch` REJECTS on a network failure rather than
+  returning a non-ok response, so the dialog re-enables with nothing on screen
+  and the operator clicks into the same silence. This branch fixed exactly that
+  twice, with tests, and wrote down why both times (WU8.3
+  `CustomerActivationButton`, WU4b.1 `CustomerImportButton`); both now carry the
+  `catch`. `CustomerForm` does not, and C1's "Guardar igual" button
+  (`CustomerForm.tsx:437`, `onClick={() => submit(true)}`) is a new floating
+  promise off a click handler with no rejection path. `ServiceOrderForm`
+  (line 248) has the same shape.
+  Raised at GGA round 11 and called non-blocking there: the behaviour is
+  unchanged from `main` and the new path is no worse than the old one. It is a
+  one-line `catch` plus its test **on #68's branch**, where both files live —
+  putting it in #70 is the chained-PR hazard AGENTS.md warns about doubly.
+  Needs the owner's call on whether #68 reopens for it.
 
 - [ ] **`/desactivado/i` where the branch elsewhere pins the exact literal.**
   `ServiceOrderForm.test.tsx` and `CustomerForm.test.tsx` match the
