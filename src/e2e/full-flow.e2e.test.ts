@@ -1007,8 +1007,8 @@ describe("customer import (E2E)", () => {
   // cascade if any import ever created one, but this import never does.
   //
   // Every `runCustomerImport` call below also writes a `customer_import_runs`
-  // row through the real default `startImportRun`/`finishImportRun` (none of
-  // these calls inject those two), and this is the only describe in the file
+  // row (through the real defaults, or — in the race test — through an
+  // injected start that inserts the same real row), and this is the only describe in the file
   // that writes to that table at all — so a delete scoped BY TIME here cannot
   // catch another describe's rows the way an unscoped delete would. See
   // `suiteStartedAt` above for what makes the boundary itself trustworthy
@@ -1167,13 +1167,16 @@ describe("customer import (E2E)", () => {
    * connections. Racing two real `runCustomerImport` calls over the same rows
    * is the only way to exercise that.
    *
-   * Layer 1 (`hasActiveImportRun`) is deliberately bypassed here by injecting
-   * `hasActiveImportRun: async () => false` on both calls: layer 1 is a
-   * check-then-act TOCTOU that would just as happily "pass" this test by
-   * rejecting the second run outright, which would prove layer 1 works and
-   * say nothing about layer 2 — the thing this row exists to verify. No
-   * `setTimeout`/sleep is used: both calls are launched together via
-   * `Promise.all` and the assertion is the resulting row count, not timing.
+   * Layer 1 is deliberately bypassed here by injecting a
+   * `startImportRunIfNotActive` that ALWAYS starts (it still inserts the real
+   * `running` row, so the default `finishImportRun` has a real row to close
+   * and `afterAll` still cleans it up). Left at its default, layer 1 would
+   * just as happily "pass" this test by rejecting the second run outright,
+   * which would prove layer 1 works and say nothing about layer 2 — the
+   * thing this row exists to verify. Layer 1's own default path is covered
+   * by the three rows below. No `setTimeout`/sleep is used: both calls are
+   * launched together via `Promise.all` and the assertion is the resulting
+   * row count, not timing.
    */
   it("serialises two racing runs over the same external id into one row (proves the advisory lock, not layer 1)", async () => {
     const externalId = `imp-race-${Date.now()}`;
@@ -1184,9 +1187,18 @@ describe("customer import (E2E)", () => {
       yield [rawRow(externalId, "Importado En Carrera", "50774444444")];
     }
 
+    const alwaysStart = async () => {
+      const [run] = await db
+        .insert(customerImportRuns)
+        .values({ status: "running" })
+        .returning({ id: customerImportRuns.id });
+      seededRunIds.push(run.id);
+      return run;
+    };
+
     const [resultA, resultB] = await Promise.all([
-      runCustomerImport({ fetchCustomers: batchA, hasActiveImportRun: async () => false }),
-      runCustomerImport({ fetchCustomers: batchB, hasActiveImportRun: async () => false }),
+      runCustomerImport({ fetchCustomers: batchA, startImportRunIfNotActive: alwaysStart }),
+      runCustomerImport({ fetchCustomers: batchB, startImportRunIfNotActive: alwaysStart }),
     ]);
 
     // Register before asserting: this is precisely the test whose whole
@@ -1199,13 +1211,13 @@ describe("customer import (E2E)", () => {
   });
 
   /**
-   * Proves layer 1's real `WHERE NOT EXISTS` clause (`defaultStartImportRunIfNotActive`,
-   * job.ts) — unlike the race test above, this exercises the DEFAULT path
-   * with no `hasActiveImportRun`/`startImportRun` override, since that
-   * legacy seam is exactly what the unit tests already cover and this gap
-   * is about the real SQL running for real. A `WHERE NOT EXISTS` neutered
-   * into `WHERE TRUE OR NOT EXISTS (...)` would make this test pass through
-   * to `fetchCustomers` instead of rejecting first.
+   * Proves layer 1's real `WHERE NOT EXISTS` clause
+   * (`buildStartImportRunStatement`, job.ts) — unlike the race test above,
+   * this leaves `startImportRunIfNotActive` at its default so the real SQL
+   * runs for real. The unit tests only compile that statement; nothing there
+   * executes it. A `WHERE NOT EXISTS` neutered into `WHERE TRUE OR NOT
+   * EXISTS (...)` would make this test pass through to `fetchCustomers`
+   * instead of rejecting first.
    *
    * Cleans up the inserted `running` row immediately (not just via
    * `seededRunIds`/`afterAll`) because leaving it in `running` status would

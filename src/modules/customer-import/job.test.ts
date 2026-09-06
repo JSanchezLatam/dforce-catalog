@@ -1,4 +1,5 @@
 import { Param, sql } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it, vi } from "vitest";
 
 import type { TxLike as BaseTxLike } from "@/modules/customers/vehicles";
@@ -9,8 +10,7 @@ import { InterfuerzaAbortError } from "@/shared/interfuerza/client";
 type TxLike = BaseTxLike & { execute: (query: ReturnType<typeof sql>) => Promise<{ rows: Record<string, unknown>[] }> };
 import type { LocalCustomer } from "./plan";
 import {
-  buildActiveImportRunQuery,
-  hasActiveImportRun,
+  buildStartImportRunStatement,
   ImportAlreadyRunningError,
   runCustomerImport,
   type RunCustomerImportDeps,
@@ -71,13 +71,14 @@ function baseDeps(overrides: Partial<RunCustomerImportDeps> = {}): {
     database,
     listExisting: async () => [],
     // Layer-1 bookkeeping (the "already running?" source of truth) is
-    // orthogonal to what most of these tests exercise — stubbed to no-ops so
-    // the default (real `db`) is never reached, same reasoning as
-    // `defaultListExisting` in the "default deps" describe below: the real
-    // `db` would try to open a Postgres connection this test suite doesn't
-    // have (vitest.config.ts points DATABASE_URL at a nonexistent database).
-    hasActiveImportRun: async () => false,
-    startImportRun: async () => ({ id: "run-1" }),
+    // orthogonal to what most of these tests exercise — stubbed to a no-op
+    // that always starts, so the default (real `db`) is never reached, same
+    // reasoning as `defaultListExisting` in the "default deps" describe
+    // below: the real `db` would try to open a Postgres connection this test
+    // suite doesn't have (vitest.config.ts points DATABASE_URL at a
+    // nonexistent database). This is the SAME seam production takes — there
+    // is no second, test-only path through the gate.
+    startImportRunIfNotActive: async () => ({ id: "run-1" }),
     finishImportRun: async () => {},
     ...overrides,
   };
@@ -174,8 +175,7 @@ describe("runCustomerImport — an abort mid-run leaves nothing new to persist",
         },
       },
       listExisting: async () => [],
-      hasActiveImportRun: async () => false,
-      startImportRun: async () => ({ id: "run-1" }),
+      startImportRunIfNotActive: async () => ({ id: "run-1" }),
       finishImportRun: async () => {},
     };
 
@@ -214,8 +214,7 @@ describe("runCustomerImport — default deps", () => {
       fetchCustomers,
       database,
       listExisting,
-      hasActiveImportRun: async () => false,
-      startImportRun: async () => ({ id: "run-1" }),
+      startImportRunIfNotActive: async () => ({ id: "run-1" }),
       finishImportRun: async () => {},
     });
 
@@ -225,36 +224,41 @@ describe("runCustomerImport — default deps", () => {
   });
 });
 
-describe("hasActiveImportRun — layer 1's own query (best-effort, not the guarantee)", () => {
-  it("reflects whatever the query returns", async () => {
-    await expect(hasActiveImportRun(async () => [{ id: "run-1" }])).resolves.toBe(true);
-    await expect(hasActiveImportRun(async () => [])).resolves.toBe(false);
-  });
-});
+describe("buildStartImportRunStatement — layer 1's shipped clause", () => {
+  // This inspects the EXACT statement `defaultStartImportRunIfNotActive`
+  // executes, not a parallel builder that merely looks like it. An earlier
+  // version of this file asserted a separate drizzle query builder that
+  // production had stopped calling — a test guarding a clause nothing
+  // shipped. `sqlToQuery` compiles it without a live Postgres connection
+  // (the same "no real DB under `npm test`" constraint AGENTS.md documents),
+  // and the behaviour itself is proven against real Postgres by the layer-1
+  // rows in `src/e2e/full-flow.e2e.test.ts`.
+  const compiled = new PgDialect().sqlToQuery(buildStartImportRunStatement("run-1")).sql;
 
-describe("hasActiveImportRun — default query bounds `running` by age (finding 1)", () => {
-  it("bounds the default query to status = 'running' AND startedAt within the window, not status alone", () => {
+  it("folds the check into the write, so there is no gap between them", () => {
+    expect(compiled).toMatch(/insert into customer_import_runs/);
+    expect(compiled).toMatch(/where not exists/);
+    expect(compiled).toMatch(/returning id/);
+  });
+
+  it("bounds `running` by age, so a killed run stops blocking imports after 45 minutes", () => {
     // A killed process (deploy, OOM, host reaping a long request) between
-    // `startRun()` and `finishRun` leaves a `running` row forever. Without a
-    // time bound, `hasActiveImportRun`'s default query answers 409 forever
-    // for a run that died last week. `buildActiveImportRunQuery` is a pure
-    // query BUILDER (not executed) so this can inspect its compiled SQL via
-    // drizzle's own `.toSQL()` without a live Postgres connection — same
-    // "no real DB reachable under `npm test`" constraint AGENTS.md documents
-    // for this module's other real-SQL defaults.
-    const { sql: compiled } = buildActiveImportRunQuery().toSQL();
-
-    expect(compiled).toMatch(/"status" = \$1/);
-    expect(compiled).toMatch(/"started_at" > now\(\) - interval '45 minutes'/);
+    // this insert and `finishRun` leaves a `running` row forever. Without the
+    // time bound, every later import would answer 409 forever for a run that
+    // died last week.
+    expect(compiled).toMatch(/status = 'running'/);
+    expect(compiled).toMatch(/started_at > now\(\) - interval '45 minutes'/);
   });
 });
 
-describe("runCustomerImport — layer 1: fast rejection BEFORE the fetch (best-effort, TOCTOU-prone on its own)", () => {
+describe("runCustomerImport — layer 1: fast rejection BEFORE the fetch", () => {
   it("rejects with ImportAlreadyRunningError and never calls fetchCustomers when a run is already in progress", async () => {
     const fetchCustomers = vi.fn(async function* () {
       yield [];
     });
-    const { deps } = baseDeps({ fetchCustomers, hasActiveImportRun: async () => true });
+    // `null` is exactly what the real statement returns when its `WHERE NOT
+    // EXISTS` matched nothing to insert: a run is already active.
+    const { deps } = baseDeps({ fetchCustomers, startImportRunIfNotActive: async () => null });
 
     await expect(runCustomerImport(deps)).rejects.toBeInstanceOf(ImportAlreadyRunningError);
 
@@ -301,8 +305,7 @@ describe("runCustomerImport — layer 2: pg_advisory_xact_lock is the actual cor
       fetchCustomers,
       database,
       listExisting,
-      hasActiveImportRun: async () => false,
-      startImportRun: async () => ({ id: "run-1" }),
+      startImportRunIfNotActive: async () => ({ id: "run-1" }),
       finishImportRun: async () => {},
     });
 
@@ -328,7 +331,7 @@ describe("runCustomerImport — run bookkeeping backs layer 1's source of truth"
     const finishImportRun = vi.fn(async () => {});
     const { deps } = baseDeps({
       fetchCustomers,
-      startImportRun: async () => ({ id: "run-42" }),
+      startImportRunIfNotActive: async () => ({ id: "run-42" }),
       finishImportRun,
     });
 
@@ -355,8 +358,7 @@ describe("runCustomerImport — run bookkeeping backs layer 1's source of truth"
       fetchCustomers,
       database: { transaction: async () => Promise.reject(boom) },
       listExisting: async () => [],
-      hasActiveImportRun: async () => false,
-      startImportRun: async () => ({ id: "run-42" }),
+      startImportRunIfNotActive: async () => ({ id: "run-42" }),
       finishImportRun,
     };
 
@@ -378,8 +380,7 @@ describe("runCustomerImport — run bookkeeping backs layer 1's source of truth"
       fetchCustomers,
       database: { transaction: async () => Promise.reject(originalError) },
       listExisting: async () => [],
-      hasActiveImportRun: async () => false,
-      startImportRun: async () => ({ id: "run-42" }),
+      startImportRunIfNotActive: async () => ({ id: "run-42" }),
       finishImportRun: async () => {
         throw bookkeepingError;
       },
@@ -414,10 +415,6 @@ describe("runCustomerImport — fix 1: the default path is ONE statement, not ch
       transaction: async <T>(fn: (tx: TxLike) => Promise<T>): Promise<T> =>
         fn({ execute: async () => ({ rows: [] }) } as unknown as TxLike),
     };
-    // Deliberately NOT `hasActiveImportRun`/`startImportRun` — those two stay
-    // wired only for src/e2e/full-flow.e2e.test.ts's layer-2 race test, which
-    // reproduces the OLD two-step shape on purpose. Leaving them unset here
-    // is what routes this call through the new atomic default instead.
     const deps: RunCustomerImportDeps = {
       fetchCustomers,
       database,

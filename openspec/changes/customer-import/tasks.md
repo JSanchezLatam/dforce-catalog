@@ -319,8 +319,8 @@ files.
 - Migration `0018` applied to a real database: column `text`, nullable, no
   unique index, and two rows sharing an `external_id` insert cleanly.
 
-- [ ] **A real coverage gap the schema agent found and reported honestly**:
-  every `cliente` fixture in the suite goes through `as unknown as Cliente`,
+**A real coverage gap the schema agent found and reported honestly** (recorded,
+not open work): every `cliente` fixture in the suite goes through `as unknown as Cliente`,
   which bypasses missing-property checks — so adding a column to `cliente` is
   NOT type-checked anywhere in the tests. `tsc` was clean before and after
   `externalId`, which is exactly the problem. Pre-existing and repo-wide, so
@@ -348,9 +348,10 @@ landed.
 - Route: neutralising the `customers.write` gate, and deleting the
   `InterfuerzaAbortError → 502` mapping, each turn a test red.
 
-- [ ] **Not proven, and it cannot be here**: the transactional rollback itself
-  is `db.transaction()`'s guarantee, and an injected fake cannot demonstrate
-  it. `inventory-sync/job.test.ts` documents the same limit.
+**Not proven, and it cannot be here** (a limit, not open work): the
+transactional rollback itself is `db.transaction()`'s guarantee, and an injected
+fake cannot demonstrate it. `inventory-sync/job.test.ts` documents the same
+limit.
 - [x] **Scope the WU4 agent reported rather than hid**: adding the manual
   trigger broke 14 pre-existing tests two ways — `route-guards.test.ts` has a
   completeness check that requires every route be registered, and
@@ -614,9 +615,9 @@ Re-run properly, it goes red.
   and **nothing went red**: 1240 unit tests and 44 e2e rows, all green,
   mutation confirmed applied, checked twice.
   The unit tests inject `startImportRunIfNotActive`, so that SQL never runs
-  under `npm test`; and the one e2e touching concurrency deliberately injects
-  `hasActiveImportRun: async () => false` to prove layer 2 in isolation — right
-  for what it tests, and exactly why layer 1 was uncovered. **The whole
+  under `npm test`; and the one e2e touching concurrency deliberately bypasses
+  layer 1 to prove layer 2 in isolation — right for what it tests, and exactly
+  why layer 1 was uncovered. **The whole
   fast-rejection layer rested on a clause nothing proved.**
   Three e2e rows now exercise the real default: a `running` row rejects AND
   `fetchCustomers` is never called (the actual point of layer 1); a `running`
@@ -626,6 +627,34 @@ Re-run properly, it goes red.
 - [x] 4i.3 The 403 vehicle-deletion gate winning over the 400 mutual-exclusion
   check is now deliberate and commented, with a test for that exact body shape,
   rather than an accident of ordering.
+
+## Review round 9 (GGA) — the dual path had to go
+
+- [x] 4j.1 **Production and the unit suite took different branches through
+  layer 1's gate, and the branch that ships was the less-covered one.** Round
+  8 left `hasActiveImportRun`/`startImportRun` wired as a back-compat seam so
+  the e2e race test could reconstruct the old check-then-act shape; every unit
+  test but one then injected that pair, routing itself through the legacy
+  branch. Same hazard as 4i.2, one layer up: a gate whose shipped path the
+  suite barely touched.
+  Both deps are gone, and with them `startRunOrThrow`'s branch,
+  `defaultStartImportRun`, `hasActiveImportRun` and `buildActiveImportRunQuery`.
+  There is now ONE seam, `startImportRunIfNotActive`, and every unit test takes
+  the same path production does. The e2e race test bypasses layer 1 by
+  injecting a start that always succeeds — it still inserts the real `running`
+  row, so `finishImportRun`'s default closes a real row and `afterAll` still
+  cleans it.
+- [x] 4j.2 **The 45-minute test was guarding a clause nothing shipped.** It
+  asserted `buildActiveImportRunQuery`'s compiled SQL — a drizzle builder
+  production had stopped calling at round 8. Replaced by
+  `buildStartImportRunStatement`, the exact statement
+  `defaultStartImportRunIfNotActive` executes, compiled through `PgDialect`
+  the way `queries.test.ts` and `vehicles.test.ts` already do. Mutation-verified:
+  widening the bound to `100 years` turns *"bounds `running` by age, so a killed
+  run stops blocking imports after 45 minutes"* red by name.
+- [x] 4j.3 `ImportRunPatch.finishedAt` dropped from the caller-supplied patch
+  and stamped inside `defaultFinishImportRun` — the only function that knows a
+  run just finished. A fake can no longer forget it.
 
 ## Gates at the final state
 
@@ -642,6 +671,14 @@ careful about verification, silence reads as "not run".
   subagent's report
 
 ## Known and NOT fixed here
+
+- [ ] **`customers/page.tsx` issues a second `countClientes` for one boolean.**
+  On an empty result — including every mistyped search — it runs a serial
+  second count outside the `Promise.all` just to decide whether to show the
+  "there are deactivated customers" hint. `listClientes(filters,
+  { includeInactive: true }, { limit: 1 })` would answer the same question
+  inside a query the page already needs. Raised at GGA round 9 and called a
+  follow-up there; a page-level query change is not this branch's scope.
 
 - [ ] **Layer 1's residual race.** `INSERT … WHERE NOT EXISTS` is not atomic
   under READ COMMITTED: two connections whose snapshots both predate either

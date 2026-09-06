@@ -258,13 +258,14 @@ export const customerImportStatusEnum = pgEnum("customer_import_status", ["runni
  * `customer_import_runs` — layer-1 concurrency guard for
  * `modules/customer-import/job.ts`'s `runCustomerImport`. Same shape and same
  * purpose as `sync_runs` above: a `status = 'running'` row is this feature's
- * own source of truth for "is one already going", queried by
- * `hasActiveImportRun` BEFORE the Interfuerza fetch even starts, so a second
- * concurrent request doesn't spend another ~15 requests against an API that
- * carries a real 1h IP ban.
+ * own source of truth for "is one already going", checked by
+ * `buildStartImportRunStatement`'s `WHERE NOT EXISTS` BEFORE the Interfuerza
+ * fetch even starts, so a second concurrent request doesn't spend another
+ * ~15 requests against an API that carries a real 1h IP ban.
  *
- * This is explicitly NOT the correctness guarantee — a check against this
- * table is check-then-act (TOCTOU) on its own. The actual guarantee against
+ * This is explicitly NOT the correctness guarantee — even folded into one
+ * statement, it is not a unique constraint or an explicit lock (see that
+ * function's docstring for the residual window). The actual guarantee against
  * duplicate customers is the `pg_advisory_xact_lock` taken inside the write
  * transaction, before `listExisting`, in `job.ts`.
  */

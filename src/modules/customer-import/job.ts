@@ -1,4 +1,4 @@
-import { and, eq, gt, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import type { TxLike as BaseTxLike } from "@/modules/customers/vehicles";
 import { db } from "@/shared/db/client";
@@ -34,11 +34,11 @@ import { planImport, type LocalCustomer } from "./plan";
  *    WHERE NOT EXISTS (...) RETURNING id` — so there is no gap between
  *    "is one running?" and "mark one running" for a second click to land
  *    in. This is what makes rejecting a second click actually cost nothing
- *    against Interfuerza: fix 1 (customer-import-fixes) replaced the
- *    previous two-await `hasActiveImportRun()` THEN `startImportRun()`
- *    shape, whose gap let two concurrent clicks both pass the check and
- *    both spend a full ~15-request fetch against an API that carries a real
- *    1h IP ban — exactly the cost this layer exists to avoid. A residual,
+ *    against Interfuerza: fix 1 (customer-import-fixes) replaced a
+ *    two-await check-then-act shape whose gap let two concurrent clicks
+ *    both pass the check and both spend a full ~15-request fetch against an
+ *    API that carries a real 1h IP ban — exactly the cost this layer exists
+ *    to avoid. A residual,
  *    much narrower race is still possible and is documented on
  *    `defaultStartImportRunIfNotActive` itself, not claimed away here.
  *  - Layer 2 (the actual guarantee against a duplicate `cliente` row):
@@ -59,7 +59,6 @@ type TxLike = BaseTxLike & { execute: (query: ReturnType<typeof sql>) => Promise
 
 type ImportRunPatch = {
   status: "completed" | "failed";
-  finishedAt: Date;
   created?: number;
   updated?: number;
   skippedCount?: number;
@@ -71,18 +70,12 @@ export type RunCustomerImportDeps = {
   database?: { transaction: <T>(fn: (tx: TxLike) => Promise<T>) => Promise<T> };
   listExisting?: (tx: TxLike) => Promise<LocalCustomer[]>;
   /**
-   * `hasActiveImportRun`/`startImportRun` stay here ONLY as a back-compat
-   * seam for `src/e2e/full-flow.e2e.test.ts`'s layer-2 race test, which
-   * deliberately reconstructs the OLD check-then-act shape (via
-   * `hasActiveImportRun: async () => false`) to bypass layer 1 entirely and
-   * exercise layer 2 (`pg_advisory_xact_lock`) in isolation. Providing
-   * EITHER one routes `runCustomerImport` through that legacy two-step path
-   * below — production and every other caller never sets either, so they
-   * always take `startImportRunIfNotActive`, fix 1's atomic default.
+   * Layer 1's only seam: ONE statement, see `buildStartImportRunStatement`.
+   * `null` means a run is already active. There is deliberately no second
+   * "check" seam beside it — a separate check-then-act pair is the exact
+   * shape fix 1 removed, and keeping one wired for tests would leave
+   * production on the branch with the least unit coverage.
    */
-  hasActiveImportRun?: typeof hasActiveImportRun;
-  startImportRun?: () => Promise<{ id: string }>;
-  /** Fix 1's real seam: ONE statement, see `defaultStartImportRunIfNotActive`. */
   startImportRunIfNotActive?: () => Promise<{ id: string } | null>;
   finishImportRun?: (id: string, patch: ImportRunPatch) => Promise<void>;
 };
@@ -100,16 +93,20 @@ export class ImportAlreadyRunningError extends Error {
 }
 
 /**
- * Layer 1's own query builder — pure (not executed), so a unit test can
- * inspect the compiled SQL via drizzle's `.toSQL()` without a live Postgres
- * connection. Exported only for that reason.
+ * Layer 1's statement. Pure (built, not executed), so a unit test can
+ * inspect the compiled SQL via `PgDialect().sqlToQuery()` without a live
+ * Postgres connection — exported only for that reason.
+ *
+ * ONE statement: the "is a run active?" check and the "mark one running"
+ * write happen inside the same `INSERT ... SELECT ... WHERE NOT EXISTS`, so
+ * there is no gap between them for a second click to land in.
  *
  * `status = 'running'` is deliberately NOT the whole condition: a kill
- * between `startRun()`'s write and `finishRun` (a deploy, an OOM, the host
- * reaping a long request — this module runs synchronously inside an HTTP
- * handler, per the module docstring) leaves that row `running` forever, and
- * with no time bound every later import would answer 409 forever for a run
- * that already died.
+ * between this insert and `finishRun` (a deploy, an OOM, the host reaping a
+ * long request — this module runs synchronously inside an HTTP handler, per
+ * the module docstring) leaves that row `running` forever, and with no time
+ * bound every later import would answer 409 forever for a run that already
+ * died.
  *
  * The 45-minute window is sized against the real worst case this module's
  * own fetch loop can produce, not guessed: `MAX_ATTEMPTS` (client.ts) is 3,
@@ -125,51 +122,6 @@ export class ImportAlreadyRunningError extends Error {
  * slow — not dead — is never reaped out from under itself; a run that
  * really did die stops blocking new imports after at most 45 minutes
  * instead of forever.
- */
-export function buildActiveImportRunQuery() {
-  return db
-    .select({ id: customerImportRuns.id })
-    .from(customerImportRuns)
-    .where(
-      and(
-        eq(customerImportRuns.status, "running"),
-        gt(customerImportRuns.startedAt, sql`now() - interval '45 minutes'`),
-      ),
-    )
-    .limit(1);
-}
-
-/**
- * Retained for `src/e2e/full-flow.e2e.test.ts`'s layer-2 race test (see
- * `RunCustomerImportDeps`'s docstring) and for its own direct unit tests
- * below. No longer called by `runCustomerImport`'s default path — that path
- * uses `defaultStartImportRunIfNotActive` instead, which folds this same
- * check into the write itself so there is no gap between them.
- */
-export async function hasActiveImportRun(
-  queryFn: () => Promise<{ id: string }[]> = () => buildActiveImportRunQuery(),
-): Promise<boolean> {
-  const rows = await queryFn();
-  return rows.length > 0;
-}
-
-/** Legacy-path default; unconditional, never rejects. See `RunCustomerImportDeps`. */
-async function defaultStartImportRun(): Promise<{ id: string }> {
-  const [run] = await db
-    .insert(customerImportRuns)
-    .values({ status: "running" })
-    .returning({ id: customerImportRuns.id });
-  return run;
-}
-
-/**
- * Fix 1 — the real correctness fix for layer 1's TOCTOU window (module
- * docstring). ONE statement: the "is a run active?" check and the "mark one
- * running" write happen inside the same `INSERT ... SELECT`, so there is no
- * gap between them for a second click to land in. `null` means a run is
- * already active — same condition `buildActiveImportRunQuery` compiles,
- * copied verbatim so the 45-minute staleness bound is unchanged: a killed
- * process still stops blocking new imports after 45 minutes, not forever.
  *
  * Residual window (named, not claimed away): this single statement is not a
  * unique constraint or an explicit lock. Under READ COMMITTED, two of these
@@ -184,15 +136,15 @@ async function defaultStartImportRun(): Promise<{ id: string }> {
  * (`pg_advisory_xact_lock`, still the actual guarantee against a duplicate
  * `cliente` row) is what catches it, and the loser just re-spends its own
  * ~15 Interfuerza requests instead of a rejected one costing nothing.
+ *
+ * `id` is passed in rather than defaulted by the DB: `customer_import_runs.id`
+ * has no DB-level default (schema.ts's `$defaultFn(() => crypto.randomUUID())`
+ * only runs through drizzle's own `.insert().values()`, which this raw
+ * statement bypasses), so every row from this path would otherwise fail its
+ * NOT NULL constraint.
  */
-async function defaultStartImportRunIfNotActive(): Promise<{ id: string } | null> {
-  // `customer_import_runs.id` has no DB-level default (schema.ts's
-  // `$defaultFn(() => crypto.randomUUID())` only runs through drizzle's own
-  // `.insert().values()`, which this raw statement bypasses) — generated
-  // here instead, or every row from this path would fail its NOT NULL
-  // constraint.
-  const id = crypto.randomUUID();
-  const result = await db.execute<{ id: string }>(sql`
+export function buildStartImportRunStatement(id: string) {
+  return sql`
     insert into customer_import_runs (id, status)
     select ${id}, 'running'::customer_import_status
     where not exists (
@@ -200,39 +152,23 @@ async function defaultStartImportRunIfNotActive(): Promise<{ id: string } | null
       where status = 'running' and started_at > now() - interval '45 minutes'
     )
     returning id
-  `);
+  `;
+}
+
+async function defaultStartImportRunIfNotActive(): Promise<{ id: string } | null> {
+  const result = await db.execute<{ id: string }>(buildStartImportRunStatement(crypto.randomUUID()));
   const [row] = result.rows;
   return row ? { id: row.id } : null;
 }
 
 async function defaultFinishImportRun(id: string, patch: ImportRunPatch): Promise<void> {
-  await db.update(customerImportRuns).set(patch).where(eq(customerImportRuns.id, id));
-}
-
-/**
- * Layer 1's gate. Two paths:
- *
- *  - Legacy (only when a caller explicitly overrides `hasActiveImportRun`
- *    and/or `startImportRun`): reproduces the exact pre-fix check-then-act
- *    shape. Exists only for `src/e2e/full-flow.e2e.test.ts`'s layer-2 race
- *    test — see `RunCustomerImportDeps`.
- *  - Default (every other caller, including production): fix 1's atomic
- *    `startImportRunIfNotActive`. One statement, no window.
- */
-async function startRunOrThrow(deps: RunCustomerImportDeps): Promise<{ id: string }> {
-  if (deps.hasActiveImportRun || deps.startImportRun) {
-    const checkActive = deps.hasActiveImportRun ?? hasActiveImportRun;
-    if (await checkActive()) {
-      throw new ImportAlreadyRunningError();
-    }
-    return (deps.startImportRun ?? defaultStartImportRun)();
-  }
-
-  const started = await (deps.startImportRunIfNotActive ?? defaultStartImportRunIfNotActive)();
-  if (!started) {
-    throw new ImportAlreadyRunningError();
-  }
-  return started;
+  // `finishedAt` is stamped here rather than by callers: this function is
+  // the only thing that knows a run just finished, and a fake that forgets
+  // it can no longer look like a real finish.
+  await db
+    .update(customerImportRuns)
+    .set({ ...patch, finishedAt: new Date() })
+    .where(eq(customerImportRuns.id, id));
 }
 
 export async function runCustomerImport(deps: RunCustomerImportDeps = {}): Promise<ImportResult> {
@@ -245,7 +181,10 @@ export async function runCustomerImport(deps: RunCustomerImportDeps = {}): Promi
   // fetchCustomers() is even called, so a second concurrent click costs
   // nothing against Interfuerza (barring the residual window documented on
   // `defaultStartImportRunIfNotActive`).
-  const run = await startRunOrThrow(deps);
+  const run = await (deps.startImportRunIfNotActive ?? defaultStartImportRunIfNotActive)();
+  if (!run) {
+    throw new ImportAlreadyRunningError();
+  }
 
   try {
     const mapped: MappedRow[] = [];
@@ -286,7 +225,6 @@ export async function runCustomerImport(deps: RunCustomerImportDeps = {}): Promi
 
     await finishRun(run.id, {
       status: "completed",
-      finishedAt: new Date(),
       created: result.created,
       updated: result.updated,
       skippedCount: result.skipped.length,
@@ -298,7 +236,7 @@ export async function runCustomerImport(deps: RunCustomerImportDeps = {}): Promi
     // bookkeeping failure, and losing it also compounds finding 1 (the row
     // stays `running` with no record of why).
     try {
-      await finishRun(run.id, { status: "failed", finishedAt: new Date(), error: String(error) });
+      await finishRun(run.id, { status: "failed", error: String(error) });
     } catch {
       // Swallowed deliberately — `error` below is still the original cause.
     }
