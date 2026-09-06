@@ -554,6 +554,15 @@ describe("CustomerForm — shared phone confirmation", () => {
 
     const link = await screen.findByRole("link", { name: /cliente existente/i });
     expect(link).toHaveAttribute("href", "/customers/existing-1");
+
+    // And ONLY the refusal block says it. Re-adding the pre-`0016`
+    // `setErrors({ phone: "… (ver /customers/…)" })` beside
+    // `setSharedPhoneWith` left this file 32/32 green until this line existed:
+    // `findByRole("link")` passes perfectly well with a stale bare-path error
+    // still on screen, which is the exact thing this test is named after not
+    // printing. Two alerts is the fact printed twice, once as an error the
+    // operator cannot act on.
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
   });
 
   it("saves once the operator confirms the number is shared", async () => {

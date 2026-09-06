@@ -181,6 +181,43 @@ does not ride in a PR two levels down.
   deployment and no dataset for it to fail on. Left in the first-deploy
   checklist, not this merge.
 
+## WU8 — GGA round 4: this branch's own two rules, applied to itself
+
+Both findings are the shapes WU7 accepted one file over, still standing. Both
+mutation-verified here before being fixed, not taken from the report.
+
+- [x] 8.1 **The `<Link>` was inside the `<p role="alert">`.** WU5.1 moved the
+  Button out of the live region and the Link never followed, so the comment
+  three lines above — citing "the repo's other 43 alerts are all text-only
+  `<p>`" as its whole reason — described an invariant this paragraph was the
+  single exception to. In the direction that matters: an alert region is
+  announced as flat text, and the comment itself says the link and the button
+  are the ONLY way past the refusal.
+  The Link now sits beside the paragraph, exactly where the Button already is.
+  Measured after: **45 `role="alert"` in `src/**/*.tsx`, 0 with a focusable
+  child.** The invariant is now true rather than asserted.
+- [x] 8.2 **`setErrors` deliberately NOT set on the 409 — and nothing defended
+  it.** Re-adding the pre-`0016` bare-path error
+  (`"… (ver /customers/existing-1)"`) beside `setSharedPhoneWith` left the file
+  **32/32 green**; reproduced before fixing. `findByRole("link")` passes with a
+  stale error still on screen, so the test named *"links to the existing
+  customer instead of printing a bare path"* did not assert against the bare
+  path at all.
+  One line — `expect(screen.getAllByRole("alert")).toHaveLength(1)` — in that
+  same test, which is already standing on the 409 with the block rendered. The
+  same mutation now turns it red by name.
+- [x] 8.3 **`service.ts`'s module docstring contradicted the decision it
+  governs.** It called R18 a "block" (it is refuse-then-confirm since WU1) and
+  the missing unique constraint a "deviation from the original assumption that
+  a DB constraint existed" — an accident. It is a MUST NOT in the delta spec,
+  the owner's trade in design.md D3, and guarded three ways in
+  `schema.test.ts`. That docstring is the first thing someone opens before
+  adding a unique index, and it was telling them to.
+- [x] 8.4 Two nits closed: `design.md`'s `CHECK (phone <> '')` sentence
+  overstated what the constraint would change (`validation.ts:70-72` already
+  rejects an empty phone, so it closes the last door, not the first), and one
+  comment line at 117 cols re-wrapped to the ~78 the block around it uses.
+
 ## Follow-ups (out of scope here)
 
 - [ ] **`ServiceOrderForm.handleSubmit` has the same `try/finally` shape** with

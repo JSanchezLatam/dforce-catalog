@@ -404,20 +404,26 @@ export function CustomerForm({
                 // are the ONLY way past the refusal.
                 <div className={CARD_MUTED + " flex flex-col gap-2"}>
                   <p role="alert" className="text-sm">
-                    Ya hay un cliente con este teléfono.{" "}
-                    {/* `Link`, not a raw <a>: the repo's convention, and it
-                        skips a full document reload. It does NOT save what the
-                        operator typed — navigating away unmounts this dialog
-                        either way, client-side or not. Opening the existing
-                        customer BESIDE the form would, and is the more useful
-                        behaviour when the whole point is comparing two people
-                        who share a number; it is a change nobody has asked for
-                        yet, so it is written down rather than taken. */}
-                    <Link href={`/customers/${sharedPhoneWith}`} className="font-medium underline">
-                      Ver el cliente existente
-                    </Link>
-                    . Si son dos personas distintas que comparten el número, guardá igual.
+                    Ya hay un cliente con este teléfono. Si son dos personas distintas que comparten el
+                    número, guardá igual.
                   </p>
+                  {/* Outside the alert paragraph, exactly where the button
+                      already sits. The comment above used to claim the repo's
+                      alerts are all text-only <p> while this one held a link —
+                      it was the single exception, and in the direction that
+                      matters, since a live region is announced as flat text and
+                      the link is one of the only two ways past the refusal.
+                      `Link`, not a raw <a>, is the repo convention and skips a
+                      full document reload; it does NOT save what the operator
+                      typed, because navigating away unmounts this dialog either
+                      way. Opening the existing customer BESIDE the form would,
+                      and is the more useful behaviour when the whole point is
+                      comparing two people who share a number — a change nobody
+                      has asked for yet, so it is written down rather than
+                      taken. */}
+                  <Link href={`/customers/${sharedPhoneWith}`} className="text-sm font-medium underline">
+                    Ver el cliente existente
+                  </Link>
                   <Button
                     type="button"
                     variant="outline"

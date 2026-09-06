@@ -4,11 +4,16 @@
  * (design.md D5). Mirrors template-config/service.ts's shape (validate, then
  * write) with the DI-`deps` seam from inventory-sync/job.ts for testability.
  *
- * Note: the `cliente` table (Phase 1) does NOT have a DB-level unique
- * constraint on `phone` — R18's duplicate block is enforced entirely here,
- * at the application layer, via `findClienteByPhone` before every
- * create/update. See apply-progress for this deviation from the original
- * assumption that a DB constraint existed.
+ * Note: `cliente.phone` carries NO DB-level unique constraint, and that is a
+ * DECISION, not an accident — the delta spec makes it a MUST NOT, design.md D3
+ * records the owner's trade behind it (real customers legitimately share a
+ * number: a spouse, a company line), and `schema.test.ts` guards its absence
+ * across all three Drizzle spellings. Do not "fix" it by adding an index.
+ *
+ * R18 is therefore not a block but refuse-then-confirm, enforced entirely
+ * here via `findClienteByPhone` before every create/update: the first attempt
+ * is refused with the existing customer's id, and only an explicit
+ * `allowDuplicatePhone` from the operator gets past it.
  */
 import { eq } from "drizzle-orm";
 
@@ -104,9 +109,9 @@ export type CreateClienteDeps = {
 /**
  * R16/R18 — create; refuses a duplicate phone with a link to the existing
  * record, unless the caller carries the operator's `allowDuplicatePhone`
- * confirmation that the number is genuinely shared. When `vehicles` is present in the input, the cliente row and its
- * vehicle collection are written in one transaction (D5) — both succeed or
- * both roll back. `vehicles` omitted behaves exactly as before (scalar-only,
+ * confirmation that the number is genuinely shared. When `vehicles` is
+ * present in the input, the cliente row and its vehicle collection are
+ * written in one transaction (D5) — both succeed or both roll back. `vehicles` omitted behaves exactly as before (scalar-only,
  * no transaction).
  */
 export async function createCliente(input: unknown, deps: CreateClienteDeps = {}): Promise<Cliente> {
