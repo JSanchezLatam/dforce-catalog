@@ -405,9 +405,14 @@ export function CustomerForm({
                 <div className={CARD_MUTED + " flex flex-col gap-2"}>
                   <p role="alert" className="text-sm">
                     Ya hay un cliente con este teléfono.{" "}
-                    {/* `Link`, not a raw <a>: this renders inside an OPEN
-                        dialog, so a full page reload would throw away
-                        everything the operator has typed. */}
+                    {/* `Link`, not a raw <a>: the repo's convention, and it
+                        skips a full document reload. It does NOT save what the
+                        operator typed — navigating away unmounts this dialog
+                        either way, client-side or not. Opening the existing
+                        customer BESIDE the form would, and is the more useful
+                        behaviour when the whole point is comparing two people
+                        who share a number; it is a change nobody has asked for
+                        yet, so it is written down rather than taken. */}
                     <Link href={`/customers/${sharedPhoneWith}`} className="font-medium underline">
                       Ver el cliente existente
                     </Link>

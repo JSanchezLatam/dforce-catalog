@@ -44,7 +44,19 @@ Files: `src/shared/db/schema.ts`, `src/shared/db/migrations/0016_*.sql`.
   6. no unique index on `cliente` besides the primary key
 - [x] 2.3b `npm run test:e2e` — 31/31 against a throwaway `dforce_e2e_smoke` database, dropped afterwards. This is what actually exercises the changed e2e fixture (`phone: ""`) through real Drizzle, real pg-boss and a real Chromium render; it had been edited in WU2 and never run.
 
-> **NOT covered by any of the above: the owner's 364-record dataset is not in any local database.** The dev DB holds one customer. The pre-check that matters — null or empty phones among those 364 — still has to run wherever that data actually lives, BEFORE `0016` is applied there.
+> **RESOLVED 2026-09-06 — there is no such dataset to pre-check.** This was recorded as merge-blocking on the premise that the owner's 364 customers were rows somewhere waiting to be migrated. They are not: those 364 live **in Interfuerza**, and C6 is the change that imports them — it already skips the 9 phone-less ones by design and names each. There is no deployment (`README.md:207`, *"Nothing is deployed anywhere yet"*), no deploy config of any kind in the repo, and no `DATABASE_URL` anywhere off `localhost`.
+>
+> Ran the check on every reachable database — `total | phone_null | phone_blank | phone is_nullable | migrations`:
+>
+> | database | result | |
+> |---|---|---|
+> | 5433/`dforce_catalog` (what `.env` uses) | `1 \| 0 \| 0 \| NO \| 18` | `0016` already applied, cleanly |
+> | 5433/`dforce_c2` | `6 \| 0 \| 0 \| NO \| 18` | same |
+> | 5433/`dforce_e2e` | `0 \| 0 \| 0 \| YES \| 15` | throwaway |
+> | 5432/`dforce_catalog` (native) | `0 \| 0 \| 0 \| YES \| 7` | empty scaffold |
+>
+> `0016` has nothing to fail on. It still hard-fails rather than coercing, deliberately — so the check belongs in the **first-deploy** checklist, not this merge:
+> `select count(*) from cliente where phone is null or btrim(phone) = '';`
 
 - [x] 2.4 UNPLANNED, found by the compiler: `NOT NULL` broke five fixtures built with `phone: null`, in `route.test.ts`, `schedule.test.ts`, `CustomerPicker.test.tsx` and the e2e seed. Each covers a real behaviour — R19's phone-less row, and `planReminders` skipping WhatsApp. **NOT NULL forbids a null, not an empty string**, and both guards test truthiness (`schedule.ts:51`, `CustomerPicker.tsx:25`), so the fixtures moved to `phone: ""` and every branch stays live. Nothing was deleted and no guarantee was dropped.
 - [x] 2.5 `schema.test.ts` — the nullable-contact-fields assertion now states the new contract, plus a new test that phone is NOT unique anywhere (mutation-verified with a temporary `.unique()`). That decision is the easiest thing for a later change to tidy into existence.
@@ -138,6 +150,36 @@ correctness ones. Each was checked against the codebase before acting.
 Found by GGA reviewing #70, which cannot fix it: both files live on this
 branch, and AGENTS.md's chained-PR rule says a change to this branch's files
 does not ride in a PR two levels down.
+
+## WU7 — GGA round 3 findings (two real, one already answered)
+
+- [x] 7.1 **`handleOpenChange`'s `setSharedPhoneWith(null)` was defended by
+  nothing.** GGA deleted the line and watched 32/32 pass; I reproduced it before
+  fixing anything. `design.md` D2 names that exact line as half of the
+  structural guarantee and `tasks.md` 1.8 sells it — an invariant asserted in a
+  doc and in no test.
+  **Why the existing test could not catch it**: it reopens the dialog and then
+  types into Teléfono, which fires the OTHER clear (`onChange`), then clicks
+  plain "Guardar", which passes `false` by parameter and could never have
+  carried the flag. Three exits, all closed before the assertion ran.
+  One line, asserted immediately after reopening and before any typing.
+  `toFormState` resets `phone` to `""` on reopen, so with the clear removed the
+  refusal block renders and *"does not carry the confirmation into a later
+  save"* goes red by name — verified.
+  This is WU6.2's own rule (*"a test that cannot fail alone is not a second
+  test"*) applied to a test written three rounds earlier.
+- [x] 7.2 **A comment recorded a guarantee the code does not deliver.** The
+  `Link` comment said a raw `<a>` "would throw away everything the operator has
+  typed" — but a client-side navigation unmounts this dialog too, so the typed
+  data is gone either way. `Link` is still right (repo convention, no full
+  document reload); the comment now says what it actually buys, and names the
+  behaviour that WOULD preserve the form (opening the existing customer beside
+  it) as a change nobody has asked for rather than pretending it is already
+  there.
+- [x] 7.3 GGA flagged migration `0016`'s pre-check as an open release gate. It
+  was, when the round started; it is answered above under WU2 — there is no
+  deployment and no dataset for it to fail on. Left in the first-deploy
+  checklist, not this merge.
 
 ## Follow-ups (out of scope here)
 

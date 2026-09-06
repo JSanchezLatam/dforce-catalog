@@ -584,6 +584,16 @@ describe("CustomerForm — shared phone confirmation", () => {
 
     // The dialog closed on the save above; reopening starts a fresh attempt.
     await open(user, "Nuevo cliente");
+
+    // Asserted HERE, before anything is typed. `handleOpenChange`'s
+    // `setSharedPhoneWith(null)` is one of D2's two clears, and typing into
+    // Teléfono below fires the OTHER one — so an assertion after the typing
+    // stays green with the reopen clear deleted, which is exactly what this
+    // test did until GGA removed the line and watched 32/32 pass. `toFormState`
+    // resets `phone` to "" on reopen, so with that line gone the refusal block
+    // renders here and this goes red.
+    expect(screen.queryByRole("button", { name: "Guardar igual" })).not.toBeInTheDocument();
+
     await user.type(screen.getByLabelText("Nombre"), "Otra Persona");
     await user.type(screen.getByLabelText("Teléfono"), "+525512345678");
     await user.click(screen.getByRole("button", { name: "Guardar" }));
