@@ -696,7 +696,11 @@ careful about verification, silence reads as "not run".
 
 ## Known and NOT fixed here
 
-- [ ] **`CustomerForm.submit()` is `try/finally` with no `catch` — and C1 gave
+- [x] ~~**`CustomerForm.submit()` is `try/finally` with no `catch`**~~ —
+  **fixed on #68's branch** (`8f95511`), where both files live, exactly as
+  argued below. Left here as the record of why it did not ride in this PR.
+  Original entry:
+  **`CustomerForm.submit()` is `try/finally` with no `catch` — and C1 gave
   it a second entry point.** `fetch` REJECTS on a network failure rather than
   returning a non-ok response, so the dialog re-enables with nothing on screen
   and the operator clicks into the same silence. This branch fixed exactly that
