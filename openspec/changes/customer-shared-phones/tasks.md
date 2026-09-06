@@ -110,6 +110,41 @@ correctness ones. Each was checked against the codebase before acting.
   `persistedPatch` trap, the confirmation's lifetime as a structural
   guarantee, the accepted race, and why `NOT NULL` deleted nothing.
 
+## WU6 — the silent save, found reviewing the PR two levels up
+
+- [x] 6.1 **`CustomerForm.submit()` was `try/finally` with no `catch`, and WU1
+  gave it a second entry point.** `fetch` REJECTS on a network failure rather
+  than returning a non-ok response, so the dialog re-enabled with nothing on
+  screen and the operator clicked into the same silence. `UserForm.tsx:167`
+  already carries this exact catch, with a comment recording that the same
+  defect stranded a blocked user in `user-lifecycle` WU3 — this form never got
+  it.
+  It matters twice here: "Guardar igual" (`onClick={() => submit(true)}`) is a
+  floating promise off a click handler, with no form submission behind it to
+  surface anything at all.
+  Same copy as `UserForm`, verbatim, rather than a second phrasing of the same
+  sentence.
+- [x] 6.2 **RED first**, both entry points: three tests written, all three red
+  against the unfixed component, then green. Folded to two — a third asserting
+  "Guardar re-enables" could not fail on its own, because without the catch it
+  waits for an alert that never appears, so it was only re-asserting the first.
+  A test that cannot fail alone is not a second test.
+- [x] 6.3 **Mutation-verified by removing the catch BODY**, not the `catch`
+  itself: a bare `catch {}` would swallow the rejection and satisfy any test
+  that only checked the button re-enabled. Both rows go red by name.
+- [x] 6.4 Gates: `npm test` 1084/1084, `tsc --noEmit` clean, lint 0 errors /
+  15 warnings (the documented baseline).
+
+Found by GGA reviewing #70, which cannot fix it: both files live on this
+branch, and AGENTS.md's chained-PR rule says a change to this branch's files
+does not ride in a PR two levels down.
+
 ## Follow-ups (out of scope here)
+
+- [ ] **`ServiceOrderForm.handleSubmit` has the same `try/finally` shape** with
+  no `catch` (`src/modules/service-orders/ServiceOrderForm.tsx:248`). Raised in
+  the same GGA round. Not fixed here: this branch does not touch that file, and
+  fixing it here would be the same rule violation in the other direction. It
+  needs its own change, with the same RED-first and body-removal mutation.
 
 - [ ] The six genuinely fragmented duplicate pairs are still two records each. Merging them is a data task with no code in it, and needs the owner to say which record wins per pair.

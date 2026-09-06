@@ -338,6 +338,14 @@ export function CustomerForm({
       setOpen(false);
       // Active rows only — a deletion entry is an id with no plate to report.
       onSaved?.(body.cliente, activeVehicles(form.vehicles).map((v) => v.plate.trim()));
+    } catch {
+      // `fetch` REJECTS on a network failure rather than returning a non-ok
+      // response, so without this the dialog re-enables with nothing on screen
+      // and the operator clicks into the same silence. `UserForm` carries the
+      // same catch for the same reason. It matters twice here: "Guardar igual"
+      // calls this from a click handler, with no form submission behind it to
+      // surface anything.
+      setErrors({ form: "No se pudo conectar. Revisa tu conexión e intenta de nuevo." });
     } finally {
       setIsSubmitting(false);
     }

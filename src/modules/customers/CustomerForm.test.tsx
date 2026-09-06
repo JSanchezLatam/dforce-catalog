@@ -610,3 +610,71 @@ describe("CustomerForm — shared phone confirmation", () => {
     expect(bodyOf(fetchMock, 1).allowDuplicatePhone).toBeUndefined();
   });
 });
+
+/**
+ * `fetch` REJECTS on a network failure — it does not return a non-ok response
+ * — so a `try/finally` with no `catch` re-enables the button with nothing on
+ * screen and the operator clicks into the same silence. `UserForm` carries the
+ * same `catch` with the same copy for the same reason, and its comment records
+ * that this exact defect stranded a blocked user in `user-lifecycle` WU3.
+ *
+ * R18 (rewritten) gave this form a SECOND submit entry point — "Guardar igual"
+ * is a floating promise off a click handler, with no form submission behind it
+ * to surface anything — so both entry points are covered here.
+ */
+describe("CustomerForm — a network failure has to say so", () => {
+  const CONNECTION_ERROR = "No se pudo conectar. Revisa tu conexión e intenta de nuevo.";
+
+  function mockFetchRejectingAfter(...responses: { status: number; body?: unknown }[]) {
+    const fetchMock = vi.fn();
+    for (const response of responses) {
+      fetchMock.mockResolvedValueOnce({
+        ok: response.status >= 200 && response.status < 300,
+        status: response.status,
+        json: async () => response.body ?? {},
+      });
+    }
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  async function openAndFill(user: ReturnType<typeof userEvent.setup>) {
+    render(<CustomerForm />);
+    await open(user, "Nuevo cliente");
+    await user.type(screen.getByLabelText("Nombre"), "Ana Pérez");
+    await user.type(screen.getByLabelText("Teléfono"), "+525512345678");
+  }
+
+  // One test, not two: without the catch the alert never appears, so a second
+  // test that waits for it before checking the button could not fail on its
+  // own — it would only be re-asserting the first one.
+  it("tells the operator the save did not go through, and leaves Guardar clickable", async () => {
+    const user = userEvent.setup();
+    mockFetchRejectingAfter();
+
+    await openAndFill(user);
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(CONNECTION_ERROR);
+    expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled();
+  });
+
+  // The entry point R18 added. Nothing awaits this promise, so without the
+  // catch the dialog simply sits there having done nothing.
+  it("says the same thing when the network drops on Guardar igual", async () => {
+    const user = userEvent.setup();
+    mockFetchRejectingAfter({
+      status: 409,
+      body: { error: "duplicate_phone", existingClienteId: "existing-1" },
+    });
+
+    await openAndFill(user);
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await user.click(await screen.findByRole("button", { name: "Guardar igual" }));
+
+    await vi.waitFor(() =>
+      expect(screen.getAllByRole("alert").some((el) => el.textContent === CONNECTION_ERROR)).toBe(true),
+    );
+  });
+});
