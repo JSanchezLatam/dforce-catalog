@@ -73,10 +73,13 @@ export function LoginForm() {
           {state.error}
         </p>
       )}
+      {/* The `--login-brand*` vars are declared by `<main>` in login/page.tsx, not
+          here, so each carries its fallback: rendered anywhere else — a test, a
+          future host — the button would otherwise come out transparent. */}
       <Button
         type="submit"
         disabled={pending || !username || !password}
-        className="h-11 w-full rounded-xl bg-[var(--login-brand)] font-semibold text-[var(--login-brand-foreground)] shadow-[0_1px_2px_rgb(0_0_0_/_0.15),0_6px_16px_hsl(5_85%_45%_/_0.28)] hover:bg-[var(--login-brand-hover)]"
+        className="h-11 w-full rounded-xl bg-[var(--login-brand,hsl(5_85%_45%))] font-semibold text-[var(--login-brand-foreground,white)] shadow-[0_1px_2px_rgb(0_0_0_/_0.15),0_6px_16px_hsl(5_85%_45%_/_0.28)] hover:bg-[var(--login-brand-hover,hsl(5_85%_39%))]"
       >
         {pending ? "Iniciando sesión…" : "Iniciar sesión"}
       </Button>

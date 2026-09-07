@@ -38,9 +38,9 @@ export function LoginThemeToggle() {
       aria-label={isDark ? "Activar modo claro" : "Activar modo oscuro"}
     >
       {isDark ? (
-        <Sun className="size-[18px] text-[var(--login-brand)]" aria-hidden="true" />
+        <Sun className="size-[18px] text-[var(--login-brand,hsl(5_85%_45%))]" aria-hidden="true" />
       ) : (
-        <Moon className="size-[18px] text-[var(--login-brand)]" aria-hidden="true" />
+        <Moon className="size-[18px] text-[var(--login-brand,hsl(5_85%_45%))]" aria-hidden="true" />
       )}
       <span>{isDark ? "Modo claro" : "Modo oscuro"}</span>
     </button>

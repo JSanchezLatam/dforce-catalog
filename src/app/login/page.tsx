@@ -17,20 +17,25 @@ const loginBrandStyle = {
 export default function LoginPage() {
   return (
     <main
-      className="grid h-screen grid-cols-1 overflow-hidden bg-muted text-foreground lg:grid-cols-2"
+      className="grid min-h-dvh grid-cols-1 bg-muted text-foreground lg:grid-cols-2"
       style={loginBrandStyle}
     >
       <LoginThemeToggle />
-      <section className="relative flex h-full items-center justify-center px-5 py-10 sm:px-8 lg:px-12">
-        <Card className="w-full max-w-[400px] rounded-3xl border border-border bg-card py-0 shadow-[0_24px_70px_rgb(15_23_42_/_0.16)] ring-0 dark:shadow-[0_28px_80px_rgb(0_0_0_/_0.36)]">
+      <section className="flex flex-col items-center px-5 py-10 sm:px-8 lg:px-12">
+        <Card className="my-auto w-full max-w-[400px] rounded-3xl border border-border bg-card py-0 shadow-[0_24px_70px_rgb(15_23_42_/_0.16)] ring-0 dark:shadow-[0_28px_80px_rgb(0_0_0_/_0.36)]">
           <CardContent className="flex flex-col items-center px-8 py-9 sm:px-9">
-{/* eslint-disable-next-line @next/next/no-img-element --
+            {/* eslint-disable-next-line @next/next/no-img-element --
                 Plain <img> deliberately. This repo uses `next/image` nowhere and
                 `next.config.ts` declares no `images` block, so adopting it here
                 would be a first-time config change inside a restyle. Both assets
                 are static ES imports already hashed and served from
                 `/_next/static/media`, and both carry explicit width/height, so
-                the LCP and CLS the rule warns about are already handled. */}
+                the CLS the rule warns about is handled.
+
+                On weight: the logo is 400x145 for a 200px slot — 2x retina, so
+                it is sized for what it renders. The hero is not: it is a
+                736x981 placeholder that upscales on a wide screen, and it will
+                be replaced with a real photo rather than resampled. */}
             <img
               src={logo.src}
               width={logo.width}
@@ -45,19 +50,32 @@ export default function LoginPage() {
             <LoginForm />
           </CardContent>
         </Card>
-        <div className="absolute bottom-5 left-1/2 -translate-x-1/2 text-center text-xs leading-relaxed text-muted-foreground">
+        {/* In flow, not `absolute bottom-5`. Pinned to the bottom it overlapped
+            the card by 19px once the panel started hugging its content at a
+            ~500px viewport — measured. `my-auto` on the card centres it while
+            there is room and collapses when there is not, so these sit under
+            the card instead of on top of it. */}
+        <div className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
           <p>Desarrollado por Jorge Sanchez</p>
           <p className="opacity-75">Versión 1.0 · Septiembre 2026</p>
         </div>
       </section>
-      <section className="relative hidden h-full overflow-hidden lg:block" aria-hidden="true">
-{/* eslint-disable-next-line @next/next/no-img-element -- see the note on the logo above. */}
+      <section className="relative hidden overflow-hidden lg:block" aria-hidden="true">
+        {/* Out of flow (`absolute inset-0`), like the gradient below it, because
+            `min-h-dvh` on the grid makes the row content-sized above its floor and
+            this <img> has an intrinsic size. In flow it therefore sized the row
+            itself, at its own 736:981 aspect ratio, and `size-full` then resolved
+            against the row it had just created: measured 960px tall in a 900px
+            viewport, scrolling a desktop that had room. Out of flow it sizes from
+            the section instead. `size-full` stays — `inset-0` on its own does not
+            stretch a replaced element. */}
+        {/* eslint-disable-next-line @next/next/no-img-element -- see the note on the logo above. */}
         <img
           src={heroImage.src}
           width={heroImage.width}
           height={heroImage.height}
           alt=""
-          className="h-full w-full object-cover"
+          className="absolute inset-0 size-full object-cover"
         />
         <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0.55)_30%,rgba(0,0,0,0.10)_65%,rgba(0,0,0,0.25)_100%)]" />
         <div className="absolute bottom-10 left-10 max-w-[42ch] text-white">
