@@ -466,6 +466,16 @@ export function CustomerForm({
                       type="button"
                       variant="outline"
                       size="default"
+                      // 44x44 minimum hit target. The rule is
+                      // `crm-shell-settings-rbac/design.md:245`, and its only
+                      // waiver is conditional: the collapsed sidebar rail is
+                      // "desktop-and-pointer-only and never a touch surface".
+                      // This dialog is the opposite — it is the app's primary
+                      // data-entry surface, reached from a tablet in a
+                      // workshop. `size="default"` alone is h-8 = 32px, and
+                      // these seven were the last `min-h-11` usages in the
+                      // repo: dropping them repealed the convention outright.
+                      className="min-h-11 min-w-11"
                       disabled={isSubmitting}
                       onClick={() => submit(true)}
                     >
@@ -529,6 +539,7 @@ export function CustomerForm({
                           type="button"
                           variant="outline"
                           size="default"
+                          className="min-h-11 min-w-11"
                           aria-label={`Restaurar vehículo ${index}`}
                           onClick={() => restoreVehicle(row.key)}
                         >
@@ -543,6 +554,7 @@ export function CustomerForm({
                             type="button"
                             variant="destructive"
                             size="default"
+                            className="min-h-11 min-w-11"
                             aria-label={`Eliminar vehículo ${index} definitivamente`}
                             onClick={() => setPendingDelete(row)}
                           >
@@ -570,6 +582,7 @@ export function CustomerForm({
                           type="button"
                           variant="ghost"
                           size="default"
+                          className="min-h-11 min-w-11"
                           aria-label={`Quitar vehículo ${index}`}
                           onClick={() => removeOrDeactivateVehicle(row.key)}
                         >
@@ -581,6 +594,7 @@ export function CustomerForm({
                             type="button"
                             variant="destructive"
                             size="default"
+                            className="min-h-11 min-w-11"
                             aria-label={`Eliminar vehículo ${index} definitivamente`}
                             onClick={() => setPendingDelete(row)}
                           >
@@ -649,7 +663,7 @@ export function CustomerForm({
                   <span>{errors.vehicles}</span>
                 </Alert>
               )}
-              <Button type="button" variant="outline" size="default" className="self-start" onClick={addVehicle}>
+              <Button type="button" variant="outline" size="default" className="min-h-11 min-w-11 self-start" onClick={addVehicle}>
                 <Plus aria-hidden="true" />
                 Agregar vehículo
               </Button>

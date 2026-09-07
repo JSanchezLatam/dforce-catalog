@@ -14,17 +14,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/modules/auth/session", () => ({
   requireSessionFromHeaders: vi.fn(async () => ({ id: "u1", role: "tecnico" })),
 }));
-vi.mock("@/modules/auth/policy", () => ({ can: vi.fn(() => true) }));
+vi.mock("@/modules/auth/policy", () => ({ can }));
 vi.mock("@/modules/customers/CustomerFormTrigger", () => ({ CustomerFormTrigger: () => null }));
 // Irrelevant to R20 (this file's subject) and requires a ToastProvider this
 // unit render doesn't set up — same reason CustomerFormTrigger is stubbed.
 vi.mock("@/modules/customer-import/CustomerSyncPanel", () => ({
-  // Renders the prop instead of `null`: the stats card lives inside the panel,
-  // so the only part of it this page owns is the number it hands over.
-  CustomerSyncPanel: ({ total }: { total: number }) => <div data-testid="sync-panel">{total}</div>,
+  // Renders BOTH props. The panel's own suite proves it honours `canSync`;
+  // nothing proved this page computes it, so replacing the R21 gate with a
+  // hardcoded `true` left the whole file green — a mock more convenient than
+  // reality, sitting on a permission boundary.
+  CustomerSyncPanel: ({ total, canSync }: { total: number; canSync: boolean }) => (
+    <div data-testid="sync-panel" data-can-sync={String(canSync)}>
+      {total}
+    </div>
+  ),
 }));
 vi.mock("@/modules/customers/CustomerFilters", () => ({ CustomerFilters: () => null }));
 
+const can = vi.hoisted(() => vi.fn<(user: unknown, action: string) => boolean>(() => true));
 const listClientes = vi.hoisted(() => vi.fn());
 const countClientes = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/customers/queries", () => ({ listClientes, countClientes }));
@@ -223,6 +230,30 @@ describe("CustomersPage — deactivated customers (R20)", () => {
 
     expect(screen.queryByRole("link", { name: /desactivados/i })).not.toBeInTheDocument();
     expect(screen.getByText("Todavía no hay clientes registrados.")).toBeInTheDocument();
+  });
+
+  /**
+   * R21 — the import trigger is gated on `customers.write`, and the gate is
+   * computed HERE. `CustomerSyncPanel.test.tsx` proves the panel honours the
+   * flag; only this pins that the page derives it from `can()` rather than
+   * passing a constant.
+   */
+  it("derives the import gate from the caller's permission", async () => {
+    listClientes.mockResolvedValue([row()]);
+    countClientes.mockResolvedValue(1);
+    // Only the WRITE gate flips. `can` also guards reading this page, so a
+    // blanket `false` renders the permission notice and asserts nothing.
+    can.mockImplementation((_user: unknown, action: string) => action !== "customers.write");
+
+    try {
+      render(await CustomersPage({ searchParams: Promise.resolve({}) }));
+
+      expect(screen.getByTestId("sync-panel")).toHaveAttribute("data-can-sync", "false");
+    } finally {
+      // `mockClear()` in beforeEach does not reset an implementation, and a
+      // leaked `false` would silently disarm every later render on this page.
+      can.mockImplementation(() => true);
+    }
   });
 
   /**

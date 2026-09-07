@@ -53,6 +53,7 @@ export function CustomerActivationButton({ clienteId, isActive }: { clienteId: s
         type="button"
         variant={isActive ? "outline" : "default"}
         size="default"
+        className="min-h-11 min-w-11"
         disabled={isSubmitting}
         onClick={toggle}
       >
