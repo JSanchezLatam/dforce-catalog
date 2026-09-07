@@ -22,8 +22,17 @@
  * wiring) decide whether a `{ ok: false }` result should become a throw (so
  * pg-boss retries) or a terminal `failed`/`skipped` status.
  *
- * `to` is expected to already be E.164 (customers/validation.ts's
- * `normalizePhone` enforces this on write — not re-implemented here).
+ * `to` is converted to E.164 HERE, by `toE164` below. It used to say
+ * `normalizePhone` enforced that on write; it does not, and never did —
+ * `customers/validation.ts`'s `normalizePhone` strips non-digits and keeps a
+ * leading `+`, nothing more. R17 accepts "optional leading +, 7-15 digits", so
+ * a Panama number typed the way staff type them (`6111-1111`) reached Kapso as
+ * `61111111`.
+ *
+ * Converted at this boundary and not on write, deliberately: the owner chose
+ * to store imported phones raw, and that decision governs STORAGE — which also
+ * feeds the phone search, duplicate detection and migration `0016`. A wire
+ * format is a provider's concern, and this is the provider.
  */
 import { WhatsAppClient } from "@kapso/whatsapp-cloud-api";
 
@@ -41,6 +50,42 @@ export type SendWhatsAppTemplateInput = {
 };
 
 export type SendWhatsAppTemplateResult = { ok: true } | { ok: false; reason: string };
+
+/** Panama — the only country this shop operates in, and 8 digits is its national number length. */
+const PANAMA_COUNTRY_CODE = "507";
+const PANAMA_NATIONAL_LENGTH = 8;
+
+/**
+ * Stored phone → E.164, or a refusal naming the value.
+ *
+ * Deliberately NOT a general phone library. It places exactly what this shop's
+ * data contains and refuses everything else, because the alternative is
+ * guessing a country code on someone's real phone number — the same reason
+ * migration `0016` hard-fails on a null instead of coercing one.
+ *
+ * A leading `+` means the operator already said which country, so it is taken
+ * as given. Everything else has to look like Panama, with or without the code.
+ */
+export function toE164(raw: string): { ok: true; value: string } | { ok: false; reason: string } {
+  const trimmed = raw.trim();
+  const digits = trimmed.replace(/[^0-9]/g, "");
+
+  if (digits.length === 0) return { ok: false, reason: "phone has no digits" };
+  if (trimmed.startsWith("+")) return { ok: true, value: `+${digits}` };
+  if (digits.length === PANAMA_NATIONAL_LENGTH) {
+    return { ok: true, value: `+${PANAMA_COUNTRY_CODE}${digits}` };
+  }
+  if (
+    digits.startsWith(PANAMA_COUNTRY_CODE) &&
+    digits.length === PANAMA_COUNTRY_CODE.length + PANAMA_NATIONAL_LENGTH
+  ) {
+    return { ok: true, value: `+${digits}` };
+  }
+  return {
+    ok: false,
+    reason: `cannot place "${raw}" in E.164 — not a Panama number and no country code given`,
+  };
+}
 
 /** Minimal shape this module actually calls on the Kapso SDK — DI seam for tests (no real network calls). */
 export type WhatsAppClientLike = {
@@ -81,6 +126,12 @@ export async function sendWhatsAppTemplate(
     return { ok: false, reason: "KAPSO_API_KEY/KAPSO_PHONE_NUMBER_ID not configured" };
   }
 
+  // Before the client is constructed: a number this app cannot place must cost
+  // no network call at all, and the reason has to name the value so the
+  // operator can go correct that one row.
+  const e164 = toE164(input.to);
+  if (!e164.ok) return e164;
+
   const client =
     deps.client ??
     (new WhatsAppClient({
@@ -91,7 +142,7 @@ export async function sendWhatsAppTemplate(
   try {
     await client.messages.sendTemplate({
       phoneNumberId,
-      to: input.to,
+      to: e164.value,
       template: {
         name: input.templateName,
         language: { code: input.languageCode ?? "es" },

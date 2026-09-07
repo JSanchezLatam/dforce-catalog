@@ -218,9 +218,28 @@ before touching that code:
 5 open follow-ups, full text at
 `archive/2026-09-06-customer-import/tasks.md`. The two that will matter first:
 
-- **353 imported customers cannot receive a WhatsApp reminder**, because raw
-  8-digit Panama numbers are not E.164. The owner was shown this and chose raw
-  import. Fixing it is a data migration over `cliente.phone`, not a code change.
+- ~~**353 imported customers cannot receive a WhatsApp reminder**~~ — **CLOSED
+  2026-09-07** on `fix/whatsapp-e164`, and this entry was wrong twice.
+  It is **not a data migration**: the import has never run anywhere (no
+  database has the `external_id` column yet), so there were no rows to migrate.
+  And it is **not about the import** at all — `reminders/job.ts` and
+  `providers/whatsapp.ts` both claimed `to` was "already E.164 —
+  `normalizePhone` enforces this on write", and that was false in both files.
+  `normalizePhone` strips non-digits and keeps a leading `+`, nothing more, and
+  R17 accepts "optional leading +, 7-15 digits" — so a Panama number typed the
+  way staff type them (`6111-1111`) has ALWAYS reached Kapso as `61111111`. The
+  import would only have made it 353 at once.
+  Fixed at the send boundary with `toE164`, not on write: the owner's "import
+  raw" decision governs storage, which also feeds the phone search, duplicate
+  detection and `0016`. A number it cannot place is REFUSED with the value
+  named, never guessed at — the same rule `0016` follows by hard-failing on a
+  null.
+- **An unplaceable phone retries forever.** `toE164` refusing returns
+  `{ ok: false }`, and `reminders/job.ts` throws on that, so pg-boss retries —
+  which cannot help a number that will never convert. The live census had one
+  such row (7 digits) out of 361. It wants the `skipped` terminal status the
+  opt-out path already uses, which is a change to the job's failure semantics
+  and so is its own. Raised while closing the entry above.
 - **Layer 1's residual race.** `INSERT … WHERE NOT EXISTS` is not atomic under
   READ COMMITTED. The window is one INSERT round trip and layer 2
   (`pg_advisory_xact_lock`) still guarantees the customer data; a partial unique
