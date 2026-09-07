@@ -6,7 +6,7 @@
  * the real DB call (defaulting to the actual drizzle query), so this module
  * is unit-testable with injected fakes and no live Postgres connection.
  */
-import { count, desc, eq, or, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import { db } from "@/shared/db/client";
@@ -15,9 +15,23 @@ import { listVehiculosByCliente, platesSubquery, vehiculoPlateExists } from "./v
 
 export const DEFAULT_PAGE_SIZE = 10;
 
-export type ClienteFilters = { search?: string };
+export type ClienteFilters = {
+  search?: string;
+  /**
+   * R20 — opt IN to deactivated customers. Same option name and same default
+   * as `listVehiculosByCliente(id, { includeInactive })` in `vehicles.ts`:
+   * one word for one concept across both soft-deleted tables.
+   *
+   * `undefined` and `false` are DELIBERATELY equivalent, and callers differ on
+   * which they send: the page omits the key when off, the API route always
+   * sends a boolean. Both are correct against `buildClienteListWhere`, and
+   * their tests assert the shape each one actually produces rather than a
+   * shape agreed in advance.
+   */
+  includeInactive?: boolean;
+};
 
-export type ClienteListItem = Pick<Cliente, "id" | "name" | "phone" | "email" | "createdAt"> & {
+export type ClienteListItem = Pick<Cliente, "id" | "name" | "phone" | "email" | "deactivatedAt" | "createdAt"> & {
   /** R19/D4 — this customer's active vehicle plates. */
   plates: string[];
 };
@@ -56,6 +70,29 @@ export function buildClienteSearchWhere(search?: string) {
   );
 }
 
+/**
+ * R20 (design D3) — the ONE place the default exclusion lives, and the reason
+ * it is here rather than in each screen: `CustomerPicker` reads the same
+ * `GET /api/customers` the list page does, so filtering here means no new
+ * service order can name a deactivated customer without the picker changing
+ * at all. Filtering per caller instead would leave every future caller of
+ * `listClientes` to remember, and the third one will not.
+ *
+ * Deliberately NOT applied by `getClienteById`: you cannot reactivate a
+ * record you cannot open, which is the same reason that function already
+ * fetches inactive VEHICLES.
+ *
+ * The active filter sits OUTSIDE the search branch. Inside it, a bare list
+ * with no search term — the screen staff actually open — would show every
+ * deactivated row.
+ */
+export function buildClienteListWhere(filters: ClienteFilters): SQL | undefined {
+  const search = buildClienteSearchWhere(filters.search);
+  if (filters.includeInactive) return search;
+  const active = isNull(cliente.deactivatedAt);
+  return search ? and(active, search) : active;
+}
+
 /** R19 — paginated + searched customer list, newest first. */
 export async function listClientes(
   filters: ClienteFilters,
@@ -67,11 +104,15 @@ export async function listClientes(
         name: cliente.name,
         phone: cliente.phone,
         email: cliente.email,
+        // Only ever non-null when the caller passed `includeInactive` — the
+        // row needs it to mark itself, and R20 requires a listed deactivated
+        // customer to be visibly deactivated rather than silently mixed in.
+        deactivatedAt: cliente.deactivatedAt,
         plates: platesSubquery(),
         createdAt: cliente.createdAt,
       })
       .from(cliente)
-      .where(buildClienteSearchWhere(filters.search))
+      .where(buildClienteListWhere(filters))
       .orderBy(desc(cliente.createdAt))
       .limit(window.limit)
       .offset(window.offset),
@@ -83,7 +124,7 @@ export async function listClientes(
 export async function countClientes(
   filters: ClienteFilters,
   queryFn: () => Promise<number> = async () => {
-    const rows = await db.select({ value: count() }).from(cliente).where(buildClienteSearchWhere(filters.search));
+    const rows = await db.select({ value: count() }).from(cliente).where(buildClienteListWhere(filters));
     return rows[0]?.value ?? 0;
   },
 ): Promise<number> {

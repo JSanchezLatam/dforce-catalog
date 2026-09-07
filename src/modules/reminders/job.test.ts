@@ -213,6 +213,61 @@ describe("runReminder — R23/R26 re-check at fire time", () => {
     expect(state.reminder.status).toBe("skipped");
   });
 
+  /**
+   * R20 — the reason customer deactivation is not merely a hidden list row.
+   * Without this guard the workshop keeps WhatsApping a person whose record it
+   * has explicitly retired, which is a message sent to a real human on the
+   * strength of a record that no longer stands.
+   *
+   * Checked at FIRE time, like every other guard in this function: deactivation
+   * almost always happens AFTER the orders and their reminders already exist,
+   * so a schedule-time check would miss the only case that occurs.
+   */
+  it("skips a reminder for a deactivated cliente and dispatches nothing", async () => {
+    const state = {
+      reminder: makeReminder({ status: "scheduled" }),
+      orden: makeOrden(),
+      cliente: makeCliente({ deactivatedAt: new Date("2026-09-01T00:00:00.000Z") }),
+    };
+    const { fakeDb, refillSelectQueue } = makeFakeDb(state);
+    const sendViaChannel = vi.fn();
+
+    refillSelectQueue();
+    await runReminder("reminder-1", { db: fakeDb as unknown as typeof db, now: () => NOW, sendViaChannel });
+
+    expect(sendViaChannel).not.toHaveBeenCalled();
+    expect(state.reminder.status).toBe("skipped");
+  });
+
+  /**
+   * `whatsappOptOut: TRUE`, and that is the whole test.
+   *
+   * The first version used `false`, which made `markOptedOut()` unreachable no
+   * matter where the deactivation guard sat — moving the guard BELOW the
+   * opt-out check left all 22 tests green. `not.toBe()` on a value the code
+   * cannot produce is a placebo.
+   *
+   * With the opt-out actually set, the two reasons compete and the assertion
+   * has a failing input: deactivation must win, because `opted_out` records a
+   * consent decision the CUSTOMER made per channel and carries legal weight,
+   * while this is the WORKSHOP retiring a record. Logging one as the other
+   * misreports why nothing was sent.
+   */
+  it("records a deactivated customer's skip as skipped even when they ALSO opted out", async () => {
+    const state = {
+      reminder: makeReminder({ status: "scheduled", channel: "whatsapp" }),
+      orden: makeOrden(),
+      cliente: makeCliente({ deactivatedAt: new Date("2026-09-01T00:00:00.000Z"), whatsappOptOut: true }),
+    };
+    const { fakeDb, refillSelectQueue } = makeFakeDb(state);
+
+    refillSelectQueue();
+    await runReminder("reminder-1", { db: fakeDb as unknown as typeof db, now: () => NOW, sendViaChannel: vi.fn() });
+
+    expect(state.reminder.status).not.toBe("opted_out");
+    expect(state.reminder.status).toBe("skipped");
+  });
+
   it("records opted_out (distinct from skipped) for a whatsapp reminder when the cliente has whatsappOptOut=true", async () => {
     const state = {
       reminder: makeReminder({ status: "scheduled", channel: "whatsapp" }),

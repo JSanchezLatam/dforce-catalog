@@ -28,6 +28,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/shared/db/client";
 import { ordenServicio, ordenServicioItem, reminder, type Cliente, type OrdenServicio } from "@/shared/db/schema";
 import { getClienteById } from "@/modules/customers/queries";
+import { ClienteDeactivatedError } from "@/modules/customers/service";
 import { cancelRemindersForOrder, scheduleReminder } from "@/modules/reminders/job";
 import { planReminders, type ReminderType } from "@/modules/reminders/schedule";
 import { isServiceCategory, type ServiceCategory } from "./categories";
@@ -187,6 +188,20 @@ export async function createOrder(
   const clienteDetail = await findCliente(input.clienteId);
   if (!clienteDetail) {
     throw new UnknownClienteError(input.clienteId);
+  }
+
+  // R20/D5 — "server-side, not only hidden in the UI". `getClienteById`
+  // deliberately returns a deactivated customer (reactivation has to open the
+  // record), so existence alone is not enough here. The picker's exclusion is
+  // a convenience, not the guarantee: staff A opens "Nueva orden" and picks
+  // Juan, staff B deactivates Juan, staff A submits. Without this the order is
+  // created against a retired customer whose reminders then log `skipped` and
+  // who only appears behind `?includeInactive=1`.
+  //
+  // Five lines below, the same function already refuses a soft-deleted
+  // VEHICLE. This is the customer's missing half of that rule.
+  if (clienteDetail.cliente.deactivatedAt) {
+    throw new ClienteDeactivatedError(input.clienteId);
   }
 
   // C4 — ownership check reuses clienteDetail.vehicles, already fetched above

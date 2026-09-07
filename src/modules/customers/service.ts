@@ -15,7 +15,7 @@
  * is refused with the existing customer's id, and only an explicit
  * `allowDuplicatePhone` from the operator gets past it.
  */
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { cliente, type Cliente, type Vehiculo } from "@/shared/db/schema";
@@ -39,6 +39,13 @@ export class DuplicatePhoneError extends Error {
 export class ClienteNotFoundError extends Error {
   constructor(id: string) {
     super(`Cliente ${id} not found`);
+  }
+}
+
+/** R20/D5 — a deactivated cliente is read-only until reactivated; the route maps this to 409. */
+export class ClienteDeactivatedError extends Error {
+  constructor(id: string) {
+    super(`Cliente ${id} is deactivated and cannot be edited`);
   }
 }
 
@@ -188,6 +195,12 @@ export async function updateCliente(
   if (!current) {
     throw new ClienteNotFoundError(id);
   }
+  // D5 — enforced here rather than only in the UI. `getClienteById` returns a
+  // deactivated customer on purpose (reactivation needs to open the record),
+  // so without this guard a direct PATCH would edit one.
+  if (current.cliente.deactivatedAt) {
+    throw new ClienteDeactivatedError(id);
+  }
 
   // Validate the MERGED scalar record so cross-field rules see the full
   // picture — but only the patch's own keys get persisted below (R16).
@@ -245,4 +258,59 @@ export async function updateCliente(
     await applyVehiculoPlan(tx, id, plan);
     return row;
   });
+}
+
+/**
+ * R20 — activation state, deliberately NOT reachable through `updateCliente`.
+ * Folding it into the patch would make `deactivatedAt` just another editable
+ * column, and D5 requires the opposite: a deactivated record accepts no edits
+ * at all. Same split `account/service.ts` already makes between `updateUser`
+ * and `deactivateUser`/`reactivateUser`.
+ */
+export type ActivationDeps = {
+  setDeactivatedAt?: (id: string, at: Date | null) => Promise<Cliente | undefined>;
+};
+
+/**
+ * One UPDATE, no preceding read: `returning()` already distinguishes "row
+ * updated" from "no such row", so a separate existence check would be a
+ * second query answering a question this one answers.
+ *
+ * Touches `cliente` and nothing else. Every `vehiculo` and every
+ * `orden_servicio` of this customer survives untouched — that is the whole
+ * difference between deactivation and deletion.
+ */
+async function setDeactivatedAtDb(id: string, at: Date | null): Promise<Cliente | undefined> {
+  // `coalesce`, not a bare assignment: deactivating an ALREADY deactivated
+  // customer must not restamp the date. Two staff on the same record — A
+  // deactivates, B's stale page still shows "Desactivar", B clicks — and a
+  // plain `set` would erase when it actually happened. D1's whole argument for
+  // a timestamp over a boolean is that it answers "since when?", and a value
+  // that any later click overwrites does not.
+  //
+  // Done in the UPDATE rather than as a read-then-write: one statement has no
+  // window between the check and the write, and `returning()` still
+  // distinguishes "no such row" for the not-found path.
+  const value = at === null ? null : sql`coalesce(${cliente.deactivatedAt}, ${at})`;
+  const [row] = await db.update(cliente).set({ deactivatedAt: value }).where(eq(cliente.id, id)).returning();
+  return row;
+}
+
+async function setActivation(id: string, at: Date | null, deps: ActivationDeps): Promise<Cliente> {
+  const setDeactivatedAt = deps.setDeactivatedAt ?? setDeactivatedAtDb;
+  const row = await setDeactivatedAt(id, at);
+  if (!row) {
+    throw new ClienteNotFoundError(id);
+  }
+  return row;
+}
+
+/** R20 — hide the customer from the list and the order picker, and stop their reminders. */
+export async function deactivateCliente(id: string, deps: ActivationDeps = {}): Promise<Cliente> {
+  return setActivation(id, new Date(), deps);
+}
+
+/** R20 — the exact inverse; the customer returns with vehicles and history intact. */
+export async function reactivateCliente(id: string, deps: ActivationDeps = {}): Promise<Cliente> {
+  return setActivation(id, null, deps);
 }

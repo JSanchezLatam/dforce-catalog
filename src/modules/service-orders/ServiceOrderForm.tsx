@@ -301,6 +301,23 @@ export function ServiceOrderForm({
         return;
       }
 
+      // R20/D5 — this 409 is DETERMINISTIC, so the generic "Intentalo de nuevo"
+      // below would send the operator round a loop that returns the identical
+      // refusal forever, never naming the state or the one thing that unblocks
+      // them. It fires in exactly one scenario, and it is the scenario the
+      // server guard was written for: staff A has this picker open, staff B
+      // deactivates the customer, staff A submits.
+      if (response.status === 409) {
+        const body = await response.json();
+        setErrors({
+          form:
+            body.error === "cliente_deactivated"
+              ? "Este cliente fue desactivado. Reactivalo para poder abrirle una orden."
+              : "No se pudo guardar la orden de servicio.",
+        });
+        return;
+      }
+
       if (!response.ok) {
         setErrors({ form: "No se pudo guardar la orden de servicio. Intentalo de nuevo." });
         return;

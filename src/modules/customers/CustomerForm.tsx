@@ -323,10 +323,33 @@ export function CustomerForm({
 
       if (response.status === 409) {
         const body = await response.json();
-        // No `errors.phone` here: the refusal renders its own block below,
-        // with the link and the way past it. Setting both would print the
-        // same fact twice, once as an error the operator cannot act on.
-        setSharedPhoneWith(body.existingClienteId);
+        // TWO different 409s reach here now, and branching on the body is what
+        // keeps them apart. `cliente_deactivated` (R20) carries no
+        // `existingClienteId`, so the previous unconditional
+        // `setSharedPhoneWith(body.existingClienteId)` armed `undefined` — the
+        // block below stayed hidden, `errors` had been cleared at the top of
+        // this function, and the dialog just sat there saying nothing.
+        //
+        // That path is exactly the one D5 exists for: staff A opens the detail
+        // page while the customer is active, staff B deactivates them, staff A
+        // saves. Hiding "Editar" removes the FRESH path and does nothing for
+        // the stale one, which is the only one the 409 was written to catch.
+        if (body.error === "duplicate_phone") {
+          // No `errors.phone`: the refusal renders its own block below, with
+          // the link and the way past it. Setting both would print the same
+          // fact twice, once as an error the operator cannot act on.
+          setSharedPhoneWith(body.existingClienteId);
+        } else {
+          // Disarm, don't just add a message. Reachable: a `duplicate_phone`
+          // 409 arms the block, the customer is deactivated, the operator
+          // clicks "Guardar igual" and gets `cliente_deactivated`. Without
+          // this both blocks render and "Guardar igual" stays clickable
+          // against a save that can never succeed.
+          setSharedPhoneWith(null);
+          setErrors({
+            form: "Este cliente fue desactivado y no se puede editar. Reactivalo primero.",
+          });
+        }
         return;
       }
 

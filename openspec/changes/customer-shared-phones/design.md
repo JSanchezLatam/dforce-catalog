@@ -77,6 +77,21 @@ Both guards are truthiness checks (`schedule.ts:51`, `CustomerPicker.tsx:25`),
 so `''` hits exactly the branch `null` used to. The fixtures moved to
 `phone: ""` and every branch stays live.
 
+**That sweep was INCOMPLETE, and the correction belongs here rather than in a
+new document.** GGA found a third consumer while reviewing
+`customer-deactivation`: the customer list cell rendered `item.phone ?? "—"`,
+and `??` is NULLISH — so `''` sailed past the fallback and the column went
+blank while every other column showed an em dash. Fixed to `||` there, with a
+test.
+
+The full sweep, done properly: `job.ts:152`, `schedule.ts:51` and
+`CustomerPicker.tsx:25` are truthiness checks and are safe; the detail view
+goes through `field()`, which tests `value === ""` explicitly and is safe; the
+list cell was the one `??` and is now `||`. The lesson is not that the audit
+was wrong to be written down — it is that writing it down as a list of
+enumerated call sites is exactly what let a reviewer check it against reality
+and find the missing one.
+
 Deliberately NOT added: a `CHECK (phone <> '')`. It would make R19's clause
 unsatisfiable, which is the opposite of what this change is for — though only
 at the last door: `validation.ts:70-72` already rejects an empty phone, so no
