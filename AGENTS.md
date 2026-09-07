@@ -60,6 +60,18 @@ evidence.
 - **Security headers** in `next.config.ts`. CSP is deliberately unconfigured:
   it needs the R2/Interfuerza image hosts allowlisted first, or it silently
   breaks product images app-wide.
+- **44x44 minimum hit target on action controls.** The rule is
+  `openspec/changes/archive/crm-shell-settings-rbac/design.md:245`, and its
+  only waiver there is conditional — the collapsed sidebar rail is
+  "desktop-and-pointer-only and never a touch surface". Most surfaces are not:
+  this is a workshop app used from tablets. `size="default"` on a `Button` is
+  `h-8` = 32px, so an action control needs `min-h-11 min-w-11` on top of it.
+  Two standing exceptions: a filter strip whose controls sit against `h-8`
+  inputs and read as one control, and `shared/ui/Pagination.tsx`, which is
+  still 28px and is its own change. **No test asserts a button height**, so a
+  green suite is not evidence here. The rule was invisible in an archived
+  design doc and got repealed wholesale on `feat/customers-ui-polish` before
+  GGA caught it; it is written here so the next reader finds it.
 
 Writing a component test is a procedure, not a decision — see the
 `component-testing` skill.

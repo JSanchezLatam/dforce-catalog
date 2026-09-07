@@ -115,6 +115,39 @@ describe("CustomerDetailPage — deactivated customer (R20)", () => {
  * hold `customers.write` today, so this is the only place the gate is
  * actually exercised.
  */
+/**
+ * Same regression class the list page pins: two of the three ways to put a
+ * `Link` on the shared button vocabulary quietly stop it being a link —
+ * `Button render={<Link/>}` with `nativeButton={false}` emits
+ * `<a role="button">`, and a plain `<Button onClick>` emits a button with no
+ * href. Either loses middle-click, open-in-new-tab and the link announcement.
+ * The list had this test; this screen had the same change and none.
+ */
+describe("CustomerDetailPage — the order row action stays a link", () => {
+  it("renders Ver as a link, not a button", async () => {
+    // The default fixture has no orders, so the row this guards never renders.
+    getClienteById.mockResolvedValue({
+      cliente: { id: "c1", name: "Ana Gómez", phone: "50761111111", email: null, createdAt: new Date("2026-01-01") },
+      orders: [
+        {
+          id: "o1",
+          status: "open",
+          description: "Cambio de aceite",
+          appointmentAt: new Date("2026-03-01"),
+          createdAt: new Date("2026-02-01"),
+        },
+      ],
+      vehicles: [],
+    });
+
+    render(await renderPage());
+
+    const ver = screen.queryAllByRole("link", { name: "Ver" });
+    expect(ver.length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Ver" })).not.toBeInTheDocument();
+  });
+});
+
 describe("CustomerDetailPage — activation button permission gate (R21)", () => {
   beforeEach(() => {
     getClienteById.mockResolvedValue({

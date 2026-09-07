@@ -466,37 +466,8 @@ export function CustomerForm({
                       type="button"
                       variant="outline"
                       size="default"
-                      // 44x44 minimum hit target, on EVERY action button in
-                      // this module — not a note about this one. The rule is
-                      // `crm-shell-settings-rbac/design.md:245`, and its only
-                      // waiver is conditional: the collapsed sidebar rail is
-                      // "desktop-and-pointer-only and never a touch surface".
-                      // This dialog is the opposite — the app's primary
-                      // data-entry surface, opened from a tablet in a
-                      // workshop. `size="default"` alone is h-8 = 32px.
-                      //
-                      // Scope: every action control the customers module owns
-                      // — this dialog, the row `Ver`, the activation toggle,
-                      // the sync trigger. Two things are NOT at 44 and both
-                      // are deliberate:
-                      //
-                      //   - the filter row in `CustomerFilters.tsx`, because
-                      //     those controls sit against `h-8` inputs and a
-                      //     `SelectTrigger` and read as one control strip
-                      //     rather than as separate targets;
-                      //   - `shared/ui/Pagination.tsx`, which this module does
-                      //     not own — it renders on three other screens, and
-                      //     raising it is its own change, not a line smuggled
-                      //     into a customers PR.
-                      //
-                      // Spelled out because partial application got caught
-                      // three times on this branch: the seven dropped
-                      // outright, then `Guardar`/`Cancelar`/the delete dialog
-                      // left at 32 under a comment claiming otherwise, then
-                      // the `Ver` row action and `Editar` beside a 44px
-                      // `Desactivar` — the mismatch this change started from.
-                      // No test asserts a button height, so a green suite
-                      // says nothing here.
+                      // 44x44 hit target — see AGENTS.md. Every action control in
+                      // this module carries it; the filter strip does not, on purpose.
                       className="min-h-11 min-w-11"
                       disabled={isSubmitting}
                       onClick={() => submit(true)}
