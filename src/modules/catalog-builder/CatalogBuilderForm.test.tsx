@@ -268,6 +268,38 @@ describe("CatalogBuilderForm — a failed confirm is readable from inside the di
     expect(await within(dialog()).findByText(/No se pudo encolar el catálogo/)).toBeInTheDocument();
   });
 
+  /**
+   * The `catch` covers the REQUEST and nothing after it. A 2xx whose body fails
+   * to parse means the catalog IS queued, and reporting that as a connection
+   * failure is worse here than anywhere else in the app: the dialog stays open
+   * with Generar live, so the retry it invites enqueues a DUPLICATE that evicts
+   * a real catalog under the retention limit.
+   *
+   * Testable here, unlike the three dialog forms exempted in `686bc9d` — the
+   * polarity is inverted. `await response.json()` runs BEFORE
+   * `setShowConfirmDialog(false)`, so the dialog is still mounted and the wrong
+   * message is fully visible. That exemption does not transfer.
+   */
+  it("does not blame the network for a queued catalog whose response body fails to parse", async () => {
+    const { user } = await reachReviewStep({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError("Unexpected token < in JSON");
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
+    await user.click(await screen.findByRole("button", { name: "Generar catálogo" }));
+
+    // The success is KEPT: a 2xx queued it, and the body only carried the queue
+    // position and the eviction warning — decoration this screen can do without.
+    expect(await screen.findByText(/El catálogo empezó a generarse/)).toBeInTheDocument();
+    expect(
+      screen.queryByText("No se pudo conectar. Revisa tu conexión e intenta de nuevo."),
+    ).not.toBeInTheDocument();
+  });
+
   // `handleConfirmGenerate` had no `catch` at all — the seventh instance of
   // this repo's silent-write defect, found while adding the surface above.
   // Generar re-enabled with nothing said, on a dialog that stays open.

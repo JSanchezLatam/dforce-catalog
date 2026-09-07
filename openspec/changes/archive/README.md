@@ -289,6 +289,15 @@ Which is which, as of 2026-09-06:
   pre-existing test asserted only `findByText`, which cannot tell the two
   apart — it now throws on the double match, which is itself the proof that the
   old assertion could not have caught this.
+  **The first attempt at that `catch` was itself over-wide**, and GGA measured
+  the consequence: a 2xx whose body fails to parse was reported as a connection
+  failure over a catalog the server had ALREADY queued, with the dialog open
+  and Generar live — and the retry that invites enqueues a duplicate that
+  evicts a real catalog under the retention limit. Narrowed to the two-`try`
+  shape `UserForm` already uses. **The "provably untestable" exemption recorded
+  above does NOT transfer here**: `await response.json()` runs BEFORE
+  `setShowConfirmDialog(false)`, so the dialog is still mounted and the lie is
+  fully visible — and now pinned.
 - **`selection.ts`'s error messages are half-migrated** — the `tiers` ones are
   Spanish per the language rule, `categories`/`total`/`productsPerPage` are
   still English, and they render in the same form.

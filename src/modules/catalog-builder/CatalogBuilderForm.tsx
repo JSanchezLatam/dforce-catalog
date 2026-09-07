@@ -267,8 +267,16 @@ export function CatalogBuilderForm({
   async function handleConfirmGenerate() {
     setIsSubmitting(true);
     setConfirmError(null);
+
+    // Two `try` blocks, the shape `UserForm` already uses. The first wraps ONLY
+    // the request, so the connection message can never be printed over a
+    // catalog the server already accepted: here that lie is worse than on any
+    // other surface, because the dialog stays OPEN with Generar live, and the
+    // retry it invites enqueues a DUPLICATE that evicts a real catalog under
+    // the retention limit.
+    let response: Response;
     try {
-      const response = await fetch("/api/catalog-builder/generate", {
+      response = await fetch("/api/catalog-builder/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -280,10 +288,16 @@ export function CatalogBuilderForm({
           tiers,
         }),
       });
+    } catch {
+      setConfirmError(CONNECTION_ERROR);
+      setIsSubmitting(false);
+      return;
+    }
 
+    try {
       if (response.status === 409) {
-        const body = await response.json();
-        const message = body.error ?? "Cola llena \u2014 intentá de nuevo cuando termine un trabajo";
+        const body = await response.json().catch(() => null);
+        const message = body?.error ?? "Cola llena \u2014 intentá de nuevo cuando termine un trabajo";
         setErrors({ total: message });
         setConfirmError(message);
         return;
@@ -292,26 +306,30 @@ export function CatalogBuilderForm({
       if (!response.ok) {
         const body = await response.json().catch(() => null);
         const fields: Record<string, string> | undefined = body?.errors;
-        const fallback = "No se pudo encolar el catálogo. Intentalo de nuevo.";
-        setErrors(fields ?? { form: fallback });
-        // Field errors reach the dialog as their own messages, joined: the
-        // operator has to know WHICH field, or "cancel and look around" is the
-        // only instruction the dialog gives them.
-        setConfirmError(fields ? Object.values(fields).join(" ") : fallback);
+        // Only field errors go into `errors` — they have render surfaces in the
+        // review card, where the operator lands to fix them. The generic
+        // fallback used to be written as `errors.form`, which nothing in this
+        // module renders; `confirmError` is the only place it was ever read.
+        if (fields) setErrors(fields);
+        // Joined rather than generic: the operator has to know WHICH field, or
+        // "cancel and look around" is the only instruction the dialog gives.
+        setConfirmError(
+          fields ? Object.values(fields).join(" ") : "No se pudo encolar el catálogo. Intentalo de nuevo.",
+        );
         return;
       }
 
-      const body = await response.json();
+      // A 2xx means the job IS queued. This body only carries decoration — the
+      // queue position and the eviction warning — so a malformed one must not
+      // cost the operator a success they already have, and must never surface
+      // as a failure that invites the duplicate-creating retry above.
+      const body = await response
+        .json()
+        .catch(() => ({}) as { queuePosition?: number; evictionWarning?: boolean });
       setQueuePosition(body.queuePosition ?? null);
       setEvictionWarning(body.evictionWarning === true);
       setShowConfirmDialog(false);
       setShowSuccessAlert(true);
-    } catch {
-      // `fetch` REJECTS on a network failure rather than returning a non-ok
-      // response. Without this, Generar re-enabled with nothing said, on a
-      // dialog that stays open — the seventh surface in this repo with that
-      // shape, found while giving this dialog an error surface at all.
-      setConfirmError(CONNECTION_ERROR);
     } finally {
       setIsSubmitting(false);
     }
@@ -628,9 +646,11 @@ export function CatalogBuilderForm({
         open={showConfirmDialog}
         onOpenChange={(open) => {
           setShowConfirmDialog(open);
-          // Cleared on BOTH edges: closing so a stale refusal is not waiting
-          // inside the dialog next time, and opening because a reopened dialog
-          // describes a fresh attempt that has not failed yet.
+          // Only the CLOSING edge reaches here — this dialog has no trigger, so
+          // the parent opens it by setting `open` directly and `onOpenChange`
+          // never fires for that. Clearing here stops a stale refusal waiting
+          // inside next time; the fresh-attempt clear is at the top of
+          // `handleConfirmGenerate`.
           setConfirmError(null);
           if (!open) setIsSubmitting(false);
         }}
