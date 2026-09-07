@@ -66,14 +66,17 @@ All work units below are complete (commits `02442f2`, `820b25d`, `d4dd770`,
   lands in the review card *behind* the overlay. The jsdom test passes because
   jsdom does no layering. Pre-existing: `errors.total` and `errors.form` have
   the same problem. Fix is an error surface on the dialog itself, for all three.
-- [ ] **`npm test` is not reliably clean.** A review of this branch got 6, 11
-  and 10 failures across three runs, a different set each time, in files this
-  branch never touches (`app-sidebar`, `UserForm`, `ForcedPasswordChangeForm`,
-  `CustomerForm`, `WorkshopConfigForm`). One showed interleaved keystrokes
-  (`'lLeurn.-cVoime 9-'` for `'Lun-Vie 9-18, Sáb 9-13'`) — `userEvent` starving
-  under parallel load against a 5s timeout. AGENTS.md's code-quality gate
-  requires a clean `npm test` before a PR; right now nobody can meet it, so
-  nobody is really checking it. Needs its own change (pool/timeout tuning).
+- [x] ~~**`npm test` is not reliably clean.**~~ **CLOSED — fixed by the
+  `maxWorkers: 2` cap on the jsdom project** (`vitest.config.ts`, whose own
+  comment records the measurement: the same files run 89/89 isolated, and the
+  whole suite green at `--maxWorkers=2`). The trigger was worker contention
+  starving `userEvent`, not anything in this branch. Verified closed on
+  2026-09-06: `npm test` is 1242/1242 and was run repeatedly through the
+  C1/C2/C6 work without a flake. Original text: a review of this branch got 6,
+  11 and 10 failures across three runs, a different set each time, in files it
+  never touches — one showing interleaved keystrokes (`'lLeurn.-cVoime 9-'` for
+  `'Lun-Vie 9-18, Sáb 9-13'`).
+
 - [ ] **`selection.ts` error messages are half-migrated.** The new `tiers`
   messages are Spanish per the language rule; `categories`/`total`/
   `productsPerPage` are still English and render in the same form.
