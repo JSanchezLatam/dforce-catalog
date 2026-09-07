@@ -108,8 +108,46 @@ describe("CustomerDetailPage — deactivated customer (R20)", () => {
 });
 
 /**
+ * Same regression class the list page pins: two of the three ways to put a
+ * `Link` on the shared button vocabulary quietly stop it being a link —
+ * `Button render={<Link/>}` with `nativeButton={false}` emits
+ * `<a role="button">`, and a plain `<Button onClick>` emits a button with no
+ * href. Either loses middle-click, open-in-new-tab and the link announcement.
+ * The list had this test; this screen had the same change and none.
+ */
+describe("CustomerDetailPage — the order row action stays a link", () => {
+  it("renders Ver as a link, not a button", async () => {
+    // The default fixture has no orders, so the row this guards never renders.
+    getClienteById.mockResolvedValue({
+      cliente: { id: "c1", name: "Ana Gómez", phone: "50761111111", email: null, createdAt: new Date("2026-01-01") },
+      orders: [
+        {
+          id: "o1",
+          status: "open",
+          description: "Cambio de aceite",
+          appointmentAt: new Date("2026-03-01"),
+          createdAt: new Date("2026-02-01"),
+        },
+      ],
+      vehicles: [],
+    });
+
+    render(await renderPage());
+
+    // `getByRole`, matching the twin this mirrors: the fixture seeds exactly
+    // one order, so it also fails if a second "Ver" appears. `queryAllByRole`
+    // with a length check was weaker than the test it claims to copy.
+    const ver = screen.getByRole("link", { name: "Ver" });
+    // The href too: a link that goes nowhere is the same regression wearing
+    // the right role.
+    expect(ver).toHaveAttribute("href", "/service-orders/o1");
+    expect(screen.queryByRole("button", { name: "Ver" })).not.toBeInTheDocument();
+  });
+});
+
+/**
  * R21 — the activation button is gated on `customers.write`, the same gate
- * `CustomerImportButton` gets on the customer list. A button that always
+ * `CustomerSyncPanel` gets on the customer list. A button that always
  * 403s is a worse answer than no button (`CustomerForm`'s own
  * `canDeleteVehicle` docstring states this convention); both roles happen to
  * hold `customers.write` today, so this is the only place the gate is

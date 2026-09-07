@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, Eye, Info } from "lucide-react";
 
 import {
   Breadcrumb,
@@ -10,6 +10,9 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { Alert } from "@/components/ui/alert";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -94,7 +97,7 @@ export default async function CustomerDetailPage({
               />
             )}
             {/* Gated the same way as `CustomerFormTrigger` above and
-                `CustomerImportButton` on the customer list (R21) —
+                `CustomerSyncPanel` on the customer list (R21) —
                 `CustomerForm`'s own convention (its `canDeleteVehicle`
                 docstring) is that a button that always 403s is a worse answer
                 than no button. Both roles hold `customers.write` today, so
@@ -110,10 +113,13 @@ export default async function CustomerDetailPage({
               load, not a change being announced. Every other `role="alert"` in
               this repo marks a dynamic error. */}
           {!isActive && (
-            <p role="status" className={CARD_MUTED + " mb-4 text-sm"}>
-              Cliente desactivado. No aparece en el listado ni en el selector de órdenes, y no recibe
-              recordatorios. Sus vehículos y su historial siguen intactos.
-            </p>
+            <Alert role="status" className="mb-4">
+              <Info aria-hidden="true" />
+              <p>
+                Cliente desactivado. No aparece en el listado ni en el selector de órdenes, y no recibe
+                recordatorios. Sus vehículos y su historial siguen intactos.
+              </p>
+            </Alert>
           )}
           <dl>
             {field("Teléfono", cliente.phone)}
@@ -226,10 +232,14 @@ export default async function CustomerDetailPage({
                     <TableCell>{formatDateTime(orden.appointmentAt)}</TableCell>
                     <TableCell>{formatDateTime(orden.createdAt)}</TableCell>
                     <TableCell>
+                      {/* `buttonVariants`, not `<Button render={<Link/>}>` —
+                          see the same control on the customer list for the
+                          measured reason. */}
                       <Link
                         href={`/service-orders/${orden.id}`}
-                        className="inline-flex h-7 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-xs font-medium whitespace-nowrap text-foreground transition-colors hover:bg-muted"
+                        className={cn(buttonVariants({ variant: "outline", size: "default" }), "min-h-11 min-w-11")}
                       >
+                        <Eye aria-hidden="true" />
                         Ver
                       </Link>
                     </TableCell>
