@@ -9,9 +9,27 @@ active work. New changes go in `openspec/changes/<name>/`, not here.
 | `adaptive-catalog-layouts` | 19/19 | image classification, adaptive cards, review step |
 | `crm-shell-settings-rbac` | 46/46 v1 | grouped nav, workshop settings, role matrix |
 | `user-lifecycle-management` | 40/40 | deactivation, forced password change, admin user management |
+| `service-history-per-vehicle` | 41/49 | per-vehicle service history, permanent deletion |
+| `customer-shared-phones` (C1) | 41/43 | refuse-then-confirm on a shared phone, `phone NOT NULL` |
+| `customer-deactivation` (C2) | 64/70 | `cliente.deactivated_at`, excluded from list and picker |
+| `customer-import` (C6) | 78/83 | Interfuerza customer import, idempotent re-runs |
 
-Archived 2026-08-11, in that chronological order — it is the order their delta
-specs must be applied in.
+The first four were archived 2026-08-11, `service-history-per-vehicle` on
+2026-09-03, and C1/C2/C6 on 2026-09-06 — in that chronological order, which is
+the order their delta specs must be applied in.
+
+**C1, C2 and C6 all rewrite `customer-management`, and R19 carries edits from
+both C1 and C2.** Applying C2's R19 before C1's silently reverts C1's fix
+(`phone = null` → `phone = ""`, which migration `0016` made unconstructible).
+Their unfinished-task counts above are not undone work: every open box is a
+deferral register, listed below.
+
+The three landed as a chained merge, `#68 → #69 → #70`. #68 gained four work
+units after #69 branched off it, so #69 conflicted against `main` — both had
+appended a `describe` at the end of the same test file, and both were kept.
+Anyone repeating this: dry-run the whole chain into a throwaway worktree off
+`origin/main` first, and check the real resolution byte-for-byte against the
+dry-run's.
 
 `crm-shell-settings-rbac` also carries eight unchecked boxes under "Deferred to
 follow-up change". Those are a deferral register, not open work: all four units
@@ -95,3 +113,47 @@ must be applied in order:
 The other seven are single-source: `app-navigation`, `role-permissions`,
 `template-config`, `user-account`, `user-management`, `workshop-reminders`,
 `workshop-settings`.
+
+### `customer-shared-phones` (C1, archived 2026-09-06)
+
+2 open follow-ups, full text at
+`archive/2026-09-06-customer-shared-phones/tasks.md`:
+
+- **`UserForm.tsx:167` has the same over-wide `catch`** that C1 narrowed in
+  `CustomerForm`: `setOpen`/`onSaved`-equivalent work sits inside its `try`, so
+  a parent throwing after a save that SUCCEEDED gets blamed on the network.
+  Belongs to `user-lifecycle-management`, not C1.
+- **`ServiceOrderForm.handleSubmit` has no `catch` at all**
+  (`src/modules/service-orders/ServiceOrderForm.tsx`) — the silent-save defect
+  this project has now fixed three times elsewhere. Needs its own change, with
+  the same RED-first and catch-body-removal mutation C1 used.
+
+A third entry — merging the six genuinely fragmented duplicate customer pairs —
+was **dropped by the owner on 2026-09-06**, omitted rather than deferred. It is
+marked as a decision in that `tasks.md` rather than deleted, so the next person
+who finds those pairs knows someone looked.
+
+### `customer-deactivation` (C2, archived 2026-09-06)
+
+6 open follow-ups, full text at
+`archive/2026-09-06-customer-deactivation/tasks.md`. The two worth knowing
+before touching that code:
+
+- **`pendingPushes` can be decremented by an EXTERNAL navigation** landing
+  between two of `CustomerFilters`' own pushes, releasing `pushedParamsRef`
+  early. Bounded and self-correcting, but it is a real window.
+- **`gga run --pr-mode` ignores `PR_BASE_BRANCH` as an environment variable** —
+  a hole in `AGENTS.md`'s own guidance, which tells you to pin it that way.
+
+### `customer-import` (C6, archived 2026-09-06)
+
+5 open follow-ups, full text at
+`archive/2026-09-06-customer-import/tasks.md`. The two that will matter first:
+
+- **353 imported customers cannot receive a WhatsApp reminder**, because raw
+  8-digit Panama numbers are not E.164. The owner was shown this and chose raw
+  import. Fixing it is a data migration over `cliente.phone`, not a code change.
+- **Layer 1's residual race.** `INSERT … WHERE NOT EXISTS` is not atomic under
+  READ COMMITTED. The window is one INSERT round trip and layer 2
+  (`pg_advisory_xact_lock`) still guarantees the customer data; a partial unique
+  index on `status = 'running'` would close it structurally. Its own change.

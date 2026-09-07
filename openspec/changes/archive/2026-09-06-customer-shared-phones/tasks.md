@@ -272,4 +272,4 @@ mutation-verified here before being fixed, not taken from the report.
   fixing it here would be the same rule violation in the other direction. It
   needs its own change, with the same RED-first and body-removal mutation.
 
-- [ ] The six genuinely fragmented duplicate pairs are still two records each. Merging them is a data task with no code in it, and needs the owner to say which record wins per pair.
+- [x] ~~The six genuinely fragmented duplicate pairs are still two records each.~~ **Dropped by the owner 2026-09-06 — omitted, not deferred.** They stay as two records each. This is recorded as a decision rather than deleted, so the next person who finds those pairs knows someone looked and chose to leave them.

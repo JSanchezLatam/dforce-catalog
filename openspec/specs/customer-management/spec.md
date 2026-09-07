@@ -1,12 +1,12 @@
 # Spec: customer-management
 
-This spec consolidates R16–R19 from `crm-workshop-management` (baseline), adds access-control requirements from `crm-shell-settings-rbac`, incorporates the R19 modification from `customer-search-and-picker` (async search, accent-insensitivity, near-match fallback, route endpoint), and layers in the vehicle collection (soft/permanent delete) model from `vehicles-one-to-many` (C3) and per-vehicle service history plus the permanent-deletion referential-integrity check from `service-history-per-vehicle` (C4).
+This spec consolidates R16–R19 from `crm-workshop-management` (baseline), adds access-control requirements from `crm-shell-settings-rbac`, incorporates the R19 modification from `customer-search-and-picker` (async search, accent-insensitivity, near-match fallback, route endpoint), and layers in the vehicle collection (soft/permanent delete) model from `vehicles-one-to-many` (C3) and per-vehicle service history plus the permanent-deletion referential-integrity check from `service-history-per-vehicle` (C4). R17, R18 and R19 were then rewritten by `customer-shared-phones` (C1) — a phone no longer identifies one person, and `cliente.phone` became `NOT NULL`; R16 and R19 again by `customer-deactivation` (C2), which added R20; and `customer-import` (C6) added R21. **R19 carries edits from both C1 and C2**, so those three archived in branch order — C1, C2, C6 — and applying them in any other order silently reverts one of them.
 
 ## REQUIREMENTS
 
 ### Requirement: Cliente Creation, Editing, Listing, and Detail View (R16)
 
-The system MUST allow staff to create a native `cliente` record with: name, phone, email (optional), and zero or more vehicles, each recorded as a separate `vehiculo` record (make, model, year, plate — all optional as a group per vehicle, see R17 for the plate exception). Staff MUST be able to edit any field of an existing `cliente`, including adding, editing, or soft-deleting individual vehicles in its collection (see the Vehicle Collection Persistence requirement). The system MUST provide a paginated list view of all `cliente` records and a detail view for a single record. The detail view MUST include that customer's service-order history (see `service-orders` capability), ordered most-recent first.
+The system MUST allow staff to create a native `cliente` record with: name, phone, email (optional), and zero or more vehicles, each recorded as a separate `vehiculo` record (make, model, year, plate — all optional as a group per vehicle, see R17 for the plate exception). Staff MUST be able to edit any field of an existing `cliente`, including adding, editing, or soft-deleting individual vehicles in its collection (see the Vehicle Collection Persistence requirement). The system MUST provide a paginated list view of all `cliente` records and a detail view for a single record. The detail view MUST include that customer's service-order history (see `service-orders` capability), ordered most-recent first. The list view MUST show only ACTIVE customers unless the operator explicitly asks for deactivated ones (see the Customer Deactivation requirement); the detail view MUST remain reachable for a deactivated customer, because reactivating a record requires opening it.
 
 Every route (list, create, detail, edit) MUST call `can()` for `customers.read`/`customers.write` after `requireSession()`, enforcing default-deny policy.
 
@@ -15,15 +15,30 @@ Every route (list, create, detail, edit) MUST call `can()` for `customers.read`/
 - GIVEN a staff user on the "New Customer" form WHEN they submit a valid name and phone THEN the system MUST create the `cliente` record and redirect to its detail view
 - GIVEN a `cliente` with three vehicles WHEN staff opens its detail or edit view THEN the system MUST display all three
 - GIVEN an existing `cliente` WHEN staff edits its phone number and saves without touching any vehicle THEN the system MUST persist only the phone field on `cliente` and leave every existing `vehiculo` row unchanged
-- GIVEN more `cliente` records than fit on one page WHEN staff opens the customer list THEN the system MUST show a paginated table with at least name, phone, and a joined list of that customer's active vehicle plates (comma-separated, reusing `CustomerPicker`'s `plates.join(\", \")` convention) instead of a single fixed plate column
+- GIVEN more `cliente` records than fit on one page WHEN staff opens the customer list THEN the system MUST show a paginated table with at least name, phone, and a joined list of that customer's active vehicle plates (comma-separated, reusing `CustomerPicker`'s `plates.join(", ")` convention) instead of a single fixed plate column
 - GIVEN a `cliente` with one or more service orders WHEN staff opens its detail view THEN the system MUST display that customer's service-order history ordered most-recent first
 - GIVEN a `cliente` with zero service orders WHEN staff opens its detail view THEN the system MUST show an empty-state message instead of an empty table with no explanation
 - GIVEN a `tecnico` with a valid session WHEN they call any customer route THEN `can()` MUST evaluate `true` and the request MUST succeed exactly as it does today
 - GIVEN an `administrador` with a valid session WHEN they call any customer route THEN `can()` MUST evaluate `true` and the request MUST succeed
+- GIVEN a deactivated `cliente` WHEN staff opens the customer list without asking for deactivated records THEN the system MUST NOT list that customer
+- GIVEN a deactivated `cliente` WHEN staff opens that customer's detail view directly THEN the system MUST render it, marked as deactivated
 
 ### Requirement: Field Validation (R17)
 
-`name` and `phone` MUST be required on create and edit; `email` MUST be optional, and a `cliente` MAY have zero vehicles. For each `vehiculo` record attached to a `cliente`, IF any field other than `plate` (make, model, year) is provided, THEN `plate` MUST also be provided for that same vehicle — a vehicle without a plate is not a usable record for service-order lookups. This rule MUST be evaluated independently per vehicle, never across the customer's whole collection. `phone` MUST match a loose international format (optional leading `+`, 7–15 digits, spaces/dashes/parentheses allowed as separators only). `email`, when provided, MUST match a standard email format.
+`name` and `phone` MUST be required on create and edit; `email` MUST be optional, and a `cliente` MAY have zero vehicles. For each `vehiculo` record attached to a `cliente`, IF any field other than `plate` (make, model, year) is provided, THEN `plate` MUST also be provided for that same vehicle — a vehicle without a plate is not a usable record for service-order lookups. This rule MUST be evaluated independently per vehicle, never across the customer's whole collection. `phone` MUST match a loose international format (optional leading `+`, 7–15 digits, spaces/dashes/parentheses allowed as separators only). `email`, when provided, MUST match a standard email format. `cliente.phone` MUST additionally be `NOT NULL` at the database level, matching the required status this requirement already gives it in the application.
+
+*Rationale for the new clause: R17 has always rejected an empty `phone`
+(`validation.ts`, `"Phone is required"`) and the column never agreed. A row
+with no phone cannot be found by the phone search, cannot receive a WhatsApp
+reminder, and has no way to enter through any current write path — so the
+nullable column was permitting only states nothing produces.*
+
+`NOT NULL` forbids a null, NOT an empty string. R19's guarantee that "a
+`cliente` with neither `phone` nor any plate on record MUST still render as an
+identifiable row" therefore STANDS UNCHANGED: "no phone on record" is now
+spelled `''` instead of `NULL`, and every consumer already tests it by
+truthiness (`schedule.ts:51`, `CustomerPicker.tsx:25`), not against null. No
+defensive branch becomes dead, and no row shape stops rendering.
 
 #### Scenarios
 
@@ -34,20 +49,47 @@ Every route (list, create, detail, edit) MUST call `can()` for `customers.read`/
 - GIVEN a `cliente` submission with zero vehicles attached WHEN staff submits an otherwise-valid `cliente` THEN the system MUST accept it
 - GIVEN a submission with one vehicle having `make = "Toyota"` and no `plate` WHEN staff submits THEN the system MUST reject it, requiring `plate` for that vehicle
 - GIVEN a submission with two vehicles, one fully valid and one missing `plate` while carrying `make` WHEN staff submits THEN the system MUST reject the whole submission citing the invalid vehicle only, without changing how the valid vehicle's fields are treated
+- GIVEN the `cliente` table WHEN a row is inserted with a null `phone` by any path THEN the database MUST reject it
+- GIVEN a `cliente` whose `phone` is the empty string WHEN reminders are planned for it THEN the system MUST skip the WhatsApp channel exactly as it did for a null phone
 
 ### Requirement: Duplicate Detection by Phone (R18)
 
-`phone` MUST be unique across all `cliente` records. WHEN staff attempts to create a new `cliente` with a `phone` that already belongs to an existing record, THE system MUST block creation and present an error that links to the existing customer's detail view, so staff can update that record (e.g. add a note or correct data) instead of creating a fragmented duplicate. *Rationale: a phone identifies one billable, contactable person. This change already lets that person register more than one vehicle under the same `cliente`, so blocking a duplicate phone keeps service history consolidated under one customer instead of fragmenting it across near-duplicate records for the same owner.*
+A `phone` MUST NOT be assumed to identify exactly one person. WHEN staff
+attempts to create a `cliente`, or to change an existing one's `phone`, to a
+number that already belongs to a different `cliente`, THE system MUST refuse
+that first attempt and present the existing customer as a link to their detail
+view. THE system MUST also offer, in the same place, a way to confirm that the
+number is genuinely shared and proceed; taking it MUST save the record. THE
+confirmation MUST be an explicit act by the operator on that attempt — never a
+default, never remembered, and never applied to a subsequent save.
+
+*Rationale: R18 was written against staff re-creating a customer they could not
+find, and PR #44's accent-insensitive search removed that cause at the root.
+What the original wording did not allow for is a number that legitimately
+belongs to two people — a house line, a shared handset. Three such pairs exist
+in the current data, and under the old requirement the second person in each
+pair could not be entered at all. The first refusal still does R18's real work,
+which is making staff look at who already holds that number before deciding.*
+
+THE system MUST NOT enforce phone uniqueness as a database constraint. Two
+records with the same `phone` created concurrently are therefore possible and
+are accepted: the check reads before it writes, and nothing between those two
+steps prevents a second writer. *Rationale: every constraint that closes that
+window also rejects a legitimately shared number, or requires a column marking
+which numbers are shared. Chosen deliberately over both — see proposal.md.*
 
 #### Scenarios
 
-- GIVEN an existing `cliente` with `phone = "+5215512345678"` WHEN staff attempts to create a new `cliente` with the same phone THEN the system MUST reject creation and show a link to the existing customer's detail view
+- GIVEN an existing `cliente` with `phone = "+5215512345678"` WHEN staff attempts to create a new `cliente` with the same phone THEN the system MUST refuse that attempt and show a link to the existing customer's detail view
+- GIVEN that refusal on screen WHEN staff confirms the number is shared THEN the system MUST save the new `cliente` with that same phone
+- GIVEN that refusal on screen WHEN staff instead corrects the phone to an unused number THEN the system MUST save without asking for any confirmation
+- GIVEN a `cliente` saved through the shared-number confirmation WHEN staff later edits that same customer and changes an unrelated field THEN the system MUST save without asking again
 - GIVEN an existing `cliente` with `phone = "+5215512345678"` WHEN staff edits that same customer's own record without changing the phone THEN the system MUST NOT flag it as a duplicate of itself
-- GIVEN two different customers WHEN staff edits customer B's phone to match customer A's existing phone THEN the system MUST reject the edit as a duplicate
+- GIVEN two different customers WHEN staff edits customer B's phone to match customer A's THEN the system MUST refuse that first attempt, and MUST accept it once staff confirms the number is shared
 
 ### Requirement: List View Search and Filter (R19)
 
-The customer list view MUST provide a text search input matching `cliente` records by partial, case-insensitive AND accent-insensitive match against `name`, `phone`, or any of that customer's active vehicle `plate`s. Accent folding MUST apply to both the stored plate and the search term (`unaccent()` on both sides), exactly as it already does for `name`. The plate match MUST be evaluated as an existence check over the customer's vehicle collection — matching if any one active vehicle's plate matches — not a single-column comparison; a customer with zero vehicles MUST still match on `name` or `phone` alone. The same matching MUST also be reachable through `GET /api/customers`, gated by `customers.read`, accepting `search`, `page`, and `pageSize` parameters. Each result MUST include a `plates: string[]` array of that customer's active vehicle plates (possibly empty) for disambiguation, replacing the single `vehiclePlate` field; a `cliente` with neither `phone` nor any plate on record MUST still render as an identifiable row, not a blank one. WHEN a search yields zero exact matches, the route MUST also return near matches produced from the same relaxed term — a shorter prefix for name/plate, and for `phone` the search TERM reduced to its last significant digits. The relaxation applies to the term only: the comparison still runs against the stored column verbatim, so this guarantee holds exactly as far as `normalizePhone` (`validation.ts`) has already stripped separators on write. A row written by any path that bypasses `normalizePhone` keeps its separators and is NOT covered. This is deliberately NOT fuzzy/similarity matching.
+The customer list view MUST provide a text search input matching `cliente` records by partial, case-insensitive AND accent-insensitive match against `name`, `phone`, or any of that customer's active vehicle `plate`s. Accent folding MUST apply to both the stored plate and the search term (`unaccent()` on both sides), exactly as it already does for `name`. The plate match MUST be evaluated as an existence check over the customer's vehicle collection — matching if any one active vehicle's plate matches — not a single-column comparison; a customer with zero vehicles MUST still match on `name` or `phone` alone. The same matching MUST also be reachable through `GET /api/customers`, gated by `customers.read`, accepting `search`, `page`, `pageSize`, and `includeInactive` parameters (see R20 for what the last one does). Each result MUST include a `plates: string[]` array of that customer's active vehicle plates (possibly empty) for disambiguation, replacing the single `vehiclePlate` field; a `cliente` with neither `phone` nor any plate on record MUST still render as an identifiable row, not a blank one. WHEN a search yields zero exact matches, the route MUST also return near matches produced from the same relaxed term — a shorter prefix for name/plate, and for `phone` the search TERM reduced to its last significant digits. The relaxation applies to the term only: the comparison still runs against the stored column verbatim, so this guarantee holds exactly as far as `normalizePhone` (`validation.ts`) has already stripped separators on write. A row written by any path that bypasses `normalizePhone` keeps its separators and is NOT covered. This is deliberately NOT fuzzy/similarity matching.
 
 #### Scenarios
 
@@ -60,8 +102,10 @@ The customer list view MUST provide a text search input matching `cliente` recor
 - GIVEN a search term that matches no `cliente` WHEN staff submits it THEN the system MUST show an empty-results message rather than the full unfiltered list
 - GIVEN staff clears the search box WHEN the input becomes empty THEN the system MUST show the full paginated customer list again
 - GIVEN no `customers.read` WHEN calling `GET /api/customers?search=juan` THEN the system MUST reject with 403 before running any query
-- GIVEN two `cliente` records named "Juan Pérez" with the same phone but different plates, plus a third with `phone = null` and zero vehicles WHEN `GET /api/customers?search=juan` is called THEN all three rows MUST be returned, the two Juans each carrying their own `plates` array, and the third rendering with a defined fallback label instead of blank fields
+- GIVEN two `cliente` records named "Juan Pérez" with the same phone but different plates, plus a third with `phone = ""` and zero vehicles WHEN `GET /api/customers?search=juan` is called THEN all three rows MUST be returned, the two Juans each carrying their own `plates` array, and the third rendering with a defined fallback label instead of blank fields
 - GIVEN a `cliente` whose name only starts with "Juan" and another whose `phone` is stored as "+525512345678" (separator-free) WHEN searches for "Juan Alberto" and for "55 1234-5678" each yield zero exact matches THEN the system MUST return each `cliente` as a near match — by shorter prefix, and by reducing the search term to its last significant digits
+
+## ADDED Requirements
 
 ### Requirement: Vehicle Collection Persistence, Soft Delete, and Permanent Deletion
 
@@ -97,3 +141,100 @@ The system MUST provide a vehicle detail screen at `/customers/[id]/vehicles/[ve
 - GIVEN a vehicle detail screen with at least one history row WHEN staff clicks that row's detail affordance THEN the system MUST navigate to `/service-orders/[id]` for that exact order
 - GIVEN a vehicle with zero `orden_servicio` rows WHEN staff opens its detail screen THEN the system MUST show an empty-state message instead of an empty table
 - GIVEN a soft-deleted (deactivated) vehicle that has service-order history WHEN staff navigates directly to its detail screen (e.g. via an order's vehicle link) THEN the system MUST still render the vehicle's identity and its full history
+
+### Requirement: Customer Deactivation and Reactivation (R20)
+
+Staff MUST be able to deactivate a `cliente` and to reactivate a deactivated
+one. Both actions require `customers.write`; no separate grant is introduced.
+Deactivation MUST be recorded as a nullable `deactivated_at` timestamp, never
+a boolean, matching `vehiculo` and `users`.
+
+Deactivation MUST NOT destroy or detach anything. Every `vehiculo`, every
+`orden_servicio`, and every historical record belonging to that customer MUST
+survive untouched, and reactivation MUST restore the customer to exactly the
+state deactivation left, with no data re-entry.
+
+A deactivated `cliente` MUST be excluded from the customer list and from the
+service-order customer picker by default. That exclusion MUST be applied in the
+shared customer read path, not separately per screen. *Rationale: the picker
+reads the same `GET /api/customers` the list does; filtering per caller leaves
+every future caller to remember.*
+
+Independently of that exclusion, the system MUST REFUSE to create a service
+order whose `cliente` is deactivated, and MUST refuse it on the server rather
+than only by hiding the customer from the picker. *Rationale: the exclusion is
+a convenience and cannot be the guarantee. Staff A opens "Nueva orden" and
+picks a customer, staff B deactivates them, staff A submits — a stale page is
+enough to defeat any UI-only rule. The same requirement already applies to
+editing a deactivated customer, and order creation already refuses a
+soft-deleted `vehiculo`; this is the customer's missing half of that rule.*
+
+A deactivated `cliente` MUST NOT receive reminders. The check MUST happen when
+the reminder FIRES, not when it is scheduled, so a customer deactivated after
+a reminder was queued still receives nothing. A reminder suppressed this way
+MUST be recorded as `skipped`, NOT as `opted_out`. *Rationale: `opted_out`
+records a consent decision the customer made per channel and carries legal
+meaning; this is the workshop retiring a record. Conflating them corrupts the
+one status that has to stay trustworthy.*
+
+A deactivated `cliente` MUST NOT be editable while deactivated. Its detail
+view MUST state the record is deactivated and MUST offer reactivation as the
+way forward.
+
+#### Scenarios
+
+- GIVEN an active `cliente` WHEN staff deactivates it THEN the system MUST record `deactivated_at` and leave every vehicle and service order of that customer unchanged
+- GIVEN a deactivated `cliente` WHEN staff reactivates it THEN the system MUST clear `deactivated_at` and the customer MUST reappear in the default list with its vehicles and history intact
+- GIVEN a deactivated `cliente` WHEN staff searches for them in the service-order customer picker THEN the system MUST NOT offer that customer
+- GIVEN a page opened while a `cliente` was still active WHEN staff submits a new service order for them after they have been deactivated THEN the system MUST refuse it on the server and create no order
+- GIVEN a deactivated `cliente` WHEN staff asks the customer list to include deactivated records THEN the system MUST list that customer, marked as deactivated
+- GIVEN a reminder already scheduled for a `cliente` WHEN that customer is deactivated before the reminder fires THEN `runReminder` MUST send nothing and MUST mark the reminder `skipped`
+- GIVEN a reminder for a deactivated `cliente` WHEN it is suppressed THEN the system MUST NOT mark it `opted_out`
+- GIVEN a deactivated `cliente` WHEN staff opens its detail view THEN the system MUST NOT offer the edit action and MUST offer reactivation
+
+### Requirement: Customer Import from Interfuerza (R21)
+
+Staff MUST be able to import customers from Interfuerza on demand, and to run
+that import repeatedly without duplicating anyone. The action requires
+`customers.write`.
+
+Each imported `cliente` MUST be matched to its Interfuerza record by an
+external identifier stored on the row, never by `phone` or `name`. *Rationale:
+`phone` cannot identify a customer here — 9 numbers are shared by 18 people in
+the live data, which is the reason R18 was rewritten. Matching by name would
+merge two people who share one.*
+
+A re-run MUST NOT overwrite state this application owns and Interfuerza does
+not: the per-channel reminder opt-outs, the deactivation timestamp, and the
+vehicle collection. *Rationale: a re-import that resurrects a customer the
+workshop deactivated, or silently reverses a consent decision, is worse than
+no import — it undoes deliberate work with no audit and no warning.*
+
+A row the system cannot represent MUST be SKIPPED and REPORTED, never
+fabricated and never silently dropped. At minimum a row with no name, no
+external identifier, or no phone in any of its phone fields MUST be skipped,
+and the result MUST name each skipped customer and the reason. *Rationale:
+`phone` is `NOT NULL` and R17 requires it, so the alternatives were to invent a
+value or to write rows this application's own form would reject. A skip that
+nobody can see is indistinguishable from data loss.*
+
+Phone values MUST be imported verbatim, without normalisation. *Rationale: the
+owner was shown the consequence and chose it — Panama numbers are 8 digits with
+no country code, WhatsApp requires E.164, and so 353 of these customers cannot
+receive a WhatsApp reminder. Recorded as an accepted cost, not an oversight;
+changing it later is a data migration over a known column, not a code change.*
+
+The import MUST be all-or-nothing. *Rationale: a half-imported customer list is
+worse than an empty one, because staff cannot tell which half is missing.*
+
+#### Scenarios
+
+- GIVEN an Interfuerza customer not yet in this system WHEN staff runs the import THEN the system MUST create that `cliente` and record its external identifier
+- GIVEN an already-imported customer WHEN staff runs the import a second time THEN the system MUST update that same record and MUST NOT create a second one
+- GIVEN two Interfuerza customers sharing one phone number WHEN staff runs the import THEN the system MUST create both, matched by external identifier rather than conflated by phone
+- GIVEN an imported customer the workshop has since deactivated WHEN staff runs the import again THEN that customer MUST remain deactivated
+- GIVEN an imported customer whose WhatsApp opt-out was set locally WHEN staff runs the import again THEN that opt-out MUST survive
+- GIVEN an Interfuerza row with no phone in any of its phone fields WHEN staff runs the import THEN the system MUST NOT create a `cliente` for it and MUST name it in the result with the reason
+- GIVEN an Interfuerza row whose name is blank WHEN staff runs the import THEN the system MUST skip it rather than substituting any other field as the name
+- GIVEN an 8-digit Interfuerza phone WHEN it is imported THEN the stored value MUST be that same string, with no country code added
+- GIVEN a page of the import that fails after its retries are exhausted WHEN the run aborts THEN no customer from that run MUST remain persisted
