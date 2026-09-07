@@ -1,16 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 
+/** Stable no-op subscription — the answer to "am I hydrated" never changes again. */
+const subscribeNever = () => () => {};
+
 export function LoginThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // `mounted` is NOT redundant with the `!resolvedTheme` gate here, even though
   // the sidebar's ThemeToggle drops it. That one only ever renders inside an
@@ -20,6 +18,14 @@ export function LoginThemeToggle() {
   // without `mounted` the client emits the button where the server emitted
   // nothing — a hydration mismatch, confirmed in the browser. `mounted` forces
   // the hydration render to match the server, and the button appears after.
+  //
+  // `useSyncExternalStore` and not a `useState` + `useEffect` flag: that flag
+  // is what this repo's lint forbids (`react-hooks/set-state-in-effect`), and
+  // `ToastProvider.tsx` already answered the identical question this way in
+  // 8f98b4e. The server snapshot is `false`, so the first client render also
+  // returns null and matches; after hydration it reads `true`.
+  const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
+
   if (!mounted || !resolvedTheme) return null;
 
   const isDark = resolvedTheme === "dark";
