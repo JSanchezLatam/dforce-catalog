@@ -105,11 +105,15 @@ export function toE164(raw: string): { ok: true; value: string } | { ok: false; 
   // whether someone typed the country code.
   //
   // Without a `+`, 7 or 8 digits is read as Panama's: this shop is in Panama
-  // and the plan has no area codes. That is a heuristic, and its cost is worth
-  // naming — a foreign short-form number typed WITHOUT its country code is
-  // misread. A Danish mobile is 8 digits and can start with `6`, so a stored
-  // `60123456` would go to `+50760123456`. The 361-row census contains no such
-  // value, and typing the `+` is what an operator has to do to say otherwise.
+  // and the plan has no area codes. That is a heuristic, and BOTH of its costs
+  // are worth naming, because a foreign number typed without its country code
+  // is misread either way:
+  //   - 8 digits starting with `6` — a Danish mobile, say — a stored
+  //     `60123456` goes to `+50760123456`, a real Panama handset.
+  //   - 10 digits starting with `507` — `507-123-4567` is a US Minnesota
+  //     number and is refused here as a Panama landline.
+  // The 361-row census contains neither, and typing the `+` is what an
+  // operator has to do to say otherwise.
   const declared = raw.trim().startsWith("+");
   const carriesPanamaCode =
     digits.startsWith(PANAMA_COUNTRY_CODE) &&
