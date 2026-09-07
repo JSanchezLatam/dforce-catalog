@@ -275,12 +275,20 @@ Which is which, as of 2026-09-06:
 **2 open follow-ups** in
 `archive/2026-09-06-catalog-price-tier-choice/tasks.md`:
 
-- **A `tiers` validation error renders BEHIND the confirm modal.**
-  `handleConfirmGenerate` sets `errors` and returns without closing the dialog,
-  and `ConfirmGenerateDialog` has no error surface, so the message lands in the
-  review card under the overlay. The jsdom test passes because jsdom does no
-  layering. Pre-existing for `errors.total` and `errors.form` too; the fix is
-  one error surface on the dialog, for all three.
+- ~~**A `tiers` validation error renders BEHIND the confirm modal.**~~ —
+  **CLOSED 2026-09-06** on `fix/tiers-error-behind-modal`. One error surface on
+  the dialog, covering all three paths the entry named, plus a fourth it did
+  not: `handleConfirmGenerate` had **no `catch` at all**, so a dropped
+  connection re-enabled Generar with nothing said on a dialog that stays open.
+  That was the SEVENTH surface of the silent-write defect, found while adding
+  the surface — and it is why the class could not have been called closed one
+  PR earlier.
+  The message now appears in TWO places on a field error, deliberately: inside
+  the dialog, which is what the operator reads without closing anything, and in
+  the review card, where they land when they close it to fix the field. The
+  pre-existing test asserted only `findByText`, which cannot tell the two
+  apart — it now throws on the double match, which is itself the proof that the
+  old assertion could not have caught this.
 - **`selection.ts`'s error messages are half-migrated** — the `tiers` ones are
   Spanish per the language rule, `categories`/`total`/`productsPerPage` are
   still English, and they render in the same form.

@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { CARD, FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
 import { Pagination } from "@/shared/ui/Pagination";
 import { RETENTION_LIMIT } from "@/modules/catalog-storage/retention-policy";
@@ -107,6 +108,13 @@ export function CatalogBuilderForm({
   const [bulkFramed, setBulkFramed] = useState(false);
   const overridesBeforeBulkFrameRef = useRef<Record<string, "transparent" | "opaque" | "low_res" | null>>({});
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  /**
+   * Separate from `errors` on purpose. A field error still belongs in `errors`
+   * so the review card shows it once the operator closes the dialog to fix the
+   * field — this is the copy they read WITHOUT closing it, which is the only
+   * way they learn the click did anything at all.
+   */
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
   const [queueDepth, setQueueDepth] = useState<number | null>(null);
@@ -258,6 +266,7 @@ export function CatalogBuilderForm({
 
   async function handleConfirmGenerate() {
     setIsSubmitting(true);
+    setConfirmError(null);
     try {
       const response = await fetch("/api/catalog-builder/generate", {
         method: "POST",
@@ -274,13 +283,21 @@ export function CatalogBuilderForm({
 
       if (response.status === 409) {
         const body = await response.json();
-        setErrors({ total: body.error ?? "Cola llena \u2014 intentá de nuevo cuando termine un trabajo" });
+        const message = body.error ?? "Cola llena \u2014 intentá de nuevo cuando termine un trabajo";
+        setErrors({ total: message });
+        setConfirmError(message);
         return;
       }
 
       if (!response.ok) {
         const body = await response.json().catch(() => null);
-        setErrors(body?.errors ?? { form: "No se pudo encolar el catálogo. Intentalo de nuevo." });
+        const fields: Record<string, string> | undefined = body?.errors;
+        const fallback = "No se pudo encolar el catálogo. Intentalo de nuevo.";
+        setErrors(fields ?? { form: fallback });
+        // Field errors reach the dialog as their own messages, joined: the
+        // operator has to know WHICH field, or "cancel and look around" is the
+        // only instruction the dialog gives them.
+        setConfirmError(fields ? Object.values(fields).join(" ") : fallback);
         return;
       }
 
@@ -289,6 +306,12 @@ export function CatalogBuilderForm({
       setEvictionWarning(body.evictionWarning === true);
       setShowConfirmDialog(false);
       setShowSuccessAlert(true);
+    } catch {
+      // `fetch` REJECTS on a network failure rather than returning a non-ok
+      // response. Without this, Generar re-enabled with nothing said, on a
+      // dialog that stays open — the seventh surface in this repo with that
+      // shape, found while giving this dialog an error surface at all.
+      setConfirmError(CONNECTION_ERROR);
     } finally {
       setIsSubmitting(false);
     }
@@ -605,6 +628,10 @@ export function CatalogBuilderForm({
         open={showConfirmDialog}
         onOpenChange={(open) => {
           setShowConfirmDialog(open);
+          // Cleared on BOTH edges: closing so a stale refusal is not waiting
+          // inside the dialog next time, and opening because a reopened dialog
+          // describes a fresh attempt that has not failed yet.
+          setConfirmError(null);
           if (!open) setIsSubmitting(false);
         }}
         categories={categoryRefs}
@@ -612,6 +639,7 @@ export function CatalogBuilderForm({
         productCount={reviewedProducts.length}
         catalogCount={catalogCount}
         isSubmitting={isSubmitting}
+        error={confirmError}
         onConfirm={handleConfirmGenerate}
       />
 
