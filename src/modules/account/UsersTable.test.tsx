@@ -146,6 +146,44 @@ describe("UsersTable — the action each row offers", () => {
   });
 });
 
+/**
+ * `router.refresh()` runs OUTSIDE the `try` that catches the fetch, so a
+ * refresh that throws is never reported as a connection failure over a
+ * deactivation the server already applied. Nothing pinned that: widening the
+ * `try` to cover it left this whole file green.
+ */
+describe("UsersTable — a throwing refresh is not a connection failure", () => {
+  it("does not show the connection error when the refresh itself throws", async () => {
+    const user = userEvent.setup();
+    mockFetch({ status: 200, body: {} });
+    const boom = new Error("refresh blew up");
+    refresh.mockImplementationOnce(() => {
+      throw boom;
+    });
+
+    // The throw ESCAPES — that is the property under test — so it surfaces as
+    // an unhandled rejection. Captured rather than left for the runner: a
+    // stray one is silent under this config and a red suite under a stricter
+    // one (`customers/service.test.ts` documents the same trap). Capturing it
+    // also makes "no connection error appeared" a positive claim: the error
+    // went somewhere, and that somewhere was not the operator's screen.
+    const escaped: unknown[] = [];
+    const capture = (reason: unknown) => escaped.push(reason);
+    process.on("unhandledRejection", capture);
+    try {
+      render(<UsersTable users={[ACTIVE]} />);
+      await user.click(within(rowFor("ana")).getByRole("button", { name: "Desactivar" }));
+
+      await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+      await vi.waitFor(() => expect(escaped).toContain(boom));
+    } finally {
+      process.off("unhandledRejection", capture);
+    }
+
+    expect(screen.queryByText("No se pudo conectar. Revisa tu conexión e intenta de nuevo.")).not.toBeInTheDocument();
+  });
+});
+
 describe("UsersTable — when the safety guard refuses", () => {
   it("surfaces last_active_admin inline and leaves the row active", async () => {
     const user = userEvent.setup();

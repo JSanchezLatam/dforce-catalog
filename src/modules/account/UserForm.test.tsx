@@ -168,6 +168,14 @@ describe("UserForm — creating", () => {
   });
 });
 
+/**
+ * `setOpen`/`onSaved` sit inside a SECOND `try` that has only a `finally` and
+ * no `catch`, so a throwing `onSaved` propagates instead of being reported as
+ * a connection failure. Not pinned here for the same reason as the other two
+ * dialog forms — see the note in `CustomerForm.test.tsx`; the dialog is closed
+ * before any message could render. `OrderStatusControls`, `UsersTable` and
+ * `ForcedPasswordChangeForm` carry the guard.
+ */
 describe("UserForm — when the server refuses", () => {
   it("lands a duplicate email on the email field", async () => {
     const user = userEvent.setup();
