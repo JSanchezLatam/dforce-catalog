@@ -204,7 +204,7 @@ export default async function CustomersPage({
                 <Pagination
                   currentPage={pageWindow.page}
                   pageCount={pageCount}
-                  buildHref={(p) => buildPageHref(params, p)}
+                  hrefPattern={buildPageHrefPattern(params)}
                 />
               </CardContent>
             </Card>
@@ -215,7 +215,19 @@ export default async function CustomersPage({
   );
 }
 
-function buildPageHref(params: SearchParams, page: number): string {
+/**
+ * A serializable `{page}` PATTERN, not a function.
+ *
+ * `Pagination` is a client component, and a server component cannot hand one a
+ * function — Next.js throws "Functions cannot be passed directly to Client
+ * Components". The bug shipped in Phase 6 and stayed invisible for months
+ * because `Pagination` returns `null` at `pageCount <= 1`, and this database
+ * held one customer. Importing the Interfuerza list made it 37 pages and the
+ * page stopped rendering.
+ *
+ * `hrefPattern` is the variant that already existed for exactly this.
+ */
+function buildPageHrefPattern(params: SearchParams): string {
   const search = new URLSearchParams();
   // `firstValue` for every key, matching `normalizeClienteFilters`. The
   // `typeof === "string"` checks these replace saw `?search=a&search=b` as an
@@ -229,6 +241,17 @@ function buildPageHref(params: SearchParams, page: number): string {
   // desactivados" would silently switch itself off on page 2, which reads as
   // the records having disappeared rather than the filter having reset.
   if (firstValue(params.includeInactive) === "1") search.set("includeInactive", "1");
-  search.set("page", String(page));
-  return `/customers?${search.toString()}`;
+  // `page` appended raw rather than through `URLSearchParams.set`: that
+  // percent-encodes the braces, and `Pagination` replaces the literal `{page}`.
+  const query = search.toString();
+  return `/customers?${query ? `${query}&` : ""}page={page}`;
+}
+
+/**
+ * One concrete page, derived from the pattern above rather than built beside
+ * it — the two widen-search links use this, and the whole reason the pattern
+ * carries every filter is that a second copy dropped `pageSize` once already.
+ */
+function buildPageHref(params: SearchParams, page: number): string {
+  return buildPageHrefPattern(params).replace("{page}", String(page));
 }
