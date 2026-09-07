@@ -2,9 +2,10 @@
  * Maps one raw Interfuerza `customers` row onto this app's `cliente` shape.
  *
  * Field names and cardinalities below are MEASURED, from a live sweep of all
- * 370 rows recorded in `openspec/changes/archive/2026-09-06-customer-import/proposal.md` — not
- * taken from the vendor docs, which described a REST API that does not exist
- * and cost this integration a full rewrite once already.
+ * 370 rows recorded in the proposal at
+ * `openspec/changes/archive/2026-09-06-customer-import/` — not taken from the
+ * vendor docs, which described a REST API that does not exist and cost this
+ * integration a full rewrite once already.
  *
  * Never throws. A row this app cannot represent becomes a SKIP carrying a
  * reason, so the run completes and the report can name it. A throw here would

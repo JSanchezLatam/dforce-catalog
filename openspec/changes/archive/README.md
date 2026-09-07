@@ -29,8 +29,13 @@ R19 before C1's, for one example, reverts `phone = null` → `phone = ""`, a
 shape migration `0016` made unconstructible. The `customer-management` column
 above exists so nobody has to open eleven folders to find that out.
 
-Unfinished task counts are not undone work. Every open box in this folder is a
-deferral register, listed below.
+Unfinished task counts are mostly not undone work — but only the changes with
+a register below say so for themselves. **`vehicles-one-to-many` (C3) has 9
+open boxes and no register**: three are real follow-ups (the mixed-language
+validation payload, the missing `CustomerPicker` `onSaved` test, and staged
+permanent deletion being invisible) and six are owner-reserved GGA/PR boxes
+that were in fact done. Read that `tasks.md` directly until someone writes it
+one.
 
 C1, C2 and C6 landed as a chained merge, `#68 → #69 → #70`. #68 gained four
 work units after #69 branched off it, so #69 conflicted against `main` — both
@@ -94,41 +99,6 @@ survives being found.
   assertions that all check the same string; trim to one the next time that
   file is opened.
 
-## Where the current spec actually lives
-
-There is no `openspec/specs/` baseline in this repo, and these deltas do not
-add up to one on their own. Reading the current contract means reading two
-places:
-
-1. **`.kiro/specs/dforce-catalog/requirements.md`** — the original baseline
-   (Requisitos 1-12, Spanish). This is what the deltas' `R5`/`R6`/`R8`
-   references point at. It carries its own errata: R1 and R3's original text
-   describes the Interfuerza API as `GET /products`, which is wrong — see the
-   correction notes inline, and `interfuerza-api-contract-fix`.
-2. **The `specs/` folder of each change here**, applied in the table's order.
-
-## Known merge debt
-
-Consolidating the above into one `openspec/specs/<capability>/spec.md` tree was
-NOT done as part of this archival, deliberately. It is not a mechanical merge:
-the baseline is a 242-line Spanish document organized by numbered requirement,
-while the 13 deltas are English and organized by capability. Producing one tree
-means choosing a language for the consolidated spec and re-cutting the baseline
-along capability lines — both are judgment calls, and a half-correct baseline is
-worse than this pointer, because the next change would plan against it and
-believe it.
-
-Ten capabilities are involved. Three have more than one contributing delta and
-must be applied in order:
-
-- `catalog-generation` — adaptive-catalog-layouts, then crm-shell-settings-rbac
-- `customer-management` — crm-workshop-management, then crm-shell-settings-rbac
-- `service-orders` — crm-workshop-management, then crm-shell-settings-rbac
-
-The other seven are single-source: `app-navigation`, `role-permissions`,
-`template-config`, `user-account`, `user-management`, `workshop-reminders`,
-`workshop-settings`.
-
 ### `customer-shared-phones` (C1, archived 2026-09-06)
 
 2 open follow-ups, full text at
@@ -172,3 +142,47 @@ before touching that code:
   READ COMMITTED. The window is one INSERT round trip and layer 2
   (`pg_advisory_xact_lock`) still guarantees the customer data; a partial unique
   index on `status = 'running'` would close it structurally. Its own change.
+
+## Where the current spec actually lives
+
+`openspec/specs/` **is** the baseline for five capabilities —
+`catalog-generation`, `customer-management`, `service-orders`,
+`template-config`, `workshop-settings`. It has been since 2026-08-29. Read
+those files directly; the deltas here are history, not the contract.
+
+For the other five that appear in deltas — `app-navigation`,
+`role-permissions`, `user-account`, `user-management`, `workshop-reminders` —
+there is still no consolidated spec, and reading the contract means two places:
+
+1. **`.kiro/specs/dforce-catalog/requirements.md`** — the original baseline
+   (Requisitos 1-12, Spanish). This is what the deltas' `R5`/`R6`/`R8`
+   references point at. It carries its own errata: R1 and R3's original text
+   describes the Interfuerza API as `GET /products`, which is wrong — see the
+   correction notes inline, and `interfuerza-api-contract-fix`.
+2. **The `specs/` folder of each change here**, applied in the table's order.
+
+## Known merge debt — half paid
+
+When this folder was first written (2026-08-11) no capability had a
+consolidated spec, and building one was declined as a judgment call rather than
+a mechanical merge: the Kiro baseline is a 242-line Spanish document organized
+by numbered requirement, while the deltas are English and organized by
+capability.
+
+**Five capabilities have since been consolidated** and are listed above. Five
+have not. The reasoning for the remaining five is unchanged: producing a tree
+means choosing a language for the consolidated spec and re-cutting the baseline
+along capability lines, and a half-correct baseline is worse than a pointer,
+because the next change would plan against it and believe it.
+
+For the capabilities that still have no baseline, more than one delta
+contributes and order matters:
+
+- `service-orders`, `catalog-generation`, `customer-management` — **now
+  consolidated in `openspec/specs/`; the table above is their apply order and
+  supersedes what this list used to say.** `customer-management` in particular
+  had two contributing changes named here and has eight.
+
+The other seven are single-source: `app-navigation`, `role-permissions`,
+`template-config`, `user-account`, `user-management`, `workshop-reminders`,
+`workshop-settings`.

@@ -4,9 +4,9 @@ import { mapCustomerRow } from "./mapper";
 
 /**
  * Field names and shapes come from a live sweep of all 370 rows, recorded in
- * `openspec/changes/archive/2026-09-06-customer-import/proposal.md` — not from the vendor docs,
- * which described a REST API that does not exist and cost this integration a
- * rewrite once already.
+ * the proposal at `openspec/changes/archive/2026-09-06-customer-import/` —
+ * not from the vendor docs, which described a REST API that does not exist
+ * and cost this integration a rewrite once already.
  */
 function row(overrides: Record<string, unknown> = {}) {
   return {
