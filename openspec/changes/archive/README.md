@@ -159,7 +159,9 @@ it is marked below:
 - ~~**`OrderStatusControls.transitionTo` has the same shape**~~ — **CLOSED
   2026-09-06** on `fix/status-controls-catch`, together with the shared copy
   constant. It had no test file at all; it has three now. The sentence itself
-  had been hand-copied into **six** places, so it moved to
+  had been hand-copied into **five** places — `OrderStatusControls` is the
+  sixth surface and held none, because it was the one still missing its
+  `catch`. It moved to
   `src/shared/ui/messages.ts` as `CONNECTION_ERROR` — one definition, and the
   tests still assert the literal so a bad edit to it goes red rather than
   moving both sides at once. That net had three holes when it was extracted —
