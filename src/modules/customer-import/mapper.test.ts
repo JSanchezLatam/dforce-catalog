@@ -75,11 +75,14 @@ describe("mapCustomerRow — the phone (D4: verbatim, and it costs something)", 
   });
 
   /**
-   * VERBATIM. The owner chose raw over normalising to `+507`, knowing an
-   * 8-digit Panama number is not E.164 and so cannot receive a WhatsApp
-   * reminder. This test is what stops a later "helpful" normalisation from
-   * changing that decision quietly — if the rule changes, it should change
-   * here, deliberately.
+   * VERBATIM. The owner chose raw over normalising to `+507`. The reason
+   * stands; the consequence once recorded alongside it does not — "cannot
+   * receive a WhatsApp reminder" was true of the SEND path, and
+   * `reminders/providers/whatsapp.ts`'s `toE164` converts there now, so a raw
+   * Panama mobile does get its reminder.
+   * This test is what stops a later "helpful" normalisation from changing the
+   * storage decision quietly — if the rule changes, it should change here,
+   * deliberately.
    */
   it("does NOT normalise, prefix a country code, or strip separators", () => {
     expect(mapCustomerRow(row({ Telefono_1: "6123-4567" }))).toMatchObject({ phone: "6123-4567" });

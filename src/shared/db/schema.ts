@@ -299,8 +299,11 @@ export const cliente = pgTable(
       .$defaultFn(() => crypto.randomUUID()),
     name: text("name").notNull(),
     /**
-     * E.164 preferred (WhatsApp needs it); validated in
-     * modules/customers/validation.ts, which has always REQUIRED it — the
+     * Stored as the operator typed it, separators stripped. NOT E.164:
+     * `reminders/providers/whatsapp.ts` converts at the wire, because that is
+     * a provider format and this column feeds the search and duplicate
+     * detection instead. Validated in
+     * modules/customers/validation.ts, which has always REQUIRED a phone — the
      * column only stopped disagreeing in migration `0016`. Not UNIQUE, and
      * deliberately so: a phone can belong to two people (a house line, a
      * shared handset). See `customer-shared-phones`.

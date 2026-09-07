@@ -51,9 +51,27 @@ export type SendWhatsAppTemplateInput = {
 
 export type SendWhatsAppTemplateResult = { ok: true } | { ok: false; reason: string };
 
-/** Panama — the only country this shop operates in, and 8 digits is its national number length. */
+/**
+ * Panama's numbering plan, verified against it rather than assumed:
+ * https://en.wikipedia.org/wiki/Telephone_numbers_in_Panama
+ *
+ * - Mobiles: EIGHT digits, always starting with `6`.
+ * - Landlines: SEVEN digits (2/3/4/5/7/9). No area codes exist.
+ *
+ * An earlier version of this module asserted "8 digits is its national number
+ * length", which is wrong on both counts — in a change whose premise is that a
+ * comment claimed something the code did not do. The live census of this
+ * shop's 361 phones is consistent with the real plan: 353 of 8 digits, 7 of 11
+ * (a mobile carrying `507`), and 1 of 7 — a landline.
+ */
 const PANAMA_COUNTRY_CODE = "507";
-const PANAMA_NATIONAL_LENGTH = 8;
+const PANAMA_MOBILE_LENGTH = 8;
+const PANAMA_MOBILE_PREFIX = "6";
+const PANAMA_LANDLINE_LENGTH = 7;
+
+/** R17's own bounds ("optional leading +, 7-15 digits"), reused rather than re-invented. */
+const MIN_E164_DIGITS = 7;
+const MAX_E164_DIGITS = 15;
 
 /**
  * Stored phone → E.164, or a refusal naming the value.
@@ -63,28 +81,49 @@ const PANAMA_NATIONAL_LENGTH = 8;
  * guessing a country code on someone's real phone number — the same reason
  * migration `0016` hard-fails on a null instead of coercing one.
  *
- * A leading `+` means the operator already said which country, so it is taken
- * as given. Everything else has to look like Panama, with or without the code.
+ * A landline is refused, and the reason says LANDLINE. It is a perfectly valid
+ * Panama number; it simply cannot receive a WhatsApp template, because
+ * WhatsApp is a mobile service. Calling it "not a Panama number" would be the
+ * same class of false statement this module was fixed for.
+ *
+ * A leading `+` means the operator already said which country, so the country
+ * is taken as given — but the LENGTH is still checked. An imported row never
+ * passes through `validateClienteInput`, which is the entire reason this
+ * function exists, so a `+` is not proof the rest is a phone number.
  */
 export function toE164(raw: string): { ok: true; value: string } | { ok: false; reason: string } {
   const trimmed = raw.trim();
   const digits = trimmed.replace(/[^0-9]/g, "");
+  const refuse = (why: string) => ({ ok: false as const, reason: `cannot place "${raw}" in E.164 — ${why}` });
 
-  if (digits.length === 0) return { ok: false, reason: "phone has no digits" };
-  if (trimmed.startsWith("+")) return { ok: true, value: `+${digits}` };
-  if (digits.length === PANAMA_NATIONAL_LENGTH) {
-    return { ok: true, value: `+${PANAMA_COUNTRY_CODE}${digits}` };
-  }
-  if (
-    digits.startsWith(PANAMA_COUNTRY_CODE) &&
-    digits.length === PANAMA_COUNTRY_CODE.length + PANAMA_NATIONAL_LENGTH
-  ) {
+  if (digits.length === 0) return refuse("no digits");
+
+  if (trimmed.startsWith("+")) {
+    if (digits.length < MIN_E164_DIGITS || digits.length > MAX_E164_DIGITS) {
+      return refuse(`${digits.length} digits is outside E.164's ${MIN_E164_DIGITS}-${MAX_E164_DIGITS}`);
+    }
     return { ok: true, value: `+${digits}` };
   }
-  return {
-    ok: false,
-    reason: `cannot place "${raw}" in E.164 — not a Panama number and no country code given`,
-  };
+
+  // Strip a leading country code only when what remains is a national length,
+  // so an 8-digit number that merely happens to start with 507 is not mangled.
+  const national =
+    digits.startsWith(PANAMA_COUNTRY_CODE) &&
+    (digits.length === PANAMA_COUNTRY_CODE.length + PANAMA_MOBILE_LENGTH ||
+      digits.length === PANAMA_COUNTRY_CODE.length + PANAMA_LANDLINE_LENGTH)
+      ? digits.slice(PANAMA_COUNTRY_CODE.length)
+      : digits;
+
+  if (national.length === PANAMA_LANDLINE_LENGTH) {
+    return refuse("Panama landline, and WhatsApp is a mobile service");
+  }
+  if (national.length === PANAMA_MOBILE_LENGTH) {
+    if (!national.startsWith(PANAMA_MOBILE_PREFIX)) {
+      return refuse("eight digits but not a Panama mobile, which always starts with 6");
+    }
+    return { ok: true, value: `+${PANAMA_COUNTRY_CODE}${national}` };
+  }
+  return refuse("no country code given, and not a length Panama uses");
 }
 
 /** Minimal shape this module actually calls on the Kapso SDK — DI seam for tests (no real network calls). */

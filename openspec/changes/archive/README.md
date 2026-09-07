@@ -234,6 +234,19 @@ before touching that code:
   detection and `0016`. A number it cannot place is REFUSED with the value
   named, never guessed at — the same rule `0016` follows by hard-failing on a
   null.
+  **The first attempt asserted a numbering plan that does not exist** ("8
+  digits is Panama's national number length"), in a change whose premise is a
+  comment claiming something untrue. Verified against the real plan afterwards:
+  mobiles are 8 digits starting with `6`, landlines are **7**, and there are no
+  area codes — which matches the census exactly (353 of 8, 7 of 11, 1 of 7).
+  That 7-digit row is a LANDLINE, and the first version refused it as "not a
+  Panama number", which is false. It is still refused, because WhatsApp is a
+  mobile service and no storage format fixes that — but the reason now says so.
+  The claim also lived in a THIRD file, its origin: `validation.ts`'s
+  `normalizePhone` docstring called itself "E.164-ish … needed for Kapso". And
+  it left four downstream statements stale — `schema.ts`, `mapper.ts`,
+  `mapper.test.ts` and `validation.test.ts` all recorded that a raw 8-digit
+  number "cannot receive a WhatsApp reminder". A raw MOBILE now does.
 - **An unplaceable phone retries forever.** `toE164` refusing returns
   `{ ok: false }`, and `reminders/job.ts` throws on that, so pg-boss retries —
   which cannot help a number that will never convert. The live census had one

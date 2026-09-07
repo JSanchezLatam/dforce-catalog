@@ -87,7 +87,7 @@ describe("isValidPhoneFormat (R17)", () => {
   });
 });
 
-describe("normalizePhone (E.164-ish, needed for Kapso in Phase 7)", () => {
+describe("normalizePhone — strips separators, keeps a `+`, and does NOT produce E.164", () => {
   it("strips separators but keeps digits when there is no leading +", () => {
     expect(normalizePhone("55 1234 5678")).toBe("5512345678");
   });

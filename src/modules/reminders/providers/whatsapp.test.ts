@@ -72,7 +72,7 @@ describe("sendWhatsAppTemplate — ADR-3 (Kapso template send, not sendText)", (
 });
 
 /**
- * Both this module's docstring and `reminders/job.ts:163` claimed `to` was
+ * Both this module's docstring and `reminders/job.ts`'s `dispatch` claimed `to` was
  * "already E.164 — `normalizePhone` enforces this on write". It does not:
  * `customers/validation.ts`'s `normalizePhone` strips non-digits and keeps a
  * leading `+`, nothing more. R17 accepts "optional leading +, 7-15 digits", so
@@ -104,6 +104,45 @@ describe("toE164 — the wire format is the provider's problem, not the operator
     const result = toE164("611111");
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.reason).toContain("611111");
+  });
+
+  /**
+   * Panama's plan, verified rather than assumed: landlines are SEVEN digits
+   * (prefix 2/3/4/5/7/9), mobiles are EIGHT and start with 6. There are no area
+   * codes. The live census found exactly one 7-digit row among 361.
+   *
+   * A landline is a perfectly valid Panama number — it just cannot receive a
+   * WhatsApp template, because WhatsApp is a mobile service. So it is refused,
+   * and the refusal has to SAY that. An earlier version of this module called
+   * it "not a Panama number", which is false, in a change whose whole premise
+   * is that a comment claimed something untrue.
+   */
+  it("refuses a Panama LANDLINE as a landline, not as a foreign number", () => {
+    const result = toE164("269-1234");
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.reason).toMatch(/fij|landline/i);
+    expect(result.ok === false && result.reason).not.toMatch(/not a Panama number/i);
+  });
+
+  it("refuses a landline that already carries its country code, the same way", () => {
+    const result = toE164("5072691234");
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.reason).toMatch(/fij|landline/i);
+  });
+
+  it("refuses eight digits that are not a mobile — no Panama number starts 7xxxxxxx", () => {
+    expect(toE164("71234567").ok).toBe(false);
+  });
+
+  // R17's own bounds, reused. An imported row never passes through
+  // `validateClienteInput`, which is the entire reason this module exists — so
+  // a `+` cannot be taken as proof the rest is a phone number.
+  it("does not wave through a `+` with too few digits to be a phone number", () => {
+    expect(toE164("+1").ok).toBe(false);
+  });
+
+  it("does not wave through a `+` with more digits than E.164 allows", () => {
+    expect(toE164("+1234567890123456").ok).toBe(false);
   });
 
   it("refuses an empty phone rather than sending a bare plus", () => {

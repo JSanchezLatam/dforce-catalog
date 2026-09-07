@@ -41,10 +41,18 @@ export function isValidPhoneFormat(raw: string): boolean {
 }
 
 /**
- * E.164-ish normalization — strips separators, preserves a leading `+` when
- * present. Needed for Kapso (Phase 7's WhatsApp templates require E.164 `to`)
- * but lives here because it's part of validating/persisting a customer's
- * phone, not a provider concern.
+ * Strips separators and preserves a leading `+` when present. That is ALL it
+ * does — it is not E.164 normalization and never was.
+ *
+ * This docstring used to say "E.164-ish … needed for Kapso", and two other
+ * files went on to state as fact that `to` was "already E.164 — normalizePhone
+ * enforces this on write". None of it was true, and a Panama number typed the
+ * way staff type them (`6111-1111`) reached Kapso as `61111111` for months.
+ *
+ * E.164 is a WIRE format and belongs to the provider: `reminders/providers/
+ * whatsapp.ts`'s `toE164` does that conversion, and refuses what it cannot
+ * place rather than guessing. What lives here is storage — the shape the phone
+ * search, duplicate detection and migration `0016` all read.
  */
 export function normalizePhone(raw: string): string {
   const hasPlus = raw.trim().startsWith("+");
