@@ -272,8 +272,9 @@ Which is which, as of 2026-09-06:
 
 ### `catalog-price-tier-choice` (archived 2026-09-06, merged 2026-09-01)
 
-**2 open follow-ups** in
-`archive/2026-09-06-catalog-price-tier-choice/tasks.md`:
+**1 open follow-up** in
+`archive/2026-09-06-catalog-price-tier-choice/tasks.md` (the tiers-behind-the-
+modal entry was closed 2026-09-06 and is struck through there):
 
 - ~~**A `tiers` validation error renders BEHIND the confirm modal.**~~ —
   **CLOSED 2026-09-06** on `fix/tiers-error-behind-modal`. One error surface on
@@ -300,7 +301,11 @@ Which is which, as of 2026-09-06:
   fully visible — and now pinned.
 - **`selection.ts`'s error messages are half-migrated** — the `tiers` ones are
   Spanish per the language rule, `categories`/`total`/`productsPerPage` are
-  still English, and they render in the same form.
+  still English, and they render in the same form. **More urgent since
+  2026-09-06**: the confirm dialog now has an error surface, so those English
+  strings reach a second place. The route's own `form` sentinel ("Invalid
+  request body") was caught and is filtered out with a test, but that is one
+  string — the `selection.ts` set is the rest of the same problem.
 
 A third — "`npm test` is not reliably clean" — was **closed while archiving**,
 not carried: the cause was worker contention starving `userEvent`, fixed by the

@@ -60,7 +60,12 @@ All work units below are complete (commits `02442f2`, `820b25d`, `d4dd770`,
 
 ## Follow-ups (raised in review, out of scope here)
 
-- [ ] **The tiers error renders behind the modal.** On a 400,
+- [x] ~~**The tiers error renders behind the modal.**~~ **CLOSED 2026-09-06**,
+  branch `fix/tiers-error-behind-modal`. `ConfirmGenerateDialog` has its own
+  error surface now, covering all three paths below plus a fourth this entry
+  did not know about: `handleConfirmGenerate` had no `catch` at all. Tests
+  assert CONTAINMENT (`within(dialog)`), which jsdom can prove, rather than
+  visibility, which it cannot. Original text: On a 400,
   `handleConfirmGenerate` sets `errors` and returns without closing the confirm
   dialog, and `ConfirmGenerateDialog` has no error surface — so the message
   lands in the review card *behind* the overlay. The jsdom test passes because

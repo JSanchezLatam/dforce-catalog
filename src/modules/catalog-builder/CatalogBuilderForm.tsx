@@ -305,16 +305,23 @@ export function CatalogBuilderForm({
 
       if (!response.ok) {
         const body = await response.json().catch(() => null);
-        const fields: Record<string, string> | undefined = body?.errors;
-        // Only field errors go into `errors` — they have render surfaces in the
-        // review card, where the operator lands to fix them. The generic
-        // fallback used to be written as `errors.form`, which nothing in this
-        // module renders; `confirmError` is the only place it was ever read.
-        if (fields) setErrors(fields);
+        const returned: Record<string, string> | undefined = body?.errors;
+        // `form` is dropped on both paths. It is the route's sentinel for a
+        // body it could not parse at all (`generate/route.ts` answers
+        // `{ errors: { form: "Invalid request body" } }`) — English, and not a
+        // field the operator can go correct. It survived unnoticed only
+        // because nothing in this module ever rendered `errors.form`; giving
+        // the channel a surface would have published it straight to the
+        // operator's screen, in the wrong language.
+        const fields = returned && Object.fromEntries(Object.entries(returned).filter(([k]) => k !== "form"));
+        // Only real field errors go into `errors` — those have render surfaces
+        // in the review card, where the operator lands to fix them.
+        if (fields && Object.keys(fields).length > 0) setErrors(fields);
         // Joined rather than generic: the operator has to know WHICH field, or
         // "cancel and look around" is the only instruction the dialog gives.
+        const messages = fields ? Object.values(fields) : [];
         setConfirmError(
-          fields ? Object.values(fields).join(" ") : "No se pudo encolar el catálogo. Intentalo de nuevo.",
+          messages.length > 0 ? messages.join(" ") : "No se pudo encolar el catálogo. Intentalo de nuevo.",
         );
         return;
       }

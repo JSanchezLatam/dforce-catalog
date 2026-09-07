@@ -218,6 +218,32 @@ describe("CatalogBuilderForm — a tiers error from the route is shown", () => {
     const shown = await screen.findAllByText("Elegí 1 o 2 listas de precios");
     expect(shown).toHaveLength(2);
     expect(within(screen.getByRole("dialog")).getByText("Elegí 1 o 2 listas de precios")).toBeInTheDocument();
+
+    // Two `role="alert"` regions with the same sentence would be announced
+    // twice — except exactly one of them is inside the tree the open dialog
+    // marks `aria-hidden`, so assistive tech reads the dialog's and not the
+    // card's. Measured, and pinned here because it is the half of this fix a
+    // sighted reader cannot check.
+    expect(shown.filter((el) => el.closest('[aria-hidden="true"]') !== null)).toHaveLength(1);
+  });
+
+  // The route answers an unparseable body with `{ errors: { form: "Invalid
+  // request body" } }` — English, and not a field anyone can go correct. It
+  // was invisible only because nothing rendered `errors.form`; the new surface
+  // would have published it verbatim.
+  it("does not publish the route's English `form` sentinel to the operator", async () => {
+    const { user } = await reachReviewStep({
+      ok: false,
+      status: 400,
+      json: async () => ({ errors: { form: "Invalid request body" } }),
+    });
+
+    await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
+    await user.click(await screen.findByRole("button", { name: "Generar catálogo" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(await within(dialog).findByText(/No se pudo encolar el catálogo/)).toBeInTheDocument();
+    expect(screen.queryByText("Invalid request body")).not.toBeInTheDocument();
   });
 });
 
