@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { Lock, User } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,7 @@ import { FIELD_ERROR } from "@/shared/ui/styles";
 const initialState: LoginState = null;
 
 function validateField(value: string): string {
-  return value ? "" : "Required";
+  return value ? "" : "Requerido";
 }
 
 export function LoginForm() {
@@ -25,45 +26,62 @@ export function LoginForm() {
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <form action={formAction} className="flex w-full flex-col gap-4">
       <div className="grid gap-2">
-        <Label htmlFor="username">Username</Label>
-        <Input
-          id="username"
-          name="username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          onBlur={() => setFieldError("username", username)}
-          autoComplete="username"
-          required
-        />
-        {fieldErrors.username && (
-          <p className={FIELD_ERROR}>{fieldErrors.username}</p>
-        )}
+        <Label htmlFor="username" className="text-[13px] font-semibold text-foreground">
+          Usuario
+        </Label>
+        <div className="relative flex items-center">
+          <User className="pointer-events-none absolute left-3 size-4 text-muted-foreground" aria-hidden="true" />
+          <Input
+            id="username"
+            name="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            onBlur={() => setFieldError("username", username)}
+            autoComplete="username"
+            required
+            placeholder="Ingresa tu nombre de usuario"
+            className="h-11 rounded-xl bg-background/70 pl-10 pr-3 shadow-inner placeholder:text-muted-foreground"
+          />
+        </div>
+        {fieldErrors.username && <p className={FIELD_ERROR}>{fieldErrors.username}</p>}
       </div>
       <div className="grid gap-2">
-        <Label htmlFor="password">Password</Label>
-        <Input
-          id="password"
-          name="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          onBlur={() => setFieldError("password", password)}
-          autoComplete="current-password"
-          required
-        />
-        {fieldErrors.password && (
-          <p className={FIELD_ERROR}>{fieldErrors.password}</p>
-        )}
+        <Label htmlFor="password" className="text-[13px] font-semibold text-foreground">
+          Contraseña
+        </Label>
+        <div className="relative flex items-center">
+          <Lock className="pointer-events-none absolute left-3 size-4 text-muted-foreground" aria-hidden="true" />
+          <Input
+            id="password"
+            name="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onBlur={() => setFieldError("password", password)}
+            autoComplete="current-password"
+            required
+            placeholder="••••••••"
+            className="h-11 rounded-xl bg-background/70 pl-10 pr-3 shadow-inner placeholder:text-muted-foreground"
+          />
+        </div>
+        {fieldErrors.password && <p className={FIELD_ERROR}>{fieldErrors.password}</p>}
       </div>
       {state?.error && (
         <p role="alert" className={FIELD_ERROR}>
           {state.error}
         </p>
       )}
-      <Button type="submit" disabled={pending || !username || !password}>
-        {pending ? "Signing in…" : "Sign in"}
+      {/* The `--login-brand*` vars are declared by `<main>` in login/page.tsx, not
+          here, so each carries its fallback: rendered anywhere else — a test, a
+          future host — the button would otherwise come out transparent. */}
+      <Button
+        type="submit"
+        disabled={pending || !username || !password}
+        className="h-11 w-full rounded-xl bg-[var(--login-brand,hsl(5_85%_45%))] font-semibold text-[var(--login-brand-foreground,white)] shadow-[0_1px_2px_rgb(0_0_0_/_0.15),0_6px_16px_hsl(5_85%_45%_/_0.28)] hover:bg-[var(--login-brand-hover,hsl(5_85%_39%))]"
+      >
+        {pending ? "Iniciando sesión…" : "Iniciar sesión"}
       </Button>
     </form>
   );
