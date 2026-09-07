@@ -252,6 +252,38 @@ export const reminderStatusEnum = pgEnum("reminder_status", [
   "opted_out",
 ]);
 
+export const customerImportStatusEnum = pgEnum("customer_import_status", ["running", "completed", "failed"]);
+
+/**
+ * `customer_import_runs` — layer-1 concurrency guard for
+ * `modules/customer-import/job.ts`'s `runCustomerImport`. Same shape and same
+ * purpose as `sync_runs` above: a `status = 'running'` row is this feature's
+ * own source of truth for "is one already going", checked by
+ * `buildStartImportRunStatement`'s `WHERE NOT EXISTS` BEFORE the Interfuerza
+ * fetch even starts, so a second concurrent request doesn't spend another
+ * ~15 requests against an API that carries a real 1h IP ban.
+ *
+ * This is explicitly NOT the correctness guarantee — even folded into one
+ * statement, it is not a unique constraint or an explicit lock (see that
+ * function's docstring for the residual window). The actual guarantee against
+ * duplicate customers is the `pg_advisory_xact_lock` taken inside the write
+ * transaction, before `listExisting`, in `job.ts`.
+ */
+export const customerImportRuns = pgTable("customer_import_runs", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  status: customerImportStatusEnum("status").notNull().default("running"),
+  created: integer("created"),
+  updated: integer("updated"),
+  skippedCount: integer("skipped_count"),
+  error: text("error"),
+});
+
+export type CustomerImportRun = typeof customerImportRuns.$inferSelect;
+
 /**
  * `cliente` — customer. Originally shipped with one inline vehicle (v1,
  * ADR-6); superseded by the `vehiculo` child table below
@@ -275,6 +307,19 @@ export const cliente = pgTable(
      */
     phone: text("phone").notNull(),
     email: text("email"),
+    /**
+     * Interfuerza's `Cliente` value (customer-import D2) — nullable because
+     * every customer created through the app has none, and that stays the
+     * normal case going forward; this column marks provenance, not a
+     * requirement. Not UNIQUE at the database level, for the same reason
+     * `phone` above is not: the import matches on it in application code, and
+     * one more unique index is one more thing that rejects a legitimate row
+     * later.
+     *
+     * `Token` is NOT the identifier despite the name — it is empty on all 370
+     * live rows. Written here because the next person will reach for it.
+     */
+    externalId: text("external_id"),
     /**
      * Two INDEPENDENT opt-out flags (R26, design ADR-5) — WhatsApp and email
      * are legally distinct consent regimes, so a customer can decline one

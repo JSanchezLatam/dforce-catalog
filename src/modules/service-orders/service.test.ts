@@ -641,7 +641,7 @@ describe("createOrder — a deactivated cliente (R20)", () => {
     };
   }
 
-  const input = { clienteId: "c1", vehiculoId: "v1", categoria: "mant_preventivo", descripcion: "x" };
+  const input = { clienteId: "c1", vehiculoId: "v1", categoria: "mant_preventivo", description: "x" };
 
   it("refuses to open an order against a deactivated customer", async () => {
     const db = { transaction: vi.fn() };

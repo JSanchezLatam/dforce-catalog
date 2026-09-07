@@ -40,8 +40,15 @@ const pending = vi.hoisted(() => ({
 
 /** Commits a navigation the way Next does: URL first, then every consumer of the hook. */
 const land = vi.hoisted(() => (url: string) => {
+  const next = url.split("?")[1] ?? "";
+  // A navigation to the SAME url produces no new `searchParams`, so consumers
+  // are not re-rendered. Notifying unconditionally — as this mock did — hides
+  // every bug about a push that does not change the URL, which is the fourth
+  // mock-fidelity gap of this shape on this branch.
+  const unchanged = next === searchParams.value.toString();
   window.history.replaceState({}, "", url);
-  searchParams.value = new URLSearchParams(url.split("?")[1] ?? "");
+  if (unchanged) return;
+  searchParams.value = new URLSearchParams(next);
   for (const notify of listeners) notify();
 });
 

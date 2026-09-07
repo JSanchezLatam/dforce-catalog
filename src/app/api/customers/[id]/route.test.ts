@@ -94,6 +94,25 @@ describe("permanent vehicle deletion is administrador-only", () => {
     expect(transaction).toHaveBeenCalled();
   });
 
+  /**
+   * Fix 2 (customer-import-fixes) — decided: the deleteVehicle permission
+   * gate outranks the active/fields mutual-exclusion 400 just past it,
+   * because it runs first. A tecnico combining a deactivation with a vehicle
+   * deletion in one body gets refused for the permission problem, not the
+   * mutual-exclusion one.
+   */
+  it("refuses active+vehicle-deletion combined from a tecnico with 403, not the active/fields 400 (fix 2)", async () => {
+    transaction.mockClear();
+
+    const response = await handleUpdateCliente(requestWith({ active: false, vehicles: [{ deleted: true }] }), "c1", {
+      getById: async () => owningV1,
+      database,
+    });
+
+    expect(response.status).toBe(403);
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
   /** The gate is scoped to deletion: a tecnico's ordinary vehicle edit is untouched. */
   it("still lets a tecnico deactivate and edit vehicles", async () => {
     transaction.mockClear();

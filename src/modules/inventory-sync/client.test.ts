@@ -173,3 +173,38 @@ describe("fetchAllProducts", () => {
     expect(PAGE_SIZE).toBe(25);
   });
 });
+
+/**
+ * Added AFTER the extraction, and deliberately breaking this file's
+ * "untouched" status — because the thing it was proving stopped being true.
+ *
+ * `design.md` D1 claimed these tests passing unmodified proved the refactor
+ * changed no behaviour. That held for the extraction commit. It stopped
+ * holding when a later commit added a `count` guard INSIDE the shared
+ * transport: every fixture here hands back a numeric `count`, so a guard that
+ * rejected the string the API actually sends was invisible to all of them.
+ *
+ * An untouched test file is proof only while nothing underneath it changed.
+ */
+describe("fetchAllProducts — the wire shape of `count` (post-extraction)", () => {
+  it("paginates on the numeric STRING the API really sends", async () => {
+    // Measured live: products answers `count: "699"`, a string, exactly as
+    // customers answers `"370"`. The pre-extraction code worked by coercion.
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ products: Array.from({ length: 25 }, (_, i) => ({ Producto: { id: String(i) } })), count: "60" }),
+    })) as unknown as typeof fetch;
+    const sleepImpl = vi.fn().mockResolvedValue(undefined);
+
+    const batches: unknown[][] = [];
+    for await (const batch of fetchAllProducts({}, { fetchImpl, sleepImpl, baseUrl: "https://ifx.test/", token: "t" })) {
+      batches.push(batch);
+      if (batches.length > 5) break; // a guard against a regression that loops
+    }
+
+    // 60 over pages of 25 → 3 pages. A guard rejecting the string would have
+    // aborted here instead, on the very first page.
+    expect(batches).toHaveLength(3);
+  });
+});

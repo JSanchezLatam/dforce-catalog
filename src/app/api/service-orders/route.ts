@@ -32,10 +32,10 @@ export async function handleCreateOrdenServicio(
     if (err instanceof ClienteDeactivatedError) {
       // 409, matching `api/customers/[id]` — the caller is permitted, the
       // RECORD's state is what refuses. A 400 would read as a malformed body.
-      return NextResponse.json({ error: "cliente_deactivated" }, { status: 409 }); // R20/D5
+      return NextResponse.json({ error: "cliente_deactivated" }, { status: 409 }); // customer-management R20/D5 — NOT service-orders R20, three lines below
     }
     if (err instanceof UnknownClienteError) {
-      return NextResponse.json({ error: "unknown_cliente", clienteId: err.clienteId }, { status: 400 }); // R20
+      return NextResponse.json({ error: "unknown_cliente", clienteId: err.clienteId }, { status: 400 }); // service-orders R20
     }
     if (err instanceof InvalidCategoriaError) {
       return NextResponse.json({ errors: err.errors }, { status: 400 }); // C4
