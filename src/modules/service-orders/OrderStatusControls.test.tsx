@@ -47,6 +47,15 @@ describe("OrderStatusControls — a network failure has to say so", () => {
     expect(await screen.findByText("No se pudo conectar. Revisa tu conexión e intenta de nuevo.")).toBeInTheDocument();
     // And it never pretends the transition happened.
     expect(refresh).not.toHaveBeenCalled();
+    // The button comes BACK. Every sibling network-failure test pins this
+    // and this file did not: deleting the `finally` strands `isSubmitting`
+    // at true on both failure paths, so every status button reads
+    // "Actualizando…" forever and the operator is locked out of the order
+    // until they reload — with all three of these tests green. That is
+    // `user-lifecycle` WU3's CRITICAL by name, the one `UserForm.tsx`'s
+    // own comment memorializes.
+    expect(screen.getByRole("button", { name: "Marcar como En progreso" })).toBeEnabled();
+
   });
 
   it("keeps the generic message for a request that arrived and was refused", async () => {
@@ -58,6 +67,14 @@ describe("OrderStatusControls — a network failure has to say so", () => {
 
     expect(await screen.findByText("No se pudo actualizar el estado de la orden.")).toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
+    // The button comes BACK. The `finally` covers this path too — deleting the `finally` strands `isSubmitting`
+    // at true on both failure paths, so every status button reads
+    // "Actualizando…" forever and the operator is locked out of the order
+    // until they reload — with all three of these tests green. That is
+    // `user-lifecycle` WU3's CRITICAL by name, the one `UserForm.tsx`'s
+    // own comment memorializes.
+    expect(screen.getByRole("button", { name: "Marcar como En progreso" })).toBeEnabled();
+
   });
 
   it("refreshes the page once the transition is accepted", async () => {

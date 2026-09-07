@@ -154,8 +154,15 @@ it is marked below:
   pudo conectar". Narrow, and identical in `UserForm`, `CustomerForm` and
   `ServiceOrderForm` — consistency rather than a regression any one of them
   introduced. Raised by GGA on the `ServiceOrderForm` fix. If it is ever fixed
-  it gets fixed in all three at once, which is also when the shared helper
-  below is worth extracting.
+  it gets fixed in all three at once.
+  **No shared submit helper exists, and the entry below is not one.** That
+  entry once pointed here as the moment to extract one; when it was closed,
+  only the shared SENTENCE moved (`CONNECTION_ERROR`). A `submitJson()` was
+  considered and rejected on the spot: the call sites branch on different
+  status codes and write to different surfaces (`setErrors({ form })` vs
+  `addToast`), so wrapping three lines behind a shared result type would be
+  more code, not less. Anyone fixing this `json()` throw is starting from four
+  independent `catch` blocks, not from a helper.
 - ~~**`OrderStatusControls.transitionTo` has the same shape**~~ — **CLOSED
   2026-09-06** on `fix/status-controls-catch`, together with the shared copy
   constant. It had no test file at all; it has three now. The sentence itself
