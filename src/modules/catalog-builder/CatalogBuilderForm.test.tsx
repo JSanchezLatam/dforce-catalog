@@ -301,10 +301,15 @@ describe("CatalogBuilderForm — a failed confirm is readable from inside the di
    * with Generar live, so the retry it invites enqueues a DUPLICATE that evicts
    * a real catalog under the retention limit.
    *
-   * Testable here, unlike the three dialog forms exempted in `686bc9d` — the
-   * polarity is inverted. `await response.json()` runs BEFORE
-   * `setShowConfirmDialog(false)`, so the dialog is still mounted and the wrong
-   * message is fully visible. That exemption does not transfer.
+   * WHAT THIS PINS, measured in both directions rather than assumed: it binds
+   * to `response.json().catch(() => ({}))`, NOT to the scope of the `catch`.
+   * Drop that fallback and this goes red; collapse the two `try` blocks back
+   * into one wide `catch` and all 13 tests here still PASS. With `.json()`
+   * guarded at all three parse sites the narrow first `try` has no reachable
+   * path that differs from the wide one, so it is defence in depth and the
+   * `.json()` fallback is the actual fix. An earlier version of this docstring
+   * claimed the narrowing was pinned. It is not, and saying so in the archive
+   * would have been worse than not testing it.
    */
   it("does not blame the network for a queued catalog whose response body fails to parse", async () => {
     const { user } = await reachReviewStep({

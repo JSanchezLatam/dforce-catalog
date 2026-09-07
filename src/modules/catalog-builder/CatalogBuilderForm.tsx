@@ -319,9 +319,13 @@ export function CatalogBuilderForm({
         if (fields && Object.keys(fields).length > 0) setErrors(fields);
         // Joined rather than generic: the operator has to know WHICH field, or
         // "cancel and look around" is the only instruction the dialog gives.
+        // `validateCatalogSelection` sets its keys in independent `if` blocks,
+        // so several arrive at once. Joined with the same separator the printed
+        // catalog uses for its price lists — a plain space runs two sentences
+        // together into one unreadable line.
         const messages = fields ? Object.values(fields) : [];
         setConfirmError(
-          messages.length > 0 ? messages.join(" ") : "No se pudo encolar el catálogo. Intentalo de nuevo.",
+          messages.length > 0 ? messages.join(" · ") : "No se pudo encolar el catálogo. Intentalo de nuevo.",
         );
         return;
       }
@@ -337,6 +341,10 @@ export function CatalogBuilderForm({
       setEvictionWarning(body.evictionWarning === true);
       setShowConfirmDialog(false);
       setShowSuccessAlert(true);
+      // A retry that SUCCEEDS leaves nothing to fix, so the field error this
+      // design sends the operator back to the review card for is now a lie
+      // sitting behind the success dialog. Pre-existing, and cheap here.
+      setErrors({});
     } finally {
       setIsSubmitting(false);
     }

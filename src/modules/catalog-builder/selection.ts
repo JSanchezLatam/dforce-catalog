@@ -160,15 +160,15 @@ export function validateCatalogSelection(check: CatalogSelectionCheck): void {
   const errors: Record<string, string> = {};
 
   if (check.includedCategoryCount === 0) {
-    errors.categories = "Select at least one category"; // R5.7
+    errors.categories = "Elegí al menos una categoría"; // R5.7
   }
 
   if (check.totalProductCount === 0) {
-    errors.total = "No products selected"; // R13 scenario 3
+    errors.total = "No seleccionaste ningún producto"; // R13 scenario 3
   }
 
   if (check.totalProductCount > MAX_TOTAL_PRODUCTS) {
-    errors.total = `${check.totalProductCount} selected, max ${MAX_TOTAL_PRODUCTS}`; // R5.8/5.9
+    errors.total = `Seleccionaste ${check.totalProductCount}, el máximo es ${MAX_TOTAL_PRODUCTS}`; // R5.8/5.9
   }
 
   if (
@@ -176,7 +176,7 @@ export function validateCatalogSelection(check: CatalogSelectionCheck): void {
     check.productsPerPage < MIN_PRODUCTS_PER_PAGE ||
     check.productsPerPage > MAX_PRODUCTS_PER_PAGE
   ) {
-    errors.productsPerPage = `Must be an integer between ${MIN_PRODUCTS_PER_PAGE} and ${MAX_PRODUCTS_PER_PAGE}`; // R5.4
+    errors.productsPerPage = `Tiene que ser un número entero entre ${MIN_PRODUCTS_PER_PAGE} y ${MAX_PRODUCTS_PER_PAGE}`; // R5.4
   }
 
   if (check.tiers !== undefined) {

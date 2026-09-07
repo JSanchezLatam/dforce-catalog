@@ -272,9 +272,8 @@ Which is which, as of 2026-09-06:
 
 ### `catalog-price-tier-choice` (archived 2026-09-06, merged 2026-09-01)
 
-**1 open follow-up** in
-`archive/2026-09-06-catalog-price-tier-choice/tasks.md` (the tiers-behind-the-
-modal entry was closed 2026-09-06 and is struck through there):
+**0 open follow-ups** — both were closed on 2026-09-06 and are struck through
+in `archive/2026-09-06-catalog-price-tier-choice/tasks.md`:
 
 - ~~**A `tiers` validation error renders BEHIND the confirm modal.**~~ —
   **CLOSED 2026-09-06** on `fix/tiers-error-behind-modal`. One error surface on
@@ -295,17 +294,27 @@ modal entry was closed 2026-09-06 and is struck through there):
   failure over a catalog the server had ALREADY queued, with the dialog open
   and Generar live — and the retry that invites enqueues a duplicate that
   evicts a real catalog under the retention limit. Narrowed to the two-`try`
-  shape `UserForm` already uses. **The "provably untestable" exemption recorded
-  above does NOT transfer here**: `await response.json()` runs BEFORE
-  `setShowConfirmDialog(false)`, so the dialog is still mounted and the lie is
-  fully visible — and now pinned.
-- **`selection.ts`'s error messages are half-migrated** — the `tiers` ones are
-  Spanish per the language rule, `categories`/`total`/`productsPerPage` are
-  still English, and they render in the same form. **More urgent since
-  2026-09-06**: the confirm dialog now has an error surface, so those English
-  strings reach a second place. The route's own `form` sentinel ("Invalid
-  request body") was caught and is filtered out with a test, but that is one
-  string — the `selection.ts` set is the rest of the same problem.
+  shape `UserForm` already uses.
+  **And the "now pinned" this entry first claimed was FALSE.** Measured in both
+  directions afterwards: the test binds to `response.json().catch(() => ({}))`,
+  not to the scope of the `catch`. Drop that fallback and it goes red; collapse
+  the two `try` blocks back into one wide `catch` and all 13 tests still pass.
+  With `.json()` guarded at all three parse sites the narrow `try` has no
+  reachable path that differs, so it is defence in depth and the `.json()`
+  fallback is the fix. The narrowing stays — it costs nothing and matches the
+  repo's shape — but a false "pinned" written into this ledger is what the next
+  agent trusts instead of re-measuring.
+- ~~**`selection.ts`'s error messages are half-migrated**~~ — **CLOSED
+  2026-09-06** on `fix/tiers-error-behind-modal`. All four English strings
+  translated (`categories`, both `total` cases, `productsPerPage`); the `tiers`
+  ones were already Spanish. Closed rather than deferred because the same
+  change gave those strings a SECOND surface: the confirm dialog would have
+  printed "Select at least one category No products selected Must be an integer
+  between 1 and 24" — three English sentences, run together, inside a Spanish
+  dialog. The route's own `form` sentinel is filtered out separately, with a
+  test. The joiner is now `" · "`, the separator the printed catalog already
+  uses, because `validateCatalogSelection` sets its keys in independent `if`
+  blocks and several arrive at once.
 
 A third — "`npm test` is not reliably clean" — was **closed while archiving**,
 not carried: the cause was worker contention starving `userEvent`, fixed by the

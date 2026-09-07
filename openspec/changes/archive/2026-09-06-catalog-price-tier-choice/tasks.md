@@ -82,6 +82,10 @@ All work units below are complete (commits `02442f2`, `820b25d`, `d4dd770`,
   never touches — one showing interleaved keystrokes (`'lLeurn.-cVoime 9-'` for
   `'Lun-Vie 9-18, Sáb 9-13'`).
 
-- [ ] **`selection.ts` error messages are half-migrated.** The new `tiers`
+- [x] ~~**`selection.ts` error messages are half-migrated.**~~ **CLOSED
+  2026-09-06**, branch `fix/tiers-error-behind-modal` — all four English
+  strings translated, forced by that change giving them a second surface in the
+  confirm dialog. Original text:
+  **`selection.ts` error messages are half-migrated.** The new `tiers`
   messages are Spanish per the language rule; `categories`/`total`/
   `productsPerPage` are still English and render in the same form.
