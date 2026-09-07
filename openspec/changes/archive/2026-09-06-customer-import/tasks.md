@@ -760,6 +760,12 @@ careful about verification, silence reads as "not run".
   `61111111` for months. Converted at the send boundary by
   `reminders/providers/whatsapp.ts`'s `toE164`. A Panama LANDLINE is still
   refused — WhatsApp is a mobile service, and no storage format fixes that.
+- [ ] **`findByPhone` is an exact match, so the column's two shapes never
+  dedupe against each other.** `customers/queries.ts` compares
+  `eq(cliente.phone, phone)`, and the app form stores `61234567` where the
+  import stores `6123-4567` — the same number, never matched. `schema.ts` now
+  states the tolerate-both requirement that the code does not yet meet. Raised
+  2026-09-07 while closing the E.164 entry above.
 - [ ] **An unplaceable phone burns three retries and lands in the DLQ.**
   `toE164` refusing returns `{ ok: false }`, `reminders/job.ts` throws on that,
   and pg-boss retries — `retryLimit: 3`, backoff, then `REMINDER_DLQ`

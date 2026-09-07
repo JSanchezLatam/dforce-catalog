@@ -146,9 +146,6 @@ describe("toE164 — the wire format is the provider's problem, not the operator
     expect(toE164("+507 6111-1111")).toEqual({ ok: true, value: "+50761111111" });
   });
 
-  // The third shape. A `+` on 7-8 digits says nothing a country code would —
-  // no valid international number is that short — so it is read as Panama
-  // national exactly like the bare form.
   // Landlines are 2/3/4/5/7/9. Seven digits starting with `6` is a truncated
   // mobile — refused either way, but the reason has to name which, or it is
   // the same false-statement defect this module was fixed for.
@@ -159,9 +156,20 @@ describe("toE164 — the wire format is the provider's problem, not the operator
     expect(result.ok === false && result.reason).not.toContain("landline");
   });
 
-  it("refuses a bare `+` landline, and places a bare `+` mobile", () => {
-    expect(toE164("+269-1234").ok).toBe(false);
-    expect(toE164("+6111-1111")).toEqual({ ok: true, value: "+50761111111" });
+  /**
+   * A `+` means the operator DECLARED the country, and this function never
+   * re-homes a declared number. `+677 61234` is Solomon Islands; re-reading it
+   * as a Panama mobile would deliver someone's reminder to a real Panamanian
+   * handset — worse than not sending at all.
+   *
+   * `+507` is the exception, because that declaration IS Panama: the national
+   * number behind it is read exactly as a bare one would be, which is what
+   * keeps the landline guard from depending on how someone typed the number.
+   */
+  it("never re-homes a number whose country the operator declared", () => {
+    expect(toE164("+677 61234")).toEqual({ ok: true, value: "+67761234" });
+    expect(toE164("+6111-1111")).toEqual({ ok: true, value: "+61111111" });
+    expect(toE164("+269-1234")).toEqual({ ok: true, value: "+2691234" });
   });
 
   /**

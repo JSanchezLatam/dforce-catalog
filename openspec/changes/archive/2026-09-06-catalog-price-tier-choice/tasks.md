@@ -60,6 +60,15 @@ All work units below are complete (commits `02442f2`, `820b25d`, `d4dd770`,
 
 ## Follow-ups (raised in review, out of scope here)
 
+- [ ] **`deriveCatalogTitle` still returns `"Catalog: Motor"`**
+  (`selection.ts:103`) — English, and it reaches both the confirm dialog
+  (`Título: Catalog: Motor`) and the generated PDF, which AGENTS.md names as a
+  Spanish surface. Not translated with the other four: five test files pin the
+  literal (`selection.test.ts`, `render.test.ts`, `enqueue.test.ts`,
+  `full-flow.e2e.test.ts`) and catalogs already stored carry the old title, so
+  it needs its own change with a decision about existing rows. Raised
+  2026-09-06.
+
 - [x] ~~**The tiers error renders behind the modal.**~~ **CLOSED 2026-09-06**,
   branch `fix/tiers-error-behind-modal`. `ConfirmGenerateDialog` has its own
   error surface now, covering all three paths below plus a fourth this entry

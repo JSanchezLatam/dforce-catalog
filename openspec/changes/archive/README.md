@@ -65,7 +65,7 @@ Anyone repeating this: dry-run the whole chain into a throwaway worktree off
 `origin/main` first, and check the real resolution byte-for-byte against the
 dry-run's.
 
-**After any archive, BOTH of these must hold.** There is no `openspec` CLI
+**After any archive, ALL THREE of these must hold.** There is no `openspec` CLI
 here to run, so they are the gate.
 
 1. `rg '^## (ADDED|MODIFIED)' openspec/specs/*/spec.md` comes back **empty**.
@@ -88,7 +88,7 @@ here to run, so they are the gate.
    applied, the main spec keeps the requirement that change replaced, and the
    grep stays clean the whole time. That is exactly how
    `catalog-price-tier-choice` hid for five days. As of 2026-09-06 the
-   directory holds nothing but `archive/`, so both checks pass.
+   directory holds nothing but `archive/`, so that check passes.
 
 `crm-shell-settings-rbac` also carries eight unchecked boxes under "Deferred to
 follow-up change". Those are a deferral register, not open work: all four units
@@ -140,7 +140,7 @@ survives being found.
 
 ### `customer-shared-phones` (C1, archived 2026-09-06)
 
-**2 open follow-ups** in
+**1 open follow-up** in
 `archive/2026-09-06-customer-shared-phones/tasks.md`, plus **one observation**
 that is not a box in that file and will not be found by following the pointer —
 it is marked below:
@@ -225,8 +225,8 @@ before touching that code:
 
 ### `customer-import` (C6, archived 2026-09-06)
 
-5 open follow-ups, full text at
-`archive/2026-09-06-customer-import/tasks.md`. The two that will matter first:
+6 open follow-ups, full text at
+`archive/2026-09-06-customer-import/tasks.md`. The ones that will matter first:
 
 - ~~**353 imported customers cannot receive a WhatsApp reminder**~~ — **CLOSED
   2026-09-07** on `fix/whatsapp-e164`. The entry was wrong twice: it is not a
@@ -239,12 +239,6 @@ before touching that code:
   and `0016` read. It ADDS only `+507`, and only to a number it identifies as a
   Panama mobile; everything else keeps the operator's digits with a `+`.
   A Panama LANDLINE is refused: valid number, but WhatsApp is a mobile service.
-- **`findByPhone` is an exact match, so the column's two shapes never dedupe
-  against each other.** `customers/service.ts` compares
-  `eq(cliente.phone, phone)`, and the form stores `61234567` where the import
-  stores `6123-4567` — the same number, never matched. Raised 2026-09-07; the
-  `schema.ts` comment now states the tolerate-both requirement the code does
-  not yet meet.
 - **An unplaceable phone burns three retries and lands in the DLQ.** `toE164`
   refusing returns `{ ok: false }`, `reminders/job.ts` throws, and pg-boss
   retries — `retryLimit: 3`, backoff, then `REMINDER_DLQ` (`job.ts:84`).
@@ -302,20 +296,11 @@ Which is which, as of 2026-09-06:
 
 ### `catalog-price-tier-choice` (archived 2026-09-06, merged 2026-09-01)
 
-**1 open follow-up.** Both entries in
-`archive/2026-09-06-catalog-price-tier-choice/tasks.md` were closed on
-2026-09-06 and are struck through there, but closing the language one turned up
-a third string the entry never named:
-
-- **`deriveCatalogTitle` still returns `"Catalog: Motor"`** (`selection.ts:103`).
-  That reaches the confirm dialog (`Título: Catalog: Motor`) and the generated
-  PDF, which AGENTS.md names as a Spanish surface. NOT translated with the
-  other four, deliberately: five test files pin the literal
-  (`selection.test.ts`, `render.test.ts`, `enqueue.test.ts`,
-  `full-flow.e2e.test.ts`) and catalogs already stored carry the old title, so
-  it needs its own change with a decision about existing rows. Logged rather
-  than left at "0", because a commit titled "finish the Spanish migration" is
-  exactly what the next agent would trust instead of re-checking.
+**1 open follow-up** in
+`archive/2026-09-06-catalog-price-tier-choice/tasks.md` — `deriveCatalogTitle`
+still returns `"Catalog: Motor"`, which reaches the confirm dialog and the
+generated PDF. It was turned up by closing the language entry below and is
+recorded there in full.
 
 The two that were closed:
 

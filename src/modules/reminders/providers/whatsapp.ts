@@ -94,32 +94,32 @@ export function toE164(raw: string): { ok: true; value: string } | { ok: false; 
   // and `+507 269-1234` has to get the same answer — an earlier draft checked
   // the plus first, so one of those two forms sailed past the guard.
   //
-  // A 7- or 8-digit number is READ as Panama's, with or without a `+`, because
-  // this shop is in Panama and the plan has no area codes.
+  // A leading `+` means the operator DECLARED the country. Whatever follows is
+  // theirs, and this function never re-homes it — a `+677 61234` (Solomon
+  // Islands) re-read as a Panama mobile would deliver a stranger's reminder to
+  // a real Panamanian handset, which is a worse outcome than not sending.
   //
-  // That is a heuristic, and its failure mode is worth naming: a foreign
-  // short-form number typed without its country code is misread. A Danish
-  // mobile is 8 digits and can start with `6`, so a stored `60123456` would be
-  // sent to `+50760123456` — a real Panama number belonging to someone else.
-  // The 361-row census contains no such value, and an operator who means
-  // Denmark can type `+45 60123456`, which has too many digits to be read as
-  // national. Right for this shop; not a general phone parser.
+  // The one exception is a `+` that carries `507` itself: that IS Panama,
+  // declared, so the national number behind it is read the same way a bare one
+  // would be — otherwise the same landline gets two answers depending only on
+  // whether someone typed the country code.
   //
-  // A LONGER number only counts as Panama when it actually carries `507` —
-  // a shape, not a proof of origin: `507-123-4567` is a real US Minnesota
-  // number and is refused here as a Panama landline. That IS a behaviour
-  // change for such a row, and whether it ever delivered before is UNVERIFIED
-  // — it depends on how Meta parses a plus-less `5071234567`, which nobody
-  // here has measured. Stated rather than waved away as harmless. The census
-  // contains no US number, and an operator who means one can type `+1`.
-  const national =
+  // Without a `+`, 7 or 8 digits is read as Panama's: this shop is in Panama
+  // and the plan has no area codes. That is a heuristic, and its cost is worth
+  // naming — a foreign short-form number typed WITHOUT its country code is
+  // misread. A Danish mobile is 8 digits and can start with `6`, so a stored
+  // `60123456` would go to `+50760123456`. The 361-row census contains no such
+  // value, and typing the `+` is what an operator has to do to say otherwise.
+  const declared = raw.trim().startsWith("+");
+  const carriesPanamaCode =
     digits.startsWith(PANAMA_COUNTRY_CODE) &&
     (digits.length === PANAMA_COUNTRY_CODE.length + PANAMA_MOBILE_LENGTH ||
-      digits.length === PANAMA_COUNTRY_CODE.length + PANAMA_LANDLINE_LENGTH)
-      ? digits.slice(PANAMA_COUNTRY_CODE.length)
-      : digits.length === PANAMA_MOBILE_LENGTH || digits.length === PANAMA_LANDLINE_LENGTH
-        ? digits
-        : null;
+      digits.length === PANAMA_COUNTRY_CODE.length + PANAMA_LANDLINE_LENGTH);
+  const national = carriesPanamaCode
+    ? digits.slice(PANAMA_COUNTRY_CODE.length)
+    : !declared && (digits.length === PANAMA_MOBILE_LENGTH || digits.length === PANAMA_LANDLINE_LENGTH)
+      ? digits
+      : null;
 
   if (national !== null) {
     if (national.length === PANAMA_LANDLINE_LENGTH) {
