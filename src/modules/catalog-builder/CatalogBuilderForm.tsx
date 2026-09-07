@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { CARD, FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
 import { Pagination } from "@/shared/ui/Pagination";
 import { RETENTION_LIMIT } from "@/modules/catalog-storage/retention-policy";
@@ -107,6 +108,13 @@ export function CatalogBuilderForm({
   const [bulkFramed, setBulkFramed] = useState(false);
   const overridesBeforeBulkFrameRef = useRef<Record<string, "transparent" | "opaque" | "low_res" | null>>({});
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  /**
+   * Separate from `errors` on purpose. A field error still belongs in `errors`
+   * so the review card shows it once the operator closes the dialog to fix the
+   * field — this is the copy they read WITHOUT closing it, which is the only
+   * way they learn the click did anything at all.
+   */
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
   const [queueDepth, setQueueDepth] = useState<number | null>(null);
@@ -258,8 +266,17 @@ export function CatalogBuilderForm({
 
   async function handleConfirmGenerate() {
     setIsSubmitting(true);
+    setConfirmError(null);
+
+    // Two `try` blocks, the shape `UserForm` already uses. The first wraps ONLY
+    // the request, so the connection message can never be printed over a
+    // catalog the server already accepted: here that lie is worse than on any
+    // other surface, because the dialog stays OPEN with Generar live, and the
+    // retry it invites enqueues a DUPLICATE that evicts a real catalog under
+    // the retention limit.
+    let response: Response;
     try {
-      const response = await fetch("/api/catalog-builder/generate", {
+      response = await fetch("/api/catalog-builder/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -271,24 +288,66 @@ export function CatalogBuilderForm({
           tiers,
         }),
       });
+    } catch {
+      setConfirmError(CONNECTION_ERROR);
+      setIsSubmitting(false);
+      return;
+    }
 
+    try {
       if (response.status === 409) {
-        const body = await response.json();
-        setErrors({ total: body.error ?? "Cola llena \u2014 intentá de nuevo cuando termine un trabajo" });
+        const body = await response.json().catch(() => null);
+        const message = body?.error ?? "Cola llena \u2014 intentá de nuevo cuando termine un trabajo";
+        setErrors({ total: message });
+        setConfirmError(message);
         return;
       }
 
       if (!response.ok) {
         const body = await response.json().catch(() => null);
-        setErrors(body?.errors ?? { form: "No se pudo encolar el catálogo. Intentalo de nuevo." });
+        const returned: Record<string, string> | undefined = body?.errors;
+        // `form` is dropped on both paths. It is the route's sentinel for a
+        // body it could not parse at all (`generate/route.ts` answers
+        // `{ errors: { form: "Invalid request body" } }`) — English, and not a
+        // field the operator can go correct. It survived unnoticed only
+        // because nothing in this module ever rendered `errors.form`; giving
+        // the channel a surface would have published it straight to the
+        // operator's screen, in the wrong language.
+        const fields = returned && Object.fromEntries(Object.entries(returned).filter(([k]) => k !== "form"));
+        // Only real field errors go into `errors`, for when the operator goes
+        // BACK to fix them. Not all of them have a surface at this point:
+        // `productsPerPage` renders inside the `step === "select"` block, so on
+        // a confirm failure it is invisible until they click "Volver a la
+        // selección". The dialog surface below is what covers that gap.
+        if (fields && Object.keys(fields).length > 0) setErrors(fields);
+        // Joined rather than generic: the operator has to know WHICH field, or
+        // "cancel and look around" is the only instruction the dialog gives.
+        // `validateCatalogSelection` sets its keys in independent `if` blocks,
+        // so several arrive at once. Joined with the same separator the printed
+        // catalog uses for its price lists — a plain space runs two sentences
+        // together into one unreadable line.
+        const messages = fields ? Object.values(fields) : [];
+        setConfirmError(
+          messages.length > 0 ? messages.join(" · ") : "No se pudo encolar el catálogo. Intentalo de nuevo.",
+        );
         return;
       }
 
-      const body = await response.json();
+      // A 2xx means the job IS queued. This body only carries decoration — the
+      // queue position and the eviction warning — so a malformed one must not
+      // cost the operator a success they already have, and must never surface
+      // as a failure that invites the duplicate-creating retry above.
+      const body = await response
+        .json()
+        .catch(() => ({}) as { queuePosition?: number; evictionWarning?: boolean });
       setQueuePosition(body.queuePosition ?? null);
       setEvictionWarning(body.evictionWarning === true);
       setShowConfirmDialog(false);
       setShowSuccessAlert(true);
+      // A retry that SUCCEEDS leaves nothing to fix, so the field error this
+      // design sends the operator back to the review card for is now a lie
+      // sitting behind the success dialog. Pre-existing, and cheap here.
+      setErrors({});
     } finally {
       setIsSubmitting(false);
     }
@@ -605,6 +664,12 @@ export function CatalogBuilderForm({
         open={showConfirmDialog}
         onOpenChange={(open) => {
           setShowConfirmDialog(open);
+          // Only the CLOSING edge reaches here — this dialog has no trigger, so
+          // the parent opens it by setting `open` directly and `onOpenChange`
+          // never fires for that. Clearing here stops a stale refusal waiting
+          // inside next time; the fresh-attempt clear is at the top of
+          // `handleConfirmGenerate`.
+          setConfirmError(null);
           if (!open) setIsSubmitting(false);
         }}
         categories={categoryRefs}
@@ -612,6 +677,7 @@ export function CatalogBuilderForm({
         productCount={reviewedProducts.length}
         catalogCount={catalogCount}
         isSubmitting={isSubmitting}
+        error={confirmError}
         onConfirm={handleConfirmGenerate}
       />
 

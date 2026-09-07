@@ -4,6 +4,7 @@ import { AlertTriangleIcon, LoaderIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogClose, DialogContent, DialogFooter, DialogTitle } from "@/components/ui/dialog";
+import { FIELD_ERROR } from "@/shared/ui/styles";
 import type { CategoryRef } from "./selection";
 
 export function ConfirmGenerateDialog({
@@ -14,6 +15,7 @@ export function ConfirmGenerateDialog({
   productCount,
   catalogCount,
   isSubmitting,
+  error,
   onConfirm,
 }: {
   open: boolean;
@@ -23,6 +25,14 @@ export function ConfirmGenerateDialog({
   productCount: number;
   catalogCount: number;
   isSubmitting: boolean;
+  /**
+   * Why the last confirm attempt failed, or `null`. This dialog stays OPEN on
+   * every failure — the operator has to be able to retry or cancel — so it
+   * needs its own surface: without one the message went to the review card
+   * BEHIND the overlay, unreadable, and the only reason that looked fine in
+   * tests is that jsdom does no layering.
+   */
+  error: string | null;
   onConfirm: () => void;
 }) {
   const hasWarning = catalogCount >= 2;
@@ -61,6 +71,12 @@ export function ConfirmGenerateDialog({
             Título: <span className="font-medium text-foreground">{title}</span>
           </p>
         </DialogBody>
+
+        {error && (
+          <p role="alert" className={`px-6 ${FIELD_ERROR}`}>
+            {error}
+          </p>
+        )}
 
         <DialogFooter>
           <DialogClose render={<Button variant="outline" disabled={isSubmitting} />}>

@@ -272,18 +272,63 @@ Which is which, as of 2026-09-06:
 
 ### `catalog-price-tier-choice` (archived 2026-09-06, merged 2026-09-01)
 
-**2 open follow-ups** in
-`archive/2026-09-06-catalog-price-tier-choice/tasks.md`:
+**1 open follow-up.** Both entries in
+`archive/2026-09-06-catalog-price-tier-choice/tasks.md` were closed on
+2026-09-06 and are struck through there, but closing the language one turned up
+a third string the entry never named:
 
-- **A `tiers` validation error renders BEHIND the confirm modal.**
-  `handleConfirmGenerate` sets `errors` and returns without closing the dialog,
-  and `ConfirmGenerateDialog` has no error surface, so the message lands in the
-  review card under the overlay. The jsdom test passes because jsdom does no
-  layering. Pre-existing for `errors.total` and `errors.form` too; the fix is
-  one error surface on the dialog, for all three.
-- **`selection.ts`'s error messages are half-migrated** — the `tiers` ones are
-  Spanish per the language rule, `categories`/`total`/`productsPerPage` are
-  still English, and they render in the same form.
+- **`deriveCatalogTitle` still returns `"Catalog: Motor"`** (`selection.ts:103`).
+  That reaches the confirm dialog (`Título: Catalog: Motor`) and the generated
+  PDF, which AGENTS.md names as a Spanish surface. NOT translated with the
+  other four, deliberately: five test files pin the literal
+  (`selection.test.ts`, `render.test.ts`, `enqueue.test.ts`,
+  `full-flow.e2e.test.ts`) and catalogs already stored carry the old title, so
+  it needs its own change with a decision about existing rows. Logged rather
+  than left at "0", because a commit titled "finish the Spanish migration" is
+  exactly what the next agent would trust instead of re-checking.
+
+The two that were closed:
+
+- ~~**A `tiers` validation error renders BEHIND the confirm modal.**~~ —
+  **CLOSED 2026-09-06** on `fix/tiers-error-behind-modal`. One error surface on
+  the dialog, covering all three paths the entry named, plus a fourth it did
+  not: `handleConfirmGenerate` had **no `catch` at all**, so a dropped
+  connection re-enabled Generar with nothing said on a dialog that stays open.
+  That was the SEVENTH surface of the silent-write defect, found while adding
+  the surface — and it is why the class could not have been called closed one
+  PR earlier.
+  The message now appears in TWO places on a field error, deliberately: inside
+  the dialog, which is what the operator reads without closing anything, and in
+  the review card, where they land when they close it to fix the field. The
+  pre-existing test asserted only `findByText`, which cannot tell the two
+  apart — it now throws on the double match, which is itself the proof that the
+  old assertion could not have caught this.
+  **The first attempt at that `catch` was itself over-wide**, and GGA measured
+  the consequence: a 2xx whose body fails to parse was reported as a connection
+  failure over a catalog the server had ALREADY queued, with the dialog open
+  and Generar live — and the retry that invites enqueues a duplicate that
+  evicts a real catalog under the retention limit. Narrowed to the two-`try`
+  shape `UserForm` already uses.
+  **And the "now pinned" this entry first claimed was FALSE.** Measured in both
+  directions afterwards: the test binds to `response.json().catch(() => ({}))`,
+  not to the scope of the `catch`. Drop that fallback and it goes red; collapse
+  the two `try` blocks back into one wide `catch` and all 13 tests still pass.
+  With `.json()` guarded at all three parse sites the narrow `try` has no
+  reachable path that differs, so it is defence in depth and the `.json()`
+  fallback is the fix. The narrowing stays — it costs nothing and matches the
+  repo's shape — but a false "pinned" written into this ledger is what the next
+  agent trusts instead of re-measuring.
+- ~~**`selection.ts`'s error messages are half-migrated**~~ — **CLOSED
+  2026-09-06** on `fix/tiers-error-behind-modal`. All four English strings
+  translated (`categories`, both `total` cases, `productsPerPage`); the `tiers`
+  ones were already Spanish. Closed rather than deferred because the same
+  change gave those strings a SECOND surface: the confirm dialog would have
+  printed "Select at least one category No products selected Must be an integer
+  between 1 and 24" — three English sentences, run together, inside a Spanish
+  dialog. The route's own `form` sentinel is filtered out separately, with a
+  test. The joiner is now `" · "`, the separator the printed catalog already
+  uses, because `validateCatalogSelection` sets its keys in independent `if`
+  blocks and several arrive at once.
 
 A third — "`npm test` is not reliably clean" — was **closed while archiving**,
 not carried: the cause was worker contention starving `userEvent`, fixed by the

@@ -7,7 +7,7 @@
  * this WU's scope and already exercised end-to-end by `full-flow.e2e.test.ts`.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { CatalogBuilderForm } from "./CatalogBuilderForm";
@@ -192,17 +192,20 @@ describe("CatalogBuilderForm — reviewedProducts carries all three tiers (desig
  * the message must reach the DOM: an error set into state and rendered nowhere
  * is a dead Generar button with no explanation.
  *
- * CEILING, stated because a green run here is otherwise read as more than it
- * is: this proves the message is RENDERED, not that a user can see it. On a
- * 400 the confirm dialog stays open and has no error surface of its own, so
- * the message lands in the review card BEHIND the overlay. jsdom does no
- * layering, which is the only reason this passes. `errors.total` and
- * `errors.form` share the defect; the fix is one error surface on the dialog
- * for all three, tracked in tasks.md. Do not close that follow-up on the
- * strength of this test.
+ * The CEILING this docstring used to carry is GONE, and the assertion changed
+ * with it. It used to say: a green run proves the message is RENDERED, not
+ * that a user can see it — the dialog stayed open with no error surface, so
+ * the message landed in the review card BEHIND the overlay, and only jsdom's
+ * lack of layering made it pass. The dialog has its own surface now.
+ *
+ * So the message is in TWO places, deliberately, and this test pins both: the
+ * dialog, which is what the operator reads without closing anything, and the
+ * review card, which is where they land when they close it to fix the field.
+ * A bare `findByText` would now throw on the double match — which is itself
+ * the proof that the old assertion could not tell the two apart.
  */
 describe("CatalogBuilderForm — a tiers error from the route is shown", () => {
-  it("sets errors.tiers into the review card", async () => {
+  it("puts it inside the dialog AND in the review card behind it", async () => {
     const { user } = await reachReviewStep({
       ok: false,
       status: 400,
@@ -212,6 +215,135 @@ describe("CatalogBuilderForm — a tiers error from the route is shown", () => {
     await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
     await user.click(await screen.findByRole("button", { name: "Generar catálogo" }));
 
-    expect(await screen.findByText("Elegí 1 o 2 listas de precios")).toBeInTheDocument();
+    const shown = await screen.findAllByText("Elegí 1 o 2 listas de precios");
+    expect(shown).toHaveLength(2);
+    expect(within(screen.getByRole("dialog")).getByText("Elegí 1 o 2 listas de precios")).toBeInTheDocument();
+
+    // Two `role="alert"` regions with the same sentence would be announced
+    // twice — except exactly one of them is inside the tree the open dialog
+    // marks `aria-hidden`, so assistive tech reads the dialog's and not the
+    // card's. Measured, and pinned here because it is the half of this fix a
+    // sighted reader cannot check.
+    expect(shown.filter((el) => el.closest('[aria-hidden="true"]') !== null)).toHaveLength(1);
+  });
+
+  // The route answers an unparseable body with `{ errors: { form: "Invalid
+  // request body" } }` — English, and not a field anyone can go correct. It
+  // was invisible only because nothing rendered `errors.form`; the new surface
+  // would have published it verbatim.
+  it("does not publish the route's English `form` sentinel to the operator", async () => {
+    const { user } = await reachReviewStep({
+      ok: false,
+      status: 400,
+      json: async () => ({ errors: { form: "Invalid request body" } }),
+    });
+
+    await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
+    await user.click(await screen.findByRole("button", { name: "Generar catálogo" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(await within(dialog).findByText(/No se pudo encolar el catálogo/)).toBeInTheDocument();
+    expect(screen.queryByText("Invalid request body")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The confirm dialog stays OPEN on every failure — the operator has to be able
+ * to retry or cancel — so whatever went wrong has to be readable from inside
+ * it. It had no error surface at all: the message went to the review card
+ * BEHIND the overlay, and only jsdom's lack of layering made that look fine.
+ *
+ * These assert CONTAINMENT, which jsdom can prove, rather than visibility,
+ * which it cannot. `within(dialog)` is the whole point: the same text passing
+ * a bare `findByText` is exactly the false green the previous test warned
+ * about in its own docstring.
+ */
+describe("CatalogBuilderForm — a failed confirm is readable from inside the dialog", () => {
+  const dialog = () => screen.getByRole("dialog");
+
+  async function confirmAgainst(response: Parameters<typeof reachReviewStep>[0]) {
+    const { user } = await reachReviewStep(response);
+    await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
+    await user.click(await screen.findByRole("button", { name: "Generar catálogo" }));
+    return user;
+  }
+
+  it("shows a field error from the route inside the dialog, not only behind it", async () => {
+    await confirmAgainst({
+      ok: false,
+      status: 400,
+      json: async () => ({ errors: { tiers: "Elegí 1 o 2 listas de precios" } }),
+    });
+
+    expect(await within(dialog()).findByText("Elegí 1 o 2 listas de precios")).toBeInTheDocument();
+  });
+
+  it("shows the queue-full refusal inside the dialog", async () => {
+    await confirmAgainst({
+      ok: false,
+      status: 409,
+      json: async () => ({ error: "Cola llena — intentá de nuevo cuando termine un trabajo" }),
+    });
+
+    expect(await within(dialog()).findByText(/Cola llena/)).toBeInTheDocument();
+  });
+
+  it("shows the generic failure inside the dialog when the route returns no field errors", async () => {
+    await confirmAgainst({ ok: false, status: 500, json: async () => ({}) });
+
+    expect(await within(dialog()).findByText(/No se pudo encolar el catálogo/)).toBeInTheDocument();
+  });
+
+  /**
+   * The `catch` covers the REQUEST and nothing after it. A 2xx whose body fails
+   * to parse means the catalog IS queued, and reporting that as a connection
+   * failure is worse here than anywhere else in the app: the dialog stays open
+   * with Generar live, so the retry it invites enqueues a DUPLICATE that evicts
+   * a real catalog under the retention limit.
+   *
+   * WHAT THIS PINS, measured in both directions rather than assumed: it binds
+   * to `response.json().catch(() => ({}))`, NOT to the scope of the `catch`.
+   * Drop that fallback and this goes red; collapse the two `try` blocks back
+   * into one wide `catch` and all 13 tests here still PASS. With `.json()`
+   * guarded at all three parse sites the narrow first `try` has no reachable
+   * path that differs from the wide one, so it is defence in depth and the
+   * `.json()` fallback is the actual fix. An earlier version of this docstring
+   * claimed the narrowing was pinned. It is not, and saying so in the archive
+   * would have been worse than not testing it.
+   */
+  it("does not blame the network for a queued catalog whose response body fails to parse", async () => {
+    const { user } = await reachReviewStep({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError("Unexpected token < in JSON");
+      },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
+    await user.click(await screen.findByRole("button", { name: "Generar catálogo" }));
+
+    // The success is KEPT: a 2xx queued it, and the body only carried the queue
+    // position and the eviction warning — decoration this screen can do without.
+    expect(await screen.findByText(/El catálogo empezó a generarse/)).toBeInTheDocument();
+    expect(
+      screen.queryByText("No se pudo conectar. Revisa tu conexión e intenta de nuevo."),
+    ).not.toBeInTheDocument();
+  });
+
+  // `handleConfirmGenerate` had no `catch` at all — the seventh instance of
+  // this repo's silent-write defect, found while adding the surface above.
+  // Generar re-enabled with nothing said, on a dialog that stays open.
+  it("says the connection failed when the request never lands", async () => {
+    const { user } = await reachReviewStep();
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+
+    await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
+    await user.click(await screen.findByRole("button", { name: "Generar catálogo" }));
+
+    expect(
+      await within(dialog()).findByText("No se pudo conectar. Revisa tu conexión e intenta de nuevo."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generar catálogo" })).toBeEnabled();
   });
 });
