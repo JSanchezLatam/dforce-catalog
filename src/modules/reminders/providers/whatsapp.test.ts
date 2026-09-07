@@ -149,6 +149,16 @@ describe("toE164 — the wire format is the provider's problem, not the operator
   // The third shape. A `+` on 7-8 digits says nothing a country code would —
   // no valid international number is that short — so it is read as Panama
   // national exactly like the bare form.
+  // Landlines are 2/3/4/5/7/9. Seven digits starting with `6` is a truncated
+  // mobile — refused either way, but the reason has to name which, or it is
+  // the same false-statement defect this module was fixed for.
+  it("calls a truncated mobile a truncated mobile, not a landline", () => {
+    const result = toE164("6111111");
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.reason).toContain("truncated Panama mobile");
+    expect(result.ok === false && result.reason).not.toContain("landline");
+  });
+
   it("refuses a bare `+` landline, and places a bare `+` mobile", () => {
     expect(toE164("+269-1234").ok).toBe(false);
     expect(toE164("+6111-1111")).toEqual({ ok: true, value: "+50761111111" });

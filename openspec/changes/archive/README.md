@@ -73,7 +73,17 @@ here to run, so they are the gate.
    not copied. One rode into the main spec on this very archive: it sat above
    two requirements it had nothing to do with, so the spec claimed C1/C2/C6
    added the vehicle collection model.
-2. **Every folder left in `openspec/changes/` has an unmerged PR.** Check 1
+2. **A merged change's RATIONALE in `openspec/specs/` can go stale without
+   either other check noticing.** Found 2026-09-07: the customer-import spec
+   still said 353 customers "cannot receive a WhatsApp reminder" and that fixing
+   it "is a data migration, not a code change" — both disproved by
+   `fix/whatsapp-e164` — while the change was archived, `openspec/changes/` was
+   clean, and the `## ADDED/MODIFIED` grep came back empty. Every automated
+   check passed with the baseline asserting the opposite of shipped code.
+   There is no grep for this one. When a change disproves something an ARCHIVED
+   change wrote down, the merged spec is the third place to correct, after that
+   change's `tasks.md` and this README.
+3. **Every folder left in `openspec/changes/` has an unmerged PR.** Check 1
    cannot catch a merged-but-unarchived change: its delta simply never gets
    applied, the main spec keeps the requirement that change replaced, and the
    grep stays clean the whole time. That is exactly how
@@ -229,6 +239,12 @@ before touching that code:
   and `0016` read. It ADDS only `+507`, and only to a number it identifies as a
   Panama mobile; everything else keeps the operator's digits with a `+`.
   A Panama LANDLINE is refused: valid number, but WhatsApp is a mobile service.
+- **`findByPhone` is an exact match, so the column's two shapes never dedupe
+  against each other.** `customers/service.ts` compares
+  `eq(cliente.phone, phone)`, and the form stores `61234567` where the import
+  stores `6123-4567` — the same number, never matched. Raised 2026-09-07; the
+  `schema.ts` comment now states the tolerate-both requirement the code does
+  not yet meet.
 - **An unplaceable phone burns three retries and lands in the DLQ.** `toE164`
   refusing returns `{ ok: false }`, `reminders/job.ts` throws, and pg-boss
   retries — `retryLimit: 3`, backoff, then `REMINDER_DLQ` (`job.ts:84`).

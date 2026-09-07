@@ -107,9 +107,11 @@ export function toE164(raw: string): { ok: true; value: string } | { ok: false; 
   //
   // A LONGER number only counts as Panama when it actually carries `507` —
   // a shape, not a proof of origin: `507-123-4567` is a real US Minnesota
-  // number and reads as a Panama landline here. Harmless, because Meta reads a
-  // plus-less `5071234567` as Panama too, so nothing that was delivered stops
-  // being.
+  // number and is refused here as a Panama landline. That IS a behaviour
+  // change for such a row, and whether it ever delivered before is UNVERIFIED
+  // — it depends on how Meta parses a plus-less `5071234567`, which nobody
+  // here has measured. Stated rather than waved away as harmless. The census
+  // contains no US number, and an operator who means one can type `+1`.
   const national =
     digits.startsWith(PANAMA_COUNTRY_CODE) &&
     (digits.length === PANAMA_COUNTRY_CODE.length + PANAMA_MOBILE_LENGTH ||
@@ -121,7 +123,14 @@ export function toE164(raw: string): { ok: true; value: string } | { ok: false; 
 
   if (national !== null) {
     if (national.length === PANAMA_LANDLINE_LENGTH) {
-      return refuse("Panama landline, and WhatsApp is a mobile service");
+      // Landlines are 2/3/4/5/7/9; a 7-digit number starting with `6` is a
+      // truncated mobile, not a landline. Both are refused, and the reason has
+      // to say which — the same standard this module was fixed for.
+      return refuse(
+        national.startsWith(PANAMA_MOBILE_PREFIX)
+          ? "seven digits starting with 6 — a truncated Panama mobile, not a dialable number"
+          : "Panama landline, and WhatsApp is a mobile service",
+      );
     }
     if (national.startsWith(PANAMA_MOBILE_PREFIX)) {
       return { ok: true, value: `+${PANAMA_COUNTRY_CODE}${national}` };

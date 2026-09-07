@@ -217,10 +217,15 @@ value or to write rows this application's own form would reject. A skip that
 nobody can see is indistinguishable from data loss.*
 
 Phone values MUST be imported verbatim, without normalisation. *Rationale: the
-owner was shown the consequence and chose it — Panama numbers are 8 digits with
-no country code, WhatsApp requires E.164, and so 353 of these customers cannot
-receive a WhatsApp reminder. Recorded as an accepted cost, not an oversight;
-changing it later is a data migration over a known column, not a code change.*
+owner was shown the consequence and chose it. The consequence recorded here
+originally — that 353 of these customers therefore cannot receive a WhatsApp
+reminder, and that changing it would be a data migration — was WRONG on both
+counts, and is corrected here rather than left for the next change to believe.
+E.164 is a wire format: `reminders/providers/whatsapp.ts` converts at the send
+boundary, so an imported Panama MOBILE gets its reminder while the column keeps
+the raw value the search and duplicate check read. A Panama LANDLINE still does
+not, for a reason no storage format can fix — WhatsApp is a mobile service. The
+storage decision stands on its own merits, not on that consequence.*
 
 The import MUST be all-or-nothing. *Rationale: a half-imported customer list is
 worse than an empty one, because staff cannot tell which half is missing.*
