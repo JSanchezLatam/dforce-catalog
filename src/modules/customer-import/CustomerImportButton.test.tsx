@@ -29,7 +29,7 @@ const ABORTED_IMPORT_MESSAGE =
   "No se pudo completar la importación. No se guardó ningún cambio; probá de nuevo más tarde.";
 // The component's own fallback, used both when a non-ok response carries no
 // `error` field and when `fetch` itself rejects (CustomerImportButton.tsx).
-const GENERIC_IMPORT_ERROR = "No se pudo importar a los clientes.";
+const GENERIC_IMPORT_ERROR = "No se pudo sincronizar a los clientes.";
 
 function renderButton() {
   return render(
@@ -49,7 +49,7 @@ describe("CustomerImportButton (R21)", () => {
     const fetchMock = mockFetch(() => ok({ created: 0, updated: 0, skipped: [] }));
     renderButton();
 
-    await user.click(screen.getByRole("button", { name: "Importar clientes" }));
+    await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0];
@@ -62,7 +62,7 @@ describe("CustomerImportButton (R21)", () => {
     mockFetch(() => ok({ created: 2, updated: 1, skipped: [{ externalId: "9", name: "Sin Telefono", reason: "missing_phone" }] }));
     renderButton();
 
-    await user.click(screen.getByRole("button", { name: "Importar clientes" }));
+    await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("2 nuevos, 1 actualizados, 1 omitidos");
   });
@@ -72,7 +72,7 @@ describe("CustomerImportButton (R21)", () => {
     mockFetch(() => ({ ok: false, status: 502, json: async () => ({ error: ABORTED_IMPORT_MESSAGE }) }));
     renderButton();
 
-    await user.click(screen.getByRole("button", { name: "Importar clientes" }));
+    await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
     const status = await screen.findByRole("status");
     expect(status.textContent).toBe(ABORTED_IMPORT_MESSAGE);
@@ -84,7 +84,7 @@ describe("CustomerImportButton (R21)", () => {
     mockFetch(() => ({ ok: false, status: 500, json: async () => ({}) }));
     renderButton();
 
-    await user.click(screen.getByRole("button", { name: "Importar clientes" }));
+    await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
     const status = await screen.findByRole("status");
     expect(status.textContent).toBe(GENERIC_IMPORT_ERROR);
@@ -101,7 +101,7 @@ describe("CustomerImportButton (R21)", () => {
     });
     renderButton();
 
-    await user.click(screen.getByRole("button", { name: "Importar clientes" }));
+    await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
     const status = await screen.findByRole("status");
     expect(status.textContent).toBe(GENERIC_IMPORT_ERROR);
@@ -114,7 +114,7 @@ describe("CustomerImportButton (R21)", () => {
     });
     renderButton();
 
-    const button = screen.getByRole("button", { name: "Importar clientes" });
+    const button = screen.getByRole("button", { name: "Sincronizar clientes" });
     await user.click(button);
 
     await screen.findByRole("status");
@@ -131,7 +131,7 @@ describe("CustomerImportButton (R21)", () => {
     );
     renderButton();
 
-    await user.click(screen.getByRole("button", { name: "Importar clientes" }));
+    await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
     expect(await screen.findByText("Sin Telefono — sin teléfono")).toBeInTheDocument();
   });
@@ -148,7 +148,7 @@ describe("CustomerImportButton (R21)", () => {
     );
     renderButton();
 
-    await user.click(screen.getByRole("button", { name: "Importar clientes" }));
+    await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
     expect(await screen.findByText("9 — sin nombre")).toBeInTheDocument();
   });
@@ -174,7 +174,7 @@ describe("CustomerImportButton (R21)", () => {
     );
     renderButton();
 
-    await user.click(screen.getByRole("button", { name: "Importar clientes" }));
+    await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
     expect(await screen.findByText("Cliente Uno — sin teléfono")).toBeInTheDocument();
     expect(screen.getByText("Cliente Dos — sin teléfono")).toBeInTheDocument();
@@ -198,7 +198,7 @@ describe("CustomerImportButton (R21)", () => {
     );
     renderButton();
 
-    await user.click(screen.getByRole("button", { name: "Importar clientes" }));
+    await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
     expect(await screen.findByText("Sin Externo — sin identificador externo")).toBeInTheDocument();
   });

@@ -2,11 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
-import {
-  countClientes as countClientesQuery,
-  listClientes as listClientesQuery,
-  type ClienteListItem,
-} from "@/modules/customers/queries";
+import { countClientes as countClientesQuery, listClientes as listClientesQuery, type ClienteFilters, type ClienteListItem } from "@/modules/customers/queries";
 import { relaxSearchTerm } from "@/modules/customers/near-match";
 import { createCliente, DuplicatePhoneError, type CreateClienteDeps } from "@/modules/customers/service";
 import { ClienteValidationError } from "@/modules/customers/validation";
@@ -42,9 +38,11 @@ export async function handleListClientes(
 
   const params = request.nextUrl.searchParams;
   const search = params.get("search")?.trim() || undefined;
-  // R20 — opt IN. `=== "1"` rather than truthiness, so `includeInactive=0`
-  // means off; the page's `normalizeClienteFilters` reads it the same way.
-  const includeInactive = params.get("includeInactive") === "1";
+  // R20 — three states; an unknown value falls back to the default rather
+  // than throwing, so a stale link cannot 500 the list.
+  const rawStatus = params.get("status");
+  const status: ClienteFilters["status"] =
+    rawStatus === "inactive" || rawStatus === "all" ? rawStatus : "active";
   const pageSize = parsePageSize(params.get("pageSize") ?? undefined);
   const pageWindow = computePageWindow(params.get("page") ?? undefined, pageSize);
 
@@ -53,7 +51,7 @@ export async function handleListClientes(
 
   // Both round-trips at once, as `customers/page.tsx:49` does — the search is
   // a sequential scan, so serialising them doubles every keystroke's latency.
-  const filters = { search, includeInactive };
+  const filters = { search, status };
   let [customers, total] = await Promise.all([list(filters, pageWindow), countFn(filters)]);
   let relaxedFrom: string | undefined;
 

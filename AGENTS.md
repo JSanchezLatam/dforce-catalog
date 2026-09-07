@@ -140,6 +140,23 @@ suite therefore *proves* zero real-SQL coverage. Hand-built SQL (e.g.
 still be wrong at runtime. Until a Postgres testcontainer exists, smoke-test
 those paths against a throwaway database before merging.
 
+**Second known limit — jsdom cannot see a Server Component boundary or a
+hydration mismatch.** Two production defects shipped for months under a green
+suite and were found only when real data mounted the component: a function
+passed from a server component to a `"use client"` one (Next.js refuses and the
+page does not render), and a portal behind `typeof document !== "undefined"`
+(React's documented cause #1 for a hydration mismatch). Reverting either fix
+leaves the suite green — vitest invokes a page as a plain function, so there is
+no RSC SERIALIZATION to violate, and `render()` takes the client snapshot
+directly rather than a server render plus `hydrateRoot`.
+
+Both were caught by opening a browser and reading the console. **When a change
+crosses a Server Component boundary or touches a portal, that is the
+verification** — a test cannot be written for it, and a green run is not
+evidence. Also note the trigger: `Pagination` returns `null` at `pageCount <=
+1`, so one customer in the dev database hid the first defect entirely. A bug
+that depends on data VOLUME does not exist until there is data.
+
 ## Code quality gate
 
 - **`npm test` and `npx tsc --noEmit` clean before a PR.**

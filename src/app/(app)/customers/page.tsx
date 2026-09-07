@@ -22,10 +22,12 @@ function firstValue(value: string | string[] | undefined): string | undefined {
 /** Pure — R19's single combined name/phone/plate search term, read from `searchParams`. */
 function normalizeClienteFilters(searchParams: SearchParams): ClienteFilters {
   const search = firstValue(searchParams.search);
-  // R20 — opt IN, so the default list is active-only. `=== "1"` rather than
-  // truthiness: `?includeInactive=0` must mean off, not "a non-empty string".
-  const includeInactive = firstValue(searchParams.includeInactive) === "1";
-  return { ...(search ? { search } : {}), ...(includeInactive ? { includeInactive } : {}) };
+  // R20 — three states, defaulting to active-only. An unknown value falls back
+  // to the default rather than throwing: `?status=garbage` from a stale link
+  // should show the normal list, not an error page.
+  const raw = firstValue(searchParams.status);
+  const status = raw === "inactive" || raw === "all" ? raw : "active";
+  return { ...(search ? { search } : {}), ...(status === "active" ? {} : { status }) };
 }
 
 /**
@@ -54,7 +56,7 @@ export default async function CustomersPage({
 
   // Without this a genuinely empty database offered "Ver desactivados" — a
   // link to another empty page — while "Todavía no hay clientes registrados"
-  // became reachable only WITH `includeInactive=1`, the one case where it is
+  // became reachable only WITH the deactivated ones in view, the one case where it is
   // least true.
   //
   // Cost, stated honestly rather than as "nothing in the normal case": this is
@@ -69,16 +71,22 @@ export default async function CustomersPage({
   // page of a search that does match, the result set is not empty and no offer
   // belongs on screen.
   const hasDeactivated =
-    total === 0 && !filters.includeInactive
-      ? (await countClientes({ ...filters, includeInactive: true })) > 0
+    total === 0 && (filters.status ?? "active") === "active"
+      ? (await countClientes({ ...filters, status: "all" })) > 0
       : false;
 
   const pageCount = Math.max(1, Math.ceil(total / pageWindow.limit));
 
   return (
     <div className="p-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className={PAGE_HEADING}>Clientes</h1>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className={`${PAGE_HEADING} mb-1`}>Clientes</h1>
+          <p className="text-sm text-muted-foreground">
+            Los clientes del taller y sus vehículos. Se sincronizan desde Interfuerza y podés
+            editarlos acá.
+          </p>
+        </div>
         <div className="flex items-center gap-2">
           {/* R21 — manual import trigger, same `customers.write` gate as the create form (both tecnico and administrador hold it). */}
           {can(user, "customers.write") && <CustomerImportButton />}
@@ -99,7 +107,7 @@ export default async function CustomersPage({
               <Users className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
               <h2 className="text-lg font-semibold text-foreground">No se encontraron clientes</h2>
               <p className="text-sm text-muted-foreground">
-                {filters.search && !filters.includeInactive && hasDeactivated ? (
+                {filters.search && (filters.status ?? "active") === "active" && hasDeactivated ? (
                   // R20 — searching a name is how staff actually reach ONE
                   // customer, far more than opening a bare list. Without this
                   // branch, searching a deactivated customer said they did not
@@ -112,7 +120,7 @@ export default async function CustomersPage({
                       // Through `buildPageHref` so this link cannot drift from
                       // the pagination links beside it — it kept `pageSize`
                       // and this one had dropped it.
-                      href={buildPageHref({ ...params, includeInactive: "1" }, 1)}
+                      href={buildPageHref({ ...params, status: "all" }, 1)}
                       className="text-primary hover:underline"
                     >
                       Buscar también entre los desactivados
@@ -125,7 +133,7 @@ export default async function CustomersPage({
                       Limpiar filtro
                     </Link>
                   </>
-                ) : !filters.includeInactive && hasDeactivated ? (
+                ) : (filters.status ?? "active") === "active" && hasDeactivated ? (
                   // R20 — "no hay clientes" is a claim, and it is false when
                   // every customer is deactivated. The rest of this change is
                   // careful never to let a retired record be silently
@@ -136,8 +144,23 @@ export default async function CustomersPage({
                     {/* Through `buildPageHref`, like the widen-search link
                         above — hardcoded, this one dropped `pageSize`, which
                         is the defect WU14.2 fixed one branch over. */}
-                    <Link href={buildPageHref({ ...params, includeInactive: "1" }, 1)} className="text-primary hover:underline">
+                    <Link href={buildPageHref({ ...params, status: "inactive" }, 1)} className="text-primary hover:underline">
                       Ver desactivados
+                    </Link>
+                  </>
+                ) : filters.status === "inactive" ? (
+                  // The new state brought its own empty case. Without this
+                  // branch a "Desactivados" filter over 368 active customers
+                  // said "Todavía no hay clientes registrados" — false, and the
+                  // same class as the two branches above: an empty state that
+                  // claims more than it knows.
+                  <>
+                    Ningún cliente desactivado.{" "}
+                    <Link
+                      href={buildPageHref({ ...params, status: "active" }, 1)}
+                      className="text-primary hover:underline"
+                    >
+                      Ver los activos
                     </Link>
                   </>
                 ) : (
@@ -204,7 +227,7 @@ export default async function CustomersPage({
                 <Pagination
                   currentPage={pageWindow.page}
                   pageCount={pageCount}
-                  buildHref={(p) => buildPageHref(params, p)}
+                  hrefPattern={buildPageHrefPattern(params)}
                 />
               </CardContent>
             </Card>
@@ -215,7 +238,19 @@ export default async function CustomersPage({
   );
 }
 
-function buildPageHref(params: SearchParams, page: number): string {
+/**
+ * A serializable `{page}` PATTERN, not a function.
+ *
+ * `Pagination` is a client component, and a server component cannot hand one a
+ * function — Next.js throws "Functions cannot be passed directly to Client
+ * Components". The bug shipped in Phase 6 and stayed invisible for months
+ * because `Pagination` returns `null` at `pageCount <= 1`, and this database
+ * held one customer. Importing the Interfuerza list made it 37 pages and the
+ * page stopped rendering.
+ *
+ * `hrefPattern` is the variant that already existed for exactly this.
+ */
+function buildPageHrefPattern(params: SearchParams): string {
   const search = new URLSearchParams();
   // `firstValue` for every key, matching `normalizeClienteFilters`. The
   // `typeof === "string"` checks these replace saw `?search=a&search=b` as an
@@ -228,7 +263,19 @@ function buildPageHref(params: SearchParams, page: number): string {
   // R20 — every filter in the URL has to survive paging. Dropped here, "Ver
   // desactivados" would silently switch itself off on page 2, which reads as
   // the records having disappeared rather than the filter having reset.
-  if (firstValue(params.includeInactive) === "1") search.set("includeInactive", "1");
-  search.set("page", String(page));
-  return `/customers?${search.toString()}`;
+  const status = firstValue(params.status);
+  if (status === "inactive" || status === "all") search.set("status", status);
+  // `page` appended raw rather than through `URLSearchParams.set`: that
+  // percent-encodes the braces, and `Pagination` replaces the literal `{page}`.
+  const query = search.toString();
+  return `/customers?${query ? `${query}&` : ""}page={page}`;
+}
+
+/**
+ * One concrete page, derived from the pattern above rather than built beside
+ * it — the two widen-search links use this, and the whole reason the pattern
+ * carries every filter is that a second copy dropped `pageSize` once already.
+ */
+function buildPageHref(params: SearchParams, page: number): string {
+  return buildPageHrefPattern(params).replace("{page}", String(page));
 }
