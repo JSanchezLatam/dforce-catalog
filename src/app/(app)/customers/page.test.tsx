@@ -225,6 +225,22 @@ describe("CustomersPage — deactivated customers (R20)", () => {
     expect(screen.getByText("Todavía no hay clientes registrados.")).toBeInTheDocument();
   });
 
+  /**
+   * With no search term `filters` is `{}`, so the probe's
+   * `{...filters, status: "all"}` is the SAME query the stats card already
+   * ran. It used to fire anyway — a third COUNT, and the serial one rather
+   * than the parallel one. Two is the floor here, not three.
+   */
+  it("reuses the card's count for the deactivated probe when nothing was searched", async () => {
+    listClientes.mockResolvedValue([]);
+    countClientes.mockImplementation(countByStatus);
+
+    render(await CustomersPage({ searchParams: Promise.resolve({}) }));
+
+    expect(screen.getByRole("link", { name: /desactivados/i })).toBeInTheDocument();
+    expect(countClientes).toHaveBeenCalledTimes(2);
+  });
+
   it("does not run the deactivated probe when the active list is not empty", async () => {
     listClientes.mockResolvedValue([row()]);
     countClientes.mockResolvedValue(1);

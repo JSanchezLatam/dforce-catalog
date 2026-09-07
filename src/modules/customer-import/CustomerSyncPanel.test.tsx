@@ -31,10 +31,10 @@ const ABORTED_IMPORT_MESSAGE =
 // `error` field and when `fetch` itself rejects (CustomerSyncPanel.tsx).
 const GENERIC_IMPORT_ERROR = "No se pudo sincronizar a los clientes.";
 
-function renderPanel(total = 0) {
+function renderPanel(total = 0, canSync = true) {
   return render(
     <ToastProvider>
-      <CustomerSyncPanel total={total} />
+      <CustomerSyncPanel total={total} canSync={canSync} />
     </ToastProvider>,
   );
 }
@@ -44,6 +44,19 @@ afterEach(() => {
 });
 
 describe("CustomerSyncPanel (R21)", () => {
+  /**
+   * The total is data on a page the reader can already open; importing is the
+   * privileged part. Mounting the number inside the action's permission gate
+   * answered "how many customers do I have" with "nowhere" for anyone without
+   * `customers.write`, which is the complaint this card exists to fix.
+   */
+  it("shows the total without the import trigger when the reader cannot sync", () => {
+    renderPanel(370, false);
+
+    expect(screen.getByText("370")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Sincronizar clientes/ })).not.toBeInTheDocument();
+  });
+
   it("posts to /api/customer-import", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch(() => ok({ created: 0, updated: 0, skipped: [] }));

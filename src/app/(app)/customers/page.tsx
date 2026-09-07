@@ -81,9 +81,16 @@ export default async function CustomersPage({
   // (`api/customers/route.ts` documents the same distinction). Past the last
   // page of a search that does match, the result set is not empty and no offer
   // belongs on screen.
+  // With no search term `filters` is `{}`, so `{...filters, status: "all"}` is
+  // the SAME query `syncedTotal` already ran — a third COUNT, and the serial
+  // one rather than the parallel one. Reuse the value. The search branch is a
+  // genuinely different query (`{search, status: "all"}`) and still needs its
+  // own count.
   const hasDeactivated =
     total === 0 && (filters.status ?? "active") === "active"
-      ? (await countClientes({ ...filters, status: "all" })) > 0
+      ? filters.search
+        ? (await countClientes({ ...filters, status: "all" })) > 0
+        : syncedTotal > 0
       : false;
 
   const pageCount = Math.max(1, Math.ceil(total / pageWindow.limit));
@@ -101,12 +108,18 @@ export default async function CustomersPage({
         <CustomerFormTrigger triggerLabel="Nuevo cliente" />
       </div>
 
-      {/* R21 — manual import trigger, same `customers.write` gate as the create
-          form (both tecnico and administrador hold it). Out of the header row
-          and into its own card: the skip report it renders on a partial run is
-          a full-width block, and inside that row it stretched it and shoved
-          "Nuevo cliente" out of position. */}
-      {can(user, "customers.write") && <CustomerSyncPanel total={syncedTotal} />}
+      {/* The card ALWAYS renders; only the import trigger inside it is gated on
+          `customers.write` (R21, the same gate as the create form). The owner
+          asked to see how many customers are synced — mounting that number
+          inside an action's permission would answer "nowhere" again for any
+          future read-only role, and it also made the unfiltered COUNT above
+          run for a role that could never see it. A total is data on a page you
+          can already read; importing is the privileged part.
+
+          Out of the header row and into its own card because the skip report
+          it renders on a partial run is a full-width block, and inside that
+          row it stretched it and shoved "Nuevo cliente" out of position. */}
+      <CustomerSyncPanel total={syncedTotal} canSync={can(user, "customers.write")} />
 
       <Card size="sm" className="mb-4">
         <CardContent>

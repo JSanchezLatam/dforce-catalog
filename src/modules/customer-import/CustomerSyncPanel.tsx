@@ -49,7 +49,7 @@ function skipLabel(s: ImportSkip): string {
  * `total` is a prop, not a fetch: this is a `"use client"` component and the
  * count is already in hand at the Server Component call site.
  */
-export function CustomerSyncPanel({ total }: { total: number }) {
+export function CustomerSyncPanel({ total, canSync }: { total: number; canSync: boolean }) {
   const [running, setRunning] = useState(false);
   const [skipped, setSkipped] = useState<ImportSkip[]>([]);
   const { addToast } = useToast();
@@ -96,14 +96,18 @@ export function CustomerSyncPanel({ total }: { total: number }) {
               <p className="text-3xl font-bold text-foreground">{total}</p>
               <p className="text-sm text-muted-foreground">sincronizados desde Interfuerza</p>
             </div>
-            <Button type="button" variant="outline" size="default" onClick={handleClick} disabled={running}>
-              <RefreshCw aria-hidden="true" />
-              {running ? "Sincronizando…" : "Sincronizar clientes"}
-            </Button>
+            {/* Only the ACTION is privileged. The total beside it is data on a
+                page the reader can already open. */}
+            {canSync && (
+              <Button type="button" variant="outline" size="default" onClick={handleClick} disabled={running}>
+                <RefreshCw aria-hidden="true" />
+                {running ? "Sincronizando…" : "Sincronizar clientes"}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
-      {skipped.length > 0 && (
+      {canSync && skipped.length > 0 && (
         // D5 — the skip report exists so "the owner can add the real
         // number"; a bare count names nobody. Each row states its own reason
         // (Finding 1) instead of a single heading that was only true for
