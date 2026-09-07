@@ -23,10 +23,25 @@ so sorting by date gives an arbitrary permutation — including across C1/C2/C6,
 the exact trio this warning exists for. A delta spec applied out of row order
 reverts a later one silently.
 
-`openspec/changes/` holds only genuinely active work. The 2026-08-12 archival
-of `catalog-templates-and-workshop-info` copied the folder instead of moving
-it, so a byte-identical duplicate sat there reading as open work for three
-weeks; it was removed with this archive.
+`openspec/changes/` is supposed to hold only genuinely active work, and it did
+not. The 2026-08-12 archival of `catalog-templates-and-workshop-info` copied the
+folder instead of moving it, so a byte-identical duplicate sat there reading as
+open work for three weeks; removed with this archive.
+
+**One is still there, and it is not cosmetic.** `catalog-price-tier-choice`
+shipped in PR #53 (merged 2026-09-01) and was never archived, so its delta was
+never applied — and `openspec/specs/catalog-generation/spec.md` still carries
+the requirement that change REPLACED:
+
+| | |
+|---|---|
+| `openspec/specs/catalog-generation/spec.md` | "The review step **MUST NOT** offer a price-tier selector" |
+| `src/modules/catalog-builder/CatalogBuilderForm.tsx:540` | renders `<legend>Listas de precios</legend>` and its checkbox group |
+
+The consolidated spec asserts the opposite of shipped code, right now. That is
+the third time this repo has hit this exact failure. Archiving it is its own
+change — it needs the same delta-merge care this one took, on a different
+capability — and is deliberately not folded in here.
 
 **`customer-management` is where that bites.** Four changes rewrite R19 —
 `customer-search-and-picker`, `vehicles-one-to-many`, `customer-shared-phones`
@@ -51,12 +66,19 @@ Anyone repeating this: dry-run the whole chain into a throwaway worktree off
 `origin/main` first, and check the real resolution byte-for-byte against the
 dry-run's.
 
-**After any archive**, `rg '^## (ADDED|MODIFIED)' openspec/specs/*/spec.md`
-must come back empty. Those headers are merge INSTRUCTIONS — where to splice —
-and are consumed, not copied. One rode into the main spec on this very archive:
-it sat above two requirements it had nothing to do with, so the spec claimed
-C1/C2/C6 added the vehicle collection model. There is no `openspec` CLI here to
-catch it; that grep is the whole gate.
+**After any archive, BOTH of these must hold.** There is no `openspec` CLI
+here to run, so they are the gate.
+
+1. `rg '^## (ADDED|MODIFIED)' openspec/specs/*/spec.md` comes back **empty**.
+   Those headers are merge INSTRUCTIONS — where to splice — and are consumed,
+   not copied. One rode into the main spec on this very archive: it sat above
+   two requirements it had nothing to do with, so the spec claimed C1/C2/C6
+   added the vehicle collection model.
+2. **Every folder left in `openspec/changes/` has an unmerged PR.** Check 1
+   cannot catch a merged-but-unarchived change: its delta simply never gets
+   applied, the main spec keeps the requirement that change replaced, and the
+   grep stays clean the whole time. That is exactly the state
+   `catalog-price-tier-choice` is in above.
 
 `crm-shell-settings-rbac` also carries eight unchecked boxes under "Deferred to
 follow-up change". Those are a deferral register, not open work: all four units
@@ -108,14 +130,17 @@ survives being found.
 
 ### `customer-shared-phones` (C1, archived 2026-09-06)
 
-2 open follow-ups, full text at
-`archive/2026-09-06-customer-shared-phones/tasks.md`:
+**2 open follow-ups** in
+`archive/2026-09-06-customer-shared-phones/tasks.md`, plus **one observation**
+that is not a box in that file and will not be found by following the pointer —
+it is marked below:
 
 - **`UserForm.tsx:167` has the same over-wide `catch`** that C1 narrowed in
   `CustomerForm`: `setOpen`/`onSaved`-equivalent work sits inside its `try`, so
   a parent throwing after a save that SUCCEEDED gets blamed on the network.
   Belongs to `user-lifecycle-management`, not C1.
-- **`customer-management`'s R17 rationale pins `schedule.ts:51` and
+- *(observation, not in `tasks.md` — raised reviewing this archive)*
+  **`customer-management`'s R17 rationale pins `schedule.ts:51` and
   `CustomerPicker.tsx:25` by LINE NUMBER**, which rots on the next edit to
   either file. Not changed when merging: the block is byte-identical to C1's
   delta, and that property is worth more than the fix. Name the function next
