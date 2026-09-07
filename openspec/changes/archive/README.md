@@ -16,6 +16,7 @@ active work. New changes go in `openspec/changes/<name>/`, not here.
 | `customer-shared-phones` (C1) | 2026-09-06 | 41/43 † | **MODIFIED R17 R18 R19** | refuse-then-confirm on a shared phone, `phone NOT NULL` |
 | `customer-deactivation` (C2) | 2026-09-06 | 64/70 | **MODIFIED R16 R19**, ADDED R20 | `cliente.deactivated_at`, excluded from list and picker |
 | `customer-import` (C6) | 2026-09-06 | 78/83 | ADDED R21 | Interfuerza customer import, idempotent re-runs |
+| `catalog-price-tier-choice` | 2026-09-06 | 20/22 | — | choose 1 or 2 ERP price lists per catalog (merged 2026-09-01 in PR #53) |
 
 † One of C1's 41 is the duplicate-pair merge the owner **dropped**, struck
 through and marked in that `tasks.md` rather than deleted. It counts as closed
@@ -32,20 +33,14 @@ not. The 2026-08-12 archival of `catalog-templates-and-workshop-info` copied the
 folder instead of moving it, so a byte-identical duplicate sat there reading as
 open work for three weeks; removed with this archive.
 
-**One is still there, and it is not cosmetic.** `catalog-price-tier-choice`
-shipped in PR #53 (merged 2026-09-01) and was never archived, so its delta was
-never applied — and `openspec/specs/catalog-generation/spec.md` still carries
-the requirement that change REPLACED:
-
-| | |
-|---|---|
-| `openspec/specs/catalog-generation/spec.md` | "The review step **MUST NOT** offer a price-tier selector" |
-| `src/modules/catalog-builder/CatalogBuilderForm.tsx:540` | renders `<legend>Listas de precios</legend>` and its checkbox group |
-
-The consolidated spec asserts the opposite of shipped code, right now. That is
-the third time this repo has hit this exact failure. Archiving it is its own
-change — it needs the same delta-merge care this one took, on a different
-capability — and is deliberately not folded in here.
+**`catalog-price-tier-choice` was the third instance of it, and it is now
+closed.** That change shipped in PR #53 (merged 2026-09-01) and sat unarchived
+for five days, so its delta was never applied and
+`openspec/specs/catalog-generation/spec.md` went on saying "the review step
+MUST NOT offer a price-tier selector" while
+`src/modules/catalog-builder/CatalogBuilderForm.tsx:540` rendered
+`<legend>Listas de precios</legend>` and its checkbox group. Archived
+2026-09-06, immediately after the archive that found it.
 
 **`customer-management` is where that bites.** Four changes rewrite R19 —
 `customer-search-and-picker`, `vehicles-one-to-many`, `customer-shared-phones`
@@ -81,8 +76,9 @@ here to run, so they are the gate.
 2. **Every folder left in `openspec/changes/` has an unmerged PR.** Check 1
    cannot catch a merged-but-unarchived change: its delta simply never gets
    applied, the main spec keeps the requirement that change replaced, and the
-   grep stays clean the whole time. That is exactly the state
-   `catalog-price-tier-choice` is in above.
+   grep stays clean the whole time. That is exactly how
+   `catalog-price-tier-choice` hid for five days. As of 2026-09-06 the
+   directory holds nothing but `archive/`, so both checks pass.
 
 `crm-shell-settings-rbac` also carries eight unchecked boxes under "Deferred to
 follow-up change". Those are a deferral register, not open work: all four units
@@ -227,3 +223,41 @@ Which is which, as of 2026-09-06:
   `user-management`, `workshop-reminders`. Each is single-source, so the
   ordering problem does not arise for them; read the one delta plus the Kiro
   requirements above.
+
+### `catalog-price-tier-choice` (archived 2026-09-06, merged 2026-09-01)
+
+**2 open follow-ups** in
+`archive/2026-09-06-catalog-price-tier-choice/tasks.md`:
+
+- **A `tiers` validation error renders BEHIND the confirm modal.**
+  `handleConfirmGenerate` sets `errors` and returns without closing the dialog,
+  and `ConfirmGenerateDialog` has no error surface, so the message lands in the
+  review card under the overlay. The jsdom test passes because jsdom does no
+  layering. Pre-existing for `errors.total` and `errors.form` too; the fix is
+  one error surface on the dialog, for all three.
+- **`selection.ts`'s error messages are half-migrated** — the `tiers` ones are
+  Spanish per the language rule, `categories`/`total`/`productsPerPage` are
+  still English, and they render in the same form.
+
+A third — "`npm test` is not reliably clean" — was **closed while archiving**,
+not carried: the cause was worker contention starving `userEvent`, fixed by the
+`maxWorkers: 2` cap on the jsdom project whose measurement lives in
+`vitest.config.ts`. Verified 1242/1242, repeatedly, on 2026-09-06.
+
+**Two amendments this archive had to make by hand, because the delta was
+PARTIAL.** R6's block opened with "Amended for one sentence only; every other
+clause of R6 stands unchanged" — but the archiver REPLACES, so applying that
+block wholesale would have deleted `ProductPrintRef`'s extension, the
+template/workshop branding rule, image-type card selection, and the
+`productsPerPage`-is-a-maximum rule, none of which this change touches. R13 was
+partial the same way, and would have taken the review table, the image-type
+override and the `catalogs.generate` gate with it. Both were merged
+sentence-by-sentence instead.
+
+And one scenario the delta itself missed: R6's *"A zero tier renders an
+em-dash"* still demanded that "Venta and Taller still show their bold prices"
+while Socio em-dashes — three rows on one card, which this very change caps at
+two. Unsatisfiable the moment it landed. Narrowed to a chosen pair, and
+*"A missing tier renders an em-dash"* given an explicit chosen tier. This is
+the failure C1 documented for R19: **full-restatement discipline follows the
+DATA SHAPE, not only the requirement being edited.**
