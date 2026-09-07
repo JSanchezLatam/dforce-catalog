@@ -4,11 +4,16 @@
  * (design.md D5). Mirrors template-config/service.ts's shape (validate, then
  * write) with the DI-`deps` seam from inventory-sync/job.ts for testability.
  *
- * Note: the `cliente` table (Phase 1) does NOT have a DB-level unique
- * constraint on `phone` — R18's duplicate block is enforced entirely here,
- * at the application layer, via `findClienteByPhone` before every
- * create/update. See apply-progress for this deviation from the original
- * assumption that a DB constraint existed.
+ * Note: `cliente.phone` carries NO DB-level unique constraint, and that is a
+ * DECISION, not an accident — the delta spec makes it a MUST NOT, design.md D3
+ * records the owner's trade behind it (real customers legitimately share a
+ * number: a spouse, a company line), and `schema.test.ts` guards its absence
+ * across all three Drizzle spellings. Do not "fix" it by adding an index.
+ *
+ * R18 is therefore not a block but refuse-then-confirm, enforced entirely
+ * here via `findClienteByPhone` before every create/update: the first attempt
+ * is refused with the existing customer's id, and only an explicit
+ * `allowDuplicatePhone` from the operator gets past it.
  */
 import { eq } from "drizzle-orm";
 
@@ -41,6 +46,20 @@ export type DatabaseDep = { transaction: <T>(fn: (tx: TxLike) => Promise<T>) => 
 
 function extractVehiclesRaw(input: unknown): unknown {
   return (input as Record<string, unknown> | null | undefined)?.vehicles;
+}
+
+/**
+ * R18 (rewritten) — the operator's confirmation that a phone really does
+ * belong to two people. Strictly `=== true`: this overrides a deliberate
+ * refusal, so a truthy `"false"` arriving from a form or a query string must
+ * not carry it.
+ *
+ * NOT a `cliente` column and never persisted — see the two "does not persist
+ * the shared-phone confirmation" tests. It rides the same raw body the
+ * validated scalars are read from, so no route needs to know about it.
+ */
+function confirmsSharedPhone(input: unknown): boolean {
+  return (input as Record<string, unknown> | null | undefined)?.allowDuplicatePhone === true;
 }
 
 /**
@@ -88,18 +107,20 @@ export type CreateClienteDeps = {
 };
 
 /**
- * R16/R18 — create; blocks on a duplicate phone with a link to the existing
- * record. When `vehicles` is present in the input, the cliente row and its
- * vehicle collection are written in one transaction (D5) — both succeed or
- * both roll back. `vehicles` omitted behaves exactly as before (scalar-only,
- * no transaction).
+ * R16/R18 — create; refuses a duplicate phone with a link to the existing
+ * record, unless the caller carries the operator's `allowDuplicatePhone`
+ * confirmation that the number is genuinely shared. When `vehicles` is
+ * present in the input, the cliente row and its vehicle collection are
+ * written in one transaction (D5) — both succeed or both roll back.
+ * `vehicles` omitted behaves exactly as before (scalar-only, no
+ * transaction).
  */
 export async function createCliente(input: unknown, deps: CreateClienteDeps = {}): Promise<Cliente> {
   const { value, vehicles: vehiclesInput } = validateClienteAndVehicles(input, extractVehiclesRaw(input));
 
   const findByPhone = deps.findByPhone ?? findClienteByPhone;
   const existing = await findByPhone(value.phone);
-  if (existing) {
+  if (existing && !confirmsSharedPhone(input)) {
     throw new DuplicatePhoneError(existing.id);
   }
 
@@ -145,7 +166,7 @@ export type UpdateClienteDeps = {
   database?: DatabaseDep;
 };
 
-export type ClientePatch = Partial<ClienteInput> & { vehicles?: unknown };
+export type ClientePatch = Partial<ClienteInput> & { vehicles?: unknown; allowDuplicatePhone?: unknown };
 
 /**
  * R16 — edit; persists only the changed field(s). R18 — duplicate check is
@@ -177,11 +198,15 @@ export async function updateCliente(
   // without checking anything, so a typo'd key or a renamed field would compile
   // clean and land in `db.update(cliente).set(...)`. This keeps the write path
   // type-checked, which the pre-change `{ ...patch }` spread already was.
-  const { vehicles: strippedVehicles, ...persistedPatch } = patch;
-  // The binding exists only to keep `vehicles` out of `persistedPatch`; it is
-  // already validated above as `vehiclesInput`. `void` marks it used rather
-  // than relaxing `no-unused-vars` repo-wide for one line.
+  const { vehicles: strippedVehicles, allowDuplicatePhone: strippedConfirmation, ...persistedPatch } = patch;
+  // Both bindings exist only to keep their key out of `persistedPatch`, which
+  // is what reaches `db.update(cliente).set(...)`. `vehicles` is already
+  // validated above as `vehiclesInput`; `allowDuplicatePhone` is an override
+  // read by `confirmsSharedPhone`, not a column — left in, it would SET a
+  // column that does not exist. `void` marks them used rather than relaxing
+  // `no-unused-vars` repo-wide for one line.
   void strippedVehicles;
+  void strippedConfirmation;
 
   if (patch.phone !== undefined) {
     const normalizedPhone = normalizePhone(patch.phone);
@@ -190,7 +215,7 @@ export async function updateCliente(
     if (normalizedPhone !== current.cliente.phone) {
       const findByPhone = deps.findByPhone ?? findClienteByPhone;
       const existing = await findByPhone(normalizedPhone);
-      if (existing && existing.id !== id) {
+      if (existing && existing.id !== id && !confirmsSharedPhone(patch)) {
         throw new DuplicatePhoneError(existing.id);
       }
     }
