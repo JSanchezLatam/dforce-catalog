@@ -5,9 +5,10 @@
  *
  * `fetch` REJECTS on a network failure rather than returning a non-ok
  * response, so the buttons re-enabled with no toast and the operator clicked
- * into the same silence. It is worse here than on the three forms: nothing is
- * typed, so there is no dialog left open to hint that anything went wrong —
- * the page simply looks like the click did nothing.
+ * into the same silence. It is worse here than on the other five surfaces
+ * that share this copy: nothing is typed, so there is no dialog left open to
+ * hint that anything went wrong — the page simply looks like the click did
+ * nothing.
  *
  * See `.claude/skills/component-testing/SKILL.md` for why this is `.test.tsx`.
  */

@@ -46,8 +46,9 @@ export function OrderStatusControls({ orderId, status }: { orderId: string; stat
       // `fetch` REJECTS on a network failure rather than returning a non-ok
       // response, so without this the buttons re-enable with no toast at all
       // and the click looks like it simply did nothing. Worse here than on the
-      // three forms that share this copy: nothing was typed, so there is no
-      // dialog left open to hint that anything happened.
+      // other five surfaces that share this copy (four forms and `UsersTable`):
+      // nothing was typed, so there is no dialog left open to hint that
+      // anything happened.
       //
       // `router.refresh()` sits BELOW, not inside — a refresh that throws must
       // not be reported as a connection failure over a transition the server

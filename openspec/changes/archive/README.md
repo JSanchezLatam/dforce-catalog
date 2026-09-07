@@ -162,8 +162,11 @@ it is marked below:
   had been hand-copied into **six** places, so it moved to
   `src/shared/ui/messages.ts` as `CONNECTION_ERROR` — one definition, and the
   tests still assert the literal so a bad edit to it goes red rather than
-  moving both sides at once. Proven: mutating the constant turns 7 tests red
-  across 6 files.
+  moving both sides at once. That net had three holes when it was extracted —
+  two assertions matched a prefix and one matched `/no se pudo/i`, so rewriting
+  only the sentence's tail left those files green. All three were widened, and
+  it is now measured: replacing the whole sentence and replacing only its tail
+  turn the SAME 7 tests red across the same 6 files.
 
 A third entry — merging the six genuinely fragmented duplicate customer pairs —
 was **dropped by the owner on 2026-09-06**, omitted rather than deferred. It is
