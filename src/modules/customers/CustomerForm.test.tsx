@@ -554,6 +554,15 @@ describe("CustomerForm — shared phone confirmation", () => {
 
     const link = await screen.findByRole("link", { name: /cliente existente/i });
     expect(link).toHaveAttribute("href", "/customers/existing-1");
+
+    // And ONLY the refusal block says it. Re-adding the pre-`0016`
+    // `setErrors({ phone: "… (ver /customers/…)" })` beside
+    // `setSharedPhoneWith` left this file 32/32 green until this line existed:
+    // `findByRole("link")` passes perfectly well with a stale bare-path error
+    // still on screen, which is the exact thing this test is named after not
+    // printing. Two alerts is the fact printed twice, once as an error the
+    // operator cannot act on.
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
   });
 
   it("saves once the operator confirms the number is shared", async () => {
@@ -584,6 +593,16 @@ describe("CustomerForm — shared phone confirmation", () => {
 
     // The dialog closed on the save above; reopening starts a fresh attempt.
     await open(user, "Nuevo cliente");
+
+    // Asserted HERE, before anything is typed. `handleOpenChange`'s
+    // `setSharedPhoneWith(null)` is one of D2's two clears, and typing into
+    // Teléfono below fires the OTHER one — so an assertion after the typing
+    // stays green with the reopen clear deleted, which is exactly what this
+    // test did until GGA removed the line and watched 32/32 pass. `toFormState`
+    // resets `phone` to "" on reopen, so with that line gone the refusal block
+    // renders here and this goes red.
+    expect(screen.queryByRole("button", { name: "Guardar igual" })).not.toBeInTheDocument();
+
     await user.type(screen.getByLabelText("Nombre"), "Otra Persona");
     await user.type(screen.getByLabelText("Teléfono"), "+525512345678");
     await user.click(screen.getByRole("button", { name: "Guardar" }));
@@ -608,6 +627,83 @@ describe("CustomerForm — shared phone confirmation", () => {
     await user.click(screen.getByRole("button", { name: "Guardar" }));
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(bodyOf(fetchMock, 1).allowDuplicatePhone).toBeUndefined();
+  });
+});
+
+/**
+ * `fetch` REJECTS on a network failure — it does not return a non-ok response
+ * — so a `try/finally` with no `catch` re-enables the button with nothing on
+ * screen and the operator clicks into the same silence. `UserForm` carries the
+ * same `catch` with the same copy for the same reason, and its comment records
+ * that this exact defect stranded a blocked user in `user-lifecycle` WU3.
+ *
+ * R18 (rewritten) gave this form a SECOND submit entry point — "Guardar igual"
+ * is a floating promise off a click handler, with no form submission behind it
+ * to surface anything — so both entry points are covered here.
+ */
+describe("CustomerForm — a network failure has to say so", () => {
+  const CONNECTION_ERROR = "No se pudo conectar. Revisa tu conexión e intenta de nuevo.";
+
+  function mockFetchRejectingAfter(...responses: { status: number; body?: unknown }[]) {
+    const fetchMock = vi.fn();
+    for (const response of responses) {
+      fetchMock.mockResolvedValueOnce({
+        ok: response.status >= 200 && response.status < 300,
+        status: response.status,
+        json: async () => response.body ?? {},
+      });
+    }
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  async function openAndFill(user: ReturnType<typeof userEvent.setup>) {
+    render(<CustomerForm />);
+    await open(user, "Nuevo cliente");
+    await user.type(screen.getByLabelText("Nombre"), "Ana Pérez");
+    await user.type(screen.getByLabelText("Teléfono"), "+525512345678");
+  }
+
+  // One test, not two: without the catch the alert never appears, so a second
+  // test that waits for it before checking the button could not fail on its
+  // own — it would only be re-asserting the first one.
+  it("tells the operator the save did not go through, and leaves Guardar clickable", async () => {
+    const user = userEvent.setup();
+    mockFetchRejectingAfter();
+
+    await openAndFill(user);
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(CONNECTION_ERROR);
+    expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled();
+  });
+
+  // NOT tested here, and it cannot be: `setOpen`/`onSaved` moved out of the
+  // `try` so the catch stops speaking for a save that already succeeded. Put
+  // them back inside and this file stays green — verified, 33/33 — because
+  // `setOpen(false)` has already run by then, so the wrong message renders
+  // into a closed dialog nobody can read. The change is right and its effect
+  // is invisible from a component test; a test written for it passed with the
+  // change reverted, so it was deleted rather than kept as a placebo. See
+  // tasks.md WU9.2.
+
+  // The entry point R18 added. Nothing awaits this promise, so without the
+  // catch the dialog simply sits there having done nothing.
+  it("says the same thing when the network drops on Guardar igual", async () => {
+    const user = userEvent.setup();
+    mockFetchRejectingAfter({
+      status: 409,
+      body: { error: "duplicate_phone", existingClienteId: "existing-1" },
+    });
+
+    await openAndFill(user);
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    await user.click(await screen.findByRole("button", { name: "Guardar igual" }));
+
+    await vi.waitFor(() =>
+      expect(screen.getAllByRole("alert").some((el) => el.textContent === CONNECTION_ERROR)).toBe(true),
+    );
   });
 });
 
