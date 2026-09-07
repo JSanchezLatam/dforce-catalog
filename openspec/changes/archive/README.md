@@ -156,13 +156,14 @@ it is marked below:
   introduced. Raised by GGA on the `ServiceOrderForm` fix. If it is ever fixed
   it gets fixed in all three at once, which is also when the shared helper
   below is worth extracting.
-- **`OrderStatusControls.transitionTo` has the same shape**
-  (`src/modules/service-orders/OrderStatusControls.tsx:33`) — `try`/`finally`
-  around a `fetch`, no `catch`, so a network failure re-enables the status
-  buttons with no toast and the operator clicks into the same silence. Found
-  while closing the entry above and deliberately NOT folded into it: different
-  file, and that PR is about one form. It already has an `addToast` surface, so
-  the fix is one line plus its test.
+- ~~**`OrderStatusControls.transitionTo` has the same shape**~~ — **CLOSED
+  2026-09-06** on `fix/status-controls-catch`, together with the shared copy
+  constant. It had no test file at all; it has three now. The sentence itself
+  had been hand-copied into **six** places, so it moved to
+  `src/shared/ui/messages.ts` as `CONNECTION_ERROR` — one definition, and the
+  tests still assert the literal so a bad edit to it goes red rather than
+  moving both sides at once. Proven: mutating the constant turns 7 tests red
+  across 6 files.
 
 A third entry — merging the six genuinely fragmented duplicate customer pairs —
 was **dropped by the owner on 2026-09-06**, omitted rather than deferred. It is

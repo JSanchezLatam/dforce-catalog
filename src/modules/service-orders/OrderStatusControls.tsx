@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { useToast } from "@/shared/ui/ToastProvider";
 import { getAllowedTransitions, type OrderStatus } from "./transitions";
 
@@ -41,11 +42,23 @@ export function OrderStatusControls({ orderId, status }: { orderId: string; stat
         addToast("error", "No se pudo actualizar el estado de la orden.");
         return;
       }
-
-      router.refresh();
+    } catch {
+      // `fetch` REJECTS on a network failure rather than returning a non-ok
+      // response, so without this the buttons re-enable with no toast at all
+      // and the click looks like it simply did nothing. Worse here than on the
+      // three forms that share this copy: nothing was typed, so there is no
+      // dialog left open to hint that anything happened.
+      //
+      // `router.refresh()` sits BELOW, not inside — a refresh that throws must
+      // not be reported as a connection failure over a transition the server
+      // already accepted.
+      addToast("error", CONNECTION_ERROR);
+      return;
     } finally {
       setIsSubmitting(false);
     }
+
+    router.refresh();
   }
 
   if (nextStates.length === 0) return null;

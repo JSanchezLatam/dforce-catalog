@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FIELD_ERROR } from "@/shared/ui/styles";
+import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { UserFormTrigger } from "./UserFormTrigger";
 
 export type UserRow = {
@@ -58,7 +59,7 @@ export function UsersTable({ users }: { users: UserRow[] }) {
         body: JSON.stringify({ active: user.deactivatedAt !== null }),
       });
     } catch {
-      setError("No se pudo conectar. Revisa tu conexión e intenta de nuevo.");
+      setError(CONNECTION_ERROR);
       setPendingId(null);
       return;
     }

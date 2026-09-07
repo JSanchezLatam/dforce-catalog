@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FIELD_ERROR } from "@/shared/ui/styles";
+import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { MIN_PASSWORD_LENGTH } from "./password-policy";
 
 /**
@@ -66,7 +67,7 @@ export function ForcedPasswordChangeForm() {
         body: JSON.stringify({ currentPassword, newPassword }),
       });
     } catch {
-      setError("No se pudo conectar. Revisa tu conexión e intenta de nuevo.");
+      setError(CONNECTION_ERROR);
       setStatus("idle");
       return;
     }
