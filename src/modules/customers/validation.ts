@@ -42,16 +42,12 @@ export function isValidPhoneFormat(raw: string): boolean {
 
 /**
  * Strips separators and preserves a leading `+` when present. That is ALL it
- * does — it is not E.164 normalization and never was.
+ * does — it is NOT E.164 normalization, whatever a caller might assume from
+ * the name.
  *
- * This docstring used to say "E.164-ish … needed for Kapso", and two other
- * files went on to state as fact that `to` was "already E.164 — normalizePhone
- * enforces this on write". None of it was true, and a Panama number typed the
- * way staff type them (`6111-1111`) reached Kapso as `61111111` for months.
- *
- * E.164 is a WIRE format and belongs to the provider: `reminders/providers/
- * whatsapp.ts`'s `toE164` does that conversion, and refuses what it cannot
- * place rather than guessing. What lives here is storage — the shape the phone
+ * E.164 is a wire format and belongs to the provider: `reminders/providers/
+ * whatsapp.ts`'s `toE164` converts there, and refuses what it cannot place
+ * rather than guessing. What lives here is storage — the shape the phone
  * search, duplicate detection and migration `0016` all read.
  */
 export function normalizePhone(raw: string): string {

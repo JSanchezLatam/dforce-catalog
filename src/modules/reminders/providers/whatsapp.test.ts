@@ -100,7 +100,7 @@ describe("toE164 — the wire format is the provider's problem, not the operator
 
   // Never invent a phone number: this repo's standing rule, and the reason
   // migration 0016 hard-fails rather than coercing.
-  it("REFUSES a shape it cannot place, naming it, instead of guessing a country", () => {
+  it("REFUSES a length that cannot be a phone number, naming the value", () => {
     const result = toE164("611111");
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.reason).toContain("611111");
@@ -120,18 +120,35 @@ describe("toE164 — the wire format is the provider's problem, not the operator
   it("refuses a Panama LANDLINE as a landline, not as a foreign number", () => {
     const result = toE164("269-1234");
     expect(result.ok).toBe(false);
-    expect(result.ok === false && result.reason).toMatch(/fij|landline/i);
+    expect(result.ok === false && result.reason).toContain("Panama landline, and WhatsApp is a mobile service");
     expect(result.ok === false && result.reason).not.toMatch(/not a Panama number/i);
   });
 
   it("refuses a landline that already carries its country code, the same way", () => {
     const result = toE164("5072691234");
     expect(result.ok).toBe(false);
-    expect(result.ok === false && result.reason).toMatch(/fij|landline/i);
+    expect(result.ok === false && result.reason).toContain("Panama landline");
   });
 
-  it("refuses eight digits that are not a mobile — no Panama number starts 7xxxxxxx", () => {
-    expect(toE164("71234567").ok).toBe(false);
+  /**
+   * The one thing this function ADDS is Panama's country code, and only to a
+   * number it can identify as a Panama mobile. Everything else keeps the
+   * operator's digits with the `+` E.164 wants — the shape Meta already
+   * accepted before this function existed.
+   *
+   * An earlier draft refused these. That was a REGRESSION: a Mexican number
+   * typed without a `+` (`5512345678` — R17 accepts it, `validateClienteInput`
+   * stores it) used to be delivered, and would have become a permanent failure
+   * after three pointless retries. Guessing a country code is the thing this
+   * module must never do; refusing a number that already worked is not the
+   * alternative to guessing.
+   */
+  it("passes a number it cannot identify as Panama through, rather than refusing what used to work", () => {
+    expect(toE164("5512345678")).toEqual({ ok: true, value: "+5512345678" });
+  });
+
+  it("does not mistake eight digits that are not a Panama mobile for one", () => {
+    expect(toE164("71234567")).toEqual({ ok: true, value: "+71234567" });
   });
 
   // R17's own bounds, reused. An imported row never passes through

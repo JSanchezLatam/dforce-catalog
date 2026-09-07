@@ -247,6 +247,13 @@ before touching that code:
   it left four downstream statements stale — `schema.ts`, `mapper.ts`,
   `mapper.test.ts` and `validation.test.ts` all recorded that a raw 8-digit
   number "cannot receive a WhatsApp reminder". A raw MOBILE now does.
+  **And a second draft introduced a REGRESSION**: refusing every shape it could
+  not identify as Panama would have broken a Mexican number typed without a
+  `+` (`5512345678` — R17 accepts it and `validateClienteInput` stores it),
+  which reached Kapso and was delivered before any of this. `toE164` now ADDS
+  only Panama's country code, and only to a number it identifies as a Panama
+  mobile; everything else keeps the operator's digits with the `+` E.164 wants.
+  Refusing a number that already worked is not the alternative to guessing.
 - **An unplaceable phone retries forever.** `toE164` refusing returns
   `{ ok: false }`, and `reminders/job.ts` throws on that, so pg-boss retries —
   which cannot help a number that will never convert. The live census had one

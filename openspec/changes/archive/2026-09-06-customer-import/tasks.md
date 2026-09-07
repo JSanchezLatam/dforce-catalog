@@ -751,7 +751,22 @@ careful about verification, silence reads as "not run".
 
 ## Known before starting
 
-- [ ] **353 imported customers will not be able to receive a WhatsApp
+- [x] ~~**353 imported customers will not be able to receive a WhatsApp
+  reminder**~~ — **CLOSED 2026-09-07**, branch `fix/whatsapp-e164`, and this
+  entry was wrong on both halves. It is not a data migration (the import has
+  never run; no database has the `external_id` column yet) and it was never
+  about the import: `normalizePhone` was never E.164 despite three files saying
+  so, and a Panama mobile typed the way staff type them reached Kapso as
+  `61111111` for months. Converted at the send boundary by
+  `reminders/providers/whatsapp.ts`'s `toE164`. A Panama LANDLINE is still
+  refused — WhatsApp is a mobile service, and no storage format fixes that.
+- [ ] **An unplaceable phone retries forever.** `toE164` refusing returns
+  `{ ok: false }`, `reminders/job.ts` throws on that, and pg-boss retries —
+  which cannot help a number that will never convert. The census had one such
+  row (a 7-digit landline) out of 361. It wants the `skipped` terminal status
+  the opt-out path already uses, which is a change to the job's failure
+  semantics. Raised 2026-09-07 while closing the entry above.
+- [x] ~~Original text of the entry above:~~ **353 imported customers will not be able to receive a WhatsApp
   reminder**, because raw 8-digit Panama numbers are not E.164. The owner was
   shown this and chose raw. Fixing it later is a data migration over
   `cliente.phone`, not a code change.
