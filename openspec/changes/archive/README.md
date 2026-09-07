@@ -3,33 +3,48 @@
 Every change in this folder is complete and merged to `main`. Nothing here is
 active work. New changes go in `openspec/changes/<name>/`, not here.
 
-| Change | Tasks | Landed |
-|--------|-------|--------|
-| `crm-workshop-management` | 41/41 | customers, service orders, reminders |
-| `adaptive-catalog-layouts` | 19/19 | image classification, adaptive cards, review step |
-| `crm-shell-settings-rbac` | 46/46 v1 | grouped nav, workshop settings, role matrix |
-| `user-lifecycle-management` | 40/40 | deactivation, forced password change, admin user management |
-| `service-history-per-vehicle` | 41/49 | per-vehicle service history, permanent deletion |
-| `customer-shared-phones` (C1) | 41/43 | refuse-then-confirm on a shared phone, `phone NOT NULL` |
-| `customer-deactivation` (C2) | 64/70 | `cliente.deactivated_at`, excluded from list and picker |
-| `customer-import` (C6) | 78/83 | Interfuerza customer import, idempotent re-runs |
+| Change | Archived | Tasks | `customer-management` | Landed |
+|--------|----------|-------|----------------------|--------|
+| `crm-workshop-management` | 2026-08-11 | 41/41 | ADDED R16–R19 | customers, service orders, reminders |
+| `adaptive-catalog-layouts` | 2026-08-11 | 19/19 | — | image classification, adaptive cards, review step |
+| `crm-shell-settings-rbac` | 2026-08-11 | 46/54 | ADDED access control | grouped nav, workshop settings, role matrix |
+| `user-lifecycle-management` | 2026-08-11 | 40/40 | — | deactivation, forced password change, admin user management |
+| `catalog-templates-and-workshop-info` | 2026-08-12 | 66/66 | — | catalog templates, workshop info on the PDF |
+| `customer-search-and-picker` | 2026-08-29 | 28/28 | **MODIFIED R19** | async search, accent-insensitivity, near matches |
+| `vehicles-one-to-many` (C3) | 2026-09-01 | 52/61 | **MODIFIED R16 R17 R18 R19**, ADDED vehicle collection | one customer, many vehicles |
+| `service-history-per-vehicle` (C4) | 2026-09-03 | 41/49 | MODIFIED + ADDED vehicle detail | per-vehicle service history, permanent deletion |
+| `customer-shared-phones` (C1) | 2026-09-06 | 41/43 | **MODIFIED R17 R18 R19** | refuse-then-confirm on a shared phone, `phone NOT NULL` |
+| `customer-deactivation` (C2) | 2026-09-06 | 64/70 | **MODIFIED R16 R19**, ADDED R20 | `cliente.deactivated_at`, excluded from list and picker |
+| `customer-import` (C6) | 2026-09-06 | 78/83 | ADDED R21 | Interfuerza customer import, idempotent re-runs |
 
-The first four were archived 2026-08-11, `service-history-per-vehicle` on
-2026-09-03, and C1/C2/C6 on 2026-09-06 — in that chronological order, which is
-the order their delta specs must be applied in.
+**The table is complete, and the `Archived` column is the apply order.** Every
+change here is listed; a delta spec applied out of that order reverts a later
+one silently.
 
-**C1, C2 and C6 all rewrite `customer-management`, and R19 carries edits from
-both C1 and C2.** Applying C2's R19 before C1's silently reverts C1's fix
-(`phone = null` → `phone = ""`, which migration `0016` made unconstructible).
-Their unfinished-task counts above are not undone work: every open box is a
+**`customer-management` is where that bites.** Four changes rewrite R19 —
+`customer-search-and-picker`, `vehicles-one-to-many`, `customer-shared-phones`
+and `customer-deactivation` — because a `## MODIFIED Requirements` block
+REPLACES the matching requirement rather than merging into it. Applying C2's
+R19 before C1's, for one example, reverts `phone = null` → `phone = ""`, a
+shape migration `0016` made unconstructible. The `customer-management` column
+above exists so nobody has to open eleven folders to find that out.
+
+Unfinished task counts are not undone work. Every open box in this folder is a
 deferral register, listed below.
 
-The three landed as a chained merge, `#68 → #69 → #70`. #68 gained four work
-units after #69 branched off it, so #69 conflicted against `main` — both had
-appended a `describe` at the end of the same test file, and both were kept.
+C1, C2 and C6 landed as a chained merge, `#68 → #69 → #70`. #68 gained four
+work units after #69 branched off it, so #69 conflicted against `main` — both
+had appended a `describe` at the end of the same test file, and both were kept.
 Anyone repeating this: dry-run the whole chain into a throwaway worktree off
 `origin/main` first, and check the real resolution byte-for-byte against the
 dry-run's.
+
+**After any archive**, `rg '^## (ADDED|MODIFIED)' openspec/specs/*/spec.md`
+must come back empty. Those headers are merge INSTRUCTIONS — where to splice —
+and are consumed, not copied. One rode into the main spec on this very archive:
+it sat above two requirements it had nothing to do with, so the spec claimed
+C1/C2/C6 added the vehicle collection model. There is no `openspec` CLI here to
+catch it; that grep is the whole gate.
 
 `crm-shell-settings-rbac` also carries eight unchecked boxes under "Deferred to
 follow-up change". Those are a deferral register, not open work: all four units
