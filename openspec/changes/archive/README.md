@@ -149,6 +149,13 @@ it is marked below:
   2026-09-06** on `fix/service-order-form-catch`, RED-first and
   mutation-verified by removing the catch body. It was the last of the three
   forms without one.
+- **All three save dialogs' `catch` also swallows a `response.json()` throw on
+  a 2xx**, so an order/customer/user that WAS created could surface as "no se
+  pudo conectar". Narrow, and identical in `UserForm`, `CustomerForm` and
+  `ServiceOrderForm` — consistency rather than a regression any one of them
+  introduced. Raised by GGA on the `ServiceOrderForm` fix. If it is ever fixed
+  it gets fixed in all three at once, which is also when the shared helper
+  below is worth extracting.
 - **`OrderStatusControls.transitionTo` has the same shape**
   (`src/modules/service-orders/OrderStatusControls.tsx:33`) — `try`/`finally`
   around a `fetch`, no `catch`, so a network failure re-enables the status
