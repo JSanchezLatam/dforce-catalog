@@ -317,13 +317,13 @@ describe("CustomersPage — the row action stays a link", () => {
 });
 
 /**
- * The card answers "how many customers do I have synced", so it counts the
+ * The card answers "how many customers exist", so it counts the
  * whole table — not the page, and not the filter. Reading it off `total`
  * (the paginated count, which carries the search term and the status filter)
  * would make the headline number move every time staff typed in the search
  * box.
  */
-describe("CustomersPage — the synced-customer total behind the stats card", () => {
+describe("CustomersPage — the unfiltered total behind the stats card", () => {
   beforeEach(() => {
     listClientes.mockReset();
     countClientes.mockReset();

@@ -134,11 +134,13 @@ describe("CustomerDetailPage — the order row action stays a link", () => {
 
     render(await renderPage());
 
-    const ver = screen.queryAllByRole("link", { name: "Ver" });
-    expect(ver.length).toBeGreaterThan(0);
-    // Its list-page twin pins the href too: a link that goes nowhere is the
-    // same regression wearing the right role.
-    expect(ver[0]).toHaveAttribute("href", "/service-orders/o1");
+    // `getByRole`, matching the twin this mirrors: the fixture seeds exactly
+    // one order, so it also fails if a second "Ver" appears. `queryAllByRole`
+    // with a length check was weaker than the test it claims to copy.
+    const ver = screen.getByRole("link", { name: "Ver" });
+    // The href too: a link that goes nowhere is the same regression wearing
+    // the right role.
+    expect(ver).toHaveAttribute("href", "/service-orders/o1");
     expect(screen.queryByRole("button", { name: "Ver" })).not.toBeInTheDocument();
   });
 });

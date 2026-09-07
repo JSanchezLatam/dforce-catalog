@@ -54,13 +54,25 @@ export default async function CustomersPage({
     return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
   }
 
-  // `syncedTotal` is deliberately unfiltered: the stats card answers "how many
-  // customers do I have synced", not "how many match what I am looking at".
-  // `total` beside it carries the search term and the status filter, so
-  // reading the headline off it would make the number move on every keystroke
-  // in the search box. Both go in the same `Promise.all` — the extra count is
-  // independent of the other two and must not cost a second round trip.
-  const [items, total, syncedTotal] = await Promise.all([
+  // `totalClientes` is deliberately unfiltered: the card answers "how many
+  // customers exist", not "how many match what I am looking at". `total`
+  // beside it carries the search term and the status filter, so reading the
+  // headline off it would move the number on every keystroke in the search
+  // box.
+  //
+  // NOT "synced". `{status:"all"}` with no search makes `buildClienteListWhere`
+  // return `undefined` (`queries.ts:83-89`), so there is no WHERE at all: this
+  // counts rows typed into "Nuevo cliente" on this page, whose `externalId` is
+  // NULL, and deactivated rows too. The caption on screen says "registrados,
+  // incluidos los inactivos" for that reason; this name and comment used to
+  // say otherwise, which is the same false claim one layer down.
+  //
+  // Cost, stated the way the `hasDeactivated` comment below states its own:
+  // this makes TWO unconditional counts per render where there was one. The
+  // extra is inside the `Promise.all`, so it adds no round trip — but it is a
+  // second full-table scan on every list view. At 370 rows that is free; at a
+  // hundred times that it would need an index or a cached total.
+  const [items, total, totalClientes] = await Promise.all([
     listClientes(filters, pageWindow),
     countClientes(filters),
     countClientes({ status: "all" }),
@@ -83,7 +95,7 @@ export default async function CustomersPage({
   // page of a search that does match, the result set is not empty and no offer
   // belongs on screen.
   // With no search term `filters` is `{}`, so `{...filters, status: "all"}` is
-  // the SAME query `syncedTotal` already ran — a third COUNT, and the serial
+  // the SAME query `totalClientes` already ran — a third COUNT, and the serial
   // one rather than the parallel one. Reuse the value. The search branch is a
   // genuinely different query (`{search, status: "all"}`) and still needs its
   // own count.
@@ -91,7 +103,7 @@ export default async function CustomersPage({
     total === 0 && (filters.status ?? "active") === "active"
       ? filters.search
         ? (await countClientes({ ...filters, status: "all" })) > 0
-        : syncedTotal > 0
+        : totalClientes > 0
       : false;
 
   const pageCount = Math.max(1, Math.ceil(total / pageWindow.limit));
@@ -111,7 +123,7 @@ export default async function CustomersPage({
 
       {/* The card ALWAYS renders; only the import trigger inside it is gated on
           `customers.write` (R21, the same gate as the create form). The owner
-          asked to see how many customers are synced — mounting that number
+          asked to see how many customers he has — mounting that number
           inside an action's permission would answer "nowhere" again for any
           future read-only role, and it also made the unfiltered COUNT above
           run for a role that could never see it. A total is data on a page you
@@ -120,7 +132,7 @@ export default async function CustomersPage({
           Out of the header row and into its own card because the skip report
           it renders on a partial run is a full-width block, and inside that
           row it stretched it and shoved "Nuevo cliente" out of position. */}
-      <CustomerSyncPanel total={syncedTotal} canSync={can(user, "customers.write")} />
+      <CustomerSyncPanel total={totalClientes} canSync={can(user, "customers.write")} />
 
       <Card size="sm" className="mb-4">
         <CardContent>
