@@ -1,7 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { cliente, vehiculo, type Cliente, type Vehiculo } from "@/shared/db/schema";
-import { ClienteNotFoundError, createCliente, DuplicatePhoneError, updateCliente, type DatabaseDep } from "./service";
+import {
+  ClienteDeactivatedError,
+  ClienteNotFoundError,
+  createCliente,
+  deactivateCliente,
+  DuplicatePhoneError,
+  reactivateCliente,
+  updateCliente,
+  type DatabaseDep,
+} from "./service";
 import { ClienteValidationError } from "./validation";
 import type { TxLike } from "./vehicles";
 
@@ -81,6 +90,45 @@ describe("createCliente (R16, R18)", () => {
     await expect(
       createCliente(validInput, { findByPhone: async () => ({ id: "existing-1" }) as unknown as Cliente }),
     ).rejects.toMatchObject({ existingClienteId: "existing-1" });
+  });
+
+  // R18 (rewritten) — a phone can legitimately belong to two people. The
+  // refusal above still fires first; this is the operator's way past it.
+  it("creates the customer anyway once the operator confirms the number is shared", async () => {
+    const insert = vi.fn(async (value) => ({ id: "new-1", ...value }) as unknown as Cliente);
+
+    const row = await createCliente(
+      { ...validInput, allowDuplicatePhone: true },
+      { findByPhone: async () => ({ id: "existing-1" }) as unknown as Cliente, insert },
+    );
+
+    expect(row.id).toBe("new-1");
+    expect(insert).toHaveBeenCalledOnce();
+  });
+
+  // The flag is an override, not a field. It must not reach the insert as a
+  // column — `cliente` has no such column, so a leak fails only at runtime.
+  it("does not persist the shared-phone confirmation as a column", async () => {
+    const insert = vi.fn(async (value) => value as unknown as Cliente);
+
+    await createCliente(
+      { ...validInput, allowDuplicatePhone: true },
+      { findByPhone: async () => ({ id: "existing-1" }) as unknown as Cliente, insert },
+    );
+
+    expect(insert.mock.calls[0][0]).not.toHaveProperty("allowDuplicatePhone");
+  });
+
+  // Absent flag, absent override — the refusal is still the default answer.
+  it("still refuses a duplicate phone when the confirmation is false", async () => {
+    const insert = vi.fn();
+    await expect(
+      createCliente(
+        { ...validInput, allowDuplicatePhone: false },
+        { findByPhone: async () => ({ id: "existing-1" }) as unknown as Cliente, insert },
+      ),
+    ).rejects.toBeInstanceOf(DuplicatePhoneError);
+    expect(insert).not.toHaveBeenCalled();
   });
 
   it("creates the cliente (normalized phone) when the phone is not a duplicate", async () => {
@@ -204,6 +252,43 @@ describe("updateCliente (R16, R18)", () => {
     ).rejects.toBeInstanceOf(DuplicatePhoneError);
   });
 
+  it("applies the edit once the operator confirms the number is shared", async () => {
+    const current = {
+      cliente: { id: "c1", name: "Juan", phone: "+525512345678" } as unknown as Cliente,
+      orders: [],
+      vehicles: [],
+    };
+    const update = vi.fn().mockResolvedValue(current.cliente);
+
+    await updateCliente(
+      "c1",
+      { phone: "+525599998888", allowDuplicatePhone: true },
+      { getById: async () => current, findByPhone: async () => ({ id: "c2" }) as unknown as Cliente, update },
+    );
+
+    expect(update).toHaveBeenCalledOnce();
+  });
+
+  // Same trap as create, and worse here: `persistedPatch` is what reaches
+  // `db.update(cliente).set(...)`, so a leaked flag becomes a SET on a column
+  // that does not exist.
+  it("does not persist the shared-phone confirmation as a column on edit", async () => {
+    const current = {
+      cliente: { id: "c1", name: "Juan", phone: "+525512345678" } as unknown as Cliente,
+      orders: [],
+      vehicles: [],
+    };
+    const update = vi.fn().mockResolvedValue(current.cliente);
+
+    await updateCliente(
+      "c1",
+      { phone: "+525599998888", allowDuplicatePhone: true },
+      { getById: async () => current, findByPhone: async () => ({ id: "c2" }) as unknown as Cliente, update },
+    );
+
+    expect(update.mock.calls[0][1]).not.toHaveProperty("allowDuplicatePhone");
+  });
+
   it("rejects an update whose vehicles entry is missing a plate, without touching the DB", async () => {
     const current = {
       cliente: { id: "c1", name: "Juan", phone: "+525512345678" } as unknown as Cliente,
@@ -257,5 +342,72 @@ describe("updateCliente (R16, R18)", () => {
     // the new plate is inserted.
     expect(tx.insert).toHaveBeenCalledWith(vehiculo);
     expect(tx.update).toHaveBeenCalledWith(vehiculo);
+  });
+});
+
+/**
+ * R20 (customer-deactivation) — deactivation is REVERSIBLE and destroys
+ * nothing. These pin both halves: the timestamp, and the promise that no
+ * vehicle or service order is touched on the way.
+ */
+describe("deactivateCliente / reactivateCliente (R20)", () => {
+  type SetDeactivatedAt = (id: string, at: Date | null) => Promise<Cliente | undefined>;
+  const CLIENTE = { id: "c1", name: "Juan", phone: "+525512345678" } as unknown as Cliente;
+
+  it("stamps deactivatedAt with a timestamp, not a boolean", async () => {
+    const setDeactivatedAt = vi.fn<SetDeactivatedAt>(async () => CLIENTE);
+    await deactivateCliente("c1", { setDeactivatedAt });
+
+    expect(setDeactivatedAt).toHaveBeenCalledWith("c1", expect.any(Date));
+  });
+
+  it("clears deactivatedAt on reactivation", async () => {
+    const setDeactivatedAt = vi.fn<SetDeactivatedAt>(async () => CLIENTE);
+    await reactivateCliente("c1", { setDeactivatedAt });
+
+    expect(setDeactivatedAt).toHaveBeenCalledWith("c1", null);
+  });
+
+  // R20's core promise, as far as a unit test can carry it: exactly one write,
+  // and nothing reads or touches a second table on the way. That vehicles and
+  // orders actually SURVIVE is asserted in the e2e suite against real
+  // Postgres - a unit test with an injected seam cannot prove a row it never
+  // wrote still exists.
+  it("performs exactly one write and reads nothing else", async () => {
+    const setDeactivatedAt = vi.fn<SetDeactivatedAt>(async () => CLIENTE);
+    const row = await deactivateCliente("c1", { setDeactivatedAt });
+
+    expect(setDeactivatedAt).toHaveBeenCalledOnce();
+    expect(row).toBe(CLIENTE);
+  });
+
+  it("throws ClienteNotFoundError rather than writing blind for an unknown id", async () => {
+    const setDeactivatedAt = vi.fn<SetDeactivatedAt>(async () => undefined);
+    await expect(deactivateCliente("missing", { setDeactivatedAt })).rejects.toBeInstanceOf(ClienteNotFoundError);
+  });
+
+  // D5 — enforced in the SERVICE, not only hidden in the UI. A deactivated
+  // record the workshop says it no longer has must not quietly accept edits
+  // through a direct PATCH.
+  it("refuses to edit a deactivated cliente", async () => {
+    const current = {
+      cliente: { ...CLIENTE, deactivatedAt: new Date("2026-09-01") } as unknown as Cliente,
+      orders: [],
+      vehicles: [],
+    };
+    const update = vi.fn();
+
+    await expect(
+      updateCliente("c1", { name: "Nuevo nombre" }, { getById: async () => current, update }),
+    ).rejects.toBeInstanceOf(ClienteDeactivatedError);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("still allows editing an ACTIVE cliente", async () => {
+    const current = { cliente: CLIENTE, orders: [], vehicles: [] };
+    const update = vi.fn().mockResolvedValue(CLIENTE);
+
+    await updateCliente("c1", { name: "Nuevo nombre" }, { getById: async () => current, update });
+    expect(update).toHaveBeenCalledOnce();
   });
 });

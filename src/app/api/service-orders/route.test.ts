@@ -19,7 +19,7 @@ const clienteDetail = { cliente: { id: "cli-1" }, orders: [], vehicles: [vehicul
   vehicles: unknown[];
 };
 
-describe("POST /api/service-orders (R20)", () => {
+describe("POST /api/service-orders (service-orders R20)", () => {
   it("throws when called without session headers", async () => {
     const request = new NextRequest("http://localhost/api/service-orders", {
       method: "POST",
@@ -143,5 +143,32 @@ describe("POST /api/service-orders (R20)", () => {
     expect(response.status).toBe(201);
     // "user-1" is the x-user-id header requestWith() sends.
     expect(inserted.createdBy).toBe("user-1");
+  });
+});
+
+/**
+ * R20/D5 — the service throws; this is the only thing that proves it comes
+ * back as a 409 rather than an unhandled 500. Its twin in
+ * `api/customers/[id]/route.test.ts` exists for the same reason.
+ */
+describe("POST /api/service-orders — a deactivated cliente (customer-management R20)", () => {
+  const deactivated = {
+    cliente: { id: "cli-1", deactivatedAt: new Date("2026-09-01") },
+    orders: [],
+    vehicles: [vehiculo1],
+  } as unknown as typeof clienteDetail;
+
+  it("maps ClienteDeactivatedError to 409, never a 500", async () => {
+    const database = { transaction: vi.fn() };
+
+    const response = await handleCreateOrdenServicio(
+      requestWith({ clienteId: "cli-1", vehiculoId: "v1", categoria: "revisado" }),
+      { getClienteById: async () => deactivated as never, db: database as never },
+    );
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).error).toBe("cliente_deactivated");
+    // The refusal lands before the transaction opens.
+    expect(database.transaction).not.toHaveBeenCalled();
   });
 });

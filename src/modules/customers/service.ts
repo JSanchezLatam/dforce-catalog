@@ -4,13 +4,18 @@
  * (design.md D5). Mirrors template-config/service.ts's shape (validate, then
  * write) with the DI-`deps` seam from inventory-sync/job.ts for testability.
  *
- * Note: the `cliente` table (Phase 1) does NOT have a DB-level unique
- * constraint on `phone` — R18's duplicate block is enforced entirely here,
- * at the application layer, via `findClienteByPhone` before every
- * create/update. See apply-progress for this deviation from the original
- * assumption that a DB constraint existed.
+ * Note: `cliente.phone` carries NO DB-level unique constraint, and that is a
+ * DECISION, not an accident — the delta spec makes it a MUST NOT, design.md D3
+ * records the owner's trade behind it (real customers legitimately share a
+ * number: a spouse, a company line), and `schema.test.ts` guards its absence
+ * across all three Drizzle spellings. Do not "fix" it by adding an index.
+ *
+ * R18 is therefore not a block but refuse-then-confirm, enforced entirely
+ * here via `findClienteByPhone` before every create/update: the first attempt
+ * is refused with the existing customer's id, and only an explicit
+ * `allowDuplicatePhone` from the operator gets past it.
  */
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { cliente, type Cliente, type Vehiculo } from "@/shared/db/schema";
@@ -37,10 +42,31 @@ export class ClienteNotFoundError extends Error {
   }
 }
 
+/** R20/D5 — a deactivated cliente is read-only until reactivated; the route maps this to 409. */
+export class ClienteDeactivatedError extends Error {
+  constructor(id: string) {
+    super(`Cliente ${id} is deactivated and cannot be edited`);
+  }
+}
+
 export type DatabaseDep = { transaction: <T>(fn: (tx: TxLike) => Promise<T>) => Promise<T> };
 
 function extractVehiclesRaw(input: unknown): unknown {
   return (input as Record<string, unknown> | null | undefined)?.vehicles;
+}
+
+/**
+ * R18 (rewritten) — the operator's confirmation that a phone really does
+ * belong to two people. Strictly `=== true`: this overrides a deliberate
+ * refusal, so a truthy `"false"` arriving from a form or a query string must
+ * not carry it.
+ *
+ * NOT a `cliente` column and never persisted — see the two "does not persist
+ * the shared-phone confirmation" tests. It rides the same raw body the
+ * validated scalars are read from, so no route needs to know about it.
+ */
+function confirmsSharedPhone(input: unknown): boolean {
+  return (input as Record<string, unknown> | null | undefined)?.allowDuplicatePhone === true;
 }
 
 /**
@@ -88,18 +114,20 @@ export type CreateClienteDeps = {
 };
 
 /**
- * R16/R18 — create; blocks on a duplicate phone with a link to the existing
- * record. When `vehicles` is present in the input, the cliente row and its
- * vehicle collection are written in one transaction (D5) — both succeed or
- * both roll back. `vehicles` omitted behaves exactly as before (scalar-only,
- * no transaction).
+ * R16/R18 — create; refuses a duplicate phone with a link to the existing
+ * record, unless the caller carries the operator's `allowDuplicatePhone`
+ * confirmation that the number is genuinely shared. When `vehicles` is
+ * present in the input, the cliente row and its vehicle collection are
+ * written in one transaction (D5) — both succeed or both roll back.
+ * `vehicles` omitted behaves exactly as before (scalar-only, no
+ * transaction).
  */
 export async function createCliente(input: unknown, deps: CreateClienteDeps = {}): Promise<Cliente> {
   const { value, vehicles: vehiclesInput } = validateClienteAndVehicles(input, extractVehiclesRaw(input));
 
   const findByPhone = deps.findByPhone ?? findClienteByPhone;
   const existing = await findByPhone(value.phone);
-  if (existing) {
+  if (existing && !confirmsSharedPhone(input)) {
     throw new DuplicatePhoneError(existing.id);
   }
 
@@ -145,7 +173,7 @@ export type UpdateClienteDeps = {
   database?: DatabaseDep;
 };
 
-export type ClientePatch = Partial<ClienteInput> & { vehicles?: unknown };
+export type ClientePatch = Partial<ClienteInput> & { vehicles?: unknown; allowDuplicatePhone?: unknown };
 
 /**
  * R16 — edit; persists only the changed field(s). R18 — duplicate check is
@@ -167,6 +195,12 @@ export async function updateCliente(
   if (!current) {
     throw new ClienteNotFoundError(id);
   }
+  // D5 — enforced here rather than only in the UI. `getClienteById` returns a
+  // deactivated customer on purpose (reactivation needs to open the record),
+  // so without this guard a direct PATCH would edit one.
+  if (current.cliente.deactivatedAt) {
+    throw new ClienteDeactivatedError(id);
+  }
 
   // Validate the MERGED scalar record so cross-field rules see the full
   // picture — but only the patch's own keys get persisted below (R16).
@@ -177,11 +211,15 @@ export async function updateCliente(
   // without checking anything, so a typo'd key or a renamed field would compile
   // clean and land in `db.update(cliente).set(...)`. This keeps the write path
   // type-checked, which the pre-change `{ ...patch }` spread already was.
-  const { vehicles: strippedVehicles, ...persistedPatch } = patch;
-  // The binding exists only to keep `vehicles` out of `persistedPatch`; it is
-  // already validated above as `vehiclesInput`. `void` marks it used rather
-  // than relaxing `no-unused-vars` repo-wide for one line.
+  const { vehicles: strippedVehicles, allowDuplicatePhone: strippedConfirmation, ...persistedPatch } = patch;
+  // Both bindings exist only to keep their key out of `persistedPatch`, which
+  // is what reaches `db.update(cliente).set(...)`. `vehicles` is already
+  // validated above as `vehiclesInput`; `allowDuplicatePhone` is an override
+  // read by `confirmsSharedPhone`, not a column — left in, it would SET a
+  // column that does not exist. `void` marks them used rather than relaxing
+  // `no-unused-vars` repo-wide for one line.
   void strippedVehicles;
+  void strippedConfirmation;
 
   if (patch.phone !== undefined) {
     const normalizedPhone = normalizePhone(patch.phone);
@@ -190,7 +228,7 @@ export async function updateCliente(
     if (normalizedPhone !== current.cliente.phone) {
       const findByPhone = deps.findByPhone ?? findClienteByPhone;
       const existing = await findByPhone(normalizedPhone);
-      if (existing && existing.id !== id) {
+      if (existing && existing.id !== id && !confirmsSharedPhone(patch)) {
         throw new DuplicatePhoneError(existing.id);
       }
     }
@@ -220,4 +258,59 @@ export async function updateCliente(
     await applyVehiculoPlan(tx, id, plan);
     return row;
   });
+}
+
+/**
+ * R20 — activation state, deliberately NOT reachable through `updateCliente`.
+ * Folding it into the patch would make `deactivatedAt` just another editable
+ * column, and D5 requires the opposite: a deactivated record accepts no edits
+ * at all. Same split `account/service.ts` already makes between `updateUser`
+ * and `deactivateUser`/`reactivateUser`.
+ */
+export type ActivationDeps = {
+  setDeactivatedAt?: (id: string, at: Date | null) => Promise<Cliente | undefined>;
+};
+
+/**
+ * One UPDATE, no preceding read: `returning()` already distinguishes "row
+ * updated" from "no such row", so a separate existence check would be a
+ * second query answering a question this one answers.
+ *
+ * Touches `cliente` and nothing else. Every `vehiculo` and every
+ * `orden_servicio` of this customer survives untouched — that is the whole
+ * difference between deactivation and deletion.
+ */
+async function setDeactivatedAtDb(id: string, at: Date | null): Promise<Cliente | undefined> {
+  // `coalesce`, not a bare assignment: deactivating an ALREADY deactivated
+  // customer must not restamp the date. Two staff on the same record — A
+  // deactivates, B's stale page still shows "Desactivar", B clicks — and a
+  // plain `set` would erase when it actually happened. D1's whole argument for
+  // a timestamp over a boolean is that it answers "since when?", and a value
+  // that any later click overwrites does not.
+  //
+  // Done in the UPDATE rather than as a read-then-write: one statement has no
+  // window between the check and the write, and `returning()` still
+  // distinguishes "no such row" for the not-found path.
+  const value = at === null ? null : sql`coalesce(${cliente.deactivatedAt}, ${at})`;
+  const [row] = await db.update(cliente).set({ deactivatedAt: value }).where(eq(cliente.id, id)).returning();
+  return row;
+}
+
+async function setActivation(id: string, at: Date | null, deps: ActivationDeps): Promise<Cliente> {
+  const setDeactivatedAt = deps.setDeactivatedAt ?? setDeactivatedAtDb;
+  const row = await setDeactivatedAt(id, at);
+  if (!row) {
+    throw new ClienteNotFoundError(id);
+  }
+  return row;
+}
+
+/** R20 — hide the customer from the list and the order picker, and stop their reminders. */
+export async function deactivateCliente(id: string, deps: ActivationDeps = {}): Promise<Cliente> {
+  return setActivation(id, new Date(), deps);
+}
+
+/** R20 — the exact inverse; the customer returns with vehicles and history intact. */
+export async function reactivateCliente(id: string, deps: ActivationDeps = {}): Promise<Cliente> {
+  return setActivation(id, null, deps);
 }

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { ClienteDeactivatedError } from "@/modules/customers/service";
+
 import { ordenCategoriaEnum, type OrdenServicio, type Vehiculo } from "@/shared/db/schema";
 import { OrderTransitionError } from "./transitions";
 import {
@@ -619,5 +621,56 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
 
     expect(cancelRemindersForOrder).not.toHaveBeenCalled();
     expect(scheduleReminder).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * R20/D5 — "server-side, not only hidden in the UI". `createOrder` already
+ * refuses a soft-deleted VEHICLE; the customer had no equivalent guard, so the
+ * picker's exclusion was the only thing standing between a retired customer
+ * and a new order.
+ */
+describe("createOrder — a deactivated cliente (R20)", () => {
+  const VEHICLE = { id: "v1", clienteId: "c1", plate: "ABC123", deactivatedAt: null };
+
+  function detail(deactivatedAt: Date | null) {
+    return {
+      cliente: { id: "c1", name: "Retirado", phone: "50761111111", deactivatedAt } as never,
+      orders: [],
+      vehicles: [VEHICLE as never],
+    };
+  }
+
+  const input = { clienteId: "c1", vehiculoId: "v1", categoria: "mant_preventivo", description: "x" };
+
+  it("refuses to open an order against a deactivated customer", async () => {
+    const db = { transaction: vi.fn() };
+    await expect(
+      createOrder(input as never, {
+        getClienteById: async () => detail(new Date("2026-09-01")),
+        db: db as never,
+      }),
+    ).rejects.toBeInstanceOf(ClienteDeactivatedError);
+    // Nothing written: the refusal lands before the transaction opens.
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  // The stale-page, two-staff scenario: A opens "Nueva orden" and picks Juan,
+  // B deactivates Juan, A submits. Without the guard the order is created for
+  // someone whose reminders then log `skipped` and who only appears behind
+  // `?includeInactive=1`.
+  it("still opens an order for an ACTIVE customer", async () => {
+    const db = {
+      transaction: vi.fn(async (fn: (tx: unknown) => unknown) =>
+        fn({
+          insert: () => ({ values: () => ({ returning: async () => [{ id: "o1" }] }) }),
+        }),
+      ),
+    };
+    const orden = await createOrder(input as never, {
+      getClienteById: async () => detail(null),
+      db: db as never,
+    });
+    expect(orden).toBeTruthy();
   });
 });

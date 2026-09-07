@@ -52,12 +52,10 @@ RULES_FILE="AGENTS.md"
 STRICT_MODE="true"
 
 # Timeout in seconds for AI provider response
-# Default: 300 (5 minutes)
-# Increase for large changesets or slow connections
-# NOTE: this value is INERT — see AGENTS.md known defect #1. Nothing in this
-# file is applied. The runbook command in AGENTS.md passes GGA_TIMEOUT=900,
-# which is the only lever that works.
-TIMEOUT="300"
+# Default: 300 (5 minutes). 300 is not enough at this repo's changeset size:
+# a review of an 18-file branch timed out mid-response, and a timeout is not
+# a PASS. 900 is the measured floor.
+TIMEOUT="900"
 
 # OpenCode provider: optional reasoning effort / variant
 # Examples: minimal, low, medium, high, max

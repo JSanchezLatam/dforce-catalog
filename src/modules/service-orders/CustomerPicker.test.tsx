@@ -17,6 +17,10 @@ function row(overrides: Partial<ClienteListItem> = {}): ClienteListItem {
     name: "Cliente Default",
     phone: "50761111111",
     email: null,
+    // The picker never SEES a deactivated customer - `listClientes` excludes
+    // them before the route answers (R20/D3), which is exactly why the picker
+    // needed no change of its own.
+    deactivatedAt: null,
     plates: ["ABC111"],
     createdAt: new Date("2026-01-01T00:00:00Z"),
     ...overrides,
@@ -95,8 +99,8 @@ describe("CustomerPicker", () => {
         customers: [
           row({ id: "c-plate", name: "Con Placa", plates: ["XYZ999"], phone: "50769999999" }),
           row({ id: "c-phone-only", name: "Solo Teléfono", plates: [], phone: "50768888888" }),
-          row({ id: "c-email-only", name: "Solo Email", plates: [], phone: null, email: "sin.telefono@example.com" }),
-          row({ id: "c-bare", name: "Sin Nada", plates: [], phone: null, email: null }),
+          row({ id: "c-email-only", name: "Solo Email", plates: [], phone: "", email: "sin.telefono@example.com" }),
+          row({ id: "c-bare", name: "Sin Nada", plates: [], phone: "", email: null }),
         ],
         total: 4,
       }),

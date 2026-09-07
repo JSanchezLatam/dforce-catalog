@@ -3,15 +3,92 @@
 Every change in this folder is complete and merged to `main`. Nothing here is
 active work. New changes go in `openspec/changes/<name>/`, not here.
 
-| Change | Tasks | Landed |
-|--------|-------|--------|
-| `crm-workshop-management` | 41/41 | customers, service orders, reminders |
-| `adaptive-catalog-layouts` | 19/19 | image classification, adaptive cards, review step |
-| `crm-shell-settings-rbac` | 46/46 v1 | grouped nav, workshop settings, role matrix |
-| `user-lifecycle-management` | 40/40 | deactivation, forced password change, admin user management |
+| Change | Archived | Tasks | `customer-management` | Landed |
+|--------|----------|-------|----------------------|--------|
+| `crm-workshop-management` | 2026-08-11 | 41/41 | ADDED R16–R19 | customers, service orders, reminders |
+| `adaptive-catalog-layouts` | 2026-08-11 | 19/19 | — | image classification, adaptive cards, review step |
+| `crm-shell-settings-rbac` | 2026-08-11 | 46/54 | ADDED access control | grouped nav, workshop settings, role matrix |
+| `user-lifecycle-management` | 2026-08-11 | 40/40 | — | deactivation, forced password change, admin user management |
+| `catalog-templates-and-workshop-info` | 2026-08-12 | 66/66 | — | catalog templates, workshop info on the PDF |
+| `customer-search-and-picker` | 2026-08-29 | 28/28 | **MODIFIED R19** | async search, accent-insensitivity, near matches |
+| `vehicles-one-to-many` (C3) | 2026-09-01 | 52/61 | **MODIFIED R16 R17 R18 R19**, ADDED vehicle collection | one customer, many vehicles |
+| `service-history-per-vehicle` (C4) | 2026-09-03 | 41/49 | MODIFIED + ADDED vehicle detail | per-vehicle service history, permanent deletion |
+| `customer-shared-phones` (C1) | 2026-09-06 | 41/43 † | **MODIFIED R17 R18 R19** | refuse-then-confirm on a shared phone, `phone NOT NULL` |
+| `customer-deactivation` (C2) | 2026-09-06 | 64/70 | **MODIFIED R16 R19**, ADDED R20 | `cliente.deactivated_at`, excluded from list and picker |
+| `customer-import` (C6) | 2026-09-06 | 78/83 | ADDED R21 | Interfuerza customer import, idempotent re-runs |
+| `catalog-price-tier-choice` | 2026-09-06 | 20/22 | — | choose 1 or 2 ERP price lists per catalog (merged 2026-09-01 in PR #53) |
 
-Archived 2026-08-11, in that chronological order — it is the order their delta
-specs must be applied in.
+† One of C1's 41 is the duplicate-pair merge the owner **dropped**, struck
+through and marked in that `tasks.md` rather than deleted. It counts as closed
+because it will not be done, not because it was.
+
+**The table is complete, and its ROW ORDER is the apply order.** The `Archived`
+column is informational: four rows share 2026-08-11 and three share 2026-09-06,
+so sorting by date gives an arbitrary permutation — including across C1/C2/C6,
+the exact trio this warning exists for. A delta spec applied out of row order
+reverts a later one silently.
+
+`openspec/changes/` is supposed to hold only genuinely active work, and it did
+not. The 2026-08-12 archival of `catalog-templates-and-workshop-info` copied the
+folder instead of moving it, so a byte-identical duplicate sat there reading as
+open work for three weeks; removed with this archive.
+
+**`catalog-price-tier-choice` was the third instance of it, and it is now
+closed.** That change shipped in PR #53 (merged 2026-09-01) and sat unarchived
+for five days, so its delta was never applied and
+`openspec/specs/catalog-generation/spec.md` went on saying "the review step
+MUST NOT offer a price-tier selector" while
+`src/modules/catalog-builder/CatalogBuilderForm.tsx:540` rendered
+`<legend>Listas de precios</legend>` and its checkbox group. Archived
+2026-09-06, immediately after the archive that found it.
+
+**`customer-management` is where that bites.** Four changes rewrite R19 —
+`customer-search-and-picker`, `vehicles-one-to-many`, `customer-shared-phones`
+and `customer-deactivation` — because a `## MODIFIED Requirements` block
+REPLACES the matching requirement rather than merging into it. Applying C2's
+R19 before C1's, for one example, reverts `phone = null` → `phone = ""`, a
+shape migration `0016` made unconstructible. The `customer-management` column
+above exists so nobody has to open eleven folders to find that out.
+
+Unfinished task counts are mostly not undone work — but only the changes with
+a register below say so for themselves. **`vehicles-one-to-many` (C3) has 9
+open boxes and no register**: three are real follow-ups (the mixed-language
+validation payload, the missing `CustomerPicker` `onSaved` test, and staged
+permanent deletion being invisible) and six are owner-reserved GGA/PR boxes
+that were in fact done. Read that `tasks.md` directly until someone writes it
+one.
+
+C1, C2 and C6 landed as a chained merge, `#68 → #69 → #70`. #68 gained four
+work units after #69 branched off it, so #69 conflicted against `main` — both
+had appended a `describe` at the end of the same test file, and both were kept.
+Anyone repeating this: dry-run the whole chain into a throwaway worktree off
+`origin/main` first, and check the real resolution byte-for-byte against the
+dry-run's.
+
+**After any archive, ALL THREE of these must hold.** There is no `openspec` CLI
+here to run, so they are the gate.
+
+1. `rg '^## (ADDED|MODIFIED)' openspec/specs/*/spec.md` comes back **empty**.
+   Those headers are merge INSTRUCTIONS — where to splice — and are consumed,
+   not copied. One rode into the main spec on this very archive: it sat above
+   two requirements it had nothing to do with, so the spec claimed C1/C2/C6
+   added the vehicle collection model.
+2. **A merged change's RATIONALE in `openspec/specs/` can go stale without
+   either other check noticing.** Found 2026-09-07: the customer-import spec
+   still said 353 customers "cannot receive a WhatsApp reminder" and that fixing
+   it "is a data migration, not a code change" — both disproved by
+   `fix/whatsapp-e164` — while the change was archived, `openspec/changes/` was
+   clean, and the `## ADDED/MODIFIED` grep came back empty. Every automated
+   check passed with the baseline asserting the opposite of shipped code.
+   There is no grep for this one. When a change disproves something an ARCHIVED
+   change wrote down, the merged spec is the third place to correct, after that
+   change's `tasks.md` and this README.
+3. **Every folder left in `openspec/changes/` has an unmerged PR.** Check 1
+   cannot catch a merged-but-unarchived change: its delta simply never gets
+   applied, the main spec keeps the requirement that change replaced, and the
+   grep stays clean the whole time. That is exactly how
+   `catalog-price-tier-choice` hid for five days. As of 2026-09-06 the
+   directory holds nothing but `archive/`, so that check passes.
 
 `crm-shell-settings-rbac` also carries eight unchecked boxes under "Deferred to
 follow-up change". Those are a deferral register, not open work: all four units
@@ -61,11 +138,128 @@ survives being found.
   assertions that all check the same string; trim to one the next time that
   file is opened.
 
+### `customer-shared-phones` (C1, archived 2026-09-06)
+
+**1 open follow-up** in
+`archive/2026-09-06-customer-shared-phones/tasks.md`, plus **one observation**
+that is not a box in that file and will not be found by following the pointer —
+it is marked below:
+
+- ~~**`UserForm.tsx:167` has the same over-wide `catch`**~~ — **WRONG, and
+  withdrawn 2026-09-06.** I recorded this from a review report without checking
+  it. `UserForm` has TWO `try` blocks: the first wraps only the `fetch` and
+  carries the connection `catch`; `setOpen`/`onSaved` sit in the second, which
+  has a `finally` and **no `catch` at all**. A throwing `onSaved` propagates
+  there and never was blamed on the network. Kept rather than deleted, because
+  a ledger that quietly drops its own false entries teaches nobody anything.
+- *(observation, not in `tasks.md` — raised reviewing this archive)*
+  **`customer-management`'s R17 rationale pins `schedule.ts:51` and
+  `CustomerPicker.tsx:25` by LINE NUMBER**, which rots on the next edit to
+  either file. Not changed when merging: the block is byte-identical to C1's
+  delta, and that property is worth more than the fix. Name the function next
+  time the rationale is touched for any other reason.
+- ~~**`ServiceOrderForm.handleSubmit` has no `catch` at all**~~ — **CLOSED
+  2026-09-06** on `fix/service-order-form-catch`, RED-first and
+  mutation-verified by removing the catch body. It was the last of the three
+  forms without one.
+- **All three save dialogs' `catch` also swallows a `response.json()` throw on
+  a 2xx**, so an order/customer/user that WAS created could surface as "no se
+  pudo conectar". Narrow, and identical in `UserForm`, `CustomerForm` and
+  `ServiceOrderForm` — consistency rather than a regression any one of them
+  introduced. Raised by GGA on the `ServiceOrderForm` fix. If it is ever fixed
+  it gets fixed in all three at once.
+  **No shared submit helper exists, and the entry below is not one.** That
+  entry once pointed here as the moment to extract one; when it was closed,
+  only the shared SENTENCE moved (`CONNECTION_ERROR`). A `submitJson()` was
+  considered and rejected on the spot: the call sites branch on different
+  status codes and write to different surfaces (`setErrors({ form })` vs
+  `addToast`), so wrapping three lines behind a shared result type would be
+  more code, not less. Anyone fixing this `json()` throw is starting from four
+  independent `catch` blocks, not from a helper.
+- ~~**Nothing tests that the post-success line throwing is NOT reported as a
+  connection failure.**~~ — **CLOSED 2026-09-06** on `test/post-success-throw`,
+  and the entry was wrong on its own count. It is **six** write surfaces, not
+  four, and **all six were already correct**: the gap was coverage, never
+  behaviour.
+  Three now pin it, each mutation-verified by widening the `try` to swallow the
+  post-success line — `OrderStatusControls` (`router.refresh()`), `UsersTable`
+  and `ForcedPasswordChangeForm` (`router.push("/")`). Each also captures the
+  escaping rejection with `process.on("unhandledRejection")` rather than
+  leaving a stray one for the runner, which turns "no error appeared" into a
+  positive claim: it went somewhere, and not onto the operator's screen.
+  The three DIALOG forms are **provably untestable** for it, not merely
+  untested. `setOpen(false)` runs first, so the wrong message would render into
+  an unmounted dialog. Measured rather than reasoned: `ServiceOrderForm`'s
+  `catch` was widened to swallow `onSaved`'s throw — the real defect — and a
+  test written to catch it PASSED. Documented in all three test files.
+- ~~**`OrderStatusControls.transitionTo` has the same shape**~~ — **CLOSED
+  2026-09-06** on `fix/status-controls-catch`, together with the shared copy
+  constant. It had no test file at all; it has three now. The sentence itself
+  had been hand-copied into **five** places — `OrderStatusControls` is the
+  sixth surface and held none, because it was the one still missing its
+  `catch`. It moved to
+  `src/shared/ui/messages.ts` as `CONNECTION_ERROR` — one definition, and the
+  tests still assert the literal so a bad edit to it goes red rather than
+  moving both sides at once. That net had three holes when it was extracted —
+  two assertions matched a prefix and one matched `/no se pudo/i`, so rewriting
+  only the sentence's tail left those files green. All three were widened, and
+  it is now measured: replacing the whole sentence and replacing only its tail
+  turn the SAME 7 tests red across the same 6 files.
+
+A third entry — merging the six genuinely fragmented duplicate customer pairs —
+was **dropped by the owner on 2026-09-06**, omitted rather than deferred. It is
+marked as a decision in that `tasks.md` rather than deleted, so the next person
+who finds those pairs knows someone looked.
+
+### `customer-deactivation` (C2, archived 2026-09-06)
+
+6 open follow-ups, full text at
+`archive/2026-09-06-customer-deactivation/tasks.md`. The two worth knowing
+before touching that code:
+
+- **`pendingPushes` can be decremented by an EXTERNAL navigation** landing
+  between two of `CustomerFilters`' own pushes, releasing `pushedParamsRef`
+  early. Bounded and self-correcting, but it is a real window.
+- **`gga run --pr-mode` ignores `PR_BASE_BRANCH` as an environment variable** —
+  a hole in `AGENTS.md`'s own guidance, which tells you to pin it that way.
+
+### `customer-import` (C6, archived 2026-09-06)
+
+6 open follow-ups, full text at
+`archive/2026-09-06-customer-import/tasks.md`. The ones that will matter first:
+
+- ~~**353 imported customers cannot receive a WhatsApp reminder**~~ — **CLOSED
+  2026-09-07** on `fix/whatsapp-e164`. The entry was wrong twice: it is not a
+  data migration (the import has never run — no database has `external_id`
+  yet), and it was never about the import. Three files claimed `normalizePhone`
+  produced E.164; it never did, so a Panama mobile typed the way staff type
+  them reached Kapso as `61111111` for months, imported or not.
+  `reminders/providers/whatsapp.ts`'s `toE164` converts at the send boundary —
+  storage stays raw, because that is what the phone search, duplicate detection
+  and `0016` read. It ADDS only `+507`, and only to a number it identifies as a
+  Panama mobile; everything else keeps the operator's digits with a `+`.
+  A Panama LANDLINE is refused: valid number, but WhatsApp is a mobile service.
+- **An unplaceable phone burns three retries and lands in the DLQ.** `toE164`
+  refusing returns `{ ok: false }`, `reminders/job.ts` throws, and pg-boss
+  retries — `retryLimit: 3`, backoff, then `REMINDER_DLQ` (`job.ts:84`).
+  Retrying cannot help a number that will never convert; it wants the `skipped`
+  terminal status the opt-out path already uses, which is a change to the job's
+  failure semantics. The census had one such row (a 7-digit landline) of 361.
+- **Layer 1's residual race.** `INSERT … WHERE NOT EXISTS` is not atomic under
+  READ COMMITTED. The window is one INSERT round trip and layer 2
+  (`pg_advisory_xact_lock`) still guarantees the customer data; a partial unique
+  index on `status = 'running'` would close it structurally. Its own change.
+
 ## Where the current spec actually lives
 
-There is no `openspec/specs/` baseline in this repo, and these deltas do not
-add up to one on their own. Reading the current contract means reading two
-places:
+`openspec/specs/` **is** the baseline for five capabilities —
+`catalog-generation`, `customer-management`, `service-orders`,
+`template-config`, `workshop-settings`. It has been since 2026-08-29. Read
+those files directly; the deltas here are history, not the contract.
+
+For the other five that appear in deltas — `app-navigation`,
+`role-permissions`, `user-account`, `user-management`, `workshop-reminders` —
+there is still no consolidated spec, and reading the contract means two places:
 
 1. **`.kiro/specs/dforce-catalog/requirements.md`** — the original baseline
    (Requisitos 1-12, Spanish). This is what the deltas' `R5`/`R6`/`R8`
@@ -74,24 +268,102 @@ places:
    correction notes inline, and `interfuerza-api-contract-fix`.
 2. **The `specs/` folder of each change here**, applied in the table's order.
 
-## Known merge debt
+## Known merge debt — half paid
 
-Consolidating the above into one `openspec/specs/<capability>/spec.md` tree was
-NOT done as part of this archival, deliberately. It is not a mechanical merge:
-the baseline is a 242-line Spanish document organized by numbered requirement,
-while the 13 deltas are English and organized by capability. Producing one tree
+When this folder was first written (2026-08-11) no capability had a
+consolidated spec, and building one was declined as a judgment call rather than
+a mechanical merge: the Kiro baseline is a 242-line Spanish document organized
+by numbered requirement, while the deltas are English and organized by
+capability.
+
+**Five capabilities have since been consolidated** and are listed above. Five
+have not. The reasoning for the remaining five is unchanged: producing a tree
 means choosing a language for the consolidated spec and re-cutting the baseline
-along capability lines — both are judgment calls, and a half-correct baseline is
-worse than this pointer, because the next change would plan against it and
-believe it.
+along capability lines, and a half-correct baseline is worse than a pointer,
+because the next change would plan against it and believe it.
 
-Ten capabilities are involved. Three have more than one contributing delta and
-must be applied in order:
+Which is which, as of 2026-09-06:
 
-- `catalog-generation` — adaptive-catalog-layouts, then crm-shell-settings-rbac
-- `customer-management` — crm-workshop-management, then crm-shell-settings-rbac
-- `service-orders` — crm-workshop-management, then crm-shell-settings-rbac
+- **Consolidated in `openspec/specs/`** — `catalog-generation`,
+  `customer-management`, `service-orders`, `template-config`,
+  `workshop-settings`. Read those files; the table above is their delta
+  history, not the contract. This list used to name only three, and used to
+  credit `customer-management` with two contributing changes when it has eight.
+- **Still no baseline** — `app-navigation`, `role-permissions`, `user-account`,
+  `user-management`, `workshop-reminders`. Each is single-source, so the
+  ordering problem does not arise for them; read the one delta plus the Kiro
+  requirements above.
 
-The other seven are single-source: `app-navigation`, `role-permissions`,
-`template-config`, `user-account`, `user-management`, `workshop-reminders`,
-`workshop-settings`.
+### `catalog-price-tier-choice` (archived 2026-09-06, merged 2026-09-01)
+
+**1 open follow-up** in
+`archive/2026-09-06-catalog-price-tier-choice/tasks.md` — `deriveCatalogTitle`
+still returns `"Catalog: Motor"`, which reaches the confirm dialog and the
+generated PDF. It was turned up by closing the language entry below and is
+recorded there in full.
+
+The two that were closed:
+
+- ~~**A `tiers` validation error renders BEHIND the confirm modal.**~~ —
+  **CLOSED 2026-09-06** on `fix/tiers-error-behind-modal`. One error surface on
+  the dialog, covering all three paths the entry named, plus a fourth it did
+  not: `handleConfirmGenerate` had **no `catch` at all**, so a dropped
+  connection re-enabled Generar with nothing said on a dialog that stays open.
+  That was the SEVENTH surface of the silent-write defect, found while adding
+  the surface — and it is why the class could not have been called closed one
+  PR earlier.
+  The message now appears in TWO places on a field error, deliberately: inside
+  the dialog, which is what the operator reads without closing anything, and in
+  the review card, where they land when they close it to fix the field. The
+  pre-existing test asserted only `findByText`, which cannot tell the two
+  apart — it now throws on the double match, which is itself the proof that the
+  old assertion could not have caught this.
+  **The first attempt at that `catch` was itself over-wide**, and GGA measured
+  the consequence: a 2xx whose body fails to parse was reported as a connection
+  failure over a catalog the server had ALREADY queued, with the dialog open
+  and Generar live — and the retry that invites enqueues a duplicate that
+  evicts a real catalog under the retention limit. Narrowed to the two-`try`
+  shape `UserForm` already uses.
+  **And the "now pinned" this entry first claimed was FALSE.** Measured in both
+  directions afterwards: the test binds to `response.json().catch(() => ({}))`,
+  not to the scope of the `catch`. Drop that fallback and it goes red; collapse
+  the two `try` blocks back into one wide `catch` and all 13 tests still pass.
+  With `.json()` guarded at all three parse sites the narrow `try` has no
+  reachable path that differs, so it is defence in depth and the `.json()`
+  fallback is the fix. The narrowing stays — it costs nothing and matches the
+  repo's shape — but a false "pinned" written into this ledger is what the next
+  agent trusts instead of re-measuring.
+- ~~**`selection.ts`'s error messages are half-migrated**~~ — **CLOSED
+  2026-09-06** on `fix/tiers-error-behind-modal`. All four English strings
+  translated (`categories`, both `total` cases, `productsPerPage`); the `tiers`
+  ones were already Spanish. Closed rather than deferred because the same
+  change gave those strings a SECOND surface: the confirm dialog would have
+  printed "Select at least one category No products selected Must be an integer
+  between 1 and 24" — three English sentences, run together, inside a Spanish
+  dialog. The route's own `form` sentinel is filtered out separately, with a
+  test. The joiner is now `" · "`, the separator the printed catalog already
+  uses, because `validateCatalogSelection` sets its keys in independent `if`
+  blocks and several arrive at once.
+
+A third — "`npm test` is not reliably clean" — was **closed while archiving**,
+not carried: the cause was worker contention starving `userEvent`, fixed by the
+`maxWorkers: 2` cap on the jsdom project whose measurement lives in
+`vitest.config.ts`. Verified 1242/1242, repeatedly, on 2026-09-06.
+
+**Two amendments this archive had to make by hand, because the delta was
+PARTIAL.** R6's block opened with "Amended for one sentence only; every other
+clause of R6 stands unchanged" — but the archiver REPLACES, so applying that
+block wholesale would have deleted `ProductPrintRef`'s extension, the
+template/workshop branding rule, image-type card selection, and the
+`productsPerPage`-is-a-maximum rule, none of which this change touches. R13 was
+partial the same way, and would have taken the review table, the image-type
+override and the `catalogs.generate` gate with it. Both were merged
+sentence-by-sentence instead.
+
+And one scenario the delta itself missed: R6's *"A zero tier renders an
+em-dash"* still demanded that "Venta and Taller still show their bold prices"
+while Socio em-dashes — three rows on one card, which this very change caps at
+two. Unsatisfiable the moment it landed. Narrowed to a chosen pair, and
+*"A missing tier renders an em-dash"* given an explicit chosen tier. This is
+the failure C1 documented for R19: **full-restatement discipline follows the
+DATA SHAPE, not only the requirement being edited.**

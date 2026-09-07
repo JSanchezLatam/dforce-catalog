@@ -113,6 +113,34 @@
       "when": 1788294332038,
       "tag": "0015_order_vehiculo_category_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788590707320,
+      "tag": "0016_cliente_phone_not_null",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788617222217,
+      "tag": "0017_cliente_deactivated_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788638393021,
+      "tag": "0018_cliente_external_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788646459078,
+      "tag": "0019_customer_import_runs",
+      "breakpoints": true
     }
   ]
 }

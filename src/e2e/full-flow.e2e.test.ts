@@ -26,7 +26,7 @@
  * render.
  */
 import { execSync } from "node:child_process";
-import { eq, inArray } from "drizzle-orm";
+import { eq, gte, inArray, sql } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -55,11 +55,13 @@ import { registerPdfUploadWorker } from "@/modules/catalog-storage/upload-status
 import { countAllProducts, listCategoryL1Options, listInventory } from "@/modules/inventory-view/queries";
 import { runSync } from "@/modules/inventory-sync/job";
 import { getClienteById } from "@/modules/customers/queries";
+import { deactivateCliente, reactivateCliente } from "@/modules/customers/service";
+import { ImportAlreadyRunningError, runCustomerImport } from "@/modules/customer-import/job";
 import { listOrdenesByVehiculo } from "@/modules/service-orders/queries";
 import { registerPdfGenerateWorker } from "@/modules/pdf-generation/worker";
 import { proxy } from "@/proxy";
 import { db } from "@/shared/db/client";
-import { cliente, ordenServicio, users, vehiculo } from "@/shared/db/schema";
+import { cliente, customerImportRuns, ordenServicio, users, vehiculo } from "@/shared/db/schema";
 import { getBoss } from "@/shared/jobs/boss";
 
 import { POST as loginPOST } from "../app/api/login/route";
@@ -92,12 +94,19 @@ async function loginAs(username: string): Promise<{ id: string; role: "tecnico" 
  * AGENTS.md's "Known coverage limit" — every unit test for `listClientes`/
  * `countClientes` injects `queryFn`, so a fully green `npm test` proves ZERO
  * coverage of the real `ilike`/`or()` SQL `buildClienteSearchWhere` builds.
- * Specifically: `NULL ILIKE x` is NULL, not false, so a customer with a null
- * `phone` or `vehicle_plate` could in principle be silently dropped from the
- * `or()`. This describe calls the real `GET /api/customers` handler (no
- * injected deps) against a real Postgres to prove: mid-string case-
- * insensitive matching on name/plate, that a NULL column does not drop a row
- * matched through a different column, mid-string digit matching on phone,
+ * The original motive was `NULL ILIKE x` evaluating to NULL rather than false,
+ * which could silently drop a row from the `or()`. Migration `0016` closed
+ * that off: `cliente.phone` and `vehiculo.plate` are both NOT NULL, so no
+ * branch of `buildClienteSearchWhere`'s `or()` can yield NULL any more. What
+ * remains reachable — and is what the row below now covers — is the EMPTY
+ * STRING, which R19 still has to render as an identifiable row. `'' ILIKE x`
+ * is false, a strictly weaker property than the NULL case, so this is a
+ * narrower guarantee than it once was; kept because `''` is the shape a
+ * phone-less customer actually takes now. This describe calls the real
+ * `GET /api/customers` handler (no injected deps) against a real Postgres to
+ * prove: mid-string case-insensitive matching on name/plate, that an empty
+ * column does not drop a row matched through a different column,
+ * mid-string digit matching on phone,
  * and that the `relaxSearchTerm` near-match pass finds a row the raw
  * (unrelaxed) term cannot. Runs before the catalog-generation describe below
  * so `db.$client.end()` in that describe's `afterAll` — its own connection
@@ -106,7 +115,7 @@ async function loginAs(username: string): Promise<{ id: string; role: "tecnico" 
 describe("customer search (E2E)", () => {
   let mixedCaseName: { id: string };
   let noVehicles: { id: string };
-  let nullPhone: { id: string };
+  let emptyPhone: { id: string };
   let formattedPhone: { id: string };
 
   beforeAll(async () => {
@@ -117,7 +126,7 @@ describe("customer search (E2E)", () => {
       .values([
         { name: "María GONZÁLEZ", phone: "50761111111" },
         { name: "Carlos Ruiz", phone: "50762222222" },
-        { name: "Ana Torres", phone: null },
+        { name: "Ana Torres", phone: "" },
         // Stored with a leading "+" — `normalizePhone`'s real output shape
         // for an international number (validation.ts:47-51), i.e. what a
         // production row genuinely looks like, not a hand-formatted stub.
@@ -126,7 +135,7 @@ describe("customer search (E2E)", () => {
       .returning({ id: cliente.id });
     mixedCaseName = row1;
     noVehicles = row2;
-    nullPhone = row3;
+    emptyPhone = row3;
     formattedPhone = row4;
 
     // Migration `0014` (slice 3) dropped `cliente.vehicle_plate`, so a plate
@@ -157,7 +166,7 @@ describe("customer search (E2E)", () => {
   afterAll(async () => {
     // Optional chaining because a throwing `beforeAll` leaves these undefined,
     // and a TypeError in here would mask the real seed error underneath it.
-    const seeded = [mixedCaseName?.id, noVehicles?.id, nullPhone?.id, formattedPhone?.id].filter(
+    const seeded = [mixedCaseName?.id, noVehicles?.id, emptyPhone?.id, formattedPhone?.id].filter(
       (id): id is string => Boolean(id),
     );
     if (seeded.length > 0) await db.delete(cliente).where(inArray(cliente.id, seeded));
@@ -229,9 +238,9 @@ describe("customer search (E2E)", () => {
     expect(body.customers.map((c) => c.id)).toContain(noVehicles.id);
   });
 
-  it("does not silently drop a row with a NULL phone from the or() when matched by name", async () => {
+  it("does not drop a row with an EMPTY phone from the or() when matched by name", async () => {
     const body = await search("Torres");
-    expect(body.customers.map((c) => c.id)).toContain(nullPhone.id);
+    expect(body.customers.map((c) => c.id)).toContain(emptyPhone.id);
   });
 
   it("finds a customer only through the relaxed near-match pass, not the raw term", async () => {
@@ -817,6 +826,475 @@ describe("vehicle search (E2E)", () => {
       expect(secondVehicleHistory.map((o) => o.id)).toContain(secondOrder.id);
       expect(secondVehicleHistory.map((o) => o.id)).not.toContain(firstOrder.id);
     });
+  });
+});
+
+/**
+ * R20 (customer-deactivation) — the rows that actually execute the `WHERE`.
+ * AGENTS.md's injected-seam limit means a fully green `npm test` proves ZERO
+ * coverage of the real SQL, and this whole change IS a `WHERE` clause, so the
+ * unit tests above are compile-checks and these are the verification.
+ */
+describe("customer deactivation (E2E)", () => {
+  const headers = { "x-user-id": "e2e-deactivation", "x-user-role": "tecnico" };
+  let target: { id: string };
+  let bystander: { id: string };
+  let vehicleId: string;
+
+  beforeAll(async () => {
+    execSync("npx drizzle-kit migrate", { stdio: "inherit" });
+
+    const [row1, row2] = await db
+      .insert(cliente)
+      .values([
+        { name: "Retirado Perez", phone: "50770000001" },
+        { name: "Retirado Vecino", phone: "50770000002" },
+      ])
+      .returning();
+    target = row1;
+    bystander = row2;
+
+    const [v] = await db.insert(vehiculo).values({ clienteId: target.id, plate: "DEACT01" }).returning();
+    vehicleId = v.id;
+  }, 60_000);
+
+  // Without this the describe is a one-way write, exactly as `customer search`
+  // spells out above — and worse here than there: `reactivateCliente` only
+  // runs in the LAST test, so any earlier failure would leave "Retirado Perez"
+  // permanently deactivated in whatever database ran the suite. `vehiculo`
+  // cascades, so deleting the two `cliente` rows is enough.
+  afterAll(async () => {
+    const seeded = [target?.id, bystander?.id].filter((id): id is string => Boolean(id));
+    if (seeded.length > 0) {
+      await db.delete(cliente).where(inArray(cliente.id, seeded));
+    }
+  });
+
+  async function list(query: string) {
+    const response = await customersGET(new NextRequest(`http://localhost/api/customers?${query}`, { headers }));
+    expect(response.status).toBe(200);
+    return response.json() as Promise<{ customers: { id: string; deactivatedAt: string | null }[] }>;
+  }
+
+  const idsOf = (body: { customers: { id: string }[] }) => body.customers.map((c) => c.id);
+
+  it("lists the customer while active", async () => {
+    expect(idsOf(await list("search=Retirado"))).toContain(target.id);
+  });
+
+  it("drops them from the default list once deactivated, and keeps the bystander", async () => {
+    await deactivateCliente(target.id);
+
+    const body = await list("search=Retirado");
+    expect(idsOf(body)).not.toContain(target.id);
+    // The filter has to be a predicate on the row, not something that empties
+    // the result set - a `WHERE` bug that removed everyone would pass a test
+    // asserting only the first line.
+    expect(idsOf(body)).toContain(bystander.id);
+  });
+
+  // The whole reason D3 put the filter in the shared read path: the
+  // service-order customer picker reads this exact route, so no new order can
+  // be opened against a retired customer without the picker changing at all.
+  it("hides them from the picker's route with no search term either", async () => {
+    expect(idsOf(await list("pageSize=100"))).not.toContain(target.id);
+  });
+
+  it("lists them, marked, when the operator asks for deactivated records", async () => {
+    const body = await list("search=Retirado&includeInactive=1");
+    expect(idsOf(body)).toContain(target.id);
+    expect(body.customers.find((c) => c.id === target.id)?.deactivatedAt).toBeTruthy();
+  });
+
+  // D3's deliberate exception, and the one place a filter here would be a bug:
+  // you cannot reactivate a record you cannot open.
+  it("still returns the customer by id, with vehicles and history intact", async () => {
+    const detail = await getClienteById(target.id);
+    expect(detail).not.toBeNull();
+    expect(detail!.cliente.deactivatedAt).toBeTruthy();
+    expect(detail!.vehicles.map((v) => v.id)).toContain(vehicleId);
+  });
+
+  it("destroys nothing — the vehicle row survives deactivation", async () => {
+    const rows = await db.select().from(vehiculo).where(eq(vehiculo.id, vehicleId));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].deactivatedAt).toBeNull();
+  });
+
+  // D1's whole argument for a timestamp over a boolean is that it answers
+  // "since when?". Two staff on the same record — A deactivates, B's stale
+  // page still shows "Desactivar", B clicks — and a plain `set` would erase
+  // when it actually happened. Only real SQL can prove the `coalesce`.
+  it("does not restamp the date when an already-deactivated customer is deactivated again", async () => {
+    const first = (await getClienteById(target.id))!.cliente.deactivatedAt;
+    expect(first).toBeTruthy();
+
+    await deactivateCliente(target.id);
+
+    const second = (await getClienteById(target.id))!.cliente.deactivatedAt;
+    expect(second?.getTime()).toBe(first?.getTime());
+  });
+
+  it("brings them back on reactivation, with everything still attached", async () => {
+    await reactivateCliente(target.id);
+
+    expect(idsOf(await list("search=Retirado"))).toContain(target.id);
+    const detail = await getClienteById(target.id);
+    expect(detail!.cliente.deactivatedAt).toBeNull();
+    expect(detail!.vehicles.map((v) => v.id)).toContain(vehicleId);
+  });
+});
+
+/**
+ * customer-import WU5 (design.md D6, tasks.md 5.1-5.3) — the coverage the
+ * injected-DB seam structurally cannot give. Every unit test for
+ * `runCustomerImport` supplies `deps.database`/`deps.listExisting`, so the
+ * real transactional `UPDATE`/`INSERT` — the statement that could clobber
+ * `deactivatedAt` or an opt-out flag — never executes under `npm test`
+ * (AGENTS.md's "Known coverage limit"). Only `fetchCustomers` is injected
+ * here; the database seam is left to its real default so this suite proves
+ * the actual SQL, not a fake standing in for it.
+ *
+ * Real Interfuerza row shape (measured live, proposal.md): `{ Cliente,
+ * Nombre, Email, Telefono_1, Cellular, Telefono_2, Token, Tipo, Status }` —
+ * `Cliente` is the external id, `Token` is empty on every real row,
+ * `Telefono_1` is the phone `mapCustomerRow` prefers.
+ */
+describe("customer import (E2E)", () => {
+  const seededIds: string[] = [];
+  /**
+   * Cleanup for `customer_import_runs` rows this describe inserts DIRECTLY
+   * (layer-1 tests below) rather than through `runCustomerImport` itself.
+   * The time-scoped delete in `afterAll` only catches rows whose
+   * `started_at` is `>= suiteStartedAt` — a row seeded with a deliberately
+   * OLD `started_at` (the staleness-bound test) predates that boundary and
+   * would survive it otherwise.
+   */
+  const seededRunIds: string[] = [];
+  /**
+   * Boundary for the run-row cleanup below (see `afterAll`) — read from
+   * Postgres itself (`select now()`) inside `beforeAll`, not `new Date()` at
+   * describe-collection time. Fixes two real bugs the previous `new Date()`
+   * version had:
+   *
+   *   - Two clocks: `customer_import_runs.started_at` defaults to Postgres
+   *     `now()`. Comparing it against a boundary taken from Node's clock is
+   *     wrong whenever the two drift (a container, a remote host) — if the
+   *     DB clock trails Node's, a row this describe just inserted can land
+   *     BEFORE the boundary and survive the delete below, which is exactly
+   *     the one-way write this cleanup exists to prevent. Reading the
+   *     boundary from Postgres removes the second clock entirely.
+   *   - Too wide: `new Date()` at the top of a `describe` body runs at
+   *     COLLECTION time — before every OTHER describe in this file executes
+   *     — so the old boundary sat before all of them, not just this one.
+   *     Taking it inside `beforeAll` instead moves it to immediately before
+   *     this describe's own tests run.
+   */
+  let suiteStartedAt: Date;
+
+  beforeAll(async () => {
+    execSync("npx drizzle-kit migrate", { stdio: "inherit" });
+    // `db.execute` returns the raw driver row: node-postgres does not parse
+    // this timestamptz for a manually-built query the way Drizzle's typed
+    // column mapping does, so `now` arrives as a string, not a `Date`.
+    const [{ now }] = (await db.execute<{ now: string }>(sql`select now()`)).rows;
+    suiteStartedAt = new Date(now);
+  }, 60_000);
+
+  // Same one-way-write risk `customer search (E2E)` documents above: without
+  // this, every row this describe's `runCustomerImport` calls actually
+  // INSERT survives in whatever database ran the suite. `vehiculo` would
+  // cascade if any import ever created one, but this import never does.
+  //
+  // Every `runCustomerImport` call below also writes a `customer_import_runs`
+  // row (through the real defaults, or — in the race test — through an
+  // injected start that inserts the same real row), and this is the only describe in the file
+  // that writes to that table at all — so a delete scoped BY TIME here cannot
+  // catch another describe's rows the way an unscoped delete would. See
+  // `suiteStartedAt` above for what makes the boundary itself trustworthy
+  // (the database's own clock, taken right before this describe's tests run).
+  //
+  // `runCustomerImport` does not return the run ids it creates, so there is
+  // nothing to collect the way `seededIds` collects customers. The
+  // `suiteStartedAt` boundary is the next best thing, and — with both bugs
+  // above fixed — a real one: it deletes only rows this describe could have
+  // created.
+  //
+  // An earlier version deleted the whole table, arguing that was "exactly as
+  // scoped as deleting seededIds from cliente". It is not. `seededIds` touches
+  // only rows this block made; an unscoped delete also removes rows it never
+  // made — and this suite runs against whatever `DATABASE_URL` points at, with
+  // no guard that it is a throwaway. A test that can erase real import history
+  // when someone points it at the wrong database is not cleanup, it is a trap.
+  afterAll(async () => {
+    if (seededIds.length > 0) {
+      await db.delete(cliente).where(inArray(cliente.id, seededIds));
+    }
+    if (seededRunIds.length > 0) {
+      await db.delete(customerImportRuns).where(inArray(customerImportRuns.id, seededRunIds));
+    }
+    await db.delete(customerImportRuns).where(gte(customerImportRuns.startedAt, suiteStartedAt));
+  });
+
+  /** One raw Interfuerza wrapper row, verbatim field names, `Token` always empty. */
+  function rawRow(externalId: string, nombre: string, telefono1: string, email = "") {
+    return {
+      Cliente: externalId,
+      Nombre: nombre,
+      Email: email,
+      Telefono_1: telefono1,
+      Cellular: "",
+      Telefono_2: "",
+      Token: "",
+      Tipo: "cliente",
+      Status: "activo",
+    };
+  }
+
+  async function fetchByExternalId(externalId: string) {
+    const rows = await db.select().from(cliente).where(eq(cliente.externalId, externalId));
+    return rows[0];
+  }
+
+  /**
+   * Registration-before-assertion pattern for this describe: every test
+   * below that creates a `cliente` row must register it for cleanup BEFORE
+   * running any assertion that could throw. The failure mode under test
+   * (a broken lock, a resurrected row, a duplicate insert) is exactly what
+   * makes the very next assertion throw — if `seededIds.push` sits after
+   * that assertion, it never runs, and the row(s) survive permanently in
+   * whatever database this suite ran against. Registers every match, not
+   * just the first: `rows[0]` alone would miss a duplicate-row regression's
+   * second row.
+   */
+  async function registerByExternalId(externalId: string) {
+    const rows = await db.select().from(cliente).where(eq(cliente.externalId, externalId));
+    rows.forEach((row) => seededIds.push(row.id));
+    return rows;
+  }
+
+  it("is idempotent: a second run over the same rows creates nothing and leaves the row count unchanged", async () => {
+    const externalId = `imp-idem-${Date.now()}`;
+    async function* oneBatch() {
+      yield [rawRow(externalId, "Importado Idempotente", "50771111111")];
+    }
+
+    const first = await runCustomerImport({ fetchCustomers: oneBatch });
+    const afterFirst = await registerByExternalId(externalId);
+    expect(first.created).toBe(1);
+    expect(first.skipped).toEqual([]);
+    expect(afterFirst).toHaveLength(1);
+
+    const countBefore = afterFirst.length;
+
+    const second = await runCustomerImport({ fetchCustomers: oneBatch });
+    const afterSecond = await registerByExternalId(externalId);
+    expect(second.created).toBe(0);
+    expect(afterSecond).toHaveLength(countBefore);
+  });
+
+  /**
+   * The row that matters most in the whole change (task 5.2). A re-import
+   * must never resurrect a customer staff deliberately deactivated —
+   * `applyUserPatchTx`/`setActivation`-style hand-written SQL has no other
+   * automated coverage (AGENTS.md's known coverage limit), so this is the
+   * only place `deactivatedAt` surviving a real `UPDATE` is proven at all.
+   */
+  it("does not resurrect a customer deactivated locally after a re-run", async () => {
+    const externalId = `imp-noresurrect-${Date.now()}`;
+    async function* oneBatch() {
+      yield [rawRow(externalId, "Importado Desactivado", "50772222222")];
+    }
+
+    await runCustomerImport({ fetchCustomers: oneBatch });
+    const createdRows = await registerByExternalId(externalId);
+    expect(createdRows).toHaveLength(1);
+    const created = createdRows[0];
+
+    await deactivateCliente(created.id);
+    const deactivated = await fetchByExternalId(externalId);
+    expect(deactivated!.deactivatedAt).not.toBeNull();
+
+    await runCustomerImport({ fetchCustomers: oneBatch });
+    // Re-registers in case a resurrection regression also duplicated the row.
+    const afterReimport = (await registerByExternalId(externalId)).find((row) => row.id === created.id);
+    expect(afterReimport).toBeDefined();
+    expect(afterReimport!.deactivatedAt).not.toBeNull();
+    expect(afterReimport!.deactivatedAt).toEqual(deactivated!.deactivatedAt);
+  });
+
+  it("does not reverse a locally-set whatsapp opt-out after a re-run", async () => {
+    const externalId = `imp-optout-${Date.now()}`;
+    async function* oneBatch() {
+      yield [rawRow(externalId, "Importado Opt Out", "50773333333")];
+    }
+
+    await runCustomerImport({ fetchCustomers: oneBatch });
+    const createdRows = await registerByExternalId(externalId);
+    expect(createdRows).toHaveLength(1);
+    const created = createdRows[0];
+
+    await db.update(cliente).set({ whatsappOptOut: true }).where(eq(cliente.id, created.id));
+
+    await runCustomerImport({ fetchCustomers: oneBatch });
+    const afterReimport = await registerByExternalId(externalId);
+    expect(afterReimport.find((row) => row.id === created.id)?.whatsappOptOut).toBe(true);
+  });
+
+  it("skips a phone-less row by name and reason, and creates no cliente for it", async () => {
+    const externalId = `imp-nophone-${Date.now()}`;
+    async function* oneBatch() {
+      yield [rawRow(externalId, "Sin Telefono", "")];
+    }
+
+    const result = await runCustomerImport({ fetchCustomers: oneBatch });
+    const createdRows = await registerByExternalId(externalId);
+
+    expect(result.created).toBe(0);
+    expect(result.skipped).toContainEqual({
+      externalId,
+      name: "Sin Telefono",
+      reason: "missing_phone",
+    });
+    expect(createdRows).toHaveLength(0);
+  });
+
+  /**
+   * Proves layer 2 (job.ts module docstring), the actual duplicate-insert
+   * guarantee — `pg_advisory_xact_lock` taken as the first statement inside
+   * the write transaction. The unit tests only assert call ORDER against a
+   * fake `tx`; nothing there proves the lock serialises two real Postgres
+   * connections. Racing two real `runCustomerImport` calls over the same rows
+   * is the only way to exercise that.
+   *
+   * Layer 1 is deliberately bypassed here by injecting a
+   * `startImportRunIfNotActive` that ALWAYS starts (it still inserts the real
+   * `running` row, so the default `finishImportRun` has a real row to close
+   * and `afterAll` still cleans it up). Left at its default, layer 1 would
+   * just as happily "pass" this test by rejecting the second run outright,
+   * which would prove layer 1 works and say nothing about layer 2 — the
+   * thing this row exists to verify. Layer 1's own default path is covered
+   * by the three rows below. No `setTimeout`/sleep is used: both calls are
+   * launched together via `Promise.all` and the assertion is the resulting
+   * row count, not timing.
+   */
+  it("serialises two racing runs over the same external id into one row (proves the advisory lock, not layer 1)", async () => {
+    const externalId = `imp-race-${Date.now()}`;
+    async function* batchA() {
+      yield [rawRow(externalId, "Importado En Carrera", "50774444444")];
+    }
+    async function* batchB() {
+      yield [rawRow(externalId, "Importado En Carrera", "50774444444")];
+    }
+
+    const alwaysStart = async () => {
+      const [run] = await db
+        .insert(customerImportRuns)
+        .values({ status: "running" })
+        .returning({ id: customerImportRuns.id });
+      seededRunIds.push(run.id);
+      return run;
+    };
+
+    const [resultA, resultB] = await Promise.all([
+      runCustomerImport({ fetchCustomers: batchA, startImportRunIfNotActive: alwaysStart }),
+      runCustomerImport({ fetchCustomers: batchB, startImportRunIfNotActive: alwaysStart }),
+    ]);
+
+    // Register before asserting: this is precisely the test whose whole
+    // point is a regression that creates TWO rows instead of one, so the
+    // very next assertion is the one expected to throw under regression.
+    const rows = await registerByExternalId(externalId);
+
+    expect(resultA.created + resultB.created).toBe(1);
+    expect(rows).toHaveLength(1);
+  });
+
+  /**
+   * Proves layer 1's real `WHERE NOT EXISTS` clause
+   * (`buildStartImportRunStatement`, job.ts) — unlike the race test above,
+   * this leaves `startImportRunIfNotActive` at its default so the real SQL
+   * runs for real. The unit tests only compile that statement; nothing there
+   * executes it. A `WHERE NOT EXISTS` neutered into `WHERE TRUE OR NOT
+   * EXISTS (...)` would make this test pass through to `fetchCustomers`
+   * instead of rejecting first.
+   *
+   * Cleans up the inserted `running` row immediately (not just via
+   * `seededRunIds`/`afterAll`) because leaving it in `running` status would
+   * falsely block every `runCustomerImport` call the OTHER two tests below
+   * make.
+   */
+  it("rejects a second import while a running row is already active, before spending any Interfuerza requests (layer 1)", async () => {
+    const [activeRun] = await db
+      .insert(customerImportRuns)
+      .values({ status: "running" })
+      .returning({ id: customerImportRuns.id });
+    seededRunIds.push(activeRun.id);
+
+    const fetchCustomers = vi.fn(async function* () {
+      yield [];
+    });
+
+    try {
+      await expect(runCustomerImport({ fetchCustomers })).rejects.toThrow(ImportAlreadyRunningError);
+      expect(fetchCustomers).not.toHaveBeenCalled();
+    } finally {
+      await db.delete(customerImportRuns).where(eq(customerImportRuns.id, activeRun.id));
+    }
+  });
+
+  /**
+   * Proves the 45-minute staleness bound in the same real `WHERE NOT
+   * EXISTS` clause: a `running` row older than the bound must NOT count as
+   * active. Widening the bound (e.g. to `100 years`) would make this test
+   * see a false rejection instead of a completed import.
+   *
+   * `startedAt` is seeded 2 hours in the past — well past the 45-minute
+   * bound — using Node's clock; the margin is wide enough that ordinary
+   * clock drift between this process and Postgres cannot make it flaky.
+   */
+  it("does not block a new import when the only running row is older than the 45-minute staleness bound (layer 1)", async () => {
+    const [staleRun] = await db
+      .insert(customerImportRuns)
+      .values({ status: "running", startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) })
+      .returning({ id: customerImportRuns.id });
+    seededRunIds.push(staleRun.id);
+
+    const externalId = `imp-stalerun-${Date.now()}`;
+    async function* oneBatch() {
+      yield [rawRow(externalId, "Importado Tras Corrida Vencida", "50775555555")];
+    }
+
+    const result = await runCustomerImport({ fetchCustomers: oneBatch });
+    const createdRows = await registerByExternalId(externalId);
+
+    expect(result.created).toBe(1);
+    expect(createdRows).toHaveLength(1);
+  });
+
+  /**
+   * Proves the clause's `status = 'running'` predicate: a `completed` row
+   * must never count as active, no matter how recent. Dropping that
+   * predicate would make this test see a false rejection instead of a
+   * completed import.
+   */
+  it("does not block a new import when the only customer_import_runs row is completed (layer 1)", async () => {
+    const [completedRun] = await db
+      .insert(customerImportRuns)
+      .values({ status: "completed", finishedAt: new Date() })
+      .returning({ id: customerImportRuns.id });
+    seededRunIds.push(completedRun.id);
+
+    const externalId = `imp-completedrun-${Date.now()}`;
+    async function* oneBatch() {
+      yield [rawRow(externalId, "Importado Tras Corrida Completa", "50776666666")];
+    }
+
+    const result = await runCustomerImport({ fetchCustomers: oneBatch });
+    const createdRows = await registerByExternalId(externalId);
+
+    expect(result.created).toBe(1);
+    expect(createdRows).toHaveLength(1);
   });
 });
 

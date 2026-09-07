@@ -160,7 +160,8 @@ function buildDefaultSendViaChannel(kapsoTemplates?: KapsoTemplateNames): SendVi
       throw new Error(`reminders: no Kapso template configured for reminder type "${ctx.reminder.type}"`);
     }
     const result = await sendWhatsAppTemplate({
-      to: ctx.cliente.phone, // already E.164 — customers/validation.ts's normalizePhone enforces this on write (Phase 2)
+      // Stored raw; `providers/whatsapp.ts`'s `toE164` puts it on the wire.
+      to: ctx.cliente.phone,
       templateName,
       bodyParams: [{ parameterName: "customer_name", text: ctx.cliente.name }],
     });
@@ -201,6 +202,18 @@ export async function runReminder(reminderId: string, deps: RunReminderDeps = {}
   const markOptedOut = () => database.update(reminder).set({ status: "opted_out" }).where(eq(reminder.id, reminderId));
 
   if (ctx.orden.status === "cancelled") {
+    await markSkipped();
+    return;
+  }
+  // R20 — the workshop retired this customer, so nothing goes out to them.
+  // `markSkipped`, NOT `markOptedOut`: `opted_out` records a consent decision
+  // the CUSTOMER made per channel and carries legal meaning, while this is an
+  // operational state of the record, exactly like the cancelled order above.
+  //
+  // At fire time, like every guard here. Deactivation almost always happens
+  // after the orders and their reminders already exist, so a schedule-time
+  // check would miss the only case that actually occurs.
+  if (ctx.cliente.deactivatedAt) {
     await markSkipped();
     return;
   }

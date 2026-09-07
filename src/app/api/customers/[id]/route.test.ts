@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Cliente } from "@/shared/db/schema";
+import { ClienteNotFoundError } from "@/modules/customers/service";
 import { handleUpdateCliente, PATCH } from "./route";
 
 function requestWith(body: unknown, role = "tecnico") {
@@ -93,6 +94,25 @@ describe("permanent vehicle deletion is administrador-only", () => {
     expect(transaction).toHaveBeenCalled();
   });
 
+  /**
+   * Fix 2 (customer-import-fixes) — decided: the deleteVehicle permission
+   * gate outranks the active/fields mutual-exclusion 400 just past it,
+   * because it runs first. A tecnico combining a deactivation with a vehicle
+   * deletion in one body gets refused for the permission problem, not the
+   * mutual-exclusion one.
+   */
+  it("refuses active+vehicle-deletion combined from a tecnico with 403, not the active/fields 400 (fix 2)", async () => {
+    transaction.mockClear();
+
+    const response = await handleUpdateCliente(requestWith({ active: false, vehicles: [{ deleted: true }] }), "c1", {
+      getById: async () => owningV1,
+      database,
+    });
+
+    expect(response.status).toBe(403);
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
   /** The gate is scoped to deletion: a tecnico's ordinary vehicle edit is untouched. */
   it("still lets a tecnico deactivate and edit vehicles", async () => {
     transaction.mockClear();
@@ -155,6 +175,21 @@ describe("PATCH /api/customers/[id] (R16)", () => {
     expect(response.status).toBe(409);
   });
 
+  // Same guarantee as the POST route: the body is forwarded whole, and this is
+  // what keeps it that way.
+  it("carries the shared-phone confirmation through to the service on edit (R18)", async () => {
+    const update = vi.fn().mockResolvedValue(current.cliente);
+
+    const response = await handleUpdateCliente(
+      requestWith({ phone: "+525599998888", allowDuplicatePhone: true }),
+      "c1",
+      { getById: async () => current, findByPhone: async () => ({ id: "c2" }) as unknown as Cliente, update },
+    );
+
+    expect(response.status).toBe(200);
+    expect(update).toHaveBeenCalledOnce();
+  });
+
   it("returns 400 on a validation error", async () => {
     const response = await handleUpdateCliente(requestWith({ name: "" }), "c1", {
       getById: async () => current,
@@ -169,5 +204,160 @@ describe("PATCH /api/customers/[id] (R16)", () => {
     expect(response.status).toBe(400);
     const body = await response.json();
     expect(body.errors["vehicles.0.plate"]).toBeTruthy();
+  });
+});
+
+/**
+ * R20 — activation rides the same PATCH as field edits, the idiom
+ * `api/users/[id]/route.ts` already uses for `body.active`. Gated on
+ * `customers.write` (design D2): deactivation is reversible, so it needs no
+ * grant of its own.
+ */
+describe("PATCH /api/customers/[id] — activation (R20)", () => {
+  it("deactivates on active:false and never sends `active` on to updateCliente", async () => {
+    const deactivateCliente = vi.fn().mockResolvedValue(current.cliente);
+    const update = vi.fn();
+
+    const response = await handleUpdateCliente(requestWith({ active: false }), "c1", {
+      getById: async () => current,
+      update,
+      deactivateCliente,
+    });
+
+    expect(response.status).toBe(200);
+    expect(deactivateCliente).toHaveBeenCalledWith("c1");
+    // `active` is not a column. Forwarded, it would become a SET on one that
+    // does not exist - the same trap `allowDuplicatePhone` had to dodge.
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("reactivates on active:true", async () => {
+    const reactivateCliente = vi.fn().mockResolvedValue(current.cliente);
+
+    const response = await handleUpdateCliente(requestWith({ active: true }), "c1", {
+      getById: async () => current,
+      reactivateCliente,
+    });
+
+    expect(response.status).toBe(200);
+    expect(reactivateCliente).toHaveBeenCalledWith("c1");
+  });
+
+  // Ordering these was the previous design: reactivate, then edit, then
+  // deactivate. It only held when everything succeeded —
+  // `{ active: true, name: "" }` reactivated the customer and THEN answered
+  // 400 for the invalid name, so the operator saw a rejection while the record
+  // went live. Rejecting the combination removes the hazard and the ordering
+  // it existed to serve; no UI sends both.
+  it("refuses to change activation and edit fields in one request, writing nothing", async () => {
+    const update = vi.fn();
+    const reactivateCliente = vi.fn();
+
+    const response = await handleUpdateCliente(requestWith({ active: true, name: "Nuevo" }), "c1", {
+      getById: async () => current,
+      update,
+      reactivateCliente,
+    });
+
+    expect(response.status).toBe(400);
+    expect(reactivateCliente).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("still applies an ordinary edit that carries no `active` at all", async () => {
+    const update = vi.fn().mockResolvedValue(current.cliente);
+
+    const response = await handleUpdateCliente(requestWith({ name: "Nuevo" }), "c1", {
+      getById: async () => current,
+      update,
+    });
+
+    expect(response.status).toBe(200);
+    expect(update).toHaveBeenCalledOnce();
+  });
+
+  it("lets a tecnico deactivate — no grant of its own (D2)", async () => {
+    const response = await handleUpdateCliente(
+      new NextRequest("http://localhost/api/customers/c1", {
+        method: "PATCH",
+        headers: { "x-user-id": "u1", "x-user-role": "tecnico" },
+        body: JSON.stringify({ active: false }),
+      }),
+      "c1",
+      { getById: async () => current, deactivateCliente: vi.fn() },
+    );
+    // `tecnico` HOLDS customers.write (policy.ts), so this must succeed - the
+    // assertion pins design D2's "no new grant", not a denial.
+    expect(response.status).toBe(200);
+  });
+
+  // Named for what it actually proves: the route's job here is the
+  // error-to-status MAPPING. That the service refuses to write blind is a
+  // service-level claim, tested in `service.test.ts` with an injected
+  // `setDeactivatedAt` - and verified by mutation, unlike this one, which
+  // hand-feeds the rejection and would pass even if the service stopped
+  // throwing.
+  it("maps ClienteNotFoundError to 404", async () => {
+    const deactivateCliente = vi.fn().mockRejectedValue(new ClienteNotFoundError("missing"));
+
+    const response = await handleUpdateCliente(requestWith({ active: false }), "missing", {
+      getById: async () => null,
+      deactivateCliente,
+    });
+
+    expect(response.status).toBe(404);
+  });
+
+  it("maps an edit to a deactivated cliente to 409, not a silent no-op", async () => {
+    const deactivated = {
+      cliente: { ...current.cliente, deactivatedAt: new Date("2026-09-01") } as unknown as Cliente,
+      orders: [],
+      vehicles: [],
+    };
+
+    const response = await handleUpdateCliente(requestWith({ name: "Nuevo" }), "c1", {
+      getById: async () => deactivated,
+      update: vi.fn(),
+    });
+
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body.error).toBe("cliente_deactivated");
+  });
+});
+
+/**
+ * R20 — a malformed `active` used to fall through all three branches and
+ * answer 200 having written nothing. `CustomerActivationButton` reads
+ * `response.ok`, refreshes, and the operator watches the state not change with
+ * no message anywhere: the same silence the network-failure `catch` exists to
+ * prevent, one layer up.
+ */
+describe("PATCH /api/customers/[id] — a malformed `active` (R20)", () => {
+  it.each([["false"], [1], [null], [{}]])("rejects active: %o with 400 and writes nothing", async (value) => {
+    const update = vi.fn();
+    const deactivateCliente = vi.fn();
+    const reactivateCliente = vi.fn();
+
+    const response = await handleUpdateCliente(requestWith({ active: value }), "c1", {
+      getById: async () => current,
+      update,
+      deactivateCliente,
+      reactivateCliente,
+    });
+
+    expect(response.status).toBe(400);
+    expect(update).not.toHaveBeenCalled();
+    expect(deactivateCliente).not.toHaveBeenCalled();
+    expect(reactivateCliente).not.toHaveBeenCalled();
+  });
+
+  it("still accepts a real boolean", async () => {
+    const deactivateCliente = vi.fn().mockResolvedValue(current.cliente);
+    const response = await handleUpdateCliente(requestWith({ active: false }), "c1", {
+      getById: async () => current,
+      deactivateCliente,
+    });
+    expect(response.status).toBe(200);
   });
 });

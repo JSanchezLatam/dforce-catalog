@@ -91,7 +91,7 @@ describe("validateCatalogSelection (R5.4/5.7/5.8-9)", () => {
       expect.fail("expected validation to throw");
     } catch (err) {
       expect(err).toBeInstanceOf(CatalogSelectionValidationError);
-      expect((err as CatalogSelectionValidationError).errors.total).toBe("No products selected");
+      expect((err as CatalogSelectionValidationError).errors.total).toBe("No seleccionaste ningún producto");
     }
   });
 
@@ -101,7 +101,7 @@ describe("validateCatalogSelection (R5.4/5.7/5.8-9)", () => {
       expect.fail("expected validation to throw");
     } catch (err) {
       expect(err).toBeInstanceOf(CatalogSelectionValidationError);
-      expect((err as CatalogSelectionValidationError).errors.total).toBe("235 selected, max 200");
+      expect((err as CatalogSelectionValidationError).errors.total).toBe("Seleccionaste 235, el máximo es 200");
     }
   });
 

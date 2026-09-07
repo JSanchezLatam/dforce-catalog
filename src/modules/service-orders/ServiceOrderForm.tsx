@@ -22,6 +22,7 @@ import type { ClienteListItem } from "@/modules/customers/queries";
 import { CATEGORIA_LABEL, type ServiceCategory } from "./categories";
 import { CustomerPicker } from "./CustomerPicker";
 import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
+import { CONNECTION_ERROR } from "@/shared/ui/messages";
 
 const CATEGORIA_OPTIONS = Object.entries(CATEGORIA_LABEL) as [ServiceCategory, string][];
 
@@ -244,6 +245,7 @@ export function ServiceOrderForm({
     event.preventDefault();
     setIsSubmitting(true);
     setErrors({});
+    let saved: OrdenServicio;
 
     try {
       const response = isEdit
@@ -301,17 +303,50 @@ export function ServiceOrderForm({
         return;
       }
 
+      // R20/D5 — this 409 is DETERMINISTIC, so the generic "Intentalo de nuevo"
+      // below would send the operator round a loop that returns the identical
+      // refusal forever, never naming the state or the one thing that unblocks
+      // them. It fires in exactly one scenario, and it is the scenario the
+      // server guard was written for: staff A has this picker open, staff B
+      // deactivates the customer, staff A submits.
+      if (response.status === 409) {
+        const body = await response.json();
+        setErrors({
+          form:
+            body.error === "cliente_deactivated"
+              ? "Este cliente fue desactivado. Reactivalo para poder abrirle una orden."
+              : "No se pudo guardar la orden de servicio.",
+        });
+        return;
+      }
+
       if (!response.ok) {
         setErrors({ form: "No se pudo guardar la orden de servicio. Intentalo de nuevo." });
         return;
       }
 
       const body = await response.json();
-      setOpen(false);
-      onSaved?.(body.orden);
+      saved = body.orden;
+    } catch {
+      // `fetch` REJECTS on a network failure rather than returning a non-ok
+      // response, so without this the dialog re-enables with nothing on screen
+      // and the operator clicks into the same silence. `UserForm` and
+      // `CustomerForm` carry the same catch with the same copy. The cost is
+      // highest here: a save that vanishes takes the customer, the vehicle,
+      // the category and the parts cart with it.
+      //
+      // It covers the request and its body and nothing else — `setOpen` and
+      // `onSaved` sit BELOW, so a parent's `onSaved` throwing cannot print
+      // "no se pudo conectar" over an order that was actually created, onto a
+      // dialog this same code has already closed.
+      setErrors({ form: CONNECTION_ERROR });
+      return;
     } finally {
       setIsSubmitting(false);
     }
+
+    setOpen(false);
+    onSaved?.(saved);
   }
 
   return (

@@ -252,6 +252,38 @@ export const reminderStatusEnum = pgEnum("reminder_status", [
   "opted_out",
 ]);
 
+export const customerImportStatusEnum = pgEnum("customer_import_status", ["running", "completed", "failed"]);
+
+/**
+ * `customer_import_runs` — layer-1 concurrency guard for
+ * `modules/customer-import/job.ts`'s `runCustomerImport`. Same shape and same
+ * purpose as `sync_runs` above: a `status = 'running'` row is this feature's
+ * own source of truth for "is one already going", checked by
+ * `buildStartImportRunStatement`'s `WHERE NOT EXISTS` BEFORE the Interfuerza
+ * fetch even starts, so a second concurrent request doesn't spend another
+ * ~15 requests against an API that carries a real 1h IP ban.
+ *
+ * This is explicitly NOT the correctness guarantee — even folded into one
+ * statement, it is not a unique constraint or an explicit lock (see that
+ * function's docstring for the residual window). The actual guarantee against
+ * duplicate customers is the `pg_advisory_xact_lock` taken inside the write
+ * transaction, before `listExisting`, in `job.ts`.
+ */
+export const customerImportRuns = pgTable("customer_import_runs", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+  status: customerImportStatusEnum("status").notNull().default("running"),
+  created: integer("created"),
+  updated: integer("updated"),
+  skippedCount: integer("skipped_count"),
+  error: text("error"),
+});
+
+export type CustomerImportRun = typeof customerImportRuns.$inferSelect;
+
 /**
  * `cliente` — customer. Originally shipped with one inline vehicle (v1,
  * ADR-6); superseded by the `vehiculo` child table below
@@ -266,9 +298,36 @@ export const cliente = pgTable(
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
     name: text("name").notNull(),
-    /** E.164 preferred (WhatsApp needs it); validated in modules/customers/validation.ts. */
-    phone: text("phone"),
+    /**
+     * Two write paths, two shapes. The app form goes through
+     * `normalizePhone`, so `6123-4567` is stored as `61234567`. The customer
+     * import does NOT (`customer-import/plan.ts` writes the mapper's output
+     * straight through, by design D4), so the same number is stored
+     * `6123-4567`, separators and all. Anything reading this column has to
+     * tolerate both — the search and the duplicate check especially.
+     *
+     * Neither shape is E.164: `reminders/providers/whatsapp.ts` converts at
+     * the wire, because that is a provider format. Validated in
+     * modules/customers/validation.ts, which has always REQUIRED a phone — the
+     * column only stopped disagreeing in migration `0016`. Not UNIQUE, and
+     * deliberately so: a phone can belong to two people (a house line, a
+     * shared handset). See `customer-shared-phones`.
+     */
+    phone: text("phone").notNull(),
     email: text("email"),
+    /**
+     * Interfuerza's `Cliente` value (customer-import D2) — nullable because
+     * every customer created through the app has none, and that stays the
+     * normal case going forward; this column marks provenance, not a
+     * requirement. Not UNIQUE at the database level, for the same reason
+     * `phone` above is not: the import matches on it in application code, and
+     * one more unique index is one more thing that rejects a legitimate row
+     * later.
+     *
+     * `Token` is NOT the identifier despite the name — it is empty on all 370
+     * live rows. Written here because the next person will reach for it.
+     */
+    externalId: text("external_id"),
     /**
      * Two INDEPENDENT opt-out flags (R26, design ADR-5) — WhatsApp and email
      * are legally distinct consent regimes, so a customer can decline one
@@ -277,6 +336,18 @@ export const cliente = pgTable(
      */
     whatsappOptOut: boolean("whatsapp_opt_out").notNull().default(false),
     emailOptOut: boolean("email_opt_out").notNull().default(false),
+    /**
+     * NULL = active; stamped on deactivation (`customer-deactivation` D1).
+     * A nullable timestamp, NOT a boolean — the third table in this codebase
+     * to spell soft delete this way, after `users` and `vehiculo`.
+     *
+     * Deactivation is REVERSIBLE and nothing is ever destroyed: every
+     * `vehiculo` and every `orden_servicio` of a deactivated customer
+     * survives untouched. `queries.ts` owns the default exclusion; a customer
+     * is hidden from the list and the service-order picker, and
+     * `reminders/job.ts` refuses to send to them at fire time.
+     */
+    deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

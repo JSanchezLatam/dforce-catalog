@@ -28,7 +28,9 @@ The selection flow MUST carry `image` and `image_type` alongside each product fr
 
 ### Requirement: PDF Catalog Generation (R6)
 
-The `ProductPrintRef` type MUST be extended with `image?: string | null` and `imageType?: "transparent" | "opaque" | "low_res"`, and with `prices?: {venta, taller, socio}` (all `number | null`). The PDF MUST apply the branding of the template selected in `template-config` (font and colors from the registry) and the workshop's cover text and contact information from `workshop-settings`. Every product card SHALL show all three price tiers (Venta, Taller, Socio) in bold; a tier with no usable price — absent from the payload, or an ERP value `<= 0.00` — SHALL render an em-dash (`—`), never `$0.00` and never a blank line. Image cards are rendered according to their image type (transparent → full-bleed, opaque/low_res → polaroid frame).
+The `ProductPrintRef` type MUST be extended with `image?: string | null` and `imageType?: "transparent" | "opaque" | "low_res"`, and with `prices?: {venta, taller, socio}` (all `number | null`). The PDF MUST apply the branding of the template selected in `template-config` (font and colors from the registry) and the workshop's cover text and contact information from `workshop-settings`. Every product card SHALL show one price row per tier CHOSEN for that catalog — between one and two of `venta`, `taller`, `socio` — in bold, in the canonical order `venta, taller, socio`. A chosen tier with no usable price (absent from the payload, or an ERP value `<= 0.00`) SHALL render an em-dash (`—`), never `$0.00` and never a blank line. A tier that was NOT chosen SHALL be absent from the card entirely, with no row and no em-dash: an em-dash states "this catalog quotes that list and this product has no price", which is a different and false claim. Image cards are rendered according to their image type (transparent → full-bleed, opaque/low_res → polaroid frame).
+
+The page footer SHALL name exactly the chosen tiers, derived from the same selection the cards render. A footer naming a list the cards do not carry is the one error a customer reads directly off the page.
 
 `productsPerPage` is a **maximum**, not an exact count: the binding constraint is the printed page's own height. A printed page MUST hold no more than `productsPerPage` products AND no more products than physically fit within A4 minus the page margin. Card heights MUST be measured in the rendering browser at the printed page's content width, never estimated. (Wording corrected here from an exact count: the earlier reading was what allowed archive gap #1 — a 10-product "page" silently spilling onto a second physical sheet once WU4's three-row price table made cards taller. The count never described what the paper could deliver.)
 
@@ -68,21 +70,31 @@ The `ProductPrintRef` type MUST be extended with `image?: string | null` and `im
 - WHEN the PDF is rendered
 - THEN the system MUST use an opaque-style card with a placeholder
 
-#### Scenario: All three tiers present
+#### Scenario: Only the chosen tiers appear
 
 - GIVEN a product with venta=120.00, taller=100.00, socio=90.00
+- AND the catalog chose Venta and Socio
 - WHEN its card renders
-- THEN all three prices MUST appear, each bold, labeled Venta/Taller/Socio
+- THEN the Venta and Socio prices MUST appear, each bold and labeled
+- AND no Taller row MUST be present, neither priced nor em-dashed
+
+#### Scenario: Footer names the chosen lists
+
+- GIVEN the catalog chose Venta and Socio
+- WHEN any index or product page renders
+- THEN its footer MUST read "Venta · Socio" and MUST NOT name Taller
 
 #### Scenario: A zero tier renders an em-dash
 
 - GIVEN a real product where `socio = 0.00` (verified present in production data)
+- AND the catalog chose Venta and Socio
 - WHEN its card renders
-- THEN the Socio line MUST show `—`, never `$0.00`, while Venta and Taller still show their bold prices
+- THEN the Socio line MUST show `—`, never `$0.00`, while Venta still shows its bold price
 
 #### Scenario: A missing tier renders an em-dash
 
 - GIVEN a product whose payload omits the `taller` field entirely
+- AND the catalog chose Taller
 - WHEN its card renders
 - THEN the Taller line MUST show `—`, exactly as the zero-value case
 
@@ -113,7 +125,9 @@ The inventory-sync mapper MUST classify each product's image at sync time via cl
 
 ### Requirement: Review Step (R13)
 
-`CatalogBuilderForm` MUST include a "Review & Adjust" step between product selection and generation confirmation. This step SHALL display the selected products in a table with columns: name, image thumbnail, image-type badge, and an override selector. The review step MUST NOT offer a price-tier selector; every reviewed product MUST carry all three resolved tiers (`venta`, `taller`, `socio`) through to generation. Only users with the `catalogs.generate` action (Administrador) may proceed beyond this step.
+`CatalogBuilderForm` MUST include a "Review & Adjust" step between product selection and generation confirmation. This step SHALL display the selected products in a table with columns: name, image thumbnail, image-type badge, and an override selector. The review step MUST offer a price-list control: a checkbox group over the three ERP tiers (`venta`, `taller`, `socio`), of which the user MUST choose at least one and at most two. Every card in the generated catalog MUST print exactly one price row per chosen tier, in the canonical order `venta, taller, socio` regardless of the order chosen. Only users with the `catalogs.generate` action (Administrador) may proceed beyond this step.
+
+Every reviewed product MUST still carry all three resolved tiers through to generation. The choice is a RENDER instruction, not a payload filter: the unchosen tiers' values MUST reach the worker, so the same catalog can be regenerated against a different pair without re-reading the ERP.
 
 #### Scenario: Review table shown
 
@@ -133,11 +147,60 @@ The inventory-sync mapper MUST classify each product's image at sync time via cl
 - WHEN the review step is opened
 - THEN the system MUST disable "Generate" and show "No products selected"
 
-#### Scenario: No tier selector shown
+#### Scenario: Tier control shown with two pre-chosen
 
 - GIVEN the review step renders with candidates selected
 - WHEN the Usuario views it
-- THEN no "Lista de precios" control MUST be present
+- THEN a checkbox MUST be present for each of Venta, Taller and Socio
+- AND Venta and Taller MUST be checked, Socio unchecked
+
+#### Scenario: A third choice is unreachable
+
+- GIVEN two tiers are chosen
+- WHEN the Usuario views the remaining checkbox
+- THEN that checkbox MUST be disabled rather than accepting the click and
+  reporting an error afterwards
+
+#### Scenario: The last choice cannot be removed
+
+- GIVEN exactly one tier is chosen
+- WHEN the Usuario views that checkbox
+- THEN it MUST be disabled — a card with no price row is not a catalog
+
+#### Scenario: Only the chosen tiers print
+
+- GIVEN Venta and Socio are chosen
+- WHEN the catalog renders
+- THEN each card MUST show a Venta row and a Socio row and no Taller row at all
+- AND the omitted row MUST NOT appear as an em-dash, which states the opposite
+  ("we quote that list; this product has no price")
+
+#### Scenario: Chosen tier with no usable price
+
+- GIVEN Taller is chosen and a product's `taller` is `null` or `<= 0`
+- WHEN the catalog renders
+- THEN that product's Taller row MUST print an em-dash, never `$0.00`
+
+#### Scenario: The first printed row is the headline
+
+- GIVEN Taller and Socio are chosen
+- WHEN the catalog renders
+- THEN the Taller amount MUST be tinted in the template's primary colour, as
+  Venta was when it was always first
+
+#### Scenario: A payload naming no tiers still renders
+
+- GIVEN a `pdf-generate` job enqueued before this change, carrying no `tiers`
+- WHEN the worker renders it
+- THEN the catalog MUST print Venta and Taller rather than failing the job
+
+#### Scenario: Rejected selections
+
+- GIVEN a generate request whose `tiers` is empty, names three, repeats a tier,
+  or names an unknown list
+- WHEN the route validates it
+- THEN it MUST respond 400 with a `tiers` field error, having re-run the same
+  pure validator the client ran
 
 #### Scenario: All three tiers travel to generation
 

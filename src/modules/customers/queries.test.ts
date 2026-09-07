@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Cliente, OrdenServicio, Vehiculo } from "@/shared/db/schema";
 import {
+  buildClienteListWhere,
   buildClienteSearchWhere,
   countClientes,
   findClienteByPhone,
@@ -17,6 +18,55 @@ function compileSearchWhere(term: string) {
   expect(condition).toBeDefined();
   return new PgDialect().sqlToQuery(condition!);
 }
+
+/**
+ * R20 (customer-deactivation D3) — the whole change is a `WHERE` clause, and
+ * `vitest.config.ts` points DATABASE_URL at a nonexistent database, so these
+ * compile the condition to real Postgres SQL rather than run it. The e2e suite
+ * carries the rows that actually execute it.
+ */
+function compileListWhere(filters: Parameters<typeof buildClienteListWhere>[0]) {
+  const condition = buildClienteListWhere(filters);
+  return condition === undefined ? undefined : new PgDialect().sqlToQuery(condition);
+}
+
+describe("buildClienteListWhere (R20 — deactivated customers are excluded by default)", () => {
+  it("filters out deactivated customers even with NO search term", () => {
+    // The failure this pins: an active-only filter written INSIDE the search
+    // branch applies only when someone is searching, so the bare list — the
+    // screen staff actually open — would still show every deactivated row.
+    const compiled = compileListWhere({});
+    expect(compiled).toBeDefined();
+    expect(compiled!.sql).toContain('"cliente"."deactivated_at" is null');
+  });
+
+  it("keeps the search predicate AND the active filter when both apply", () => {
+    const compiled = compileListWhere({ search: "juan" });
+    expect(compiled!.sql).toContain('"cliente"."deactivated_at" is null');
+    expect(compiled!.sql).toContain("unaccent");
+    expect(compiled!.params).toContain("%juan%");
+  });
+
+  it("drops the CUSTOMER active filter when the operator asks for deactivated records", () => {
+    const compiled = compileListWhere({ search: "juan", includeInactive: true });
+    // Qualified, not a bare "deactivated_at": R19's plate subquery carries its
+    // OWN `vehiculo.deactivated_at is null`, and the first version of this
+    // test failed on that. The two soft deletes are independent concepts and
+    // must stay so — asking to see a retired CUSTOMER is not asking to search
+    // the plates of cars they no longer own.
+    expect(compiled!.sql).not.toContain('"cliente"."deactivated_at"');
+    expect(compiled!.sql).toContain('"vehiculo"."deactivated_at" is null');
+  });
+
+  it("leaves R19's active-PLATE predicate alone when excluding deactivated customers", () => {
+    const compiled = compileListWhere({ search: "juan" });
+    expect(compiled!.sql).toContain('"vehiculo"."deactivated_at" is null');
+  });
+
+  it("returns undefined for no term AND includeInactive — nothing left to filter on", () => {
+    expect(compileListWhere({ includeInactive: true })).toBeUndefined();
+  });
+});
 
 describe("buildClienteSearchWhere (R19)", () => {
   it("returns undefined when no search term is given", () => {
@@ -68,6 +118,7 @@ describe("listClientes (R19)", () => {
         name: "Juan",
         phone: "+525512345678",
         email: null,
+        deactivatedAt: null,
         plates: [],
         createdAt: new Date(),
       },

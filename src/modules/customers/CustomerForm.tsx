@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
+import Link from "next/link";
 
 import type { Cliente, Vehiculo } from "@/shared/db/schema";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import {
   CARD,
   CARD_MUTED,
@@ -194,6 +196,16 @@ export function CustomerForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   /** The row a destructive confirmation is open for — `null` means no confirmation on screen. */
   const [pendingDelete, setPendingDelete] = useState<VehiculoRow | null>(null);
+  /**
+   * R18 (rewritten) — the id of the customer who already holds this phone,
+   * set by a `409` and cleared by anything that changes the question: editing
+   * the phone, or reopening the dialog. `null` means no refusal on screen.
+   *
+   * This is what arms the override, so its lifetime IS the guarantee that the
+   * confirmation answers one attempt and no other. Held here rather than in
+   * `errors` because it drives a link and a button, not a message.
+   */
+  const [sharedPhoneWith, setSharedPhoneWith] = useState<string | null>(null);
 
   function update<K extends keyof CustomerFormState>(key: K, value: CustomerFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -276,20 +288,32 @@ export function CustomerForm({
     if (next) {
       setForm(toFormState(cliente, vehicles));
       setErrors({});
+      setSharedPhoneWith(null);
     }
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // A plain save never carries the override — it has to be asked for.
+    return submit(false);
+  }
+
+  /**
+   * `confirmSharedPhone` is passed per call rather than read from
+   * `sharedPhoneWith`, so the flag can only ride a save the operator started
+   * from the confirmation button itself.
+   */
+  async function submit(confirmSharedPhone: boolean) {
     setIsSubmitting(true);
     setErrors({});
+    let saved: Cliente;
 
     try {
       const payload = buildPayload(form);
       const response = await fetch(isEdit ? `/api/customers/${cliente!.id}` : "/api/customers", {
         method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(confirmSharedPhone ? { ...payload, allowDuplicatePhone: true } : payload),
       });
 
       if (response.status === 400) {
@@ -300,9 +324,33 @@ export function CustomerForm({
 
       if (response.status === 409) {
         const body = await response.json();
-        setErrors({
-          phone: `Ya existe un cliente con este teléfono (ver /customers/${body.existingClienteId})`,
-        });
+        // TWO different 409s reach here now, and branching on the body is what
+        // keeps them apart. `cliente_deactivated` (R20) carries no
+        // `existingClienteId`, so the previous unconditional
+        // `setSharedPhoneWith(body.existingClienteId)` armed `undefined` — the
+        // block below stayed hidden, `errors` had been cleared at the top of
+        // this function, and the dialog just sat there saying nothing.
+        //
+        // That path is exactly the one D5 exists for: staff A opens the detail
+        // page while the customer is active, staff B deactivates them, staff A
+        // saves. Hiding "Editar" removes the FRESH path and does nothing for
+        // the stale one, which is the only one the 409 was written to catch.
+        if (body.error === "duplicate_phone") {
+          // No `errors.phone`: the refusal renders its own block below, with
+          // the link and the way past it. Setting both would print the same
+          // fact twice, once as an error the operator cannot act on.
+          setSharedPhoneWith(body.existingClienteId);
+        } else {
+          // Disarm, don't just add a message. Reachable: a `duplicate_phone`
+          // 409 arms the block, the customer is deactivated, the operator
+          // clicks "Guardar igual" and gets `cliente_deactivated`. Without
+          // this both blocks render and "Guardar igual" stays clickable
+          // against a save that can never succeed.
+          setSharedPhoneWith(null);
+          setErrors({
+            form: "Este cliente fue desactivado y no se puede editar. Reactivalo primero.",
+          });
+        }
         return;
       }
 
@@ -312,12 +360,28 @@ export function CustomerForm({
       }
 
       const body = await response.json();
-      setOpen(false);
-      // Active rows only — a deletion entry is an id with no plate to report.
-      onSaved?.(body.cliente, activeVehicles(form.vehicles).map((v) => v.plate.trim()));
+      saved = body.cliente;
+    } catch {
+      // `fetch` REJECTS on a network failure rather than returning a non-ok
+      // response, so without this the dialog re-enables with nothing on screen
+      // and the operator clicks into the same silence. `UserForm` carries the
+      // same catch for the same reason. It matters twice here: "Guardar igual"
+      // calls this from a click handler, with no form submission behind it to
+      // surface anything.
+      //
+      // It covers the request and its body and nothing else: `setOpen`/
+      // `onSaved` moved BELOW, so a parent's `onSaved` throwing can no longer
+      // print "no se pudo conectar" over a save that actually succeeded — onto
+      // a dialog this same code has already closed, where nobody would read it.
+      setErrors({ form: CONNECTION_ERROR });
+      return;
     } finally {
       setIsSubmitting(false);
     }
+
+    setOpen(false);
+    // Active rows only — a deletion entry is an id with no plate to report.
+    onSaved?.(saved, activeVehicles(form.vehicles).map((v) => v.plate.trim()));
   }
 
   return (
@@ -348,11 +412,54 @@ export function CustomerForm({
 
             <div className="grid gap-2">
               <Label htmlFor="cliente-phone">Teléfono</Label>
-              <Input id="cliente-phone" value={form.phone} onChange={(e) => update("phone", e.target.value)} />
+              <Input
+                id="cliente-phone"
+                value={form.phone}
+                onChange={(e) => {
+                  update("phone", e.target.value);
+                  // Correcting the number is the other way out of the refusal.
+                  // Clearing here is what stops a confirmation armed for the
+                  // OLD phone from applying to whatever is typed next.
+                  setSharedPhoneWith(null);
+                }}
+              />
               {errors.phone && (
                 <p role="alert" className={FIELD_ERROR}>
                   {errors.phone}
                 </p>
+              )}
+              {sharedPhoneWith && (
+                // `role="alert"` sits on the PARAGRAPH, and nothing focusable
+                // goes inside it: a live region announces changed TEXT, and the
+                // two ways past this refusal — the link and the button — are
+                // not text. Keeping the paragraph text-only is what leaves
+                // their own semantics intact.
+                <div className={CARD_MUTED + " flex flex-col gap-2"}>
+                  <p role="alert" className="text-sm">
+                    Ya hay un cliente con este teléfono. Si son dos personas distintas que comparten el
+                    número, guardá igual.
+                  </p>
+                  {/* `Link`, not a raw <a>: repo convention, and it skips a
+                      full document reload. It does NOT preserve what the
+                      operator typed — navigating away unmounts this dialog
+                      either way. Opening the existing customer beside the form
+                      would, and is the more useful behaviour when the point is
+                      comparing two people who share a number; nobody has asked
+                      for it. */}
+                  <Link href={`/customers/${sharedPhoneWith}`} className="text-sm font-medium underline">
+                    Ver el cliente existente
+                  </Link>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="min-h-11 self-start"
+                    disabled={isSubmitting}
+                    onClick={() => submit(true)}
+                  >
+                    Guardar igual
+                  </Button>
+                </div>
               )}
             </div>
 

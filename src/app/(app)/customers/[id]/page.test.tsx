@@ -8,10 +8,16 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const notFound = vi.hoisted(() => vi.fn(() => { throw new Error("NEXT_NOT_FOUND"); }));
-vi.mock("next/navigation", () => ({ notFound }));
+// `useRouter` too: `CustomerActivationButton` (R20) is a client component
+// rendered by this page and calls it on mount.
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({ notFound, useRouter: () => ({ refresh }) }));
 vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders: vi.fn(async () => ({ id: "u1", role: "tecnico" })) }));
-vi.mock("@/modules/auth/policy", () => ({ can: vi.fn(() => true) }));
-vi.mock("@/modules/customers/CustomerFormTrigger", () => ({ CustomerFormTrigger: () => null }));
+const can = vi.hoisted(() => vi.fn<(user: unknown, action: string) => boolean>(() => true));
+vi.mock("@/modules/auth/policy", () => ({ can }));
+vi.mock("@/modules/customers/CustomerFormTrigger", () => ({
+  CustomerFormTrigger: ({ triggerLabel }: { triggerLabel?: React.ReactNode }) => <button>{triggerLabel}</button>,
+}));
 
 const getClienteById = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/customers/queries", () => ({ getClienteById }));
@@ -28,6 +34,7 @@ function renderPage() {
 
 describe("CustomerDetailPage", () => {
   beforeEach(() => {
+    can.mockReturnValue(true);
     getClienteById.mockResolvedValue({
       cliente: { id: "c1", name: "Ana Gómez", phone: "50761111111", email: null, createdAt: new Date("2026-01-01") },
       orders: [],
@@ -42,5 +49,93 @@ describe("CustomerDetailPage", () => {
     // The car is out of service; its history is not. A retired vehicle that
     // renders as a dead end is the failure this asserts against.
     expect(screen.getByRole("link", { name: /XYZ789/ })).toHaveAttribute("href", "/customers/c1/vehicles/v2");
+  });
+});
+
+/**
+ * R20/D5 — a deactivated customer is READ-ONLY until reactivated. The failure
+ * these guard against is a detail view that looks ordinary: staff edit a
+ * record the workshop says it no longer has, and the server refuses with a 409
+ * they were given no way to anticipate.
+ */
+describe("CustomerDetailPage — deactivated customer (R20)", () => {
+  const DEACTIVATED = {
+    cliente: {
+      id: "c1",
+      name: "Ana Gómez",
+      phone: "50761111111",
+      email: null,
+      deactivatedAt: new Date("2026-09-01"),
+      createdAt: new Date("2026-01-01"),
+    },
+    orders: [],
+    vehicles: [vehiculo("v1", "ABC123", null)],
+  };
+
+  it("says the record is deactivated instead of rendering an ordinary detail", async () => {
+    getClienteById.mockResolvedValue(DEACTIVATED);
+    render(await renderPage());
+
+    expect(screen.getByText(/cliente desactivado/i)).toBeInTheDocument();
+  });
+
+  it("offers reactivation and does NOT offer editing", async () => {
+    getClienteById.mockResolvedValue(DEACTIVATED);
+    render(await renderPage());
+
+    expect(screen.getByRole("button", { name: "Reactivar" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the vehicles and their history reachable — deactivation destroys nothing", async () => {
+    getClienteById.mockResolvedValue(DEACTIVATED);
+    render(await renderPage());
+
+    expect(screen.getByRole("link", { name: /ABC123/ })).toHaveAttribute("href", "/customers/c1/vehicles/v1");
+  });
+
+  it("offers deactivation, not reactivation, for an ACTIVE customer", async () => {
+    // Set explicitly: the outer describe's `beforeEach` does not reach this
+    // block, so without this the mock still holds the deactivated customer
+    // from the test above and this would assert nothing about an active one.
+    getClienteById.mockResolvedValue({ ...DEACTIVATED, cliente: { ...DEACTIVATED.cliente, deactivatedAt: null } });
+    render(await renderPage());
+
+    expect(screen.getByRole("button", { name: "Desactivar" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reactivar" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Editar" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * R21 — the activation button is gated on `customers.write`, the same gate
+ * `CustomerImportButton` gets on the customer list. A button that always
+ * 403s is a worse answer than no button (`CustomerForm`'s own
+ * `canDeleteVehicle` docstring states this convention); both roles happen to
+ * hold `customers.write` today, so this is the only place the gate is
+ * actually exercised.
+ */
+describe("CustomerDetailPage — activation button permission gate (R21)", () => {
+  beforeEach(() => {
+    getClienteById.mockResolvedValue({
+      cliente: { id: "c1", name: "Ana Gómez", phone: "50761111111", email: null, createdAt: new Date("2026-01-01") },
+      orders: [],
+      vehicles: [],
+    });
+  });
+
+  it("shows the activation button for a user with customers.write", async () => {
+    can.mockReturnValue(true);
+    render(await renderPage());
+
+    expect(screen.getByRole("button", { name: "Desactivar" })).toBeInTheDocument();
+  });
+
+  it("hides the activation button for a user without customers.write", async () => {
+    can.mockImplementation((_user, action) => action !== "customers.write");
+    render(await renderPage());
+
+    expect(screen.queryByRole("button", { name: "Desactivar" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reactivar" })).not.toBeInTheDocument();
   });
 });

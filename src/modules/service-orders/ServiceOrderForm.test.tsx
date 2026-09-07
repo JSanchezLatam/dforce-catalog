@@ -24,6 +24,7 @@ const CUSTOMER: ClienteListItem = {
   name: "Ya Elegido",
   phone: "50761111111",
   email: null,
+  deactivatedAt: null,
   plates: ["ABC111"],
   createdAt: new Date("2026-01-01T00:00:00Z"),
 };
@@ -31,6 +32,7 @@ const CUSTOMER: ClienteListItem = {
 function clienteRow(overrides: Partial<ClienteListItem> = {}): ClienteListItem {
   return {
     id: "c-a",
+    deactivatedAt: null,
     name: "Cliente A",
     phone: "50762222222",
     email: null,
@@ -657,4 +659,132 @@ describe("ServiceOrderForm", () => {
       expect(body.appointmentAt).toBe("2026-03-10T16:30:00.000Z");
     });
   });
+});
+
+/**
+ * R20/D5 — `POST /api/service-orders` gained a 409 in this change and this
+ * form, its only client, was not touched: the refusal fell through to the
+ * generic "Intentalo de nuevo", which sends the operator round a loop that
+ * returns the identical answer forever. The wire between the route's mapping
+ * and this screen was asserted nowhere.
+ */
+describe("ServiceOrderForm — a deactivated customer's 409 (R20)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  async function submitAgainst(response: { status: number; body: unknown }) {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === "POST") {
+        return Promise.resolve({
+          ok: response.status >= 200 && response.status < 300,
+          status: response.status,
+          json: async () => response.body,
+        } as Response);
+      }
+      if (url.includes("/vehicles")) {
+        return Promise.resolve(jsonResponse({ vehicles: [vehiculoRow({ id: "v-pre", clienteId: "c-preseleccionado" })] }));
+      }
+      return Promise.resolve(jsonResponse({ customers: [], total: 0 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+    openDialog();
+    await flush();
+    fireEvent.change(vehicleSelect(), { target: { value: "v-pre" } });
+    fireEvent.change(categorySelect(), { target: { value: "revisado" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await flush();
+  }
+
+  it("names the deactivation instead of telling the operator to retry", async () => {
+    await submitAgainst({ status: 409, body: { error: "cliente_deactivated" } });
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(/desactivado/i);
+    // The generic copy is the defect: this refusal is deterministic, so
+    // "Intentalo de nuevo" is an instruction that cannot ever work.
+    expect(alert).not.toHaveTextContent(/Intentalo de nuevo/i);
+  });
+
+  it("still shows the generic message for a failure that IS worth retrying", async () => {
+    await submitAgainst({ status: 500, body: {} });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/Intentalo de nuevo/i);
+  });
+});
+
+/**
+ * NOT tested here, and PROVEN untestable rather than assumed: that a throwing
+ * `onSaved` is not reported as a connection failure.
+ *
+ * The dialog forms all place their post-success lines outside the `catch` so
+ * exactly that cannot happen — but no component test can pin it. `setOpen(false)`
+ * runs first, so the wrong message would render into a dialog that is already
+ * unmounted. Measured, not reasoned: widening the `catch` to swallow `onSaved`'s
+ * throw — the actual defect — and running a test written to catch it, the test
+ * PASSES. Nothing distinguishes the two shapes from the DOM.
+ *
+ * `OrderStatusControls`, `UsersTable` and `ForcedPasswordChangeForm` do pin it,
+ * because their error surface survives the post-success line. Those three are
+ * the guard for this property.
+ */
+
+/**
+ * `fetch` REJECTS on a network failure — it does not return a non-ok response
+ * — so a `try/finally` with no `catch` re-enables Guardar with nothing on
+ * screen and the operator clicks into the same silence. `UserForm` and
+ * `CustomerForm` both carry this catch with the same copy, and `UserForm`'s
+ * comment records that the defect stranded a blocked user once.
+ *
+ * This form was the last of the three without it. It is also the one where the
+ * silence costs most: the operator has just picked a customer, a vehicle, a
+ * category and possibly a parts cart, and a save that vanishes takes all of it
+ * with the dialog.
+ */
+describe("ServiceOrderForm — a network failure has to say so", () => {
+  const CONNECTION_ERROR = "No se pudo conectar. Revisa tu conexión e intenta de nuevo.";
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  /** Same scaffold as the 409 describe above, with the POST REJECTING instead. */
+  async function submitAgainstNetworkFailure() {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === "POST") return Promise.reject(new TypeError("Failed to fetch"));
+      if (url.includes("/vehicles")) {
+        return Promise.resolve(jsonResponse({ vehicles: [vehiculoRow({ id: "v-pre", clienteId: "c-preseleccionado" })] }));
+      }
+      return Promise.resolve(jsonResponse({ customers: [], total: 0 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+    openDialog();
+    await flush();
+    fireEvent.change(vehicleSelect(), { target: { value: "v-pre" } });
+    fireEvent.change(categorySelect(), { target: { value: "revisado" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await flush();
+  }
+
+  it("tells the operator the order did not go through, and leaves Guardar clickable", async () => {
+    await submitAgainstNetworkFailure();
+
+    expect(screen.getByRole("alert")).toHaveTextContent(CONNECTION_ERROR);
+    expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled();
+  });
+
+  // NOT tested: "the dialog stays open, so nothing typed is thrown away". It
+  // is true and it matters — the dialog is the only place the order exists —
+  // but no test can prove it here. Without the catch the rejection escapes
+  // BEFORE `setOpen(false)` runs, so the dialog stays open either way; the
+  // assertion was written, run, and passed against the unfixed component.
+  // Deleted rather than kept as a placebo.
 });

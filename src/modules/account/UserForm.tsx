@@ -19,6 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ROLE_LABELS, type Role } from "@/modules/auth/roles";
 import { FIELD_ERROR } from "@/shared/ui/styles";
+import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { MIN_PASSWORD_LENGTH } from "./password-policy";
 
 /** The subset of a user row this form can read; mirrors `UsersTable`'s `UserRow` minus the activation state. */
@@ -168,7 +169,7 @@ export function UserForm({
       // Never leave Guardar disabled on a network failure — that stranded a
       // blocked user on the change-password screen in WU3 and was the one
       // CRITICAL the RDD review caught.
-      setErrors({ form: "No se pudo conectar. Revisa tu conexión e intenta de nuevo." });
+      setErrors({ form: CONNECTION_ERROR });
       setIsSubmitting(false);
       return;
     }

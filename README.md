@@ -231,9 +231,25 @@ a Playwright version bump.
 - `producto.category_l1` is upper-cased on sync (`0011_fold_category_case`),
   so the ERP's `Accesorios` and `ACCESORIOS` collapse into one. The
   duplicates still exist upstream in Interfuerza.
-- Nothing is deployed anywhere yet. Before a first deploy the PDF queue has
-  to be drained with `scripts/drain-pdf-queue.sh` — the job payload shape
-  changed after those jobs were enqueued.
+- Nothing is deployed anywhere yet. Before a first deploy:
+  - the PDF queue has to be drained with `scripts/drain-pdf-queue.sh` — the
+    job payload shape changed after those jobs were enqueued;
+  - `cliente.phone` is `NOT NULL` since migration `0016`, and that migration
+    is a bare `SET NOT NULL` that **hard-fails on the first null row rather
+    than coercing one** — deliberately, because a customer's phone number is
+    the owner's data and not something to invent. Run this against the target
+    database before applying migrations to it, and resolve any rows it finds
+    with the owner:
+
+    ```sql
+    select count(*) from cliente where phone is null or btrim(phone) = '';
+    ```
+
+    It has never had anything to find: every database this has run against
+    holds dev rows only, and the real customer list lives in Interfuerza,
+    which the import brings in already skipping the phone-less rows. The check
+    lives here rather than in the change folder because that folder gets
+    archived and this outlives it.
 - Smaller deferrals from completed changes are registered in
   `openspec/changes/archive/README.md`, each labelled with the review round
   that raised it. They live outside the archived change folders on purpose:

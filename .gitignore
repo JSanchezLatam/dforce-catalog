@@ -44,3 +44,21 @@ next-env.d.ts
 
 # catalog visual gate output (scripts/preview-catalog.ts)
 /preview-out
+
+# Skill registry — the gentle-ai UserPromptSubmit hook rewrites BOTH files on
+# EVERY prompt, so tracking either left the working tree permanently dirty and
+# dragged them into unrelated feature commits. `skill-registry.md` was exempted
+# once as "the real artifact"; it is not portable enough to be one — it stores
+# ABSOLUTE skill paths and titles itself after the checkout directory, so a
+# worktree's copy points at a directory that stops existing the moment the
+# worktree is removed, `component-testing` (the skill AGENTS.md routes people
+# to) included. It slipped into a feature commit twice on one branch before
+# being untracked here. Every machine regenerates it on the next prompt.
+.atl/.skill-registry.cache.json
+
+# CodeGraph index — local to each machine (SQLite db, daemon pid, socket, logs).
+# Ignore the whole directory: .codegraph/.gitignore could not exclude itself,
+# so it showed up as untracked forever.
+/.codegraph/
+# Local AI runtime state
+.atl/
