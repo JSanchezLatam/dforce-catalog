@@ -131,6 +131,23 @@ describe("toE164 — the wire format is the provider's problem, not the operator
   });
 
   /**
+   * The SAME landline, typed the other way staff type it. An earlier draft put
+   * the `+` short-circuit ahead of this check, so `validateClienteInput({ phone:
+   * "+507 269-1234" })` — which stores `+5072691234` — sailed through to Kapso
+   * and spent the three retries and the DLQ entry the guard exists to avoid.
+   * One number, two answers, depending only on how it was typed.
+   */
+  it("refuses the same landline when the operator typed the country code with a plus", () => {
+    const result = toE164("+507 269-1234");
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.reason).toContain("Panama landline");
+  });
+
+  it("still adds nothing to a mobile that already carries +507", () => {
+    expect(toE164("+507 6111-1111")).toEqual({ ok: true, value: "+50761111111" });
+  });
+
+  /**
    * The one thing this function ADDS is Panama's country code, and only to a
    * number it can identify as a Panama mobile. Everything else keeps the
    * operator's digits with the `+` E.164 wants — the shape Meta already

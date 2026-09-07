@@ -254,12 +254,15 @@ before touching that code:
   only Panama's country code, and only to a number it identifies as a Panama
   mobile; everything else keeps the operator's digits with the `+` E.164 wants.
   Refusing a number that already worked is not the alternative to guessing.
-- **An unplaceable phone retries forever.** `toE164` refusing returns
-  `{ ok: false }`, and `reminders/job.ts` throws on that, so pg-boss retries —
-  which cannot help a number that will never convert. The live census had one
-  such row (7 digits) out of 361. It wants the `skipped` terminal status the
-  opt-out path already uses, which is a change to the job's failure semantics
-  and so is its own. Raised while closing the entry above.
+- **An unplaceable phone burns three retries and lands in the DLQ.** `toE164`
+  refusing returns `{ ok: false }`, `reminders/job.ts` throws on that, and
+  pg-boss retries — `retryLimit: 3`, backoff, then `REMINDER_DLQ` (`job.ts:84`).
+  Not forever: an earlier version of this entry said "retries forever", which
+  the same file contradicts two bullets up, in a change whose premise is that a
+  false written claim is a defect. Retrying still cannot help a number that
+  will never convert. It wants the `skipped` terminal status the opt-out path
+  already uses, which is a change to the job's failure semantics and so is its
+  own. Raised while closing the entry above.
 - **Layer 1's residual race.** `INSERT … WHERE NOT EXISTS` is not atomic under
   READ COMMITTED. The window is one INSERT round trip and layer 2
   (`pg_advisory_xact_lock`) still guarantees the customer data; a partial unique

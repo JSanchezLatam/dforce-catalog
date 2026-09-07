@@ -90,29 +90,36 @@ export function toE164(raw: string): { ok: true; value: string } | { ok: false; 
     return refuse(`${digits.length} digits is outside E.164's ${MIN_E164_DIGITS}-${MAX_E164_DIGITS}`);
   }
 
-  // A `+` means the operator already said which country. Nothing to add.
-  if (trimmed.startsWith("+")) return { ok: true, value: `+${digits}` };
-
-  // Strip a leading country code only when what remains is a Panama national
-  // length, so a foreign number that merely happens to start with 507 is not
-  // mangled into a different one.
+  // Derived BEFORE any `+` short-circuit. The same landline typed `269-1234`
+  // and `+507 269-1234` has to get the same answer — an earlier draft checked
+  // the plus first, so one of those two forms sailed past the guard.
+  //
+  // A bare 7- or 8-digit number is Panama's, because this shop is in Panama and
+  // the plan has no area codes. A longer one only counts as Panama if it
+  // actually carries `507`, so a foreign number is never mangled into one.
   const national =
     digits.startsWith(PANAMA_COUNTRY_CODE) &&
     (digits.length === PANAMA_COUNTRY_CODE.length + PANAMA_MOBILE_LENGTH ||
       digits.length === PANAMA_COUNTRY_CODE.length + PANAMA_LANDLINE_LENGTH)
       ? digits.slice(PANAMA_COUNTRY_CODE.length)
-      : digits;
+      : !trimmed.startsWith("+") &&
+          (digits.length === PANAMA_MOBILE_LENGTH || digits.length === PANAMA_LANDLINE_LENGTH)
+        ? digits
+        : null;
 
-  if (national.length === PANAMA_LANDLINE_LENGTH) {
-    return refuse("Panama landline, and WhatsApp is a mobile service");
-  }
-  if (national.length === PANAMA_MOBILE_LENGTH && national.startsWith(PANAMA_MOBILE_PREFIX)) {
-    return { ok: true, value: `+${PANAMA_COUNTRY_CODE}${national}` };
+  if (national !== null) {
+    if (national.length === PANAMA_LANDLINE_LENGTH) {
+      return refuse("Panama landline, and WhatsApp is a mobile service");
+    }
+    if (national.startsWith(PANAMA_MOBILE_PREFIX)) {
+      return { ok: true, value: `+${PANAMA_COUNTRY_CODE}${national}` };
+    }
   }
 
-  // Not identifiable as Panama. Pass the operator's digits through with the
-  // `+`, exactly as they reached Kapso before this function existed — guessing
-  // a country code here is the one thing this module must never do.
+  // Either the operator already said which country, or this is not a shape
+  // identifiable as Panama. Either way the digits go through with the `+`
+  // E.164 wants — the shape Meta already accepted before this function
+  // existed. Guessing a country code is the one thing it must never do.
   return { ok: true, value: `+${digits}` };
 }
 

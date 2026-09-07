@@ -760,10 +760,11 @@ careful about verification, silence reads as "not run".
   `61111111` for months. Converted at the send boundary by
   `reminders/providers/whatsapp.ts`'s `toE164`. A Panama LANDLINE is still
   refused — WhatsApp is a mobile service, and no storage format fixes that.
-- [ ] **An unplaceable phone retries forever.** `toE164` refusing returns
-  `{ ok: false }`, `reminders/job.ts` throws on that, and pg-boss retries —
-  which cannot help a number that will never convert. The census had one such
-  row (a 7-digit landline) out of 361. It wants the `skipped` terminal status
+- [ ] **An unplaceable phone burns three retries and lands in the DLQ.**
+  `toE164` refusing returns `{ ok: false }`, `reminders/job.ts` throws on that,
+  and pg-boss retries — `retryLimit: 3`, backoff, then `REMINDER_DLQ`
+  (`job.ts:84`). Retrying cannot help a number that will never convert. The
+  census had one such row (a 7-digit landline) out of 361. It wants the `skipped` terminal status
   the opt-out path already uses, which is a change to the job's failure
   semantics. Raised 2026-09-07 while closing the entry above.
 - [x] ~~Original text of the entry above:~~ **353 imported customers will not be able to receive a WhatsApp
