@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Alert } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -236,7 +237,7 @@ export default async function CustomerDetailPage({
                           measured reason. */}
                       <Link
                         href={`/service-orders/${orden.id}`}
-                        className={buttonVariants({ variant: "outline", size: "default" })}
+                        className={cn(buttonVariants({ variant: "outline", size: "default" }), "min-h-11 min-w-11")}
                       >
                         <Eye aria-hidden="true" />
                         Ver

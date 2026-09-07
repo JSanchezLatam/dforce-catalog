@@ -16,8 +16,6 @@ vi.mock("@/modules/auth/session", () => ({
 }));
 vi.mock("@/modules/auth/policy", () => ({ can }));
 vi.mock("@/modules/customers/CustomerFormTrigger", () => ({ CustomerFormTrigger: () => null }));
-// Irrelevant to R20 (this file's subject) and requires a ToastProvider this
-// unit render doesn't set up — same reason CustomerFormTrigger is stubbed.
 vi.mock("@/modules/customer-import/CustomerSyncPanel", () => ({
   // Renders BOTH props. The panel's own suite proves it honours `canSync`;
   // nothing proved this page computes it, so replacing the R21 gate with a

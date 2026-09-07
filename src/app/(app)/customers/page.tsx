@@ -11,6 +11,7 @@ import { computePageWindow, parsePageSize } from "@/modules/inventory-view/queri
 import { Pagination } from "@/shared/ui/Pagination";
 import { PAGE_HEADING } from "@/shared/ui/styles";
 import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -247,7 +248,7 @@ export default async function CustomersPage({
                             behaviour, which is all a link needs. */}
                         <Link
                           href={`/customers/${item.id}`}
-                          className={buttonVariants({ variant: "outline", size: "default" })}
+                          className={cn(buttonVariants({ variant: "outline", size: "default" }), "min-h-11 min-w-11")}
                         >
                           <Eye aria-hidden="true" />
                           Ver

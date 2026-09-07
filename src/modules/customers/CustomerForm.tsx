@@ -475,15 +475,28 @@ export function CustomerForm({
                       // data-entry surface, opened from a tablet in a
                       // workshop. `size="default"` alone is h-8 = 32px.
                       //
-                      // Applied to all of them because a partial application
-                      // is what got caught twice on this branch: first the
-                      // seven that were dropped outright, then a version of
-                      // this comment claiming the rule while `Guardar`,
-                      // `Cancelar` and the delete dialog stayed at 32px — and
-                      // `Editar` at 32 beside a 44px `Desactivar` on the
-                      // detail page, which is the mismatch this whole change
-                      // started from. No test asserts a button height, so a
-                      // green suite says nothing here.
+                      // Scope: every action control the customers module owns
+                      // — this dialog, the row `Ver`, the activation toggle,
+                      // the sync trigger. Two things are NOT at 44 and both
+                      // are deliberate:
+                      //
+                      //   - the filter row in `CustomerFilters.tsx`, because
+                      //     those controls sit against `h-8` inputs and a
+                      //     `SelectTrigger` and read as one control strip
+                      //     rather than as separate targets;
+                      //   - `shared/ui/Pagination.tsx`, which this module does
+                      //     not own — it renders on three other screens, and
+                      //     raising it is its own change, not a line smuggled
+                      //     into a customers PR.
+                      //
+                      // Spelled out because partial application got caught
+                      // three times on this branch: the seven dropped
+                      // outright, then `Guardar`/`Cancelar`/the delete dialog
+                      // left at 32 under a comment claiming otherwise, then
+                      // the `Ver` row action and `Editar` beside a 44px
+                      // `Desactivar` — the mismatch this change started from.
+                      // No test asserts a button height, so a green suite
+                      // says nothing here.
                       className="min-h-11 min-w-11"
                       disabled={isSubmitting}
                       onClick={() => submit(true)}
