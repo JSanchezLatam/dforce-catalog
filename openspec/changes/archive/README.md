@@ -65,7 +65,7 @@ Anyone repeating this: dry-run the whole chain into a throwaway worktree off
 `origin/main` first, and check the real resolution byte-for-byte against the
 dry-run's.
 
-**After any archive, BOTH of these must hold.** There is no `openspec` CLI
+**After any archive, ALL THREE of these must hold.** There is no `openspec` CLI
 here to run, so they are the gate.
 
 1. `rg '^## (ADDED|MODIFIED)' openspec/specs/*/spec.md` comes back **empty**.
@@ -73,12 +73,22 @@ here to run, so they are the gate.
    not copied. One rode into the main spec on this very archive: it sat above
    two requirements it had nothing to do with, so the spec claimed C1/C2/C6
    added the vehicle collection model.
-2. **Every folder left in `openspec/changes/` has an unmerged PR.** Check 1
+2. **A merged change's RATIONALE in `openspec/specs/` can go stale without
+   either other check noticing.** Found 2026-09-07: the customer-import spec
+   still said 353 customers "cannot receive a WhatsApp reminder" and that fixing
+   it "is a data migration, not a code change" — both disproved by
+   `fix/whatsapp-e164` — while the change was archived, `openspec/changes/` was
+   clean, and the `## ADDED/MODIFIED` grep came back empty. Every automated
+   check passed with the baseline asserting the opposite of shipped code.
+   There is no grep for this one. When a change disproves something an ARCHIVED
+   change wrote down, the merged spec is the third place to correct, after that
+   change's `tasks.md` and this README.
+3. **Every folder left in `openspec/changes/` has an unmerged PR.** Check 1
    cannot catch a merged-but-unarchived change: its delta simply never gets
    applied, the main spec keeps the requirement that change replaced, and the
    grep stays clean the whole time. That is exactly how
    `catalog-price-tier-choice` hid for five days. As of 2026-09-06 the
-   directory holds nothing but `archive/`, so both checks pass.
+   directory holds nothing but `archive/`, so that check passes.
 
 `crm-shell-settings-rbac` also carries eight unchecked boxes under "Deferred to
 follow-up change". Those are a deferral register, not open work: all four units
@@ -130,7 +140,7 @@ survives being found.
 
 ### `customer-shared-phones` (C1, archived 2026-09-06)
 
-**2 open follow-ups** in
+**1 open follow-up** in
 `archive/2026-09-06-customer-shared-phones/tasks.md`, plus **one observation**
 that is not a box in that file and will not be found by following the pointer —
 it is marked below:
@@ -215,12 +225,26 @@ before touching that code:
 
 ### `customer-import` (C6, archived 2026-09-06)
 
-5 open follow-ups, full text at
-`archive/2026-09-06-customer-import/tasks.md`. The two that will matter first:
+6 open follow-ups, full text at
+`archive/2026-09-06-customer-import/tasks.md`. The ones that will matter first:
 
-- **353 imported customers cannot receive a WhatsApp reminder**, because raw
-  8-digit Panama numbers are not E.164. The owner was shown this and chose raw
-  import. Fixing it is a data migration over `cliente.phone`, not a code change.
+- ~~**353 imported customers cannot receive a WhatsApp reminder**~~ — **CLOSED
+  2026-09-07** on `fix/whatsapp-e164`. The entry was wrong twice: it is not a
+  data migration (the import has never run — no database has `external_id`
+  yet), and it was never about the import. Three files claimed `normalizePhone`
+  produced E.164; it never did, so a Panama mobile typed the way staff type
+  them reached Kapso as `61111111` for months, imported or not.
+  `reminders/providers/whatsapp.ts`'s `toE164` converts at the send boundary —
+  storage stays raw, because that is what the phone search, duplicate detection
+  and `0016` read. It ADDS only `+507`, and only to a number it identifies as a
+  Panama mobile; everything else keeps the operator's digits with a `+`.
+  A Panama LANDLINE is refused: valid number, but WhatsApp is a mobile service.
+- **An unplaceable phone burns three retries and lands in the DLQ.** `toE164`
+  refusing returns `{ ok: false }`, `reminders/job.ts` throws, and pg-boss
+  retries — `retryLimit: 3`, backoff, then `REMINDER_DLQ` (`job.ts:84`).
+  Retrying cannot help a number that will never convert; it wants the `skipped`
+  terminal status the opt-out path already uses, which is a change to the job's
+  failure semantics. The census had one such row (a 7-digit landline) of 361.
 - **Layer 1's residual race.** `INSERT … WHERE NOT EXISTS` is not atomic under
   READ COMMITTED. The window is one INSERT round trip and layer 2
   (`pg_advisory_xact_lock`) still guarantees the customer data; a partial unique
@@ -272,20 +296,11 @@ Which is which, as of 2026-09-06:
 
 ### `catalog-price-tier-choice` (archived 2026-09-06, merged 2026-09-01)
 
-**1 open follow-up.** Both entries in
-`archive/2026-09-06-catalog-price-tier-choice/tasks.md` were closed on
-2026-09-06 and are struck through there, but closing the language one turned up
-a third string the entry never named:
-
-- **`deriveCatalogTitle` still returns `"Catalog: Motor"`** (`selection.ts:103`).
-  That reaches the confirm dialog (`Título: Catalog: Motor`) and the generated
-  PDF, which AGENTS.md names as a Spanish surface. NOT translated with the
-  other four, deliberately: five test files pin the literal
-  (`selection.test.ts`, `render.test.ts`, `enqueue.test.ts`,
-  `full-flow.e2e.test.ts`) and catalogs already stored carry the old title, so
-  it needs its own change with a decision about existing rows. Logged rather
-  than left at "0", because a commit titled "finish the Spanish migration" is
-  exactly what the next agent would trust instead of re-checking.
+**1 open follow-up** in
+`archive/2026-09-06-catalog-price-tier-choice/tasks.md` — `deriveCatalogTitle`
+still returns `"Catalog: Motor"`, which reaches the confirm dialog and the
+generated PDF. It was turned up by closing the language entry below and is
+recorded there in full.
 
 The two that were closed:
 

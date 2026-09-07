@@ -160,7 +160,8 @@ function buildDefaultSendViaChannel(kapsoTemplates?: KapsoTemplateNames): SendVi
       throw new Error(`reminders: no Kapso template configured for reminder type "${ctx.reminder.type}"`);
     }
     const result = await sendWhatsAppTemplate({
-      to: ctx.cliente.phone, // already E.164 — customers/validation.ts's normalizePhone enforces this on write (Phase 2)
+      // Stored raw; `providers/whatsapp.ts`'s `toE164` puts it on the wire.
+      to: ctx.cliente.phone,
       templateName,
       bodyParams: [{ parameterName: "customer_name", text: ctx.cliente.name }],
     });

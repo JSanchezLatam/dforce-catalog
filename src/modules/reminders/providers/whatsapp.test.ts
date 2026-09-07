@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { WhatsAppClientLike } from "./whatsapp";
-import { sendWhatsAppTemplate } from "./whatsapp";
+import { sendWhatsAppTemplate, toE164 } from "./whatsapp";
 
 describe("sendWhatsAppTemplate — ADR-3 (Kapso template send, not sendText)", () => {
   it("sends a template message via the injected Kapso-shaped client (phoneNumberId/to/template.name/template.language/components)", async () => {
@@ -68,5 +68,166 @@ describe("sendWhatsAppTemplate — ADR-3 (Kapso template send, not sendText)", (
 
     expect(result).toEqual({ ok: false, reason: "KAPSO_API_KEY/KAPSO_PHONE_NUMBER_ID not configured" });
     expect(client.messages.sendTemplate).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Both this module's docstring and `reminders/job.ts`'s `dispatch` claimed `to` was
+ * "already E.164 — `normalizePhone` enforces this on write". It does not:
+ * `customers/validation.ts`'s `normalizePhone` strips non-digits and keeps a
+ * leading `+`, nothing more. R17 accepts "optional leading +, 7-15 digits", so
+ * a Panama number typed the normal way — `6111-1111` — is stored, and was
+ * sent, as `61111111`.
+ *
+ * That predates the customer import. The import only makes it 353 at once.
+ *
+ * Converted HERE and not on write, deliberately: the owner chose to import
+ * phones raw, and that decision is about STORAGE — which also feeds search,
+ * duplicate detection and `0016`. The wire format is this provider's concern.
+ */
+describe("toE164 — the wire format is the provider's problem, not the operator's", () => {
+  it("gives a bare Panama national number its country code", () => {
+    expect(toE164("6111-1111")).toEqual({ ok: true, value: "+50761111111" });
+  });
+
+  it("leaves a number the operator already qualified alone", () => {
+    expect(toE164("+52 55 1234 5678")).toEqual({ ok: true, value: "+525512345678" });
+  });
+
+  it("accepts a Panama number already carrying its country code without a plus", () => {
+    expect(toE164("50761111111")).toEqual({ ok: true, value: "+50761111111" });
+  });
+
+  // Never invent a phone number: this repo's standing rule, and the reason
+  // migration 0016 hard-fails rather than coercing.
+  it("REFUSES a length that cannot be a phone number, naming the value", () => {
+    const result = toE164("611111");
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.reason).toContain("611111");
+  });
+
+  /**
+   * Panama's plan, verified rather than assumed: landlines are SEVEN digits
+   * (prefix 2/3/4/5/7/9), mobiles are EIGHT and start with 6. There are no area
+   * codes. The live census found exactly one 7-digit row among 361.
+   *
+   * A landline is a perfectly valid Panama number — it just cannot receive a
+   * WhatsApp template, because WhatsApp is a mobile service. So it is refused,
+   * and the refusal has to SAY that. An earlier version of this module called
+   * it "not a Panama number", which is false, in a change whose whole premise
+   * is that a comment claimed something untrue.
+   */
+  it("refuses a Panama LANDLINE as a landline, not as a foreign number", () => {
+    const result = toE164("269-1234");
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.reason).toContain("Panama landline, and WhatsApp is a mobile service");
+    expect(result.ok === false && result.reason).not.toMatch(/not a Panama number/i);
+  });
+
+  it("refuses a landline that already carries its country code, the same way", () => {
+    const result = toE164("5072691234");
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.reason).toContain("Panama landline");
+  });
+
+  /**
+   * The same landline reaches storage in three shapes, because R17 accepts all
+   * three: `269-1234`, `+507 269-1234`, and a bare `+269-1234`. All three must
+   * get the same answer — a guard that depends on how someone typed a number
+   * is not a guard.
+   */
+  it("refuses the same landline when the operator typed the country code with a plus", () => {
+    const result = toE164("+507 269-1234");
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.reason).toContain("Panama landline");
+  });
+
+  it("still adds nothing to a mobile that already carries +507", () => {
+    expect(toE164("+507 6111-1111")).toEqual({ ok: true, value: "+50761111111" });
+  });
+
+  // Landlines are 2/3/4/5/7/9. Seven digits starting with `6` is a truncated
+  // mobile — refused either way, but the reason has to name which, or it is
+  // the same false-statement defect this module was fixed for.
+  it("calls a truncated mobile a truncated mobile, not a landline", () => {
+    const result = toE164("6111111");
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.reason).toContain("truncated Panama mobile");
+    expect(result.ok === false && result.reason).not.toContain("landline");
+  });
+
+  /**
+   * A `+` means the operator DECLARED the country, and this function never
+   * re-homes a declared number. `+677 61234` is Solomon Islands; re-reading it
+   * as a Panama mobile would deliver someone's reminder to a real Panamanian
+   * handset — worse than not sending at all.
+   *
+   * `+507` is the exception, because that declaration IS Panama: the national
+   * number behind it is read exactly as a bare one would be, which is what
+   * keeps the landline guard from depending on how someone typed the number.
+   */
+  it("never re-homes a number whose country the operator declared", () => {
+    expect(toE164("+677 61234")).toEqual({ ok: true, value: "+67761234" });
+    expect(toE164("+6111-1111")).toEqual({ ok: true, value: "+61111111" });
+    expect(toE164("+269-1234")).toEqual({ ok: true, value: "+2691234" });
+  });
+
+  /**
+   * The one thing this function ADDS is Panama's country code, and only to a
+   * number it can identify as a Panama mobile. Everything else keeps the
+   * operator's digits with the `+` E.164 wants — the shape Meta already
+   * accepted before this function existed.
+   *
+   * A Mexican number typed without a `+` (`5512345678` — R17 accepts it and
+   * `validateClienteInput` stores it) is delivered today. Refusing it because
+   * it is not identifiably Panama would trade a working reminder for three
+   * retries and a DLQ entry: refusing a number that already works is not the
+   * alternative to guessing a country code.
+   */
+  it("passes a number it cannot identify as Panama through, rather than refusing what used to work", () => {
+    expect(toE164("5512345678")).toEqual({ ok: true, value: "+5512345678" });
+  });
+
+  it("does not mistake eight digits that are not a Panama mobile for one", () => {
+    expect(toE164("71234567")).toEqual({ ok: true, value: "+71234567" });
+  });
+
+  // R17's own bounds, reused. An imported row never passes through
+  // `validateClienteInput`, which is the entire reason this module exists — so
+  // a `+` cannot be taken as proof the rest is a phone number.
+  it("does not wave through a `+` with too few digits to be a phone number", () => {
+    expect(toE164("+1").ok).toBe(false);
+  });
+
+  it("does not wave through a `+` with more digits than E.164 allows", () => {
+    expect(toE164("+1234567890123456").ok).toBe(false);
+  });
+
+  it("refuses an empty phone rather than sending a bare plus", () => {
+    expect(toE164("   ").ok).toBe(false);
+  });
+});
+
+describe("sendWhatsAppTemplate — what actually reaches Kapso", () => {
+  it("sends the E.164 form, not the stored one", async () => {
+    const sendTemplate = vi.fn().mockResolvedValue(undefined);
+    const result = await sendWhatsAppTemplate(
+      { to: "6111-1111", templateName: "recordatorio" },
+      { apiKey: "k", phoneNumberId: "p", client: { messages: { sendTemplate } } },
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(sendTemplate).toHaveBeenCalledWith(expect.objectContaining({ to: "+50761111111" }));
+  });
+
+  it("does not call Kapso at all with a number it cannot place", async () => {
+    const sendTemplate = vi.fn();
+    const result = await sendWhatsAppTemplate(
+      { to: "611111", templateName: "recordatorio" },
+      { apiKey: "k", phoneNumberId: "p", client: { messages: { sendTemplate } } },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(sendTemplate).not.toHaveBeenCalled();
   });
 });

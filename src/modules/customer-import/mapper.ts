@@ -58,10 +58,12 @@ export function mapCustomerRow(raw: unknown): MappedRow {
   // field: 361/370 vs 45/370. Preferring the mobile-sounding one would leave
   // 316 customers with no phone and skip them.
   //
-  // VERBATIM — no normalisation, no `+507`, no stripping separators. The owner
-  // chose raw knowing an 8-digit Panama number is not E.164 and therefore
-  // cannot receive a WhatsApp reminder (design D4). If that decision changes,
-  // it changes here and deliberately.
+  // VERBATIM — no normalisation, no `+507`, no stripping separators (design
+  // D4). It costs nothing on the reminder side: `reminders/providers/
+  // whatsapp.ts`'s `toE164` adds the country code at the wire, so a raw Panama
+  // mobile still gets its reminder. A landline does not, for a reason no
+  // storage format can fix — WhatsApp is a mobile service.
+  // If the storage decision changes, it changes here, deliberately.
   // TWO sources, matching design D4. `Telefono_2` was measured EMPTY on all
   // 370 rows, so a third clause would be a branch no fixture can populate and
   // no mutation can prove — dead by measurement, not by guess.

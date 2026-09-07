@@ -22,8 +22,17 @@
  * wiring) decide whether a `{ ok: false }` result should become a throw (so
  * pg-boss retries) or a terminal `failed`/`skipped` status.
  *
- * `to` is expected to already be E.164 (customers/validation.ts's
- * `normalizePhone` enforces this on write — not re-implemented here).
+ * `to` is converted to E.164 HERE, by `toE164` below. It used to say
+ * `normalizePhone` enforced that on write; it does not, and never did —
+ * `customers/validation.ts`'s `normalizePhone` strips non-digits and keeps a
+ * leading `+`, nothing more. R17 accepts "optional leading +, 7-15 digits", so
+ * a Panama number typed the way staff type them (`6111-1111`) reached Kapso as
+ * `61111111`.
+ *
+ * Converted at this boundary and not on write, deliberately: the owner chose
+ * to store imported phones raw, and that decision governs STORAGE — which also
+ * feeds the phone search, duplicate detection and migration `0016`. A wire
+ * format is a provider's concern, and this is the provider.
  */
 import { WhatsAppClient } from "@kapso/whatsapp-cloud-api";
 
@@ -41,6 +50,103 @@ export type SendWhatsAppTemplateInput = {
 };
 
 export type SendWhatsAppTemplateResult = { ok: true } | { ok: false; reason: string };
+
+/**
+ * Panama's numbering plan, verified against it rather than assumed
+ * (https://en.wikipedia.org/wiki/Telephone_numbers_in_Panama): mobiles are
+ * EIGHT digits and always start with `6`; landlines are SEVEN; there are no
+ * area codes. The census of this shop's 361 phones matches — 353 of 8, 7 of 11
+ * (a mobile carrying `507`), 1 of 7 (a landline).
+ */
+const PANAMA_COUNTRY_CODE = "507";
+const PANAMA_MOBILE_LENGTH = 8;
+const PANAMA_MOBILE_PREFIX = "6";
+const PANAMA_LANDLINE_LENGTH = 7;
+
+/** R17's own bounds ("optional leading +, 7-15 digits"), reused rather than re-invented. */
+const MIN_E164_DIGITS = 7;
+const MAX_E164_DIGITS = 15;
+
+/**
+ * Stored phone → E.164, or a refusal naming the value.
+ *
+ * The only thing it ADDS is Panama's country code, and only to a number it can
+ * identify as a Panama mobile. Everything else keeps the digits the operator
+ * stored, with the `+` E.164 wants — the shape Meta already accepted, so
+ * nothing that used to be delivered stops being. Guessing a country code is
+ * the one thing this function must never do.
+ *
+ * One deliberate refusal beyond a malformed length: a Panama LANDLINE. It is a
+ * valid number; it simply cannot receive a WhatsApp template, because WhatsApp
+ * is a mobile service. Sending it spends an API call and three retries to
+ * learn what the length already said.
+ */
+export function toE164(raw: string): { ok: true; value: string } | { ok: false; reason: string } {
+  const digits = raw.replace(/[^0-9]/g, "");
+  const refuse = (why: string) => ({ ok: false as const, reason: `cannot place "${raw}" in E.164 — ${why}` });
+
+  if (digits.length === 0) return refuse("no digits");
+  if (digits.length < MIN_E164_DIGITS || digits.length > MAX_E164_DIGITS) {
+    return refuse(`${digits.length} digits is outside E.164's ${MIN_E164_DIGITS}-${MAX_E164_DIGITS}`);
+  }
+
+  // Derived BEFORE any `+` short-circuit. The same landline typed `269-1234`
+  // and `+507 269-1234` has to get the same answer — an earlier draft checked
+  // the plus first, so one of those two forms sailed past the guard.
+  //
+  // A leading `+` means the operator DECLARED the country. Whatever follows is
+  // theirs, and this function never re-homes it — a `+677 61234` (Solomon
+  // Islands) re-read as a Panama mobile would deliver a stranger's reminder to
+  // a real Panamanian handset, which is a worse outcome than not sending.
+  //
+  // The one exception is a `+` that carries `507` itself: that IS Panama,
+  // declared, so the national number behind it is read the same way a bare one
+  // would be — otherwise the same landline gets two answers depending only on
+  // whether someone typed the country code.
+  //
+  // Without a `+`, 7 or 8 digits is read as Panama's: this shop is in Panama
+  // and the plan has no area codes. That is a heuristic, and BOTH of its costs
+  // are worth naming, because a foreign number typed without its country code
+  // is misread either way:
+  //   - 8 digits starting with `6` — a Danish mobile, say — a stored
+  //     `60123456` goes to `+50760123456`, a real Panama handset.
+  //   - 10 digits starting with `507` — `507-123-4567` is a US Minnesota
+  //     number and is refused here as a Panama landline.
+  // The 361-row census contains neither, and typing the `+` is what an
+  // operator has to do to say otherwise.
+  const declared = raw.trim().startsWith("+");
+  const carriesPanamaCode =
+    digits.startsWith(PANAMA_COUNTRY_CODE) &&
+    (digits.length === PANAMA_COUNTRY_CODE.length + PANAMA_MOBILE_LENGTH ||
+      digits.length === PANAMA_COUNTRY_CODE.length + PANAMA_LANDLINE_LENGTH);
+  const national = carriesPanamaCode
+    ? digits.slice(PANAMA_COUNTRY_CODE.length)
+    : !declared && (digits.length === PANAMA_MOBILE_LENGTH || digits.length === PANAMA_LANDLINE_LENGTH)
+      ? digits
+      : null;
+
+  if (national !== null) {
+    if (national.length === PANAMA_LANDLINE_LENGTH) {
+      // Landlines are 2/3/4/5/7/9; a 7-digit number starting with `6` is a
+      // truncated mobile, not a landline. Both are refused, and the reason has
+      // to say which — the same standard this module was fixed for.
+      return refuse(
+        national.startsWith(PANAMA_MOBILE_PREFIX)
+          ? "seven digits starting with 6 — a truncated Panama mobile, not a dialable number"
+          : "Panama landline, and WhatsApp is a mobile service",
+      );
+    }
+    if (national.startsWith(PANAMA_MOBILE_PREFIX)) {
+      return { ok: true, value: `+${PANAMA_COUNTRY_CODE}${national}` };
+    }
+  }
+
+  // Either the operator already said which country, or this is not a shape
+  // identifiable as Panama. Either way the digits go through with the `+`
+  // E.164 wants — the shape Meta already accepted before this function
+  // existed. Guessing a country code is the one thing it must never do.
+  return { ok: true, value: `+${digits}` };
+}
 
 /** Minimal shape this module actually calls on the Kapso SDK — DI seam for tests (no real network calls). */
 export type WhatsAppClientLike = {
@@ -81,6 +187,12 @@ export async function sendWhatsAppTemplate(
     return { ok: false, reason: "KAPSO_API_KEY/KAPSO_PHONE_NUMBER_ID not configured" };
   }
 
+  // Before the client is constructed: a number this app cannot place must cost
+  // no network call at all, and the reason has to name the value so the
+  // operator can go correct that one row.
+  const e164 = toE164(input.to);
+  if (!e164.ok) return e164;
+
   const client =
     deps.client ??
     (new WhatsAppClient({
@@ -91,7 +203,7 @@ export async function sendWhatsAppTemplate(
   try {
     await client.messages.sendTemplate({
       phoneNumberId,
-      to: input.to,
+      to: e164.value,
       template: {
         name: input.templateName,
         language: { code: input.languageCode ?? "es" },
