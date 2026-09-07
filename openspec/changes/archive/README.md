@@ -135,10 +135,13 @@ survives being found.
 that is not a box in that file and will not be found by following the pointer —
 it is marked below:
 
-- **`UserForm.tsx:167` has the same over-wide `catch`** that C1 narrowed in
-  `CustomerForm`: `setOpen`/`onSaved`-equivalent work sits inside its `try`, so
-  a parent throwing after a save that SUCCEEDED gets blamed on the network.
-  Belongs to `user-lifecycle-management`, not C1.
+- ~~**`UserForm.tsx:167` has the same over-wide `catch`**~~ — **WRONG, and
+  withdrawn 2026-09-06.** I recorded this from a review report without checking
+  it. `UserForm` has TWO `try` blocks: the first wraps only the `fetch` and
+  carries the connection `catch`; `setOpen`/`onSaved` sit in the second, which
+  has a `finally` and **no `catch` at all**. A throwing `onSaved` propagates
+  there and never was blamed on the network. Kept rather than deleted, because
+  a ledger that quietly drops its own false entries teaches nobody anything.
 - *(observation, not in `tasks.md` — raised reviewing this archive)*
   **`customer-management`'s R17 rationale pins `schedule.ts:51` and
   `CustomerPicker.tsx:25` by LINE NUMBER**, which rots on the next edit to
@@ -163,13 +166,22 @@ it is marked below:
   `addToast`), so wrapping three lines behind a shared result type would be
   more code, not less. Anyone fixing this `json()` throw is starting from four
   independent `catch` blocks, not from a helper.
-- **Nothing tests that the post-success line throwing is NOT reported as a
-  connection failure.** All four write surfaces now place their `router.refresh()`
-  / `onSaved?.()` below the `try`/`catch` precisely so a throw there is not
-  blamed on the network, and the comments say so — but no test pins it in any
-  of them. A consistent pre-existing gap, not one this repo's catch work
-  introduced; raised by GGA while closing the entry below. Its own change, and
-  it should cover all four at once.
+- ~~**Nothing tests that the post-success line throwing is NOT reported as a
+  connection failure.**~~ — **CLOSED 2026-09-06** on `test/post-success-throw`,
+  and the entry was wrong on its own count. It is **six** write surfaces, not
+  four, and **all six were already correct**: the gap was coverage, never
+  behaviour.
+  Three now pin it, each mutation-verified by widening the `try` to swallow the
+  post-success line — `OrderStatusControls` (`router.refresh()`), `UsersTable`
+  and `ForcedPasswordChangeForm` (`router.push("/")`). Each also captures the
+  escaping rejection with `process.on("unhandledRejection")` rather than
+  leaving a stray one for the runner, which turns "no error appeared" into a
+  positive claim: it went somewhere, and not onto the operator's screen.
+  The three DIALOG forms are **provably untestable** for it, not merely
+  untested. `setOpen(false)` runs first, so the wrong message would render into
+  an unmounted dialog. Measured rather than reasoned: `ServiceOrderForm`'s
+  `catch` was widened to swallow `onSaved`'s throw — the real defect — and a
+  test written to catch it PASSED. Documented in all three test files.
 - ~~**`OrderStatusControls.transitionTo` has the same shape**~~ — **CLOSED
   2026-09-06** on `fix/status-controls-catch`, together with the shared copy
   constant. It had no test file at all; it has three now. The sentence itself

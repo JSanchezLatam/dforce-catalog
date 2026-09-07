@@ -122,6 +122,45 @@ describe("ForcedPasswordChangeForm — client-side validation", () => {
   });
 });
 
+/**
+ * `router.push("/")` runs OUTSIDE the `try` that catches the fetch, so a push
+ * that throws is never reported as a connection failure over a password that
+ * WAS rotated — which on this screen would be the worst possible lie: the user
+ * is locked out of every other surface until the rotation lands, and the one
+ * message telling them it failed would be false.
+ */
+describe("ForcedPasswordChangeForm — a throwing push is not a connection failure", () => {
+  it("does not show the connection error when the redirect itself throws", async () => {
+    const user = userEvent.setup();
+    mockFetch({ status: 200, body: { success: true } });
+    const boom = new Error("push blew up");
+    push.mockImplementationOnce(() => {
+      throw boom;
+    });
+
+    // The throw ESCAPES — that is the property under test — so it surfaces as
+    // an unhandled rejection. Captured rather than left for the runner: a
+    // stray one is silent under this config and a red suite under a stricter
+    // one (`customers/service.test.ts` documents the same trap). Capturing it
+    // also makes "no connection error appeared" a positive claim: the error
+    // went somewhere, and that somewhere was not the operator's screen.
+    const escaped: unknown[] = [];
+    const capture = (reason: unknown) => escaped.push(reason);
+    process.on("unhandledRejection", capture);
+    try {
+      render(<ForcedPasswordChangeForm />);
+      await fillAndSubmit(user, { current: "temp-pass", next: "a-new-password" });
+
+      await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
+      await vi.waitFor(() => expect(escaped).toContain(boom));
+    } finally {
+      process.off("unhandledRejection", capture);
+    }
+
+    expect(screen.queryByText("No se pudo conectar. Revisa tu conexión e intenta de nuevo.")).not.toBeInTheDocument();
+  });
+});
+
 describe("ForcedPasswordChangeForm — success", () => {
   it("posts to the session-only password route and clears every field", async () => {
     const user = userEvent.setup();

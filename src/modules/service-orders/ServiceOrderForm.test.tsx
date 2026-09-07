@@ -718,6 +718,22 @@ describe("ServiceOrderForm — a deactivated customer's 409 (R20)", () => {
 });
 
 /**
+ * NOT tested here, and PROVEN untestable rather than assumed: that a throwing
+ * `onSaved` is not reported as a connection failure.
+ *
+ * The dialog forms all place their post-success lines outside the `catch` so
+ * exactly that cannot happen — but no component test can pin it. `setOpen(false)`
+ * runs first, so the wrong message would render into a dialog that is already
+ * unmounted. Measured, not reasoned: widening the `catch` to swallow `onSaved`'s
+ * throw — the actual defect — and running a test written to catch it, the test
+ * PASSES. Nothing distinguishes the two shapes from the DOM.
+ *
+ * `OrderStatusControls`, `UsersTable` and `ForcedPasswordChangeForm` do pin it,
+ * because their error surface survives the post-success line. Those three are
+ * the guard for this property.
+ */
+
+/**
  * `fetch` REJECTS on a network failure — it does not return a non-ok response
  * — so a `try/finally` with no `catch` re-enables Guardar with nothing on
  * screen and the operator clicks into the same silence. `UserForm` and
