@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useReducer, useState } from "react";
+import { createContext, useCallback, useContext, useReducer, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 import { Toast } from "./Toast";
@@ -39,6 +39,9 @@ export function useToast() {
   return ctx;
 }
 
+/** Stable no-op subscription — the answer to "am I hydrated" never changes again. */
+const subscribeNever = () => () => {};
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, dispatch] = useReducer(reducer, []);
 
@@ -56,13 +59,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   // is React's own documented cause #1 for a hydration mismatch: the server
   // renders nothing, the client renders the portal, and the trees disagree —
   // which showed up as "Hydration failed" on every page and made React throw
-  // away the tree and re-render it on the client.
+  // the tree away and re-render it on the client.
   //
-  // With a state flag the FIRST client render also renders nothing, so it
-  // matches the server exactly; the effect then flips it. A toast can only be
-  // raised by an interaction, which cannot happen before that.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  // `useSyncExternalStore` rather than a `useState` + `useEffect` flag: this
+  // repo's lint forbids `setState` inside an effect (`set-state-in-effect`,
+  // cascading renders), and this is the hook React documents for exactly this
+  // question. The server snapshot is `false`, so the first client render also
+  // renders nothing and matches; after hydration it reads `true`. A toast
+  // needs an interaction, which cannot happen before that.
+  const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
 
   return (
     <ToastContext.Provider value={{ addToast, removeToast }}>
