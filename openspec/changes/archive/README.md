@@ -13,9 +13,13 @@ active work. New changes go in `openspec/changes/<name>/`, not here.
 | `customer-search-and-picker` | 2026-08-29 | 28/28 | **MODIFIED R19** | async search, accent-insensitivity, near matches |
 | `vehicles-one-to-many` (C3) | 2026-09-01 | 52/61 | **MODIFIED R16 R17 R18 R19**, ADDED vehicle collection | one customer, many vehicles |
 | `service-history-per-vehicle` (C4) | 2026-09-03 | 41/49 | MODIFIED + ADDED vehicle detail | per-vehicle service history, permanent deletion |
-| `customer-shared-phones` (C1) | 2026-09-06 | 41/43 | **MODIFIED R17 R18 R19** | refuse-then-confirm on a shared phone, `phone NOT NULL` |
+| `customer-shared-phones` (C1) | 2026-09-06 | 41/43 † | **MODIFIED R17 R18 R19** | refuse-then-confirm on a shared phone, `phone NOT NULL` |
 | `customer-deactivation` (C2) | 2026-09-06 | 64/70 | **MODIFIED R16 R19**, ADDED R20 | `cliente.deactivated_at`, excluded from list and picker |
 | `customer-import` (C6) | 2026-09-06 | 78/83 | ADDED R21 | Interfuerza customer import, idempotent re-runs |
+
+† One of C1's 41 is the duplicate-pair merge the owner **dropped**, struck
+through and marked in that `tasks.md` rather than deleted. It counts as closed
+because it will not be done, not because it was.
 
 **The table is complete, and its ROW ORDER is the apply order.** The `Archived`
 column is informational: four rows share 2026-08-11 and three share 2026-09-06,
