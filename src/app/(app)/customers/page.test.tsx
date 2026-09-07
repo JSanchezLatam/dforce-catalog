@@ -331,8 +331,12 @@ describe("CustomersPage — the synced-customer total behind the stats card", ()
 
   it("hands the panel a count taken with no search and no status filter", async () => {
     listClientes.mockResolvedValue([row()]);
-    // In call order: the filtered count paging uses, then the unfiltered one.
-    countClientes.mockResolvedValueOnce(1).mockResolvedValueOnce(368);
+    // Keyed on the filter, not on call order — `countByStatus` forty lines up
+    // explains why an ordered chain is the wrong shape here, and this test
+    // was contradicting it.
+    countClientes.mockImplementation(async (filters: { status?: string }) =>
+      filters.status === "all" ? 368 : 1,
+    );
 
     render(await CustomersPage({ searchParams: Promise.resolve({ search: "perez", status: "inactive" }) }));
 

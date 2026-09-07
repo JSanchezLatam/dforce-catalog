@@ -94,7 +94,13 @@ export function CustomerSyncPanel({ total, canSync }: { total: number; canSync: 
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total de clientes</p>
               <p className="text-3xl font-bold text-foreground">{total}</p>
-              <p className="text-sm text-muted-foreground">sincronizados desde Interfuerza</p>
+              {/* NOT "sincronizados desde Interfuerza". `countClientes({status:"all"})`
+                  produces no WHERE at all (`queries.ts:86`), so this counts every
+                  row in `cliente` — including one typed into the "Nuevo cliente"
+                  form on this very page, whose `externalId` is NULL, and including
+                  deactivated ones. Inventory can say "desde Interfuerza" because
+                  every product really does arrive that way; customers do not. */}
+              <p className="text-sm text-muted-foreground">registrados, incluidos los inactivos</p>
             </div>
             {/* Only the ACTION is privileged. The total beside it is data on a
                 page the reader can already open. */}
