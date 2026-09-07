@@ -314,8 +314,11 @@ export function CatalogBuilderForm({
         // the channel a surface would have published it straight to the
         // operator's screen, in the wrong language.
         const fields = returned && Object.fromEntries(Object.entries(returned).filter(([k]) => k !== "form"));
-        // Only real field errors go into `errors` — those have render surfaces
-        // in the review card, where the operator lands to fix them.
+        // Only real field errors go into `errors`, for when the operator goes
+        // BACK to fix them. Not all of them have a surface at this point:
+        // `productsPerPage` renders inside the `step === "select"` block, so on
+        // a confirm failure it is invisible until they click "Volver a la
+        // selección". The dialog surface below is what covers that gap.
         if (fields && Object.keys(fields).length > 0) setErrors(fields);
         // Joined rather than generic: the operator has to know WHICH field, or
         // "cancel and look around" is the only instruction the dialog gives.

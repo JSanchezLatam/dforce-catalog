@@ -272,8 +272,22 @@ Which is which, as of 2026-09-06:
 
 ### `catalog-price-tier-choice` (archived 2026-09-06, merged 2026-09-01)
 
-**0 open follow-ups** — both were closed on 2026-09-06 and are struck through
-in `archive/2026-09-06-catalog-price-tier-choice/tasks.md`:
+**1 open follow-up.** Both entries in
+`archive/2026-09-06-catalog-price-tier-choice/tasks.md` were closed on
+2026-09-06 and are struck through there, but closing the language one turned up
+a third string the entry never named:
+
+- **`deriveCatalogTitle` still returns `"Catalog: Motor"`** (`selection.ts:103`).
+  That reaches the confirm dialog (`Título: Catalog: Motor`) and the generated
+  PDF, which AGENTS.md names as a Spanish surface. NOT translated with the
+  other four, deliberately: five test files pin the literal
+  (`selection.test.ts`, `render.test.ts`, `enqueue.test.ts`,
+  `full-flow.e2e.test.ts`) and catalogs already stored carry the old title, so
+  it needs its own change with a decision about existing rows. Logged rather
+  than left at "0", because a commit titled "finish the Spanish migration" is
+  exactly what the next agent would trust instead of re-checking.
+
+The two that were closed:
 
 - ~~**A `tiers` validation error renders BEHIND the confirm modal.**~~ —
   **CLOSED 2026-09-06** on `fix/tiers-error-behind-modal`. One error surface on
