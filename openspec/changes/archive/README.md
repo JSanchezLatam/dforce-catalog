@@ -17,9 +17,16 @@ active work. New changes go in `openspec/changes/<name>/`, not here.
 | `customer-deactivation` (C2) | 2026-09-06 | 64/70 | **MODIFIED R16 R19**, ADDED R20 | `cliente.deactivated_at`, excluded from list and picker |
 | `customer-import` (C6) | 2026-09-06 | 78/83 | ADDED R21 | Interfuerza customer import, idempotent re-runs |
 
-**The table is complete, and the `Archived` column is the apply order.** Every
-change here is listed; a delta spec applied out of that order reverts a later
-one silently.
+**The table is complete, and its ROW ORDER is the apply order.** The `Archived`
+column is informational: four rows share 2026-08-11 and three share 2026-09-06,
+so sorting by date gives an arbitrary permutation — including across C1/C2/C6,
+the exact trio this warning exists for. A delta spec applied out of row order
+reverts a later one silently.
+
+`openspec/changes/` holds only genuinely active work. The 2026-08-12 archival
+of `catalog-templates-and-workshop-info` copied the folder instead of moving
+it, so a byte-identical duplicate sat there reading as open work for three
+weeks; it was removed with this archive.
 
 **`customer-management` is where that bites.** Four changes rewrite R19 —
 `customer-search-and-picker`, `vehicles-one-to-many`, `customer-shared-phones`
@@ -108,6 +115,11 @@ survives being found.
   `CustomerForm`: `setOpen`/`onSaved`-equivalent work sits inside its `try`, so
   a parent throwing after a save that SUCCEEDED gets blamed on the network.
   Belongs to `user-lifecycle-management`, not C1.
+- **`customer-management`'s R17 rationale pins `schedule.ts:51` and
+  `CustomerPicker.tsx:25` by LINE NUMBER**, which rots on the next edit to
+  either file. Not changed when merging: the block is byte-identical to C1's
+  delta, and that property is worth more than the fix. Name the function next
+  time the rationale is touched for any other reason.
 - **`ServiceOrderForm.handleSubmit` has no `catch` at all**
   (`src/modules/service-orders/ServiceOrderForm.tsx`) — the silent-save defect
   this project has now fixed three times elsewhere. Needs its own change, with
@@ -175,14 +187,14 @@ means choosing a language for the consolidated spec and re-cutting the baseline
 along capability lines, and a half-correct baseline is worse than a pointer,
 because the next change would plan against it and believe it.
 
-For the capabilities that still have no baseline, more than one delta
-contributes and order matters:
+Which is which, as of 2026-09-06:
 
-- `service-orders`, `catalog-generation`, `customer-management` — **now
-  consolidated in `openspec/specs/`; the table above is their apply order and
-  supersedes what this list used to say.** `customer-management` in particular
-  had two contributing changes named here and has eight.
-
-The other seven are single-source: `app-navigation`, `role-permissions`,
-`template-config`, `user-account`, `user-management`, `workshop-reminders`,
-`workshop-settings`.
+- **Consolidated in `openspec/specs/`** — `catalog-generation`,
+  `customer-management`, `service-orders`, `template-config`,
+  `workshop-settings`. Read those files; the table above is their delta
+  history, not the contract. This list used to name only three, and used to
+  credit `customer-management` with two contributing changes when it has eight.
+- **Still no baseline** — `app-navigation`, `role-permissions`, `user-account`,
+  `user-management`, `workshop-reminders`. Each is single-source, so the
+  ordering problem does not arise for them; read the one delta plus the Kiro
+  requirements above.
