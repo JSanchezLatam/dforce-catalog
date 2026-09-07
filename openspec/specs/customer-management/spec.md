@@ -89,7 +89,7 @@ which numbers are shared. Chosen deliberately over both — see proposal.md.*
 
 ### Requirement: List View Search and Filter (R19)
 
-The customer list view MUST provide a text search input matching `cliente` records by partial, case-insensitive AND accent-insensitive match against `name`, `phone`, or any of that customer's active vehicle `plate`s. Accent folding MUST apply to both the stored plate and the search term (`unaccent()` on both sides), exactly as it already does for `name`. The plate match MUST be evaluated as an existence check over the customer's vehicle collection — matching if any one active vehicle's plate matches — not a single-column comparison; a customer with zero vehicles MUST still match on `name` or `phone` alone. The same matching MUST also be reachable through `GET /api/customers`, gated by `customers.read`, accepting `search`, `page`, `pageSize`, and `includeInactive` parameters (see R20 for what the last one does). Each result MUST include a `plates: string[]` array of that customer's active vehicle plates (possibly empty) for disambiguation, replacing the single `vehiclePlate` field; a `cliente` with neither `phone` nor any plate on record MUST still render as an identifiable row, not a blank one. WHEN a search yields zero exact matches, the route MUST also return near matches produced from the same relaxed term — a shorter prefix for name/plate, and for `phone` the search TERM reduced to its last significant digits. The relaxation applies to the term only: the comparison still runs against the stored column verbatim, so this guarantee holds exactly as far as `normalizePhone` (`validation.ts`) has already stripped separators on write. A row written by any path that bypasses `normalizePhone` keeps its separators and is NOT covered. This is deliberately NOT fuzzy/similarity matching.
+The customer list view MUST provide a text search input matching `cliente` records by partial, case-insensitive AND accent-insensitive match against `name`, `phone`, or any of that customer's active vehicle `plate`s. Accent folding MUST apply to both the stored plate and the search term (`unaccent()` on both sides), exactly as it already does for `name`. The plate match MUST be evaluated as an existence check over the customer's vehicle collection — matching if any one active vehicle's plate matches — not a single-column comparison; a customer with zero vehicles MUST still match on `name` or `phone` alone. The same matching MUST also be reachable through `GET /api/customers`, gated by `customers.read`, accepting `search`, `page`, `pageSize`, and `status` parameters (`active` | `inactive` | `all`, defaulting to `active`; see R20). Each result MUST include a `plates: string[]` array of that customer's active vehicle plates (possibly empty) for disambiguation, replacing the single `vehiclePlate` field; a `cliente` with neither `phone` nor any plate on record MUST still render as an identifiable row, not a blank one. WHEN a search yields zero exact matches, the route MUST also return near matches produced from the same relaxed term — a shorter prefix for name/plate, and for `phone` the search TERM reduced to its last significant digits. The relaxation applies to the term only: the comparison still runs against the stored column verbatim, so this guarantee holds exactly as far as `normalizePhone` (`validation.ts`) has already stripped separators on write. A row written by any path that bypasses `normalizePhone` keeps its separators and is NOT covered. This is deliberately NOT fuzzy/similarity matching.
 
 #### Scenarios
 
@@ -153,7 +153,10 @@ survive untouched, and reactivation MUST restore the customer to exactly the
 state deactivation left, with no data re-entry.
 
 A deactivated `cliente` MUST be excluded from the customer list and from the
-service-order customer picker by default. That exclusion MUST be applied in the
+service-order customer picker by default. The list MUST let staff choose
+between three states — only active, only deactivated, or all — because a
+two-state toggle cannot express "only deactivated", which is what someone
+looking for a customer they retired is asking for. That exclusion MUST be applied in the
 shared customer read path, not separately per screen. *Rationale: the picker
 reads the same `GET /api/customers` the list does; filtering per caller leaves
 every future caller to remember.*
@@ -186,6 +189,8 @@ way forward.
 - GIVEN a deactivated `cliente` WHEN staff searches for them in the service-order customer picker THEN the system MUST NOT offer that customer
 - GIVEN a page opened while a `cliente` was still active WHEN staff submits a new service order for them after they have been deactivated THEN the system MUST refuse it on the server and create no order
 - GIVEN a deactivated `cliente` WHEN staff asks the customer list to include deactivated records THEN the system MUST list that customer, marked as deactivated
+- GIVEN both active and deactivated `cliente` records WHEN staff picks the deactivated-only state THEN the list MUST return every deactivated record and NO active one
+- GIVEN the deactivated-only state matches nothing WHEN the list renders THEN it MUST say so and offer the way back to the active list, rather than claiming no customer is registered
 - GIVEN a reminder already scheduled for a `cliente` WHEN that customer is deactivated before the reminder fires THEN `runReminder` MUST send nothing and MUST mark the reminder `skipped`
 - GIVEN a reminder for a deactivated `cliente` WHEN it is suppressed THEN the system MUST NOT mark it `opted_out`
 - GIVEN a deactivated `cliente` WHEN staff opens its detail view THEN the system MUST NOT offer the edit action and MUST offer reactivation
