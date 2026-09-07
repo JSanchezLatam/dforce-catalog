@@ -6,7 +6,7 @@
  * the real DB call (defaulting to the actual drizzle query), so this module
  * is unit-testable with injected fakes and no live Postgres connection.
  */
-import { and, count, desc, eq, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import { db } from "@/shared/db/client";
@@ -18,17 +18,12 @@ export const DEFAULT_PAGE_SIZE = 10;
 export type ClienteFilters = {
   search?: string;
   /**
-   * R20 — opt IN to deactivated customers. Same option name and same default
-   * as `listVehiculosByCliente(id, { includeInactive })` in `vehicles.ts`:
-   * one word for one concept across both soft-deleted tables.
-   *
-   * `undefined` and `false` are DELIBERATELY equivalent, and callers differ on
-   * which they send: the page omits the key when off, the API route always
-   * sends a boolean. Both are correct against `buildClienteListWhere`, and
-   * their tests assert the shape each one actually produces rather than a
-   * shape agreed in advance.
+   * R20 — three states, not a boolean. `includeInactive` used to mean "active
+   * or everything", which left "solo desactivados" unaskable: the screen
+   * offered a checkbox that could not express it, and staff looking for a
+   * customer they had deactivated had to scan the whole list.
    */
-  includeInactive?: boolean;
+  status?: "active" | "inactive" | "all";
 };
 
 export type ClienteListItem = Pick<Cliente, "id" | "name" | "phone" | "email" | "deactivatedAt" | "createdAt"> & {
@@ -88,9 +83,11 @@ export function buildClienteSearchWhere(search?: string) {
  */
 export function buildClienteListWhere(filters: ClienteFilters): SQL | undefined {
   const search = buildClienteSearchWhere(filters.search);
-  if (filters.includeInactive) return search;
-  const active = isNull(cliente.deactivatedAt);
-  return search ? and(active, search) : active;
+  if (filters.status === "all") return search;
+  // Outside the search branch, for the reason the docstring above gives.
+  const state =
+    filters.status === "inactive" ? isNotNull(cliente.deactivatedAt) : isNull(cliente.deactivatedAt);
+  return search ? and(state, search) : state;
 }
 
 /** R19 — paginated + searched customer list, newest first. */
@@ -104,7 +101,7 @@ export async function listClientes(
         name: cliente.name,
         phone: cliente.phone,
         email: cliente.email,
-        // Only ever non-null when the caller passed `includeInactive` — the
+        // Only ever non-null when the caller asked for a status that admits them — the
         // row needs it to mark itself, and R20 requires a listed deactivated
         // customer to be visibly deactivated rather than silently mixed in.
         deactivatedAt: cliente.deactivatedAt,

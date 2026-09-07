@@ -1,5 +1,5 @@
 /**
- * R20 — written because GGA found `buildPageHref` dropping `includeInactive`:
+ * R20 — written because GGA found `buildPageHref` dropping the status filter:
  * turn on "Ver desactivados", page to 2, and the flag vanished so the list
  * silently narrowed back to active-only. Every unit test was green and this
  * file did not exist.
@@ -47,6 +47,44 @@ function renderPage(params: Record<string, string>) {
   return CustomersPage({ searchParams: Promise.resolve(params) });
 }
 
+/**
+ * The `status=inactive` empty state. Its two siblings each carry two tests;
+ * this one shipped with none — deleting the whole branch left the suite green.
+ * It is the same class those two exist for: an empty screen that claims more
+ * than it knows. "Todavía no hay clientes registrados" over 368 active
+ * customers is simply false.
+ */
+describe("CustomersPage — the empty state for the deactivated-only filter", () => {
+  it("does not claim the database is empty when only the filter is", async () => {
+    listClientes.mockResolvedValue([]);
+    countClientes.mockResolvedValue(0);
+
+    render(await CustomersPage({ searchParams: Promise.resolve({ status: "inactive" }) }));
+
+    expect(screen.getByText(/Ningún cliente desactivado/)).toBeInTheDocument();
+    expect(screen.queryByText(/Todavía no hay clientes registrados/)).not.toBeInTheDocument();
+  });
+
+  it("offers the way back to the active list, keeping the other filters", async () => {
+    listClientes.mockResolvedValue([]);
+    countClientes.mockResolvedValue(0);
+
+    render(
+      await CustomersPage({
+        searchParams: Promise.resolve({ status: "inactive", pageSize: "50" }),
+      }),
+    );
+
+    const href = new URL(
+      screen.getByRole("link", { name: "Ver los activos" }).getAttribute("href")!,
+      "http://localhost",
+    );
+    expect(href.searchParams.get("status")).toBeNull();
+    // `pageSize` survives: the defect WU14.2 fixed on the sibling links.
+    expect(href.searchParams.get("pageSize")).toBe("50");
+  });
+});
+
 describe("CustomersPage — deactivated customers (R20)", () => {
   // Without this, `mock.calls[0]` is the FIRST call of the whole file, not of
   // the current test - which silently asserted the previous test's filters.
@@ -57,25 +95,25 @@ describe("CustomersPage — deactivated customers (R20)", () => {
 
   it("asks for active customers only by default", async () => {
     render(await renderPage({}));
-    expect(listClientes.mock.calls[0][0].includeInactive).toBeUndefined();
+    expect(listClientes.mock.calls[0][0].status).toBeUndefined();
   });
 
-  it("passes includeInactive through when the URL asks for it", async () => {
-    render(await renderPage({ includeInactive: "1" }));
-    expect(listClientes.mock.calls[0][0].includeInactive).toBe(true);
-    expect(countClientes.mock.calls[0][0].includeInactive).toBe(true);
+  it("passes status=all through when the URL asks for it", async () => {
+    render(await renderPage({ status: "all" }));
+    expect(listClientes.mock.calls[0][0].status).toBe("all");
+    expect(countClientes.mock.calls[0][0].status).toBe("all");
   });
 
-  it("reads =1 exactly, so includeInactive=0 stays off", async () => {
-    render(await renderPage({ includeInactive: "0" }));
-    expect(listClientes.mock.calls[0][0].includeInactive).toBeUndefined();
+  it("falls back to the default for a value it does not know", async () => {
+    render(await renderPage({ status: "garbage" }));
+    expect(listClientes.mock.calls[0][0].status).toBeUndefined();
   });
 
   // THE BUG. Every pagination link has to carry the flag; without it page 2
   // reads as "the deactivated records disappeared" rather than "the filter
   // reset itself".
-  it("keeps includeInactive on every pagination link", async () => {
-    render(await renderPage({ includeInactive: "1" }));
+  it("keeps the status on every pagination link", async () => {
+    render(await renderPage({ status: "all" }));
 
     const pageLinks = screen
       .getAllByRole("link")
@@ -84,12 +122,12 @@ describe("CustomersPage — deactivated customers (R20)", () => {
 
     expect(pageLinks.length).toBeGreaterThan(0);
     for (const href of pageLinks) {
-      expect(href).toContain("includeInactive=1");
+      expect(href).toContain("status=all");
     }
   });
 
   it("keeps the search term on pagination links too, alongside the flag", async () => {
-    render(await renderPage({ includeInactive: "1", search: "perez" }));
+    render(await renderPage({ status: "all", search: "perez" }));
 
     const href = screen
       .getAllByRole("link")
@@ -97,11 +135,11 @@ describe("CustomersPage — deactivated customers (R20)", () => {
       .find((h) => h.includes("page="));
 
     expect(href).toContain("search=perez");
-    expect(href).toContain("includeInactive=1");
+    expect(href).toContain("status=all");
   });
 
   it("marks a listed deactivated customer instead of mixing it in silently", async () => {
-    render(await renderPage({ includeInactive: "1" }));
+    render(await renderPage({ status: "all" }));
     expect(screen.getByText("Desactivado")).toBeInTheDocument();
   });
 
@@ -126,7 +164,7 @@ describe("CustomersPage — deactivated customers (R20)", () => {
   // record was one query-string key away and nothing said so.
   it("offers to widen a search that matched no ACTIVE customer, keeping the term", async () => {
     listClientes.mockResolvedValue([]);
-    // Two counts: the active one is 0, the second (includeInactive) proves
+    // Two counts: the active one is 0, the second (status=all) proves
     // there is actually something behind the offer.
     countClientes.mockResolvedValueOnce(0).mockResolvedValueOnce(3);
     render(await CustomersPage({ searchParams: Promise.resolve({ search: "Retirado Perez" }) }));
@@ -139,7 +177,7 @@ describe("CustomersPage — deactivated customers (R20)", () => {
       "http://localhost",
     );
     expect(href.searchParams.get("search")).toBe("Retirado Perez");
-    expect(href.searchParams.get("includeInactive")).toBe("1");
+    expect(href.searchParams.get("status")).toBe("all");
   });
 
   it("keeps pageSize on the widen-search link, like the pagination links do", async () => {
@@ -154,7 +192,7 @@ describe("CustomersPage — deactivated customers (R20)", () => {
   it("does not offer it again once deactivated records are already included", async () => {
     listClientes.mockResolvedValue([]);
     countClientes.mockResolvedValue(0);
-    render(await CustomersPage({ searchParams: Promise.resolve({ search: "nadie", includeInactive: "1" }) }));
+    render(await CustomersPage({ searchParams: Promise.resolve({ search: "nadie", status: "all" }) }));
 
     expect(screen.queryByRole("link", { name: /desactivados/i })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Limpiar filtro" })).toBeInTheDocument();
@@ -162,7 +200,7 @@ describe("CustomersPage — deactivated customers (R20)", () => {
 
   // A genuinely empty database must not offer a link to another empty page,
   // and must be able to say so — before this, "Todavía no hay clientes
-  // registrados" was reachable only WITH `includeInactive=1`, the one case
+  // registrados" was reachable only WITH the deactivated ones in view, the one case
   // where it is least true.
   it("does not offer Ver desactivados when there are none to see", async () => {
     listClientes.mockResolvedValue([]);
@@ -192,6 +230,9 @@ describe("CustomersPage — deactivated customers (R20)", () => {
 
     const href = screen.getByRole("link", { name: /desactivados/i }).getAttribute("href")!;
     expect(href).toContain("pageSize=50");
-    expect(href).toContain("includeInactive=1");
+    // `inactive`, not `all`: the link says "Ver desactivados" and now there is
+    // a state that means exactly that. It used to open a mixed list because a
+    // deactivated-only one could not be asked for.
+    expect(href).toContain("status=inactive");
   });
 });

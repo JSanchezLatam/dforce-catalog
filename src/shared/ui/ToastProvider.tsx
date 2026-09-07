@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useReducer } from "react";
+import { createContext, useCallback, useContext, useReducer, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 import { Toast } from "./Toast";
@@ -39,6 +39,9 @@ export function useToast() {
   return ctx;
 }
 
+/** Stable no-op subscription — the answer to "am I hydrated" never changes again. */
+const subscribeNever = () => () => {};
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, dispatch] = useReducer(reducer, []);
 
@@ -52,10 +55,24 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: "remove", id });
   }, []);
 
+  // Mounted AFTER hydration, not behind a `typeof document` check. That check
+  // is React's own documented cause #1 for a hydration mismatch: the server
+  // renders nothing, the client renders the portal, and the trees disagree —
+  // which showed up as "Hydration failed" on every page and made React throw
+  // the tree away and re-render it on the client.
+  //
+  // `useSyncExternalStore` rather than a `useState` + `useEffect` flag: this
+  // repo's lint forbids `setState` inside an effect (`set-state-in-effect`,
+  // cascading renders), and this is the hook React documents for exactly this
+  // question. The server snapshot is `false`, so the first client render also
+  // renders nothing and matches; after hydration it reads `true`. A toast
+  // needs an interaction, which cannot happen before that.
+  const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
+
   return (
     <ToastContext.Provider value={{ addToast, removeToast }}>
       {children}
-      {typeof document !== "undefined" &&
+      {mounted &&
         createPortal(
           <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
             {toasts.map((t) => (

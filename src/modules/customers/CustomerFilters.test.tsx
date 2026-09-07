@@ -96,27 +96,47 @@ afterEach(() => {
   window.history.replaceState({}, "", "/customers");
 });
 
-describe("CustomerFilters — ver desactivados (R20)", () => {
-  it("is off by default, so the list is active-only until asked otherwise", () => {
+/**
+ * The toggle went from a two-state checkbox to a three-state select. What
+ * these tests protect — that the filter lives in the URL, survives the search
+ * debounce, and is not clobbered by an external navigation — did not change.
+ */
+async function chooseStatus(user: ReturnType<typeof userEvent.setup>, label: string) {
+  await user.click(screen.getByRole("combobox", { name: "Estado" }));
+  await user.click(await screen.findByRole("option", { name: label }));
+}
+
+describe("CustomerFilters — customer status (R20)", () => {
+  it("shows Activos by default, so the list is active-only until asked otherwise", () => {
     render(<CustomerFilters selected={{}} pageSize={10} />);
-    expect(screen.getByRole("checkbox", { name: "Ver desactivados" })).not.toBeChecked();
+    expect(screen.getByRole("combobox", { name: "Estado" })).toHaveTextContent("Activos");
   });
 
-  it("puts includeInactive=1 in the URL when ticked", async () => {
+  // The state the checkbox could not express, and the reason for the change.
+  it("can ask for ONLY the deactivated ones, which the old toggle could not", async () => {
     const user = userEvent.setup();
     render(<CustomerFilters selected={{}} pageSize={10} />);
 
-    await user.click(screen.getByRole("checkbox", { name: "Ver desactivados" }));
+    await chooseStatus(user, "Desactivados");
 
-    expect(push).toHaveBeenCalledWith("/customers?includeInactive=1");
+    expect(push).toHaveBeenCalledWith("/customers?status=inactive");
   });
 
-  it("removes it from the URL when unticked, rather than setting it to 0", async () => {
+  it("puts status=all in the URL when asked for everything", async () => {
     const user = userEvent.setup();
-    seedUrl("includeInactive=1");
-    render(<CustomerFilters selected={{ includeInactive: true }} pageSize={10} />);
+    render(<CustomerFilters selected={{}} pageSize={10} />);
 
-    await user.click(screen.getByRole("checkbox", { name: "Ver desactivados" }));
+    await chooseStatus(user, "Todos");
+
+    expect(push).toHaveBeenCalledWith("/customers?status=all");
+  });
+
+  it("removes it from the URL when back to Activos, rather than spelling out the default", async () => {
+    const user = userEvent.setup();
+    seedUrl("status=all");
+    render(<CustomerFilters selected={{ status: "all" }} pageSize={10} />);
+
+    await chooseStatus(user, "Activos");
 
     // `/customers`, not `/customers?` — `commit` omits the separator for an
     // empty query rather than pushing a bare "?".
@@ -128,11 +148,11 @@ describe("CustomerFilters — ver desactivados (R20)", () => {
     seedUrl("search=perez");
     render(<CustomerFilters selected={{ search: "perez" }} pageSize={10} />);
 
-    await user.click(screen.getByRole("checkbox", { name: "Ver desactivados" }));
+    await chooseStatus(user, "Todos");
 
     const [url] = push.mock.calls[0] as [string];
     expect(url).toContain("search=perez");
-    expect(url).toContain("includeInactive=1");
+    expect(url).toContain("status=all");
   });
 
   // `applyFilter` drops `page` for every key except `pageSize`. Without that,
@@ -143,13 +163,13 @@ describe("CustomerFilters — ver desactivados (R20)", () => {
     seedUrl("page=3");
     render(<CustomerFilters selected={{}} pageSize={10} />);
 
-    await user.click(screen.getByRole("checkbox", { name: "Ver desactivados" }));
+    await chooseStatus(user, "Todos");
 
     expect((push.mock.calls[0] as [string])[0]).not.toContain("page=3");
   });
 
   it("offers Limpiar once the toggle alone is on, not only after a search", () => {
-    render(<CustomerFilters selected={{ includeInactive: true }} pageSize={10} />);
+    render(<CustomerFilters selected={{ status: "all" }} pageSize={10} />);
     expect(screen.getByRole("button", { name: "Limpiar" })).toBeInTheDocument();
   });
 });
@@ -166,7 +186,7 @@ describe("CustomerFilters — ver desactivados (R20)", () => {
  * timer advancement made too easy to get wrong in either direction.
  */
 describe("CustomerFilters — the debounce must not clobber a newer filter", () => {
-  it("keeps includeInactive when the search debounce fires after it", async () => {
+  it("keeps the status when the search debounce fires after it", async () => {
     // Navigation SLOWER than the 300ms debounce. This is the case that
     // separates a correct fix from one that merely narrows the window: with a
     // fast mock, the URL lands before the timeout and even a
@@ -177,14 +197,14 @@ describe("CustomerFilters — the debounce must not clobber a newer filter", () 
     const user = userEvent.setup();
     render(<CustomerFilters selected={{}} pageSize={10} />);
 
-    await user.type(screen.getByLabelText(/Buscar/), "perez");
+    await user.type(screen.getByLabelText(/Filtro/), "perez");
     // Inside the 300ms window — this is the interaction that lost the flag.
-    await user.click(screen.getByRole("checkbox", { name: "Ver desactivados" }));
+    await chooseStatus(user, "Todos");
     await new Promise((resolve) => setTimeout(resolve, 350));
 
     const last = push.mock.calls.at(-1)?.[0] as string;
     expect(last).toContain("search=perez");
-    expect(last).toContain("includeInactive=1");
+    expect(last).toContain("status=all");
   });
 });
 
@@ -201,19 +221,19 @@ describe("CustomerFilters — Limpiar goes through the same writer", () => {
     pending.delay = 450; // navigation slower than the debounce, as in production
     // `selected` is what the SERVER already rendered, so seeding it on is how
     // the screen looks when Limpiar is reachable at all.
-    seedUrl("includeInactive=1");
-    render(<CustomerFilters selected={{ includeInactive: true }} pageSize={10} />);
+    seedUrl("status=all");
+    render(<CustomerFilters selected={{ status: "all" }} pageSize={10} />);
 
-    await user.click(screen.getByRole("checkbox", { name: "Ver desactivados" }));
+    await chooseStatus(user, "Todos");
     await user.click(screen.getByRole("button", { name: "Limpiar" }));
     // Before the clear's navigation lands — the ordinary "clear, then search
     // again" rhythm.
-    await user.type(screen.getByLabelText(/Buscar/), "ana");
+    await user.type(screen.getByLabelText(/Filtro/), "ana");
     await new Promise((resolve) => setTimeout(resolve, 350));
 
     const last = push.mock.calls.at(-1)?.[0] as string;
     expect(last).toContain("search=ana");
-    expect(last).not.toContain("includeInactive");
+    expect(last).not.toContain("status");
   });
 
   it("cancels a pending search instead of letting it re-push the cleared term", async () => {
@@ -221,7 +241,7 @@ describe("CustomerFilters — Limpiar goes through the same writer", () => {
     pending.delay = 450;
     render(<CustomerFilters selected={{ search: "perez" }} pageSize={10} />);
 
-    await user.type(screen.getByLabelText(/Buscar/), "z");
+    await user.type(screen.getByLabelText(/Filtro/), "z");
     await user.click(screen.getByRole("button", { name: "Limpiar" }));
     await new Promise((resolve) => setTimeout(resolve, 350));
 
@@ -232,7 +252,7 @@ describe("CustomerFilters — Limpiar goes through the same writer", () => {
     const user = userEvent.setup();
     render(<CustomerFilters selected={{ search: "perez" }} pageSize={10} />);
 
-    const input = screen.getByLabelText(/Buscar/) as HTMLInputElement;
+    const input = screen.getByLabelText(/Filtro/) as HTMLInputElement;
     await user.click(screen.getByRole("button", { name: "Limpiar" }));
 
     expect(input.value).toBe("");
@@ -253,16 +273,16 @@ describe("CustomerFilters — two pushes outstanding", () => {
     pending.delays = [100, 5000];
     render(<CustomerFilters selected={{}} pageSize={10} />);
 
-    await user.type(screen.getByLabelText(/Buscar/), "perez");
+    await user.type(screen.getByLabelText(/Filtro/), "perez");
     await new Promise((resolve) => setTimeout(resolve, 320)); // debounce fires → push A
-    await user.click(screen.getByRole("checkbox", { name: "Ver desactivados" })); // → push B
+    await chooseStatus(user, "Todos"); // → push B
     await new Promise((resolve) => setTimeout(resolve, 200)); // A lands, B still pending
 
-    await user.type(screen.getByLabelText(/Buscar/), "x");
+    await user.type(screen.getByLabelText(/Filtro/), "x");
     await new Promise((resolve) => setTimeout(resolve, 350));
 
     const last = push.mock.calls.at(-1)?.[0] as string;
     expect(last).toContain("search=perezx");
-    expect(last).toContain("includeInactive=1");
+    expect(last).toContain("status=all");
   });
 });

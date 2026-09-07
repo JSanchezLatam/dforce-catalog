@@ -30,6 +30,34 @@ function compileListWhere(filters: Parameters<typeof buildClienteListWhere>[0]) 
   return condition === undefined ? undefined : new PgDialect().sqlToQuery(condition);
 }
 
+/**
+ * R20 gained a THIRD state. The filter used to be a boolean — active, or
+ * everything — so "solo desactivados" had no way to be asked for, and the
+ * screen offered a checkbox that could not express it.
+ */
+describe("buildClienteListWhere — the three states", () => {
+  it("shows ONLY deactivated customers when asked for them", () => {
+    const compiled = compileListWhere({ status: "inactive" });
+    expect(compiled?.sql).toContain('"cliente"."deactivated_at" is not null');
+    // Qualified, per the convention this file already set below: R19's plate
+    // subquery carries its OWN `vehiculo.deactivated_at is null`, so a bare
+    // match here goes red on the wrong table the moment a search term joins it.
+    expect(compiled?.sql).not.toContain('"cliente"."deactivated_at" is null');
+  });
+
+  it("filters on neither when asked for all", () => {
+    expect(compileListWhere({ status: "all" })).toBeUndefined();
+  });
+
+  // The state applies OUTSIDE the search branch, the same reason the original
+  // active filter does: a bare list is the screen staff actually open.
+  it("keeps the state alongside a search term, not instead of it", () => {
+    const compiled = compileListWhere({ status: "inactive", search: "juan" });
+    expect(compiled?.sql).toContain('"cliente"."deactivated_at" is not null');
+    expect(compiled?.sql).toContain("unaccent");
+  });
+});
+
 describe("buildClienteListWhere (R20 — deactivated customers are excluded by default)", () => {
   it("filters out deactivated customers even with NO search term", () => {
     // The failure this pins: an active-only filter written INSIDE the search
@@ -47,8 +75,8 @@ describe("buildClienteListWhere (R20 — deactivated customers are excluded by d
     expect(compiled!.params).toContain("%juan%");
   });
 
-  it("drops the CUSTOMER active filter when the operator asks for deactivated records", () => {
-    const compiled = compileListWhere({ search: "juan", includeInactive: true });
+  it("drops the CUSTOMER active filter when the operator asks for every record", () => {
+    const compiled = compileListWhere({ search: "juan", status: "all" });
     // Qualified, not a bare "deactivated_at": R19's plate subquery carries its
     // OWN `vehiculo.deactivated_at is null`, and the first version of this
     // test failed on that. The two soft deletes are independent concepts and
@@ -63,8 +91,8 @@ describe("buildClienteListWhere (R20 — deactivated customers are excluded by d
     expect(compiled!.sql).toContain('"vehiculo"."deactivated_at" is null');
   });
 
-  it("returns undefined for no term AND includeInactive — nothing left to filter on", () => {
-    expect(compileListWhere({ includeInactive: true })).toBeUndefined();
+  it("returns undefined for no term AND status=all — nothing left to filter on", () => {
+    expect(compileListWhere({ status: "all" })).toBeUndefined();
   });
 });
 

@@ -3,10 +3,20 @@
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { ClienteFilters } from "./queries";
+
+/** Imported, not redeclared: two definitions of one union can drift apart. */
+type ClienteStatus = NonNullable<ClienteFilters["status"]>;
+
+const STATUS_OPTIONS: ClienteStatus[] = ["active", "inactive", "all"];
+const STATUS_LABELS: Record<ClienteStatus, string> = {
+  active: "Activos",
+  inactive: "Desactivados",
+  all: "Todos",
+};
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
@@ -23,7 +33,7 @@ export function CustomerFilters({
   selected,
   pageSize,
 }: {
-  selected: { search?: string; includeInactive?: boolean };
+  selected: { search?: string; status?: ClienteStatus };
   pageSize: number;
 }) {
   const router = useRouter();
@@ -136,42 +146,59 @@ export function CustomerFilters({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="filter-search">Buscar (nombre, teléfono o placa)</Label>
+    <div className="flex flex-wrap items-end gap-x-3 gap-y-3">
+      <div className="flex min-w-72 flex-1 flex-col gap-1.5">
+        <Label htmlFor="filter-search">Filtro</Label>
         <Input
           id="filter-search"
           ref={searchInputRef}
-          placeholder="Buscar cliente..."
+          placeholder="Buscar por nombre, placa o teléfono"
           defaultValue={selected.search ?? ""}
           onChange={(e) => applyDebounced("search", e.target.value)}
-          className="w-64"
         />
       </div>
       {/* R20 — URL state like `search` and `pageSize`, not client state. A
           filter that does not survive a refresh or a shared link is one staff
-          will not trust. Undebounced: a checkbox has no keystrokes to wait
-          out. */}
-      <label className="flex items-center gap-2 self-end pb-2 text-sm font-medium text-foreground">
-        <Checkbox
-          checked={selected.includeInactive === true}
-          onCheckedChange={(checked) => applyFilter("includeInactive", checked === true ? "1" : "")}
-        />
-        Ver desactivados
-      </label>
-      {(selected.search || selected.includeInactive) && (
+          will not trust. Undebounced: a select has no keystrokes to wait out.
+
+          Three states, not the old checkbox: that one could say active or
+          all, and had no way to say ONLY the deactivated ones — which is what
+          someone looking for a customer they retired is actually asking. */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="filter-status">Estado</Label>
+        <Select
+          value={selected.status ?? "active"}
+          onValueChange={(v) => applyFilter("status", v === "active" ? "" : (v ?? ""))}
+        >
+          <SelectTrigger id="filter-status" className="w-44">
+            {/* Render function, not a bare `<SelectValue />`: Base UI prints the
+                raw VALUE otherwise, so the trigger read "active" instead of
+                "Activos". The `pageSize` select gets away with it only because
+                its value and its label are the same string. */}
+            <SelectValue>{(value) => STATUS_LABELS[value as ClienteStatus] ?? value}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {STATUS_OPTIONS.map((opt) => (
+              <SelectItem key={opt} value={opt}>
+                {STATUS_LABELS[opt]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {(selected.search || (selected.status && selected.status !== "active")) && (
         <button
           type="button"
           onClick={clearFilters}
-          className="rounded border border-border px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-muted/20"
+          className="mb-0.5 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted/20"
         >
           Limpiar
         </button>
       )}
-      <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
-        <Label>Filas por página</Label>
+      <div className="ml-auto flex flex-col gap-1.5">
+        <Label htmlFor="filter-page-size">Filas por página</Label>
         <Select value={String(pageSize)} onValueChange={(v) => applyFilter("pageSize", v ?? "")}>
-          <SelectTrigger className="w-20">
+          <SelectTrigger id="filter-page-size" className="w-20">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

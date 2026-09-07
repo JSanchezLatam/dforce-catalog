@@ -154,7 +154,7 @@ export default async function ServiceOrdersPage({
                 <Pagination
                   currentPage={pageWindow.page}
                   pageCount={pageCount}
-                  buildHref={(p) => buildPageHref(params, p)}
+                  hrefPattern={buildPageHrefPattern(params)}
                 />
               </CardContent>
             </Card>
@@ -165,10 +165,11 @@ export default async function ServiceOrdersPage({
   );
 }
 
-function buildPageHref(params: SearchParams, page: number): string {
+/** A serializable `{page}` pattern — see the note on the customers page's twin. */
+function buildPageHrefPattern(params: SearchParams): string {
   const search = new URLSearchParams();
   if (typeof params.status === "string" && params.status) search.set("status", params.status);
   if (typeof params.pageSize === "string" && params.pageSize) search.set("pageSize", params.pageSize);
-  search.set("page", String(page));
-  return `/service-orders?${search.toString()}`;
+  const query = search.toString();
+  return `/service-orders?${query ? `${query}&` : ""}page={page}`;
 }

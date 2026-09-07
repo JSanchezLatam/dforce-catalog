@@ -49,13 +49,13 @@ export function CustomerImportButton() {
       const res = await fetch("/api/customer-import", { method: "POST" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        addToast("error", body.error ?? "No se pudo importar a los clientes.");
+        addToast("error", body.error ?? "No se pudo sincronizar a los clientes.");
         return;
       }
       const body: ImportResponse = await res.json();
       addToast(
         "success",
-        `Importación completa: ${body.created} nuevos, ${body.updated} actualizados, ${body.skipped.length} omitidos.`,
+        `Sincronización completa: ${body.created} nuevos, ${body.updated} actualizados, ${body.skipped.length} omitidos.`,
       );
       setSkipped(body.skipped);
     } catch {
@@ -64,7 +64,7 @@ export function CustomerImportButton() {
       // without this the button re-enabled with nothing on screen and the
       // operator clicked again into the same silence (same defect already
       // fixed once in `CustomerActivationButton`).
-      addToast("error", "No se pudo importar a los clientes.");
+      addToast("error", "No se pudo sincronizar a los clientes.");
     } finally {
       setRunning(false);
     }
@@ -73,7 +73,7 @@ export function CustomerImportButton() {
   return (
     <div className="flex flex-col items-start gap-2">
       <Button type="button" variant="outline" onClick={handleClick} disabled={running}>
-        {running ? "Importando…" : "Importar clientes"}
+        {running ? "Sincronizando…" : "Sincronizar clientes"}
       </Button>
       {skipped.length > 0 && (
         // D5 — the skip report exists so "the owner can add the real

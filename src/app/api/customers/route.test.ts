@@ -135,11 +135,11 @@ describe("GET /api/customers (R19)", () => {
 
     await handleListClientes(getReq("tecnico", "?search=juan&page=2&pageSize=25"), { listClientes, countClientes });
 
-    // `includeInactive: false` rides every filter object now (R20) — the
+    // `status: "active"` rides every filter object now (R20) — the
     // default list is active-only, and asserting it here keeps that visible
     // at the call site rather than only in `buildClienteListWhere`.
-    expect(listClientes).toHaveBeenCalledWith({ search: "juan", includeInactive: false }, { page: 2, offset: 25, limit: 25 });
-    expect(countClientes).toHaveBeenCalledWith({ search: "juan", includeInactive: false });
+    expect(listClientes).toHaveBeenCalledWith({ search: "juan", status: "active" }, { page: 2, offset: 25, limit: 25 });
+    expect(countClientes).toHaveBeenCalledWith({ search: "juan", status: "active" });
   });
 
   it("defaults to page 1 and the standard page size with no query string", async () => {
@@ -148,7 +148,7 @@ describe("GET /api/customers (R19)", () => {
 
     await handleListClientes(getReq("tecnico"), { listClientes, countClientes });
 
-    expect(listClientes).toHaveBeenCalledWith({ search: undefined, includeInactive: false }, { page: 1, offset: 0, limit: 10 });
+    expect(listClientes).toHaveBeenCalledWith({ search: undefined, status: "active" }, { page: 1, offset: 0, limit: 10 });
   });
 
   it("re-queries with a relaxed term and sets relaxedFrom only when the primary search returns zero rows", async () => {
@@ -162,7 +162,7 @@ describe("GET /api/customers (R19)", () => {
 
     const body = await response.json();
     expect(listClientes).toHaveBeenCalledTimes(2);
-    expect(listClientes).toHaveBeenNthCalledWith(2, { search: "Juan", includeInactive: false }, expect.any(Object));
+    expect(listClientes).toHaveBeenNthCalledWith(2, { search: "Juan", status: "active" }, expect.any(Object));
     expect(body.relaxedFrom).toBe("Juan");
     expect(body.total).toBe(1);
   });
@@ -181,7 +181,7 @@ describe("GET /api/customers (R19)", () => {
 
     await handleListClientes(getReq("tecnico", "?search=perez&pageSize=50"), { listClientes, countClientes });
 
-    expect(listClientes).toHaveBeenCalledWith({ search: "perez", includeInactive: false }, expect.objectContaining({ limit: 50 }));
+    expect(listClientes).toHaveBeenCalledWith({ search: "perez", status: "active" }, expect.objectContaining({ limit: 50 }));
   });
 
   /**
@@ -267,12 +267,12 @@ describe("GET /api/customers (R19)", () => {
 });
 
 /**
- * R20 — added AFTER the e2e caught this: every unit test passed while
- * `includeInactive` was wired into the PAGE but not into this route, so
- * "ver desactivados" silently returned the active list. The query-string
+ * R20 — added AFTER the e2e caught this: every unit test passed while the
+ * deactivated-customer filter was wired into the PAGE but not into this route,
+ * so "ver desactivados" silently returned the active list. The query-string
  * parse is its own seam and needed its own test.
  */
-describe("GET /api/customers — includeInactive (R20)", () => {
+describe("GET /api/customers — status (R20)", () => {
   function listSpy() {
     const listClientes = vi.fn().mockResolvedValue([]);
     const countClientes = vi.fn().mockResolvedValue(0);
@@ -283,36 +283,39 @@ describe("GET /api/customers — includeInactive (R20)", () => {
     const deps = listSpy();
     await handleListClientes(getReq("tecnico"), deps);
 
-    expect(deps.listClientes.mock.calls[0][0].includeInactive).toBe(false);
+    expect(deps.listClientes.mock.calls[0][0].status).toBe("active");
   });
 
-  it("passes includeInactive through when the query string asks for it", async () => {
+  it("passes status=all through when the query string asks for it", async () => {
     const deps = listSpy();
-    await handleListClientes(getReq("tecnico", "?includeInactive=1"), deps);
+    await handleListClientes(getReq("tecnico", "?status=all"), deps);
 
-    expect(deps.listClientes.mock.calls[0][0].includeInactive).toBe(true);
-    expect(deps.countClientes.mock.calls[0][0].includeInactive).toBe(true);
+    expect(deps.listClientes.mock.calls[0][0].status).toBe("all");
+    expect(deps.countClientes.mock.calls[0][0].status).toBe("all");
   });
 
-  it("reads =1 exactly, so includeInactive=0 stays off", async () => {
+  // A value the route does not know falls back to the default rather than
+  // throwing: an old `?includeInactive=1` link sitting in someone's bookmarks
+  // cannot take the list down, only render it unfiltered.
+  it("falls back to the default for a value it does not know, including the retired parameter", async () => {
     const deps = listSpy();
-    await handleListClientes(getReq("tecnico", "?includeInactive=0"), deps);
+    await handleListClientes(getReq("tecnico", "?status=garbage&includeInactive=1"), deps);
 
-    expect(deps.listClientes.mock.calls[0][0].includeInactive).toBe(false);
+    expect(deps.listClientes.mock.calls[0][0].status).toBe("active");
   });
 
   // The near-match pass rebuilds the filter object. Dropped there, a relaxed
   // search would silently narrow back to active-only — the same class of bug
   // as the one the e2e found, one branch deeper.
-  it("keeps includeInactive on the relaxed near-match pass", async () => {
+  it("keeps the status on the relaxed near-match pass", async () => {
     const listClientes = vi.fn().mockResolvedValue([]);
     const countClientes = vi.fn().mockResolvedValue(0);
-    await handleListClientes(getReq("tecnico", "?search=50761234567&includeInactive=1"), {
+    await handleListClientes(getReq("tecnico", "?search=50761234567&status=all"), {
       listClientes,
       countClientes,
     });
 
     expect(listClientes).toHaveBeenCalledTimes(2);
-    expect(listClientes.mock.calls[1][0].includeInactive).toBe(true);
+    expect(listClientes.mock.calls[1][0].status).toBe("all");
   });
 });

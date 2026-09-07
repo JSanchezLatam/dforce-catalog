@@ -901,9 +901,33 @@ describe("customer deactivation (E2E)", () => {
   });
 
   it("lists them, marked, when the operator asks for deactivated records", async () => {
-    const body = await list("search=Retirado&includeInactive=1");
+    const body = await list("search=Retirado&status=all");
     expect(idsOf(body)).toContain(target.id);
     expect(body.customers.find((c) => c.id === target.id)?.deactivatedAt).toBeTruthy();
+  });
+
+  /**
+   * The predicate this change ADDED — `isNotNull(cliente.deactivated_at)`.
+   * `status=all` above takes `buildClienteListWhere`'s early return, the path
+   * that already existed, so it proves nothing about the new one.
+   *
+   * AGENTS.md's coverage limit is the whole reason this row exists: the unit
+   * test compiles the clause with `sqlToQuery` and no connection, and its own
+   * docstring says "the e2e suite carries the rows that actually execute it".
+   * This change IS a `WHERE`, so that has to be true rather than assumed.
+   */
+  it("returns ONLY the deactivated ones, excluding every active customer", async () => {
+    const body = await list("status=inactive&pageSize=100");
+
+    expect(idsOf(body)).toContain(target.id);
+    expect(body.customers.every((c) => c.deactivatedAt !== null)).toBe(true);
+    // Named, not counted: comparing page lengths is capped at 100 on BOTH
+    // sides by `parsePageSize`, so against a database holding 100+ deactivated
+    // rows it goes red for a reason that has nothing to do with the code — and
+    // this suite runs against whatever `DATABASE_URL` points at. `bystander`
+    // is a seeded ACTIVE customer, so its absence is what proves the filter is
+    // not simply returning everything.
+    expect(idsOf(body)).not.toContain(bystander.id);
   });
 
   // D3's deliberate exception, and the one place a filter here would be a bug:
