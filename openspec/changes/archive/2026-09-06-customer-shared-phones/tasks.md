@@ -266,7 +266,14 @@ mutation-verified here before being fixed, not taken from the report.
   file belongs to `user-lifecycle-management`, not this change. Raised at GGA
   round 5.
 
-- [ ] **`ServiceOrderForm.handleSubmit` has the same `try/finally` shape** with
+- [x] ~~**`ServiceOrderForm.handleSubmit` has the same `try/finally` shape**~~
+  — **CLOSED 2026-09-06**, branch `fix/service-order-form-catch`. Same catch,
+  same copy, `setOpen`/`onSaved` placed below the try/catch from the start.
+  Mutation-verified by removing the catch BODY. A second assertion ("the dialog
+  stays open") was written, found to pass against the unfixed component — the
+  rejection escapes before `setOpen(false)` either way — and deleted rather
+  than kept. Original entry:
+  **`ServiceOrderForm.handleSubmit` has the same `try/finally` shape** with
   no `catch` (`src/modules/service-orders/ServiceOrderForm.tsx:248`). Raised in
   the same GGA round. Not fixed here: this branch does not touch that file, and
   fixing it here would be the same rule violation in the other direction. It

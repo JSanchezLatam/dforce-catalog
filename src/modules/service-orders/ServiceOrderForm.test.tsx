@@ -716,3 +716,59 @@ describe("ServiceOrderForm — a deactivated customer's 409 (R20)", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/Intentalo de nuevo/i);
   });
 });
+
+/**
+ * `fetch` REJECTS on a network failure — it does not return a non-ok response
+ * — so a `try/finally` with no `catch` re-enables Guardar with nothing on
+ * screen and the operator clicks into the same silence. `UserForm` and
+ * `CustomerForm` both carry this catch with the same copy, and `UserForm`'s
+ * comment records that the defect stranded a blocked user once.
+ *
+ * This form was the last of the three without it. It is also the one where the
+ * silence costs most: the operator has just picked a customer, a vehicle, a
+ * category and possibly a parts cart, and a save that vanishes takes all of it
+ * with the dialog.
+ */
+describe("ServiceOrderForm — a network failure has to say so", () => {
+  const CONNECTION_ERROR = "No se pudo conectar. Revisa tu conexión e intenta de nuevo.";
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  /** Same scaffold as the 409 describe above, with the POST REJECTING instead. */
+  async function submitAgainstNetworkFailure() {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === "POST") return Promise.reject(new TypeError("Failed to fetch"));
+      if (url.includes("/vehicles")) {
+        return Promise.resolve(jsonResponse({ vehicles: [vehiculoRow({ id: "v-pre", clienteId: "c-preseleccionado" })] }));
+      }
+      return Promise.resolve(jsonResponse({ customers: [], total: 0 }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+    openDialog();
+    await flush();
+    fireEvent.change(vehicleSelect(), { target: { value: "v-pre" } });
+    fireEvent.change(categorySelect(), { target: { value: "revisado" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await flush();
+  }
+
+  it("tells the operator the order did not go through, and leaves Guardar clickable", async () => {
+    await submitAgainstNetworkFailure();
+
+    expect(screen.getByRole("alert")).toHaveTextContent(CONNECTION_ERROR);
+    expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled();
+  });
+
+  // NOT tested: "the dialog stays open, so nothing typed is thrown away". It
+  // is true and it matters — the dialog is the only place the order exists —
+  // but no test can prove it here. Without the catch the rejection escapes
+  // BEFORE `setOpen(false)` runs, so the dialog stays open either way; the
+  // assertion was written, run, and passed against the unfixed component.
+  // Deleted rather than kept as a placebo.
+});

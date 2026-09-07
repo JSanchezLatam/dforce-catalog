@@ -244,6 +244,7 @@ export function ServiceOrderForm({
     event.preventDefault();
     setIsSubmitting(true);
     setErrors({});
+    let saved: OrdenServicio;
 
     try {
       const response = isEdit
@@ -324,11 +325,27 @@ export function ServiceOrderForm({
       }
 
       const body = await response.json();
-      setOpen(false);
-      onSaved?.(body.orden);
+      saved = body.orden;
+    } catch {
+      // `fetch` REJECTS on a network failure rather than returning a non-ok
+      // response, so without this the dialog re-enables with nothing on screen
+      // and the operator clicks into the same silence. `UserForm` and
+      // `CustomerForm` carry the same catch with the same copy. The cost is
+      // highest here: a save that vanishes takes the customer, the vehicle,
+      // the category and the parts cart with it.
+      //
+      // It covers the request and its body and nothing else — `setOpen` and
+      // `onSaved` sit BELOW, so a parent's `onSaved` throwing cannot print
+      // "no se pudo conectar" over an order that was actually created, onto a
+      // dialog this same code has already closed.
+      setErrors({ form: "No se pudo conectar. Revisa tu conexión e intenta de nuevo." });
+      return;
     } finally {
       setIsSubmitting(false);
     }
+
+    setOpen(false);
+    onSaved?.(saved);
   }
 
   return (
