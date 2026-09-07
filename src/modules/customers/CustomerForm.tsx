@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import {
   CARD,
   CARD_MUTED,
@@ -372,7 +373,7 @@ export function CustomerForm({
       // `onSaved` moved BELOW, so a parent's `onSaved` throwing can no longer
       // print "no se pudo conectar" over a save that actually succeeded — onto
       // a dialog this same code has already closed, where nobody would read it.
-      setErrors({ form: "No se pudo conectar. Revisa tu conexión e intenta de nuevo." });
+      setErrors({ form: CONNECTION_ERROR });
       return;
     } finally {
       setIsSubmitting(false);

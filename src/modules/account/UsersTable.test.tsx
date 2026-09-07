@@ -190,7 +190,10 @@ describe("UsersTable — when the safety guard refuses", () => {
 
     await user.click(within(rowFor("ana")).getByRole("button", { name: "Desactivar" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo conectar");
+    // The FULL sentence, not a prefix: `CONNECTION_ERROR` is shared by six
+    // surfaces now, and a substring match lets its tail be rewritten with
+    // this file still green.
+    expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo conectar. Revisa tu conexión e intenta de nuevo.");
     expect(within(rowFor("ana")).getByRole("button", { name: "Desactivar" })).toBeEnabled();
   });
 });

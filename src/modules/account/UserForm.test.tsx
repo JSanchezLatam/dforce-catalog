@@ -231,7 +231,12 @@ describe("UserForm — when the server refuses", () => {
     await user.type(screen.getByLabelText("Contraseña inicial"), "secreto123");
     await user.click(screen.getByRole("button", { name: "Guardar" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/no se pudo/i);
+    // The FULL sentence, not `/no se pudo/i`: `CONNECTION_ERROR` is shared by
+    // six surfaces, and a three-word regex leaves the rest of it rewritable
+    // with this file still green.
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "No se pudo conectar. Revisa tu conexión e intenta de nuevo.",
+    );
     expect(screen.getByRole("button", { name: "Guardar" })).toBeEnabled();
   });
 });

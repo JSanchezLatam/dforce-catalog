@@ -77,7 +77,8 @@ describe("ForcedPasswordChangeForm — network failure", () => {
     render(<ForcedPasswordChangeForm />);
     await fillAndSubmit(user, { current: "temp-pass", next: "a-new-password" });
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo conectar");
+    // The FULL sentence, not a prefix — see the note in `UsersTable.test.tsx`.
+    expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo conectar. Revisa tu conexión e intenta de nuevo.");
     // Re-enabled: a flagged user is blocked from every other surface, so a
     // permanently disabled submit button strands them with no unlock path.
     expect(screen.getByRole("button", { name: "Cambiar contraseña" })).toBeEnabled();

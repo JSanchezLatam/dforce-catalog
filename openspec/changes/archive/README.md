@@ -154,15 +154,35 @@ it is marked below:
   pudo conectar". Narrow, and identical in `UserForm`, `CustomerForm` and
   `ServiceOrderForm` — consistency rather than a regression any one of them
   introduced. Raised by GGA on the `ServiceOrderForm` fix. If it is ever fixed
-  it gets fixed in all three at once, which is also when the shared helper
-  below is worth extracting.
-- **`OrderStatusControls.transitionTo` has the same shape**
-  (`src/modules/service-orders/OrderStatusControls.tsx:33`) — `try`/`finally`
-  around a `fetch`, no `catch`, so a network failure re-enables the status
-  buttons with no toast and the operator clicks into the same silence. Found
-  while closing the entry above and deliberately NOT folded into it: different
-  file, and that PR is about one form. It already has an `addToast` surface, so
-  the fix is one line plus its test.
+  it gets fixed in all three at once.
+  **No shared submit helper exists, and the entry below is not one.** That
+  entry once pointed here as the moment to extract one; when it was closed,
+  only the shared SENTENCE moved (`CONNECTION_ERROR`). A `submitJson()` was
+  considered and rejected on the spot: the call sites branch on different
+  status codes and write to different surfaces (`setErrors({ form })` vs
+  `addToast`), so wrapping three lines behind a shared result type would be
+  more code, not less. Anyone fixing this `json()` throw is starting from four
+  independent `catch` blocks, not from a helper.
+- **Nothing tests that the post-success line throwing is NOT reported as a
+  connection failure.** All four write surfaces now place their `router.refresh()`
+  / `onSaved?.()` below the `try`/`catch` precisely so a throw there is not
+  blamed on the network, and the comments say so — but no test pins it in any
+  of them. A consistent pre-existing gap, not one this repo's catch work
+  introduced; raised by GGA while closing the entry below. Its own change, and
+  it should cover all four at once.
+- ~~**`OrderStatusControls.transitionTo` has the same shape**~~ — **CLOSED
+  2026-09-06** on `fix/status-controls-catch`, together with the shared copy
+  constant. It had no test file at all; it has three now. The sentence itself
+  had been hand-copied into **five** places — `OrderStatusControls` is the
+  sixth surface and held none, because it was the one still missing its
+  `catch`. It moved to
+  `src/shared/ui/messages.ts` as `CONNECTION_ERROR` — one definition, and the
+  tests still assert the literal so a bad edit to it goes red rather than
+  moving both sides at once. That net had three holes when it was extracted —
+  two assertions matched a prefix and one matched `/no se pudo/i`, so rewriting
+  only the sentence's tail left those files green. All three were widened, and
+  it is now measured: replacing the whole sentence and replacing only its tail
+  turn the SAME 7 tests red across the same 6 files.
 
 A third entry — merging the six genuinely fragmented duplicate customer pairs —
 was **dropped by the owner on 2026-09-06**, omitted rather than deferred. It is

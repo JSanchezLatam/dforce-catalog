@@ -22,6 +22,7 @@ import type { ClienteListItem } from "@/modules/customers/queries";
 import { CATEGORIA_LABEL, type ServiceCategory } from "./categories";
 import { CustomerPicker } from "./CustomerPicker";
 import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
+import { CONNECTION_ERROR } from "@/shared/ui/messages";
 
 const CATEGORIA_OPTIONS = Object.entries(CATEGORIA_LABEL) as [ServiceCategory, string][];
 
@@ -338,7 +339,7 @@ export function ServiceOrderForm({
       // `onSaved` sit BELOW, so a parent's `onSaved` throwing cannot print
       // "no se pudo conectar" over an order that was actually created, onto a
       // dialog this same code has already closed.
-      setErrors({ form: "No se pudo conectar. Revisa tu conexión e intenta de nuevo." });
+      setErrors({ form: CONNECTION_ERROR });
       return;
     } finally {
       setIsSubmitting(false);
