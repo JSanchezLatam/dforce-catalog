@@ -2,8 +2,11 @@ export default function LoginLoading() {
   return (
     <main className="grid min-h-dvh grid-cols-1 bg-muted text-foreground lg:grid-cols-2">
       <section className="flex flex-col items-center px-5 py-10 sm:px-8 lg:px-12">
-        {/* Mirrors LoginThemeToggle: `fixed right-5 top-5 z-10`, not `absolute`. */}
-        <div className="fixed right-5 top-5 z-10 h-11 w-36 animate-pulse rounded-full border border-border bg-card shadow-[0_10px_30px_rgb(0_0_0_/_0.12)]" />
+        {/* No toggle placeholder on purpose. `LoginThemeToggle` returns null
+            until it is hydrated, so painting a pill here would show one, drop
+            it the moment the real page mounted, and bring it back a tick
+            later. An honest skeleton omits what the page does not render
+            yet. */}
         <div className="my-auto w-full max-w-[400px] animate-pulse rounded-3xl border border-border bg-card px-8 py-9 shadow-[0_24px_70px_rgb(15_23_42_/_0.16)] dark:shadow-[0_28px_80px_rgb(0_0_0_/_0.36)] sm:px-9">
           <div className="mx-auto mb-6 h-16 w-[200px] rounded-2xl bg-border/50" />
           <div className="mb-7 flex flex-col items-center gap-2">

@@ -25,16 +25,13 @@ describe("loginAction", () => {
     expect(state).toEqual({ error: "Usuario o contraseña incorrectos." });
   });
 
-  /**
-   * R9.1/9.2 — the refusal must not say WHICH half was wrong, or it becomes a
-   * username oracle. Pinned here because translating the string is exactly the
-   * moment someone helpfully makes it specific.
-   */
-  it("does not reveal whether the username exists", async () => {
-    authenticateUser.mockResolvedValue({ ok: false });
-
-    const state = await loginAction(null, new FormData());
-
-    expect(state?.error).not.toMatch(/usuario no existe|no encontrado|contraseña incorrecta$/i);
-  });
+  // The no-enumeration property (R9.1/9.2) is NOT tested here. It lives in
+  // `authenticateUser`, which has three failure causes to keep identical —
+  // unknown username, wrong password, deactivated account — and
+  // `authenticate.test.ts` already pins it ("generic failure (no
+  // enumeration)" and "shape parity"). A copy of that guard at this layer
+  // would see only the single `{ ok: false }` this file mocks, so it could
+  // never fail on its own. The first attempt at one here was exactly that:
+  // it passed while `"Contraseña incorrecta."` — a real oracle — was in the
+  // string.
 });
