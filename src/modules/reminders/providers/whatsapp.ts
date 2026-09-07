@@ -82,8 +82,7 @@ const MAX_E164_DIGITS = 15;
  * learn what the length already said.
  */
 export function toE164(raw: string): { ok: true; value: string } | { ok: false; reason: string } {
-  const trimmed = raw.trim();
-  const digits = trimmed.replace(/[^0-9]/g, "");
+  const digits = raw.replace(/[^0-9]/g, "");
   const refuse = (why: string) => ({ ok: false as const, reason: `cannot place "${raw}" in E.164 — ${why}` });
 
   if (digits.length === 0) return refuse("no digits");
@@ -95,14 +94,22 @@ export function toE164(raw: string): { ok: true; value: string } | { ok: false; 
   // and `+507 269-1234` has to get the same answer — an earlier draft checked
   // the plus first, so one of those two forms sailed past the guard.
   //
-  // A 7- or 8-digit number is Panama's, with or without a `+`: this shop is in
-  // Panama, the plan has no area codes, and no valid international number is
-  // that short, so a leading `+` on one says nothing a country code would.
+  // A 7- or 8-digit number is READ as Panama's, with or without a `+`, because
+  // this shop is in Panama and the plan has no area codes.
+  //
+  // That is a heuristic, and its failure mode is worth naming: a foreign
+  // short-form number typed without its country code is misread. A Danish
+  // mobile is 8 digits and can start with `6`, so a stored `60123456` would be
+  // sent to `+50760123456` — a real Panama number belonging to someone else.
+  // The 361-row census contains no such value, and an operator who means
+  // Denmark can type `+45 60123456`, which has too many digits to be read as
+  // national. Right for this shop; not a general phone parser.
+  //
   // A LONGER number only counts as Panama when it actually carries `507` —
-  // which is a shape, not a guarantee of origin: `507-123-4567` is a real US
-  // Minnesota number and reads as a Panama landline here. Harmless, because
-  // Meta reads a plus-less `5071234567` as Panama too, so nothing that was
-  // delivered stops being.
+  // a shape, not a proof of origin: `507-123-4567` is a real US Minnesota
+  // number and reads as a Panama landline here. Harmless, because Meta reads a
+  // plus-less `5071234567` as Panama too, so nothing that was delivered stops
+  // being.
   const national =
     digits.startsWith(PANAMA_COUNTRY_CODE) &&
     (digits.length === PANAMA_COUNTRY_CODE.length + PANAMA_MOBILE_LENGTH ||

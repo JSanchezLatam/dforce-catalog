@@ -299,10 +299,15 @@ export const cliente = pgTable(
       .$defaultFn(() => crypto.randomUUID()),
     name: text("name").notNull(),
     /**
-     * Stored as the operator typed it, separators stripped. NOT E.164:
-     * `reminders/providers/whatsapp.ts` converts at the wire, because that is
-     * a provider format and this column feeds the search and duplicate
-     * detection instead. Validated in
+     * Two write paths, two shapes. The app form goes through
+     * `normalizePhone`, so `6123-4567` is stored as `61234567`. The customer
+     * import does NOT (`customer-import/plan.ts` writes the mapper's output
+     * straight through, by design D4), so the same number is stored
+     * `6123-4567`, separators and all. Anything reading this column has to
+     * tolerate both — the search and the duplicate check especially.
+     *
+     * Neither shape is E.164: `reminders/providers/whatsapp.ts` converts at
+     * the wire, because that is a provider format. Validated in
      * modules/customers/validation.ts, which has always REQUIRED a phone — the
      * column only stopped disagreeing in migration `0016`. Not UNIQUE, and
      * deliberately so: a phone can belong to two people (a house line, a
