@@ -42,7 +42,7 @@ export function LoginForm() {
             autoComplete="username"
             required
             placeholder="Ingresa tu nombre de usuario"
-            className="h-11 rounded-xl bg-background/70 pl-10 pr-3 shadow-inner placeholder:text-muted-foreground/70"
+            className="h-11 rounded-xl bg-background/70 pl-10 pr-3 shadow-inner placeholder:text-muted-foreground"
           />
         </div>
         {fieldErrors.username && <p className={FIELD_ERROR}>{fieldErrors.username}</p>}
@@ -63,7 +63,7 @@ export function LoginForm() {
             autoComplete="current-password"
             required
             placeholder="••••••••"
-            className="h-11 rounded-xl bg-background/70 pl-10 pr-3 shadow-inner placeholder:text-muted-foreground/70"
+            className="h-11 rounded-xl bg-background/70 pl-10 pr-3 shadow-inner placeholder:text-muted-foreground"
           />
         </div>
         {fieldErrors.password && <p className={FIELD_ERROR}>{fieldErrors.password}</p>}
