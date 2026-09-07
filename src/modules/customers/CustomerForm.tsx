@@ -391,7 +391,7 @@ export function CustomerForm({
       {/* One size for every button in this module, `default` (h-8) — the
           trigger used to be `sm` in edit mode, which is why "Editar" sat 4px
           shorter than the "Desactivar" beside it on the detail page. */}
-      <DialogTrigger render={<Button variant={isEdit ? "outline" : "default"} size="default" />}>
+      <DialogTrigger render={<Button variant={isEdit ? "outline" : "default"} size="default" className="min-h-11 min-w-11" />}>
         {isEdit ? <Pencil aria-hidden="true" /> : <Plus aria-hidden="true" />}
         {triggerLabel ?? (isEdit ? "Editar" : "Nuevo cliente")}
       </DialogTrigger>
@@ -466,15 +466,24 @@ export function CustomerForm({
                       type="button"
                       variant="outline"
                       size="default"
-                      // 44x44 minimum hit target. The rule is
+                      // 44x44 minimum hit target, on EVERY action button in
+                      // this module — not a note about this one. The rule is
                       // `crm-shell-settings-rbac/design.md:245`, and its only
                       // waiver is conditional: the collapsed sidebar rail is
                       // "desktop-and-pointer-only and never a touch surface".
-                      // This dialog is the opposite — it is the app's primary
-                      // data-entry surface, reached from a tablet in a
-                      // workshop. `size="default"` alone is h-8 = 32px, and
-                      // these seven were the last `min-h-11` usages in the
-                      // repo: dropping them repealed the convention outright.
+                      // This dialog is the opposite — the app's primary
+                      // data-entry surface, opened from a tablet in a
+                      // workshop. `size="default"` alone is h-8 = 32px.
+                      //
+                      // Applied to all of them because a partial application
+                      // is what got caught twice on this branch: first the
+                      // seven that were dropped outright, then a version of
+                      // this comment claiming the rule while `Guardar`,
+                      // `Cancelar` and the delete dialog stayed at 32px — and
+                      // `Editar` at 32 beside a 44px `Desactivar` on the
+                      // detail page, which is the mismatch this whole change
+                      // started from. No test asserts a button height, so a
+                      // green suite says nothing here.
                       className="min-h-11 min-w-11"
                       disabled={isSubmitting}
                       onClick={() => submit(true)}
@@ -698,11 +707,11 @@ export function CustomerForm({
           </DialogBody>
 
           <DialogFooter>
-            <DialogClose render={<Button type="button" variant="outline" size="default" disabled={isSubmitting} />}>
+            <DialogClose render={<Button type="button" variant="outline" size="default" className="min-h-11 min-w-11" disabled={isSubmitting} />}>
               <X aria-hidden="true" />
               Cancelar
             </DialogClose>
-            <Button type="submit" size="default" disabled={isSubmitting}>
+            <Button type="submit" size="default" className="min-h-11 min-w-11" disabled={isSubmitting}>
               <Save aria-hidden="true" />
               {isSubmitting ? "Guardando…" : "Guardar"}
             </Button>
@@ -734,6 +743,7 @@ export function CustomerForm({
                 type="button"
                 variant="outline"
                 size="default"
+                className="min-h-11 min-w-11"
                 aria-label="Cancelar eliminación"
                 onClick={() => setPendingDelete(null)}
               >
@@ -744,6 +754,7 @@ export function CustomerForm({
                 type="button"
                 variant="destructive"
                 size="default"
+                className="min-h-11 min-w-11"
                 onClick={() => {
                   if (pendingDelete) deleteVehicle(pendingDelete.key);
                   setPendingDelete(null);

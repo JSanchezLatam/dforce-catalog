@@ -99,7 +99,7 @@ export function CustomerSyncPanel({ total, canSync }: { total: number; canSync: 
             {/* Only the ACTION is privileged. The total beside it is data on a
                 page the reader can already open. */}
             {canSync && (
-              <Button type="button" variant="outline" size="default" onClick={handleClick} disabled={running}>
+              <Button type="button" variant="outline" size="default" className="min-h-11 min-w-11" onClick={handleClick} disabled={running}>
                 <RefreshCw aria-hidden="true" />
                 {running ? "Sincronizando…" : "Sincronizar clientes"}
               </Button>
@@ -107,7 +107,7 @@ export function CustomerSyncPanel({ total, canSync }: { total: number; canSync: 
           </div>
         </CardContent>
       </Card>
-      {canSync && skipped.length > 0 && (
+      {skipped.length > 0 && (
         // D5 — the skip report exists so "the owner can add the real
         // number"; a bare count names nobody. Each row states its own reason
         // (Finding 1) instead of a single heading that was only true for
