@@ -131,11 +131,10 @@ describe("toE164 — the wire format is the provider's problem, not the operator
   });
 
   /**
-   * The SAME landline, typed the other way staff type it. An earlier draft put
-   * the `+` short-circuit ahead of this check, so `validateClienteInput({ phone:
-   * "+507 269-1234" })` — which stores `+5072691234` — sailed through to Kapso
-   * and spent the three retries and the DLQ entry the guard exists to avoid.
-   * One number, two answers, depending only on how it was typed.
+   * The same landline reaches storage in three shapes, because R17 accepts all
+   * three: `269-1234`, `+507 269-1234`, and a bare `+269-1234`. All three must
+   * get the same answer — a guard that depends on how someone typed a number
+   * is not a guard.
    */
   it("refuses the same landline when the operator typed the country code with a plus", () => {
     const result = toE164("+507 269-1234");
@@ -147,18 +146,25 @@ describe("toE164 — the wire format is the provider's problem, not the operator
     expect(toE164("+507 6111-1111")).toEqual({ ok: true, value: "+50761111111" });
   });
 
+  // The third shape. A `+` on 7-8 digits says nothing a country code would —
+  // no valid international number is that short — so it is read as Panama
+  // national exactly like the bare form.
+  it("refuses a bare `+` landline, and places a bare `+` mobile", () => {
+    expect(toE164("+269-1234").ok).toBe(false);
+    expect(toE164("+6111-1111")).toEqual({ ok: true, value: "+50761111111" });
+  });
+
   /**
    * The one thing this function ADDS is Panama's country code, and only to a
    * number it can identify as a Panama mobile. Everything else keeps the
    * operator's digits with the `+` E.164 wants — the shape Meta already
    * accepted before this function existed.
    *
-   * An earlier draft refused these. That was a REGRESSION: a Mexican number
-   * typed without a `+` (`5512345678` — R17 accepts it, `validateClienteInput`
-   * stores it) used to be delivered, and would have become a permanent failure
-   * after three pointless retries. Guessing a country code is the thing this
-   * module must never do; refusing a number that already worked is not the
-   * alternative to guessing.
+   * A Mexican number typed without a `+` (`5512345678` — R17 accepts it and
+   * `validateClienteInput` stores it) is delivered today. Refusing it because
+   * it is not identifiably Panama would trade a working reminder for three
+   * retries and a DLQ entry: refusing a number that already works is not the
+   * alternative to guessing a country code.
    */
   it("passes a number it cannot identify as Panama through, rather than refusing what used to work", () => {
     expect(toE164("5512345678")).toEqual({ ok: true, value: "+5512345678" });

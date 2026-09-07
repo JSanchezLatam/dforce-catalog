@@ -72,13 +72,14 @@ const MAX_E164_DIGITS = 15;
  *
  * The only thing it ADDS is Panama's country code, and only to a number it can
  * identify as a Panama mobile. Everything else keeps the digits the operator
- * stored, with the `+` E.164 wants — the shape Meta already accepted before
- * this function existed, so nothing that used to be delivered stops being.
+ * stored, with the `+` E.164 wants — the shape Meta already accepted, so
+ * nothing that used to be delivered stops being. Guessing a country code is
+ * the one thing this function must never do.
  *
  * One deliberate refusal beyond a malformed length: a Panama LANDLINE. It is a
  * valid number; it simply cannot receive a WhatsApp template, because WhatsApp
- * is a mobile service. Sending it costs an API call and a retry cycle to learn
- * what the length already says.
+ * is a mobile service. Sending it spends an API call and three retries to
+ * learn what the length already said.
  */
 export function toE164(raw: string): { ok: true; value: string } | { ok: false; reason: string } {
   const trimmed = raw.trim();
@@ -94,16 +95,20 @@ export function toE164(raw: string): { ok: true; value: string } | { ok: false; 
   // and `+507 269-1234` has to get the same answer — an earlier draft checked
   // the plus first, so one of those two forms sailed past the guard.
   //
-  // A bare 7- or 8-digit number is Panama's, because this shop is in Panama and
-  // the plan has no area codes. A longer one only counts as Panama if it
-  // actually carries `507`, so a foreign number is never mangled into one.
+  // A 7- or 8-digit number is Panama's, with or without a `+`: this shop is in
+  // Panama, the plan has no area codes, and no valid international number is
+  // that short, so a leading `+` on one says nothing a country code would.
+  // A LONGER number only counts as Panama when it actually carries `507` —
+  // which is a shape, not a guarantee of origin: `507-123-4567` is a real US
+  // Minnesota number and reads as a Panama landline here. Harmless, because
+  // Meta reads a plus-less `5071234567` as Panama too, so nothing that was
+  // delivered stops being.
   const national =
     digits.startsWith(PANAMA_COUNTRY_CODE) &&
     (digits.length === PANAMA_COUNTRY_CODE.length + PANAMA_MOBILE_LENGTH ||
       digits.length === PANAMA_COUNTRY_CODE.length + PANAMA_LANDLINE_LENGTH)
       ? digits.slice(PANAMA_COUNTRY_CODE.length)
-      : !trimmed.startsWith("+") &&
-          (digits.length === PANAMA_MOBILE_LENGTH || digits.length === PANAMA_LANDLINE_LENGTH)
+      : digits.length === PANAMA_MOBILE_LENGTH || digits.length === PANAMA_LANDLINE_LENGTH
         ? digits
         : null;
 

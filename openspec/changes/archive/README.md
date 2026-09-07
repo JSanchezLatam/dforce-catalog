@@ -219,50 +219,22 @@ before touching that code:
 `archive/2026-09-06-customer-import/tasks.md`. The two that will matter first:
 
 - ~~**353 imported customers cannot receive a WhatsApp reminder**~~ — **CLOSED
-  2026-09-07** on `fix/whatsapp-e164`, and this entry was wrong twice.
-  It is **not a data migration**: the import has never run anywhere (no
-  database has the `external_id` column yet), so there were no rows to migrate.
-  And it is **not about the import** at all — `reminders/job.ts` and
-  `providers/whatsapp.ts` both claimed `to` was "already E.164 —
-  `normalizePhone` enforces this on write", and that was false in both files.
-  `normalizePhone` strips non-digits and keeps a leading `+`, nothing more, and
-  R17 accepts "optional leading +, 7-15 digits" — so a Panama number typed the
-  way staff type them (`6111-1111`) has ALWAYS reached Kapso as `61111111`. The
-  import would only have made it 353 at once.
-  Fixed at the send boundary with `toE164`, not on write: the owner's "import
-  raw" decision governs storage, which also feeds the phone search, duplicate
-  detection and `0016`. A number it cannot place is REFUSED with the value
-  named, never guessed at — the same rule `0016` follows by hard-failing on a
-  null.
-  **The first attempt asserted a numbering plan that does not exist** ("8
-  digits is Panama's national number length"), in a change whose premise is a
-  comment claiming something untrue. Verified against the real plan afterwards:
-  mobiles are 8 digits starting with `6`, landlines are **7**, and there are no
-  area codes — which matches the census exactly (353 of 8, 7 of 11, 1 of 7).
-  That 7-digit row is a LANDLINE, and the first version refused it as "not a
-  Panama number", which is false. It is still refused, because WhatsApp is a
-  mobile service and no storage format fixes that — but the reason now says so.
-  The claim also lived in a THIRD file, its origin: `validation.ts`'s
-  `normalizePhone` docstring called itself "E.164-ish … needed for Kapso". And
-  it left four downstream statements stale — `schema.ts`, `mapper.ts`,
-  `mapper.test.ts` and `validation.test.ts` all recorded that a raw 8-digit
-  number "cannot receive a WhatsApp reminder". A raw MOBILE now does.
-  **And a second draft introduced a REGRESSION**: refusing every shape it could
-  not identify as Panama would have broken a Mexican number typed without a
-  `+` (`5512345678` — R17 accepts it and `validateClienteInput` stores it),
-  which reached Kapso and was delivered before any of this. `toE164` now ADDS
-  only Panama's country code, and only to a number it identifies as a Panama
-  mobile; everything else keeps the operator's digits with the `+` E.164 wants.
-  Refusing a number that already worked is not the alternative to guessing.
+  2026-09-07** on `fix/whatsapp-e164`. The entry was wrong twice: it is not a
+  data migration (the import has never run — no database has `external_id`
+  yet), and it was never about the import. Three files claimed `normalizePhone`
+  produced E.164; it never did, so a Panama mobile typed the way staff type
+  them reached Kapso as `61111111` for months, imported or not.
+  `reminders/providers/whatsapp.ts`'s `toE164` converts at the send boundary —
+  storage stays raw, because that is what the phone search, duplicate detection
+  and `0016` read. It ADDS only `+507`, and only to a number it identifies as a
+  Panama mobile; everything else keeps the operator's digits with a `+`.
+  A Panama LANDLINE is refused: valid number, but WhatsApp is a mobile service.
 - **An unplaceable phone burns three retries and lands in the DLQ.** `toE164`
-  refusing returns `{ ok: false }`, `reminders/job.ts` throws on that, and
-  pg-boss retries — `retryLimit: 3`, backoff, then `REMINDER_DLQ` (`job.ts:84`).
-  Not forever: an earlier version of this entry said "retries forever", which
-  the same file contradicts two bullets up, in a change whose premise is that a
-  false written claim is a defect. Retrying still cannot help a number that
-  will never convert. It wants the `skipped` terminal status the opt-out path
-  already uses, which is a change to the job's failure semantics and so is its
-  own. Raised while closing the entry above.
+  refusing returns `{ ok: false }`, `reminders/job.ts` throws, and pg-boss
+  retries — `retryLimit: 3`, backoff, then `REMINDER_DLQ` (`job.ts:84`).
+  Retrying cannot help a number that will never convert; it wants the `skipped`
+  terminal status the opt-out path already uses, which is a change to the job's
+  failure semantics. The census had one such row (a 7-digit landline) of 361.
 - **Layer 1's residual race.** `INSERT … WHERE NOT EXISTS` is not atomic under
   READ COMMITTED. The window is one INSERT round trip and layer 2
   (`pg_advisory_xact_lock`) still guarantees the customer data; a partial unique

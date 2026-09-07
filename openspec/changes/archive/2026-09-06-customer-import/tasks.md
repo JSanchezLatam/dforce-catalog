@@ -767,9 +767,5 @@ careful about verification, silence reads as "not run".
   census had one such row (a 7-digit landline) out of 361. It wants the `skipped` terminal status
   the opt-out path already uses, which is a change to the job's failure
   semantics. Raised 2026-09-07 while closing the entry above.
-- [x] ~~Original text of the entry above:~~ **353 imported customers will not be able to receive a WhatsApp
-  reminder**, because raw 8-digit Panama numbers are not E.164. The owner was
-  shown this and chose raw. Fixing it later is a data migration over
-  `cliente.phone`, not a code change.
 - [ ] `Status` is uniformly `ACTIVE` across all 370, so nothing exercises a
   mapping onto `deactivatedAt` and none is written.
