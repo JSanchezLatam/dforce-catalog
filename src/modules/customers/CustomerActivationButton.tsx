@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Power, RotateCcw, TriangleAlert } from "lucide-react";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -50,17 +52,21 @@ export function CustomerActivationButton({ clienteId, isActive }: { clienteId: s
       <Button
         type="button"
         variant={isActive ? "outline" : "default"}
-        size="sm"
-        className="min-h-11"
+        size="default"
         disabled={isSubmitting}
         onClick={toggle}
       >
+        {isActive ? <Power aria-hidden="true" /> : <RotateCcw aria-hidden="true" />}
         {isActive ? "Desactivar" : "Reactivar"}
       </Button>
       {error && (
-        <p role="alert" className="text-sm text-destructive">
+        // Block-level: the whole action failed, and there is no input to sit
+        // under. `role="alert"` is unchanged — the box is styling, not new
+        // semantics.
+        <Alert role="alert" variant="destructive">
+          <TriangleAlert aria-hidden="true" />
           {error}
-        </p>
+        </Alert>
       )}
     </div>
   );

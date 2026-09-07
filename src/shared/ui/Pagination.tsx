@@ -27,7 +27,15 @@ function buildWindow(current: number, total: number): (number | "ellipsis")[] {
   return pages;
 }
 
-const navClassName = "rounded-lg px-3 py-1.5 text-primary hover:bg-muted transition-colors";
+/**
+ * `py-1`, matching `pageClassName` exactly. At `py-1.5` these were 32px tall
+ * against the 28px page numbers sitting beside them in the same row — the same
+ * control, two heights, four pixels apart.
+ *
+ * SHARED: this row also renders on /inventory, /service-orders and inside
+ * `CatalogBuilderForm`. Prev/Next shrink by 4px on all four.
+ */
+const navClassName = "rounded-lg px-3 py-1 text-primary hover:bg-muted transition-colors";
 
 function pageClassName(isActive: boolean): string {
   return `rounded-lg px-3 py-1 text-sm ${

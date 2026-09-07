@@ -2,7 +2,9 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { X } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -187,13 +189,15 @@ export function CustomerFilters({
         </Select>
       </div>
       {(selected.search || (selected.status && selected.status !== "active")) && (
-        <button
-          type="button"
-          onClick={clearFilters}
-          className="mb-0.5 rounded-md border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted/20"
-        >
+        // `size="default"` is h-8, the same height as the `Input` and
+        // `SelectTrigger` beside it (`input.tsx` is `h-8` too), so `items-end`
+        // on the row lines all three up and the `mb-0.5` nudge the hand-styled
+        // button carried is no longer needed. That one computed to 38px
+        // (`py-2` + `text-sm`'s 20px line box + 2px of border) against their 32.
+        <Button type="button" variant="outline" size="default" onClick={clearFilters}>
+          <X aria-hidden="true" />
           Limpiar
-        </button>
+        </Button>
       )}
       <div className="ml-auto flex flex-col gap-1.5">
         <Label htmlFor="filter-page-size">Filas por página</Label>

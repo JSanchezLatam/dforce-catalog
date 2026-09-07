@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { RefreshCw, TriangleAlert } from "lucide-react";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/shared/ui/ToastProvider";
 // Type-only import — erased at build, pulls no DB code into the client
 // bundle. Restating this union by hand (as `reason: string`) is what let the
@@ -36,8 +39,17 @@ function skipLabel(s: ImportSkip): string {
  * completion), simplified because `runCustomerImport` runs synchronously
  * inside the route handler (no pg-boss queue like inventory-sync) — the
  * result comes back in the same response, so there is nothing to poll.
+ *
+ * The card around the button is `inventory-view/InventoryStatsHeader`'s, so
+ * the two synced-from-Interfuerza screens read the same way. The total sits
+ * beside the trigger because the trigger is what changes it — the customer
+ * list had no total anywhere, and the one screen that syncs them is where the
+ * question "how many are synced" gets asked.
+ *
+ * `total` is a prop, not a fetch: this is a `"use client"` component and the
+ * count is already in hand at the Server Component call site.
  */
-export function CustomerImportButton() {
+export function CustomerSyncPanel({ total }: { total: number }) {
   const [running, setRunning] = useState(false);
   const [skipped, setSkipped] = useState<ImportSkip[]>([]);
   const { addToast } = useToast();
@@ -71,26 +83,51 @@ export function CustomerImportButton() {
   }
 
   return (
-    <div className="flex flex-col items-start gap-2">
-      <Button type="button" variant="outline" onClick={handleClick} disabled={running}>
-        {running ? "Sincronizando…" : "Sincronizar clientes"}
-      </Button>
+    // The skip report is a SIBLING of the card, not a child of it: inside the
+    // header row it stretched that row and pushed the actions out of place,
+    // which is what put it here. Full width below, it can list every row
+    // without moving anything above it.
+    <div className="mb-4 flex flex-col gap-2">
+      <Card size="sm">
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total de clientes</p>
+              <p className="text-3xl font-bold text-foreground">{total}</p>
+              <p className="text-sm text-muted-foreground">sincronizados desde Interfuerza</p>
+            </div>
+            <Button type="button" variant="outline" size="default" onClick={handleClick} disabled={running}>
+              <RefreshCw aria-hidden="true" />
+              {running ? "Sincronizando…" : "Sincronizar clientes"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
       {skipped.length > 0 && (
         // D5 — the skip report exists so "the owner can add the real
         // number"; a bare count names nobody. Each row states its own reason
         // (Finding 1) instead of a single heading that was only true for
         // `missing_phone`.
-        <div className="text-sm text-muted-foreground">
-          <p>Clientes omitidos:</p>
-          <ul className="list-disc pl-5">
-            {skipped.map((s, i) => (
-              // `i` is always in the key: two skipped rows can share the same
-              // `externalId` (planImport dedupes insert/update rows but
-              // passes skips through untouched), which collided here.
-              <li key={`${s.externalId ?? s.name}-${i}`}>{skipLabel(s)}</li>
-            ))}
-          </ul>
-        </div>
+        //
+        // `role="alert"`, and in the destructive variant: these rows did NOT
+        // import. Rendered as plain muted text outside any live region, the
+        // only thing a screen reader heard was the success toast
+        // ("Sincronización completa …") — it never learned the run was
+        // partial, which is the half of the result that needs acting on.
+        <Alert role="alert" variant="destructive">
+          <TriangleAlert aria-hidden="true" />
+          <div>
+            <p>Clientes omitidos:</p>
+            <ul className="list-disc pl-5">
+              {skipped.map((s, i) => (
+                // `i` is always in the key: two skipped rows can share the same
+                // `externalId` (planImport dedupes insert/update rows but
+                // passes skips through untouched), which collided here.
+                <li key={`${s.externalId ?? s.name}-${i}`}>{skipLabel(s)}</li>
+              ))}
+            </ul>
+          </div>
+        </Alert>
       )}
     </div>
   );

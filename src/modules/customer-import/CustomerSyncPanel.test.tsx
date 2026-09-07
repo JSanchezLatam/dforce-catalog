@@ -9,7 +9,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ToastProvider } from "@/shared/ui/ToastProvider";
-import { CustomerImportButton } from "./CustomerImportButton";
+import { CustomerSyncPanel } from "./CustomerSyncPanel";
 
 type FetchArgs = [string, RequestInit];
 
@@ -28,13 +28,13 @@ const ok = (body: object) => ({ ok: true, status: 200, json: async () => body })
 const ABORTED_IMPORT_MESSAGE =
   "No se pudo completar la importación. No se guardó ningún cambio; probá de nuevo más tarde.";
 // The component's own fallback, used both when a non-ok response carries no
-// `error` field and when `fetch` itself rejects (CustomerImportButton.tsx).
+// `error` field and when `fetch` itself rejects (CustomerSyncPanel.tsx).
 const GENERIC_IMPORT_ERROR = "No se pudo sincronizar a los clientes.";
 
-function renderButton() {
+function renderPanel(total = 0) {
   return render(
     <ToastProvider>
-      <CustomerImportButton />
+      <CustomerSyncPanel total={total} />
     </ToastProvider>,
   );
 }
@@ -43,11 +43,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("CustomerImportButton (R21)", () => {
+describe("CustomerSyncPanel (R21)", () => {
   it("posts to /api/customer-import", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch(() => ok({ created: 0, updated: 0, skipped: [] }));
-    renderButton();
+    renderPanel();
 
     await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
@@ -60,7 +60,7 @@ describe("CustomerImportButton (R21)", () => {
   it("reports created / updated / skipped to the operator on a successful run", async () => {
     const user = userEvent.setup();
     mockFetch(() => ok({ created: 2, updated: 1, skipped: [{ externalId: "9", name: "Sin Telefono", reason: "missing_phone" }] }));
-    renderButton();
+    renderPanel();
 
     await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
@@ -70,7 +70,7 @@ describe("CustomerImportButton (R21)", () => {
   it("shows the server's exact failure message when the response is not ok and carries one", async () => {
     const user = userEvent.setup();
     mockFetch(() => ({ ok: false, status: 502, json: async () => ({ error: ABORTED_IMPORT_MESSAGE }) }));
-    renderButton();
+    renderPanel();
 
     await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
@@ -82,7 +82,7 @@ describe("CustomerImportButton (R21)", () => {
   it("shows the generic fallback when the response is not ok and carries no server message", async () => {
     const user = userEvent.setup();
     mockFetch(() => ({ ok: false, status: 500, json: async () => ({}) }));
-    renderButton();
+    renderPanel();
 
     await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
@@ -99,7 +99,7 @@ describe("CustomerImportButton (R21)", () => {
     mockFetch(() => {
       throw new Error("network down");
     });
-    renderButton();
+    renderPanel();
 
     await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
@@ -112,7 +112,7 @@ describe("CustomerImportButton (R21)", () => {
     mockFetch(() => {
       throw new Error("network down");
     });
-    renderButton();
+    renderPanel();
 
     const button = screen.getByRole("button", { name: "Sincronizar clientes" });
     await user.click(button);
@@ -129,7 +129,7 @@ describe("CustomerImportButton (R21)", () => {
     mockFetch(() =>
       ok({ created: 0, updated: 0, skipped: [{ externalId: "9", name: "Sin Telefono", reason: "missing_phone" }] }),
     );
-    renderButton();
+    renderPanel();
 
     await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
@@ -146,7 +146,7 @@ describe("CustomerImportButton (R21)", () => {
     mockFetch(() =>
       ok({ created: 0, updated: 0, skipped: [{ externalId: "9", name: null, reason: "missing_name" }] }),
     );
-    renderButton();
+    renderPanel();
 
     await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
@@ -172,7 +172,7 @@ describe("CustomerImportButton (R21)", () => {
         ],
       }),
     );
-    renderButton();
+    renderPanel();
 
     await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
@@ -196,10 +196,66 @@ describe("CustomerImportButton (R21)", () => {
         skipped: [{ externalId: null, name: "Sin Externo", reason: "missing_external_id" }],
       }),
     );
-    renderButton();
+    renderPanel();
 
     await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
 
     expect(await screen.findByText("Sin Externo — sin identificador externo")).toBeInTheDocument();
+  });
+});
+
+/**
+ * The skip report is the only surface saying the import did NOT bring
+ * everything in. It rendered as plain muted text outside any live region, so
+ * a screen reader heard the success toast ("Sincronización completa …") and
+ * nothing at all about the rows that were left behind — the one part of the
+ * result the operator has to act on.
+ */
+describe("CustomerSyncPanel — the skip report is announced", () => {
+  it("puts the skipped rows in a live region so a screen reader learns the import partially failed", async () => {
+    const user = userEvent.setup();
+    mockFetch(() =>
+      ok({ created: 1, updated: 0, skipped: [{ externalId: "9", name: "Sin Telefono", reason: "missing_phone" }] }),
+    );
+    renderPanel();
+
+    await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
+
+    // `role="alert"`, not the toast's `role="status"`: the toast reports the
+    // run finished, this reports part of it did not.
+    expect(await screen.findByRole("alert")).toHaveTextContent("Sin Telefono — sin teléfono");
+  });
+
+  it("renders no live region at all when every row imported", async () => {
+    const user = userEvent.setup();
+    mockFetch(() => ok({ created: 3, updated: 0, skipped: [] }));
+    renderPanel();
+
+    await user.click(screen.getByRole("button", { name: "Sincronizar clientes" }));
+
+    await screen.findByRole("status");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The owner's complaint: the customer list showed no total anywhere, so
+ * "how many customers are synced" had no answer on the screen that syncs
+ * them. The number is the panel's headline, beside the trigger that changes
+ * it — same shape as `inventory-view/InventoryStatsHeader`.
+ */
+describe("CustomerSyncPanel — the synced-customer total", () => {
+  it("shows the total it was handed, under a label naming what it counts", () => {
+    renderPanel(368);
+
+    expect(screen.getByText("368")).toBeInTheDocument();
+    // The bare number alone is not an answer: 368 of what.
+    expect(screen.getByText("Total de clientes")).toBeInTheDocument();
+  });
+
+  it("shows a total of zero rather than nothing, so an unsynced database still reads as an answer", () => {
+    renderPanel(0);
+
+    expect(screen.getByText("0")).toBeInTheDocument();
   });
 });

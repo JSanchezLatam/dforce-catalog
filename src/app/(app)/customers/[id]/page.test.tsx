@@ -109,7 +109,7 @@ describe("CustomerDetailPage — deactivated customer (R20)", () => {
 
 /**
  * R21 — the activation button is gated on `customers.write`, the same gate
- * `CustomerImportButton` gets on the customer list. A button that always
+ * `CustomerSyncPanel` gets on the customer list. A button that always
  * 403s is a worse answer than no button (`CustomerForm`'s own
  * `canDeleteVehicle` docstring states this convention); both roles happen to
  * hold `customers.write` today, so this is the only place the gate is

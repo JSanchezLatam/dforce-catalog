@@ -2,8 +2,10 @@
 
 import { useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
+import { Info, Pencil, Plus, RotateCcw, Save, Trash2, TriangleAlert, X } from "lucide-react";
 
 import type { Cliente, Vehiculo } from "@/shared/db/schema";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -386,7 +388,11 @@ export function CustomerForm({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger render={<Button variant={isEdit ? "outline" : "default"} size={isEdit ? "sm" : "default"} />}>
+      {/* One size for every button in this module, `default` (h-8) — the
+          trigger used to be `sm` in edit mode, which is why "Editar" sat 4px
+          shorter than the "Desactivar" beside it on the detail page. */}
+      <DialogTrigger render={<Button variant={isEdit ? "outline" : "default"} size="default" />}>
+        {isEdit ? <Pencil aria-hidden="true" /> : <Plus aria-hidden="true" />}
         {triggerLabel ?? (isEdit ? "Editar" : "Nuevo cliente")}
       </DialogTrigger>
       <DialogContent>
@@ -434,32 +440,40 @@ export function CustomerForm({
                 // two ways past this refusal — the link and the button — are
                 // not text. Keeping the paragraph text-only is what leaves
                 // their own semantics intact.
-                <div className={CARD_MUTED + " flex flex-col gap-2"}>
-                  <p role="alert" className="text-sm">
-                    Ya hay un cliente con este teléfono. Si son dos personas distintas que comparten el
-                    número, guardá igual.
-                  </p>
-                  {/* `Link`, not a raw <a>: repo convention, and it skips a
-                      full document reload. It does NOT preserve what the
-                      operator typed — navigating away unmounts this dialog
-                      either way. Opening the existing customer beside the form
-                      would, and is the more useful behaviour when the point is
-                      comparing two people who share a number; nobody has asked
-                      for it. */}
-                  <Link href={`/customers/${sharedPhoneWith}`} className="text-sm font-medium underline">
-                    Ver el cliente existente
-                  </Link>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="min-h-11 self-start"
-                    disabled={isSubmitting}
-                    onClick={() => submit(true)}
-                  >
-                    Guardar igual
-                  </Button>
-                </div>
+                // Block-level, so it gets the box: the refusal is about the
+                // save, and it carries two controls of its own. The NEUTRAL
+                // variant, not destructive — a shared number between two real
+                // people is a question, not an error, and the way past it is
+                // right here.
+                <Alert>
+                  <Info aria-hidden="true" />
+                  <div className="flex flex-col items-start gap-2">
+                    <p role="alert" className="text-sm">
+                      Ya hay un cliente con este teléfono. Si son dos personas distintas que comparten el
+                      número, guardá igual.
+                    </p>
+                    {/* `Link`, not a raw <a>: repo convention, and it skips a
+                        full document reload. It does NOT preserve what the
+                        operator typed — navigating away unmounts this dialog
+                        either way. Opening the existing customer beside the form
+                        would, and is the more useful behaviour when the point is
+                        comparing two people who share a number; nobody has asked
+                        for it. */}
+                    <Link href={`/customers/${sharedPhoneWith}`} className="text-sm font-medium underline">
+                      Ver el cliente existente
+                    </Link>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="default"
+                      disabled={isSubmitting}
+                      onClick={() => submit(true)}
+                    >
+                      <Save aria-hidden="true" />
+                      Guardar igual
+                    </Button>
+                  </div>
+                </Alert>
               )}
             </div>
 
@@ -514,11 +528,11 @@ export function CustomerForm({
                         <Button
                           type="button"
                           variant="outline"
-                          size="sm"
-                          className="min-h-11 min-w-11"
+                          size="default"
                           aria-label={`Restaurar vehículo ${index}`}
                           onClick={() => restoreVehicle(row.key)}
                         >
+                          <RotateCcw aria-hidden="true" />
                           Restaurar
                         </Button>
                         {/* Offered here too: a plate typed wrong and then quitado
@@ -528,11 +542,11 @@ export function CustomerForm({
                           <Button
                             type="button"
                             variant="destructive"
-                            size="sm"
-                            className="min-h-11 min-w-11"
+                            size="default"
                             aria-label={`Eliminar vehículo ${index} definitivamente`}
                             onClick={() => setPendingDelete(row)}
                           >
+                            <Trash2 aria-hidden="true" />
                             Eliminar definitivamente
                           </Button>
                         )}
@@ -555,22 +569,22 @@ export function CustomerForm({
                         <Button
                           type="button"
                           variant="ghost"
-                          size="sm"
-                          className="min-h-11 min-w-11"
+                          size="default"
                           aria-label={`Quitar vehículo ${index}`}
                           onClick={() => removeOrDeactivateVehicle(row.key)}
                         >
+                          <X aria-hidden="true" />
                           Quitar
                         </Button>
                         {canDeleteVehicle && (
                           <Button
                             type="button"
                             variant="destructive"
-                            size="sm"
-                            className="min-h-11 min-w-11"
+                            size="default"
                             aria-label={`Eliminar vehículo ${index} definitivamente`}
                             onClick={() => setPendingDelete(row)}
                           >
+                            <Trash2 aria-hidden="true" />
                             Eliminar definitivamente
                           </Button>
                         )}
@@ -624,13 +638,19 @@ export function CustomerForm({
               {/* `validateVehiculosInput` and `planVehiculoReconcile` both throw
                   under the bare `vehicles` key (a non-list payload, a foreign
                   vehicle id). With no slot for it the dialog just sat there
-                  after Guardar with nothing on screen. */}
+                  after Guardar with nothing on screen.
+
+                  Boxed because it is about the vehicle COLLECTION, not about
+                  one input — the `vehicles.<i>.plate` message under each card
+                  stays plain red text. */}
               {errors.vehicles && (
-                <p role="alert" className={FIELD_ERROR}>
-                  {errors.vehicles}
-                </p>
+                <Alert role="alert" variant="destructive">
+                  <TriangleAlert aria-hidden="true" />
+                  <span>{errors.vehicles}</span>
+                </Alert>
               )}
-              <Button type="button" variant="outline" size="sm" className="min-h-11 min-w-11" onClick={addVehicle}>
+              <Button type="button" variant="outline" size="default" className="self-start" onClick={addVehicle}>
+                <Plus aria-hidden="true" />
                 Agregar vehículo
               </Button>
             </div>
@@ -653,18 +673,23 @@ export function CustomerForm({
               </label>
             </div>
 
+            {/* FORM-level — it is about the save, not about any one input, so
+                it is the one message in this dialog that gets the red box. */}
             {errors.form && (
-              <p role="alert" className={FIELD_ERROR}>
-                {errors.form}
-              </p>
+              <Alert role="alert" variant="destructive">
+                <TriangleAlert aria-hidden="true" />
+                <span>{errors.form}</span>
+              </Alert>
             )}
           </DialogBody>
 
           <DialogFooter>
-            <DialogClose render={<Button type="button" variant="outline" disabled={isSubmitting} />}>
+            <DialogClose render={<Button type="button" variant="outline" size="default" disabled={isSubmitting} />}>
+              <X aria-hidden="true" />
               Cancelar
             </DialogClose>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" size="default" disabled={isSubmitting}>
+              <Save aria-hidden="true" />
               {isSubmitting ? "Guardando…" : "Guardar"}
             </Button>
           </DialogFooter>
@@ -694,19 +719,23 @@ export function CustomerForm({
               <Button
                 type="button"
                 variant="outline"
+                size="default"
                 aria-label="Cancelar eliminación"
                 onClick={() => setPendingDelete(null)}
               >
+                <X aria-hidden="true" />
                 Cancelar
               </Button>
               <Button
                 type="button"
                 variant="destructive"
+                size="default"
                 onClick={() => {
                   if (pendingDelete) deleteVehicle(pendingDelete.key);
                   setPendingDelete(null);
                 }}
               >
+                <Trash2 aria-hidden="true" />
                 Eliminar definitivamente
               </Button>
             </DialogFooter>

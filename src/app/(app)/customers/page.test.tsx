@@ -18,7 +18,11 @@ vi.mock("@/modules/auth/policy", () => ({ can: vi.fn(() => true) }));
 vi.mock("@/modules/customers/CustomerFormTrigger", () => ({ CustomerFormTrigger: () => null }));
 // Irrelevant to R20 (this file's subject) and requires a ToastProvider this
 // unit render doesn't set up — same reason CustomerFormTrigger is stubbed.
-vi.mock("@/modules/customer-import/CustomerImportButton", () => ({ CustomerImportButton: () => null }));
+vi.mock("@/modules/customer-import/CustomerSyncPanel", () => ({
+  // Renders the prop instead of `null`: the stats card lives inside the panel,
+  // so the only part of it this page owns is the number it hands over.
+  CustomerSyncPanel: ({ total }: { total: number }) => <div data-testid="sync-panel">{total}</div>,
+}));
 vi.mock("@/modules/customers/CustomerFilters", () => ({ CustomerFilters: () => null }));
 
 const listClientes = vi.hoisted(() => vi.fn());
@@ -38,6 +42,17 @@ function row(overrides: Record<string, unknown> = {}) {
     createdAt: new Date("2026-01-01"),
     ...overrides,
   };
+}
+
+/**
+ * Keyed on the filter, not on call order. Three counts can run per render now
+ * (the paginated one, the unfiltered one behind the stats card, and the
+ * deactivated probe), and an ordered `mockResolvedValueOnce` chain quietly fed
+ * the probe whatever value was left over — a fixture passing for a reason the
+ * test does not state. Reads as: three customers exist, none of them active.
+ */
+async function countByStatus(filters: { status?: string }) {
+  return (filters.status ?? "active") === "active" ? 0 : 3;
 }
 
 function renderPage(params: Record<string, string>) {
@@ -164,9 +179,8 @@ describe("CustomersPage — deactivated customers (R20)", () => {
   // record was one query-string key away and nothing said so.
   it("offers to widen a search that matched no ACTIVE customer, keeping the term", async () => {
     listClientes.mockResolvedValue([]);
-    // Two counts: the active one is 0, the second (status=all) proves
-    // there is actually something behind the offer.
-    countClientes.mockResolvedValueOnce(0).mockResolvedValueOnce(3);
+    // Nothing active matches, and three customers exist behind the offer.
+    countClientes.mockImplementation(countByStatus);
     render(await CustomersPage({ searchParams: Promise.resolve({ search: "Retirado Perez" }) }));
 
     // Semantics, not an exact string: the href goes through `buildPageHref`,
@@ -182,7 +196,7 @@ describe("CustomersPage — deactivated customers (R20)", () => {
 
   it("keeps pageSize on the widen-search link, like the pagination links do", async () => {
     listClientes.mockResolvedValue([]);
-    countClientes.mockResolvedValueOnce(0).mockResolvedValueOnce(3);
+    countClientes.mockImplementation(countByStatus);
     render(await CustomersPage({ searchParams: Promise.resolve({ search: "x", pageSize: "50" }) }));
 
     const href = screen.getByRole("link", { name: /desactivados/i }).getAttribute("href")!;
@@ -211,12 +225,15 @@ describe("CustomersPage — deactivated customers (R20)", () => {
     expect(screen.getByText("Todavía no hay clientes registrados.")).toBeInTheDocument();
   });
 
-  it("does not run the second count when the active list is not empty", async () => {
+  it("does not run the deactivated probe when the active list is not empty", async () => {
     listClientes.mockResolvedValue([row()]);
     countClientes.mockResolvedValue(1);
     render(await CustomersPage({ searchParams: Promise.resolve({}) }));
 
-    expect(countClientes).toHaveBeenCalledOnce();
+    // Two counts always run: the paginated one and the unfiltered one behind
+    // the stats card. The probe this test guards would be a THIRD, and it is
+    // the only count here that is conditional.
+    expect(countClientes).toHaveBeenCalledTimes(2);
   });
 
   // The no-search branch's link was hardcoded and dropped `pageSize`, one
@@ -225,7 +242,7 @@ describe("CustomersPage — deactivated customers (R20)", () => {
   // again.
   it("keeps pageSize on the no-search Ver desactivados link too", async () => {
     listClientes.mockResolvedValue([]);
-    countClientes.mockResolvedValueOnce(0).mockResolvedValueOnce(3);
+    countClientes.mockImplementation(countByStatus);
     render(await CustomersPage({ searchParams: Promise.resolve({ pageSize: "50" }) }));
 
     const href = screen.getByRole("link", { name: /desactivados/i }).getAttribute("href")!;
@@ -234,5 +251,48 @@ describe("CustomersPage — deactivated customers (R20)", () => {
     // a state that means exactly that. It used to open a mixed list because a
     // deactivated-only one could not be asked for.
     expect(href).toContain("status=inactive");
+  });
+});
+
+/**
+ * The row action was restyled from a hand-copied class string onto the shared
+ * button vocabulary. Two of the three ways to do that quietly stop it being a
+ * link: base-ui's `Button render={<Link/>}` with `nativeButton={false}` emits
+ * `<a role="button">`, and a plain `<Button onClick>` emits a `<button>` with
+ * no href at all. Either one loses middle-click, "open in new tab", and the
+ * link's own announcement — none of which any styling test would notice.
+ */
+describe("CustomersPage — the row action stays a link", () => {
+  it("renders Ver as a link to that customer, not a button", async () => {
+    render(await renderPage({}));
+
+    expect(screen.getByRole("link", { name: "Ver" })).toHaveAttribute("href", "/customers/c1");
+    expect(screen.queryByRole("button", { name: "Ver" })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The card answers "how many customers do I have synced", so it counts the
+ * whole table — not the page, and not the filter. Reading it off `total`
+ * (the paginated count, which carries the search term and the status filter)
+ * would make the headline number move every time staff typed in the search
+ * box.
+ */
+describe("CustomersPage — the synced-customer total behind the stats card", () => {
+  beforeEach(() => {
+    listClientes.mockReset();
+    countClientes.mockReset();
+  });
+
+  it("hands the panel a count taken with no search and no status filter", async () => {
+    listClientes.mockResolvedValue([row()]);
+    // In call order: the filtered count paging uses, then the unfiltered one.
+    countClientes.mockResolvedValueOnce(1).mockResolvedValueOnce(368);
+
+    render(await CustomersPage({ searchParams: Promise.resolve({ search: "perez", status: "inactive" }) }));
+
+    expect(screen.getByTestId("sync-panel")).toHaveTextContent("368");
+    // The filters the operator is looking at must not reach this count.
+    expect(countClientes.mock.calls[1][0]).toEqual({ status: "all" });
   });
 });

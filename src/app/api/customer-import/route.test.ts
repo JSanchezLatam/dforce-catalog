@@ -55,7 +55,7 @@ describe("POST /api/customer-import — customers.write gating (R21)", () => {
     expect(body.error).not.toMatch(/failed after 3 attempts/);
     // Pins the exact Spanish string the operator reads — not a loose pattern
     // that would pass for any wording containing "pudo" or "guardó". This is
-    // the literal `CustomerImportButton.test.tsx` also pins on the UI side.
+    // the literal `CustomerSyncPanel.test.tsx` also pins on the UI side.
     expect(body.error).toBe(
       "No se pudo completar la importación. No se guardó ningún cambio; probá de nuevo más tarde.",
     );

@@ -1,15 +1,16 @@
 import Link from "next/link";
-import { Users } from "lucide-react";
+import { Eye, Users } from "lucide-react";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
-import { CustomerImportButton } from "@/modules/customer-import/CustomerImportButton";
+import { CustomerSyncPanel } from "@/modules/customer-import/CustomerSyncPanel";
 import { CustomerFilters } from "@/modules/customers/CustomerFilters";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
 import { countClientes, listClientes, type ClienteFilters } from "@/modules/customers/queries";
 import { computePageWindow, parsePageSize } from "@/modules/inventory-view/queries";
 import { Pagination } from "@/shared/ui/Pagination";
 import { PAGE_HEADING } from "@/shared/ui/styles";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -52,7 +53,17 @@ export default async function CustomersPage({
     return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
   }
 
-  const [items, total] = await Promise.all([listClientes(filters, pageWindow), countClientes(filters)]);
+  // `syncedTotal` is deliberately unfiltered: the stats card answers "how many
+  // customers do I have synced", not "how many match what I am looking at".
+  // `total` beside it carries the search term and the status filter, so
+  // reading the headline off it would make the number move on every keystroke
+  // in the search box. Both go in the same `Promise.all` — the extra count is
+  // independent of the other two and must not cost a second round trip.
+  const [items, total, syncedTotal] = await Promise.all([
+    listClientes(filters, pageWindow),
+    countClientes(filters),
+    countClientes({ status: "all" }),
+  ]);
 
   // Without this a genuinely empty database offered "Ver desactivados" — a
   // link to another empty page — while "Todavía no hay clientes registrados"
@@ -87,12 +98,15 @@ export default async function CustomersPage({
             editarlos acá.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {/* R21 — manual import trigger, same `customers.write` gate as the create form (both tecnico and administrador hold it). */}
-          {can(user, "customers.write") && <CustomerImportButton />}
-          <CustomerFormTrigger triggerLabel="Nuevo cliente" />
-        </div>
+        <CustomerFormTrigger triggerLabel="Nuevo cliente" />
       </div>
+
+      {/* R21 — manual import trigger, same `customers.write` gate as the create
+          form (both tecnico and administrador hold it). Out of the header row
+          and into its own card: the skip report it renders on a partial run is
+          a full-width block, and inside that row it stretched it and shoved
+          "Nuevo cliente" out of position. */}
+      {can(user, "customers.write") && <CustomerSyncPanel total={syncedTotal} />}
 
       <Card size="sm" className="mb-4">
         <CardContent>
@@ -208,10 +222,21 @@ export default async function CustomersPage({
                       <TableCell>{item.email ?? "—"}</TableCell>
                       <TableCell>{item.plates.length > 0 ? item.plates.join(", ") : "—"}</TableCell>
                       <TableCell>
+                        {/* `buttonVariants` on a plain `Link`, NOT
+                            `<Button render={<Link/>}>`. Measured, both ways:
+                            base-ui's Button defaults to `nativeButton: true`
+                            and logs "expected a native <button>" to the
+                            console on every render when handed an anchor,
+                            while `nativeButton={false}` renders
+                            `<a href role="button">` — announcing a navigation
+                            as a button and dropping it out of the links list.
+                            `buttonVariants` is the styling without the
+                            behaviour, which is all a link needs. */}
                         <Link
                           href={`/customers/${item.id}`}
-                          className="inline-flex h-7 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-xs font-medium whitespace-nowrap text-foreground transition-colors hover:bg-muted"
+                          className={buttonVariants({ variant: "outline", size: "default" })}
                         >
+                          <Eye aria-hidden="true" />
                           Ver
                         </Link>
                       </TableCell>
