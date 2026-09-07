@@ -9,6 +9,9 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ToastProvider } from "@/shared/ui/ToastProvider";
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+
 import { CustomerSyncPanel } from "./CustomerSyncPanel";
 
 type FetchArgs = [string, RequestInit];
@@ -44,6 +47,26 @@ afterEach(() => {
 });
 
 describe("CustomerSyncPanel (R21)", () => {
+  /**
+   * The card's `total` is a server prop. Without a refresh the operator reads
+   * "Sincronización completa: 368 nuevos" in the toast while the number four
+   * lines above it still says 0 — on the one screen whose whole purpose is
+   * answering how many customers exist. `CustomerActivationButton` in the
+   * same module already owns `useRouter()` for exactly this reason.
+   */
+  it("refreshes the server data so the total stops contradicting the toast", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(
+      JSON.stringify({ created: 3, updated: 1, skipped: [] }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )));
+    renderPanel(0);
+
+    await user.click(screen.getByRole("button", { name: /Sincronizar clientes/ }));
+
+    expect(refresh).toHaveBeenCalled();
+  });
+
   /**
    * The total is data on a page the reader can already open; importing is the
    * privileged part. Mounting the number inside the action's permission gate

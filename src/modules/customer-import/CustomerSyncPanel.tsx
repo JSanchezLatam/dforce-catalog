@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCw, TriangleAlert } from "lucide-react";
 
 import { Alert } from "@/components/ui/alert";
@@ -53,6 +54,7 @@ export function CustomerSyncPanel({ total, canSync }: { total: number; canSync: 
   const [running, setRunning] = useState(false);
   const [skipped, setSkipped] = useState<ImportSkip[]>([]);
   const { addToast } = useToast();
+  const router = useRouter();
 
   async function handleClick() {
     setRunning(true);
@@ -70,6 +72,12 @@ export function CustomerSyncPanel({ total, canSync }: { total: number; canSync: 
         `Sincronización completa: ${body.created} nuevos, ${body.updated} actualizados, ${body.skipped.length} omitidos.`,
       );
       setSkipped(body.skipped);
+      // `total` is a server prop. Without this the toast says "368 nuevos"
+      // while the number four lines above it still shows the pre-import
+      // count until someone reloads by hand — on the one screen whose
+      // purpose is answering how many customers exist. Same reason
+      // `CustomerActivationButton` owns a router in this module.
+      router.refresh();
     } catch {
       // `fetch` REJECTS on a network failure rather than returning a non-ok
       // response, and `res.json()` can throw on a malformed body too —
