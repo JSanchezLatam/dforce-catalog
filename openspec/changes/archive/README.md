@@ -145,10 +145,17 @@ it is marked below:
   either file. Not changed when merging: the block is byte-identical to C1's
   delta, and that property is worth more than the fix. Name the function next
   time the rationale is touched for any other reason.
-- **`ServiceOrderForm.handleSubmit` has no `catch` at all**
-  (`src/modules/service-orders/ServiceOrderForm.tsx`) — the silent-save defect
-  this project has now fixed three times elsewhere. Needs its own change, with
-  the same RED-first and catch-body-removal mutation C1 used.
+- ~~**`ServiceOrderForm.handleSubmit` has no `catch` at all**~~ — **CLOSED
+  2026-09-06** on `fix/service-order-form-catch`, RED-first and
+  mutation-verified by removing the catch body. It was the last of the three
+  forms without one.
+- **`OrderStatusControls.transitionTo` has the same shape**
+  (`src/modules/service-orders/OrderStatusControls.tsx:33`) — `try`/`finally`
+  around a `fetch`, no `catch`, so a network failure re-enables the status
+  buttons with no toast and the operator clicks into the same silence. Found
+  while closing the entry above and deliberately NOT folded into it: different
+  file, and that PR is about one form. It already has an `addToast` surface, so
+  the fix is one line plus its test.
 
 A third entry — merging the six genuinely fragmented duplicate customer pairs —
 was **dropped by the owner on 2026-09-06**, omitted rather than deferred. It is
