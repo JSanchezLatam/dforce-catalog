@@ -1,0 +1,26 @@
+# Delta for customer-management
+
+## MODIFIED Requirements
+
+### Requirement: List View Search and Filter (R19)
+
+The customer list view MUST provide a text search input matching `cliente` records by partial, case-insensitive AND accent-insensitive match against `name`, `phone`, or any of that customer's active vehicle `plate`s. Accent folding MUST apply to both the stored plate and the search term (`unaccent()` on both sides), exactly as it already does for `name`. The plate match MUST be evaluated as an existence check over the customer's vehicle collection — matching if any one active vehicle's plate matches — not a single-column comparison; a customer with zero vehicles MUST still match on `name` or `phone` alone. The same matching MUST also be reachable through `GET /api/customers`, gated by `customers.read`, accepting `search`, `page`, `pageSize`, and `status` parameters (`active` | `inactive` | `all`, defaulting to `active`; see R20). Each result MUST include a `plates: string[]` array of that customer's active vehicle plates (possibly empty) for disambiguation, replacing the single `vehiclePlate` field; a `cliente` with neither `phone` nor any plate on record MUST still render as an identifiable row, not a blank one. WHEN a search yields zero exact matches, the route MUST also return near matches produced from the same relaxed term — a shorter prefix for name/plate, and for `phone` the search TERM reduced to its last significant digits. The relaxation applies to the term only: the comparison still runs against the stored column verbatim, so this guarantee holds exactly as far as `normalizePhone` (`validation.ts`) has already stripped separators on write. A row written by any path that bypasses `normalizePhone` keeps its separators and is NOT covered. This is deliberately NOT fuzzy/similarity matching.
+
+The list view MUST additionally let staff order results by clicking a whitelisted column header (`name`, `phone`, or `email`; see the `table-sorting` capability for the full whitelist, page-reset, invalid-parameter, and NULL-ordering rules that apply here). Sorting and search compose: a sort applies to whatever result set the current search and status filter already produced, never bypassing them. `GET /api/customers` (`handleListClientes`, consumed by `CustomerPicker`) remains deliberately unaffected by this addition — it does not accept a `sort` parameter, and its underlying `listClientes` order argument defaults to today's `desc(createdAt)` when omitted, so the picker's behavior is byte-identical to before.
+(Previously: search and filter had no column-sorting behavior; results returned in a single fixed `desc(createdAt)` order with no way to change it from the UI.)
+
+#### Scenarios
+
+- GIVEN a `cliente` named "Juan Pérez" WHEN staff types "juan" in the search box THEN the system MUST show that customer in the filtered list
+- GIVEN a `cliente` with an active vehicle plate "ABC-123" WHEN staff types "abc" in the search box THEN the system MUST show that customer in the filtered results
+- GIVEN a `cliente` with three vehicles WHEN staff searches by the plate of the second or third vehicle THEN the system MUST return that customer, not only when the first vehicle's plate matches
+- GIVEN a `cliente` with zero vehicles but a matching name or phone WHEN staff searches THEN the system MUST still return that customer
+- GIVEN a `cliente` named "María GONZÁLEZ" WHEN staff types "maria gonza" — no accents, lower case — in the picker or the list-view search box THEN the system MUST show that customer as an exact match, and MUST NOT report zero matches or offer "create customer" as if none existed
+- AND typing "maría gonzá", with the accents, MUST still match the same customer
+- GIVEN a search term that matches no `cliente` WHEN staff submits it THEN the system MUST show an empty-results message rather than the full unfiltered list
+- GIVEN staff clears the search box WHEN the input becomes empty THEN the system MUST show the full paginated customer list again
+- GIVEN no `customers.read` WHEN calling `GET /api/customers?search=juan` THEN the system MUST reject with 403 before running any query
+- GIVEN two `cliente` records named "Juan Pérez" with the same phone but different plates, plus a third with `phone = ""` and zero vehicles WHEN `GET /api/customers?search=juan` is called THEN all three rows MUST be returned, the two Juans each carrying their own `plates` array, and the third rendering with a defined fallback label instead of blank fields
+- GIVEN a `cliente` whose name only starts with "Juan" and another whose `phone` is stored as "+525512345678" (separator-free) WHEN searches for "Juan Alberto" and for "55 1234-5678" each yield zero exact matches THEN the system MUST return each `cliente` as a near match — by shorter prefix, and by reducing the search term to its last significant digits
+- GIVEN an active search term matching several customers WHEN staff clicks the `name` header THEN the system MUST sort only the matching rows, MUST reset to page 1, and MUST leave the search term and status filter unchanged
+- GIVEN a `status=inactive` filter active WHEN staff sorts by `phone` THEN the sort MUST apply only to the deactivated customers already matching that filter, never mixing in active customers
