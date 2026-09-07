@@ -305,6 +305,7 @@ export function CustomerForm({
   async function submit(confirmSharedPhone: boolean) {
     setIsSubmitting(true);
     setErrors({});
+    let saved: Cliente;
 
     try {
       const payload = buildPayload(form);
@@ -358,12 +359,28 @@ export function CustomerForm({
       }
 
       const body = await response.json();
-      setOpen(false);
-      // Active rows only — a deletion entry is an id with no plate to report.
-      onSaved?.(body.cliente, activeVehicles(form.vehicles).map((v) => v.plate.trim()));
+      saved = body.cliente;
+    } catch {
+      // `fetch` REJECTS on a network failure rather than returning a non-ok
+      // response, so without this the dialog re-enables with nothing on screen
+      // and the operator clicks into the same silence. `UserForm` carries the
+      // same catch for the same reason. It matters twice here: "Guardar igual"
+      // calls this from a click handler, with no form submission behind it to
+      // surface anything.
+      //
+      // It covers the request and its body and nothing else: `setOpen`/
+      // `onSaved` moved BELOW, so a parent's `onSaved` throwing can no longer
+      // print "no se pudo conectar" over a save that actually succeeded — onto
+      // a dialog this same code has already closed, where nobody would read it.
+      setErrors({ form: "No se pudo conectar. Revisa tu conexión e intenta de nuevo." });
+      return;
     } finally {
       setIsSubmitting(false);
     }
+
+    setOpen(false);
+    // Active rows only — a deletion entry is an id with no plate to report.
+    onSaved?.(saved, activeVehicles(form.vehicles).map((v) => v.plate.trim()));
   }
 
   return (
@@ -411,23 +428,26 @@ export function CustomerForm({
                 </p>
               )}
               {sharedPhoneWith && (
-                // `role="alert"` sits on the PARAGRAPH, not this wrapper —
-                // every other alert in this repo is a text-only <p>, and a live
-                // region is for announcing changed text, not a container whose
-                // focusable children have their own semantics. That matters
-                // more here than anywhere else: the link and the button below
-                // are the ONLY way past the refusal.
+                // `role="alert"` sits on the PARAGRAPH, and nothing focusable
+                // goes inside it: a live region announces changed TEXT, and the
+                // two ways past this refusal — the link and the button — are
+                // not text. Keeping the paragraph text-only is what leaves
+                // their own semantics intact.
                 <div className={CARD_MUTED + " flex flex-col gap-2"}>
                   <p role="alert" className="text-sm">
-                    Ya hay un cliente con este teléfono.{" "}
-                    {/* `Link`, not a raw <a>: this renders inside an OPEN
-                        dialog, so a full page reload would throw away
-                        everything the operator has typed. */}
-                    <Link href={`/customers/${sharedPhoneWith}`} className="font-medium underline">
-                      Ver el cliente existente
-                    </Link>
-                    . Si son dos personas distintas que comparten el número, guardá igual.
+                    Ya hay un cliente con este teléfono. Si son dos personas distintas que comparten el
+                    número, guardá igual.
                   </p>
+                  {/* `Link`, not a raw <a>: repo convention, and it skips a
+                      full document reload. It does NOT preserve what the
+                      operator typed — navigating away unmounts this dialog
+                      either way. Opening the existing customer beside the form
+                      would, and is the more useful behaviour when the point is
+                      comparing two people who share a number; nobody has asked
+                      for it. */}
+                  <Link href={`/customers/${sharedPhoneWith}`} className="text-sm font-medium underline">
+                    Ver el cliente existente
+                  </Link>
                   <Button
                     type="button"
                     variant="outline"

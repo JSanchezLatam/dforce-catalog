@@ -93,7 +93,10 @@ enumerated call sites is exactly what let a reviewer check it against reality
 and find the missing one.
 
 Deliberately NOT added: a `CHECK (phone <> '')`. It would make R19's clause
-unsatisfiable, which is the opposite of what this change is for.
+unsatisfiable, which is the opposite of what this change is for — though only
+at the last door: `validation.ts:70-72` already rejects an empty phone, so no
+application write path produces one today. Raw inserts do, which is how the
+e2e builds R19's row.
 
 ## Migration risk
 
