@@ -163,6 +163,13 @@ it is marked below:
   `addToast`), so wrapping three lines behind a shared result type would be
   more code, not less. Anyone fixing this `json()` throw is starting from four
   independent `catch` blocks, not from a helper.
+- **Nothing tests that the post-success line throwing is NOT reported as a
+  connection failure.** All four write surfaces now place their `router.refresh()`
+  / `onSaved?.()` below the `try`/`catch` precisely so a throw there is not
+  blamed on the network, and the comments say so — but no test pins it in any
+  of them. A consistent pre-existing gap, not one this repo's catch work
+  introduced; raised by GGA while closing the entry below. Its own change, and
+  it should cover all four at once.
 - ~~**`OrderStatusControls.transitionTo` has the same shape**~~ — **CLOSED
   2026-09-06** on `fix/status-controls-catch`, together with the shared copy
   constant. It had no test file at all; it has three now. The sentence itself
