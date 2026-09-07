@@ -23,7 +23,7 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
 
   const result = await authenticateUser(username, password);
   if (!result.ok) {
-    return { error: "Invalid username or password." };
+    return { error: "Usuario o contraseña incorrectos." };
   }
 
   const cookieStore = await cookies();
