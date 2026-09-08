@@ -436,7 +436,7 @@ export function CatalogBuilderForm({
                     </Select>
                   </div>
                 </div>
-                <div className="rounded-lg border border-border">
+                <div className="overflow-hidden rounded-lg border border-border">
                   <Table>
                     <TableHeader>
                       <TableRow>

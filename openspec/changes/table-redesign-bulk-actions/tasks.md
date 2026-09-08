@@ -108,6 +108,20 @@ Branch names follow the `crm-workshop/prN-*` convention:
 
 - [x] 1.1 Add the shaded-header class to `TableHeader` in `src/components/ui/table.tsx` (today `[&_tr]:border-b` only). Do **not** add a border or rounded class to `Table` itself — the four list pages' existing `Card`/`CardContent` stays the sole container (double-border risk named in the proposal).
 
+  **GGA found a second-order effect full opacity created, and it was real.**
+  `Table` renders its own square-clipping `overflow-x-auto` div, but four
+  consumers hand-roll their own wrapper — and two of those (`CatalogBuilderForm`
+  and `ServiceOrderForm`'s cart table) had `rounded-lg` with NO `overflow`, so
+  they never clipped. Transparent, that was invisible; opaque, the band paints
+  into the 8px corner arcs. Both got `overflow-hidden`. Note the irony worth
+  keeping: task 1.3 named `CatalogBuilderForm` as the sharpest risk and named
+  the WRONG symptom — double border, which never happened.
+
+  **Also corrected: "five consumers" was a number nobody counted.** There are
+  14 `<Table>` uses across 13 files; every one but `UsersTable` already brings
+  its own container. The comment now says that instead of a figure repeated
+  from the design doc without checking.
+
   Shipped as `bg-muted` at FULL opacity, not `bg-muted/50`. The /50 variant was
   tried first and measured invisible: light `--muted` is `hsl(240 4.8% 95.9%)`,
   so at half alpha the header computed to `oklab(0.967 …/0.5)` against a white
@@ -122,6 +136,19 @@ Branch names follow the `crm-workshop/prN-*` convention:
   - `CatalogBuilderForm.tsx:439` (already wraps `rounded-lg border` — confirm no double border specifically here, the case the proposal names as the sharpest risk)
   - `CustomerPicker` (inside a dialog)
   - the 3 `loading.tsx` skeletons (customers, inventory, service-orders)
+
+  Re-earned after the GGA fixes, measured in the live DOM rather than judged
+  from a screenshot (8px arcs do not survive a screenshot at page zoom):
+  `/customers`, `/inventory`, `/users`, both themes, console clean, and the
+  catalog builder's review table confirmed `overflow: hidden` + `8px` radius
+  with exactly ONE bordered ancestor.
+
+  **One gap, stated rather than ticked over:** `ServiceOrderForm`'s cart table
+  is gated on `cart.length > 0`, which needs a customer, a vehicle and a part
+  added inside the new-order dialog. Its wrapper carries the identical
+  `overflow-hidden` class and its sibling search table was verified live in
+  that same dialog — but the cart table itself was never rendered. If anything
+  in this unit is wrong, that is where it is.
 - [x] 1.4 Also open `/users` and confirm the bare `<Table>` (not yet Card-wrapped — that lands in unit 3 per design's File Changes table) shows the shaded header with no broken layout in the interim. Do not add a Card here; that is unit 3's job, bundled with the file's next real touch.
 - [x] 1.5 `npm test` and `npx tsc --noEmit` clean.
 
