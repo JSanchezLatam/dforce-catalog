@@ -408,8 +408,10 @@ function buildPageHrefPattern(params: SearchParams, sort: ClienteSort | undefine
   // clicking page 2 returned rows in `desc(createdAt)` while the OFFSET had
   // been computed against the email ordering — so rows repeat across the
   // boundary and rows never appear at all. Taken from the PARSED sort, not
-  // from `params`, so a hand-typed `?sort=garbage` cannot be laundered into
-  // the pagination links.
+  // from `params`, so an unrecognised `?sort=` cannot be laundered into
+  // the pagination links — including the inherited names (`toString`,
+  // `constructor`) that `in` let through until `parseClienteSort` switched
+  // to `Object.hasOwn`.
   if (sort) {
     search.set("sort", sort.key);
     search.set("dir", sort.dir);

@@ -399,6 +399,18 @@ describe("CustomersPage — column sorting", () => {
    * the URL has to survive paging", and a sibling test pinning `status` for
    * exactly this reason.
    */
+  /**
+   * The whole point of the work unit: the page parses the sort and HANDS IT
+   * to the query. Dropping the third argument to `listClientes` left both
+   * files green — the suite pinned the hrefs, the `aria-sort`, the pagination
+   * carry and the negative case, and never the positive one.
+   */
+  it("hands the parsed sort to listClientes, which is the entire feature", async () => {
+    render(await renderPage({ sort: "email", dir: "desc" }));
+
+    expect(listClientes.mock.calls[0][2]).toEqual({ key: "email", dir: "desc" });
+  });
+
   it("keeps the sort on every pagination link, like the status beside it", async () => {
     render(await renderPage({ sort: "name", dir: "asc" }));
 

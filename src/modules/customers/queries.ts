@@ -137,11 +137,24 @@ function firstSortValue(value: string | string[] | undefined): string | undefine
   return Array.isArray(value) ? value[0] : value;
 }
 
-/** Pure — whitelist + `asc|desc` check; a garbage `sort`/`dir` falls back to `undefined`. */
+/**
+ * Pure — whitelist + `asc|desc` check; anything else falls back to `undefined`.
+ *
+ * `Object.hasOwn`, NOT `key in CLIENTE_SORT`. `in` walks the prototype chain,
+ * so `toString`, `constructor`, `valueOf` and `__proto__` all passed the
+ * whitelist — and the failure was silent rather than loud:
+ * `CLIENTE_SORT["toString"]` is `Function.prototype.toString`, which Drizzle
+ * renders as a bound `$1`, Postgres accepts, and the ORDER BY collapses to
+ * the tiebreaker while the URL and every pagination link keep advertising the
+ * sort. `?sort=garbage` was the only invalid input anyone had tested.
+ *
+ * This is the single untrusted-input surface the design's threat matrix says
+ * the whitelist closes, and D3 has WU2/3/4 copying this function's shape.
+ */
 export function parseClienteSort(searchParams: RawSearchParams): ClienteSort | undefined {
   const key = firstSortValue(searchParams.sort);
   const dir = firstSortValue(searchParams.dir);
-  if (!key || !(key in CLIENTE_SORT)) return undefined;
+  if (!key || !Object.hasOwn(CLIENTE_SORT, key)) return undefined;
   if (dir !== "asc" && dir !== "desc") return undefined;
   return { key: key as keyof typeof CLIENTE_SORT, dir };
 }

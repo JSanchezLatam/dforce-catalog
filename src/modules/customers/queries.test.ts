@@ -217,6 +217,25 @@ describe("parseClienteSort", () => {
     },
   );
 
+  /**
+   * `key in CLIENTE_SORT` walks the PROTOTYPE CHAIN, so `toString`,
+   * `constructor`, `valueOf` and `__proto__` all passed the whitelist. The
+   * failure was silent, not loud: `CLIENTE_SORT["toString"]` is
+   * `Function.prototype.toString`, which Drizzle renders as a bound `$1`
+   * parameter, Postgres accepts, and the ORDER BY quietly collapses to the
+   * tiebreaker — while the URL and every pagination link keep advertising the
+   * sort. `?sort=garbage` was the only invalid case anyone had tested.
+   *
+   * D3 gives each module its OWN `parse*Sort`, so WU2/3/4 copy this shape.
+   * Fixed here, or shipped four times.
+   */
+  it.each(["toString", "constructor", "valueOf", "__proto__", "hasOwnProperty"])(
+    "rejects the inherited property %s, which `in` would have accepted",
+    (key) => {
+      expect(parseClienteSort({ sort: key, dir: "asc" })).toBeUndefined();
+    },
+  );
+
   it("returns undefined for a column not on the whitelist", () => {
     expect(parseClienteSort({ sort: "createdAt", dir: "asc" })).toBeUndefined();
   });
