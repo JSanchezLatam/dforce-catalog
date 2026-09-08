@@ -8,7 +8,7 @@
  * wired into one layer and not the next), which is why the pagination link is
  * asserted here rather than trusted.
  */
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -185,9 +185,10 @@ describe("CustomersPage — deactivated customers (R20)", () => {
     // That blanket form worked only while every cell carried text, and the
     // Acciones cell is now an icon-only kebab trigger whose `textContent` is
     // legitimately "" — it would fail this test for the wrong reason while
-    // saying nothing about the phone. Column order: Nombre | Teléfono | Email
-    // | Vehículos | Acciones.
-    expect(cells[1]).toBe("—");
+    // saying nothing about the phone. Column order, since WU4 put the
+    // selection checkbox first: ☐ | Nombre | Teléfono | Email | Vehículos |
+    // Acciones.
+    expect(cells[2]).toBe("—");
   });
 
   // R20 — searching is how staff reach one specific customer. Before this the
@@ -505,5 +506,186 @@ describe("CustomersPage — the unfiltered total behind the stats card", () => {
     expect(screen.getByTestId("sync-panel")).toHaveTextContent("368");
     // The filters the operator is looking at must not reach this count.
     expect(countClientes.mock.calls[1][0]).toEqual({ status: "all" });
+  });
+});
+
+/**
+ * table-redesign WU4 — the selection primitive, landed on customers first.
+ *
+ * Two properties are pinned here and nowhere else, because they are decided by
+ * what THIS PAGE puts in `filterKey`, not by the hook:
+ *
+ * - changing the search term or the status clears the selection, announcing it
+ *   with the exact Spanish sentence the spec fixes;
+ * - sorting a column or turning the page does NOT, which is only true while
+ *   `filterKey` is built from search + status alone. A `sort` leaking into it
+ *   wipes the operator's selection on every column click.
+ *
+ * `rerender` is how a filter change is reproduced: in the app a filter edit is
+ * a URL navigation that re-runs this Server Component and patches the tree,
+ * leaving the client `SelectionProvider` mounted at the same position. That is
+ * the whole premise of D3, and jsdom reproduces the reconciliation faithfully
+ * even though it cannot see the RSC boundary itself.
+ */
+describe("CustomersPage — cross-page selection and the filter rule (WU4)", () => {
+  const PAGE_1 = [
+    row({ id: "c1", name: "Ana Gómez" }),
+    row({ id: "c2", name: "Beto Ruiz" }),
+  ];
+  const PAGE_2 = [row({ id: "c9", name: "Zulema Paz" })];
+
+  beforeEach(() => {
+    listClientes.mockClear();
+    countClientes.mockClear();
+  });
+
+  function renderAt(params: Record<string, string>, items = PAGE_1) {
+    listClientes.mockResolvedValue(items);
+    // More than one page, so paging is a real thing on this screen.
+    countClientes.mockResolvedValue(40);
+    return CustomersPage({ searchParams: Promise.resolve(params) });
+  }
+
+  /**
+   * Let a pending `Reconcile` resolve. Without this a "does not clear"
+   * assertion is a placebo: the clearing is one microtask away and a
+   * synchronous expectation passes while the selection is on its way out.
+   * Measured on `useRowSelection.test.tsx`, where exactly that hid a mutation.
+   */
+  async function settle() {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+
+  it("renders a checkbox per row plus a select-all for the current page", async () => {
+    render(await renderAt({}));
+
+    expect(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Seleccionar Beto Ruiz" })).toBeInTheDocument();
+    // Not "seleccionar todo": there is no server-side select-all-matching in
+    // this change, and the name must not promise one.
+    expect(
+      screen.getByRole("checkbox", { name: "Seleccionar todo lo de esta página" }),
+    ).toBeInTheDocument();
+  });
+
+  it("clears the selection when the search term changes, saying exactly how many went", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(await renderAt({}));
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" }));
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Beto Ruiz" }));
+    expect(screen.getByRole("status")).toHaveTextContent("2 seleccionados");
+
+    rerender(await renderAt({ search: "perez" }));
+
+    // The exact sentence, never loosened — the spec fixes this shape.
+    await waitFor(() =>
+      expect(
+        screen.getByText("Se limpió la selección de 2 al cambiar el filtro"),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" })).not.toBeChecked();
+  });
+
+  it("clears when the status filter changes too", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(await renderAt({}));
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" }));
+    rerender(await renderAt({ status: "all" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Se limpió la selección de 1 al cambiar el filtro"),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  /**
+   * The spec's negative scenario, pinned so it cannot be "improved" back into
+   * a lie. Clearing is unconditional, so most of the cleared rows normally DO
+   * match the new filter; a message claiming otherwise asserts more than the
+   * code knows.
+   */
+  it("does not claim the cleared rows failed to match the new filter", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(await renderAt({}));
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" }));
+    rerender(await renderAt({ search: "gómez" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Se limpió la selección de 1 al cambiar el filtro"),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/no coinciden/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/se soltaron/i)).not.toBeInTheDocument();
+  });
+
+  /**
+   * THE regression this test file exists for. `filterKey` is built from search
+   * and status ONLY; put `sort` in it and every column-header click silently
+   * wipes the selection the operator has been assembling.
+   */
+  it("does not clear the selection when a column is sorted", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(await renderAt({}));
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" }));
+    rerender(await renderAt({ sort: "name", dir: "desc" }));
+    await settle();
+
+    expect(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" })).toBeChecked();
+    expect(screen.queryByText(/Se limpió la selección/)).not.toBeInTheDocument();
+  });
+
+  it("does not clear the selection when the page or the page size changes", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(await renderAt({}));
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" }));
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Beto Ruiz" }));
+
+    rerender(await renderAt({ page: "2", pageSize: "50" }, PAGE_2));
+    await settle();
+
+    const bar = screen.getByRole("status");
+    expect(screen.queryByText(/Se limpió la selección/)).not.toBeInTheDocument();
+    expect(bar).toHaveTextContent("2 seleccionados");
+    // The spec's "Off-screen selection is legible, not just counted": the bar
+    // has to say how many are off this page, and be able to name them.
+    expect(bar).toHaveTextContent("2 fuera de esta página");
+    expect(within(bar).getByText("Ana Gómez")).toBeInTheDocument();
+    expect(within(bar).getByText("Beto Ruiz")).toBeInTheDocument();
+  });
+
+  it("puts the rows back checked when the operator returns to page 1", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(await renderAt({}));
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" }));
+    rerender(await renderAt({ page: "2" }, PAGE_2));
+    await settle();
+    rerender(await renderAt({}, PAGE_1));
+    await settle();
+
+    expect(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Seleccionar Beto Ruiz" })).not.toBeChecked();
+  });
+
+  it("lets the operator drop the whole selection by hand, with no filter message", async () => {
+    const user = userEvent.setup();
+    render(await renderAt({}));
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar todo lo de esta página" }));
+    expect(screen.getByRole("status")).toHaveTextContent("2 seleccionados");
+
+    await user.click(screen.getByRole("button", { name: "Limpiar selección" }));
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Se limpió la selección/)).not.toBeInTheDocument();
   });
 });
