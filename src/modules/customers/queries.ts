@@ -6,7 +6,7 @@
  * the real DB call (defaulting to the actual drizzle query), so this module
  * is unit-testable with injected fakes and no live Postgres connection.
  */
-import { and, count, desc, eq, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import { db } from "@/shared/db/client";
@@ -90,10 +90,69 @@ export function buildClienteListWhere(filters: ClienteFilters): SQL | undefined 
   return search ? and(state, search) : state;
 }
 
-/** R19 — paginated + searched customer list, newest first. */
+/**
+ * table-column-sorting D2 — one whitelist, shared by `parseClienteSort` and
+ * the page (which imports it to decide which headers link). `plates` is
+ * included: the throwaway-Postgres spike (design's Open Question, task 1.2,
+ * recorded in apply-progress) proved `.orderBy()` against this correlated
+ * `array_agg` alias both executes and reads sensibly (alphabetical by first
+ * plate).
+ *
+ * `name` and `email` are wrapped in `lower(unaccent(...))`. Task 1.1 read
+ * `datcollate` off the Postgres on `:5432` and concluded no wrapping was
+ * needed — but the app connects to `:5433` (see `.env`), a different
+ * instance. That one also reports `en_US.utf8` and then orders by BYTES:
+ *
+ *   plain              Ana < Zapata < Zulema < automovil < Ángel
+ *   lower()            Ana < automovil < Zapata < Zulema < Ángel
+ *   lower(unaccent())  Ana < Ángel < automovil < Zapata < Zulema
+ *
+ * Measured on that instance with the app's own credentials. Unwrapped, every
+ * lowercase name sorts after every uppercase one and "Ángel", "Núñez" and
+ * "Peña" land past "Z" — this list already contains NUÑEZ and Peña.
+ *
+ * `phone` is left bare: digits and dashes have neither case nor accents.
+ * `plates` too — plates are uppercase alphanumeric by construction.
+ *
+ * `unaccent()` is STABLE, so this cannot use `cliente_name_idx`; at 370 rows
+ * that is a sequential scan of nothing. It would need a rethink at a scale
+ * where the index mattered.
+ */
+export const CLIENTE_SORT = {
+  name: sql`lower(unaccent(${cliente.name}))`,
+  phone: cliente.phone,
+  email: sql`lower(unaccent(${cliente.email}))`,
+  plates: platesSubquery(),
+} as const;
+
+export type ClienteSort = { key: keyof typeof CLIENTE_SORT; dir: "asc" | "desc" };
+
+type RawSearchParams = Record<string, string | string[] | undefined>;
+
+function firstSortValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+/** Pure — whitelist + `asc|desc` check; a garbage `sort`/`dir` falls back to `undefined`. */
+export function parseClienteSort(searchParams: RawSearchParams): ClienteSort | undefined {
+  const key = firstSortValue(searchParams.sort);
+  const dir = firstSortValue(searchParams.dir);
+  if (!key || !(key in CLIENTE_SORT)) return undefined;
+  if (dir !== "asc" && dir !== "desc") return undefined;
+  return { key: key as keyof typeof CLIENTE_SORT, dir };
+}
+
+function buildClienteOrderBy(sort?: ClienteSort) {
+  if (!sort) return desc(cliente.createdAt);
+  const column = CLIENTE_SORT[sort.key];
+  return sort.dir === "asc" ? asc(column) : desc(column);
+}
+
+/** R19 — paginated + searched customer list, newest first by default; sortable per D2. */
 export async function listClientes(
   filters: ClienteFilters,
   window: { offset: number; limit: number },
+  sort?: ClienteSort,
   queryFn: () => Promise<ClienteListItem[]> = () =>
     db
       .select({
@@ -110,7 +169,7 @@ export async function listClientes(
       })
       .from(cliente)
       .where(buildClienteListWhere(filters))
-      .orderBy(desc(cliente.createdAt))
+      .orderBy(buildClienteOrderBy(sort))
       .limit(window.limit)
       .offset(window.offset),
 ): Promise<ClienteListItem[]> {

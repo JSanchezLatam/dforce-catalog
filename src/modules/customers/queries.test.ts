@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
@@ -5,10 +6,12 @@ import type { Cliente, OrdenServicio, Vehiculo } from "@/shared/db/schema";
 import {
   buildClienteListWhere,
   buildClienteSearchWhere,
+  CLIENTE_SORT,
   countClientes,
   findClienteByPhone,
   getClienteById,
   listClientes,
+  parseClienteSort,
   type ClienteListItem,
 } from "./queries";
 
@@ -138,6 +141,73 @@ describe("buildClienteSearchWhere (R19)", () => {
   });
 });
 
+/**
+ * table-column-sorting WU1 — `plates` is in the whitelist because the
+ * throwaway-Postgres spike (task 1.2, recorded in apply-progress) proved both
+ * required conditions: `.orderBy()` against the correlated `platesSubquery()`
+ * alias executes, and the resulting array-lexicographic order reads
+ * sensibly (alphabetical by first plate). Had either failed, this key would
+ * not exist (design D2 — "dropping plates is deleting one key").
+ */
+/**
+ * Measured against the database the app actually uses (`:5433`, 370 rows), not
+ * the one on `:5432` that task 1.1 probed by mistake. It reports
+ * `datcollate = en_US.utf8` and then orders by BYTES:
+ *
+ *   plain             Ana < Zapata < Zulema < automovil < Ángel
+ *   lower()           Ana < automovil < Zapata < Zulema < Ángel
+ *   lower(unaccent()) Ana < Ángel < automovil < Zapata < Zulema   ← correct
+ *
+ * So every lowercase name lands after every uppercase one, and "Ángel",
+ * "Núñez" and "Peña" land after "Z" — in a Spanish app whose own customer
+ * list contains NUÑEZ and Peña. `unaccent()` is STABLE, which blocks an
+ * expression index but not an ORDER BY; at 370 rows the unused
+ * `cliente_name_idx` costs nothing.
+ */
+describe("CLIENTE_SORT text ordering", () => {
+  const dialect = new PgDialect();
+
+  it.each(["name", "email"] as const)(
+    "orders %s case- and accent-insensitively, not by byte",
+    (key) => {
+      const rendered = dialect.sqlToQuery(sql`${CLIENTE_SORT[key]}`).sql;
+      expect(rendered).toContain("lower(unaccent(");
+    },
+  );
+
+  it("leaves phone alone — digits have neither case nor accents", () => {
+    const rendered = dialect.sqlToQuery(sql`${CLIENTE_SORT.phone}`).sql;
+    expect(rendered).not.toContain("lower(");
+  });
+});
+
+describe("parseClienteSort", () => {
+  it.each(["name", "phone", "email", "plates"] as const)(
+    "returns a defined sort for the whitelisted column %s",
+    (key) => {
+      expect(parseClienteSort({ sort: key, dir: "asc" })).toEqual({ key, dir: "asc" });
+      expect(parseClienteSort({ sort: key, dir: "desc" })).toEqual({ key, dir: "desc" });
+    },
+  );
+
+  it("returns undefined for a column not on the whitelist", () => {
+    expect(parseClienteSort({ sort: "createdAt", dir: "asc" })).toBeUndefined();
+  });
+
+  it("returns undefined for a dir outside asc|desc", () => {
+    expect(parseClienteSort({ sort: "name", dir: "sideways" })).toBeUndefined();
+  });
+
+  it("returns undefined when no sort param is present", () => {
+    expect(parseClienteSort({})).toBeUndefined();
+    expect(parseClienteSort({ dir: "asc" })).toBeUndefined();
+  });
+
+  it("CLIENTE_SORT whitelists exactly name, phone, email, plates", () => {
+    expect(Object.keys(CLIENTE_SORT).sort()).toEqual(["email", "name", "phone", "plates"]);
+  });
+});
+
 describe("listClientes (R19)", () => {
   it("returns whatever the injected queryFn resolves", async () => {
     const rows: ClienteListItem[] = [
@@ -152,7 +222,7 @@ describe("listClientes (R19)", () => {
       },
     ];
     await expect(
-      listClientes({ search: "juan" }, { offset: 0, limit: 10 }, async () => rows),
+      listClientes({ search: "juan" }, { offset: 0, limit: 10 }, undefined, async () => rows),
     ).resolves.toEqual(rows);
   });
 });

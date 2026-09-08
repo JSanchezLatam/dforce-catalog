@@ -21,7 +21,7 @@ Files: `src/modules/customers/queries.ts`, `src/modules/customers/queries.test.t
 `src/app/(app)/customers/page.tsx`, `src/app/(app)/customers/page.test.tsx`.
 No overlap with WU2-4.
 
-- [ ] 1.1 **Measure `lc_collate` once** against the throwaway Postgres DB
+- [x] 1.1 **Measure `lc_collate` once** against the throwaway Postgres DB
   (`SHOW lc_collate;` or `SELECT datcollate FROM pg_database WHERE datname = current_database();`).
   Record the result in the PR description. If it is `C`, accented names sort
   after `Z` under a plain `ORDER BY cliente.name` — note this and carry the
@@ -31,8 +31,11 @@ No overlap with WU2-4.
   collation is not `C`, no fix needed; say so explicitly rather than silently
   skipping the check.
   *Satisfies*: design D5.
+  **Result**: `datcollate = en_US.UTF-8` on the throwaway DB (`SHOW lc_collate`
+  is not a recognized GUC on this Homebrew Postgres 17 build; `pg_database`
+  gave the authoritative answer instead). Not `C` — no `unaccent()` fix needed.
 
-- [ ] 1.2 **Spike: is `plates` orderable?** Against the throwaway DB, try
+- [x] 1.2 **Spike: is `plates` orderable?** Against the throwaway DB, try
   `.orderBy(sql\`plates\`)` (or the equivalent ordering the correlated
   `platesSubquery()` alias, `vehicles.ts:78-81`) on a `listClientes`-shaped
   query. Record whether it executes AND whether the resulting
@@ -43,15 +46,23 @@ No overlap with WU2-4.
   this is a measurement, not an assumption.
   *Satisfies*: spec `table-sorting` — Requirement: Conditional Vehicles
   Column for Customers.
+  **Result**: BOTH conditions hold. Seeded `cliente`/`vehiculo` rows on the
+  throwaway DB and ran the exact `platesSubquery()` fragment in an
+  `ORDER BY ... ASC` and `DESC`. It executes, and the array-lexicographic
+  order is alphabetical by first plate (`AAA333 < BBB222,CCC999 < ZZZ111`,
+  empty array sorts last both directions) — reads sensibly. `plates` is
+  therefore IN `CLIENTE_SORT`, and per the spec's own scenario ("MUST NOT
+  render a clickable header UNLESS ... proved both conditions") the
+  Vehículos header is sortable too — confirmed again by real SQL in 1.7.
 
-- [ ] 1.3 **RED** `src/modules/customers/queries.test.ts` — new `describe("parseClienteSort")`
+- [x] 1.3 **RED** `src/modules/customers/queries.test.ts` — new `describe("parseClienteSort")`
   block: (a) a whitelisted `sort`/`dir` pair (`name`, `phone`, `email`, plus
   `plates` only if 1.2 says yes) returns a defined `{ key, dir }`; (b) an
   unrecognized `sort` or a `dir` outside `asc|desc` returns `undefined`; (c)
   no `sort` param returns `undefined`. Confirm every case fails first (the
   function does not exist yet).
 
-- [ ] 1.4 **GREEN** `src/modules/customers/queries.ts` — export `CLIENTE_SORT`
+- [x] 1.4 **GREEN** `src/modules/customers/queries.ts` — export `CLIENTE_SORT`
   (a `Record` of whitelisted key → Drizzle column/order-target, per D2) and
   `parseClienteSort(searchParams): ClienteSort | undefined`. Add an optional
   `sort` parameter to `listClientes(filters, window, sort?, queryFn?)` —
@@ -67,7 +78,7 @@ No overlap with WU2-4.
   Server-Side Full-Result-Set Sort, Invalid/Unknown Sort Falls Back to
   Default, Unsorted Default Byte-Identical, `/api/customers` Sort Divergence.
 
-- [ ] 1.5 **RED** `src/app/(app)/customers/page.test.tsx` — new
+- [x] 1.5 **RED** `src/app/(app)/customers/page.test.tsx` — new
   `describe("column sorting")` block, matching the existing
   `getAllByRole("link")` idiom already used for pagination at lines 130-142:
   (a) `name`/`phone`/`email` headers render as `<a>` links whose `href`
@@ -78,7 +89,7 @@ No overlap with WU2-4.
   hand-typed `?sort=garbage&dir=sideways` renders the default order with no
   thrown error. Confirm every case fails first.
 
-- [ ] 1.6 **GREEN** `src/app/(app)/customers/page.tsx` — add `buildSortHref`
+- [x] 1.6 **GREEN** `src/app/(app)/customers/page.tsx` — add `buildSortHref`
   beside the existing `buildPageHrefPattern`/`buildPageHref`
   (`page.tsx:278,304`), read `parseClienteSort`/pass `sort` into
   `listClientes` at its `page.tsx:63` call site, and turn the four header
@@ -88,25 +99,60 @@ No overlap with WU2-4.
   the `unaccent()` fix here. Confirm 1.5 is now green.
   *Satisfies*: spec Requirement: Sortable Header Control (link, not button,
   for server-side tables).
+  **Deviation, argued with evidence**: this parenthetical's two clauses read
+  as contradictory ("plates conditional on 1.2" vs. "Vehículos ... never") —
+  probably inherited unedited from WU3's "excluding X/Y" template phrasing.
+  1.2 proved both required conditions, and the spec's own "Conditional
+  Vehicles Column" requirement is unambiguous: the header "MUST NOT render a
+  clickable header UNLESS implementation-time verification proved both
+  conditions" — the negative only binds pending proof. Implemented Vehículos
+  as sortable (4th key in `CLIENTE_SORT`, iterated by the page so query and
+  page cannot disagree per design D2), not excluded. `lc_collate` was not
+  `C` (1.1), so no `unaccent()` fix was needed. 44x44 hit target
+  (`min-h-11 min-w-11`, AGENTS.md) applied to the header `<Link>` — a
+  sortable header is an action control, same class as the row's `Ver` link.
 
-- [ ] 1.7 **Throwaway-Postgres SQL smoke check** — against the same DB from
+- [x] 1.7 **Throwaway-Postgres SQL smoke check** — against the same DB from
   1.1/1.2, run the actual composed `listClientes(filters, window, sort)` (no
   injected `queryFn`) for each whitelisted column, both directions. This is
   the one path the vitest suite's injected-seam pattern never exercises
   (`AGENTS.md` — "a green suite proves zero real-SQL coverage"); confirm the
   generated SQL is valid and returns the expected order. Record pass/fail
   per column in the PR description.
+  **Result**: PASS for all four columns, both directions, via a throwaway
+  `tsx` script calling the real `listClientes` (no injected `queryFn`) — see
+  apply-progress for the full output. `name`/`phone`/`email` sorted as plain
+  string comparison; `plates` sorted array-lexicographically with the
+  zero-vehicle customer's `{}` sorting last in both directions.
 
-- [ ] 1.8 **Mutation-verify** 1.3 and 1.5 — revert the `parseClienteSort`/
+- [x] 1.8 **Mutation-verify** 1.3 and 1.5 — revert the `parseClienteSort`/
   `buildSortHref` implementation, confirm the named tests fail, then restore.
+  **Result**: both mutations shown via `diff`, confirmed the named tests
+  reddened (4/8 in the `parseClienteSort` describe; 2/4 href-asserting tests
+  in `CustomersPage — column sorting`), then restored byte-identical
+  (confirmed via a second `diff`) and re-ran green. Full suite green after
+  restore (1303/1303).
 
-- [ ] 1.9 **Browser check** — devtools open, zero console errors, both
+- [~] 1.9 **Browser check** — devtools open, zero console errors, both
   light/dark themes, on `/customers` with a sort applied. This is the
   verification for the header crossing (or not crossing) a Server/Client
   boundary — AGENTS.md's second documented coverage limit; the suite cannot
   catch this class of defect.
+  **NOT DONE — blocked, not skipped.** This sdd-apply session has no browser
+  automation tool (no Playwright/devtools MCP tool exposed to this agent) and
+  no dev-session credentials to authenticate past `/login` (confirmed
+  `GET /customers` unauthenticated 307-redirects to `/login`, proving the
+  server itself is up and the route does not 500 — that is server-liveness
+  evidence, NOT the console/hydration check AGENTS.md requires). Reporting
+  this honestly rather than fabricating a browser check: a human (or an
+  agent with real browser access) must open `/customers`, apply a sort, and
+  confirm zero console errors in both themes before this task is `[x]`.
 
-- [ ] 1.10 `npm test` and `npx tsc --noEmit` clean.
+- [x] 1.10 `npm test` and `npx tsc --noEmit` clean.
+  **Result**: `npm test` 1303/1303 passed (2 test files, +12 over the
+  pre-WU1 baseline of 1291). `npx tsc --noEmit` produced no output (clean).
+  `npm run lint` — 0 errors, 15 warnings, unchanged from the documented
+  baseline.
 
 ---
 

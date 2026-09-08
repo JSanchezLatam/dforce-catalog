@@ -32,7 +32,14 @@ vi.mock("@/modules/customers/CustomerFilters", () => ({ CustomerFilters: () => n
 const can = vi.hoisted(() => vi.fn<(user: unknown, action: string) => boolean>(() => true));
 const listClientes = vi.hoisted(() => vi.fn());
 const countClientes = vi.hoisted(() => vi.fn());
-vi.mock("@/modules/customers/queries", () => ({ listClientes, countClientes }));
+vi.mock("@/modules/customers/queries", async (importOriginal) => {
+  // `CLIENTE_SORT`/`parseClienteSort` are pure and the real implementation —
+  // only the DB-touching reads are faked. Reimplementing the whitelist here
+  // would be a mock more convenient than reality, drifting from `queries.ts`
+  // the moment a column is added or removed there.
+  const actual = await importOriginal<typeof import("@/modules/customers/queries")>();
+  return { ...actual, listClientes, countClientes };
+});
 
 import CustomersPage from "./page";
 
@@ -313,6 +320,74 @@ describe("CustomersPage — the row action stays a link", () => {
 
     expect(screen.getByRole("link", { name: "Ver" })).toHaveAttribute("href", "/customers/c1");
     expect(screen.queryByRole("button", { name: "Ver" })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * table-column-sorting WU1. `Vehículos` is sortable alongside
+ * name/phone/email: the throwaway-Postgres spike (task 1.2, apply-progress)
+ * proved BOTH conditions the spec's Conditional Vehicles Column requirement
+ * demands — `.orderBy()` against the `plates` alias executes, and its
+ * array-lexicographic order reads sensibly — so the spec's own scenario
+ * ("MUST NOT render a clickable header UNLESS implementation-time
+ * verification proved both conditions") requires the opposite outcome once
+ * proved, keeping one whitelist (`CLIENTE_SORT`, design D2) the sole source
+ * of truth for both the query and this page.
+ */
+describe("CustomersPage — column sorting", () => {
+  beforeEach(() => {
+    listClientes.mockClear();
+    countClientes.mockClear();
+  });
+
+  it("renders name/phone/email/plates headers as links carrying ?sort=&dir=asc by default", async () => {
+    render(await renderPage({}));
+
+    for (const [name, key] of [
+      ["Nombre", "name"],
+      ["Teléfono", "phone"],
+      ["Email", "email"],
+      ["Vehículos", "plates"],
+    ] as const) {
+      const url = new URL(screen.getByRole("link", { name }).getAttribute("href")!, "http://localhost");
+      expect(url.searchParams.get("sort")).toBe(key);
+      expect(url.searchParams.get("dir")).toBe("asc");
+    }
+  });
+
+  it("toggles the active column to desc, preserves search/status/pageSize, and drops page", async () => {
+    render(
+      await renderPage({ sort: "name", dir: "asc", search: "perez", status: "all", pageSize: "50", page: "3" }),
+    );
+
+    const url = new URL(screen.getByRole("link", { name: "Nombre" }).getAttribute("href")!, "http://localhost");
+    expect(url.searchParams.get("dir")).toBe("desc");
+    expect(url.searchParams.get("search")).toBe("perez");
+    expect(url.searchParams.get("status")).toBe("all");
+    expect(url.searchParams.get("pageSize")).toBe("50");
+    expect(url.searchParams.has("page")).toBe(false);
+  });
+
+  it("marks only the active header with aria-sort, matching the URL direction", async () => {
+    render(await renderPage({ sort: "phone", dir: "desc" }));
+
+    expect(screen.getByRole("link", { name: "Teléfono" }).closest("th")).toHaveAttribute(
+      "aria-sort",
+      "descending",
+    );
+    for (const name of ["Nombre", "Email", "Vehículos"]) {
+      const header = screen.getByRole("link", { name }).closest("th");
+      expect(header).not.toHaveAttribute("aria-sort", "ascending");
+      expect(header).not.toHaveAttribute("aria-sort", "descending");
+    }
+  });
+
+  it("falls back to default order without throwing on a hand-typed garbage sort/dir", async () => {
+    render(await renderPage({ sort: "garbage", dir: "sideways" }));
+
+    // parseClienteSort discards it — listClientes' third argument stays undefined.
+    expect(listClientes.mock.calls[0][2]).toBeUndefined();
+    expect(screen.getByRole("link", { name: "Nombre" })).toBeInTheDocument();
   });
 });
 

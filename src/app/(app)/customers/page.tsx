@@ -1,12 +1,19 @@
 import Link from "next/link";
-import { Eye, Users } from "lucide-react";
+import { ArrowDown, ArrowUp, Eye, Users } from "lucide-react";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { CustomerSyncPanel } from "@/modules/customer-import/CustomerSyncPanel";
 import { CustomerFilters } from "@/modules/customers/CustomerFilters";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
-import { countClientes, listClientes, type ClienteFilters } from "@/modules/customers/queries";
+import {
+  CLIENTE_SORT,
+  countClientes,
+  listClientes,
+  parseClienteSort,
+  type ClienteFilters,
+  type ClienteSort,
+} from "@/modules/customers/queries";
 import { computePageWindow, parsePageSize } from "@/modules/inventory-view/queries";
 import { Pagination } from "@/shared/ui/Pagination";
 import { PAGE_HEADING } from "@/shared/ui/styles";
@@ -48,6 +55,7 @@ export default async function CustomersPage({
   const filters = normalizeClienteFilters(params);
   const pageSize = parsePageSize(params.pageSize);
   const pageWindow = computePageWindow(params.page, pageSize);
+  const sort = parseClienteSort(params);
 
   const user = await requireSessionFromHeaders();
   if (!can(user, "customers.read")) {
@@ -73,7 +81,7 @@ export default async function CustomersPage({
   // second full-table scan on every list view. At 370 rows that is free; at a
   // hundred times that it would need an index or a cached total.
   const [items, total, totalClientes] = await Promise.all([
-    listClientes(filters, pageWindow),
+    listClientes(filters, pageWindow, sort),
     countClientes(filters),
     countClientes({ status: "all" }),
   ]);
@@ -217,10 +225,14 @@ export default async function CustomersPage({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Teléfono</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Vehículos</TableHead>
+                    {(Object.keys(CLIENTE_SORT) as (keyof typeof CLIENTE_SORT)[]).map((key) => (
+                      <SortableHeader
+                        key={key}
+                        label={SORT_LABELS[key]}
+                        href={buildSortHref(params, key, sort)}
+                        dir={sort?.key === key ? sort.dir : undefined}
+                      />
+                    ))}
                     <TableHead className="w-24">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -301,6 +313,66 @@ export default async function CustomersPage({
  *
  * `hrefPattern` is the variant that already existed for exactly this.
  */
+/**
+ * table-column-sorting D1 — a real `<a>`/`<Link>` built by this Server
+ * Component, not a `<button>` with a client `onClick`: the latter is exactly
+ * the "server function handed to a client component" defect class already
+ * documented at `page.tsx:266-278` (this file's original line numbers), and a
+ * new `router.push` here would be a second URL writer outside
+ * `CustomerFilters`' `pushedParamsRef` (design D1). `plates` is included:
+ * see the `CLIENTE_SORT` docstring in `queries.ts` for why the Vehículos
+ * column is sortable in v1.
+ */
+const SORT_LABELS: Record<keyof typeof CLIENTE_SORT, string> = {
+  name: "Nombre",
+  phone: "Teléfono",
+  email: "Email",
+  plates: "Vehículos",
+};
+
+/**
+ * AGENTS.md's 44x44 minimum hit target — a sortable header is an action
+ * control, same class as the row's `Ver` link a few lines below.
+ */
+function SortableHeader({
+  label,
+  href,
+  dir,
+}: {
+  label: string;
+  href: string;
+  dir?: "asc" | "desc";
+}) {
+  return (
+    <TableHead aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}>
+      <Link href={href} className="-mx-2 inline-flex min-h-11 min-w-11 items-center gap-1 px-2 hover:text-foreground">
+        {label}
+        {dir === "asc" && <ArrowUp className="h-3 w-3" aria-hidden="true" />}
+        {dir === "desc" && <ArrowDown className="h-3 w-3" aria-hidden="true" />}
+      </Link>
+    </TableHead>
+  );
+}
+
+/**
+ * Server-Side Full-Result-Set Sort with Page Reset — `page` is dropped
+ * entirely rather than set to 1 (the spec allows either). Clicking the
+ * already-active column toggles direction; any other column starts at `asc`.
+ */
+function buildSortHref(params: SearchParams, key: keyof typeof CLIENTE_SORT, currentSort: ClienteSort | undefined): string {
+  const search = new URLSearchParams();
+  const term = firstValue(params.search);
+  const size = firstValue(params.pageSize);
+  if (term) search.set("search", term);
+  if (size) search.set("pageSize", size);
+  const status = firstValue(params.status);
+  if (status === "inactive" || status === "all") search.set("status", status);
+  const nextDir = currentSort?.key === key && currentSort.dir === "asc" ? "desc" : "asc";
+  search.set("sort", key);
+  search.set("dir", nextDir);
+  return `/customers?${search.toString()}`;
+}
+
 function buildPageHrefPattern(params: SearchParams): string {
   const search = new URLSearchParams();
   // `firstValue` for every key, matching `normalizeClienteFilters`. The
