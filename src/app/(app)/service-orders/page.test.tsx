@@ -128,16 +128,20 @@ describe("ServiceOrdersPage — column sorting", () => {
   it("keeps the sort on every pagination link, like the status filter beside it", async () => {
     render(await renderPage({ sort: "id", dir: "asc", status: "open" }));
 
-    const pageHref = screen
+    const pageHrefs = screen
       .getAllByRole("link")
       .map((a) => a.getAttribute("href") ?? "")
-      .find((href) => href.includes("page="));
+      .filter((href) => href.includes("page="));
 
-    expect(pageHref).toBeDefined();
-    const url = new URL(pageHref!, "http://localhost");
-    expect(url.searchParams.get("sort")).toBe("id");
-    expect(url.searchParams.get("dir")).toBe("asc");
-    expect(url.searchParams.get("status")).toBe("open");
+    expect(pageHrefs.length).toBeGreaterThan(0);
+    // EVERY page link, not just the first — the name says "every" and a
+    // `.find()` here would pass while later links silently dropped the sort.
+    for (const href of pageHrefs) {
+      const url = new URL(href, "http://localhost");
+      expect(url.searchParams.get("sort")).toBe("id");
+      expect(url.searchParams.get("dir")).toBe("asc");
+      expect(url.searchParams.get("status")).toBe("open");
+    }
   });
 
   it("falls back to default order without throwing on a hand-typed garbage sort/dir", async () => {
