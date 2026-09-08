@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PackageSearch } from "lucide-react";
+import { ArrowDown, ArrowUp, PackageSearch } from "lucide-react";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
@@ -10,11 +10,14 @@ import {
   countAllProducts,
   DEFAULT_PAGE_SIZE,
   hasAnyProducts,
+  INVENTORY_SORT,
   listCategoryL1Options,
   listCategoryL2Options,
   listInventory,
   normalizeFilters,
+  parseInventorySort,
   parsePageSize,
+  type InventorySort,
 } from "@/modules/inventory-view/queries";
 import { ManualSyncButton } from "@/modules/inventory-sync/ManualSyncButton";
 import { Pagination } from "@/shared/ui/Pagination";
@@ -42,6 +45,7 @@ export default async function InventoryPage({
   const filters = normalizeFilters(params);
   const pageSize = parsePageSize(params.pageSize);
   const pageWindow = computePageWindow(params.page, pageSize);
+  const sort = parseInventorySort(params);
   const user = await requireSessionFromHeaders();
   if (!can(user, "inventory.read")) {
     return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
@@ -49,7 +53,7 @@ export default async function InventoryPage({
   const canTriggerSync = can(user, "sync.manual"); // R2 — admin-only manual sync trigger
 
   const [{ items, total }, categoryL1Options, categoryL2Options, grandTotal] = await Promise.all([
-    listInventory(filters, pageWindow),
+    listInventory(filters, pageWindow, sort),
     listCategoryL1Options(),
     listCategoryL2Options(filters.categoryL1),
     countAllProducts(),
@@ -115,10 +119,18 @@ export default async function InventoryPage({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Category L1</TableHead>
-                    <TableHead>Category L2</TableHead>
+                    {COLUMNS.map((column) =>
+                      column.sort ? (
+                        <SortableHeader
+                          key={column.label}
+                          label={column.label}
+                          href={buildSortHref(params, column.sort, sort)}
+                          dir={sort?.key === column.sort ? sort.dir : undefined}
+                        />
+                      ) : (
+                        <TableHead key={column.label}>{column.label}</TableHead>
+                      ),
+                    )}
                     <TableHead className="w-24">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -146,7 +158,11 @@ export default async function InventoryPage({
           {pageCount > 1 && (
             <Card size="sm">
               <CardContent>
-                <Pagination currentPage={pageWindow.page} pageCount={pageCount} hrefPattern={buildPagePattern(params)} />
+                <Pagination
+                  currentPage={pageWindow.page}
+                  pageCount={pageCount}
+                  hrefPattern={buildPagePattern(params, sort)}
+                />
               </CardContent>
             </Card>
           )}
@@ -156,7 +172,16 @@ export default async function InventoryPage({
   );
 }
 
-function buildPagePattern(params: SearchParams): string {
+/**
+ * The one href builder this page has. `sort` is now appended too, taken from
+ * the PARSED `sort` — never from raw `params` — so an unrecognised `?sort=`
+ * cannot be laundered into the pagination link (WU1 finding: `parseClienteSort`
+ * switched from `key in WHITELIST` to `Object.hasOwn` for the same reason).
+ * Dropped here, sorting by a column and clicking page 2 would return rows in
+ * the default order while the OFFSET had been computed against the sorted
+ * one — rows repeat across the boundary and rows never appear at all.
+ */
+function buildPagePattern(params: SearchParams, sort: InventorySort | undefined): string {
   const search = new URLSearchParams();
   if (typeof params.categoryL1 === "string" && params.categoryL1) search.set("categoryL1", params.categoryL1);
   if (typeof params.categoryL2 === "string" && params.categoryL2) search.set("categoryL2", params.categoryL2);
@@ -164,5 +189,80 @@ function buildPagePattern(params: SearchParams): string {
   if (typeof params.id === "string" && params.id) search.set("id", params.id);
   if (typeof params.pageSize === "string" && params.pageSize) search.set("pageSize", params.pageSize);
   if (typeof params.stockStatus === "string" && params.stockStatus) search.set("stockStatus", params.stockStatus);
+  if (sort) {
+    search.set("sort", sort.key);
+    search.set("dir", sort.dir);
+  }
   return `/inventory?${search.toString()}&page={page}`;
+}
+
+/**
+ * The header row, declared HERE rather than derived from `INVENTORY_SORT` —
+ * same reasoning as `customers/page.tsx`'s `COLUMNS`: deriving it would let a
+ * query-layer whitelist change silently reshape the table with no matching
+ * `<TableCell>`. `sort` is typed against the whitelist, so a column can still
+ * only claim to be sortable if the query agrees.
+ *
+ * `stock`/`price` have no entry at all — they are fetched and filterable but
+ * have no header column on screen (spec: Per-Table Sortable Column
+ * Whitelist), so there is nothing to make sortable or non-sortable here.
+ */
+const COLUMNS: readonly { label: string; sort?: keyof typeof INVENTORY_SORT }[] = [
+  { label: "ID", sort: "id" },
+  { label: "Name", sort: "name" },
+  { label: "Category L1", sort: "categoryL1" },
+  { label: "Category L2", sort: "categoryL2" },
+];
+
+/**
+ * table-column-sorting D1 — a real `<a>`/`<Link>` built by this Server
+ * Component, not a `<button>` with a client `onClick`. Mirrors
+ * `customers/page.tsx`'s `SortableHeader` exactly; see its comment for the
+ * in-repo evidence (`customers/page.tsx:266-278`, `CustomerFilters.tsx:94-102`).
+ */
+function SortableHeader({
+  label,
+  href,
+  dir,
+}: {
+  label: string;
+  href: string;
+  dir?: "asc" | "desc";
+}) {
+  return (
+    <TableHead aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}>
+      <Link href={href} className="-mx-2 inline-flex min-h-11 min-w-11 items-center gap-1 px-2 hover:text-foreground">
+        {label}
+        {dir === "asc" && <ArrowUp className="h-3 w-3" aria-hidden="true" />}
+        {dir === "desc" && <ArrowDown className="h-3 w-3" aria-hidden="true" />}
+      </Link>
+    </TableHead>
+  );
+}
+
+/**
+ * Server-Side Full-Result-Set Sort with Page Reset — `page` is dropped
+ * entirely rather than set to 1. Clicking the already-active column toggles
+ * direction; any other column starts at `asc`. Filters are read with the
+ * same `typeof === "string"` checks `buildPagePattern` already uses, for
+ * consistency within this file (unlike `customers/page.tsx`'s `firstValue`,
+ * which also unwraps an array value — `InventoryFilters` doesn't build this
+ * href, so that case does not arise here).
+ */
+function buildSortHref(
+  params: SearchParams,
+  key: keyof typeof INVENTORY_SORT,
+  currentSort: InventorySort | undefined,
+): string {
+  const search = new URLSearchParams();
+  if (typeof params.categoryL1 === "string" && params.categoryL1) search.set("categoryL1", params.categoryL1);
+  if (typeof params.categoryL2 === "string" && params.categoryL2) search.set("categoryL2", params.categoryL2);
+  if (typeof params.name === "string" && params.name) search.set("name", params.name);
+  if (typeof params.id === "string" && params.id) search.set("id", params.id);
+  if (typeof params.pageSize === "string" && params.pageSize) search.set("pageSize", params.pageSize);
+  if (typeof params.stockStatus === "string" && params.stockStatus) search.set("stockStatus", params.stockStatus);
+  const nextDir = currentSort?.key === key && currentSort.dir === "asc" ? "desc" : "asc";
+  search.set("sort", key);
+  search.set("dir", nextDir);
+  return `/inventory?${search.toString()}`;
 }
