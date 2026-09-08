@@ -16,9 +16,9 @@ import {
 } from "@/modules/customers/queries";
 import { computePageWindow, parsePageSize } from "@/modules/inventory-view/queries";
 import { Pagination } from "@/shared/ui/Pagination";
+import { RowActions } from "@/shared/ui/selection/RowActions";
 import { PAGE_HEADING } from "@/shared/ui/styles";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -264,7 +264,8 @@ export default async function CustomersPage({
                       <TableCell>{item.email ?? "—"}</TableCell>
                       <TableCell>{item.plates.length > 0 ? item.plates.join(", ") : "—"}</TableCell>
                       <TableCell>
-                        {/* `buttonVariants` on a plain `Link`, NOT
+                        {/* A plain `Link` inside the item, NOT
+                            `DropdownMenuItem render={<Link/>}` and NOT
                             `<Button render={<Link/>}>`. Measured, both ways:
                             base-ui's Button defaults to `nativeButton: true`
                             and logs "expected a native <button>" to the
@@ -272,15 +273,19 @@ export default async function CustomersPage({
                             while `nativeButton={false}` renders
                             `<a href role="button">` — announcing a navigation
                             as a button and dropping it out of the links list.
-                            `buttonVariants` is the styling without the
-                            behaviour, which is all a link needs. */}
-                        <Link
-                          href={`/customers/${item.id}`}
-                          className={cn(buttonVariants({ variant: "outline", size: "default" }), "min-h-11 min-w-11")}
-                        >
-                          <Eye aria-hidden="true" />
-                          Ver
-                        </Link>
+                            `render` on the menu item has the same shape of
+                            problem: it puts `role="menuitem"` on the anchor.
+                            Nesting the link keeps it a link, which is what
+                            `app-sidebar.tsx`'s collapsed-rail menu already
+                            does in production. */}
+                        <RowActions label={`Acciones de ${item.name}`}>
+                          <DropdownMenuItem>
+                            <Link href={`/customers/${item.id}`} className="flex w-full items-center gap-1.5">
+                              <Eye aria-hidden="true" />
+                              Ver
+                            </Link>
+                          </DropdownMenuItem>
+                        </RowActions>
                       </TableCell>
                     </TableRow>
                   ))}

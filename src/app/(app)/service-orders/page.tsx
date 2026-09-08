@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowDown, ArrowUp, Wrench } from "lucide-react";
+import { ArrowDown, ArrowUp, Eye, Wrench } from "lucide-react";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
@@ -17,9 +17,11 @@ import {
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import { formatDateTime } from "@/shared/datetime";
 import { Pagination } from "@/shared/ui/Pagination";
+import { RowActions } from "@/shared/ui/selection/RowActions";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 import { PAGE_HEADING } from "@/shared/ui/styles";
 import { Card, CardContent } from "@/components/ui/card";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -151,12 +153,18 @@ export default async function ServiceOrdersPage({
                       <TableCell>{orden.description ?? "—"}</TableCell>
                       <TableCell>{formatDateTime(orden.appointmentAt)}</TableCell>
                       <TableCell>
-                        <Link
-                          href={`/service-orders/${orden.id}`}
-                          className="inline-flex h-7 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-xs font-medium whitespace-nowrap text-foreground transition-colors hover:bg-muted"
-                        >
-                          Ver
-                        </Link>
+                        {/* The `h-7` (28px) hand-copied link that used to live
+                            here is deleted, not restyled — it sat under
+                            AGENTS.md's 44x44 floor, and the kebab trigger is
+                            where that floor now lives. */}
+                        <RowActions label={`Acciones de la orden ${orden.id}`}>
+                          <DropdownMenuItem>
+                            <Link href={`/service-orders/${orden.id}`} className="flex w-full items-center gap-1.5">
+                              <Eye aria-hidden="true" />
+                              Ver
+                            </Link>
+                          </DropdownMenuItem>
+                        </RowActions>
                       </TableCell>
                     </TableRow>
                   ))}

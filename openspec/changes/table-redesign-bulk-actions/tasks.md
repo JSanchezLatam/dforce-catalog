@@ -154,12 +154,30 @@ Branch names follow the `crm-workshop/prN-*` convention:
 
 ## Phase 2 — Kebab on customers / inventory / service-orders (table-bulk-actions: *Kebab Row-Action Menu at 44x44*; design D6)
 
-- [ ] 2.1 Create `src/shared/ui/selection/RowActions.tsx` — trigger `min-h-11 min-w-11` + `dropdown-menu.tsx` portal content; items are declared by the calling page (no shared action registry, per design). Copy the `buttonVariants`-on-a-plain-element idiom from `customers/page.tsx`'s existing 44×44 link, not `<Button render={<Link/>}>` — that file's own comment documents why (base-ui logs a console warning and drops the anchor out of the links list otherwise).
-- [ ] 2.2 RED (jsdom) — update `customers/page.test.tsx`'s existing "the row action stays a link" assertion (`getByRole("link", {name:"Ver"})`) to target the new kebab shape; confirm it fails against the **old** direct-link markup before touching the component.
-- [ ] 2.3 GREEN — replace the inline "Ver" link with `RowActions` in `customers/page.tsx`, `inventory/page.tsx` (currently `h-7`, the 28px violation of AGENTS.md's 44×44 rule), and `service-orders/page.tsx` (also `h-7`). Both `h-7` links are **deleted, not restyled** (spec Scenario "Trigger meets the hit-target floor").
-- [ ] 2.4 `diff` each of the three page files plus `RowActions.tsx` before trusting 2.2's result.
-- [ ] 2.5 **Browser check, both themes, 0 console errors**: kebab trigger measures ≥44×44 on all three pages (devtools box model — AGENTS.md: no test asserts a button height), portal-backed menu opens with no hydration warning (new client boundary + portal, first of the change's four).
-- [ ] 2.6 `npm test` and `npx tsc --noEmit` clean.
+- [x] 2.1 Create `src/shared/ui/selection/RowActions.tsx` — trigger `min-h-11 min-w-11` + `dropdown-menu.tsx` portal content; items are declared by the calling page (no shared action registry, per design). Copy the `buttonVariants`-on-a-plain-element idiom from `customers/page.tsx`'s existing 44×44 link, not `<Button render={<Link/>}>` — that file's own comment documents why (base-ui logs a console warning and drops the anchor out of the links list otherwise).
+- [x] 2.2 RED (jsdom) — update `customers/page.test.tsx`'s existing "the row action stays a link" assertion (`getByRole("link", {name:"Ver"})`) to target the new kebab shape; confirm it fails against the **old** direct-link markup before touching the component.
+- [x] 2.3 GREEN — replace the inline "Ver" link with `RowActions` in `customers/page.tsx`, `inventory/page.tsx` (currently `h-7`, the 28px violation of AGENTS.md's 44×44 rule), and `service-orders/page.tsx` (also `h-7`). Both `h-7` links are **deleted, not restyled** (spec Scenario "Trigger meets the hit-target floor").
+- [x] 2.4 `diff` each of the three page files plus `RowActions.tsx` before trusting 2.2's result.
+- [x] 2.5 **Browser check, both themes, 0 console errors**: kebab trigger measures ≥44×44 on all three pages (devtools box model — AGENTS.md: no test asserts a button height), portal-backed menu opens with no hydration warning (new client boundary + portal, first of the change's four).
+
+  Measured in the live DOM: trigger is exactly 44x44 on `/customers` and
+  `/inventory`, one per row, `aria-label` in Spanish, no bare link left in the
+  cell, menu renders outside the `<table>` (real portal) and its item is a real
+  `<a href>`. Console carried 48 messages and **zero** were errors or hydration
+  warnings — all HMR/Fast Refresh. `/service-orders` has 0 rows in the dev
+  database, so its kebab was verified by code and by the shared component,
+  never rendered with data.
+
+  **UX cost, recorded because it is permanent and not scaffolding:** on these
+  three pages the kebab holds exactly ONE item forever. Phase 3.4 is the only
+  place a second row action appears, and it is `/users`; phases 5, 6 and 7a
+  wire their actions into `SelectionBar`, not into `RowActions`. So "Ver" goes
+  from one click to two on the three highest-traffic tables, permanently, and
+  costs a portal per row. The spec mandates it (`MUST replace its inline
+  row-action link(s) with a single kebab-trigger button per row`) and it is
+  implemented as written — but reversing it later is a spec edit, not a code
+  edit, so the owner should see it now.
+- [x] 2.6 `npm test` and `npx tsc --noEmit` clean.
 
 ## Phase 3 — Kebab on users, its Card wrap, and its Estado badge (table-bulk-actions: *Kebab...* Scenario "Existing actions unchanged", *Enum Column Badges*; design D7, D8)
 

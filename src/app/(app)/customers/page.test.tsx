@@ -9,6 +9,7 @@
  * asserted here rather than trusted.
  */
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/modules/auth/session", () => ({
@@ -180,10 +181,13 @@ describe("CustomersPage — deactivated customers (R20)", () => {
     render(await CustomersPage({ searchParams: Promise.resolve({}) }));
 
     const cells = screen.getAllByRole("cell").map((c) => c.textContent);
-    // Positional: only the phone column can be the empty one here, since the
-    // row seeds a real email and a real plate.
-    expect(cells).not.toContain("");
-    expect(cells).toContain("—");
+    // Indexed on the phone column rather than "no cell in the row is blank".
+    // That blanket form worked only while every cell carried text, and the
+    // Acciones cell is now an icon-only kebab trigger whose `textContent` is
+    // legitimately "" — it would fail this test for the wrong reason while
+    // saying nothing about the phone. Column order: Nombre | Teléfono | Email
+    // | Vehículos | Acciones.
+    expect(cells[1]).toBe("—");
   });
 
   // R20 — searching is how staff reach one specific customer. Before this the
@@ -307,19 +311,42 @@ describe("CustomersPage — deactivated customers (R20)", () => {
 });
 
 /**
- * The row action was restyled from a hand-copied class string onto the shared
- * button vocabulary. Two of the three ways to do that quietly stop it being a
- * link: base-ui's `Button render={<Link/>}` with `nativeButton={false}` emits
- * `<a role="button">`, and a plain `<Button onClick>` emits a `<button>` with
- * no href at all. Either one loses middle-click, "open in new tab", and the
- * link's own announcement — none of which any styling test would notice.
+ * The row action moved into a kebab menu (table-redesign WU2). Two properties,
+ * because the move can break either one on its own:
+ *
+ * - The TRIGGER is a real `<button>` and it is the whole cell. The 28px links
+ *   this replaces on `/inventory` and `/service-orders` are deleted, not
+ *   restyled, and the trigger carries the 44x44 hit target. No test in this
+ *   repo asserts a button height (AGENTS.md), so the browser owns the 44
+ *   itself; what a test CAN pin is that the cell stopped being a bare link.
+ * - The ITEM that navigates is still a real link. Two of the three ways to put
+ *   a navigation inside a base-ui menu quietly stop it being one:
+ *   `DropdownMenuItem render={<Link/>}` emits `<a role="menuitem">`, and a
+ *   plain `<Button onClick>` emits a `<button>` with no href at all. Either
+ *   loses middle-click, "open in new tab", and the link's own announcement —
+ *   none of which any styling test would notice.
  */
-describe("CustomersPage — the row action stays a link", () => {
-  it("renders Ver as a link to that customer, not a button", async () => {
+describe("CustomersPage — the row action is a kebab whose Ver item stays a link", () => {
+  it("opens the kebab and renders Ver as a link to that customer, not a button", async () => {
+    const user = userEvent.setup();
     render(await renderPage({}));
 
-    expect(screen.getByRole("link", { name: "Ver" })).toHaveAttribute("href", "/customers/c1");
+    // Named per row, not a bare "Acciones": the page renders one trigger per
+    // customer, and an ambiguous accessible name makes `getByRole` throw as
+    // soon as a second row exists.
+    await user.click(screen.getByRole("button", { name: "Acciones de Retirado Perez" }));
+
+    expect(await screen.findByRole("link", { name: "Ver" })).toHaveAttribute(
+      "href",
+      "/customers/c1",
+    );
     expect(screen.queryByRole("button", { name: "Ver" })).not.toBeInTheDocument();
+  });
+
+  it("leaves no bare Ver link in the row once the kebab owns the action", async () => {
+    render(await renderPage({}));
+
+    expect(screen.queryByRole("link", { name: "Ver" })).not.toBeInTheDocument();
   });
 });
 
