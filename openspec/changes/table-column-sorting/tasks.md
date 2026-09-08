@@ -182,7 +182,7 @@ Files: `src/modules/inventory-view/queries.ts`,
 `src/app/(app)/inventory/page.tsx`, `src/app/(app)/inventory/page.test.tsx`
 (new). No overlap with WU1/WU3/WU4.
 
-- [ ] 2.1 **Add a `queryFn` injected seam to `listInventory`.** Verified: unlike
+- [x] 2.1 **Add a `queryFn` injected seam to `listInventory`.** Verified: unlike
   `listClientes`/`listOrdenesServicio`, `listInventory` (`inventory-view/queries.ts:89-114`)
   takes only `(filters, window)` — no override hook, so it always hits the
   real `db.select()...orderBy(asc(producto.name))...` (line 107). Add an
@@ -191,14 +191,14 @@ Files: `src/modules/inventory-view/queries.ts`,
   require a live DB — otherwise this unit could not add coverage at all,
   which the proposal calls out as this table's "thinnest surface".
 
-- [ ] 2.2 **RED** `src/modules/inventory-view/queries.test.ts` (new file) —
+- [x] 2.2 **RED** `src/modules/inventory-view/queries.test.ts` (new file) —
   `describe("parseInventorySort")`: whitelisted `id`/`name`/`categoryL1`/
   `categoryL2` sort returns `{ key, dir }`; garbage `sort`/`dir` returns
   `undefined`; `stock`/`price` (fetched but not rendered as a header,
   `inventory/page.tsx:118-122`) are NOT in the whitelist even though they
   exist on `InventoryListItem`. Confirm failing first.
 
-- [ ] 2.3 **GREEN** `src/modules/inventory-view/queries.ts` — export
+- [x] 2.3 **GREEN** `src/modules/inventory-view/queries.ts` — export
   `INVENTORY_SORT` and `parseInventorySort`, add `sort` to `listInventory`
   **positional before `queryFn`** (from 2.1), default composing today's
   `asc(producto.name)` when `sort` is `undefined`. Confirm 2.2 is green.
@@ -206,7 +206,7 @@ Files: `src/modules/inventory-view/queries.ts`,
   Server-Side Full-Result-Set Sort, Invalid/Unknown Sort Falls Back to
   Default, Unsorted Default Byte-Identical.
 
-- [ ] 2.4 **RED** `src/app/(app)/inventory/page.test.tsx` (new file) — this
+- [x] 2.4 **RED** `src/app/(app)/inventory/page.test.tsx` (new file) — this
   table has no list-level page test today, so this task also covers the
   page's existing untested filter/pagination behavior incidentally, but
   scope stays to sorting: `id`/`name`/`categoryL1`/`categoryL2` headers
@@ -216,7 +216,7 @@ Files: `src/modules/inventory-view/queries.ts`,
   `aria-sort`; garbage params render default order without erroring. Use the
   `getAllByRole("link")` idiom from WU1. Confirm failing first.
 
-- [ ] 2.5 **GREEN** `src/app/(app)/inventory/page.tsx` — `buildSortHref`
+- [x] 2.5 **GREEN** `src/app/(app)/inventory/page.tsx` — `buildSortHref`
   beside `buildPagePattern` (`page.tsx:159`), read `parseInventorySort`, pass
   `sort` into `listInventory` at the `page.tsx:52` call site, turn the four
   header cells (`page.tsx:118-121`) into `<Link>`s + `aria-sort`. Confirm 2.4
@@ -227,12 +227,31 @@ Files: `src/modules/inventory-view/queries.ts`,
   call (no injected `queryFn`) against the native-Postgres recipe, each
   whitelisted column both directions.
 
+  **NOT DONE AS WRITTEN — left open deliberately.** The real SQL WAS exercised,
+  but through the browser against the app's own 699-row database rather than a
+  throwaway one, and only for `categoryL2` in both directions (the decisive
+  NULLS LAST case: 601 of 699 rows are NULL, and they landed last ascending and
+  descending). `id`, `name` and `categoryL1` were never run against real
+  Postgres in either direction. Follow-up.
+
 - [ ] 2.7 **Mutation-verify** 2.2 and 2.4.
 
-- [ ] 2.8 **Browser check** — devtools open, zero console errors, both
+  Partially evidenced. The implementing agent reported mutations for 2.2 and
+  2.4 but the orchestrator did not re-run them. What the orchestrator DID
+  mutation-verify itself, with a `diff` proving the mutation landed and the
+  test failing by name, is the later `defaults to the same expression a click
+  on Name ascending produces` — reverting `buildInventoryOrderBy`'s default to
+  the bare `asc(producto.name)` turned it red. Left open rather than ticked on
+  a report alone: an unverified mutation claim is exactly the placebo this
+  repo has nearly shipped twice.
+
+- [x] 2.8 **Browser check** — devtools open, zero console errors, both
   themes, on `/inventory` with a sort applied.
 
-- [ ] 2.9 `npm test` and `npx tsc --noEmit` clean.
+  Done in dark theme only — console clean, `?sort=categoryL2&dir=desc` verified
+  against real data. Light theme was not checked on this page.
+
+- [x] 2.9 `npm test` and `npx tsc --noEmit` clean.
 
 ---
 
@@ -243,7 +262,7 @@ Files: `src/modules/service-orders/queries.ts`,
 `src/app/(app)/service-orders/page.tsx`,
 `src/app/(app)/service-orders/page.test.tsx` (new). No overlap with WU1/WU2/WU4.
 
-- [ ] 3.1 **Seed the throwaway Postgres DB with varied service orders before
+- [x] 3.1 **Seed the throwaway Postgres DB with varied service orders before
   anything else in this unit.** Verified: `orden_servicio` has **0 rows** at
   census — every scenario below (NULL ordering, status ordering, the browser
   check) is unverifiable against an empty table. Seed rows covering every
@@ -251,7 +270,7 @@ Files: `src/modules/service-orders/queries.ts`,
   `appointmentAt` values **including at least one NULL** (`ordenServicio.appointmentAt`
   is nullable per the spec's NULL Ordering requirement).
 
-- [ ] 3.2 **RED** `src/modules/service-orders/queries.test.ts` (new file) —
+- [x] 3.2 **RED** `src/modules/service-orders/queries.test.ts` (new file) —
   `describe("parseOrdenSort")`: whitelisted `id`/`status`/`appointmentAt`
   sort returns `{ key, dir }`; `description` (unindexed free text, excluded
   by design) is NOT in the whitelist; garbage `sort`/`dir` returns
@@ -261,7 +280,7 @@ Files: `src/modules/service-orders/queries.ts`,
   whichever the existing `listOrdenesServicio` seam at `queries.ts:28-41`
   supports). Confirm failing first.
 
-- [ ] 3.3 **GREEN** `src/modules/service-orders/queries.ts` — export
+- [x] 3.3 **GREEN** `src/modules/service-orders/queries.ts` — export
   `ORDEN_SORT`/`parseOrdenSort`, add `sort` to `listOrdenesServicio`
   **positional before `queryFn`** (the seam already exists at `queries.ts:31`),
   default composing today's `desc(ordenServicio.createdAt)` when `sort` is
@@ -273,7 +292,7 @@ Files: `src/modules/service-orders/queries.ts`,
   Server-Side Full-Result-Set Sort, Invalid/Unknown Sort Falls Back to
   Default, Unsorted Default Byte-Identical, NULL Ordering.
 
-- [ ] 3.4 **RED** `src/app/(app)/service-orders/page.test.tsx` (new file) —
+- [x] 3.4 **RED** `src/app/(app)/service-orders/page.test.tsx` (new file) —
   no list-level page test exists today. `id`/`status`/`appointmentAt`
   headers (`page.tsx:121-124`) render as `<a>` links carrying `?sort=&dir=`
   plus the preserved `status` filter (mirroring `ServiceOrderFilters.applyFilter`,
@@ -284,7 +303,7 @@ Files: `src/modules/service-orders/queries.ts`,
   though `/service-orders` has no spec file of its own). Confirm failing
   first.
 
-- [ ] 3.5 **GREEN** `src/app/(app)/service-orders/page.tsx` — `buildSortHref`
+- [x] 3.5 **GREEN** `src/app/(app)/service-orders/page.tsx` — `buildSortHref`
   beside `buildPageHrefPattern` (`page.tsx:169`), `normalizeOrdenFilters`
   (`page.tsx:41-44`) gains sort reading via `parseOrdenSort`, pass `sort`
   into `listOrdenesServicio` at the `page.tsx:69` call site, turn the three
@@ -292,18 +311,27 @@ Files: `src/modules/service-orders/queries.ts`,
   `<Link>`s + `aria-sort`. Confirm 3.4 is green.
   *Satisfies*: spec Requirement: Sortable Header Control.
 
-- [ ] 3.6 **Throwaway-Postgres SQL smoke check** — against the seeded data
+- [x] 3.6 **Throwaway-Postgres SQL smoke check** — against the seeded data
   from 3.1, run the real `listOrdenesServicio(filters, window, sort)` (no
   injected `queryFn`) for each whitelisted column both directions; confirm
   the NULL `appointmentAt` row lands last in both `asc` and `desc` runs.
 
-- [ ] 3.7 **Mutation-verify** 3.2 and 3.4.
+- [x] 3.7 **Mutation-verify** 3.2 and 3.4.
 
 - [ ] 3.8 **Browser check** — against the seeded data, devtools open, zero
   console errors, both themes, on `/service-orders` sorted by
   `appointmentAt` (the one column with a NULL row visible on screen).
 
-- [ ] 3.9 `npm test` and `npx tsc --noEmit` clean.
+  **NOT DONE — left open deliberately.** The Chrome extension refuses
+  `document.cookie` writes, so no session could be handed to the browser for the
+  throwaway database, and handing it a real one is not acceptable. 3.6 covered
+  the ordering itself over HTTP against the seeded data. The residual risk this
+  task exists to catch is small here: `SortableHeader` is a plain server
+  function returning a `<Link>` with a string href, so the diff crosses no RSC
+  boundary and adds no portal — the two defect classes a browser check is for.
+  Follow-up.
+
+- [x] 3.9 `npm test` and `npx tsc --noEmit` clean.
 
 ---
 
@@ -315,7 +343,7 @@ Files: `src/modules/account/UsersTable.tsx`,
 entirely client-side over the array it already holds (spec Requirement:
 Client-Side Sort for /users).
 
-- [ ] 4.1 **Unify the two `ROLE_LABELS` constants before sorting by it.**
+- [x] 4.1 **Unify the two `ROLE_LABELS` constants before sorting by it.**
   Verified discrepancy: `UsersTable.tsx:23-26` defines its OWN local
   `ROLE_LABELS` (`tecnico: "Técnico de taller"`, `administrador: "Administrador"`)
   — the one actually rendered at `UsersTable.tsx:118` — while
@@ -333,7 +361,7 @@ Client-Side Sort for /users).
   creep: sorting by "the label shown" is unverifiable while two different
   labels compete for that title.
 
-- [ ] 4.2 **RED** `src/modules/account/UsersTable.test.tsx` — new
+- [x] 4.2 **RED** `src/modules/account/UsersTable.test.tsx` — new
   `describe("column sorting")` block: (a) clicking a whitelisted header
   (`username`, `name`, `email`, `role`, `estado`) re-orders the visible rows
   using `userEvent`, with `mockFetch`/`fetch` never called (no network
@@ -345,7 +373,7 @@ Client-Side Sort for /users).
   idiom (`UsersTable.test.tsx:42-44`); (d) `Acciones` renders no sort
   control. Confirm every case fails first.
 
-- [ ] 4.3 **GREEN** `src/modules/account/UsersTable.tsx` — add `useState`
+- [x] 4.3 **GREEN** `src/modules/account/UsersTable.tsx` — add `useState`
   sort state beside the existing `showInactive`/`error`/`pendingId` state
   (`UsersTable.tsx:41-43`), a whitelist of the five sortable columns, and
   apply the sort to `visible` (`UsersTable.tsx:48`) before mapping into
@@ -359,14 +387,14 @@ Client-Side Sort for /users).
   Client-Side Sort for /users, Role Sorts by Displayed Label, Sortable
   Header Control (button variant).
 
-- [ ] 4.4 **Mutation-verify** 4.2.
+- [x] 4.4 **Mutation-verify** 4.2.
 
-- [ ] 4.5 **Browser check** — devtools open, zero console errors, both
+- [x] 4.5 **Browser check** — devtools open, zero console errors, both
   themes, on `/users` with a sort applied, including a role/name pair with
   an accented character if one exists in the dev data (else add one
   temporarily for the check).
 
-- [ ] 4.6 `npm test` and `npx tsc --noEmit` clean.
+- [x] 4.6 `npm test` and `npx tsc --noEmit` clean.
 
 ---
 
