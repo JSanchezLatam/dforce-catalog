@@ -128,6 +128,26 @@ describe("UsersTable — which rows are visible", () => {
   });
 });
 
+/**
+ * Nothing in `src/` asserted either role label before this block existed —
+ * `crm-shell-settings-rbac/verify-report.md:62` recorded exactly that, and it
+ * is why the two same-named `ROLE_LABELS` constants were free to disagree on
+ * screen for months. The value below is the one the app settled on; the
+ * archived `role-permissions/spec.md:11` says "Técnico de taller", and this
+ * change amends it deliberately rather than by drift.
+ */
+describe("UsersTable — the role label it renders", () => {
+  it("renders the Spanish role label from the shared constant, not a raw enum value", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    await user.click(screen.getByLabelText("Mostrar inactivos"));
+
+    expect(within(rowFor("ana")).getByText("Administrador")).toBeInTheDocument();
+    expect(within(rowFor("beto")).getByText("Técnico")).toBeInTheDocument();
+    expect(screen.queryByText("tecnico")).not.toBeInTheDocument();
+  });
+});
+
 describe("UsersTable — the action each row offers", () => {
   it("offers Desactivar on an active row", () => {
     render(<UsersTable users={[ACTIVE]} />);
