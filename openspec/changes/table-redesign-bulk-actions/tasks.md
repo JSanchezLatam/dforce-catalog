@@ -212,13 +212,35 @@ Branch names follow the `crm-workshop/prN-*` convention:
 
 ## Phase 3 — Kebab on users, its Card wrap, and its Estado badge (table-bulk-actions: *Kebab...* Scenario "Existing actions unchanged", *Enum Column Badges*; design D7, D8)
 
-- [ ] 3.1 Wrap `UsersTable.tsx`'s `<Table>` in `<Card size="sm"><CardContent>` around the table only — the `Mostrar inactivos` toggle and the `role="alert"` error stay above it, matching the other three pages' pattern (D7; this file change is assigned here, not unit 1, per design's File Changes table).
-- [ ] 3.2 Replace the bare "Activo"/"Inactivo" text in the Estado column with `components/ui/badge.tsx` (D8). `StatusBadge` and customers' inline "Desactivado" pill are unaffected — this is the *only* new badge in the change.
-- [ ] 3.3 RED — update the 12 concentrated button-name assertions in `UsersTable.test.tsx` (they query `UserFormTrigger` + the Desactivar/Reactivar `Button` directly today); confirm they fail against the **old** markup once the kebab relocates those controls, for the right reason (not reachable by the old direct queries), before touching the component.
-- [ ] 3.4 GREEN — replace the two direct row actions with `RowActions` (unit 2): Editar (only when active) + Activar/Desactivar. Behavior identical to today, only relocated (spec Scenario "Existing actions unchanged").
-- [ ] 3.5 `diff` `UsersTable.tsx` and `UsersTable.test.tsx` before trusting 3.3/3.4.
-- [ ] 3.6 **Browser check, both themes, 0 console errors**: `/users` Card border, Estado badge renders, kebab ≥44×44, portal opens cleanly.
-- [ ] 3.7 `npm test` and `npx tsc --noEmit` clean.
+- [x] 3.1 Wrap `UsersTable.tsx`'s `<Table>` in `<Card size="sm"><CardContent>` around the table only — the `Mostrar inactivos` toggle and the `role="alert"` error stay above it, matching the other three pages' pattern (D7; this file change is assigned here, not unit 1, per design's File Changes table).
+- [x] 3.2 Replace the bare "Activo"/"Inactivo" text in the Estado column with `components/ui/badge.tsx` (D8). `StatusBadge` and customers' inline "Desactivado" pill are unaffected — this is the *only* new badge in the change.
+- [x] 3.3 RED — update the 12 concentrated button-name assertions in `UsersTable.test.tsx` (they query `UserFormTrigger` + the Desactivar/Reactivar `Button` directly today); confirm they fail against the **old** markup once the kebab relocates those controls, for the right reason (not reachable by the old direct queries), before touching the component.
+- [x] 3.4 GREEN — replace the two direct row actions with `RowActions` (unit 2): Editar (only when active) + Activar/Desactivar. Behavior identical to today, only relocated (spec Scenario "Existing actions unchanged").
+- [x] 3.5 `diff` `UsersTable.tsx` and `UsersTable.test.tsx` before trusting 3.3/3.4.
+- [x] 3.6 **Browser check, both themes, 0 console errors**: `/users` Card border, Estado badge renders, kebab ≥44×44, portal opens cleanly.
+
+  Verified live: Card wraps the table, "Activo" renders as a `data-slot="badge"`,
+  trigger measures exactly 44x44, menu holds Editar + Desactivar, and the edit
+  dialog opens from the kebab prefilled with no dropdown painted behind it.
+
+  **The keyboard rule INVERTS between unit 2 and this one, and it is measured,
+  not reasoned.** Unit 2's item is a NAVIGATION and needs `render={<Link/>}`
+  (nested = 0 activations). These two items are ACTIONS and need a plain
+  `<DropdownMenuItem onClick>` — `render={<button/>}` swaps out base-ui's own
+  item handler, which is what Enter reaches, giving 0 activations. Both
+  directions are pinned by mutation, and the orchestrator re-ran the `render`
+  mutation independently: `ArrowDown then Enter activates Editar` goes red.
+
+  One divergence between jsdom and the real browser, worth recording rather
+  than smoothing over: in jsdom, a dialog opened from inside an OPEN menu had
+  its keystrokes eaten by base-ui's typeahead (React routes synthetic events
+  along the React tree, so portalling does not escape it). That is why the
+  dialog is hoisted out of `RowActions` and `UserForm` gained a controlled
+  `open` prop. In the real browser the keydown was NOT prevented — so the
+  hoist may be belt-and-braces there. It is kept: the jsdom failure is real
+  for the test suite either way, and the hoisted shape is simpler to reason
+  about than one that depends on which event system wins.
+- [x] 3.7 `npm test` and `npx tsc --noEmit` clean.
 
 ## Phase 4 — Selection primitive, customers only (table-bulk-actions: *Cross-Page Checkbox Selection*, *Filter Change Clears the Selection*; design D2, D3, D4, D5)
 

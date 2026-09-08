@@ -63,6 +63,29 @@ function rowFor(username: string) {
   return screen.getByRole("row", { name: new RegExp(username) });
 }
 
+type User = ReturnType<typeof userEvent.setup>;
+
+/**
+ * The row actions live in a kebab menu (table-redesign WU3). Two consequences
+ * for every assertion below:
+ *
+ * - The menu content is PORTALED to `document.body`, so it is never inside the
+ *   row. `within(rowFor(...))` cannot see it — the item is queried off
+ *   `screen`, which is unambiguous because only one row's menu is ever open.
+ * - The items are `role="menuitem"`, not `role="button"`. The kebab TRIGGER is
+ *   the button, and it is named per row so two rows never collide.
+ */
+async function openRowMenu(user: User, username: string) {
+  await user.click(screen.getByRole("button", { name: `Acciones de ${username}` }));
+  // The popup mounts asynchronously; without this every subsequent query races it.
+  await screen.findByRole("menu");
+}
+
+async function clickRowAction(user: User, username: string, action: string) {
+  await openRowMenu(user, username);
+  await user.click(await screen.findByRole("menuitem", { name: action }));
+}
+
 /** Body rows, in render order, read back through their first cell (Usuario). */
 function usernamesInOrder() {
   return screen
@@ -118,13 +141,20 @@ describe("UsersTable — which rows are visible", () => {
 
   // A text badge, not colour alone: colour is not an accessible signal and a
   // greyed row reads identically to an active one in a screen reader.
+  //
+  // WU3 (design D8) makes it a real `components/ui/badge.tsx` rather than the
+  // bare text it used to be, so the assertion names the element and not only
+  // the string — bare text would satisfy `getByText` forever.
   it("marks a deactivated row with a visible Inactivo badge", async () => {
     const user = userEvent.setup();
     render(<UsersTable users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
-    expect(within(rowFor("beto")).getByText("Inactivo")).toBeInTheDocument();
+    expect(within(rowFor("beto")).getByText("Inactivo")).toHaveAttribute("data-slot", "badge");
     expect(within(rowFor("ana")).queryByText("Inactivo")).not.toBeInTheDocument();
+    // The active row is badged too — the column is an enum, not a marker that
+    // only appears when something is wrong.
+    expect(within(rowFor("ana")).getByText("Activo")).toHaveAttribute("data-slot", "badge");
   });
 });
 
@@ -149,10 +179,13 @@ describe("UsersTable — the role label it renders", () => {
 });
 
 describe("UsersTable — the action each row offers", () => {
-  it("offers Desactivar on an active row", () => {
+  it("offers Desactivar on an active row", async () => {
+    const user = userEvent.setup();
     render(<UsersTable users={[ACTIVE]} />);
 
-    expect(within(rowFor("ana")).getByRole("button", { name: "Desactivar" })).toBeInTheDocument();
+    await openRowMenu(user, "ana");
+
+    expect(screen.getByRole("menuitem", { name: "Desactivar" })).toBeInTheDocument();
   });
 
   it("offers Reactivar on a deactivated row", async () => {
@@ -160,13 +193,18 @@ describe("UsersTable — the action each row offers", () => {
     render(<UsersTable users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
-    expect(within(rowFor("beto")).getByRole("button", { name: "Reactivar" })).toBeInTheDocument();
+    await openRowMenu(user, "beto");
+
+    expect(screen.getByRole("menuitem", { name: "Reactivar" })).toBeInTheDocument();
   });
 
-  it("offers Editar on an active row", () => {
+  it("offers Editar on an active row", async () => {
+    const user = userEvent.setup();
     render(<UsersTable users={[ACTIVE]} />);
 
-    expect(within(rowFor("ana")).getByRole("button", { name: "Editar" })).toBeInTheDocument();
+    await openRowMenu(user, "ana");
+
+    expect(screen.getByRole("menuitem", { name: "Editar" })).toBeInTheDocument();
   });
 
   // Reactivate first: editing a row whose state is "inactive" leaves it
@@ -176,7 +214,23 @@ describe("UsersTable — the action each row offers", () => {
     render(<UsersTable users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
-    expect(within(rowFor("beto")).queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
+    await openRowMenu(user, "beto");
+
+    // The positive half first: the menu really did open, so the absence below
+    // is Editar missing rather than the query looking at nothing.
+    expect(screen.getByRole("menuitem", { name: "Reactivar" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Editar" })).not.toBeInTheDocument();
+  });
+
+  // One kebab per row, each named after that row's user: two rows on screen
+  // and an ambiguous accessible name makes `getByRole` throw.
+  it("names each row's kebab after that row's user", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    await user.click(screen.getByLabelText("Mostrar inactivos"));
+
+    expect(within(rowFor("ana")).getByRole("button", { name: "Acciones de ana" })).toBeInTheDocument();
+    expect(within(rowFor("beto")).getByRole("button", { name: "Acciones de beto" })).toBeInTheDocument();
   });
 
   it("sends active:false and refreshes on a successful deactivate", async () => {
@@ -184,7 +238,7 @@ describe("UsersTable — the action each row offers", () => {
     const fetchMock = mockFetch({ status: 200, body: { success: true } });
     render(<UsersTable users={[ACTIVE]} />);
 
-    await user.click(within(rowFor("ana")).getByRole("button", { name: "Desactivar" }));
+    await clickRowAction(user, "ana", "Desactivar");
 
     expect(fetchMock).toHaveBeenCalledWith("/api/users/u-1", {
       method: "PATCH",
@@ -200,9 +254,81 @@ describe("UsersTable — the action each row offers", () => {
     render(<UsersTable users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
-    await user.click(within(rowFor("beto")).getByRole("button", { name: "Reactivar" }));
+    await clickRowAction(user, "beto", "Reactivar");
 
     expect(fetchMock.mock.calls[0][1].body).toBe(JSON.stringify({ active: true }));
+  });
+
+  it("opens the edit dialog from the kebab", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[ACTIVE]} />);
+
+    await clickRowAction(user, "ana", "Editar");
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Editar usuario");
+  });
+});
+
+/**
+ * ACTIVATION, not markup — the property unit 2 got wrong in a way that would
+ * have shipped, and the reason these three tests exist at all.
+ *
+ * What was measured here, in jsdom against base-ui 1.6, before the component
+ * was written (numbers are activations out of one keystroke pair):
+ *
+ * - `<DropdownMenuItem onClick>` — keyboard 1, mouse 1. The shape used.
+ * - `<DropdownMenuItem render={<button onClick/>}>` — keyboard **0**. Note
+ *   this is the OPPOSITE of unit 2's link, where `render` was the fix: for a
+ *   button-like item base-ui's own item handler is what fires, and rendering a
+ *   real `<button>` swaps it out for one Enter never reaches.
+ * - `UserFormTrigger` nested inside a `DropdownMenuItem` — 0 dialogs by
+ *   keyboard AND 0 by mouse, because selecting the item closes the menu and
+ *   the dialog unmounts with it.
+ * - `UserFormTrigger` as a plain child of the menu content — the dialog opens,
+ *   but the MENU STAYS OPEN behind it (`data-open` still set) and its
+ *   `useTypeahead` handler `preventDefault`s every printable keydown, so the
+ *   dialog cannot be typed into. That is why the dialog is hoisted out of the
+ *   menu entirely and the item only sets state. The last test below is what
+ *   fails if anyone puts it back.
+ */
+describe("UsersTable — every kebab item is activatable from the keyboard", () => {
+  it("ArrowDown then Enter activates Editar", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[ACTIVE]} />);
+    await openRowMenu(user, "ana");
+
+    await user.keyboard("{ArrowDown}{Enter}");
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Editar usuario");
+  });
+
+  it("ArrowUp then Enter activates Desactivar, the last item", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: {} });
+    render(<UsersTable users={[ACTIVE]} />);
+    await openRowMenu(user, "ana");
+
+    await user.keyboard("{ArrowUp}{Enter}");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].body).toBe(JSON.stringify({ active: false }));
+  });
+
+  // The dialog must be a sibling of the kebab, not a descendant of its menu.
+  // React routes synthetic events along the REACT tree, not the DOM one, so a
+  // dialog portaled from inside the menu still hands its keydowns to the menu's
+  // typeahead, which swallows them. Nothing about the markup shows that.
+  it("the dialog opened from the kebab still accepts typing", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[ACTIVE]} />);
+    await clickRowAction(user, "ana", "Editar");
+    await screen.findByRole("dialog");
+
+    const nameField = screen.getByLabelText("Nombre");
+    await user.clear(nameField);
+    await user.type(nameField, "Ana Nueva");
+
+    expect(nameField).toHaveValue("Ana Nueva");
   });
 });
 
@@ -232,7 +358,7 @@ describe("UsersTable — a throwing refresh is not a connection failure", () => 
     process.on("unhandledRejection", capture);
     try {
       render(<UsersTable users={[ACTIVE]} />);
-      await user.click(within(rowFor("ana")).getByRole("button", { name: "Desactivar" }));
+      await clickRowAction(user, "ana", "Desactivar");
 
       await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
       await vi.waitFor(() => expect(escaped).toContain(boom));
@@ -250,12 +376,14 @@ describe("UsersTable — when the safety guard refuses", () => {
     mockFetch({ status: 400, body: { error: "last_active_admin" } });
     render(<UsersTable users={[ACTIVE]} />);
 
-    await user.click(within(rowFor("ana")).getByRole("button", { name: "Desactivar" }));
+    await clickRowAction(user, "ana", "Desactivar");
 
     expect(await screen.findByRole("alert")).toHaveTextContent("último administrador");
     // The row must not optimistically flip — the server refused, so the user
-    // is still active and the action still available to retry.
-    expect(within(rowFor("ana")).getByRole("button", { name: "Desactivar" })).toBeInTheDocument();
+    // is still active and the action still available to retry. Re-opened,
+    // because selecting an item closes the menu.
+    await openRowMenu(user, "ana");
+    expect(screen.getByRole("menuitem", { name: "Desactivar" })).toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
   });
 
@@ -264,7 +392,7 @@ describe("UsersTable — when the safety guard refuses", () => {
     mockFetch({ status: 400, body: { error: "self_deactivate" } });
     render(<UsersTable users={[ACTIVE]} />);
 
-    await user.click(within(rowFor("ana")).getByRole("button", { name: "Desactivar" }));
+    await clickRowAction(user, "ana", "Desactivar");
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("tu propia cuenta");
@@ -276,7 +404,7 @@ describe("UsersTable — when the safety guard refuses", () => {
     mockFetch({ status: 500, body: {} });
     render(<UsersTable users={[ACTIVE]} />);
 
-    await user.click(within(rowFor("ana")).getByRole("button", { name: "Desactivar" }));
+    await clickRowAction(user, "ana", "Desactivar");
 
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo");
   });
@@ -286,13 +414,17 @@ describe("UsersTable — when the safety guard refuses", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
     render(<UsersTable users={[ACTIVE]} />);
 
-    await user.click(within(rowFor("ana")).getByRole("button", { name: "Desactivar" }));
+    await clickRowAction(user, "ana", "Desactivar");
 
     // The FULL sentence, not a prefix: `CONNECTION_ERROR` is shared by six
     // surfaces now, and a substring match lets its tail be rewritten with
     // this file still green.
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo conectar. Revisa tu conexión e intenta de nuevo.");
-    expect(within(rowFor("ana")).getByRole("button", { name: "Desactivar" })).toBeEnabled();
+    // `aria-disabled`, not `toBeEnabled()`: a `DropdownMenuItem` is a div, and
+    // `toBeDisabled` only reads the `disabled` ATTRIBUTE, so it passes on any
+    // div forever and would prove nothing.
+    await openRowMenu(user, "ana");
+    expect(screen.getByRole("menuitem", { name: "Desactivar" })).not.toHaveAttribute("aria-disabled", "true");
   });
 });
 
