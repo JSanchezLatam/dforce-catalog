@@ -172,7 +172,12 @@ function buildWhere(filters: InventoryFilters) {
  * `sort` is positional BEFORE `queryFn` — mirroring `listClientes`
  * (`customers/queries.ts`) — so the two existing callers that only ever pass
  * `(filters, window)` (`service-orders/page.tsx`'s picker query, the e2e
- * suite) are unaffected and keep today's `asc(producto.name)` default.
+ * suite) still COMPILE unchanged. Their ORDER BY does change, deliberately:
+ * `buildInventoryOrderBy(undefined)` now sorts by `lower(unaccent(name))`
+ * rather than the bare `asc(producto.name)` it replaced, which moves 679 of
+ * the 699 real rows. That is the point (see `buildInventoryOrderBy`), and it
+ * is safe for the picker: `PICKER_LIST_LIMIT` is 1000, above the row count,
+ * so the picker's SET is identical and only its display order changes.
  *
  * The injected-`queryFn` seam is new in this unit: unlike `listClientes`/
  * `listOrdenesServicio`, this function had no override hook before WU2, so it

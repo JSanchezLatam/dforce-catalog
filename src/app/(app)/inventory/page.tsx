@@ -218,7 +218,9 @@ const COLUMNS: readonly { label: string; sort?: keyof typeof INVENTORY_SORT }[] 
  * table-column-sorting D1 — a real `<a>`/`<Link>` built by this Server
  * Component, not a `<button>` with a client `onClick`. Mirrors
  * `customers/page.tsx`'s `SortableHeader` exactly; see its comment for the
- * in-repo evidence (`customers/page.tsx:266-278`, `CustomerFilters.tsx:94-102`).
+ * in-repo evidence. Cited by SYMBOL, not by line: the earlier line numbers
+ * here pointed at unrelated code on both branches, which is worse than no
+ * citation because a reader lands on something plausible.
  */
 function SortableHeader({
   label,
