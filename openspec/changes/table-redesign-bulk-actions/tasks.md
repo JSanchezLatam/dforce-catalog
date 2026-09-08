@@ -194,6 +194,11 @@ Branch names follow the `crm-workshop/prN-*` convention:
   The evidence for the fix is the jsdom/`user-event` measurement above plus the
   live DOM now showing `<a role="menuitem" href>`, the shape that activates.
 
+  **DECIDED 2026-09-08 — the one-item kebab stays.** The owner picked the
+  reference-faithful option twice, the spec says MUST, and it is implemented
+  and reviewed. Reversing it now would be a third change of direction on the
+  same question. This is settled; do not reopen it per unit.
+
   **UX cost, recorded because it is permanent and not scaffolding:** on these
   three pages the kebab holds exactly ONE item forever. Phase 3.4 is the only
   place a second row action appears, and it is `/users`; phases 5, 6 and 7a
