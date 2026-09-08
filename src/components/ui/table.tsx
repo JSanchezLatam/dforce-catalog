@@ -23,7 +23,11 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("[&_tr]:border-b", className)}
+      // The shaded header is the whole of this work unit. The container stays
+      // where it is: every list page already wraps its table in a `Card`, and
+      // `CatalogBuilderForm` wraps its own `rounded-lg border`, so a border or
+      // radius HERE would double-border five of this component's consumers.
+      className={cn("bg-muted [&_tr]:border-b", className)}
       {...props}
     />
   )

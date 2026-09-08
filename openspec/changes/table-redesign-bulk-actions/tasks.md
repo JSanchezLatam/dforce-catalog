@@ -106,16 +106,24 @@ Branch names follow the `crm-workshop/prN-*` convention:
 
 ## Phase 1 — `table.tsx` shell (table-bulk-actions: *Shaded Table Header, Container Unchanged*; design D7)
 
-- [ ] 1.1 Add the shaded-header class to `TableHeader` in `src/components/ui/table.tsx` (today `[&_tr]:border-b` only). Do **not** add a border or rounded class to `Table` itself — the four list pages' existing `Card`/`CardContent` stays the sole container (double-border risk named in the proposal).
-- [ ] 1.2 `diff` the file — confirm only `TableHeader`'s `className` changed and no other export in the file moved.
-- [ ] 1.3 **Browser check, both themes, 0 console errors — the only verification unit 1 has** (no test asserts table chrome, per design's Verification Notes): open every non-`UsersTable` consumer and confirm exactly one bordered container, shaded header, no visual regression:
+- [x] 1.1 Add the shaded-header class to `TableHeader` in `src/components/ui/table.tsx` (today `[&_tr]:border-b` only). Do **not** add a border or rounded class to `Table` itself — the four list pages' existing `Card`/`CardContent` stays the sole container (double-border risk named in the proposal).
+
+  Shipped as `bg-muted` at FULL opacity, not `bg-muted/50`. The /50 variant was
+  tried first and measured invisible: light `--muted` is `hsl(240 4.8% 95.9%)`,
+  so at half alpha the header computed to `oklab(0.967 …/0.5)` against a white
+  card — the browser check showed no perceptible band, which is not "shaded".
+  Full opacity gives `rgb(244 244 245)` in light and a clearly lighter band in
+  dark. `TableFooter` and the row hover state keep their own `/50`; only the
+  header is opaque.
+- [x] 1.2 `diff` the file — confirm only `TableHeader`'s `className` changed and no other export in the file moved.
+- [x] 1.3 **Browser check, both themes, 0 console errors — the only verification unit 1 has** (no test asserts table chrome, per design's Verification Notes): open every non-`UsersTable` consumer and confirm exactly one bordered container, shaded header, no visual regression:
   - `/customers`, `/inventory`, `/service-orders` list pages
   - `/customers/[id]` vehicles sub-table, `/service-orders/[id]` sub-table, `/vehicles/[vehicleId]`
   - `CatalogBuilderForm.tsx:439` (already wraps `rounded-lg border` — confirm no double border specifically here, the case the proposal names as the sharpest risk)
   - `CustomerPicker` (inside a dialog)
   - the 3 `loading.tsx` skeletons (customers, inventory, service-orders)
-- [ ] 1.4 Also open `/users` and confirm the bare `<Table>` (not yet Card-wrapped — that lands in unit 3 per design's File Changes table) shows the shaded header with no broken layout in the interim. Do not add a Card here; that is unit 3's job, bundled with the file's next real touch.
-- [ ] 1.5 `npm test` and `npx tsc --noEmit` clean.
+- [x] 1.4 Also open `/users` and confirm the bare `<Table>` (not yet Card-wrapped — that lands in unit 3 per design's File Changes table) shows the shaded header with no broken layout in the interim. Do not add a Card here; that is unit 3's job, bundled with the file's next real touch.
+- [x] 1.5 `npm test` and `npx tsc --noEmit` clean.
 
 ## Phase 2 — Kebab on customers / inventory / service-orders (table-bulk-actions: *Kebab Row-Action Menu at 44x44*; design D6)
 
