@@ -32,7 +32,14 @@ vi.mock("@/modules/customers/CustomerFilters", () => ({ CustomerFilters: () => n
 const can = vi.hoisted(() => vi.fn<(user: unknown, action: string) => boolean>(() => true));
 const listClientes = vi.hoisted(() => vi.fn());
 const countClientes = vi.hoisted(() => vi.fn());
-vi.mock("@/modules/customers/queries", () => ({ listClientes, countClientes }));
+vi.mock("@/modules/customers/queries", async (importOriginal) => {
+  // `CLIENTE_SORT`/`parseClienteSort` are pure and the real implementation —
+  // only the DB-touching reads are faked. Reimplementing the whitelist here
+  // would be a mock more convenient than reality, drifting from `queries.ts`
+  // the moment a column is added or removed there.
+  const actual = await importOriginal<typeof import("@/modules/customers/queries")>();
+  return { ...actual, listClientes, countClientes };
+});
 
 import CustomersPage from "./page";
 
@@ -313,6 +320,117 @@ describe("CustomersPage — the row action stays a link", () => {
 
     expect(screen.getByRole("link", { name: "Ver" })).toHaveAttribute("href", "/customers/c1");
     expect(screen.queryByRole("button", { name: "Ver" })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * table-column-sorting WU1. Nombre, Teléfono and Email are sortable;
+ * `Vehículos` is NOT, and that is the spec's Conditional Vehicles Column
+ * requirement doing its job — it renders a clickable header only if
+ * verification proved the order both executes and reads sensibly. Re-measured
+ * on the app's own database, ascending puts every vehicle-less customer
+ * first, and 369 of 370 have none.
+ */
+describe("CustomersPage — column sorting", () => {
+  beforeEach(() => {
+    listClientes.mockClear();
+    countClientes.mockClear();
+  });
+
+  it("renders name/phone/email headers as links carrying ?sort=&dir=asc by default", async () => {
+    render(await renderPage({}));
+
+    for (const [name, key] of [
+      ["Nombre", "name"],
+      ["Teléfono", "phone"],
+      ["Email", "email"],
+    ] as const) {
+      const url = new URL(screen.getByRole("link", { name }).getAttribute("href")!, "http://localhost");
+      expect(url.searchParams.get("sort")).toBe(key);
+      expect(url.searchParams.get("dir")).toBe("asc");
+    }
+
+    // The negative half of the same requirement: a column whose ordering was
+    // not proved sensible renders as text, not a link.
+    expect(screen.getByRole("columnheader", { name: "Vehículos" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Vehículos" })).not.toBeInTheDocument();
+  });
+
+  it("toggles the active column to desc, preserves search/status/pageSize, and drops page", async () => {
+    render(
+      await renderPage({ sort: "name", dir: "asc", search: "perez", status: "all", pageSize: "50", page: "3" }),
+    );
+
+    const url = new URL(screen.getByRole("link", { name: "Nombre" }).getAttribute("href")!, "http://localhost");
+    expect(url.searchParams.get("dir")).toBe("desc");
+    expect(url.searchParams.get("search")).toBe("perez");
+    expect(url.searchParams.get("status")).toBe("all");
+    expect(url.searchParams.get("pageSize")).toBe("50");
+    expect(url.searchParams.has("page")).toBe(false);
+  });
+
+  it("marks only the active header with aria-sort, matching the URL direction", async () => {
+    render(await renderPage({ sort: "phone", dir: "desc" }));
+
+    expect(screen.getByRole("link", { name: "Teléfono" }).closest("th")).toHaveAttribute(
+      "aria-sort",
+      "descending",
+    );
+    for (const name of ["Nombre", "Email"]) {
+      const header = screen.getByRole("link", { name }).closest("th");
+      expect(header).not.toHaveAttribute("aria-sort", "ascending");
+      expect(header).not.toHaveAttribute("aria-sort", "descending");
+    }
+    // Vehículos is not a link, so it is reached as a plain column header.
+    const vehiculos = screen.getByRole("columnheader", { name: "Vehículos" });
+    expect(vehiculos).not.toHaveAttribute("aria-sort", "ascending");
+    expect(vehiculos).not.toHaveAttribute("aria-sort", "descending");
+  });
+
+  /**
+   * `buildSortHref` writes sort/dir; `buildPageHrefPattern` builds every
+   * pagination link and did not. Sorting by Email and clicking page 2 dropped
+   * them, so `parseClienteSort` returned undefined and page 2 came back in
+   * `desc(createdAt)` — with the OFFSET computed against the OTHER ordering.
+   * Rows repeat across the boundary and rows vanish. That is the failure the
+   * tiebreaker exists to prevent, arriving through a different door.
+   *
+   * The same function already carries an R20 comment saying "every filter in
+   * the URL has to survive paging", and a sibling test pinning `status` for
+   * exactly this reason.
+   */
+  /**
+   * The whole point of the work unit: the page parses the sort and HANDS IT
+   * to the query. Dropping the third argument to `listClientes` left both
+   * files green — the suite pinned the hrefs, the `aria-sort`, the pagination
+   * carry and the negative case, and never the positive one.
+   */
+  it("hands the parsed sort to listClientes, which is the entire feature", async () => {
+    render(await renderPage({ sort: "email", dir: "desc" }));
+
+    expect(listClientes.mock.calls[0][2]).toEqual({ key: "email", dir: "desc" });
+  });
+
+  it("keeps the sort on every pagination link, like the status beside it", async () => {
+    render(await renderPage({ sort: "name", dir: "asc" }));
+
+    const pageHref = screen
+      .getAllByRole("link")
+      .map((a) => a.getAttribute("href") ?? "")
+      .find((href) => href.includes("page="));
+
+    expect(pageHref).toBeDefined();
+    const url = new URL(pageHref!, "http://localhost");
+    expect(url.searchParams.get("sort")).toBe("name");
+    expect(url.searchParams.get("dir")).toBe("asc");
+  });
+
+  it("falls back to default order without throwing on a hand-typed garbage sort/dir", async () => {
+    render(await renderPage({ sort: "garbage", dir: "sideways" }));
+
+    // parseClienteSort discards it — listClientes' third argument stays undefined.
+    expect(listClientes.mock.calls[0][2]).toBeUndefined();
+    expect(screen.getByRole("link", { name: "Nombre" })).toBeInTheDocument();
   });
 });
 

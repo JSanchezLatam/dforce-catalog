@@ -90,10 +90,107 @@ export function buildClienteListWhere(filters: ClienteFilters): SQL | undefined 
   return search ? and(state, search) : state;
 }
 
-/** R19 — paginated + searched customer list, newest first. */
+/**
+ * The sortable-column whitelist. One object, imported by both the query and
+ * the page, so neither can claim a column the other does not support.
+ *
+ * `name` and `email` are wrapped in `lower(unaccent(...))`. Task 1.1 read
+ * `datcollate` off the Postgres on `:5432` and concluded no wrapping was
+ * needed — but the app connects to `:5433` (see `.env`), a different
+ * instance. That one also reports `en_US.utf8` and then orders by BYTES:
+ *
+ *   plain              Ana < Zapata < Zulema < automovil < Ángel
+ *   lower()            Ana < automovil < Zapata < Zulema < Ángel
+ *   lower(unaccent())  Ana < Ángel < automovil < Zapata < Zulema
+ *
+ * Unwrapped, every lowercase name sorts after every uppercase one and
+ * "Ángel", "Núñez" and "Peña" land past "Z" — this list already contains
+ * NUÑEZ and Peña. A declared `datcollate` does not predict behaviour; order
+ * three known values and read the result.
+ *
+ * `phone` is left bare: digits and dashes have neither case nor accents.
+ *
+ * `unaccent()` is STABLE, so this cannot use `cliente_name_idx`; at 370 rows
+ * that is a sequential scan of nothing, and it would need rethinking at a
+ * scale where the index mattered.
+ */
+export const CLIENTE_SORT = {
+  name: sql`lower(unaccent(${cliente.name}))`,
+  phone: cliente.phone,
+  email: sql`lower(unaccent(${cliente.email}))`,
+  // `plates` is NOT here. The spec gates it on executing AND reading sensibly
+  // (Conditional Vehicles Column for Customers), and the second half fails:
+  // `platesSubquery()` coalesces to `'{}'`, Postgres compares arrays
+  // element-wise, so empty sorts FIRST ascending and last descending — the
+  // opposite of what the spike recorded. Measured on the app's own database
+  // (`:5433`): ascending opens with "Cliente generico", "SERGIO GUTIERREZ",
+  // "LUIS DE LEON", all vehicle-less, and 369 of 370 customers have no
+  // vehicle at all — so the sort shows ten em-dashes and buries the one real
+  // list on page 37. It can come back when the column has data worth ordering.
+} as const;
+
+export type ClienteSort = { key: keyof typeof CLIENTE_SORT; dir: "asc" | "desc" };
+
+type RawSearchParams = Record<string, string | string[] | undefined>;
+
+function firstSortValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+/**
+ * Pure — whitelist + `asc|desc` check; anything else falls back to `undefined`.
+ *
+ * `Object.hasOwn`, NOT `key in CLIENTE_SORT`. `in` walks the prototype chain,
+ * so `toString`, `constructor`, `valueOf` and `__proto__` all passed the
+ * whitelist — and the failure was silent rather than loud:
+ * `CLIENTE_SORT["toString"]` is `Function.prototype.toString`, which Drizzle
+ * renders as a bound `$1`, Postgres accepts, and the ORDER BY collapses to
+ * the tiebreaker while the URL and every pagination link keep advertising the
+ * sort. `?sort=garbage` was the only invalid input anyone had tested.
+ *
+ * This is the single untrusted-input surface the design's threat matrix says
+ * the whitelist closes, and D3 has WU2/3/4 copying this function's shape.
+ */
+export function parseClienteSort(searchParams: RawSearchParams): ClienteSort | undefined {
+  const key = firstSortValue(searchParams.sort);
+  const dir = firstSortValue(searchParams.dir);
+  if (!key || !Object.hasOwn(CLIENTE_SORT, key)) return undefined;
+  if (dir !== "asc" && dir !== "desc") return undefined;
+  return { key: key as keyof typeof CLIENTE_SORT, dir };
+}
+
+/**
+ * Always TWO expressions. `phone` and `email` are not unique — email is
+ * nullable and mostly empty here — and Postgres gives no ordering guarantee
+ * among ties, so it may return them differently per query. With
+ * `.limit()/.offset()` on 37 pages that means a customer can appear on two
+ * pages and another on none. `createdAt` is near-unique, which is why the old
+ * single-key default never showed it.
+ */
+export function buildClienteOrderBy(sort?: ClienteSort) {
+  const tiebreak = desc(cliente.createdAt);
+  if (!sort) return [tiebreak];
+  const column = CLIENTE_SORT[sort.key];
+  // `NULLS LAST` in BOTH directions, and built HERE rather than inside the
+  // whitelist entry: Drizzle's `asc()`/`desc()` append the direction AFTER
+  // the expression, so putting "nulls last" inside the whitelist entry
+  // rendered "… nulls last desc", which Postgres rejects. The page threw a
+  // runtime error while all 1305 tests stayed green.
+  //
+  // Why last both ways: `email` is nullable and mostly empty here, and
+  // Postgres defaults to NULLS FIRST on DESC, so one click would open on a
+  // full page of em-dashes. A missing value is never more prominent than a
+  // present one.
+  const primary =
+    sort.dir === "asc" ? sql`${column} asc nulls last` : sql`${column} desc nulls last`;
+  return [primary, tiebreak];
+}
+
+/** R19 — paginated + searched customer list, newest first by default; sortable per D2. */
 export async function listClientes(
   filters: ClienteFilters,
   window: { offset: number; limit: number },
+  sort?: ClienteSort,
   queryFn: () => Promise<ClienteListItem[]> = () =>
     db
       .select({
@@ -110,7 +207,7 @@ export async function listClientes(
       })
       .from(cliente)
       .where(buildClienteListWhere(filters))
-      .orderBy(desc(cliente.createdAt))
+      .orderBy(...buildClienteOrderBy(sort))
       .limit(window.limit)
       .offset(window.offset),
 ): Promise<ClienteListItem[]> {

@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
@@ -5,10 +6,13 @@ import type { Cliente, OrdenServicio, Vehiculo } from "@/shared/db/schema";
 import {
   buildClienteListWhere,
   buildClienteSearchWhere,
+  buildClienteOrderBy,
+  CLIENTE_SORT,
   countClientes,
   findClienteByPhone,
   getClienteById,
   listClientes,
+  parseClienteSort,
   type ClienteListItem,
 } from "./queries";
 
@@ -138,6 +142,118 @@ describe("buildClienteSearchWhere (R19)", () => {
   });
 });
 
+/**
+ * table-column-sorting WU1 — `plates` is NOT in the whitelist. The spike
+ * recorded in apply-progress claimed empty arrays sorted last in BOTH
+ * directions, which no single `ORDER BY` can produce. Re-measured against the
+ * app's own database (`:5433`): `platesSubquery()` coalesces to `'{}'` and
+ * Postgres compares arrays element-wise, so empty sorts FIRST ascending —
+ * and 369 of 370 customers have no vehicle, so ascending is ten em-dashes
+ * with the one real list on page 37. The spec gates this column on executing
+ * AND reading sensibly; the second half fails.
+ */
+/**
+ * Measured against the database the app actually uses (`:5433`, 370 rows), not
+ * the one on `:5432` that task 1.1 probed by mistake. It reports
+ * `datcollate = en_US.utf8` and then orders by BYTES:
+ *
+ *   plain             Ana < Zapata < Zulema < automovil < Ángel
+ *   lower()           Ana < automovil < Zapata < Zulema < Ángel
+ *   lower(unaccent()) Ana < Ángel < automovil < Zapata < Zulema   ← correct
+ *
+ * So every lowercase name lands after every uppercase one, and "Ángel",
+ * "Núñez" and "Peña" land after "Z" — in a Spanish app whose own customer
+ * list contains NUÑEZ and Peña. `unaccent()` is STABLE, which blocks an
+ * expression index but not an ORDER BY; at 370 rows the unused
+ * `cliente_name_idx` costs nothing.
+ */
+/**
+ * `CLIENTE_SORT` renders a column EXPRESSION; this renders the finished
+ * ORDER BY clause. The distinction is not academic: putting "nulls last"
+ * inside the expression produced `… nulls last desc`, which Postgres rejects,
+ * and the expression-level assertion above stayed green while `/customers`
+ * threw a runtime error. Direction first, then NULLS.
+ */
+describe("buildClienteOrderBy renders valid SQL", () => {
+  const dialect = new PgDialect();
+
+  it.each([
+    ["asc", "asc nulls last"],
+    ["desc", "desc nulls last"],
+  ] as const)("puts the direction before NULLS for %s", (dir, expected) => {
+    const [primary] = buildClienteOrderBy({ key: "email", dir });
+    expect(dialect.sqlToQuery(sql`${primary}`).sql).toContain(expected);
+  });
+
+  it("always appends a stable tiebreaker, so paging cannot repeat or skip a row", () => {
+    expect(buildClienteOrderBy({ key: "phone", dir: "asc" })).toHaveLength(2);
+    expect(buildClienteOrderBy(undefined)).toHaveLength(1);
+  });
+});
+
+describe("CLIENTE_SORT text ordering", () => {
+  const dialect = new PgDialect();
+
+  it.each(["name", "email"] as const)(
+    "orders %s case- and accent-insensitively, not by byte",
+    (key) => {
+      const rendered = dialect.sqlToQuery(sql`${CLIENTE_SORT[key]}`).sql;
+      expect(rendered).toContain("lower(unaccent(");
+    },
+  );
+
+  it("leaves phone alone — digits have neither case nor accents", () => {
+    const rendered = dialect.sqlToQuery(sql`${CLIENTE_SORT.phone}`).sql;
+    expect(rendered).not.toContain("lower(");
+  });
+});
+
+describe("parseClienteSort", () => {
+  it.each(["name", "phone", "email"] as const)(
+    "returns a defined sort for the whitelisted column %s",
+    (key) => {
+      expect(parseClienteSort({ sort: key, dir: "asc" })).toEqual({ key, dir: "asc" });
+      expect(parseClienteSort({ sort: key, dir: "desc" })).toEqual({ key, dir: "desc" });
+    },
+  );
+
+  /**
+   * `key in CLIENTE_SORT` walks the PROTOTYPE CHAIN, so `toString`,
+   * `constructor`, `valueOf` and `__proto__` all passed the whitelist. The
+   * failure was silent, not loud: `CLIENTE_SORT["toString"]` is
+   * `Function.prototype.toString`, which Drizzle renders as a bound `$1`
+   * parameter, Postgres accepts, and the ORDER BY quietly collapses to the
+   * tiebreaker — while the URL and every pagination link keep advertising the
+   * sort. `?sort=garbage` was the only invalid case anyone had tested.
+   *
+   * D3 gives each module its OWN `parse*Sort`, so WU2/3/4 copy this shape.
+   * Fixed here, or shipped four times.
+   */
+  it.each(["toString", "constructor", "valueOf", "__proto__", "hasOwnProperty"])(
+    "rejects the inherited property %s, which `in` would have accepted",
+    (key) => {
+      expect(parseClienteSort({ sort: key, dir: "asc" })).toBeUndefined();
+    },
+  );
+
+  it("returns undefined for a column not on the whitelist", () => {
+    expect(parseClienteSort({ sort: "createdAt", dir: "asc" })).toBeUndefined();
+  });
+
+  it("returns undefined for a dir outside asc|desc", () => {
+    expect(parseClienteSort({ sort: "name", dir: "sideways" })).toBeUndefined();
+  });
+
+  it("returns undefined when no sort param is present", () => {
+    expect(parseClienteSort({})).toBeUndefined();
+    expect(parseClienteSort({ dir: "asc" })).toBeUndefined();
+  });
+
+  it("CLIENTE_SORT whitelists exactly name, phone, email — plates is deliberately absent", () => {
+    expect(Object.keys(CLIENTE_SORT).sort()).toEqual(["email", "name", "phone"]);
+  });
+});
+
 describe("listClientes (R19)", () => {
   it("returns whatever the injected queryFn resolves", async () => {
     const rows: ClienteListItem[] = [
@@ -152,7 +268,7 @@ describe("listClientes (R19)", () => {
       },
     ];
     await expect(
-      listClientes({ search: "juan" }, { offset: 0, limit: 10 }, async () => rows),
+      listClientes({ search: "juan" }, { offset: 0, limit: 10 }, undefined, async () => rows),
     ).resolves.toEqual(rows);
   });
 });

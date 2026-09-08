@@ -1,12 +1,19 @@
 import Link from "next/link";
-import { Eye, Users } from "lucide-react";
+import { ArrowDown, ArrowUp, Eye, Users } from "lucide-react";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { CustomerSyncPanel } from "@/modules/customer-import/CustomerSyncPanel";
 import { CustomerFilters } from "@/modules/customers/CustomerFilters";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
-import { countClientes, listClientes, type ClienteFilters } from "@/modules/customers/queries";
+import {
+  CLIENTE_SORT,
+  countClientes,
+  listClientes,
+  parseClienteSort,
+  type ClienteFilters,
+  type ClienteSort,
+} from "@/modules/customers/queries";
 import { computePageWindow, parsePageSize } from "@/modules/inventory-view/queries";
 import { Pagination } from "@/shared/ui/Pagination";
 import { PAGE_HEADING } from "@/shared/ui/styles";
@@ -48,6 +55,7 @@ export default async function CustomersPage({
   const filters = normalizeClienteFilters(params);
   const pageSize = parsePageSize(params.pageSize);
   const pageWindow = computePageWindow(params.page, pageSize);
+  const sort = parseClienteSort(params);
 
   const user = await requireSessionFromHeaders();
   if (!can(user, "customers.read")) {
@@ -73,7 +81,7 @@ export default async function CustomersPage({
   // second full-table scan on every list view. At 370 rows that is free; at a
   // hundred times that it would need an index or a cached total.
   const [items, total, totalClientes] = await Promise.all([
-    listClientes(filters, pageWindow),
+    listClientes(filters, pageWindow, sort),
     countClientes(filters),
     countClientes({ status: "all" }),
   ]);
@@ -160,7 +168,7 @@ export default async function CustomersPage({
                       // Through `buildPageHref` so this link cannot drift from
                       // the pagination links beside it — it kept `pageSize`
                       // and this one had dropped it.
-                      href={buildPageHref({ ...params, status: "all" }, 1)}
+                      href={buildPageHref({ ...params, status: "all" }, 1, sort)}
                       className="text-primary hover:underline"
                     >
                       Buscar también entre los desactivados
@@ -184,7 +192,7 @@ export default async function CustomersPage({
                     {/* Through `buildPageHref`, like the widen-search link
                         above — hardcoded, this one dropped `pageSize`, which
                         is the defect WU14.2 fixed one branch over. */}
-                    <Link href={buildPageHref({ ...params, status: "inactive" }, 1)} className="text-primary hover:underline">
+                    <Link href={buildPageHref({ ...params, status: "inactive" }, 1, sort)} className="text-primary hover:underline">
                       Ver desactivados
                     </Link>
                   </>
@@ -197,7 +205,7 @@ export default async function CustomersPage({
                   <>
                     Ningún cliente desactivado.{" "}
                     <Link
-                      href={buildPageHref({ ...params, status: "active" }, 1)}
+                      href={buildPageHref({ ...params, status: "active" }, 1, sort)}
                       className="text-primary hover:underline"
                     >
                       Ver los activos
@@ -217,10 +225,18 @@ export default async function CustomersPage({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Teléfono</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Vehículos</TableHead>
+                    {COLUMNS.map((column) =>
+                      column.sort ? (
+                        <SortableHeader
+                          key={column.label}
+                          label={column.label}
+                          href={buildSortHref(params, column.sort, sort)}
+                          dir={sort?.key === column.sort ? sort.dir : undefined}
+                        />
+                      ) : (
+                        <TableHead key={column.label}>{column.label}</TableHead>
+                      ),
+                    )}
                     <TableHead className="w-24">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -278,7 +294,7 @@ export default async function CustomersPage({
                 <Pagination
                   currentPage={pageWindow.page}
                   pageCount={pageCount}
-                  hrefPattern={buildPageHrefPattern(params)}
+                  hrefPattern={buildPageHrefPattern(params, sort)}
                 />
               </CardContent>
             </Card>
@@ -287,6 +303,78 @@ export default async function CustomersPage({
       )}
     </div>
   );
+}
+
+/**
+ * The header row, declared HERE rather than derived from `CLIENTE_SORT`.
+ * Deriving it made a query-layer decision silently reshape the table: adding
+ * a key grew the header by one with no matching `<TableCell>`, and removing
+ * `plates` shrank it below the four cells below. `sort` is typed against the
+ * whitelist, so a column can still only claim to be sortable if the query
+ * agrees — but the ROW SHAPE now lives next to the cells it has to match.
+ *
+ * Vehículos has no `sort` on purpose: `platesSubquery()` coalesces to `'{}'`,
+ * Postgres compares arrays element-wise, so empty sorts FIRST ascending — and
+ * 369 of 370 customers have no vehicle, so the column would show ten
+ * em-dashes and bury the one real list on page 37. The spec gates it on
+ * reading sensibly, and it does not.
+ */
+const COLUMNS: readonly { label: string; sort?: keyof typeof CLIENTE_SORT }[] = [
+  { label: "Nombre", sort: "name" },
+  { label: "Teléfono", sort: "phone" },
+  { label: "Email", sort: "email" },
+  { label: "Vehículos" },
+];
+
+/**
+ * AGENTS.md's 44x44 minimum hit target — a sortable header is an action
+ * control, same class as the row's `Ver` link a few lines below.
+ */
+/**
+ * table-column-sorting D1 — a real `<a>`/`<Link>` built by this Server
+ * Component, not a `<button>` with a client `onClick`: the latter is exactly
+ * the "server function handed to a client component" defect class already
+ * documented at `page.tsx:266-278` (this file's original line numbers), and a
+ * new `router.push` here would be a second URL writer outside
+ * `CustomerFilters`' `pushedParamsRef` (design D1).
+ */
+function SortableHeader({
+  label,
+  href,
+  dir,
+}: {
+  label: string;
+  href: string;
+  dir?: "asc" | "desc";
+}) {
+  return (
+    <TableHead aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}>
+      <Link href={href} className="-mx-2 inline-flex min-h-11 min-w-11 items-center gap-1 px-2 hover:text-foreground">
+        {label}
+        {dir === "asc" && <ArrowUp className="h-3 w-3" aria-hidden="true" />}
+        {dir === "desc" && <ArrowDown className="h-3 w-3" aria-hidden="true" />}
+      </Link>
+    </TableHead>
+  );
+}
+
+/**
+ * Server-Side Full-Result-Set Sort with Page Reset — `page` is dropped
+ * entirely rather than set to 1 (the spec allows either). Clicking the
+ * already-active column toggles direction; any other column starts at `asc`.
+ */
+function buildSortHref(params: SearchParams, key: keyof typeof CLIENTE_SORT, currentSort: ClienteSort | undefined): string {
+  const search = new URLSearchParams();
+  const term = firstValue(params.search);
+  const size = firstValue(params.pageSize);
+  if (term) search.set("search", term);
+  if (size) search.set("pageSize", size);
+  const status = firstValue(params.status);
+  if (status === "inactive" || status === "all") search.set("status", status);
+  const nextDir = currentSort?.key === key && currentSort.dir === "asc" ? "desc" : "asc";
+  search.set("sort", key);
+  search.set("dir", nextDir);
+  return `/customers?${search.toString()}`;
 }
 
 /**
@@ -301,7 +389,7 @@ export default async function CustomersPage({
  *
  * `hrefPattern` is the variant that already existed for exactly this.
  */
-function buildPageHrefPattern(params: SearchParams): string {
+function buildPageHrefPattern(params: SearchParams, sort: ClienteSort | undefined): string {
   const search = new URLSearchParams();
   // `firstValue` for every key, matching `normalizeClienteFilters`. The
   // `typeof === "string"` checks these replace saw `?search=a&search=b` as an
@@ -316,6 +404,18 @@ function buildPageHrefPattern(params: SearchParams): string {
   // the records having disappeared rather than the filter having reset.
   const status = firstValue(params.status);
   if (status === "inactive" || status === "all") search.set("status", status);
+  // The sort is one of those filters. Dropped here, sorting by Email and
+  // clicking page 2 returned rows in `desc(createdAt)` while the OFFSET had
+  // been computed against the email ordering — so rows repeat across the
+  // boundary and rows never appear at all. Taken from the PARSED sort, not
+  // from `params`, so an unrecognised `?sort=` cannot be laundered into
+  // the pagination links — including the inherited names (`toString`,
+  // `constructor`) that `in` let through until `parseClienteSort` switched
+  // to `Object.hasOwn`.
+  if (sort) {
+    search.set("sort", sort.key);
+    search.set("dir", sort.dir);
+  }
   // `page` appended raw rather than through `URLSearchParams.set`: that
   // percent-encodes the braces, and `Pagination` replaces the literal `{page}`.
   const query = search.toString();
@@ -327,6 +427,6 @@ function buildPageHrefPattern(params: SearchParams): string {
  * it — the two widen-search links use this, and the whole reason the pattern
  * carries every filter is that a second copy dropped `pageSize` once already.
  */
-function buildPageHref(params: SearchParams, page: number): string {
-  return buildPageHrefPattern(params).replace("{page}", String(page));
+function buildPageHref(params: SearchParams, page: number, sort: ClienteSort | undefined): string {
+  return buildPageHrefPattern(params, sort).replace("{page}", String(page));
 }
