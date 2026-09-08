@@ -1,14 +1,36 @@
 # Tasks: table-redesign-bulk-actions
 
-## ⚠ BLOCKED — do not start implementation
+## Ready to start — the block cleared 2026-09-08
 
-**PRs #83–#86 (`table-column-sorting`) must merge first.** All four page files this
-change rewrites (`customers/page.tsx`, `inventory/page.tsx`,
-`service-orders/page.tsx`, `UsersTable.tsx`) are open in those PRs. Every
-file:line citation below is read from the post-sorting shape at the worktree
-`../Proyecto Catalogo-worktrees/sorting-preview` — starting before they merge
-guarantees a conflict in exactly the four files this change touches. Re-verify
-line numbers against `main` once #83–#86 land, before opening the tracker.
+PRs #83–#86 (`table-column-sorting`) are merged and archived; `main` is at
+`d884d5b`. The four page files this change rewrites are no longer open in any
+PR, so the conflict this section used to warn about cannot happen.
+
+**Every `file:line` citation in this change was re-verified against `main`**,
+not merely assumed to survive the merge. Two facts make that verification
+meaningful rather than a formality:
+
+- `src/` is **byte-identical** between `main` and the `preview/table-sorting-all`
+  worktree these artifacts were written against — the merges that landed
+  afterwards touched only `openspec/`. So the citations were valid by
+  construction, and the check confirmed it rather than discovering it.
+- All 49 citations resolve and fall inside their files. The twelve that the
+  plan actually hangs on were checked for CONTENT, not just range — a line
+  number that exists but points at the wrong code is the failure mode this
+  repo has already shipped twice. All twelve matched exactly:
+  `table.tsx:60,73,86` (the selection affordances that already exist),
+  `dropdown-menu.tsx:34` (the portal), `transitions.ts:36,48`,
+  `selection.ts:51` (`MAX_TOTAL_PRODUCTS`), `CatalogBuilderForm.tsx:439` (the
+  self-wrapped border — the double-border risk unit 1 exists to avoid),
+  `UsersTable.tsx:122,171`, and the two permission gates at
+  `api/users/[id]/route.ts:37` and `api/customers/[id]/route.ts:36`.
+- One citation was WRONG and is fixed: `proposal.md` said
+  `transitions.ts:45` for `getAllowedTransitions`; the symbol is at `:48`.
+  `design.md` had already caught it. Prefer the symbol name over the number
+  when they disagree — line numbers rot, and a reader who follows a stale one
+  lands on plausible unrelated code, which is worse than a dangling name.
+
+Start with Phase 1.
 
 ## Review Workload Forecast
 

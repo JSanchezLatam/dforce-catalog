@@ -125,7 +125,7 @@ workshop tablet and no server-side progress or cancellation. New bulk endpoints
 buy those back at the price of new routes. Open question below.
 
 For service-orders, `getAllowedTransitions` already exists
-(`transitions.ts:45`) — the status menu can offer only the transitions legal for
+(`transitions.ts:48`) — the status menu can offer only the transitions legal for
 the whole selection instead of offering everything and reporting failures.
 
 ### 4. Inventario → generador de catálogos
