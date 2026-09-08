@@ -1,12 +1,19 @@
 import Link from "next/link";
-import { Wrench } from "lucide-react";
+import { ArrowDown, ArrowUp, Wrench } from "lucide-react";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { computePageWindow, listInventory, parsePageSize } from "@/modules/inventory-view/queries";
 import { ServiceOrderFilters } from "@/modules/service-orders/ServiceOrderFilters";
 import { ServiceOrderFormTrigger } from "@/modules/service-orders/ServiceOrderFormTrigger";
-import { countOrdenesServicio, listOrdenesServicio, type OrdenServicioFilters } from "@/modules/service-orders/queries";
+import {
+  countOrdenesServicio,
+  listOrdenesServicio,
+  ORDEN_SORT,
+  parseOrdenSort,
+  type OrdenServicioFilters,
+  type OrdenSort,
+} from "@/modules/service-orders/queries";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import { formatDateTime } from "@/shared/datetime";
 import { Pagination } from "@/shared/ui/Pagination";
@@ -59,6 +66,7 @@ export default async function ServiceOrdersPage({
   const filters = normalizeOrdenFilters(params);
   const pageSize = parsePageSize(params.pageSize);
   const pageWindow = computePageWindow(params.page, pageSize);
+  const sort = parseOrdenSort(params);
 
   const user = await requireSessionFromHeaders();
   if (!can(user, "service-orders.read")) {
@@ -66,7 +74,7 @@ export default async function ServiceOrdersPage({
   }
 
   const [items, total, products] = await Promise.all([
-    listOrdenesServicio(filters, pageWindow),
+    listOrdenesServicio(filters, pageWindow, sort),
     countOrdenesServicio(filters),
     listInventory({}, { offset: 0, limit: PICKER_LIST_LIMIT }),
   ]);
@@ -118,10 +126,18 @@ export default async function ServiceOrdersPage({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Descripción</TableHead>
-                    <TableHead>Cita</TableHead>
+                    {COLUMNS.map((column) =>
+                      column.sort ? (
+                        <SortableHeader
+                          key={column.label}
+                          label={column.label}
+                          href={buildSortHref(params, column.sort, sort)}
+                          dir={sort?.key === column.sort ? sort.dir : undefined}
+                        />
+                      ) : (
+                        <TableHead key={column.label}>{column.label}</TableHead>
+                      ),
+                    )}
                     <TableHead className="w-24">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -154,7 +170,7 @@ export default async function ServiceOrdersPage({
                 <Pagination
                   currentPage={pageWindow.page}
                   pageCount={pageCount}
-                  hrefPattern={buildPageHrefPattern(params)}
+                  hrefPattern={buildPageHrefPattern(params, sort)}
                 />
               </CardContent>
             </Card>
@@ -165,11 +181,77 @@ export default async function ServiceOrdersPage({
   );
 }
 
-/** A serializable `{page}` pattern — see the note on the customers page's twin. */
-function buildPageHrefPattern(params: SearchParams): string {
+/**
+ * The header row, declared HERE rather than derived from `ORDEN_SORT` — same
+ * reasoning as `customers/page.tsx`'s `COLUMNS`: deriving it would let a
+ * query-layer whitelist change silently reshape the table with no matching
+ * `<TableCell>`. `Descripción` has no `sort` on purpose (unindexed free text,
+ * no user-meaningful order); `Acciones` never does.
+ */
+const COLUMNS: readonly { label: string; sort?: keyof typeof ORDEN_SORT }[] = [
+  { label: "ID", sort: "id" },
+  { label: "Estado", sort: "status" },
+  { label: "Descripción" },
+  { label: "Cita", sort: "appointmentAt" },
+];
+
+/**
+ * table-column-sorting D1 — a real `<a>`/`<Link>` built by this Server
+ * Component, not a `<button>` with a client `onClick`: that would need a new
+ * client boundary around the header (the "server function handed to a client
+ * component" defect class already documented on the customers page) and a new
+ * `router.push` outside `ServiceOrderFilters`' single writer.
+ */
+function SortableHeader({
+  label,
+  href,
+  dir,
+}: {
+  label: string;
+  href: string;
+  dir?: "asc" | "desc";
+}) {
+  return (
+    <TableHead aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}>
+      <Link href={href} className="-mx-2 inline-flex min-h-11 min-w-11 items-center gap-1 px-2 hover:text-foreground">
+        {label}
+        {dir === "asc" && <ArrowUp className="h-3 w-3" aria-hidden="true" />}
+        {dir === "desc" && <ArrowDown className="h-3 w-3" aria-hidden="true" />}
+      </Link>
+    </TableHead>
+  );
+}
+
+/**
+ * Server-Side Full-Result-Set Sort with Page Reset — `page` is dropped
+ * entirely (the spec allows either). Clicking the already-active column
+ * toggles direction; any other column starts at `asc`.
+ */
+function buildSortHref(params: SearchParams, key: keyof typeof ORDEN_SORT, currentSort: OrdenSort | undefined): string {
   const search = new URLSearchParams();
   if (typeof params.status === "string" && params.status) search.set("status", params.status);
   if (typeof params.pageSize === "string" && params.pageSize) search.set("pageSize", params.pageSize);
+  const nextDir = currentSort?.key === key && currentSort.dir === "asc" ? "desc" : "asc";
+  search.set("sort", key);
+  search.set("dir", nextDir);
+  return `/service-orders?${search.toString()}`;
+}
+
+/**
+ * A serializable `{page}` pattern — see the note on the customers page's
+ * twin. The sort is one of the filters that has to survive paging: taken from
+ * the PARSED sort, never from `params`, so an unrecognised `?sort=` (including
+ * an inherited prototype name `parseOrdenSort`'s `Object.hasOwn` rejects)
+ * cannot be laundered into the pagination links.
+ */
+function buildPageHrefPattern(params: SearchParams, sort: OrdenSort | undefined): string {
+  const search = new URLSearchParams();
+  if (typeof params.status === "string" && params.status) search.set("status", params.status);
+  if (typeof params.pageSize === "string" && params.pageSize) search.set("pageSize", params.pageSize);
+  if (sort) {
+    search.set("sort", sort.key);
+    search.set("dir", sort.dir);
+  }
   const query = search.toString();
   return `/service-orders?${query ? `${query}&` : ""}page={page}`;
 }
