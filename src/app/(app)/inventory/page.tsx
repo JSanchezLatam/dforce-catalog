@@ -149,12 +149,26 @@ export default async function InventoryPage({
                             AGENTS.md's 44x44 floor, and the kebab trigger is
                             where that floor now lives. */}
                         <RowActions label={`Acciones de ${item.name}`}>
-                          <DropdownMenuItem>
-                            <Link href={`/inventory/${item.id}`} className="flex w-full items-center gap-1.5">
-                              <Eye aria-hidden="true" />
-                              Ver
-                            </Link>
-                          </DropdownMenuItem>
+                          {/* `render`, not a nested `<Link>`. Measured in jsdom against
+                              base-ui 1.6: with the link NESTED inside the item,
+                              ArrowDown+Enter fires base-ui's click on the `role="menuitem"`
+                              div and it never reaches the anchor — 0 clicks, menu closes, no
+                              navigation. With `render` the anchor IS the menuitem and the
+                              same keystrokes navigate. "Ver" was keyboard-reachable as a bare
+                              link before the kebab existed; it has to stay that way.
+
+                              This does NOT contradict the `buttonVariants` comment on the old
+                              row link: that one rejects base-ui's `Button` COMPONENT wrapping
+                              an anchor. `DropdownMenuItem`'s `render` is the library's
+                              ordinary composition API, a different thing. */}
+                          <DropdownMenuItem
+                            render={
+                              <Link href={`/inventory/${item.id}`} className="flex w-full items-center gap-1.5">
+                                <Eye aria-hidden="true" />
+                                Ver
+                              </Link>
+                            }
+                          />
                         </RowActions>
                       </TableCell>
                     </TableRow>

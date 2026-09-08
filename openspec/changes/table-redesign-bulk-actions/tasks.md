@@ -160,6 +160,25 @@ Branch names follow the `crm-workshop/prN-*` convention:
 - [x] 2.4 `diff` each of the three page files plus `RowActions.tsx` before trusting 2.2's result.
 - [x] 2.5 **Browser check, both themes, 0 console errors**: kebab trigger measures ≥44×44 on all three pages (devtools box model — AGENTS.md: no test asserts a button height), portal-backed menu opens with no hydration warning (new client boundary + portal, first of the change's four).
 
+  **GGA found a keyboard regression and it reproduced.** The first version
+  nested the link inside the item (`<DropdownMenuItem><Link/></DropdownMenuItem>`).
+  Measured independently against base-ui 1.6 with `user-event`: ArrowDown+Enter
+  fires base-ui's click on the `role="menuitem"` DIV and it never reaches the
+  anchor — **0 activations**. With `render={<Link/>}` the anchor IS the
+  menuitem and the same keystrokes activate it — **1**. "Ver" was reachable by
+  Tab+Enter as a bare link before the kebab, so nesting it silently removed the
+  keyboard path from three tables. Switched to `render`, mutation-verified in
+  both directions.
+
+  This does NOT contradict `customers/page.tsx`'s older `buttonVariants`
+  comment: that one rejects base-ui's `Button` COMPONENT wrapping an anchor.
+  `DropdownMenuItem`'s `render` is the library's ordinary composition API.
+
+  **The test shipped in the first pass was pinning the broken shape.** It
+  asserted `getByRole("link", {name:"Ver"})`, which only the nested form
+  produces — so it forbade the fix rather than catching the bug. Replaced with
+  an ACTIVATION assertion plus an href assertion.
+
   Measured in the live DOM: trigger is exactly 44x44 on `/customers` and
   `/inventory`, one per row, `aria-label` in Spanish, no bare link left in the
   cell, menu renders outside the `<table>` (real portal) and its item is a real
@@ -167,6 +186,13 @@ Branch names follow the `crm-workshop/prN-*` convention:
   warnings — all HMR/Fast Refresh. `/service-orders` has 0 rows in the dev
   database, so its kebab was verified by code and by the shared component,
   never rendered with data.
+
+  **A second honest gap: end-to-end keyboard was NOT verified in a real
+  browser.** The Chrome extension's synthetic keystrokes do not reach the page
+  — a control test typed "abc" into a focused input and the value stayed empty
+  — so every browser keyboard attempt here proves nothing in either direction.
+  The evidence for the fix is the jsdom/`user-event` measurement above plus the
+  live DOM now showing `<a role="menuitem" href>`, the shape that activates.
 
   **UX cost, recorded because it is permanent and not scaffolding:** on these
   three pages the kebab holds exactly ONE item forever. Phase 3.4 is the only

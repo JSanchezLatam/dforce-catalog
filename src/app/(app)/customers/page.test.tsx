@@ -311,23 +311,26 @@ describe("CustomersPage — deactivated customers (R20)", () => {
 });
 
 /**
- * The row action moved into a kebab menu (table-redesign WU2). Two properties,
- * because the move can break either one on its own:
+* The row action moved into a kebab menu (table-redesign WU2). The property
+ * worth pinning is ACTIVATION, not markup — and this block previously got that
+ * wrong in a way that would have shipped.
  *
- * - The TRIGGER is a real `<button>` and it is the whole cell. The 28px links
- *   this replaces on `/inventory` and `/service-orders` are deleted, not
- *   restyled, and the trigger carries the 44x44 hit target. No test in this
- *   repo asserts a button height (AGENTS.md), so the browser owns the 44
- *   itself; what a test CAN pin is that the cell stopped being a bare link.
- * - The ITEM that navigates is still a real link. Two of the three ways to put
- *   a navigation inside a base-ui menu quietly stop it being one:
- *   `DropdownMenuItem render={<Link/>}` emits `<a role="menuitem">`, and a
- *   plain `<Button onClick>` emits a `<button>` with no href at all. Either
- *   loses middle-click, "open in new tab", and the link's own announcement —
- *   none of which any styling test would notice.
+ * The first version asserted `getByRole("link", { name: "Ver" })`. That shape
+ * is only produced by nesting the link INSIDE the item, and measured against
+ * base-ui 1.6 that nesting is keyboard-dead: ArrowDown+Enter fires the click on
+ * the `role="menuitem"` div and it never reaches the anchor. So the assertion
+ * did not merely miss the defect, it FORBADE the fix — the working shape
+ * (`render`) emits `<a role="menuitem">`, which no `getByRole("link")` query
+ * finds. A test that pins the broken shape as correct is the exact class
+ * CLAUDE.md warns about.
+ *
+ * What is asserted now: pressing Enter on the focused item actually activates
+ * the anchor, and the anchor still carries the real `href` so middle-click and
+ * "open in new tab" survive. "Ver" was reachable by Tab+Enter as a bare link
+ * before the kebab existed; that must not regress.
  */
-describe("CustomersPage — the row action is a kebab whose Ver item stays a link", () => {
-  it("opens the kebab and renders Ver as a link to that customer, not a button", async () => {
+describe("CustomersPage — the row action is a kebab whose Ver item is still activatable", () => {
+  it("navigates from the keyboard: ArrowDown then Enter activates the anchor", async () => {
     const user = userEvent.setup();
     render(await renderPage({}));
 
@@ -336,11 +339,25 @@ describe("CustomersPage — the row action is a kebab whose Ver item stays a lin
     // soon as a second row exists.
     await user.click(screen.getByRole("button", { name: "Acciones de Retirado Perez" }));
 
-    expect(await screen.findByRole("link", { name: "Ver" })).toHaveAttribute(
-      "href",
-      "/customers/c1",
-    );
-    expect(screen.queryByRole("button", { name: "Ver" })).not.toBeInTheDocument();
+    const item = await screen.findByRole("menuitem", { name: "Ver" });
+    // jsdom does not navigate, so the anchor's own click is the observable.
+    const clicked = vi.fn((e: Event) => e.preventDefault());
+    item.addEventListener("click", clicked);
+
+    await user.keyboard("{ArrowDown}{Enter}");
+
+    expect(clicked).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a real href, so middle-click and open-in-new-tab still work", async () => {
+    const user = userEvent.setup();
+    render(await renderPage({}));
+
+    await user.click(screen.getByRole("button", { name: "Acciones de Retirado Perez" }));
+
+    const item = await screen.findByRole("menuitem", { name: "Ver" });
+    expect(item.tagName).toBe("A");
+    expect(item).toHaveAttribute("href", "/customers/c1");
   });
 
   it("leaves no bare Ver link in the row once the kebab owns the action", async () => {
