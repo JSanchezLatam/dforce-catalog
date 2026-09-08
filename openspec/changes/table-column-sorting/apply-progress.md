@@ -2,8 +2,22 @@
 
 ## Work Unit 1 — `/customers` (branch `feat/table-sorting-wu1-customers`)
 
-Status: **9/10 tasks done, 1 blocked (browser check, no tool access) — do not
-mark task 1.9 `[x]` until a human or browser-capable agent completes it.**
+> **This file is the apply agent's session snapshot, and parts of it were
+> superseded the same day.** Two measurements in it are wrong and are corrected
+> in place below; `tasks.md` carries the authoritative state. Read the code
+> comments in `queries.ts` before trusting anything here.
+>
+> Superseded: task 1.1 measured `datcollate` on the Postgres at `:5432`, but
+> the app connects to `:5433` (see `.env`) — that instance orders by bytes and
+> `lower(unaccent(...))` IS required. Task 1.2 recorded `{}` sorting last in
+> both directions, which no single `ORDER BY` produces; empty sorts FIRST
+> ascending, and `plates` is therefore OUT of the whitelist.
+>
+> Also superseded: the "no commit was made this session" note. WU1 is three
+> commits, and the browser check (1.9) was completed by the orchestrator.
+
+Status at the time of writing: **9/10 tasks done, 1 blocked (browser check, no
+tool access).**
 
 ### Task 1.1 — `lc_collate` measurement
 
@@ -51,8 +65,8 @@ DESC: c1 Carlos {ZZZ111} → c2 Beatriz {BBB222,CCC999} → c3 Ana {AAA333} → 
 Both conditions hold: **it executes**, and the array-lexicographic order
 **reads sensibly** (alphabetical by first plate; the zero-vehicle customer's
 SUPERSEDED (see tasks.md 1.2): `{}` sorts FIRST ascending, last descending — not a
-defect). `plates` is therefore in `CLIENTE_SORT`, and the Vehículos header
-is sortable — see the task 1.6 deviation note below for why this departs
+defect). SUPERSEDED: `plates` is NOT in `CLIENTE_SORT` and the Vehículos header
+is plain text — see the task 1.6 deviation note below for why this departs
 from tasks.md's literal wording.
 
 ### Task 1.3/1.4 — RED/GREEN `parseClienteSort` + `CLIENTE_SORT`

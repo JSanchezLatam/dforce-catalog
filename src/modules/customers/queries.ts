@@ -91,12 +91,8 @@ export function buildClienteListWhere(filters: ClienteFilters): SQL | undefined 
 }
 
 /**
- * table-column-sorting D2 — one whitelist, shared by `parseClienteSort` and
- * the page (which imports it to decide which headers link). `plates` is
- * included: the throwaway-Postgres spike (design's Open Question, task 1.2,
- * recorded in apply-progress) proved `.orderBy()` against this correlated
- * `array_agg` alias both executes and reads sensibly (alphabetical by first
- * plate).
+ * The sortable-column whitelist. One object, imported by both the query and
+ * the page, so neither can claim a column the other does not support.
  *
  * `name` and `email` are wrapped in `lower(unaccent(...))`. Task 1.1 read
  * `datcollate` off the Postgres on `:5432` and concluded no wrapping was
@@ -107,16 +103,16 @@ export function buildClienteListWhere(filters: ClienteFilters): SQL | undefined 
  *   lower()            Ana < automovil < Zapata < Zulema < Ángel
  *   lower(unaccent())  Ana < Ángel < automovil < Zapata < Zulema
  *
- * Measured on that instance with the app's own credentials. Unwrapped, every
- * lowercase name sorts after every uppercase one and "Ángel", "Núñez" and
- * "Peña" land past "Z" — this list already contains NUÑEZ and Peña.
+ * Unwrapped, every lowercase name sorts after every uppercase one and
+ * "Ángel", "Núñez" and "Peña" land past "Z" — this list already contains
+ * NUÑEZ and Peña. A declared `datcollate` does not predict behaviour; order
+ * three known values and read the result.
  *
  * `phone` is left bare: digits and dashes have neither case nor accents.
- * `plates` too — plates are uppercase alphanumeric by construction.
  *
  * `unaccent()` is STABLE, so this cannot use `cliente_name_idx`; at 370 rows
- * that is a sequential scan of nothing. It would need a rethink at a scale
- * where the index mattered.
+ * that is a sequential scan of nothing, and it would need rethinking at a
+ * scale where the index mattered.
  */
 export const CLIENTE_SORT = {
   name: sql`lower(unaccent(${cliente.name}))`,

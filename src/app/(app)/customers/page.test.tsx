@@ -387,6 +387,32 @@ describe("CustomersPage — column sorting", () => {
     expect(vehiculos).not.toHaveAttribute("aria-sort", "descending");
   });
 
+  /**
+   * `buildSortHref` writes sort/dir; `buildPageHrefPattern` builds every
+   * pagination link and did not. Sorting by Email and clicking page 2 dropped
+   * them, so `parseClienteSort` returned undefined and page 2 came back in
+   * `desc(createdAt)` — with the OFFSET computed against the OTHER ordering.
+   * Rows repeat across the boundary and rows vanish. That is the failure the
+   * tiebreaker exists to prevent, arriving through a different door.
+   *
+   * The same function already carries an R20 comment saying "every filter in
+   * the URL has to survive paging", and a sibling test pinning `status` for
+   * exactly this reason.
+   */
+  it("keeps the sort on every pagination link, like the status beside it", async () => {
+    render(await renderPage({ sort: "name", dir: "asc" }));
+
+    const pageHref = screen
+      .getAllByRole("link")
+      .map((a) => a.getAttribute("href") ?? "")
+      .find((href) => href.includes("page="));
+
+    expect(pageHref).toBeDefined();
+    const url = new URL(pageHref!, "http://localhost");
+    expect(url.searchParams.get("sort")).toBe("name");
+    expect(url.searchParams.get("dir")).toBe("asc");
+  });
+
   it("falls back to default order without throwing on a hand-typed garbage sort/dir", async () => {
     render(await renderPage({ sort: "garbage", dir: "sideways" }));
 

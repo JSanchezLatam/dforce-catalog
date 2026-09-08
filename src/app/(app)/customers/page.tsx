@@ -168,7 +168,7 @@ export default async function CustomersPage({
                       // Through `buildPageHref` so this link cannot drift from
                       // the pagination links beside it — it kept `pageSize`
                       // and this one had dropped it.
-                      href={buildPageHref({ ...params, status: "all" }, 1)}
+                      href={buildPageHref({ ...params, status: "all" }, 1, sort)}
                       className="text-primary hover:underline"
                     >
                       Buscar también entre los desactivados
@@ -192,7 +192,7 @@ export default async function CustomersPage({
                     {/* Through `buildPageHref`, like the widen-search link
                         above — hardcoded, this one dropped `pageSize`, which
                         is the defect WU14.2 fixed one branch over. */}
-                    <Link href={buildPageHref({ ...params, status: "inactive" }, 1)} className="text-primary hover:underline">
+                    <Link href={buildPageHref({ ...params, status: "inactive" }, 1, sort)} className="text-primary hover:underline">
                       Ver desactivados
                     </Link>
                   </>
@@ -205,7 +205,7 @@ export default async function CustomersPage({
                   <>
                     Ningún cliente desactivado.{" "}
                     <Link
-                      href={buildPageHref({ ...params, status: "active" }, 1)}
+                      href={buildPageHref({ ...params, status: "active" }, 1, sort)}
                       className="text-primary hover:underline"
                     >
                       Ver los activos
@@ -294,7 +294,7 @@ export default async function CustomersPage({
                 <Pagination
                   currentPage={pageWindow.page}
                   pageCount={pageCount}
-                  hrefPattern={buildPageHrefPattern(params)}
+                  hrefPattern={buildPageHrefPattern(params, sort)}
                 />
               </CardContent>
             </Card>
@@ -306,35 +306,18 @@ export default async function CustomersPage({
 }
 
 /**
- * A serializable `{page}` PATTERN, not a function.
- *
- * `Pagination` is a client component, and a server component cannot hand one a
- * function — Next.js throws "Functions cannot be passed directly to Client
- * Components". The bug shipped in Phase 6 and stayed invisible for months
- * because `Pagination` returns `null` at `pageCount <= 1`, and this database
- * held one customer. Importing the Interfuerza list made it 37 pages and the
- * page stopped rendering.
- *
- * `hrefPattern` is the variant that already existed for exactly this.
- */
-/**
- * table-column-sorting D1 — a real `<a>`/`<Link>` built by this Server
- * Component, not a `<button>` with a client `onClick`: the latter is exactly
- * the "server function handed to a client component" defect class already
- * documented at `page.tsx:266-278` (this file's original line numbers), and a
- * new `router.push` here would be a second URL writer outside
- * `CustomerFilters`' `pushedParamsRef` (design D1). `plates` is included:
- * see the `CLIENTE_SORT` docstring in `queries.ts` for why the Vehículos
- * column is sortable in v1.
- */
-/**
  * The header row, declared HERE rather than derived from `CLIENTE_SORT`.
  * Deriving it made a query-layer decision silently reshape the table: adding
  * a key grew the header by one with no matching `<TableCell>`, and removing
  * `plates` shrank it below the four cells below. `sort` is typed against the
  * whitelist, so a column can still only claim to be sortable if the query
  * agrees — but the ROW SHAPE now lives next to the cells it has to match.
- * A column with no `sort` renders as plain text.
+ *
+ * Vehículos has no `sort` on purpose: `platesSubquery()` coalesces to `'{}'`,
+ * Postgres compares arrays element-wise, so empty sorts FIRST ascending — and
+ * 369 of 370 customers have no vehicle, so the column would show ten
+ * em-dashes and bury the one real list on page 37. The spec gates it on
+ * reading sensibly, and it does not.
  */
 const COLUMNS: readonly { label: string; sort?: keyof typeof CLIENTE_SORT }[] = [
   { label: "Nombre", sort: "name" },
@@ -346,6 +329,14 @@ const COLUMNS: readonly { label: string; sort?: keyof typeof CLIENTE_SORT }[] = 
 /**
  * AGENTS.md's 44x44 minimum hit target — a sortable header is an action
  * control, same class as the row's `Ver` link a few lines below.
+ */
+/**
+ * table-column-sorting D1 — a real `<a>`/`<Link>` built by this Server
+ * Component, not a `<button>` with a client `onClick`: the latter is exactly
+ * the "server function handed to a client component" defect class already
+ * documented at `page.tsx:266-278` (this file's original line numbers), and a
+ * new `router.push` here would be a second URL writer outside
+ * `CustomerFilters`' `pushedParamsRef` (design D1).
  */
 function SortableHeader({
   label,
@@ -386,7 +377,19 @@ function buildSortHref(params: SearchParams, key: keyof typeof CLIENTE_SORT, cur
   return `/customers?${search.toString()}`;
 }
 
-function buildPageHrefPattern(params: SearchParams): string {
+/**
+ * A serializable `{page}` PATTERN, not a function.
+ *
+ * `Pagination` is a client component, and a server component cannot hand one a
+ * function — Next.js throws "Functions cannot be passed directly to Client
+ * Components". The bug shipped in Phase 6 and stayed invisible for months
+ * because `Pagination` returns `null` at `pageCount <= 1`, and this database
+ * held one customer. Importing the Interfuerza list made it 37 pages and the
+ * page stopped rendering.
+ *
+ * `hrefPattern` is the variant that already existed for exactly this.
+ */
+function buildPageHrefPattern(params: SearchParams, sort: ClienteSort | undefined): string {
   const search = new URLSearchParams();
   // `firstValue` for every key, matching `normalizeClienteFilters`. The
   // `typeof === "string"` checks these replace saw `?search=a&search=b` as an
@@ -401,6 +404,16 @@ function buildPageHrefPattern(params: SearchParams): string {
   // the records having disappeared rather than the filter having reset.
   const status = firstValue(params.status);
   if (status === "inactive" || status === "all") search.set("status", status);
+  // The sort is one of those filters. Dropped here, sorting by Email and
+  // clicking page 2 returned rows in `desc(createdAt)` while the OFFSET had
+  // been computed against the email ordering — so rows repeat across the
+  // boundary and rows never appear at all. Taken from the PARSED sort, not
+  // from `params`, so a hand-typed `?sort=garbage` cannot be laundered into
+  // the pagination links.
+  if (sort) {
+    search.set("sort", sort.key);
+    search.set("dir", sort.dir);
+  }
   // `page` appended raw rather than through `URLSearchParams.set`: that
   // percent-encodes the braces, and `Pagination` replaces the literal `{page}`.
   const query = search.toString();
@@ -412,6 +425,6 @@ function buildPageHrefPattern(params: SearchParams): string {
  * it — the two widen-search links use this, and the whole reason the pattern
  * carries every filter is that a second copy dropped `pageSize` once already.
  */
-function buildPageHref(params: SearchParams, page: number): string {
-  return buildPageHrefPattern(params).replace("{page}", String(page));
+function buildPageHref(params: SearchParams, page: number, sort: ClienteSort | undefined): string {
+  return buildPageHrefPattern(params, sort).replace("{page}", String(page));
 }
