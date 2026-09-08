@@ -6,6 +6,7 @@ import type { Cliente, OrdenServicio, Vehiculo } from "@/shared/db/schema";
 import {
   buildClienteListWhere,
   buildClienteSearchWhere,
+  buildClienteOrderBy,
   CLIENTE_SORT,
   countClientes,
   findClienteByPhone,
@@ -142,12 +143,14 @@ describe("buildClienteSearchWhere (R19)", () => {
 });
 
 /**
- * table-column-sorting WU1 — `plates` is in the whitelist because the
- * throwaway-Postgres spike (task 1.2, recorded in apply-progress) proved both
- * required conditions: `.orderBy()` against the correlated `platesSubquery()`
- * alias executes, and the resulting array-lexicographic order reads
- * sensibly (alphabetical by first plate). Had either failed, this key would
- * not exist (design D2 — "dropping plates is deleting one key").
+ * table-column-sorting WU1 — `plates` is NOT in the whitelist. The spike
+ * recorded in apply-progress claimed empty arrays sorted last in BOTH
+ * directions, which no single `ORDER BY` can produce. Re-measured against the
+ * app's own database (`:5433`): `platesSubquery()` coalesces to `'{}'` and
+ * Postgres compares arrays element-wise, so empty sorts FIRST ascending —
+ * and 369 of 370 customers have no vehicle, so ascending is ten em-dashes
+ * with the one real list on page 37. The spec gates this column on executing
+ * AND reading sensibly; the second half fails.
  */
 /**
  * Measured against the database the app actually uses (`:5433`, 370 rows), not
@@ -164,6 +167,30 @@ describe("buildClienteSearchWhere (R19)", () => {
  * expression index but not an ORDER BY; at 370 rows the unused
  * `cliente_name_idx` costs nothing.
  */
+/**
+ * `CLIENTE_SORT` renders a column EXPRESSION; this renders the finished
+ * ORDER BY clause. The distinction is not academic: putting "nulls last"
+ * inside the expression produced `… nulls last desc`, which Postgres rejects,
+ * and the expression-level assertion above stayed green while `/customers`
+ * threw a runtime error. Direction first, then NULLS.
+ */
+describe("buildClienteOrderBy renders valid SQL", () => {
+  const dialect = new PgDialect();
+
+  it.each([
+    ["asc", "asc nulls last"],
+    ["desc", "desc nulls last"],
+  ] as const)("puts the direction before NULLS for %s", (dir, expected) => {
+    const [primary] = buildClienteOrderBy({ key: "email", dir });
+    expect(dialect.sqlToQuery(sql`${primary}`).sql).toContain(expected);
+  });
+
+  it("always appends a stable tiebreaker, so paging cannot repeat or skip a row", () => {
+    expect(buildClienteOrderBy({ key: "phone", dir: "asc" })).toHaveLength(2);
+    expect(buildClienteOrderBy(undefined)).toHaveLength(1);
+  });
+});
+
 describe("CLIENTE_SORT text ordering", () => {
   const dialect = new PgDialect();
 
@@ -182,7 +209,7 @@ describe("CLIENTE_SORT text ordering", () => {
 });
 
 describe("parseClienteSort", () => {
-  it.each(["name", "phone", "email", "plates"] as const)(
+  it.each(["name", "phone", "email"] as const)(
     "returns a defined sort for the whitelisted column %s",
     (key) => {
       expect(parseClienteSort({ sort: key, dir: "asc" })).toEqual({ key, dir: "asc" });
@@ -203,8 +230,8 @@ describe("parseClienteSort", () => {
     expect(parseClienteSort({ dir: "asc" })).toBeUndefined();
   });
 
-  it("CLIENTE_SORT whitelists exactly name, phone, email, plates", () => {
-    expect(Object.keys(CLIENTE_SORT).sort()).toEqual(["email", "name", "phone", "plates"]);
+  it("CLIENTE_SORT whitelists exactly name, phone, email — plates is deliberately absent", () => {
+    expect(Object.keys(CLIENTE_SORT).sort()).toEqual(["email", "name", "phone"]);
   });
 });
 

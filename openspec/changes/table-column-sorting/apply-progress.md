@@ -50,7 +50,7 @@ DESC: c1 Carlos {ZZZ111} → c2 Beatriz {BBB222,CCC999} → c3 Ana {AAA333} → 
 
 Both conditions hold: **it executes**, and the array-lexicographic order
 **reads sensibly** (alphabetical by first plate; the zero-vehicle customer's
-`{}` sorts last in both directions, which is the expected edge case, not a
+SUPERSEDED (see tasks.md 1.2): `{}` sorts FIRST ascending, last descending — not a
 defect). `plates` is therefore in `CLIENTE_SORT`, and the Vehículos header
 is sortable — see the task 1.6 deviation note below for why this departs
 from tasks.md's literal wording.
@@ -234,7 +234,10 @@ and confirm zero console errors before task 1.9 is marked `[x]`.**
 - `npm run lint`: **0 errors, 15 warnings** — unchanged from the documented
   baseline (2026-08-28).
 
-### Files touched (matches the scope fence exactly)
+### Files touched
+
+(The four scoped source files. The branch also carries the six SDD
+artifacts and this record, committed separately.)
 
 - `src/modules/customers/queries.ts`
 - `src/modules/customers/queries.test.ts`

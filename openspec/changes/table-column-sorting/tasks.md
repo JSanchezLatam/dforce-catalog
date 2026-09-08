@@ -33,7 +33,15 @@ No overlap with WU2-4.
   *Satisfies*: design D5.
   **Result**: `datcollate = en_US.UTF-8` on the throwaway DB (`SHOW lc_collate`
   is not a recognized GUC on this Homebrew Postgres 17 build; `pg_database`
-  gave the authoritative answer instead). Not `C` — no `unaccent()` fix needed.
+  gave the authoritative answer instead). **SUPERSEDED — this reading was
+  taken against the WRONG instance.** `pg_isready` answers on `:5432`, whose
+  `cliente` table is empty; the app connects to `:5433` (see `.env`), which
+  holds all 370 rows. That instance also reports `en_US.utf8` and then orders
+  by BYTES: plain gives `Ana < Zapata < Zulema < automovil < Ángel`, so every
+  lowercase name sorts after every uppercase one and accents land past Z.
+  `lower(unaccent(...))` IS required, and ships on `name` and `email`.
+  A declared `datcollate` does not predict behaviour — order three known
+  values instead.
 
 - [x] 1.2 **Spike: is `plates` orderable?** Against the throwaway DB, try
   `.orderBy(sql\`plates\`)` (or the equivalent ordering the correlated
@@ -124,6 +132,15 @@ No overlap with WU2-4.
   apply-progress for the full output. `name`/`phone`/`email` sorted as plain
   string comparison; `plates` sorted array-lexicographically with the
   zero-vehicle customer's `{}` sorting last in both directions.
+  **SUPERSEDED — that result is not reachable.** No single `ORDER BY` puts the
+  same value last in both directions. Re-measured on `:5433`: `{}` sorts
+  FIRST ascending, last descending, because Postgres compares arrays
+  element-wise. Ascending opens with "Cliente generico", "SERGIO GUTIERREZ",
+  "LUIS DE LEON" — all vehicle-less — and 369 of 370 customers have no
+  vehicle, so the sort shows ten em-dashes and buries the single real list on
+  page 37. The spec gates this column on executing AND reading sensibly; the
+  second half fails, so `plates` is OUT of `CLIENTE_SORT` and Vehículos stays
+  a plain header.
 
 - [x] 1.8 **Mutation-verify** 1.3 and 1.5 — revert the `parseClienteSort`/
   `buildSortHref` implementation, confirm the named tests fail, then restore.
@@ -133,7 +150,7 @@ No overlap with WU2-4.
   (confirmed via a second `diff`) and re-ran green. Full suite green after
   restore (1303/1303).
 
-- [~] 1.9 **Browser check** — devtools open, zero console errors, both
+- [x] 1.9 **Browser check** — devtools open, zero console errors, both
   light/dark themes, on `/customers` with a sort applied. This is the
   verification for the header crossing (or not crossing) a Server/Client
   boundary — AGENTS.md's second documented coverage limit; the suite cannot

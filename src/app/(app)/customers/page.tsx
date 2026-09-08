@@ -225,14 +225,18 @@ export default async function CustomersPage({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {(Object.keys(CLIENTE_SORT) as (keyof typeof CLIENTE_SORT)[]).map((key) => (
-                      <SortableHeader
-                        key={key}
-                        label={SORT_LABELS[key]}
-                        href={buildSortHref(params, key, sort)}
-                        dir={sort?.key === key ? sort.dir : undefined}
-                      />
-                    ))}
+                    {COLUMNS.map((column) =>
+                      column.sort ? (
+                        <SortableHeader
+                          key={column.label}
+                          label={column.label}
+                          href={buildSortHref(params, column.sort, sort)}
+                          dir={sort?.key === column.sort ? sort.dir : undefined}
+                        />
+                      ) : (
+                        <TableHead key={column.label}>{column.label}</TableHead>
+                      ),
+                    )}
                     <TableHead className="w-24">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -323,12 +327,21 @@ export default async function CustomersPage({
  * see the `CLIENTE_SORT` docstring in `queries.ts` for why the Vehículos
  * column is sortable in v1.
  */
-const SORT_LABELS: Record<keyof typeof CLIENTE_SORT, string> = {
-  name: "Nombre",
-  phone: "Teléfono",
-  email: "Email",
-  plates: "Vehículos",
-};
+/**
+ * The header row, declared HERE rather than derived from `CLIENTE_SORT`.
+ * Deriving it made a query-layer decision silently reshape the table: adding
+ * a key grew the header by one with no matching `<TableCell>`, and removing
+ * `plates` shrank it below the four cells below. `sort` is typed against the
+ * whitelist, so a column can still only claim to be sortable if the query
+ * agrees — but the ROW SHAPE now lives next to the cells it has to match.
+ * A column with no `sort` renders as plain text.
+ */
+const COLUMNS: readonly { label: string; sort?: keyof typeof CLIENTE_SORT }[] = [
+  { label: "Nombre", sort: "name" },
+  { label: "Teléfono", sort: "phone" },
+  { label: "Email", sort: "email" },
+  { label: "Vehículos" },
+];
 
 /**
  * AGENTS.md's 44x44 minimum hit target — a sortable header is an action

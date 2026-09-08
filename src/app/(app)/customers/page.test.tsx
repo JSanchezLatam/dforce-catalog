@@ -324,15 +324,12 @@ describe("CustomersPage — the row action stays a link", () => {
 });
 
 /**
- * table-column-sorting WU1. `Vehículos` is sortable alongside
- * name/phone/email: the throwaway-Postgres spike (task 1.2, apply-progress)
- * proved BOTH conditions the spec's Conditional Vehicles Column requirement
- * demands — `.orderBy()` against the `plates` alias executes, and its
- * array-lexicographic order reads sensibly — so the spec's own scenario
- * ("MUST NOT render a clickable header UNLESS implementation-time
- * verification proved both conditions") requires the opposite outcome once
- * proved, keeping one whitelist (`CLIENTE_SORT`, design D2) the sole source
- * of truth for both the query and this page.
+ * table-column-sorting WU1. Nombre, Teléfono and Email are sortable;
+ * `Vehículos` is NOT, and that is the spec's Conditional Vehicles Column
+ * requirement doing its job — it renders a clickable header only if
+ * verification proved the order both executes and reads sensibly. Re-measured
+ * on the app's own database, ascending puts every vehicle-less customer
+ * first, and 369 of 370 have none.
  */
 describe("CustomersPage — column sorting", () => {
   beforeEach(() => {
@@ -340,19 +337,23 @@ describe("CustomersPage — column sorting", () => {
     countClientes.mockClear();
   });
 
-  it("renders name/phone/email/plates headers as links carrying ?sort=&dir=asc by default", async () => {
+  it("renders name/phone/email headers as links carrying ?sort=&dir=asc by default", async () => {
     render(await renderPage({}));
 
     for (const [name, key] of [
       ["Nombre", "name"],
       ["Teléfono", "phone"],
       ["Email", "email"],
-      ["Vehículos", "plates"],
     ] as const) {
       const url = new URL(screen.getByRole("link", { name }).getAttribute("href")!, "http://localhost");
       expect(url.searchParams.get("sort")).toBe(key);
       expect(url.searchParams.get("dir")).toBe("asc");
     }
+
+    // The negative half of the same requirement: a column whose ordering was
+    // not proved sensible renders as text, not a link.
+    expect(screen.getByRole("columnheader", { name: "Vehículos" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Vehículos" })).not.toBeInTheDocument();
   });
 
   it("toggles the active column to desc, preserves search/status/pageSize, and drops page", async () => {
@@ -375,11 +376,15 @@ describe("CustomersPage — column sorting", () => {
       "aria-sort",
       "descending",
     );
-    for (const name of ["Nombre", "Email", "Vehículos"]) {
+    for (const name of ["Nombre", "Email"]) {
       const header = screen.getByRole("link", { name }).closest("th");
       expect(header).not.toHaveAttribute("aria-sort", "ascending");
       expect(header).not.toHaveAttribute("aria-sort", "descending");
     }
+    // Vehículos is not a link, so it is reached as a plain column header.
+    const vehiculos = screen.getByRole("columnheader", { name: "Vehículos" });
+    expect(vehiculos).not.toHaveAttribute("aria-sort", "ascending");
+    expect(vehiculos).not.toHaveAttribute("aria-sort", "descending");
   });
 
   it("falls back to default order without throwing on a hand-typed garbage sort/dir", async () => {

@@ -6,7 +6,7 @@
  * the real DB call (defaulting to the actual drizzle query), so this module
  * is unit-testable with injected fakes and no live Postgres connection.
  */
-import { and, asc, count, desc, eq, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
 import { db } from "@/shared/db/client";
@@ -122,7 +122,15 @@ export const CLIENTE_SORT = {
   name: sql`lower(unaccent(${cliente.name}))`,
   phone: cliente.phone,
   email: sql`lower(unaccent(${cliente.email}))`,
-  plates: platesSubquery(),
+  // `plates` is NOT here. The spec gates it on executing AND reading sensibly
+  // (Conditional Vehicles Column for Customers), and the second half fails:
+  // `platesSubquery()` coalesces to `'{}'`, Postgres compares arrays
+  // element-wise, so empty sorts FIRST ascending and last descending — the
+  // opposite of what the spike recorded. Measured on the app's own database
+  // (`:5433`): ascending opens with "Cliente generico", "SERGIO GUTIERREZ",
+  // "LUIS DE LEON", all vehicle-less, and 369 of 370 customers have no
+  // vehicle at all — so the sort shows ten em-dashes and buries the one real
+  // list on page 37. It can come back when the column has data worth ordering.
 } as const;
 
 export type ClienteSort = { key: keyof typeof CLIENTE_SORT; dir: "asc" | "desc" };
@@ -142,10 +150,31 @@ export function parseClienteSort(searchParams: RawSearchParams): ClienteSort | u
   return { key: key as keyof typeof CLIENTE_SORT, dir };
 }
 
-function buildClienteOrderBy(sort?: ClienteSort) {
-  if (!sort) return desc(cliente.createdAt);
+/**
+ * Always TWO expressions. `phone` and `email` are not unique — email is
+ * nullable and mostly empty here — and Postgres gives no ordering guarantee
+ * among ties, so it may return them differently per query. With
+ * `.limit()/.offset()` on 37 pages that means a customer can appear on two
+ * pages and another on none. `createdAt` is near-unique, which is why the old
+ * single-key default never showed it.
+ */
+export function buildClienteOrderBy(sort?: ClienteSort) {
+  const tiebreak = desc(cliente.createdAt);
+  if (!sort) return [tiebreak];
   const column = CLIENTE_SORT[sort.key];
-  return sort.dir === "asc" ? asc(column) : desc(column);
+  // `NULLS LAST` in BOTH directions, and built HERE rather than inside the
+  // whitelist entry: Drizzle's `asc()`/`desc()` append the direction AFTER
+  // the expression, so putting "nulls last" inside the whitelist entry
+  // rendered "… nulls last desc", which Postgres rejects. The page threw a
+  // runtime error while all 1305 tests stayed green.
+  //
+  // Why last both ways: `email` is nullable and mostly empty here, and
+  // Postgres defaults to NULLS FIRST on DESC, so one click would open on a
+  // full page of em-dashes. A missing value is never more prominent than a
+  // present one.
+  const primary =
+    sort.dir === "asc" ? sql`${column} asc nulls last` : sql`${column} desc nulls last`;
+  return [primary, tiebreak];
 }
 
 /** R19 — paginated + searched customer list, newest first by default; sortable per D2. */
@@ -169,7 +198,7 @@ export async function listClientes(
       })
       .from(cliente)
       .where(buildClienteListWhere(filters))
-      .orderBy(buildClienteOrderBy(sort))
+      .orderBy(...buildClienteOrderBy(sort))
       .limit(window.limit)
       .offset(window.offset),
 ): Promise<ClienteListItem[]> {
