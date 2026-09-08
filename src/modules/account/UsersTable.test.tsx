@@ -7,10 +7,30 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { UsersTable } from "./UsersTable";
+import { UsersTable, type UserRow } from "./UsersTable";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+
+/**
+ * `ROLE_LABELS` is kept REAL here — `importOriginal` copies the shipped map in,
+ * so every test below renders the real Spanish labels and the component still
+ * has to read the shared constant rather than a local duplicate.
+ *
+ * The one exception is the role-sorting test. The real map's two entries order
+ * identically to their keys ("Administrador" < "Técnico" and "administrador" <
+ * "tecnico"), so against it a label sort and a raw-key sort are
+ * indistinguishable and a role-sorting assertion is a placebo. That test
+ * temporarily swaps in labels whose order is the REVERSE of their keys, then
+ * restores them — a fixture deliberately LESS convenient than reality, and the
+ * only shape in which the "sorts by the label shown" seam is observable.
+ */
+const roleLabels = vi.hoisted(() => ({}) as Record<string, string>);
+vi.mock("@/modules/auth/roles", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/modules/auth/roles")>();
+  Object.assign(roleLabels, actual.ROLE_LABELS);
+  return { ...actual, ROLE_LABELS: roleLabels };
+});
 
 const ACTIVE = {
   id: "u-1",
@@ -41,6 +61,26 @@ function mockFetch(response: { status: number; body?: unknown }) {
 
 function rowFor(username: string) {
   return screen.getByRole("row", { name: new RegExp(username) });
+}
+
+/** Body rows, in render order, read back through their first cell (Usuario). */
+function usernamesInOrder() {
+  return screen
+    .getAllByRole("row")
+    .slice(1)
+    .map((row) => within(row).getAllByRole("cell")[0].textContent);
+}
+
+/** Cell `n` of every body row, in render order. */
+function columnInOrder(index: number) {
+  return screen
+    .getAllByRole("row")
+    .slice(1)
+    .map((row) => within(row).getAllByRole("cell")[index].textContent);
+}
+
+function activeUser(overrides: Partial<UserRow> & { id: string; username: string }): UserRow {
+  return { ...ACTIVE, name: null, email: null, deactivatedAt: null, ...overrides };
 }
 
 beforeEach(() => {
@@ -85,6 +125,26 @@ describe("UsersTable — which rows are visible", () => {
 
     expect(within(rowFor("beto")).getByText("Inactivo")).toBeInTheDocument();
     expect(within(rowFor("ana")).queryByText("Inactivo")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Nothing in `src/` asserted either role label before this block existed —
+ * `crm-shell-settings-rbac/verify-report.md:62` recorded exactly that, and it
+ * is why the two same-named `ROLE_LABELS` constants were free to disagree on
+ * screen for months. The value below is the one the app settled on; the
+ * archived `role-permissions/spec.md:11` says "Técnico de taller", and this
+ * change amends it deliberately rather than by drift.
+ */
+describe("UsersTable — the role label it renders", () => {
+  it("renders the Spanish role label from the shared constant, not a raw enum value", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    await user.click(screen.getByLabelText("Mostrar inactivos"));
+
+    expect(within(rowFor("ana")).getByText("Administrador")).toBeInTheDocument();
+    expect(within(rowFor("beto")).getByText("Técnico")).toBeInTheDocument();
+    expect(screen.queryByText("tecnico")).not.toBeInTheDocument();
   });
 });
 
@@ -233,5 +293,176 @@ describe("UsersTable — when the safety guard refuses", () => {
     // this file still green.
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo conectar. Revisa tu conexión e intenta de nuevo.");
     expect(within(rowFor("ana")).getByRole("button", { name: "Desactivar" })).toBeEnabled();
+  });
+});
+
+/**
+ * table-column-sorting WU4 — this table sorts CLIENT-SIDE over the array the
+ * page already handed it (a workshop has a handful of users, same reasoning as
+ * the `Mostrar inactivos` filter above), so the headers are `<button>`s and no
+ * request leaves the browser.
+ */
+describe("UsersTable — column sorting", () => {
+  it("re-orders the visible rows on a header click without touching the network", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200 });
+    render(
+      <UsersTable
+        users={[
+          activeUser({ id: "s-1", username: "zoe" }),
+          activeUser({ id: "s-2", username: "ana" }),
+        ]}
+      />,
+    );
+    expect(usernamesInOrder()).toEqual(["zoe", "ana"]);
+
+    await user.click(screen.getByRole("button", { name: "Usuario" }));
+
+    expect(usernamesInOrder()).toEqual(["ana", "zoe"]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("toggles the same column to descending and marks it with aria-sort", async () => {
+    const user = userEvent.setup();
+    render(
+      <UsersTable
+        users={[
+          activeUser({ id: "s-1", username: "zoe" }),
+          activeUser({ id: "s-2", username: "ana" }),
+        ]}
+      />,
+    );
+
+    const header = screen.getByRole("button", { name: "Usuario" });
+    await user.click(header);
+    expect(header.closest("th")).toHaveAttribute("aria-sort", "ascending");
+    // No other column claims a direction while Usuario is the active one.
+    expect(screen.getByRole("button", { name: "Rol" }).closest("th")).not.toHaveAttribute("aria-sort");
+
+    await user.click(header);
+
+    expect(usernamesInOrder()).toEqual(["zoe", "ana"]);
+    expect(header.closest("th")).toHaveAttribute("aria-sort", "descending");
+  });
+
+  // A plain `<` puts "Bruno" first: `Á` is U+00C1, above `B` in code-point
+  // order. Only a locale-aware comparison reads it as an accented `A`.
+  it("sorts 'Ángela' before 'Bruno' by name, which a code-point compare does not", async () => {
+    const user = userEvent.setup();
+    render(
+      <UsersTable
+        users={[
+          activeUser({ id: "s-1", username: "bruno", name: "Bruno Paz" }),
+          activeUser({ id: "s-2", username: "angela", name: "Ángela Sosa" }),
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Nombre" }));
+
+    expect(columnInOrder(1)).toEqual(["Ángela Sosa", "Bruno Paz"]);
+    expect(usernamesInOrder()).toEqual(["angela", "bruno"]);
+  });
+
+  it("sorts the Rol column by the label it renders, not by the raw role key", async () => {
+    const user = userEvent.setup();
+    const real = { ...roleLabels };
+    // Reverse of the key order: "administrador" < "tecnico", but "Zulú" >
+    // "Alfa". A sort over the raw keys leaves ana first and fails here.
+    Object.assign(roleLabels, { administrador: "Zulú", tecnico: "Alfa" });
+    try {
+      render(
+        <UsersTable
+          users={[
+            activeUser({ id: "s-1", username: "ana", role: "administrador" }),
+            activeUser({ id: "s-2", username: "beto", role: "tecnico" }),
+          ]}
+        />,
+      );
+      // The rendered label comes from the shared constant, not a local copy.
+      expect(columnInOrder(3)).toEqual(["Zulú", "Alfa"]);
+
+      await user.click(screen.getByRole("button", { name: "Rol" }));
+
+      expect(columnInOrder(3)).toEqual(["Alfa", "Zulú"]);
+      expect(usernamesInOrder()).toEqual(["beto", "ana"]);
+    } finally {
+      Object.assign(roleLabels, real);
+    }
+  });
+
+  // The spec's NULL Ordering requirement names users' `name` and `email`: a
+  // row with no value sorts LAST in BOTH directions, never first. A plain
+  // comparator gets this wrong for free — `"".localeCompare(x)` is negative,
+  // so the empty string leads ascending, and negating it for `desc` only moves
+  // the problem to the other end.
+  it("sorts the Email column with the missing email last, ascending AND descending", async () => {
+    const user = userEvent.setup();
+    render(
+      <UsersTable
+        users={[
+          activeUser({ id: "s-1", username: "zoe", email: "zoe@taller.com" }),
+          activeUser({ id: "s-2", username: "ana", email: "ana@taller.com" }),
+          activeUser({ id: "s-3", username: "nadie", email: null }),
+        ]}
+      />,
+    );
+
+    const header = screen.getByRole("button", { name: "Email" });
+    await user.click(header);
+    expect(usernamesInOrder()).toEqual(["ana", "zoe", "nadie"]);
+
+    await user.click(header);
+
+    expect(usernamesInOrder()).toEqual(["zoe", "ana", "nadie"]);
+  });
+
+  it("sorts the Nombre column with the missing name last, ascending AND descending", async () => {
+    const user = userEvent.setup();
+    render(
+      <UsersTable
+        users={[
+          activeUser({ id: "s-1", username: "zoe", name: "Zoe Paz" }),
+          activeUser({ id: "s-2", username: "nadie", name: null }),
+          activeUser({ id: "s-3", username: "ana", name: "Ana Sosa" }),
+        ]}
+      />,
+    );
+
+    const header = screen.getByRole("button", { name: "Nombre" });
+    await user.click(header);
+    expect(usernamesInOrder()).toEqual(["ana", "zoe", "nadie"]);
+
+    await user.click(header);
+
+    expect(usernamesInOrder()).toEqual(["zoe", "ana", "nadie"]);
+  });
+
+  // The one non-string comparator: `estado` is derived from `deactivatedAt`,
+  // and ascending has to mean Activo first — the reverse reads as backwards
+  // against the "Activo"/"Inactivo" labels the column actually shows.
+  it("sorts the Estado column with the active rows first", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[INACTIVE, ACTIVE]} />);
+    await user.click(screen.getByLabelText("Mostrar inactivos"));
+    expect(usernamesInOrder()).toEqual(["beto", "ana"]);
+
+    await user.click(screen.getByRole("button", { name: "Estado" }));
+
+    expect(usernamesInOrder()).toEqual(["ana", "beto"]);
+    expect(columnInOrder(4)).toEqual(["Activo", "Inactivo"]);
+  });
+
+  it("offers no sort control on Acciones", () => {
+    render(<UsersTable users={[ACTIVE]} />);
+
+    const acciones = screen.getByRole("columnheader", { name: "Acciones" });
+    expect(acciones).toBeInTheDocument();
+    expect(within(acciones).queryByRole("button")).not.toBeInTheDocument();
+    // The positive half — every other header IS a control, so the assertion
+    // above cannot pass merely because no header is clickable.
+    for (const name of ["Usuario", "Nombre", "Email", "Rol", "Estado"]) {
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    }
   });
 });
