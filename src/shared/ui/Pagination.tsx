@@ -87,7 +87,7 @@ export function Pagination(props: PaginationProps) {
 
   return (
     <nav className="flex items-center gap-1 text-sm text-muted-foreground">
-      {currentPage > 1 && renderNav(currentPage - 1, "Previous")}
+      {currentPage > 1 && renderNav(currentPage - 1, "Anterior")}
       {pages.map((p, idx) =>
         p === "ellipsis" ? (
           <span key={`e-${idx}`} className="px-2 text-muted-foreground">
@@ -97,9 +97,9 @@ export function Pagination(props: PaginationProps) {
           renderPage(p)
         ),
       )}
-      {currentPage < pageCount && renderNav(currentPage + 1, "Next")}
+      {currentPage < pageCount && renderNav(currentPage + 1, "Siguiente")}
       <span className="ml-4 text-muted-foreground">
-        Page {currentPage} of {pageCount}
+        Página {currentPage} de {pageCount}
       </span>
     </nav>
   );

@@ -31,7 +31,7 @@ export default async function ProductDetailPage({
   const { id } = await params;
   const user = await requireSessionFromHeaders();
   if (!can(user, "inventory.read")) {
-    return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
+    return <div className="p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
   }
 
   const product = await getProductById(id);
@@ -59,7 +59,7 @@ export default async function ProductDetailPage({
       <Breadcrumb className="mb-6">
         <BreadcrumbList>
           <BreadcrumbItem>
-            <BreadcrumbLink render={<Link href="/inventory" />}>Inventory</BreadcrumbLink>
+            <BreadcrumbLink render={<Link href="/inventory" />}>Inventario</BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
@@ -76,7 +76,7 @@ export default async function ProductDetailPage({
                 {product.name}
                 {product.stock != null && (
                   <Badge variant={product.stock > 0 ? "default" : "destructive"}>
-                    {product.stock} in stock
+                    {product.stock} en stock
                   </Badge>
                 )}
               </CardTitle>
@@ -84,12 +84,12 @@ export default async function ProductDetailPage({
             <CardContent>
               <dl>
                 {field("ID", product.id)}
-                {field("Category L1", product.categoryL1)}
-                {field("Category L2", product.categoryL2)}
-                {field("Price", product.price != null ? `$${product.price.toFixed(2)}` : null)}
-                {field("Code", p?.Codigo)}
-                {field("Brand", p?.Marca)}
-                {field("Description", p?.Descripcion)}
+                {field("Categoría 1", product.categoryL1)}
+                {field("Categoría 2", product.categoryL2)}
+                {field("Precio", product.price != null ? `$${product.price.toFixed(2)}` : null)}
+                {field("Código", p?.Codigo)}
+                {field("Marca", p?.Marca)}
+                {field("Descripción", p?.Descripcion)}
               </dl>
             </CardContent>
           </Card>
@@ -97,13 +97,13 @@ export default async function ProductDetailPage({
           {priceLists.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Price Lists</CardTitle>
+                <CardTitle>Listas de precios</CardTitle>
               </CardHeader>
               <CardContent>
                 <dl>
                   {priceLists.map((pl, i) => (
                     <div key={i} className="grid grid-cols-3 gap-2 py-2 border-b border-border last:border-0">
-                      <dt className="text-sm font-medium text-muted-foreground">{pl.ListName ?? `List ${i + 1}`}</dt>
+                      <dt className="text-sm font-medium text-muted-foreground">{pl.ListName ?? `Lista ${i + 1}`}</dt>
                       <dd className="col-span-2 text-sm text-foreground">
                         {pl.Price != null ? `$${Number(pl.Price).toFixed(2)}` : "—"}
                       </dd>
@@ -117,13 +117,13 @@ export default async function ProductDetailPage({
           {inStock && inStock.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Stock by Warehouse</CardTitle>
+                <CardTitle>Stock por depósito</CardTitle>
               </CardHeader>
               <CardContent>
                 <dl>
                   {inStock.map((row, i) => (
                     <div key={i} className="grid grid-cols-3 gap-2 py-2 border-b border-border last:border-0">
-                      <dt className="text-sm font-medium text-muted-foreground">Warehouse {i + 1}</dt>
+                      <dt className="text-sm font-medium text-muted-foreground">Depósito {i + 1}</dt>
                       <dd className="col-span-2 text-sm text-foreground">
                         {String(row.Available ?? "—")}
                       </dd>
@@ -137,7 +137,7 @@ export default async function ProductDetailPage({
           {raw.Matrix != null && Array.isArray(raw.Matrix) && raw.Matrix.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Matrix Data</CardTitle>
+                <CardTitle>Datos de matriz</CardTitle>
               </CardHeader>
               <CardContent>
                 <pre className="max-h-64 overflow-auto rounded-lg bg-muted p-4 text-xs text-foreground whitespace-pre-wrap font-mono">
@@ -152,7 +152,7 @@ export default async function ProductDetailPage({
           {images.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Images</CardTitle>
+                <CardTitle>Imágenes</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {images.map((img, i) =>
@@ -160,7 +160,7 @@ export default async function ProductDetailPage({
                     <LazyImage
                       key={i}
                       src={img.src}
-                      alt={`${product.name} — image ${i + 1}`}
+                      alt={`${product.name} — imagen ${i + 1}`}
                       className="aspect-square w-full rounded-lg"
                     />
                   ) : null,

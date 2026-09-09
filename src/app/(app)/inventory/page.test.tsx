@@ -63,9 +63,9 @@ describe("InventoryPage — column sorting", () => {
 
     for (const [name, key] of [
       ["ID", "id"],
-      ["Name", "name"],
-      ["Category L1", "categoryL1"],
-      ["Category L2", "categoryL2"],
+      ["Nombre", "name"],
+      ["Categoría 1", "categoryL1"],
+      ["Categoría 2", "categoryL2"],
     ] as const) {
       const url = new URL(screen.getByRole("link", { name }).getAttribute("href")!, "http://localhost");
       expect(url.searchParams.get("sort")).toBe(key);
@@ -90,7 +90,7 @@ describe("InventoryPage — column sorting", () => {
       }),
     );
 
-    const url = new URL(screen.getByRole("link", { name: "Name" }).getAttribute("href")!, "http://localhost");
+    const url = new URL(screen.getByRole("link", { name: "Nombre" }).getAttribute("href")!, "http://localhost");
     expect(url.searchParams.get("dir")).toBe("desc");
     expect(url.searchParams.get("categoryL1")).toBe("REPUESTOS");
     expect(url.searchParams.get("pageSize")).toBe("50");
@@ -100,11 +100,11 @@ describe("InventoryPage — column sorting", () => {
   it("marks only the active header with aria-sort, matching the URL direction", async () => {
     render(await renderPage({ sort: "categoryL2", dir: "desc" }));
 
-    expect(screen.getByRole("link", { name: "Category L2" }).closest("th")).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Categoría 2" }).closest("th")).toHaveAttribute(
       "aria-sort",
       "descending",
     );
-    for (const name of ["ID", "Name", "Category L1"]) {
+    for (const name of ["ID", "Nombre", "Categoría 1"]) {
       const header = screen.getByRole("link", { name }).closest("th");
       expect(header).not.toHaveAttribute("aria-sort", "ascending");
       expect(header).not.toHaveAttribute("aria-sort", "descending");
@@ -148,7 +148,7 @@ describe("InventoryPage — column sorting", () => {
     render(await renderPage({ sort: "garbage", dir: "sideways" }));
 
     expect(listInventory.mock.calls[0][2]).toBeUndefined();
-    expect(screen.getByRole("link", { name: "Name" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Nombre" })).toBeInTheDocument();
   });
 });
 

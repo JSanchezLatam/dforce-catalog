@@ -54,14 +54,14 @@ export default async function InventoryPage({
   const sort = parseInventorySort(params);
   const user = await requireSessionFromHeaders();
   if (!can(user, "inventory.read")) {
-    return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
+    return <div className="p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
   }
   const canTriggerSync = can(user, "sync.manual"); // R2 — admin-only manual sync trigger
   /**
    * Selection exists on this table for exactly one reason: feeding the
    * catalog builder. `tecnico` has `inventory.read` but not
    * `catalogs.generate` (`policy.ts`), and `/builder` refuses them with "No
-   * tienes permiso para ver esta página" — so without this gate the checkbox
+   * tenés permiso para ver esta página" — so without this gate the checkbox
    * column would offer a técnico a bulk action that can only dead-end on a
    * permission page. No new permission surface: the same flag `/builder`
    * already checks.
@@ -90,11 +90,11 @@ export default async function InventoryPage({
     return (
       <div className="p-8">
         <InventoryStatsHeader user={user} total={grandTotal} syncButton={syncButton} />
-        <h1 className={PAGE_HEADING}>Inventory</h1>
+        <h1 className={PAGE_HEADING}>Inventario</h1>
         <Card size="sm">
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              The inventory is empty. Ask an administrator to run an inventory sync to populate it.
+              El inventario está vacío. Pedile a un administrador que corra una sincronización de inventario para poblarlo.
             </p>
           </CardContent>
         </Card>
@@ -105,7 +105,7 @@ export default async function InventoryPage({
   return (
     <div className="p-8">
       <InventoryStatsHeader user={user} total={grandTotal} syncButton={syncButton} />
-      <h1 className={PAGE_HEADING}>Inventory</h1>
+      <h1 className={PAGE_HEADING}>Inventario</h1>
       <Card size="sm" className="mb-4">
         <CardContent>
           <InventoryFilters
@@ -131,11 +131,11 @@ export default async function InventoryPage({
           <CardContent>
             <div className="flex flex-col items-center gap-2 py-12 text-center">
               <PackageSearch className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
-              <h2 className="text-lg font-semibold text-foreground">No products found</h2>
+              <h2 className="text-lg font-semibold text-foreground">No se encontraron productos</h2>
               <p className="text-sm text-muted-foreground">
-                No products match the selected filters.{" "}
+                Ningún producto coincide con los filtros seleccionados.{" "}
                 <Link href="/inventory" className="text-primary hover:underline">
-                  Clear filters
+                  Limpiar filtros
                 </Link>
               </p>
             </div>
@@ -290,9 +290,9 @@ function buildPagePattern(params: SearchParams, sort: InventorySort | undefined)
  */
 const COLUMNS: readonly { label: string; sort?: keyof typeof INVENTORY_SORT }[] = [
   { label: "ID", sort: "id" },
-  { label: "Name", sort: "name" },
-  { label: "Category L1", sort: "categoryL1" },
-  { label: "Category L2", sort: "categoryL2" },
+  { label: "Nombre", sort: "name" },
+  { label: "Categoría 1", sort: "categoryL1" },
+  { label: "Categoría 2", sort: "categoryL2" },
 ];
 
 /**

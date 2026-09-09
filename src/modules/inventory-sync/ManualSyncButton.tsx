@@ -16,11 +16,11 @@ type SyncStatusResponse = {
 function syncStatusLabel(status: SyncRunStatus): string {
   switch (status) {
     case "running":
-      return "Syncing…";
+      return "Sincronizando…";
     case "completed":
-      return "Completed";
+      return "Completada";
     case "failed":
-      return "Failed";
+      return "Fallida";
   }
 }
 
@@ -54,11 +54,11 @@ export function ManualSyncButton() {
     if (!body.running) {
       stopPolling();
       if (body.lastRun?.status === "completed") {
-        const when = body.lastRun.finishedAt ? new Date(body.lastRun.finishedAt).toLocaleString() : "unknown time";
-        addToast("success", `Sync completed: ${body.lastRun.productCount ?? 0} products synced at ${when}.`);
+        const when = body.lastRun.finishedAt ? new Date(body.lastRun.finishedAt).toLocaleString() : "una hora desconocida";
+        addToast("success", `Sincronización completada: ${body.lastRun.productCount ?? 0} productos sincronizados a las ${when}.`);
       }
       if (body.lastRun?.status === "failed") {
-        addToast("error", "Sync failed. Check the logs and try again.");
+        addToast("error", "La sincronización falló. Revisá los logs y volvé a intentar.");
       }
     }
   }
@@ -87,9 +87,9 @@ export function ManualSyncButton() {
 
     if (res.status === 409) {
       const body = await res.json();
-      addToast("info", body.error ?? "A sync is already in progress.");
+      addToast("info", body.error ?? "Ya hay una sincronización en curso.");
     } else if (!res.ok) {
-      addToast("error", "Could not start the sync. Try again.");
+      addToast("error", "No se pudo iniciar la sincronización. Volvé a intentar.");
       return;
     }
 
@@ -102,7 +102,7 @@ export function ManualSyncButton() {
   return (
     <div className="mb-4 flex items-center gap-3">
       <Button type="button" onClick={handleClick} disabled={running}>
-        {running ? "Syncing…" : "Sync now"}
+        {running ? "Sincronizando…" : "Sincronizar inventario"}
       </Button>
       {running ? (
         <StatusBadge status="running" label={syncStatusLabel("running")} />
