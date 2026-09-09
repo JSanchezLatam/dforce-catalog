@@ -238,7 +238,7 @@ block exists only for what the page cannot reach.
 
 **The client boundary is one button, and it is on the sheet.** "Imprimir" on the detail page is a
 plain `<Link href={`/service-orders/${id}/print`}>` styled with `buttonVariants` at
-`min-h-11 min-w-11` — following `customers/page.tsx:279`, which uses `buttonVariants` on a
+`min-h-11 min-w-11` — following `customers/[id]/page.tsx:235`, which uses `buttonVariants` on a
 `Link` rather than `<Button render={<Link/>}>` for the reason its comment records. The detail
 page gains **no** client component. The print page carries one: `PrintButton`, a `"use client"`
 `<button onClick={() => window.print()} className="print:hidden">`. **No `useEffect`

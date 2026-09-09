@@ -255,40 +255,40 @@ now pinned by a test, mutation-verified against `"Cita"`.
 ## Phase 3 — Printed order (service-orders spec: *Printable Work Order*;
 design D8, D9)
 
-- [ ] 3.1 Create `src/app/(app)/service-orders/[id]/print/page.tsx` — Server
+- [x] 3.1 Create `src/app/(app)/service-orders/[id]/print/page.tsx` — Server
   Component, `requireSessionFromHeaders()` + `can(user,
   "service-orders.read")`, reuses `getOrdenServicioById` +
   `getClienteById` — the same two queries `[id]/page.tsx:76-83` already
   makes. Zero new SQL.
-- [ ] 3.2 RED (jsdom) print `page.test.tsx` — renders cliente
+- [x] 3.2 RED (jsdom) print `page.test.tsx` — renders cliente
   (nombre, teléfono), vehículo (placa, marca, modelo, año), categoría, fecha
   y hora de inicio, descripción, observaciones for a fully-set order (spec
   Scenario "Printed page carries the order's data").
-- [ ] 3.3 GREEN — implement the fields.
-- [ ] 3.4 RED/GREEN — an empty ruled block headed "Trabajo realizado /
+- [x] 3.3 GREEN — implement the fields.
+- [x] 3.4 RED/GREEN — an empty ruled block headed "Trabajo realizado /
   Hallazgos" with a signature line renders **regardless** of whether
   `hallazgos`/`recomendaciones` are set on the order — assert it is never
   populated from either (spec Scenario "Printed page reserves handwriting
   space"; D9 — this is layout, not data).
-- [ ] 3.5 RED/GREEN — a session without `service-orders.read` is refused
+- [x] 3.5 RED/GREEN — a session without `service-orders.read` is refused
   exactly as any other order-read route (spec Scenario "Print view enforces
   the same read gate").
-- [ ] 3.6 Create `src/modules/service-orders/PrintButton.tsx` — `"use
+- [x] 3.6 Create `src/modules/service-orders/PrintButton.tsx` — `"use
   client"`, zero props, `<button onClick={() => window.print()}
   className="print:hidden">`. No `useEffect`, no `typeof document` gate
   (D8 — AGENTS.md names that gate React's documented cause #1 for a
   hydration mismatch).
-- [ ] 3.7 Add `"/service-orders/[id]/print": { GET: "service-orders.read" }`
+- [x] 3.7 Add `"/service-orders/[id]/print": { GET: "service-orders.read" }`
   to `ROUTE_GUARDS`; update `route-guards.test.ts`.
-- [ ] 3.8 Add "Imprimir" `<Link>` on `service-orders/[id]/page.tsx`, styled
+- [x] 3.8 Add "Imprimir" `<Link>` on `service-orders/[id]/page.tsx`, styled
   with `buttonVariants` on the `Link` (not `<Button render={<Link/>}>`, per
-  `customers/page.tsx`'s documented reason) at `min-h-11 min-w-11` (spec
+  `customers/[id]/page.tsx:235`'s documented reason) at `min-h-11 min-w-11` (spec
   Scenario "Imprimir navigates to the print view").
-- [ ] 3.9 Add one `@media print` block to `src/app/globals.css` hiding
+- [x] 3.9 Add one `@media print` block to `src/app/globals.css` hiding
   `[data-slot="sidebar"]`/`"sidebar-trigger"`/`"sidebar-rail"` and zeroing
   `[data-slot="sidebar-inset"]` margin/shadow — selectors verbatim from
   `components/ui/sidebar.tsx` (D8). First `@media print` block in the repo.
-- [ ] 3.10 `diff` every touched file before trusting 3.2–3.9.
+- [x] 3.10 `diff` every touched file before trusting 3.2–3.9.
 - [ ] 3.11 Seed at least one order with a customer, vehicle, `description`
   and `observaciones` (depends on WU1's create path and WU2's vehicle
   insert already shipping) — `/service-orders` has 0 rows today.
@@ -300,7 +300,7 @@ design D8, D9)
   all absent; cliente/vehículo/categoría/fecha/descripción/observaciones
   present; the ruled block and signature line fit; Imprimir measures
   ≥44×44; no console error (RSC refusals are invisible to jsdom).
-- [ ] 3.13 `npm test` (alone) and `npx tsc --noEmit` clean.
+- [x] 3.13 `npm test` (alone) and `npx tsc --noEmit` clean.
 
 ## Phase 4 — Edit entry point, gated by role and current status (service-orders
 spec: *Order Editing Is Gated by Role and Current Status*; design D11)
