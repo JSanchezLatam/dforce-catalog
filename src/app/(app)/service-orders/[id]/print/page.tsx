@@ -49,7 +49,7 @@ export default async function ServiceOrderPrintPage({
   const { id } = await params;
   const user = await requireSessionFromHeaders();
   if (!can(user, "service-orders.read")) {
-    return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
+    return <div className="p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
   }
 
   const detail = await getOrdenServicioById(id);
@@ -62,6 +62,13 @@ export default async function ServiceOrderPrintPage({
   // Same resolution as `[id]/page.tsx`.
   const vehiculo = clienteDetail?.vehicles.find((v) => v.id === orden.vehiculoId);
 
+  // `bg-white`/`text-black` below are unconditional rather than `print:`-scoped,
+  // and that is deliberate on screen too: this route is reachable before anyone
+  // hits Imprimir, and a sheet that changes color between preview and paper is
+  // worse than one that always looks like paper. Checked in the browser in dark
+  // mode — it reads as a white page inside the dark shell, which is the intent.
+  // AGENTS.md says read `globals.css` before changing a color; this steps
+  // outside the theme on purpose rather than extending it.
   return (
     <div className="mx-auto max-w-3xl bg-white p-8 text-black print:max-w-none print:p-0">
       <div className="mb-6 flex items-start justify-between gap-4 border-b-2 border-black pb-3">

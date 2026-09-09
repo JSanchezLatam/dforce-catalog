@@ -174,7 +174,12 @@ describe("ServiceOrderPrintPage", () => {
     render(await renderPage());
 
     expect(can).toHaveBeenCalledWith({ id: "u1", role: "tecnico" }, "service-orders.read");
-    expect(screen.getByText("You do not have permission to view this page.")).toBeInTheDocument();
+    // AGENTS.md: "Tests assert the Spanish string. Those are what catch an
+    // untranslated screen." Six pages already use this exact wording
+    // (`builder`, `catalogs`, `inventory`, `users`, `workshop-config`,
+    // `customers/[id]/vehicles/[vehicleId]`); five others still carry an
+    // English copy of the same sentence, which is its own change.
+    expect(screen.getByText("No tenés permiso para ver esta página.")).toBeInTheDocument();
     // Not "the data happens to be absent" — the page must not have queried.
     expect(getOrdenServicioById).not.toHaveBeenCalled();
     expect(screen.queryByText("Ana Gómez")).not.toBeInTheDocument();
