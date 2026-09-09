@@ -310,7 +310,20 @@ Branch names follow the `crm-workshop/prN-*` convention:
 
 ## Phase 6 — service-orders selection + bulk status (service-orders delta; design D9)
 
-- [ ] 6.1 Move `STATUS_LABEL` (currently duplicated at `service-orders/page.tsx` and `OrderStatusControls.tsx`) into `transitions.ts`, deleting both duplicates — a net deletion, in the file that already owns the state machine (D9). Both call sites already import from `transitions.ts`.
+- [ ] 6.1 **CORRECTED 2026-09-08 — do NOT move it into `transitions.ts`.** The
+  canonical home already exists: `src/modules/service-orders/statuses.ts`
+  exports `ORDER_STATUS_LABEL` as a `Record<OrderStatus, string>` (so adding a
+  fifth status is a `tsc` error, not a silent `undefined`), it has its own test,
+  and its header says it was created to stop exactly this kind of third copy —
+  GGA round 1 on PR #60. It is already imported by `customers/[id]/page.tsx`
+  and `customers/[id]/vehicles/[vehicleId]/page.tsx`.
+
+  Moving the map into `transitions.ts` would create a THIRD home and orphan
+  those two consumers. The real task is: delete the two remaining duplicates in
+  `service-orders/page.tsx` and `OrderStatusControls.tsx` and import
+  `ORDER_STATUS_LABEL` from `./statuses`. Still a net deletion; different
+  destination. D9 named the wrong file because the exploration never found
+  `statuses.ts`.
 - [ ] 6.2 RED (node, beside `transitions.test.ts`) — a pure intersection helper over `getAllowedTransitions` across a mixed-status selection (e.g. 3 `open` + 1 `in_progress` → only `cancelled`); empty-intersection case.
 - [ ] 6.3 GREEN — implement the intersection helper.
 - [ ] 6.4 Wire a hand-rolled selection wrapper (consuming unit 4's `useRowSelection`/`SelectionBar`/`BulkResultPanel`, per D4 — no shared page wrapper) into `service-orders/page.tsx`. The bulk status menu offers **only** the 6.3 intersection, never every status unconditionally (spec Scenario "Menu offers only the legal intersection").
