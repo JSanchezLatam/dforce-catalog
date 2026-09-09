@@ -33,7 +33,7 @@ export function InventoryFilters({
   selected: { categoryL1?: string; categoryL2?: string; name?: string; id?: string; stockStatus?: string };
   pageSize: number;
 }) {
-  const { text, setText, applyFilter, clearAll } = useUrlFilters({
+  const { text, setText, applyFilter, clearAll, hasTypedText } = useUrlFilters({
     id: selected.id ?? "",
     name: selected.name ?? "",
   });
@@ -48,7 +48,7 @@ export function InventoryFilters({
    * cancels a pending timer, so it must stay reachable while one is pending.
    */
   const hasActiveFilters = Boolean(
-    selected.categoryL1 || selected.categoryL2 || selected.name || selected.id || selected.stockStatus || text.id || text.name,
+    hasTypedText || selected.categoryL1 || selected.categoryL2 || selected.name || selected.id || selected.stockStatus,
   );
 
   return (

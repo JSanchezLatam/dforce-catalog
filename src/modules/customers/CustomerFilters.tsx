@@ -40,7 +40,7 @@ export function CustomerFilters({
   selected: { search?: string; status?: ClienteStatus };
   pageSize: number;
 }) {
-  const { text, setText, applyFilter, clearAll } = useUrlFilters({ search: selected.search ?? "" });
+  const { text, setText, applyFilter, clearAll, hasTypedText } = useUrlFilters({ search: selected.search ?? "" });
 
   return (
     <div className="flex flex-wrap items-end gap-x-3 gap-y-3">
@@ -81,7 +81,7 @@ export function CustomerFilters({
           </SelectContent>
         </Select>
       </div>
-      {(selected.search || (selected.status && selected.status !== "active")) && (
+      {(hasTypedText || selected.search || (selected.status && selected.status !== "active")) && (
         // `size="default"` is h-8, the same height as the `Input` and
         // `SelectTrigger` beside it (`input.tsx` is `h-8` too), so `items-end`
         // on the row lines all three up.

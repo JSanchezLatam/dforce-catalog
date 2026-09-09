@@ -78,9 +78,15 @@ describe("ServiceOrderFilters — status select routes through the one hook", ()
 /**
  * `Limpiar` used to bypass `applyFilter` with its own `router.push(pathname)`
  * (`:58`) — a second writer, the exact shape D6 removes.
+ *
+ * The name below says only what this test can check. Its first draft claimed
+ * "…not a standalone router.push", and a standalone push keeps it green — this
+ * screen has no debounce to cancel until WU2 gives it a search box, so the two
+ * writers produce an identical URL. Documenting a placebo is not this repo's
+ * rule; naming the test after what it actually proves is.
  */
 describe("ServiceOrderFilters — Limpiar goes through the hook's clearAll", () => {
-  it("clears the status filter via the shared writer, not a standalone router.push", async () => {
+  it("clears the status filter, pushing the bare pathname exactly once", async () => {
     const user = userEvent.setup();
     pending.delay = 450; // navigation slower than any debounce, as in production
     seedUrl("status=done");
@@ -89,5 +95,6 @@ describe("ServiceOrderFilters — Limpiar goes through the hook's clearAll", () 
     await user.click(screen.getByRole("button", { name: "Limpiar" }));
 
     expect(push).toHaveBeenCalledWith("/service-orders");
+    expect(push).toHaveBeenCalledTimes(1); // one writer, not two
   });
 });

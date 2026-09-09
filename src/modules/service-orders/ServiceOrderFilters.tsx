@@ -27,7 +27,7 @@ export function ServiceOrderFilters({
   selected: { status?: OrderStatus };
   pageSize: number;
 }) {
-  const { applyFilter, clearAll } = useUrlFilters({});
+  const { applyFilter, clearAll, hasTypedText } = useUrlFilters({});
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -47,7 +47,7 @@ export function ServiceOrderFilters({
           </SelectContent>
         </Select>
       </div>
-      {selected.status && (
+      {(hasTypedText || selected.status) && (
         <Button type="button" variant="outline" size="default" onClick={clearAll}>
           Limpiar
         </Button>

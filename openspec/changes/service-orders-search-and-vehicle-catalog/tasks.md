@@ -301,6 +301,34 @@ text.name` from the enable condition turns *keeps Limpiar reachable while a
 debounce is pending* red, and dropping the mount guard turns *does not
 overwrite the caller's value with a duplicated URL param on mount* red.
 
+**GGA round 3 — and the first finding is the reason a third round was worth
+running.** Round 2's `Limpiar`-reachability fix landed on `/inventory` ONLY.
+`/customers` still gated its button on `selected` alone, so the identical
+defect stood on the screen the owner actually reported — one caller patched,
+the shared cause left alone, which is the failure the hook exists to prevent.
+`ServiceOrderFilters` had the same gate, harmless only until WU2 gives it a
+search box. Fixed once, in the hook: `hasTypedText` is derived there and no
+call site can forget it.
+
+**The mount guard did not survive StrictMode.** It was a `useRef(false)`
+flipped on first run — but React 19 runs mount → cleanup → mount and a ref is
+not reset by a cleanup, so the second pass found it already `true` and the
+re-seed fired. Next 16 defaults `reactStrictMode` to true, so the guard had
+stopped guarding **in dev, which is exactly where this repo's browser checks
+happen**, while RTL's plain `render()` could not see it. It now compares the
+`searchParams` object itself, which a remount cannot fool, and the regression
+test renders inside `<StrictMode>`.
+
+D5's "drop `page` on every filter change" is a behaviour change on `/customers`
+and `/service-orders` — and the only assertion for it was on `/inventory`, the
+one screen whose behaviour did not change. Covered on both now;
+mutation-verified by restoring the old `if (key !== "pageSize")`.
+
+And a test named *"…not a standalone router.push"* could not check that clause:
+`/service-orders` has no debounce to cancel until WU2, so both writers produce
+an identical URL. Renamed to what it proves, and tightened to assert exactly
+one push.
+
 ## Phase 2 — Order list search, columns, and default order
 (service-orders spec: *Order List Search Matches Customer, Vehicle, and
 Phone*, *Order List Columns Show Customer and Vehicle*, *Unsorted Default

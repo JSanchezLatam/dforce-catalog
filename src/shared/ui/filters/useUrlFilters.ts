@@ -21,6 +21,16 @@ export type UrlFilters = {
   applyFilter: (key: string, value: string) => void;
   /** Cancels every pending timer, empties `text`, pushes the bare pathname. Never touches the DOM. */
   clearAll: () => void;
+  /**
+   * True while ANY text field holds something, whether or not the server has
+   * seen it yet. Callers gate their `Limpiar` on `hasTypedText || <their own
+   * server-side filters>` — deriving it from `selected` ALONE hides the button
+   * during the debounce window, which is the only window `clearAll` exists
+   * for: type, click nothing (it is not there), and the timer then pushes the
+   * term the operator was trying to cancel. That defect was fixed at one call
+   * site and left standing at another, which is why it lives here now.
+   */
+  hasTypedText: boolean;
 };
 
 export function useUrlFilters(initialText: Record<string, string>, debounceMs = 300): UrlFilters {
@@ -114,7 +124,7 @@ export function useUrlFilters(initialText: Record<string, string>, debounceMs = 
    * and re-seeding on mount reintroduces it. `initialText` already carries the
    * caller's own normalisation; the URL does not.
    */
-  const mounted = useRef(false);
+  const lastSeenParams = useRef(searchParams);
 
   useEffect(() => {
     // Read BEFORE the decrement (D3) — `wasOurs` is not new information, it
@@ -124,11 +134,15 @@ export function useUrlFilters(initialText: Record<string, string>, debounceMs = 
     if (pendingPushes.current === 0) pushedParamsRef.current = null;
     // Our own push landing must not overwrite text the user typed since —
     // only an EXTERNAL navigation (arrives with the counter at zero) re-seeds.
-    if (!mounted.current) {
-      mounted.current = true; // first run is the mount, not a navigation
-    } else if (!wasOurs) {
-      reseedTextFromSearchParams();
-    }
+    // Keyed on the PARAMS, not on "is this the first run". React 19 StrictMode
+    // runs mount → cleanup → mount, and a plain `mounted` ref is already true
+    // on the second pass — so a first-run guard silently stops guarding, in
+    // dev, which is exactly where the browser check happens (Next 16 defaults
+    // `reactStrictMode` to true). Comparing the params themselves cannot
+    // regress that way: a remount sees the same object it already saw.
+    const changed = lastSeenParams.current !== searchParams;
+    lastSeenParams.current = searchParams;
+    if (changed && !wasOurs) reseedTextFromSearchParams();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
@@ -193,5 +207,7 @@ export function useUrlFilters(initialText: Record<string, string>, debounceMs = 
     commit(new URLSearchParams());
   }
 
-  return { text, setText, applyFilter, clearAll };
+  const hasTypedText = Object.values(text).some((value) => value !== "");
+
+  return { text, setText, applyFilter, clearAll, hasTypedText };
 }

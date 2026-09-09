@@ -10,7 +10,7 @@
  * select wiring, search-term composition, and that the rendered input is
  * actually the one `clearAll` empties.
  */
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -171,5 +171,65 @@ describe("CustomerFilters — customer status (R20)", () => {
     await user.click(screen.getByRole("button", { name: "Limpiar" }));
 
     expect(input.value).toBe("");
+  });
+});
+
+/**
+ * The round-2 fix landed on `/inventory` only, and GGA's round 3 found it
+ * still standing here — one caller patched, the shared cause left alone. It is
+ * derived inside `useUrlFilters` now (`hasTypedText`) so no third call site can
+ * forget it.
+ *
+ * `selected` is the SERVER's view and lags a keystroke by the debounce plus an
+ * RSC round trip. `clearAll` is the only thing that cancels a pending timer, so
+ * hiding the button during that window means the term the operator tried to
+ * cancel gets pushed anyway.
+ */
+describe("CustomerFilters — Limpiar is reachable while a debounce is pending", () => {
+  it("offers Limpiar as soon as the box has text, before the server has seen it", async () => {
+    const user = userEvent.setup();
+    render(<CustomerFilters selected={{}} pageSize={10} />); // nothing filtered yet
+
+    await user.type(screen.getByLabelText("Filtro"), "perez");
+
+    expect(screen.getByRole("button", { name: /Limpiar/ })).toBeInTheDocument();
+  });
+
+  it("cancels the pending push when it is clicked", async () => {
+    const user = userEvent.setup();
+    render(<CustomerFilters selected={{}} pageSize={10} />);
+
+    await user.type(screen.getByLabelText("Filtro"), "perez");
+    await user.click(screen.getByRole("button", { name: /Limpiar/ }));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 400)); // past the debounce
+    });
+
+    for (const call of push.mock.calls) expect(String(call[0])).not.toContain("perez");
+  });
+});
+
+/**
+ * D5 — `applyFilter` drops `page` on EVERY filter change, `pageSize` included.
+ * That is a behaviour change on this screen (the old code exempted
+ * `pageSize`), and it had no assertion here until GGA round 3 said so: the
+ * only coverage was on `/inventory`, the one screen whose behaviour did not
+ * change.
+ *
+ * Staying on page 7 while the page size changes shows a slice of a list that
+ * no longer exists.
+ */
+describe("CustomerFilters — page is dropped on every filter change (D5)", () => {
+  it("drops page when pageSize changes", async () => {
+    const user = userEvent.setup();
+    seedUrl("page=7&search=perez");
+    render(<CustomerFilters selected={{ search: "perez" }} pageSize={10} />);
+
+    await user.click(screen.getByRole("combobox", { name: "Filas por página" }));
+    await user.click(screen.getByRole("option", { name: "50" }));
+
+    const url = String(push.mock.calls.at(-1)?.[0]);
+    expect(url).toContain("pageSize=50");
+    expect(url).not.toContain("page=7");
   });
 });

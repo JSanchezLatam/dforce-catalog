@@ -185,8 +185,9 @@ that depends on data VOLUME does not exist until there is data.
 
 - **`npm run lint`**: 0 errors, **14** warnings (verified 2026-09-09; was 15
   until `list-search-filters` WU1 replaced `InventoryFilters`' hand-styled
-  `<button>` with the shadcn `Button`, clearing one), all pre-existing. Don't add to them; clearing them is its own change. Re-run
-  before trusting that count.
+  `<button>` with the shadcn `Button`, clearing one), all pre-existing.
+  Don't add to them; clearing them is its own change. Re-run before trusting
+  that count.
 
 - **Substantial changes go through the gentle-ai review flow**
   (`gentle-ai review status --contract gentle-ai.review-integration/v2 --agent

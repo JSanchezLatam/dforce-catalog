@@ -8,6 +8,7 @@
  * (`searchParams.toString()`) both contribute; `useUrlFilters` (D2/D4) fixes
  * both as a side effect of the shared rewire.
  */
+import { StrictMode } from "react";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -151,6 +152,28 @@ describe("InventoryFilters — both text inputs are controlled", () => {
   it("does not overwrite the caller's value with a duplicated URL param on mount", () => {
     seedUrl("id=A&id=B");
     renderFilters({}); // the page dropped the duplicate, so nothing is filtered
+
+    expect(screen.getByLabelText("ID")).toHaveValue("");
+  });
+
+  /**
+   * The first guard was `useRef(false)` flipped on first run. React 19
+   * StrictMode runs mount → cleanup → mount, and a ref is not reset by a
+   * cleanup — so on the second pass it was already `true`, the guard stopped
+   * guarding, and the re-seed fired. Next 16 defaults `reactStrictMode` to
+   * true, so that regression was live in DEV, which is exactly where this
+   * repo's browser checks happen.
+   *
+   * RTL's plain `render()` cannot see it. The guard now compares the
+   * `searchParams` object itself, which a remount cannot fool.
+   */
+  it("keeps the mount guard under StrictMode's double effect", () => {
+    seedUrl("id=A&id=B");
+    render(
+      <StrictMode>
+        <InventoryFilters categoryL1Options={[]} categoryL2Options={[]} selected={{}} pageSize={10} />
+      </StrictMode>,
+    );
 
     expect(screen.getByLabelText("ID")).toHaveValue("");
   });
