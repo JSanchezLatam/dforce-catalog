@@ -13,7 +13,7 @@ export default async function AccountPage() {
     return (
       <div className="p-8">
         <h1 className={PAGE_HEADING}>Mi cuenta</h1>
-        <p className="text-sm text-foreground">No tienes permiso para ver esta página.</p>
+        <p className="text-sm text-foreground">No tenés permiso para ver esta página.</p>
       </div>
     );
   }

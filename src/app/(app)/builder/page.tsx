@@ -43,7 +43,7 @@ export default async function CatalogBuilderPage({
   const seedProductIds = parseSeedProductIds(params.products);
   const user = await requireSessionFromHeaders();
   if (!can(user, "catalogs.generate")) {
-    return <div className="p-8"><p className="text-sm text-foreground">No tienes permiso para ver esta página.</p></div>;
+    return <div className="p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
   }
 
   const [categoryL1Options, categoryPairs, templateConfig, workshopConfig] = await Promise.all([

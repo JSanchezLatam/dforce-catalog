@@ -66,33 +66,33 @@ export function InventoryFilters({
         <Label htmlFor="filter-id">ID</Label>
         <Input
           id="filter-id"
-          placeholder="Filter by ID..."
+          placeholder="Filtrar por ID..."
           defaultValue={selected.id ?? ""}
           onChange={(e) => applyDebounced("id", e.target.value)}
           className="w-32"
         />
       </div>
       <div className="flex flex-col gap-1">
-        <Label htmlFor="filter-name">Name</Label>
+        <Label htmlFor="filter-name">Nombre</Label>
         <Input
           id="filter-name"
-          placeholder="Filter by name..."
+          placeholder="Filtrar por nombre..."
           defaultValue={selected.name ?? ""}
           onChange={(e) => applyDebounced("name", e.target.value)}
           className="w-48"
         />
       </div>
       <div className="flex flex-col gap-1">
-        <Label>Category L1</Label>
+        <Label>Categoría 1</Label>
         <Select
           value={selected.categoryL1 ?? ""}
           onValueChange={(v) => applyFilter("categoryL1", v ?? "")}
         >
           <SelectTrigger className="w-44">
-            <SelectValue placeholder="All" />
+            <SelectValue placeholder="Todos" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All</SelectItem>
+            <SelectItem value="">Todos</SelectItem>
             {categoryL1Options.map((option) => (
               <SelectItem key={option} value={option}>
                 {option}
@@ -102,16 +102,16 @@ export function InventoryFilters({
         </Select>
       </div>
       <div className="flex flex-col gap-1">
-        <Label>Category L2</Label>
+        <Label>Categoría 2</Label>
         <Select
           value={selected.categoryL2 ?? ""}
           onValueChange={(v) => applyFilter("categoryL2", v ?? "")}
         >
           <SelectTrigger className="w-44">
-            <SelectValue placeholder="All" />
+            <SelectValue placeholder="Todos" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All</SelectItem>
+            <SelectItem value="">Todos</SelectItem>
             {categoryL2Options.map((option) => (
               <SelectItem key={option} value={option}>
                 {option}
@@ -127,12 +127,12 @@ export function InventoryFilters({
           onValueChange={(v) => applyFilter("stockStatus", v ?? "")}
         >
           <SelectTrigger className="w-36">
-            <SelectValue placeholder="All" />
+            <SelectValue placeholder="Todos" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All</SelectItem>
-            <SelectItem value="in-stock">In Stock</SelectItem>
-            <SelectItem value="out-of-stock">Out of Stock</SelectItem>
+            <SelectItem value="">Todos</SelectItem>
+            <SelectItem value="in-stock">En stock</SelectItem>
+            <SelectItem value="out-of-stock">Sin stock</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -144,10 +144,10 @@ export function InventoryFilters({
             : "border-transparent text-muted-foreground/30 cursor-default"
         }`}
       >
-        Clear
+        Limpiar
       </button>
       <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
-        <Label>Rows per page</Label>
+        <Label>Filas por página</Label>
         <Select value={String(pageSize)} onValueChange={(v) => setPageSize(v ?? "")}>
           <SelectTrigger className="w-20">
             <SelectValue />

@@ -11,7 +11,7 @@ export default async function WorkshopConfigPage() {
     return (
       <div className="p-8">
         <h1 className={PAGE_HEADING}>Configuración del CRM</h1>
-        <p className="text-sm text-foreground">No tienes permiso para ver esta página.</p>
+        <p className="text-sm text-foreground">No tenés permiso para ver esta página.</p>
       </div>
     );
   }
