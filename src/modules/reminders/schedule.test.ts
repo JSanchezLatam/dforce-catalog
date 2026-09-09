@@ -141,9 +141,16 @@ describe("planReminders — R23 timing", () => {
  * for all five categories — nobody had ever written down which ones it was
  * for, because reminder scheduling has no capability spec at all.
  *
- * Driven off `CATEGORIA_LABEL`'s own keys rather than a hand-written list, so
- * a sixth category added tomorrow fails here until somebody decides whether it
- * reminds. Inheriting that decision by default is how this defect started.
+ * Driven off `CATEGORIA_LABEL`'s own keys, PLUS an exhaustiveness assertion —
+ * and the second half is the load-bearing one. `describe.each` alone cannot
+ * fail by omission: it generates a case for a new key, `SCHEDULED` does not
+ * contain it, the title becomes "schedules NO service_due", and it passes.
+ * That would default a new category to "does not remind" — the same defect
+ * this change fixes, with the sign flipped, since the old one defaulted to
+ * "reminds". Both are inheritance instead of decision.
+ *
+ * So the set is pinned below. A sixth category fails that assertion until
+ * somebody edits this list, which is the moment the decision gets made.
  *
  * Note what this REMOVES: `instalacion`, `reparacion` and `revisado` get a
  * reminder today and will not after this. `revisado` is Panama's mandatory
@@ -153,6 +160,11 @@ describe("planReminders — R23 timing", () => {
  */
 describe("planReminders — service_due is restricted by category", () => {
   const SCHEDULED = new Set(["mant_preventivo", "mant_correctivo"]);
+  const KNOWN = ["instalacion", "mant_correctivo", "mant_preventivo", "reparacion", "revisado"];
+
+  it("fails when a category is added, so nobody inherits the reminder decision", () => {
+    expect(Object.keys(CATEGORIA_LABEL).sort()).toEqual(KNOWN);
+  });
 
   describe.each(Object.keys(CATEGORIA_LABEL))("%s", (categoria) => {
     it(SCHEDULED.has(categoria) ? "schedules service_due" : "schedules NO service_due", () => {

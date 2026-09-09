@@ -42,7 +42,8 @@ export type PlannedReminder = {
  * R23 — given an order + cliente snapshot and `now`, returns every reminder
  * (type x channel) that should exist right now:
  * - `appointment`  = `order.appointmentAt - APPOINTMENT_LEAD_HOURS` (only if `appointmentAt` is set)
- * - `service_due`  = `order.completedAt + SERVICE_DUE_AFTER_DAYS` (only if `completedAt` is set)
+ * - `service_due`  = `order.completedAt + SERVICE_DUE_AFTER_DAYS` (only if `completedAt` is set AND
+ *                    `categoria` is preventive or corrective — see `SERVICE_DUE_CATEGORIES`)
  *
  * A channel is skipped when the cliente has no contact info for it (no
  * `phone` -> no whatsapp, no `email` -> no email) OR that channel's opt-out

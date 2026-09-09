@@ -657,14 +657,17 @@ Corrective Categories*; design D12)
   `"revisado"` to `SERVICE_DUE_CATEGORIES`. Confirm 4.1's `revisado` case
   goes red **by name**. `diff` to confirm the addition landed, then revert
   and `diff` again to confirm byte-identical.
-- [x] 4.5 Document the sixth-category guard's actual mechanism: since
-  `SERVICE_DUE_CATEGORIES` types off `OrdenServicio["categoria"]`, a real
-  sixth enum value needs a migration (out of scope) and cannot be added here
-  to prove the point. The guard IS 4.1's `describe.each` over
-  `CATEGORIA_LABEL`'s keys — a future category added to `CATEGORIA_LABEL`
-  without a matching case here fails the test suite by omission, not by
-  type error. Add a one-line comment beside `SERVICE_DUE_CATEGORIES` saying
-  so, since the type system alone cannot express it.
+- [x] 4.5 Make the sixth-category guard REAL, not described. `describe.each`
+  over `CATEGORIA_LABEL`'s keys cannot fail by omission: it generates a case
+  for a new key, the scheduled set does not contain it, the title becomes
+  "schedules NO service_due", and it passes — defaulting a new category to
+  not-reminding, which is this same defect with the sign flipped. GGA caught
+  the first version of this task asserting the opposite, by adding a sixth
+  category and watching the suite stay green. The guard is therefore an
+  explicit exhaustiveness assertion pinning `Object.keys(CATEGORIA_LABEL)`
+  against a written list, which a new key fails until somebody edits it —
+  which is the moment the decision gets made. Verified by adding `pintura` and
+  confirming it goes red by name.
 - [x] 4.6 `diff` `schedule.ts` and `schedule.test.ts` before trusting
   4.1–4.5.
 - [x] 4.7 `npm test` (alone) and `npx tsc --noEmit` clean.
@@ -686,9 +689,13 @@ capability in `openspec/specs/` and `service_due` appears in no consolidated
 spec — the rule had never been written down anywhere but the code, which is
 exactly why nobody noticed it applied to everything.
 
-The category table is driven off `CATEGORIA_LABEL`'s own keys, so a sixth
-category added tomorrow fails this suite until somebody decides whether it
-reminds. Inheriting that decision silently is how the defect started.
+The category table is driven off `CATEGORIA_LABEL`'s own keys AND the key set
+is pinned. **GGA caught the first version of this claim as false, by checking
+it**: `describe.each` alone generates a case for a new key, the scheduled set
+does not contain it, and it passes as "no reminder" — defaulting a new category
+to not-reminding, which is this defect with the sign flipped. The exhaustiveness
+assertion is what makes it true, verified by adding a sixth category and
+watching it go red.
 
 Two mutations, both red by name: adding `"revisado"` to
 `SERVICE_DUE_CATEGORIES` breaks its `schedules NO service_due` case, and
