@@ -2,7 +2,8 @@
 
 ## Technical Approach
 
-Four seams, three of which already exist in the repo, plus one genuinely new write path.
+Five seams, three of which already exist in the repo, plus one genuinely new write path and one
+missing entry point.
 
 1. **The picker** is client state in `CustomerPicker` plus one new `onDeselect` prop. No new
    data, no new route — D6.
@@ -15,6 +16,10 @@ Four seams, three of which already exist in the repo, plus one genuinely new wri
 4. **The printed sheet** is a second Server Component over the two queries the detail page
    already runs, plus a `@media print` block for the app shell. Zero new SQL, zero new jobs,
    zero new dependencies — D8/D9.
+5. **Editing an order** has no entry point at all today — the edit form, `updateOrder` and the
+   PATCH route all exist and are tested, and nothing in the UI reaches them. Mounting the control
+   also means gating it, on an axis `policy.ts` cannot express: one pure `(role, status)`
+   predicate, consulted by the detail page and enforced in the route — D11.
 
 The baseline is `main` @ `a8cd3e0`. `observaciones` already exists as a column, already renders
 on the detail page (`service-orders/[id]/page.tsx:148`) and is already accepted by
@@ -309,6 +314,145 @@ one order with a customer, a vehicle, a description and observaciones to render.
 | Component (jsdom) | The print page renders every field the sheet must carry, and the ruled block is empty | data only — never layout | 3 |
 | **Browser, console open — the only evidence that exists** | One page; sidebar, breadcrumb and buttons absent from the paper; the ruled block and signature line fit; the print route renders at all (RSC refusals are invisible to jsdom); Imprimir measures ≥44×44 | real print preview on a seeded order, recorded in the PR body | 3 |
 
+## D11 — Editing is gated by a pure `(role, status)` predicate, mounted on the detail page and enforced in the route
+
+### The finding: there is no entry point, so this is not a permission bug
+
+`ServiceOrderFormTrigger` takes an optional `order` prop and forwards it to `ServiceOrderForm`,
+which flips to edit mode on `const isEdit = Boolean(order)`. It is rendered in exactly one place —
+the `/service-orders` list-page header — and that call site passes `products`, `canCreateCustomer`
+and `triggerLabel`, and **no `order`**. So the trigger is permanently in create mode. The order
+detail page renders `OrderStatusControls` and links, and no edit control at all.
+
+`updateOrder`, `UpdateOrdenServicioPatch` and `PATCH /api/service-orders/[id]` all exist, all
+accept `hallazgos`/`recomendaciones`/`observaciones`, and all have tests. **No UI reaches any of
+them.** The owner's "I cannot edit hallazgos" is a missing surface, not a denial.
+
+It stayed hidden because of the defect D10 already records: `POST /api/service-orders` could not
+save at all (a JSON string reaching a declared `Date`), so there was never an order to try editing.
+Two defects covering for each other — worth stating, because it is the reason a fully green suite
+and a working PATCH route coexisted with a feature nobody could use.
+
+### Why `policy.ts` cannot express this
+
+`can(user, action)` reads a flat `MATRIX[role][action]` and **takes no order**. Both `tecnico` and
+`administrador` hold `service-orders.write`, and `handleUpdateOrdenServicio` checks exactly that
+one grant — no role distinction, no status check anywhere on the patch path today. "Admin while
+`open` or `in_progress`, técnico only while `in_progress`, nobody once closed" is a second axis:
+it is a predicate over `(role, status)`, not a cell in a role×action table.
+
+| Option | Buys | Costs |
+|---|---|---|
+| New `Action`s per status (`service-orders.writeOpen`, …) | reuses `can()` and `ROUTE_GUARDS` | the matrix grows a column per status; `route-guards.test.ts` still cannot see which order is being patched, so the real check lands in the route anyway — the grant becomes decoration |
+| Inline `if (role === … && status === …)` in the route | smallest diff | the UI needs the same rule to decide whether to render the control, so it gets written twice and drifts on the first change |
+| **A pure predicate in `service-orders/`, imported by both call sites** | one truth table, DB-free unit test, no `policy.ts` change | one new file, one new import in two places |
+
+**Chosen: the pure predicate**, in a new `src/modules/service-orders/edit-policy.ts` — the same
+shape `categories.ts` already establishes in this module: a DB-free file holding the rule, imported
+by the UI and by the route, so "the API is the trust boundary" is enforced by the same function the
+UI consulted. `transitions.ts` is deliberately not the home: its doc header scopes it to the
+status state machine, and a role concern does not belong inside `assertTransition`'s file.
+
+`policy.ts` is **unchanged**: no new `Action`, no new `ROUTE_GUARDS` entry. `service-orders.write`
+stays the coarse gate; the predicate is the fine one, and it runs after it.
+
+### The truth table, terminal row included
+
+```
+                open        in_progress    done / cancelled
+administrador   allow       allow          refuse
+tecnico         refuse      allow          refuse
+```
+
+The terminal row is **this change's decision, not the owner's request** — he named `open` and
+`in_progress` only. `assertTransition` gives `done` and `cancelled` no outgoing edges, so a closed
+order cannot be reopened through the UI. Allowing field edits there would make closure reversible
+through a side door, one field at a time, while the badge still reads `Completada`. A correction
+path for a wrongly-closed order is its own change, with its own audit story; it is not this gate
+relaxed.
+
+Note what this does **not** touch: `body.status` still routes to `transitionOrder` and returns
+before the patch branch, so R21's state machine keeps owning status exclusively and this gate never
+sees a status change request.
+
+### Where the control mounts: the detail page
+
+**Chosen: the order detail page header**, beside `OrderStatusControls`.
+
+| Option | Buys | Costs |
+|---|---|---|
+| **Detail page header** | the page already loads the full `orden` row and the `user`, and already renders one status-dependent control (`OrderStatusControls`) in that exact slot, so the gate's input is visible next to its output; `ServiceOrderForm` in edit mode needs the whole `OrdenServicio`, which the page already has | one more control in a header that already holds one |
+| A per-row kebab on `/service-orders` | edit without a navigation | the predicate would run once per row on a page that renders a full page of them, and the gate would then live in two places instead of one |
+
+**Correction, made during review of this document.** An earlier draft rejected the list page on
+the grounds that no per-row menu existed to host the control. That is false: `RowActions` renders
+a kebab on every row of `/service-orders` (`service-orders/page.tsx`, added by
+`table-redesign-bulk-actions` WU2), currently holding a single "Ver" item. The affordance is
+there, and `listOrdenesServicio` returns full `OrdenServicio` rows, so the list page is blocked by
+neither data nor UI.
+
+The decision stands on its real reason instead: `hallazgos` is read on the detail page, so that is
+where it should be written, and one mount point means one place the predicate is evaluated. Adding
+"Editar" to the row kebab is a reasonable follow-up now that the kebab exists — it would also give
+that one-item menu a second item, which the redesign recorded as a permanent cost — but it is a
+second surface for the same gate, and this change ships the first one.
+
+The trigger already renders `<Button variant="outline" size="sm">` in edit mode. `size="sm"` is
+below AGENTS.md's 44×44 floor and the detail page is a tablet surface, so the mount passes
+`min-h-11 min-w-11` — the same correction WU1 applies to the deselect control and WU3 to Imprimir.
+
+No RSC hazard: the detail page is a Server Component, `ServiceOrderFormTrigger` is `"use client"`
+and already accepts `order` as plain data, and the gate's result is a boolean evaluated on the
+server. No function crosses the boundary.
+
+### How the route enforces it, and the ordering trap
+
+`handleUpdateOrdenServicio` keeps `can(user, "service-orders.write")` as-is, then — **in the
+field-patch branch only** — resolves the order through the seam it already owns
+(`deps.getById ?? getOrdenServicioById`) and evaluates the predicate against `current.orden.status`.
+
+**The status must be read from the record, before the write.** Not from `body.status` (a client
+claim, and one a stale tab will happily carry), and not after `updateOrder` has run. A client whose
+page was rendered while the order was `open` can send its patch after someone else closed the
+order; only a fresh read refuses it. This is the same reason `isServiceCategory` is called in this
+route rather than trusted from the form — the route is the trust boundary, and the UI gate is
+convenience.
+
+Two answers, because the operator's next move differs:
+
+- `tecnico` on an `open` order → **403** `{ errors: { form: "Solo un administrador puede editar una orden abierta." } }` — the caller must ask an admin.
+- anyone on `done`/`cancelled` → **409** `{ errors: { form: "No se puede editar una orden completada o cancelada." } }` — the caller is permitted, the **record's state** refuses. That is verbatim the reasoning `POST /api/service-orders` records for its `cliente_deactivated` 409.
+- order not found → **404** `not_found`, the code this route already returns for `OrdenServicioNotFoundError`.
+
+Both messages are Spanish and use the existing `{ errors: { form } }` shape this route already
+returns for `"No hay cambios para guardar"`, so the form renders them without new plumbing.
+AGENTS.md binds the tests to those exact strings; do not loosen them to match English.
+
+**Accepted cost:** `updateOrder` calls `getById` again internally, so a permitted patch does two
+primary-key reads. Threading the row through would couple the route to `updateOrder`'s internals to
+save one indexed lookup. Not worth it; stated so it is not read as an oversight.
+
+### Testing
+
+| Layer | What | How |
+|---|---|---|
+| Unit (node) | All eight `(role, status)` combinations | `edit-policy.test.ts`, DB-free, table-driven. Mutation-verify by flipping the `open`/`tecnico` cell — the test must go red **by name** |
+| Route (node) | `tecnico` + `open` → 403 with the exact Spanish string; `administrador` + `done` → 409; a body claiming `status: "in_progress"` over a stored `done` still → 409; `tecnico` + `in_progress` → 200 and the seam **received** `hallazgos` | injected `getById` seam; assert what the update seam was called with, not that it resolved (D10's shape) |
+| Component (jsdom) | Control present for admin on `open`, absent for técnico on `open`, present for both on `in_progress`, absent for both on `done`/`cancelled` | assert the Spanish trigger label; `render(await Page({ params }))` in the existing jsdom project |
+| Browser | The dialog actually opens on a real order and the patch lands | the detail page's edit control is a new client mount on a server-rendered page — jsdom cannot see an RSC refusal (AGENTS.md) |
+
+A green predicate test proves the truth table and nothing about either call site. The route test and
+the component test are the ones that prove the gate is consulted.
+
+### A latent trap in this area, not a live bug
+
+`validateVehiculoInput` keeps `year` only when `typeof value.year === "number"`, so a JSON body
+sending `"2019"` drops it silently. **Nothing is broken today** — `CustomerForm` coerces with
+`Number(...)` before sending. It is a trap for `VehicleQuickForm` (D4), which is why D10 already
+requires that form to coerce and that route to reject a non-numeric `year` rather than drop it.
+Recorded here so a reader of D11 who lands in this module does not either "fix" a working path or
+repeat the mistake in a new one.
+
 ## Data Flow
 
 ```
@@ -334,6 +478,20 @@ ServiceOrderForm ("use client")
                                                    │ Server Component, same 2 queries
                                                    ├─ PrintButton ("use client") → window.print()
                                                    └─ blank "Trabajo realizado / Hallazgos" + firma  D9
+
+/service-orders/[id]  (Server Component)                                               D11
+  canEditOrderFields(user.role, orden.status) ──false──▶ no control rendered
+                    │
+                    └──true──▶ ServiceOrderFormTrigger order={orden} (≥44×44)
+                                        │  isEdit → PATCH /api/service-orders/[id]
+                                        ▼
+              can(user,"service-orders.write")  ──▶  body.status? ──▶ transitionOrder (R21)
+                    │                                     │ no
+                    ▼                                     ▼
+              getById(id) ──null──▶ 404      canEditOrderFields(role, current.orden.status)
+                                                  │              │
+                                       403 (Spanish)   409 (Spanish)   ──▶ updateOrder
+                                       tecnico+open    done|cancelled
 ```
 
 ## File Changes
@@ -356,6 +514,12 @@ ServiceOrderForm ("use client")
 | `src/app/(app)/service-orders/[id]/page.tsx` | Modify | "Imprimir" `<Link>` at `min-h-11 min-w-11` | 3 |
 | `src/app/globals.css` | Modify | one `@media print` block hiding the shell (D8) | 3 |
 | `src/modules/auth/route-guards.test.ts` | Modify | `"/service-orders/[id]/print": { GET: "service-orders.read" }` | 3 |
+| `src/modules/service-orders/edit-policy.ts` | Create | `canEditOrderFields(role, status)` — pure, DB-free, the single truth table (D11) | 0 |
+| `src/modules/service-orders/edit-policy.test.ts` | Create | all eight `(role, status)` combinations, mutation-verified | 0 |
+| `src/app/(app)/service-orders/[id]/page.tsx` | Modify | mount `ServiceOrderFormTrigger order={orden}` behind the predicate, at `min-h-11 min-w-11` (D11) | 0 |
+| `src/app/api/service-orders/[id]/route.ts` | Modify | field-patch branch only: read current status through `getById`, refuse 403/409 with Spanish messages (D11) | 0 |
+| `src/app/api/service-orders/[id]/route.test.ts`, `src/app/(app)/service-orders/[id]/page.test.tsx` | Modify | route refusals and control visibility per role×status — both files already exist | 0 |
+| `src/modules/auth/policy.ts`, `ROUTE_GUARDS` | **Unchanged** | no new `Action`; `service-orders.write` stays the coarse gate (D11) | — |
 | `src/modules/customers/CustomerForm.tsx`, `queries.ts`, `planVehiculoReconcile`, `PATCH /api/customers/[id]` | **Unchanged** | consequence of D1/D4 — full-collection reconcile semantics are untouched | — |
 | `src/shared/db/schema.ts`, migrations, `ordenServicioItem` | **Unchanged** | no schema change anywhere in this change (D7/D9) | — |
 
@@ -412,6 +576,15 @@ export function CustomerPicker(props: {
   onDeselect?: () => void;   // create mode only; absent in edit mode
 }): React.JSX.Element;
 
+// src/modules/service-orders/edit-policy.ts — D11. Pure, DB-free, no imports beyond the two
+// enums. The ONE truth table: the detail page calls it to decide whether to render the edit
+// control, and PATCH /api/service-orders/[id] calls it again against the status it read from
+// the record. Never given a status from a request body.
+//   open        → administrador only
+//   in_progress → both roles
+//   done | cancelled → nobody (terminal; see D11)
+export function canEditOrderFields(role: Role, status: OrderStatus): boolean;
+
 // src/modules/service-orders/PrintButton.tsx — "use client", zero props (D8)
 export function PrintButton(): React.JSX.Element;
 
@@ -438,11 +611,17 @@ Two untrusted-input surfaces exist and are closed in the design rather than left
 
 ## Migration / Rollout
 
-No migration, no schema change, no new `Action`, no new package. Three units,
+No migration, no schema change, no new `Action`, no new package. Four units,
 feature-branch-chain, tracker draft until every child lands (`auto-chain`, cached at session
 start). Each unit is additive and independently revertible: reverting 3 removes the print page,
 the button and the CSS block; reverting 2 removes the POST and restores the "add a vehicle
-elsewhere" dead end; reverting 1 restores the parts cart and the single-line description.
+elsewhere" dead end; reverting 1 restores the parts cart and the single-line description;
+reverting 0 removes the edit control and the route's status gate, returning the app to a state
+where no UI reaches `updateOrder` at all.
+
+WU0 lands **first**: it is the only unit fixing something the owner is currently blocked on, it
+shares no file with WU1 or WU2, and it touches the detail page that WU3 also edits — landing it
+ahead of WU3 in the same linear chain costs no rebase.
 
 One asymmetry, and it is the property D2's e2e proves: **vehicles inserted through WU2's route
 survive a revert.** They are ordinary `vehiculo` rows, correct on their own, because the route's
@@ -450,6 +629,7 @@ whole job is to insert exactly one row and touch nothing else.
 
 | WU | Authored lines (est.) | 800-line budget risk | Independently revertible |
 |---|---|---|---|
+| 0 — edit entry point + `(role, status)` gate | ~200 | Low | Yes |
 | 1 — intake form + `observaciones` server path | ~250 | Low | Yes |
 | 2 — POST route + `createVehiculo` + form + e2e | ~300 | Low | Yes |
 | 3 — print page, button, `@media print` | ~200 | Low | Yes |

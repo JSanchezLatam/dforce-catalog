@@ -13,6 +13,18 @@ Four are intake friction; the fifth is the one that matters.
 | 4 | `Cita` should read `Fecha y hora de inicio` | Label only |
 | 5 | `Piezas` is not needed, and there must be a comments field | **The reason: "es una orden que se imprimirá y se le dará a los técnicos"** |
 
+A sixth item surfaced after this proposal was first written, while the owner was trying to use the
+feature: he cannot edit `hallazgos`, `recomendaciones` or `observaciones`. **It is not a permission
+gate — there is no entry point at all.** `ServiceOrderFormTrigger` takes an optional `order` prop
+that switches the form to edit mode, and its one and only call site — the `/service-orders`
+list-page header — omits it, so the trigger is permanently in create mode. The order detail page
+offers `OrderStatusControls` and links, and no edit control. The edit form, `updateOrder` and
+`PATCH /api/service-orders/[id]` all exist and are tested, and **no UI reaches them**. It stayed
+hidden because of a second defect fixed the same day — `POST /api/service-orders` could never save
+(a JSON string reaching a declared `Date`), so there was never an order to try editing. Two defects
+covering for each other. Mounting the control also means deciding **who** may use it and **when**:
+see §5.
+
 Item 5 exposed that **the printed order does not exist**. The whole dialog has
 been designed as if the order were a database record staff read on screen. It is
 not — it is a sheet of paper a técnico carries to the car. That reframing is what
@@ -161,6 +173,54 @@ The sheet must carry:
 That last row is the reason the change exists. No column backs it and none
 should; it is space for a pen.
 
+### 5. The edit entry point, gated by role AND the order's current status
+
+The control that opens an order in edit mode is mounted on the **order detail page**, beside
+`OrderStatusControls`, at `min-h-11 min-w-11`. That page already holds the full `orden` row and the
+session user, and already renders one status-dependent control in that slot. The list page's kebab
+was the alternative and is rejected: there is no per-row menu on `/service-orders` today — its only
+`DropdownMenu` is `OrderBulkStatusActions`, a selection-wide control — so hosting the gate there
+means building a row-level affordance first.
+
+Who may edit, and when:
+
+| | `open` | `in_progress` | `done` / `cancelled` |
+|---|---|---|---|
+| **administrador** | may edit | may edit | **no one edits** |
+| **tecnico** | — | may edit | **no one edits** |
+
+The terminal row is **this change's decision, stated rather than asked**. The owner named `open`
+and `in_progress` only. `done` and `cancelled` are already terminal — `assertTransition` gives them
+no outgoing edges, so a closed order cannot be reopened through the UI. Allowing field edits there
+would make closure reversible through a side door, one field at a time, with the badge still
+reading `Completada`. **A correction path for a wrongly-closed order is its own change**, with its
+own audit story; it is not this gate loosened.
+
+**This is a new axis, not a tweak.** `src/modules/auth/policy.ts` is a flat role → action matrix
+and `can(user, action)` takes no order, so it cannot express "admin while `open` or `in_progress`,
+técnico only while `in_progress`". Both roles hold `service-orders.write` today, and
+`PATCH /api/service-orders/[id]` checks only that — no role distinction and no status check
+anywhere. So: **a pure predicate over `(role, status)`**, DB-free and unit-testable, imported by
+both the detail page (to decide whether to render the control) and the route (to enforce it).
+`policy.ts` gains no new `Action`.
+
+**The UI deciding alone is not a gate.** The route is the trust boundary — the same reason
+`isServiceCategory` is called there rather than trusted from the form. The route reads the order's
+**current** status from the database before writing, never a status carried in the request body: a
+tab rendered while the order was `open` will otherwise happily patch it after someone closed it. A
+refusal answers in Spanish with an accurate code — 403 when the role is the reason, 409 when the
+record's state is (the shape `POST /api/service-orders` already uses for `cliente_deactivated`) —
+never a 500.
+
+The gate covers `categoria`, `description`, `appointmentAt`, `hallazgos`, `recomendaciones` and
+`observaciones`. **It does not reintroduce Piezas anywhere** — see below.
+
+### Piezas: removed entirely, at creation and at edit
+
+Asked to remove Piezas and later to edit Piezas, the owner was put the contradiction directly and
+chose **remove entirely**. §3's delta stands unchanged: no parts at creation, no parts at edit. The
+`ordenServicioItem` table and the "Piezas utilizadas" card both stay in place, empty.
+
 ## What explicitly does NOT change
 
 - **The `ordenServicioItem` table.** No migration, no drop. The owner asked to
@@ -192,7 +252,10 @@ giving it its own spec would split the order's own contract across two files.
   `observaciones` is settable at creation while `hallazgos`/`recomendaciones`
   are not; an order has a printable one-page work sheet carrying blank space for
   handwritten findings; the customer picker clears its search on select and
-  offers an explicit deselect that also clears the dependent vehicle.
+  offers an explicit deselect that also clears the dependent vehicle; an
+  existing order has an edit entry point at all, gated by a `(role, status)`
+  predicate that both the UI and the PATCH route consult, with `done` and
+  `cancelled` editable by nobody.
 - `customer-management` (`openspec/specs/customer-management/spec.md`): a single
   vehicle may be added to an existing customer through a dedicated insert path
   that MUST NOT alter that customer's other vehicles or any other field of the
@@ -208,9 +271,11 @@ giving it its own spec would split the order's own contract across two files.
 | `src/modules/customers/` — new vehicle-only form | New | plate/make/model/year; **not** `CustomerForm` |
 | `src/modules/service-orders/service.ts` | Modified | `createOrder` accepts `observaciones`; parts insert becomes unreachable |
 | `src/app/api/service-orders/route.ts` | Modified | request schema: drop `items`, add `observaciones` |
-| `src/app/(app)/service-orders/[id]/page.tsx` | Modified | Imprimir button |
+| `src/modules/service-orders/edit-policy.ts` | New | pure `canEditOrderFields(role, status)` — the single truth table for the edit gate |
+| `src/app/api/service-orders/[id]/route.ts` | Modified | field-patch branch reads the order's current status and refuses 403/409 in Spanish |
+| `src/app/(app)/service-orders/[id]/page.tsx` | Modified | Imprimir button; edit control mounted behind the predicate at `min-h-11 min-w-11` |
 | `src/app/(app)/service-orders/[id]/print/` | New | print view + `@media print` rules |
-| tests | Modified/New | `CustomerPicker.test.tsx`, `ServiceOrderForm.test.tsx`, `service.test.ts`, new vehicles route test, e2e row for the insert |
+| tests | Modified/New | `CustomerPicker.test.tsx`, `ServiceOrderForm.test.tsx`, `service.test.ts`, new vehicles route test, e2e row for the insert, `edit-policy.test.ts`, and the existing `service-orders/[id]` route and page tests |
 
 ## Risks
 
@@ -224,13 +289,17 @@ giving it its own spec would split the order's own contract across two files.
 | **The spec amendments get half-applied** — R20's prose edited while its line-item scenario survives, leaving the spec self-contradictory | Medium | The scenario is **deleted**, called out per-amendment above; `sdd-spec` must diff both requirements together |
 | **Deselect ships without clearing `vehiculoId`**, producing a server-side ownership rejection the operator cannot explain | Medium | Named as a requirement, with its own test |
 | A reader concludes "dialog nesting is dangerous" from `table-redesign` WU3 and over-engineers the vehicle form out of the dialog | Low | Corrected in §2: that bug was Menu/typeahead, and the nesting already ships |
+| **The edit gate ships UI-only** — the control is hidden for a técnico on an `open` order and the route still accepts the PATCH, so anything that can send a request bypasses it | **High** | The route is the enforcement point and the UI is convenience. Route tests per refusal, asserting the exact Spanish string and the status code — not just "not 200" |
+| **The route trusts a status from the request body**, so a tab rendered while the order was `open` can edit it after someone closed it | **High** | The gate is evaluated against the status read from the record, before the write. A scenario pins it: a body claiming `in_progress` over a stored `done` is still refused |
+| The gate is written twice — once for the UI, once for the route — and the two drift on the first change | Medium | One pure predicate, imported by both call sites; the truth table exists in exactly one file |
 | Someone reads the empty "Piezas utilizadas" card as a regression | Low | Stated as an accepted consequence here and in `tasks.md` |
+| A reader treats the `done`/`cancelled` row as an oversight and "fixes" it by allowing admin edits on closed orders | Low | Recorded as a decision with its reason, here and in design D11; the correction path is named as a separate change |
 
 ## Review Workload Forecast
 
 | Field | Value |
 |-------|-------|
-| Estimated changed lines | ~750 |
+| Estimated changed lines | ~950 (~750 + ~200 for the edit gate) |
 | Review budget (this session) | 800 lines per PR |
 | 800-line budget risk | **Low per unit**, Medium total |
 | Chained PRs recommended | Yes |
@@ -245,16 +314,29 @@ Chained PRs recommended: Yes
 
 | Unit | Goal | Est. lines | Base |
 |---|---|---|---|
+| 0 | **Edit entry point + gate**: `canEditOrderFields(role, status)` and its truth-table test; the edit control mounted on the order detail page behind it at `min-h-11 min-w-11`; `PATCH /api/service-orders/[id]` reading the order's current status and refusing 403/409 in Spanish; route and page tests per role×status | ~200 | tracker |
 | 1 | **Intake form**: picker clear-on-select + deselect control + `vehiculoId` clearing; `Descripción` textarea; `Cita` → `Fecha y hora de inicio`; parts section removed; `observaciones` through form → route schema → `createOrder` | ~250 | tracker |
 | 2 | **Inline vehicle creation**: `POST /api/customers/[id]/vehicles` + route test + **e2e**, vehicle-only form, wiring into the empty-vehicle slot | ~300 | 1 |
 | 3 | **Printed order**: print view, `@media print` rules, Imprimir on the detail page, blank findings block + signature line | ~200 | 2 |
 
 ```
 tracker (draft, no-merge)
-  └── 1 intake ── 2 vehicle insert ── 3 print
+  └── 0 edit gate ── 1 intake ── 2 vehicle insert ── 3 print
 ```
 
-**Three, not the exploration's five — WU1-3 collapse.** The exploration split
+**The edit gate is its own unit, not an extension of WU1.** WU1 is the create-mode form
+(`CustomerPicker.tsx`, `ServiceOrderForm.tsx`) and the create path (`service.ts`,
+`POST /api/service-orders`). The gate shares **not one file** with it: a new pure module, the order
+detail page, and the PATCH route. Folding it into WU1 would put two unrelated review subjects — an
+intake-UX pass and an authorization rule — behind one approval, and the authorization rule is the
+half a reviewer must actually think about.
+
+It lands **first**, ahead of WU1, for two reasons: it is the only unit fixing something the owner is
+blocked on today, and it touches the order detail page that WU3 also edits, so landing it earlier in
+the same linear chain costs no rebase. It could equally run in a parallel worktree beside WU1 — the
+file sets are disjoint — but the chain is kept linear for the same reason it already was.
+
+**WU1-3 are three, not the exploration's five — they collapse.** The exploration split
 picker (~40-60), labels (~10-20) and parts removal (~80-120) into three units.
 Two of the three edit the *same file*, `ServiceOrderForm.tsx`, and the third
 edits its only child. Shipped apart they are three PRs that each rebase on the
@@ -276,7 +358,10 @@ Per unit, reverse order, all pre-merge to `main` — the tracker stays draft unt
 every child lands. No migration and no schema change anywhere in this change, so
 nothing to un-apply: reverting 3 removes the print view and its button;
 reverting 2 removes the POST route and restores the "add a vehicle first" dead
-end; reverting 1 restores the parts cart and the single-line description.
+end; reverting 1 restores the parts cart and the single-line description;
+reverting 0 removes the edit control and the route's status gate, returning the
+app to the state this change found it in — where no UI reaches `updateOrder` at
+all.
 
 One asymmetry: **vehicles inserted through WU2's route survive a revert** — they
 are ordinary `vehiculo` rows and remain correct, because the route's whole job is
@@ -292,6 +377,9 @@ proves, and it is what makes the rollback boring.
   a bug that depends on data volume does not exist until there is data — a
   single-vehicle customer cannot expose the reconcile trap at all.
 - A printer or print preview for WU3. Not optional: it is the verification.
+- WU0's predicate is DB-free and fully unit-testable, but confirming the control actually appears
+  (and the dialog actually opens) needs seeded orders in each of the four statuses and a session in
+  each role. `/service-orders` has 0 rows today.
 
 ## Follow-ups (recorded, not scoped)
 
@@ -302,9 +390,20 @@ proves, and it is what makes the rollback boring.
    `hallazgos` from the detail page, if the paper round-trip proves worth closing.
 3. A print sheet for a batch of orders (a day's work), if one-at-a-time printing
    becomes the complaint.
+4. **A correction path for a wrongly-closed order.** §5 makes `done` and `cancelled` editable by
+   nobody, which is right for the ordinary case and leaves no way to fix a genuine mistake. That
+   path needs its own audit story — who reopened what, and why — and is deliberately not this
+   gate loosened.
 
 ## Success Criteria
 
+- [ ] An `administrador` opening an `open` order's detail page gets a control that opens the edit
+      form; a `tecnico` on the same order gets none; both get it on `in_progress`; neither gets it
+      on `done` or `cancelled` — and the control measures at least 44x44
+- [ ] `PATCH /api/service-orders/[id]` refuses the same combinations the UI would not have offered,
+      in Spanish and with an accurate status code, asserted by route tests — a técnico patching an
+      `open` order is refused even though the button was simply never rendered for them
+- [ ] A patch whose body claims a status is still gated on the status read from the record
 - [ ] Selecting a customer clears the search box and the result list; the banner
       offers an explicit deselect that also clears the chosen vehicle — asserted
       by tests, and the deselect control measures at least 44x44
