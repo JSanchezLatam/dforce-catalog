@@ -10,6 +10,20 @@ import type { Cliente, OrdenServicio } from "@/shared/db/schema";
 export const APPOINTMENT_LEAD_HOURS = 24;
 export const SERVICE_DUE_AFTER_DAYS = 90;
 
+/**
+ * The categories a `service_due` reminder follows. The owner's rule is "90 days
+ * after preventive or corrective maintenance" — the 90 days already existed
+ * here; this is the half that did not, which is why the reminder fired for all
+ * five categories: nobody had written down which ones it was for.
+ *
+ * Typed off the SCHEMA enum, deliberately not off
+ * `service-orders/categories.ts`. `service-orders` depends on `reminders`;
+ * importing back would reverse that and create a cycle for a list of two
+ * strings. The test drives the same set from `CATEGORIA_LABEL`, which is where
+ * a new category would have to be declared anyway.
+ */
+const SERVICE_DUE_CATEGORIES: readonly OrdenServicio["categoria"][] = ["mant_preventivo", "mant_correctivo"];
+
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
@@ -28,7 +42,8 @@ export type PlannedReminder = {
  * R23 — given an order + cliente snapshot and `now`, returns every reminder
  * (type x channel) that should exist right now:
  * - `appointment`  = `order.appointmentAt - APPOINTMENT_LEAD_HOURS` (only if `appointmentAt` is set)
- * - `service_due`  = `order.completedAt + SERVICE_DUE_AFTER_DAYS` (only if `completedAt` is set)
+ * - `service_due`  = `order.completedAt + SERVICE_DUE_AFTER_DAYS` (only if `completedAt` is set AND
+ *                    `categoria` is preventive or corrective — see `SERVICE_DUE_CATEGORIES`)
  *
  * A channel is skipped when the cliente has no contact info for it (no
  * `phone` -> no whatsapp, no `email` -> no email) OR that channel's opt-out
@@ -59,7 +74,7 @@ export function planReminders(order: OrdenServicio, cliente: Cliente, now: Date)
   if (order.appointmentAt) {
     plan("appointment", new Date(order.appointmentAt.getTime() - APPOINTMENT_LEAD_HOURS * HOUR_MS));
   }
-  if (order.completedAt) {
+  if (order.completedAt && SERVICE_DUE_CATEGORIES.includes(order.categoria)) {
     plan("service_due", new Date(order.completedAt.getTime() + SERVICE_DUE_AFTER_DAYS * DAY_MS));
   }
 
