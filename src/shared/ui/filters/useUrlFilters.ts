@@ -101,6 +101,21 @@ export function useUrlFilters(initialText: Record<string, string>, debounceMs = 
     };
   }, []);
 
+  /**
+   * The effect below also runs on MOUNT, with the counter at zero — so without
+   * this guard it reads the first render as an external navigation and
+   * overwrites the lazily-seeded `initialText` with raw `searchParams`.
+   *
+   * That is not cosmetic. `/inventory?id=A&id=B`: the page's
+   * `typeof params.id === "string"` guard leaves `selected.id` undefined, so
+   * the LIST is unfiltered — while `searchParams.get("id")` returns `"A"`, so
+   * the BOX would show a filter that is not applied. The screen disagreeing
+   * with the list it produced is the class this whole unit exists to close,
+   * and re-seeding on mount reintroduces it. `initialText` already carries the
+   * caller's own normalisation; the URL does not.
+   */
+  const mounted = useRef(false);
+
   useEffect(() => {
     // Read BEFORE the decrement (D3) — `wasOurs` is not new information, it
     // is the counter's existing meaning read one line earlier.
@@ -109,7 +124,11 @@ export function useUrlFilters(initialText: Record<string, string>, debounceMs = 
     if (pendingPushes.current === 0) pushedParamsRef.current = null;
     // Our own push landing must not overwrite text the user typed since —
     // only an EXTERNAL navigation (arrives with the counter at zero) re-seeds.
-    if (!wasOurs) reseedTextFromSearchParams();
+    if (!mounted.current) {
+      mounted.current = true; // first run is the mount, not a navigation
+    } else if (!wasOurs) {
+      reseedTextFromSearchParams();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 

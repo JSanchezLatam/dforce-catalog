@@ -38,7 +38,18 @@ export function InventoryFilters({
     name: selected.name ?? "",
   });
 
-  const hasActiveFilters = Boolean(selected.categoryL1 || selected.categoryL2 || selected.name || selected.id || selected.stockStatus);
+  /**
+   * `text` is in here on purpose, and it is the whole point. `selected` is the
+   * SERVER's view, which lags a keystroke by the debounce — so deriving this
+   * from `selected` alone disabled the button in exactly the 300ms window
+   * `clearAll` exists for: type `bater`, click Limpiar, the click is a no-op
+   * because the button is disabled, and the timer then filters by the term the
+   * operator just tried to cancel. `clearAll` is the only thing here that
+   * cancels a pending timer, so it must stay reachable while one is pending.
+   */
+  const hasActiveFilters = Boolean(
+    selected.categoryL1 || selected.categoryL2 || selected.name || selected.id || selected.stockStatus || text.id || text.name,
+  );
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">

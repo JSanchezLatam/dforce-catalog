@@ -8,7 +8,7 @@
  * (`searchParams.toString()`) both contribute; `useUrlFilters` (D2/D4) fixes
  * both as a side effect of the shared rewire.
  */
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -110,6 +110,49 @@ describe("InventoryFilters — both text inputs are controlled", () => {
 
     expect(screen.getByLabelText("ID")).toHaveValue("ABCX");
     expect(push).not.toHaveBeenCalled(); // still inside the debounce window
+  });
+
+  /**
+   * `clearAll` is the ONLY thing here that cancels a pending debounce timer,
+   * so it has to stay reachable while one is pending. Deriving `disabled` from
+   * `selected` alone — the SERVER's view, which lags a keystroke by the whole
+   * debounce — disabled the button in exactly that window: type, click
+   * Limpiar, the click does nothing because the button is disabled, and the
+   * timer then filters by the term the operator just tried to cancel.
+   *
+   * `selected` is deliberately EMPTY here. A fixture that pre-seeds it renders
+   * the button enabled for the wrong reason and never reaches this path.
+   */
+  it("keeps Limpiar reachable while a debounce is pending, so it can cancel it", async () => {
+    const user = userEvent.setup();
+    renderFilters({});
+
+    await user.type(screen.getByLabelText("Nombre"), "bater");
+    await user.click(screen.getByRole("button", { name: /Limpiar/ }));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 400)); // past the debounce
+    });
+
+    expect(screen.getByLabelText("Nombre")).toHaveValue("");
+    // The cancelled term must never have reached the URL.
+    for (const call of push.mock.calls) expect(String(call[0])).not.toContain("bater");
+  });
+
+  /**
+   * The re-seed effect also runs on MOUNT with the counter at zero, so without
+   * a guard it reads the first render as an external navigation and overwrites
+   * the caller's `selected` with raw `searchParams`.
+   *
+   * `?id=A&id=B` is the shape that exposes it: the page's
+   * `typeof params.id === "string"` guard leaves `selected.id` undefined so the
+   * LIST is unfiltered, while `searchParams.get("id")` answers `"A"` — a box
+   * showing a filter that is not applied.
+   */
+  it("does not overwrite the caller's value with a duplicated URL param on mount", () => {
+    seedUrl("id=A&id=B");
+    renderFilters({}); // the page dropped the duplicate, so nothing is filtered
+
+    expect(screen.getByLabelText("ID")).toHaveValue("");
   });
 
   it("#filter-name shows the URL value on mount", () => {

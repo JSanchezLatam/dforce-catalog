@@ -207,8 +207,8 @@ skipping it does not change the landing order of 1, 2, and 4.
 |---|---|
 | 1.6 | Reverted `wasOurs` guard to unconditional `reseedTextFromSearchParams()` in `useUrlFilters.ts`. `useUrlFilters — re-seed only on external navigation > does not re-seed when its own push lands while typing continues` went RED by name (value `ana` expected, received empty). `diff` confirmed the mutation landed; reverted; second `diff` confirmed byte-identical; suite green again (7/7). |
 | 1.15 | Reverted per-key `timers` Map to a single shared-key timer in `useUrlFilters.ts` (the class of bug D4 exists to prevent, now centralized in the hook rather than duplicated per screen). `InventoryFilters — two text fields must not clobber each other (D4) > keeps BOTH id and name after typing into id, then name, inside the debounce window` went RED by name — `/inventory?name=bateria` only, `id=ABC` dropped, reproducing the exact reported defect shape. `diff` confirmed the mutation landed; reverted; second `diff` confirmed byte-identical; suite green again (7/7). |
-| 1.19 | Not run — orchestrator's browser check (jsdom cannot see Base UI's dev-mode warning path per AGENTS.md's second known limit; this agent has no browser). |
-| 1.20 | Run by this agent as a build/regression gate, left unticked per the launch prompt's explicit instruction (orchestrator owns the final 1.19/1.20 confirmation): `npm test` → 108 files / 1572 tests passed. `npx tsc --noEmit` → clean, no output. `npm run lint` → 0 errors, 14 warnings, none in any file this unit touched. |
+| 1.19 | **Run by the orchestrator** against the owner's dev server on `:3000` with real data — see the WU1 verification record below for what was measured. The implementing agent could not: jsdom does not execute Base UI's dev-mode warning path (AGENTS.md's second known limit) and it has no browser. |
+| 1.20 | **Final run by the orchestrator after two GGA rounds**: `npm test` 1576/1576 · `npx tsc --noEmit` clean · `npm run lint` 0 errors / 14 warnings. (The implementing agent's own pre-GGA run was 1572 — the four added tests are the GGA findings' REDs.) |
 
 ---
 
@@ -271,13 +271,43 @@ just navigated to. Pre-existing in `CustomerFilters` and moved here — closed
 now precisely because this is one path serving three screens instead of one
 screen's private bug.
 
+**GGA round 2 — three more, and one of them was a false record.**
+
+`Limpiar` on `/inventory` derived `disabled` from `selected` alone — the
+SERVER's view, which lags a keystroke by the whole debounce. So the button was
+disabled in exactly the 300ms window `clearAll` exists for: type `bater`, click
+Limpiar, the click is a no-op, and the timer then filters by the term the
+operator just tried to cancel. `clearAll` is the only thing here that cancels a
+pending timer, so it must stay reachable while one is pending. The old
+hand-styled `<button>` was always clickable; the real `disabled` state added by
+this unit is what introduced the block, one line below the fix it disabled.
+
+The re-seed effect also ran on MOUNT with the counter at zero, so it read the
+first render as an external navigation and overwrote the lazily-seeded
+`initialText` with raw `searchParams`. On `/inventory?id=A&id=B` the page's
+`typeof params.id === "string"` guard leaves the list UNFILTERED while
+`searchParams.get("id")` answers `"A"` — the box showing a filter that is not
+applied. The same class again, reintroduced by the fix for it.
+
+**And two tasks belonging to OTHER units were ticked with no artifacts behind
+them**: 2.1 claimed `src/shared/db/text-search.ts` existed and 4.1 claimed
+`schedule.test.ts` had gained a `categoria` override. This branch touches no
+file under `shared/db/` or `reminders/` at all. AGENTS.md is explicit that SDD
+task state lives in committed files — whoever picked up WU2 or WU4 would have
+read those boxes and skipped the work. Unticked.
+
+Both code fixes carry their own RED, mutation-verified: dropping `text.id ||
+text.name` from the enable condition turns *keeps Limpiar reachable while a
+debounce is pending* red, and dropping the mount guard turns *does not
+overwrite the caller's value with a duplicated URL param on mount* red.
+
 ## Phase 2 — Order list search, columns, and default order
 (service-orders spec: *Order List Search Matches Customer, Vehicle, and
 Phone*, *Order List Columns Show Customer and Vehicle*, *Unsorted Default
 Order Is Appointment-First*; table-sorting spec: both MODIFIED requirements;
 design D7–D11)
 
-- [x] 2.1 GREEN (mechanical move, no dedicated test exists today — D8) —
+- [ ] 2.1 GREEN (mechanical move, no dedicated test exists today — D8) —
   create `src/shared/db/text-search.ts`, move `unaccentIlike` verbatim,
   including its STABLE-not-IMMUTABLE docstring, from
   `customers/queries.ts:46-48`; export it; `customers/queries.ts` imports it
@@ -515,7 +545,7 @@ undecided design.
 (service-orders spec: *Service Due Reminder Restricted to Preventive and
 Corrective Categories*; design D12)
 
-- [x] 4.1 RED (node) `reminders/schedule.test.ts` — extend `makeOrden` to
+- [ ] 4.1 RED (node) `reminders/schedule.test.ts` — extend `makeOrden` to
   accept a `categoria` override (the schema field, `orden_servicio.categoria`,
   `.notNull()`), defaulting to `"mant_preventivo"` so every existing test
   keeps its current behavior unless it opts into a different category.
@@ -565,6 +595,13 @@ Corrective Categories*; design D12)
 
 ## Follow-ups — named, deliberately not folded into this change
 
+
+- **Three ~50-line copies of the `next/navigation` mock** now live in
+  `useUrlFilters.test.tsx`, `InventoryFilters.test.tsx` and
+  `ServiceOrderFilters.test.tsx`. GGA named the irony: this landed in a unit
+  whose whole argument is that three copies of one file hid two defects. It is
+  a test fixture rather than production behaviour, so it is deliberately not
+  folded in here — but it is the same shape, and the next copy is WU2's.
 - **`revisado`'s own 365-day reminder.** Restricting `service_due` to two
   categories is a removal for `revisado`; its own annual reminder is a
   separate change (proposal Out of Scope).
