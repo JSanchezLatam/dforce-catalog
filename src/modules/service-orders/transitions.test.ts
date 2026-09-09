@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { assertTransition, getAllowedTransitions, OrderTransitionError } from "./transitions";
+import {
+  allowedTransitionsForAll,
+  assertTransition,
+  getAllowedTransitions,
+  OrderTransitionError,
+} from "./transitions";
 
 describe("assertTransition (R21)", () => {
   it("allows open -> in_progress", () => {
@@ -64,5 +69,61 @@ describe("getAllowedTransitions (R21 — Phase 6 status-transition controls)", (
   it("returns an empty array for the terminal states (done, cancelled)", () => {
     expect(getAllowedTransitions("done")).toEqual([]);
     expect(getAllowedTransitions("cancelled")).toEqual([]);
+  });
+});
+
+/**
+ * Design D9 — what the bulk status menu is allowed to offer.
+ *
+ * The rule is the INTERSECTION of every selected row's `getAllowedTransitions`,
+ * never the union and never the four statuses unconditionally: a menu built
+ * from the union offers `done` over a selection holding one `open` row, and
+ * every one of those rows comes back an `invalid_transition` the operator had
+ * no way to predict from the menu they were shown.
+ */
+describe("allowedTransitionsForAll (D9 — the bulk status menu's intersection)", () => {
+  it("leaves only cancelled for a selection of 3 open and 1 in_progress", () => {
+    expect(allowedTransitionsForAll(["open", "open", "open", "in_progress"])).toEqual(["cancelled"]);
+  });
+
+  it("keeps both of open's next states when every selected row is open", () => {
+    expect(allowedTransitionsForAll(["open", "open"])).toEqual(["in_progress", "cancelled"]);
+  });
+
+  /**
+   * The negative half of the first case, spelled out so a union implementation
+   * cannot pass on the "only cancelled" assertion alone: `in_progress` is legal
+   * from `open` and `done` is legal from `in_progress`, and neither is legal
+   * from both.
+   */
+  it("offers no status that is legal for only some of the selected rows", () => {
+    const common = allowedTransitionsForAll(["open", "in_progress"]);
+    expect(common).not.toContain("in_progress");
+    expect(common).not.toContain("done");
+  });
+
+  it("is empty once a terminal row is in the selection", () => {
+    expect(allowedTransitionsForAll(["open", "done"])).toEqual([]);
+    expect(allowedTransitionsForAll(["in_progress", "cancelled"])).toEqual([]);
+  });
+
+  /**
+   * The mathematical identity of an intersection is the universe, which would
+   * make an EMPTY selection offer every status. Nothing is selected, so no
+   * bulk action is legal.
+   */
+  it("offers nothing for an empty selection", () => {
+    expect(allowedTransitionsForAll([])).toEqual([]);
+  });
+
+  /**
+   * `getAllowedTransitions` hands back the live `ALLOWED_TRANSITIONS` row, so a
+   * single-row selection must not become a writable alias to the state machine
+   * itself.
+   */
+  it("never returns the transition table's own array", () => {
+    const common = allowedTransitionsForAll(["open"]);
+    common.pop();
+    expect(getAllowedTransitions("open")).toEqual(["in_progress", "cancelled"]);
   });
 });
