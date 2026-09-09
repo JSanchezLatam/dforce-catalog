@@ -1,9 +1,9 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useUrlFilters } from "@/shared/ui/filters/useUrlFilters";
 import type { OrderStatus } from "./transitions";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
@@ -14,7 +14,12 @@ const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
   { value: "cancelled", label: "Cancelada" },
 ];
 
-/** R21 — status-filter Select, URL-driven, mirrors `InventoryFilters.tsx`'s Select pattern. */
+/**
+ * R21 — status-filter Select, URL-driven. `useUrlFilters` (list-search-filters
+ * design D1/D6) is the fourth call site of the shared hook — no search box
+ * yet, that arrives with WU2, but status/pageSize/Limpiar route through it
+ * now so the search box cannot become a second writer on this screen.
+ */
 export function ServiceOrderFilters({
   selected,
   pageSize,
@@ -22,17 +27,7 @@ export function ServiceOrderFilters({
   selected: { status?: OrderStatus };
   pageSize: number;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  function applyFilter(key: string, value: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value) params.set(key, value);
-    else params.delete(key);
-    if (key !== "pageSize") params.delete("page");
-    router.push(`${pathname}?${params.toString()}`);
-  }
+  const { applyFilter, clearAll, hasTypedText } = useUrlFilters({});
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -52,14 +47,13 @@ export function ServiceOrderFilters({
           </SelectContent>
         </Select>
       </div>
-      {selected.status && (
-        <button
-          type="button"
-          onClick={() => router.push(pathname)}
-          className="rounded border border-border px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-muted/20"
-        >
+      {/* `hasTypedText` is structurally false today — this screen has no text
+          field until WU2 adds its search box. Kept, not dead code: WU2 makes it
+          live, and the alternative is re-learning why it is needed. */}
+      {(hasTypedText || selected.status) && (
+        <Button type="button" variant="outline" size="default" onClick={clearAll}>
           Limpiar
-        </button>
+        </Button>
       )}
       <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
         <Label>Filas por página</Label>

@@ -1,0 +1,329 @@
+/**
+ * D3 — the URL/debounce race machinery, moved here verbatim from
+ * `CustomerFilters.tsx` (two earlier attempts, one of them shipped — see the
+ * hook's own comments). Tested against a tiny harness that calls
+ * `useUrlFilters` directly, not through any screen component, because the
+ * race lives in the hook now, not in any one filter bar.
+ */
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * The mock navigates, and navigates LATE — because the real one does.
+ *
+ * `router.push` in Next 16 only dispatches into the React action queue;
+ * `window.history.pushState` runs from a `useEffect` keyed on `appRouterState`
+ * (`app-router.js:64,70`), so on a server-component page the URL lands only
+ * after the RSC payload arrives.
+ *
+ * A synchronous mock would manufacture the very property under test, so no
+ * test in this file could fail on it — the delay here is what makes that
+ * test able to fail.
+ */
+const searchParams = vi.hoisted(() => ({ value: new URLSearchParams() }));
+/**
+ * Subscribers to the mocked `useSearchParams`. Next re-renders every consumer
+ * when a navigation COMMITS; without this the mocked hook returns one frozen
+ * object forever and the hook's `useEffect([searchParams])` never fires.
+ */
+const listeners = vi.hoisted(() => new Set<() => void>());
+const pending = vi.hoisted(() => ({
+  timers: [] as ReturnType<typeof setTimeout>[],
+  delay: 20,
+  /** Per-push delays, consumed in order, so two pushes can be outstanding with
+   *  the FIRST landing before the second. */
+  delays: [] as number[],
+}));
+
+/** Commits a navigation the way Next does: URL first, then every consumer of the hook. */
+const land = vi.hoisted(() => (url: string) => {
+  const next = url.split("?")[1] ?? "";
+  // A navigation to the SAME url produces no new `searchParams`, so consumers
+  // are not re-rendered. Notifying unconditionally hides every bug about a
+  // push that does not change the URL.
+  const unchanged = next === searchParams.value.toString();
+  window.history.replaceState({}, "", url);
+  if (unchanged) return;
+  searchParams.value = new URLSearchParams(next);
+  for (const notify of listeners) notify();
+});
+
+const push = vi.hoisted(() =>
+  vi.fn((url: string) => {
+    const delay = pending.delays.length > 0 ? pending.delays.shift()! : pending.delay;
+    pending.timers.push(setTimeout(() => land(url), delay));
+  }),
+);
+vi.mock("next/navigation", async () => {
+  const { useReducer, useEffect } = await import("react");
+  return {
+    useRouter: () => ({ push }),
+    usePathname: () => "/list",
+    useSearchParams: () => {
+      const [, force] = useReducer((n: number) => n + 1, 0);
+      useEffect(() => {
+        listeners.add(force);
+        return () => {
+          listeners.delete(force);
+        };
+      }, []);
+      return searchParams.value;
+    },
+  };
+});
+
+import { useUrlFilters } from "./useUrlFilters";
+
+/**
+ * A tiny harness, not a screen component — `useUrlFilters` is what is under
+ * test, not `CustomerFilters`. "Todos" mirrors an immediate filter (a
+ * `Select`'s `onValueChange`, no keystrokes to wait out); "Filtro" mirrors a
+ * debounced text field.
+ */
+function Harness({ initial = {} }: { initial?: Record<string, string> }) {
+  const { text, setText, applyFilter, clearAll } = useUrlFilters(initial);
+  return (
+    <div>
+      <label htmlFor="search">Filtro</label>
+      <input id="search" value={text.search ?? ""} onChange={(e) => setText("search", e.target.value)} />
+      <button onClick={() => applyFilter("status", "all")}>Todos</button>
+      <button onClick={() => applyFilter("status", "")}>Activos</button>
+      <button onClick={clearAll}>Limpiar</button>
+    </div>
+  );
+}
+
+/** Seeds BOTH, because the hook subscribes through `useSearchParams` and reads
+ *  the live URL when it writes. A test that set only one would be testing a
+ *  state the browser never produces. */
+function seedUrl(query: string) {
+  searchParams.value = new URLSearchParams(query);
+  window.history.replaceState({}, "", query ? `/list?${query}` : "/list");
+}
+
+afterEach(() => {
+  pending.delay = 20;
+  pending.delays = [];
+  for (const timer of pending.timers) clearTimeout(timer);
+  pending.timers = [];
+  push.mockClear();
+  searchParams.value = new URLSearchParams();
+  window.history.replaceState({}, "", "/list");
+});
+
+/**
+ * The third instance of the failure class WU8.1 and WU10.5 already chased: a
+ * filter surviving one layer and not the next. Here it is a RACE, not a
+ * missing line — `setText` schedules `applyFilter`'s closure `debounceMs` out,
+ * so an immediate push landing inside that window was overwritten by the
+ * stale snapshot.
+ *
+ * Real timers on purpose: the debounce is a real `setTimeout` and the bug is
+ * about WHEN the params are read.
+ */
+describe("useUrlFilters — the debounce must not clobber a newer filter", () => {
+  it("keeps the status when the search debounce fires after it", async () => {
+    pending.delay = 450;
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.type(screen.getByLabelText(/Filtro/), "perez");
+    await user.click(screen.getByRole("button", { name: "Todos" }));
+    await new Promise((resolve) => setTimeout(resolve, 350));
+
+    const last = push.mock.calls.at(-1)?.[0] as string;
+    expect(last).toContain("search=perez");
+    expect(last).toContain("status=all");
+  });
+});
+
+/**
+ * `clearAll` bypassed the single writer in the two earlier screens this hook
+ * replaces, updating neither the ref nor the pending debounce.
+ */
+describe("useUrlFilters — Limpiar goes through the same writer", () => {
+  it("does not resurrect a cleared filter on the next keystroke", async () => {
+    const user = userEvent.setup();
+    pending.delay = 450;
+    seedUrl("status=all");
+    render(<Harness />);
+
+    await user.click(screen.getByRole("button", { name: "Todos" }));
+    await user.click(screen.getByRole("button", { name: "Limpiar" }));
+    await user.type(screen.getByLabelText(/Filtro/), "ana");
+    await new Promise((resolve) => setTimeout(resolve, 350));
+
+    const last = push.mock.calls.at(-1)?.[0] as string;
+    expect(last).toContain("search=ana");
+    expect(last).not.toContain("status");
+  });
+
+  it("cancels a pending search instead of letting it re-push the cleared term", async () => {
+    const user = userEvent.setup();
+    pending.delay = 450;
+    render(<Harness initial={{ search: "perez" }} />);
+
+    await user.type(screen.getByLabelText(/Filtro/), "z");
+    await user.click(screen.getByRole("button", { name: "Limpiar" }));
+    await new Promise((resolve) => setTimeout(resolve, 350));
+
+    expect(push.mock.calls.at(-1)?.[0]).toBe("/list");
+  });
+
+  it("empties the search box, so the screen matches the list it produced", async () => {
+    const user = userEvent.setup();
+    render(<Harness initial={{ search: "perez" }} />);
+
+    const input = screen.getByLabelText(/Filtro/) as HTMLInputElement;
+    await user.click(screen.getByRole("button", { name: "Limpiar" }));
+
+    expect(input.value).toBe("");
+  });
+});
+
+/**
+ * Two pushes outstanding at once, which the single-push race test above
+ * cannot express. `useSearchParams()` reflects the COMMITTED url, so the
+ * first navigation landing must not release the ref that is holding the
+ * SECOND one.
+ */
+describe("useUrlFilters — two pushes outstanding", () => {
+  it("keeps every filter when an earlier navigation lands while a later one is still pending", async () => {
+    const user = userEvent.setup();
+    pending.delays = [100, 5000];
+    render(<Harness />);
+
+    await user.type(screen.getByLabelText(/Filtro/), "perez");
+    await new Promise((resolve) => setTimeout(resolve, 320)); // debounce fires → push A
+    await user.click(screen.getByRole("button", { name: "Todos" })); // → push B
+    await new Promise((resolve) => setTimeout(resolve, 200)); // A lands, B still pending
+
+    await user.type(screen.getByLabelText(/Filtro/), "x");
+    await new Promise((resolve) => setTimeout(resolve, 350));
+
+    const last = push.mock.calls.at(-1)?.[0] as string;
+    expect(last).toContain("search=perezx");
+    expect(last).toContain("status=all");
+  });
+});
+
+/**
+ * D3's `wasOurs` line has exactly two branches, neither expressible as a
+ * hook-level test before this unit existed.
+ */
+describe("useUrlFilters — re-seed only on external navigation", () => {
+  it("re-seeds text when the URL changes with no push of ours outstanding", async () => {
+    seedUrl("search=perez");
+    render(<Harness initial={{ search: "perez" }} />);
+    expect(screen.getByLabelText(/Filtro/)).toHaveValue("perez");
+
+    // An external navigation: no commit(), no counter incremented.
+    await act(async () => {
+      land("/list");
+    });
+
+    expect(screen.getByLabelText(/Filtro/)).toHaveValue("");
+  });
+
+  it("does not re-seed when its own push lands while typing continues", async () => {
+    const user = userEvent.setup();
+    pending.delay = 200;
+    render(<Harness />);
+
+    await user.click(screen.getByRole("button", { name: "Todos" })); // commit() → pendingPushes = 1
+    await user.type(screen.getByLabelText(/Filtro/), "ana"); // local state only, no push yet
+    await new Promise((resolve) => setTimeout(resolve, 250)); // push lands: wasOurs === true
+
+    expect(screen.getByLabelText(/Filtro/)).toHaveValue("ana");
+  });
+
+  /**
+   * The re-seed rebuilds over the keys ALREADY in state, so anything that
+   * empties the key set disables it permanently. `clearAll` did exactly that.
+   *
+   * The failure is this change's own defect class, in shared code, on three
+   * screens: Limpiar, then Back, and the list comes back filtered by `perez`
+   * while the box sits empty — a filter the operator can see is off and that
+   * is on. The test above cannot catch it, because it never clears first.
+   */
+  /**
+   * The mount guard fixed the mount. It did NOT fix the re-seed path, so the
+   * same overwrite fired on every Back or `<Link>` — the far more common
+   * trigger, and the third time in this unit that a fix landed on one caller
+   * while the shared cause stood.
+   *
+   * `?search=A&search=B`: every page's `typeof params.x === "string"` guard
+   * drops a duplicated param, so the LIST is unfiltered. `get()` would answer
+   * `"A"` and put a filter in the box that nothing is applying.
+   */
+  /**
+   * The counter used to skip a push whose target equalled
+   * `window.location.search` — "precision, not a fix for a demonstrated bug",
+   * and true while it only gated `pushedParamsRef`. It stopped being true the
+   * moment it also gated the re-seed: `window.location` LAGS, because Next 16
+   * runs `pushState` from an effect after the RSC payload lands, so a second
+   * push aimed back at the still-displayed URL went uncounted while very much
+   * producing its own commit. That commit then read as EXTERNAL and wiped the
+   * box under the operator's cursor.
+   *
+   * The hook now projects the URL the router is heading to — the last push it
+   * has outstanding, or the last commit it saw — instead of asking
+   * `window.location`, which cannot answer yet.
+   */
+  it("keeps typed text when a second push returns to the URL still on screen", async () => {
+    seedUrl("status=all");
+    pending.delays = [80, 160]; // both slower than the clicks, first lands first
+    render(<Harness initial={{ search: "" }} />);
+
+    // All three synchronously, in one `act`: both pushes must still be in the
+    // air when the text is typed, which is the whole scenario. `user.click`
+    // and `user.type` each advance timers far enough for the first push to
+    // land, which closes the window before it opens.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Activos" })); // → /list
+      fireEvent.click(screen.getByRole("button", { name: "Todos" })); // → /list?status=all
+      fireEvent.change(screen.getByLabelText(/Filtro/), { target: { value: "per" } });
+    });
+    expect(screen.getByLabelText(/Filtro/)).toHaveValue("per"); // typed, before any commit
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 220)); // both commits land, debounce has not
+    });
+    expect(screen.getByLabelText(/Filtro/)).toHaveValue("per");
+  });
+
+  it("ignores a duplicated param on an external navigation, as the page does", async () => {
+    render(<Harness initial={{ search: "" }} />);
+
+    await act(async () => {
+      land("/list?search=A&search=B");
+    });
+
+    expect(screen.getByLabelText(/Filtro/)).toHaveValue("");
+  });
+
+  it("re-seeds from an EXTERNAL navigation after Limpiar emptied the box", async () => {
+    const user = userEvent.setup();
+    seedUrl("search=perez");
+    render(<Harness initial={{ search: "perez" }} />);
+    expect(screen.getByLabelText(/Filtro/)).toHaveValue("perez");
+
+    await user.click(screen.getByRole("button", { name: "Limpiar" }));
+    expect(screen.getByLabelText(/Filtro/)).toHaveValue("");
+    // Let Limpiar's own push LAND before going back. In a browser the URL
+    // changes before the operator can reach for the back button, and without
+    // this the hook still counts that push as outstanding and reads the back
+    // navigation as its own.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    });
+
+    // Back button: an external navigation to the filtered URL.
+    await act(async () => {
+      land("/list?search=perez");
+    });
+
+    expect(screen.getByLabelText(/Filtro/)).toHaveValue("perez");
+  });
+});
