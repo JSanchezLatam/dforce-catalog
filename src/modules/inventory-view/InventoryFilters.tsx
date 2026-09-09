@@ -1,9 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-
-import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -12,9 +9,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchFilterInput } from "@/shared/ui/filters/SearchFilterInput";
+import { useUrlFilters } from "@/shared/ui/filters/useUrlFilters";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
+/**
+ * `id` and `name` are the screen the reported defect was measured on: one
+ * shared debounce timer clobbered the first field's push, and `applyFilter`
+ * read `searchParams.toString()` — a stale closure, reverted attempt #1
+ * (design.md D2) — instead of the last-pushed params. Both are gone now:
+ * `useUrlFilters` owns a per-key timer and the only `router.push` on this
+ * screen (D1–D4).
+ */
 export function InventoryFilters({
   categoryL1Options,
   categoryL2Options,
@@ -26,62 +33,31 @@ export function InventoryFilters({
   selected: { categoryL1?: string; categoryL2?: string; name?: string; id?: string; stockStatus?: string };
   pageSize: number;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function pushParams(params: URLSearchParams) {
-    router.push(`${pathname}?${params.toString()}`);
-  }
-
-  function applyFilter(key: string, value: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value) params.set(key, value);
-    else params.delete(key);
-    if (key !== "pageSize") params.delete("page");
-    pushParams(params);
-  }
-
-  function applyDebounced(key: string, value: string) {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => applyFilter(key, value), 300);
-  }
-
-  const setPageSize = useCallback(
-    (size: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("pageSize", size);
-      params.delete("page");
-      pushParams(params);
-    },
-    [searchParams, pathname, pushParams],
-  );
+  const { text, setText, applyFilter, clearAll } = useUrlFilters({
+    id: selected.id ?? "",
+    name: selected.name ?? "",
+  });
 
   const hasActiveFilters = Boolean(selected.categoryL1 || selected.categoryL2 || selected.name || selected.id || selected.stockStatus);
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="filter-id">ID</Label>
-        <Input
-          id="filter-id"
-          placeholder="Filtrar por ID..."
-          defaultValue={selected.id ?? ""}
-          onChange={(e) => applyDebounced("id", e.target.value)}
-          className="w-32"
-        />
-      </div>
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="filter-name">Nombre</Label>
-        <Input
-          id="filter-name"
-          placeholder="Filtrar por nombre..."
-          defaultValue={selected.name ?? ""}
-          onChange={(e) => applyDebounced("name", e.target.value)}
-          className="w-48"
-        />
-      </div>
+      <SearchFilterInput
+        id="filter-id"
+        label="ID"
+        placeholder="Filtrar por ID..."
+        value={text.id ?? ""}
+        onValueChange={(v) => setText("id", v)}
+        className="flex w-32 flex-col gap-1"
+      />
+      <SearchFilterInput
+        id="filter-name"
+        label="Nombre"
+        placeholder="Filtrar por nombre..."
+        value={text.name ?? ""}
+        onValueChange={(v) => setText("name", v)}
+        className="flex w-48 flex-col gap-1"
+      />
       <div className="flex flex-col gap-1">
         <Label>Categoría 1</Label>
         <Select
@@ -136,19 +112,18 @@ export function InventoryFilters({
           </SelectContent>
         </Select>
       </div>
-      <button
-        onClick={() => router.push(pathname)}
-        className={`rounded border px-3 py-1.5 text-sm transition-colors ${
-          hasActiveFilters
-            ? "border-border text-foreground hover:bg-muted/20"
-            : "border-transparent text-muted-foreground/30 cursor-default"
-        }`}
+      <Button
+        type="button"
+        variant="outline"
+        size="default"
+        onClick={clearAll}
+        disabled={!hasActiveFilters}
       >
         Limpiar
-      </button>
+      </Button>
       <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
         <Label>Filas por página</Label>
-        <Select value={String(pageSize)} onValueChange={(v) => setPageSize(v ?? "")}>
+        <Select value={String(pageSize)} onValueChange={(v) => applyFilter("pageSize", v ?? "")}>
           <SelectTrigger className="w-20">
             <SelectValue />
           </SelectTrigger>

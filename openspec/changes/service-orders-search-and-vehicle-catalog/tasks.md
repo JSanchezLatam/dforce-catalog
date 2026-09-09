@@ -59,7 +59,7 @@ skipping it does not change the landing order of 1, 2, and 4.
 ## Phase 1 — Shared controlled search input, and the two defects it fixes
 (list-search-filters spec: all four requirements; design D1–D6)
 
-- [ ] 1.1 RED (jsdom) create `src/shared/ui/filters/useUrlFilters.test.tsx` —
+- [x] 1.1 RED (jsdom) create `src/shared/ui/filters/useUrlFilters.test.tsx` —
   move the `next/navigation` mock (`pending`, `listeners`, `land`, `push`,
   all `vi.hoisted`) and the three race describes (`the debounce must not
   clobber`, `Limpiar goes through the same writer`, `two pushes
@@ -68,55 +68,66 @@ skipping it does not change the landing order of 1, 2, and 4.
   `useUrlFilters` directly and renders `text`/`applyFilter`/`clearAll`
   through plain inputs/buttons — not through `CustomerFilters`. Confirm
   every test fails: the module does not exist yet.
-- [ ] 1.2 GREEN — create `src/shared/ui/filters/useUrlFilters.ts` per the
+- [x] 1.2 GREEN — create `src/shared/ui/filters/useUrlFilters.ts` per the
   design's Interfaces block (`text`, `setText`, `applyFilter`, `clearAll`).
   Move `pushedParamsRef`, `pendingPushes`, `commit()`'s changed-URL guard, and
   `applyFilter` reading `pushedParamsRef.current ?? window.location.search`
   verbatim from `CustomerFilters.tsx:73-131` (D3). `initialText` seeded via
   lazy `useState(() => initialText)` (D3 "Seeding" — never re-seeds mid-typing
   off a rebuilt object literal).
-- [ ] 1.3 GREEN — per-key debounce: `useRef<Map<string, Timeout>>`, not the
+- [x] 1.3 GREEN — per-key debounce: `useRef<Map<string, Timeout>>`, not the
   single `debounceRef` every screen has today (D4); `clearAll` iterates the
   map.
-- [ ] 1.4 GREEN — add the one new line inside the existing
+- [x] 1.4 GREEN — add the one new line inside the existing
   `useEffect([searchParams])`: `wasOurs = pendingPushes.current > 0`, read
   BEFORE the decrement; re-seed `text` from `useSearchParams()` only when
   `!wasOurs` — D3's exact snippet.
-- [ ] 1.5 RED (jsdom), same file — an external-navigation re-seed test
+- [x] 1.5 RED (jsdom), same file — an external-navigation re-seed test
   (browser back to a URL with no params re-seeds `text` to empty) and a
   same-navigation-non-reseed test (the hook's own push landing mid-debounce
   does NOT reseed) — the two branches of D3's `wasOurs` line, neither
   expressible as a hook-level test before this unit. Confirm both pass once
   1.2–1.4 land (this is the checkpoint, not new implementation).
-- [ ] 1.6 **Mutation-verify D3's binding claim** — revert the `wasOurs`
+- [x] 1.6 **Mutation-verify D3's binding claim** — revert the `wasOurs`
   guard (make the effect always re-seed, or never re-seed). Confirm 1.5's
   re-seed test goes red **by name**. `diff` to confirm the mutation landed,
   then a second `diff` after reverting, confirming byte-identical.
-- [ ] 1.7 GREEN — create `src/shared/ui/filters/SearchFilterInput.tsx`:
+- [x] 1.7 GREEN — create `src/shared/ui/filters/SearchFilterInput.tsx`:
   `Label` + controlled `Input`, `value`/`onValueChange`, **no `defaultValue`
   prop in the type at all** (D1 — "the prop does not exist"), per the
   Interfaces block.
-- [ ] 1.8 GREEN — rewire `CustomerFilters.tsx`: delete `debounceRef`,
+- [x] 1.8 GREEN — rewire `CustomerFilters.tsx`: delete `debounceRef`,
   `pushedParamsRef`, `pendingPushes`, `searchInputRef`, `commit`,
   `applyFilter`, `clearFilters`, `applyDebounced` (all now in the hook); call
   `useUrlFilters({ search: selected.search ?? "" })`; render
   `<SearchFilterInput id="filter-search" label="Filtro" placeholder="Buscar por nombre, placa o teléfono" value={text.search} onValueChange={(v) => setText("search", v)} />`;
   status/pageSize selects keep calling the hook's `applyFilter`; `Limpiar`
   calls `clearAll`.
-- [ ] 1.9 GREEN — confirm `searchInputRef` and the hand-written DOM write at
+- [x] 1.9 GREEN — confirm `searchInputRef` and the hand-written DOM write at
   the old `:141` (`searchInputRef.current.value = ""`) are gone:
   `rg searchInputRef src/modules/customers/CustomerFilters.tsx` returns
   nothing (D3 — "the ref's disappearance is the proof the input became
   controlled").
-- [ ] 1.10 RED/GREEN `CustomerFilters.test.tsx` — confirm the surviving
+- [x] 1.10 RED/GREEN `CustomerFilters.test.tsx` — confirm the surviving
   status/compose tests (Activos default, Desactivados, Todos, keeps an
   active search term, page reset, Limpiar visibility, Limpiar empties the
   box) all still pass against the rewired component, unmodified in
   assertion.
-- [ ] 1.11 `npx vitest run useUrlFilters CustomerFilters` — every test from
+
+  > **Finding (sdd-apply):** 1.1 says move the WHOLE "Limpiar goes through
+  > the same writer" describe (all 3 its) to `useUrlFilters.test.tsx`; this
+  > task's own "surviving" list names "Limpiar empties the box" as staying in
+  > `CustomerFilters.test.tsx`. Kept it in BOTH: the hook-level version (moved
+  > verbatim, asserting the harness input) proves the mechanism; the
+  > component-level version (new here, same assertion shape, against the real
+  > `CustomerFilters`) proves the `SearchFilterInput` wiring is actually
+  > controlled — that is component-specific and no hook-level test can give
+  > it. The other two its under that describe (writer-identity, pending-timer
+  > cancellation) moved out and are not duplicated.
+- [x] 1.11 `npx vitest run useUrlFilters CustomerFilters` — every test from
   1.1–1.10 green.
 
-- [ ] 1.12 RED (jsdom) create `src/modules/inventory-view/InventoryFilters.test.tsx`
+- [x] 1.12 RED (jsdom) create `src/modules/inventory-view/InventoryFilters.test.tsx`
   (does not exist today — checked directly, only `CustomerFilters.test.tsx`
   exists). Assert `#filter-id` and `#filter-name` are controlled (`value`
   bound, no `defaultValue`). Reproduce the reported defect **by its exact
@@ -125,7 +136,7 @@ skipping it does not change the landing order of 1, 2, and 4.
   carry **both** `id=ABC` and `name=bateria` — not a generic debounce test.
   Confirm it fails against current `InventoryFilters.tsx` (one shared
   `debounceRef`, `applyFilter` built from `searchParams.toString()`).
-- [ ] 1.13 GREEN — rewire `InventoryFilters.tsx` onto
+- [x] 1.13 GREEN — rewire `InventoryFilters.tsx` onto
   `useUrlFilters({ id: selected.id ?? "", name: selected.name ?? "" })` +
   two `SearchFilterInput`s; delete `applyFilter`'s stale-closure read
   (`searchParams.toString()`, D2's "reverted attempt #1, still shipping")
@@ -133,30 +144,53 @@ skipping it does not change the landing order of 1, 2, and 4.
   button (`:140`), replace with the hook's `clearAll()` behind
   `Button variant="outline" size="default"` (D6 — stays `h-8`, filter-strip
   exception, no `min-h-11`).
-- [ ] 1.14 RED/GREEN — `Categoría 1`/`Categoría 2`/`Stock` selects still call
+- [x] 1.14 RED/GREEN — `Categoría 1`/`Categoría 2`/`Stock` selects still call
   `applyFilter` immediately, unchanged; `pageSize` change does not drop
   `page`, any other filter change does (D5 — `/inventory`'s existing
   behavior, confirm unchanged by the rewire).
-- [ ] 1.15 **Mutation-verify D2/D4's binding claim — the fix this unit exists
+
+  > **Finding (sdd-apply):** this task's literal wording ("pageSize change
+  > does NOT drop page") contradicts both D5's own text ("Chosen: always
+  > delete `page`... `/inventory` is unchanged") and the pre-change code:
+  > `InventoryFilters.tsx`'s old `setPageSize` already called
+  > `params.delete("page")` unconditionally, on every `pageSize` change.
+  > Implemented per D5 + the actual prior behavior (page dropped on every
+  > filter change, `pageSize` included) and added a test asserting exactly
+  > that (`a pageSize change also drops page, same as every other filter`),
+  > not the task's literal (backwards) wording.
+- [x] 1.15 **Mutation-verify D2/D4's binding claim — the fix this unit exists
   for.** Revert `InventoryFilters` to a single shared timer (or reintroduce
   `searchParams.toString()` as the read source). Confirm 1.12's two-field
   test goes red **by name**. `diff` to confirm, then revert and confirm
   green.
 
-- [ ] 1.16 RED (jsdom) create `src/modules/service-orders/ServiceOrderFilters.test.tsx`
+- [x] 1.16 RED (jsdom) create `src/modules/service-orders/ServiceOrderFilters.test.tsx`
   (does not exist today — checked directly). For the status `Select` and
   `pageSize` `Select` only (the search box arrives with WU2, D1 names this
   screen "the fourth call site"); assert `Limpiar` goes through the hook's
   `clearAll`, not its own `router.push(pathname)` (`:58`).
-- [ ] 1.17 GREEN — rewire `ServiceOrderFilters.tsx` onto `useUrlFilters({})`
+- [x] 1.17 GREEN — rewire `ServiceOrderFilters.tsx` onto `useUrlFilters({})`
   for `applyFilter`/`clearAll`; no `SearchFilterInput` yet — the point of
   this task is that status/pageSize/`Limpiar` route through the ONE hook so
   WU2's search box cannot become a second writer on this screen.
 
-- [ ] 1.18 `diff` every created/touched file (`useUrlFilters.ts`,
+  > **Finding (sdd-apply):** 1.16 is labeled RED, but no real RED exists here.
+  > With no debounce on this screen yet (no search box until WU2), a
+  > standalone `router.push(pathname)` Limpiar and the hook's `clearAll()`
+  > produce an IDENTICAL observable URL, so a black-box URL assertion cannot
+  > distinguish them — confirmed by implementing the standalone-writer version
+  > first and observing the test stayed green. Applied the AGENTS.md
+  > Strict-TDD retrofit carve-out instead (same class as 2.2): built the real
+  > `clearAll()` version, then temporarily reinstated a standalone
+  > `router.push(pathname)` writer and confirmed the test still passed (i.e.
+  > it is not yet meaningful as a writer-identity check), then reverted. The
+  > claim this task exists to protect only becomes testable once WU2 adds a
+  > debounced search box to this screen (task 2.25) and a race can exist.
+
+- [x] 1.18 `diff` every created/touched file (`useUrlFilters.ts`,
   `SearchFilterInput.tsx`, `CustomerFilters.tsx`, `InventoryFilters.tsx`,
   `ServiceOrderFilters.tsx`, and their tests) before trusting 1.1–1.17.
-- [ ] 1.19 **Browser check, both themes, console open — the only evidence
+- [x] 1.19 **Browser check, both themes, console open — the only evidence
   that exists for this unit's actual defects.** jsdom does not run Base
   UI's dev-mode warning path. On `/customers`, `/inventory`,
   `/service-orders`: type in every search box and confirm **zero console
@@ -165,18 +199,52 @@ skipping it does not change the landing order of 1, 2, and 4.
   `bateria` within ~1.2s and confirm the URL carries both terms (the
   reported defect, reproduced live); browser back/forward re-seeds every
   box; `Limpiar` empties the box with no DOM write.
-- [ ] 1.20 `npm test` (alone) and `npx tsc --noEmit` clean.
+- [x] 1.20 `npm test` (alone) and `npx tsc --noEmit` clean.
 
 ### Phase 1 verification record — fill in during `sdd-apply`
 
 | Task | Evidence |
 |---|---|
-| 1.6 | — |
-| 1.15 | — |
-| 1.19 | — |
-| 1.20 | — |
+| 1.6 | Reverted `wasOurs` guard to unconditional `reseedTextFromSearchParams()` in `useUrlFilters.ts`. `useUrlFilters — re-seed only on external navigation > does not re-seed when its own push lands while typing continues` went RED by name (value `ana` expected, received empty). `diff` confirmed the mutation landed; reverted; second `diff` confirmed byte-identical; suite green again (7/7). |
+| 1.15 | Reverted per-key `timers` Map to a single shared-key timer in `useUrlFilters.ts` (the class of bug D4 exists to prevent, now centralized in the hook rather than duplicated per screen). `InventoryFilters — two text fields must not clobber each other (D4) > keeps BOTH id and name after typing into id, then name, inside the debounce window` went RED by name — `/inventory?name=bateria` only, `id=ABC` dropped, reproducing the exact reported defect shape. `diff` confirmed the mutation landed; reverted; second `diff` confirmed byte-identical; suite green again (7/7). |
+| 1.19 | Not run — orchestrator's browser check (jsdom cannot see Base UI's dev-mode warning path per AGENTS.md's second known limit; this agent has no browser). |
+| 1.20 | Run by this agent as a build/regression gate, left unticked per the launch prompt's explicit instruction (orchestrator owns the final 1.19/1.20 confirmation): `npm test` → 108 files / 1572 tests passed. `npx tsc --noEmit` → clean, no output. `npm run lint` → 0 errors, 14 warnings, none in any file this unit touched. |
 
 ---
+
+
+### WU1 verification record — what was actually run, and where
+
+jsdom does not execute Base UI's dev-mode warning path, so no test in this repo
+can say the red overlay is gone. This is that evidence, run against the owner's
+own dev server on `:3000` with its real data (370 customers, 699 products).
+
+| Check | Result |
+|---|---|
+| **The reported defect** | `/customers`, typing `jorge`: filters correctly, **the red "1 Issue" badge is gone**, 0 console errors. It was present on the same screen, same term, before this unit. |
+| **`/inventory`'s silent filter drop** | Re-ran the exact measurement that found it: `ABC` into `#filter-id`, `bateria` into `#filter-name` 120 ms later. URL is now **`?id=ABC&name=bateria`** — both survive. Before: `?name=bateria`, the ID gone while the box still showed it. |
+| **The re-seed branch (D3)** | Back button from `?id=ABC&name=bateria` → `?id=ABC`: the ID box keeps `ABC`, the name box clears to match the URL. An external navigation re-seeds; our own push does not. |
+| Console | 0 errors on both screens. |
+
+Gates: `npm test` 1572/1572 · `npx tsc --noEmit` clean · `npm run lint` 0
+errors / **14** warnings — one FEWER than the documented baseline, because
+`InventoryFilters`' hand-styled `<button>` became a shadcn `Button`. Verified
+by diffing the warning set against `main`: the file that dropped out is
+`InventoryFilters.tsx`. `AGENTS.md`'s count was corrected in this unit rather
+than left to read as a regression by the next person.
+
+Both mutations were re-run independently of the implementing agent:
+`timers.current.get(key)` → a shared key turns **`keeps BOTH id and name after
+typing into id, then name, inside the debounce window`** red by name; dropping
+the `if (!wasOurs)` guard turns **`does not re-seed when its own push lands
+while typing continues`** red by name. Each `diff`-proved on the way in and
+byte-identical on the way back.
+
+**Task 1.16's test stays green under its mutation, and that is recorded rather
+than papered over.** `/service-orders` has no debounce yet — its search box is
+WU2 — so a standalone `router.push(pathname)` and the hook's `clearAll()`
+produce an identical URL, and no black-box assertion can tell them apart. It
+becomes checkable once WU2 adds that screen's search box, and the task says so.
 
 ## Phase 2 — Order list search, columns, and default order
 (service-orders spec: *Order List Search Matches Customer, Vehicle, and
@@ -184,7 +252,7 @@ Phone*, *Order List Columns Show Customer and Vehicle*, *Unsorted Default
 Order Is Appointment-First*; table-sorting spec: both MODIFIED requirements;
 design D7–D11)
 
-- [ ] 2.1 GREEN (mechanical move, no dedicated test exists today — D8) —
+- [x] 2.1 GREEN (mechanical move, no dedicated test exists today — D8) —
   create `src/shared/db/text-search.ts`, move `unaccentIlike` verbatim,
   including its STABLE-not-IMMUTABLE docstring, from
   `customers/queries.ts:46-48`; export it; `customers/queries.ts` imports it
@@ -422,7 +490,7 @@ undecided design.
 (service-orders spec: *Service Due Reminder Restricted to Preventive and
 Corrective Categories*; design D12)
 
-- [ ] 4.1 RED (node) `reminders/schedule.test.ts` — extend `makeOrden` to
+- [x] 4.1 RED (node) `reminders/schedule.test.ts` — extend `makeOrden` to
   accept a `categoria` override (the schema field, `orden_servicio.categoria`,
   `.notNull()`), defaulting to `"mant_preventivo"` so every existing test
   keeps its current behavior unless it opts into a different category.

@@ -183,8 +183,9 @@ that depends on data VOLUME does not exist until there is data.
   Both numbers were measured, and the measurements live in `vitest.config.ts`
   next to the settings — read them there, not here.
 
-- **`npm run lint`**: 0 errors, 15 warnings (verified 2026-08-28), all
-  pre-existing. Don't add to them; clearing them is its own change. Re-run
+- **`npm run lint`**: 0 errors, **14** warnings (verified 2026-09-09; was 15
+  until `list-search-filters` WU1 replaced `InventoryFilters`' hand-styled
+  `<button>` with the shadcn `Button`, clearing one), all pre-existing. Don't add to them; clearing them is its own change. Re-run
   before trusting that count.
 
 - **Substantial changes go through the gentle-ai review flow**
