@@ -287,6 +287,58 @@ describe("POST /api/service-orders — the form's payload, round-tripped through
 
   const deps = (database: unknown) => ({ getClienteById: async () => clienteDetail as never, db: database as never });
 
+  /**
+   * The sibling route refuses both of these on the SAME columns
+   * (`[id]/route.ts`'s `NULLABLE_TEXT_FIELDS` loop): "A type check alone lets
+   * any authenticated user PATCH megabytes straight into Postgres." Create had
+   * no such guard, so the identical payload was a 400 one route over and a 201
+   * here — `pg` stringifies an object, so `{ evil: 1 }` landed as
+   * `{"evil":1}` in an unbounded `text` column.
+   *
+   * `wire()` cannot catch this on its own: `JSON.parse(JSON.stringify(...))`
+   * of a hand-typed literal only ever carries the strings the fixture author
+   * wrote. Nothing in the suite sent a non-string until these two cases.
+   */
+  it("refuses a non-string observaciones with 400, without reaching the insert", async () => {
+    const { database, inserts } = capturingDb();
+
+    const response = await handleCreateOrdenServicio(
+      requestWith(wire({ ...FORM_STATE, observaciones: { evil: 1 } })),
+      deps(database),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ errors: { observaciones: "Valor inválido" } });
+    expect(inserts).toHaveLength(0);
+  });
+
+  it("refuses an over-long description with 400, without reaching the insert", async () => {
+    const { database, inserts } = capturingDb();
+
+    const response = await handleCreateOrdenServicio(
+      requestWith(wire({ ...FORM_STATE, description: "x".repeat(5001) })),
+      deps(database),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ errors: { description: "Texto demasiado largo" } });
+    expect(inserts).toHaveLength(0);
+  });
+
+  // `null` clears the field and is not the same as smuggling an object —
+  // the same distinction `[id]/route.test.ts` already pins on the patch side.
+  it("still accepts null on a note field", async () => {
+    const { database, inserts } = capturingDb();
+
+    const response = await handleCreateOrdenServicio(
+      requestWith(wire({ ...FORM_STATE, observaciones: null })),
+      deps(database),
+    );
+
+    expect(response.status).toBe(201);
+    expect((inserts[0] as Record<string, unknown>).observaciones).toBeNull();
+  });
+
   it("threads observaciones through to the insert seam", async () => {
     const { database, inserts } = capturingDb();
 

@@ -11,6 +11,20 @@ import {
   UnknownClienteError,
 } from "@/modules/service-orders/service";
 
+/**
+ * The two nullable `text` columns this route writes, guarded exactly as
+ * `[id]/route.ts` guards the same columns on the patch side. They were
+ * forwarded raw until WU4's review: `pg` stringifies an object, so
+ * `observaciones: { evil: 1 }` was a 400 one route over and a 201 here,
+ * landing `{"evil":1}` in an unbounded column — and a 6000-character string
+ * saved outright. `hallazgos`/`recomendaciones` are absent on purpose:
+ * `createOrder`'s own `.values({...})` whitelist never reads them.
+ */
+const NULLABLE_TEXT_FIELDS = ["description", "observaciones"] as const;
+
+/** Same bound as the patch route: generous for a technician's notes, finite. */
+const MAX_TEXT_LENGTH = 5000;
+
 export async function handleCreateOrdenServicio(
   request: NextRequest,
   deps: CreateOrdenServicioDeps = {},
@@ -21,6 +35,16 @@ export async function handleCreateOrdenServicio(
   }
 
   const body = await request.json();
+
+  for (const field of NULLABLE_TEXT_FIELDS) {
+    if (body[field] === undefined || body[field] === null) continue;
+    if (typeof body[field] !== "string") {
+      return NextResponse.json({ errors: { [field]: "Valor inválido" } }, { status: 400 });
+    }
+    if (body[field].length > MAX_TEXT_LENGTH) {
+      return NextResponse.json({ errors: { [field]: "Texto demasiado largo" } }, { status: 400 });
+    }
+  }
 
   // `appointmentAt` arrives as a STRING or not at all — JSON has no Date, and
   // the form's `datetime-local` holds `""` until someone picks a moment. But
