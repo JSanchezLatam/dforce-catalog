@@ -40,6 +40,30 @@ tracker (draft, no-merge)
   └── 1 intake ── 2 vehicle insert ── 3 print ── 4 edit gate
 ```
 
+## Delivery order — by what it unblocks, not by phase number
+
+**Ship in the order 1 → 2 → 4 → 3.** The phases below keep their numbers; only
+the landing order differs, and it differs deliberately.
+
+The tasks phase ordered Phase 4 last because it and Phase 3 both edit the
+detail page's header, so a linear chain avoids a rebase. That is a convenience
+argument, and it loses to what each unit unblocks:
+
+- **Phase 2 is the hardest block.** Only 2 of 370 customers have a vehicle and
+  `orden_servicio.vehiculoId` is `NOT NULL`, so an order cannot be created for
+  the other 368 at all. Until this lands, most of the app's customers have no
+  path to a service order.
+- **Phase 4 is the reported defect.** The owner asked why he cannot edit
+  `hallazgos`/`recomendaciones`/`observaciones`; the answer is that no entry
+  point exists. Every day this waits is a day those fields are unreachable
+  after creation.
+- **Phase 3 is new capability, not a repair.** The printed order has never
+  existed, so nothing regresses by it landing last.
+
+Phase 3 therefore rebases on Phase 4's header change rather than the reverse.
+Same conflict, opposite direction, and the direction is chosen by which unit
+the owner is waiting on.
+
 ## Gates, every unit
 
 - `npm test` (run alone — this machine produces phantom timeouts when suites
