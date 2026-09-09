@@ -251,6 +251,87 @@ describe("CustomerPicker", () => {
     expect(screen.queryByText("Viejo")).not.toBeInTheDocument();
   });
 
+  /**
+   * D6 / spec "Customer Selection Clear and Explicit Deselect". No test
+   * clicked "Seleccionar" and then looked back at the search box:
+   * `handleSelect` set `selected` and nothing else, so the term, the result
+   * rows, the truncation notice and the near-match notice all stayed on
+   * screen underneath the banner announcing the pick.
+   */
+  it("clears the search term, the results and the near-match state when a customer is selected", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ customers: [row({ id: "c-near", name: "Juan Cerca" })], total: 364, relaxedFrom: "Juan" }),
+    );
+
+    render(<CustomerPicker selectedCustomer={null} canCreateCustomer onSelect={vi.fn()} />);
+    await typeAndDebounce("Juan Alberto");
+    expect(screen.getByText(/364 clientes coinciden/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Seleccionar Juan Cerca/i }));
+
+    expect(searchInput()).toHaveValue("");
+    expect(screen.queryByRole("button", { name: /Seleccionar Juan Cerca/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/364 clientes coinciden/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/sin coincidencias exactas/i)).not.toBeInTheDocument();
+    // `hasSearched` on its own: left true with the rows cleared, the picker
+    // would answer the pick with "Sin coincidencias para esa búsqueda."
+    //
+    // Measured limit, stated so nobody reads more coverage into this than it
+    // has: mutation proves only `setTerm("")` and `setHasSearched(false)`.
+    // Deleting `setResults`, `setTotal` or `setRelaxedFrom` from the handler
+    // leaves this test green, because every render path that would show them
+    // is gated on `hasSearched`. Those three assertions pin the rendered
+    // outcome, which is real; they are not evidence about those setters.
+    expect(screen.queryByText(/sin coincidencias para esa búsqueda/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /crear cliente nuevo/i })).not.toBeInTheDocument();
+  });
+
+  /**
+   * AGENTS.md's 44x44 floor binds here — workshop tablets, and the one
+   * standing waiver is the pointer-only sidebar rail. `size="sm"` is 32px,
+   * so the class is carried explicitly. jsdom measures nothing, so this
+   * pins the class; the rendered height is the browser check's job.
+   */
+  it("offers a deselect control at the 44x44 hit-target floor when onDeselect is given", () => {
+    const onDeselect = vi.fn();
+
+    render(
+      <CustomerPicker
+        selectedCustomer={row({ id: "c-sel", name: "Ya Elegido" })}
+        canCreateCustomer={false}
+        onSelect={vi.fn()}
+        onDeselect={onDeselect}
+      />,
+    );
+
+    const control = screen.getByRole("button", { name: /quitar cliente/i });
+    expect(control.className).toContain("min-h-11");
+    expect(control.className).toContain("min-w-11");
+
+    fireEvent.click(control);
+
+    expect(onDeselect).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Ya Elegido")).not.toBeInTheDocument();
+  });
+
+  /**
+   * Edit mode renders no deselect: `clienteId` is not patchable, so offering
+   * "quitar" there would promise what PATCH /api/service-orders/[id] refuses.
+   * `ServiceOrderForm` expresses that by passing no `onDeselect` at all.
+   */
+  it("renders no deselect control when onDeselect is absent", () => {
+    render(
+      <CustomerPicker
+        selectedCustomer={row({ id: "c-sel", name: "Ya Elegido" })}
+        canCreateCustomer={false}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Ya Elegido")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /quitar cliente/i })).not.toBeInTheDocument();
+  });
+
   it("shows only the create action when there are zero exact and zero near matches", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ customers: [], total: 0 }));
 

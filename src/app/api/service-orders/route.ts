@@ -11,6 +11,20 @@ import {
   UnknownClienteError,
 } from "@/modules/service-orders/service";
 
+/**
+ * The two nullable `text` columns this route writes, guarded exactly as
+ * `[id]/route.ts` guards the same columns on the patch side. They were
+ * forwarded raw until WU4's review: `pg` stringifies an object, so
+ * `observaciones: { evil: 1 }` was a 400 one route over and a 201 here,
+ * landing `{"evil":1}` in an unbounded column — and a 6000-character string
+ * saved outright. `hallazgos`/`recomendaciones` are absent on purpose:
+ * `createOrder`'s own `.values({...})` whitelist never reads them.
+ */
+const NULLABLE_TEXT_FIELDS = ["description", "observaciones"] as const;
+
+/** Same bound as the patch route: generous for a technician's notes, finite. */
+const MAX_TEXT_LENGTH = 5000;
+
 export async function handleCreateOrdenServicio(
   request: NextRequest,
   deps: CreateOrdenServicioDeps = {},
@@ -21,6 +35,16 @@ export async function handleCreateOrdenServicio(
   }
 
   const body = await request.json();
+
+  for (const field of NULLABLE_TEXT_FIELDS) {
+    if (body[field] === undefined || body[field] === null) continue;
+    if (typeof body[field] !== "string") {
+      return NextResponse.json({ errors: { [field]: "Valor inválido" } }, { status: 400 });
+    }
+    if (body[field].length > MAX_TEXT_LENGTH) {
+      return NextResponse.json({ errors: { [field]: "Texto demasiado largo" } }, { status: 400 });
+    }
+  }
 
   // `appointmentAt` arrives as a STRING or not at all — JSON has no Date, and
   // the form's `datetime-local` holds `""` until someone picks a moment. But
@@ -43,11 +67,24 @@ export async function handleCreateOrdenServicio(
   }
 
   try {
-    // Follow-up 1.18. `createdBy` comes from the SESSION, never from the
-    // body — spreading it AFTER `body` is what makes a client-supplied value
-    // unable to win. The route is the only place that knows who is acting;
-    // everything the body says about identity is a claim, not a fact.
-    const orden = await createOrder({ ...body, appointmentAt, createdBy: user.id }, deps);
+    // Named fields, not `...body`. Two reasons, both already paid for here:
+    // `createdBy` comes from the SESSION and the body's claim about identity
+    // must not be able to win (follow-up 1.18); and D7 takes `items` off the
+    // create path, so the route stops handing it on at all. `createOrder`'s
+    // own `.values({...})` whitelist still stands behind this — a body's
+    // `hallazgos`/`recomendaciones` reach neither.
+    const orden = await createOrder(
+      {
+        clienteId: body.clienteId,
+        vehiculoId: body.vehiculoId,
+        categoria: body.categoria,
+        description: body.description,
+        observaciones: body.observaciones,
+        appointmentAt,
+        createdBy: user.id,
+      },
+      deps,
+    );
     return NextResponse.json({ orden }, { status: 201 });
   } catch (err) {
     if (err instanceof ClienteDeactivatedError) {

@@ -8,7 +8,6 @@ import {
   createOrder,
   InvalidCategoriaError,
   InvalidVehiculoError,
-  normalizeOrderItems,
   OrdenServicioNotFoundError,
   transitionOrder,
   UnknownClienteError,
@@ -28,40 +27,6 @@ function fakeVehiculo(overrides: Partial<Vehiculo> = {}): Vehiculo {
     ...overrides,
   };
 }
-
-describe("normalizeOrderItems (R20 — duplicate-producto policy: MERGE quantities)", () => {
-  it("merges quantities for repeated productoId occurrences into a single line item", () => {
-    const result = normalizeOrderItems([
-      { productoId: "p1", productName: "Filtro de aceite", quantity: 2 },
-      { productoId: "p1", productName: "Filtro de aceite", quantity: 3 },
-    ]);
-    expect(result).toEqual([{ productoId: "p1", productName: "Filtro de aceite", quantity: 5 }]);
-  });
-
-  it("keeps distinct productoId line items separate", () => {
-    const result = normalizeOrderItems([
-      { productoId: "p1", productName: "Filtro de aceite", quantity: 1 },
-      { productoId: "p2", productName: "Bujía", quantity: 4 },
-    ]);
-    expect(result).toEqual([
-      { productoId: "p1", productName: "Filtro de aceite", quantity: 1 },
-      { productoId: "p2", productName: "Bujía", quantity: 4 },
-    ]);
-  });
-
-  it("does not merge items with no productoId (custom/off-catalog parts) even with the same name", () => {
-    const result = normalizeOrderItems([
-      { productName: "Pieza genérica", quantity: 1 },
-      { productName: "Pieza genérica", quantity: 1 },
-    ]);
-    expect(result).toHaveLength(2);
-  });
-
-  it("defaults quantity to 1 when not provided", () => {
-    const result = normalizeOrderItems([{ productoId: "p1", productName: "Filtro de aceite" }]);
-    expect(result[0].quantity).toBe(1);
-  });
-});
 
 function makeFakeTx() {
   const insertedOrders: unknown[] = [];
@@ -99,7 +64,7 @@ describe("createOrder (R20)", () => {
     expect(database.transaction).not.toHaveBeenCalled();
   });
 
-  it("creates an order with no parts attached (empty items list)", async () => {
+  it("creates an order and writes no line item — ordenServicioItem has no writer left (D7)", async () => {
     const { tx, insertedItems } = makeFakeTx();
     const database = { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(tx) };
 
@@ -115,43 +80,12 @@ describe("createOrder (R20)", () => {
     expect(insertedItems).toHaveLength(0);
   });
 
-  it("creates an order + its line items in one transaction, merging duplicate productoId quantities", async () => {
-    const { tx, insertedItems } = makeFakeTx();
-    const database = { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(tx) };
-
-    await createOrder(
-      {
-        clienteId: "c1",
-        vehiculoId: "v1",
-        categoria: "revisado",
-        items: [
-          { productoId: "p1", productName: "Filtro de aceite", quantity: 2, unitPrice: 100 },
-          { productoId: "p1", productName: "Filtro de aceite", quantity: 1, unitPrice: 100 },
-        ],
-      },
-      {
-        getClienteById: async () => ({ cliente: { id: "c1" }, orders: [], vehicles: [fakeVehiculo()] }) as never,
-        db: database as unknown as typeof import("@/shared/db/client").db,
-      },
-    );
-
-    expect(insertedItems).toHaveLength(1);
-    expect(insertedItems[0]).toEqual([
-      expect.objectContaining({ ordenId: "o1", productoId: "p1", productName: "Filtro de aceite", quantity: 3 }),
-    ]);
-  });
-
   it("never mutates producto.stock (R22) — the transaction's update() is never called", async () => {
     const { tx, updateSpy } = makeFakeTx();
     const database = { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(tx) };
 
     await createOrder(
-      {
-        clienteId: "c1",
-        vehiculoId: "v1",
-        categoria: "revisado",
-        items: [{ productoId: "p1", productName: "Filtro de aceite", quantity: 1 }],
-      },
+      { clienteId: "c1", vehiculoId: "v1", categoria: "revisado" },
       {
         getClienteById: async () => ({ cliente: { id: "c1" }, orders: [], vehicles: [fakeVehiculo()] }) as never,
         db: database as unknown as typeof import("@/shared/db/client").db,
@@ -190,7 +124,13 @@ describe("createOrder (R20)", () => {
     const database = { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(tx) };
 
     await createOrder(
-      { clienteId: "c1", vehiculoId: "v1", categoria: "revisado", hallazgos: "no debería llegar" } as never,
+      {
+        clienteId: "c1",
+        vehiculoId: "v1",
+        categoria: "revisado",
+        observaciones: "el cliente espera",
+        hallazgos: "no debería llegar",
+      } as never,
       {
         getClienteById: async () => ({ cliente: { id: "c1" }, orders: [], vehicles: [fakeVehiculo()] }) as never,
         db: database as unknown as typeof import("@/shared/db/client").db,
@@ -198,6 +138,9 @@ describe("createOrder (R20)", () => {
     );
 
     expect(insertedOrders[0]).not.toHaveProperty("hallazgos");
+    // From the SAME payload, and the pair is the point: `observaciones` is
+    // now a create-time field while findings stay patch-only (D7).
+    expect(insertedOrders[0]).toMatchObject({ observaciones: "el cliente espera" });
   });
 
   describe("categoria validation (C4, GGA round 3)", () => {

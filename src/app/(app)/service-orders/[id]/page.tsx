@@ -140,7 +140,12 @@ export default async function ServiceOrderDetailPage({
             </div>
             {field("Categoría", CATEGORIA_LABEL[orden.categoria])}
             {field("Descripción", orden.description)}
-            {field("Cita", orden.appointmentAt && formatDateTime(orden.appointmentAt))}
+            {/* Mirrors the form's field, so it carries the form's label. The
+                narrow list-column headers keep the short "Cita" on purpose —
+                a column is width-constrained, a field label is not — and
+                `REMINDER_TYPE_LABEL.appointment` above is a different concept
+                entirely (a reminder kind, not this order's start time). */}
+            {field("Fecha y hora de inicio", orden.appointmentAt && formatDateTime(orden.appointmentAt))}
             {field("Completada", orden.completedAt && formatDateTime(orden.completedAt))}
             {field("Creada", formatDateTime(orden.createdAt))}
             {field("Hallazgos", orden.hallazgos || "—")}

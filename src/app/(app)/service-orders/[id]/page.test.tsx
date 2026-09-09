@@ -66,6 +66,22 @@ describe("ServiceOrderDetailPage", () => {
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(3);
   });
 
+  /**
+   * D7 — `ordenServicioItem` lost its only writer when Piezas came out of the
+   * intake dialog, so every order created from now on has zero line items and
+   * this card renders its empty state permanently. The card and the table
+   * stay for the rows that already exist and for a later record-what-was-used
+   * flow, which is why this pins the empty state rather than the card's
+   * removal.
+   */
+  it("renders the Piezas utilizadas card in its empty state for an order created after D7", async () => {
+    render(await renderPage());
+
+    expect(screen.getByText("Piezas utilizadas")).toBeInTheDocument();
+    expect(screen.getByText("Esta orden no tiene piezas registradas.")).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Pieza" })).not.toBeInTheDocument();
+  });
+
   it("still shows the vehicle's identity and link when that vehicle is DEACTIVATED", async () => {
     getClienteById.mockResolvedValue(detailWith(new Date("2026-02-01")));
 
