@@ -552,10 +552,13 @@ export function POST(
 
 // src/modules/customers/VehicleQuickForm.tsx — "use client". Both ends are client
 // components, so `onCreated` never crosses an RSC boundary (D4/D8).
+// `onCancel` was declared here and dropped during WU2's review: `DialogClose`
+// already closes the dialog, the sole caller passed `() => undefined`, and it
+// never fired on Escape or overlay dismiss anyway. Recorded rather than
+// deleted, so a reader of an older draft knows it went on purpose.
 export function VehicleQuickForm(props: {
   clienteId: string;
   onCreated: (vehiculoId: string) => void;
-  onCancel: () => void;
 }): React.JSX.Element;
 
 // src/modules/service-orders/service.ts — D7

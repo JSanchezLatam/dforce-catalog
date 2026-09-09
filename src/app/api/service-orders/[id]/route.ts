@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import { isServiceCategory } from "@/modules/service-orders/categories";
+import { canEditOrderFields } from "@/modules/service-orders/edit-policy";
+import { getOrdenServicioById } from "@/modules/service-orders/queries";
 import {
   OrdenServicioNotFoundError,
   updateOrder,
@@ -36,6 +38,42 @@ export async function handleUpdateOrdenServicio(
     if (typeof body.status === "string") {
       const orden = await transitionOrder(id, body.status as OrderStatus, deps);
       return NextResponse.json({ orden });
+    }
+
+    // D11 — the fine-grained gate, run after the coarse
+    // `can(user, "service-orders.write")` above, which BOTH roles pass
+    // (policy.ts:30, :43). Field patches only: the status branch returned
+    // already, so R21's state machine keeps owning status exclusively and this
+    // gate never sees a status change request.
+    //
+    // The status is read from the RECORD, before the write — never from
+    // `body.status`, which is a client claim, and one a tab rendered while the
+    // order was still open will happily carry after someone else closed it.
+    // Same reasoning as `isServiceCategory` being called here rather than
+    // trusted from the form: the route is the trust boundary, the UI gate is
+    // convenience. Accepted cost: `updateOrder` resolves the row again below,
+    // so a permitted patch does two primary-key reads (design.md D11).
+    const getById = deps.getById ?? getOrdenServicioById;
+    const current = await getById(id);
+    if (!current) {
+      throw new OrdenServicioNotFoundError(id);
+    }
+    const { status } = current.orden;
+    if (!canEditOrderFields(user.role, status)) {
+      // Two answers, because the operator's next move differs: a técnico on an
+      // open order must ask an admin (403, the caller is refused), while a
+      // closed order refuses everyone (409 — the caller is permitted, the
+      // record's state is what says no).
+      if (status === "done" || status === "cancelled") {
+        return NextResponse.json(
+          { errors: { form: "No se puede editar una orden completada o cancelada." } },
+          { status: 409 },
+        );
+      }
+      return NextResponse.json(
+        { errors: { form: "Solo un administrador puede editar una orden abierta." } },
+        { status: 403 },
+      );
     }
 
     const patch: UpdateOrdenServicioPatch = {};

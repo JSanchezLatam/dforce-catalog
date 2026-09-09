@@ -18,7 +18,9 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getClienteById } from "@/modules/customers/queries";
 import { listRemindersForOrder } from "@/modules/reminders/queries";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
+import { canEditOrderFields } from "@/modules/service-orders/edit-policy";
 import { OrderStatusControls } from "@/modules/service-orders/OrderStatusControls";
+import { ServiceOrderFormTrigger } from "@/modules/service-orders/ServiceOrderFormTrigger";
 import { getOrdenServicioById } from "@/modules/service-orders/queries";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import { formatDateTime } from "@/shared/datetime";
@@ -107,7 +109,33 @@ export default async function ServiceOrderDetailPage({
             Orden {orden.id}
             <StatusBadge status={orden.status} label={ORDER_STATUS_LABEL[orden.status]} />
           </CardTitle>
-          <OrderStatusControls orderId={orden.id} status={orden.status} />
+          <div className="flex items-center gap-2">
+            {/* D11 — the same predicate the PATCH route enforces, so the
+                control and the write cannot drift. Only its BOOLEAN result
+                crosses to the client trigger; no function is serialized. */}
+            {canEditOrderFields(user.role, orden.status) && (
+              /* AGENTS.md's 44x44 floor. `ServiceOrderForm` renders its edit
+                 trigger as `size="sm"` (h-7 = 28px) and exposes no `className`
+                 for this mount to pass, so the floor is applied to its button
+                 child from the wrapper. Giving `ServiceOrderFormTrigger` a
+                 className passthrough would be the direct fix and is a
+                 follow-up: that component is outside this work unit. */
+              <div className="[&>button]:min-h-11 [&>button]:min-w-11">
+                <ServiceOrderFormTrigger
+                  order={orden}
+                  /* Dead since the parts cart came out of creation (D7), still
+                     required by the trigger's type. Passing `[]` rather than
+                     adding a product query this page has no other use for —
+                     removing the prop is already a named follow-up. */
+                  products={[]}
+                  /* Edit mode never renders `CustomerPicker` (the order's
+                     customer is fixed), so this value is unreachable. */
+                  canCreateCustomer={false}
+                />
+              </div>
+            )}
+            <OrderStatusControls orderId={orden.id} status={orden.status} />
+          </div>
         </CardHeader>
         <CardContent>
           <dl>
