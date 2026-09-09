@@ -303,17 +303,17 @@ design D8, D9)
 ## Phase 4 — Edit entry point, gated by role and current status (service-orders
 spec: *Order Editing Is Gated by Role and Current Status*; design D11)
 
-- [ ] 4.1 RED (node, DB-free) `edit-policy.test.ts` — table-driven over all
+- [x] 4.1 RED (node, DB-free) `edit-policy.test.ts` — table-driven over all
   eight `(role, status)` combinations from the spec's truth table
   (`administrador`/`tecnico` × `open`/`in_progress`/`done`/`cancelled`).
-- [ ] 4.2 GREEN — create `src/modules/service-orders/edit-policy.ts`:
+- [x] 4.2 GREEN — create `src/modules/service-orders/edit-policy.ts`:
   `canEditOrderFields(role, status): boolean`. No `policy.ts` change, no new
   `Action` — this predicate is the fine-grained gate that runs after the
   existing coarse `service-orders.write` check.
-- [ ] 4.3 **Mutation-verify 4.1** — flip the `open`/`tecnico` cell (or any
+- [x] 4.3 **Mutation-verify 4.1** — flip the `open`/`tecnico` cell (or any
   single cell) and confirm the test goes red **by name**. `diff` to confirm
   the flip landed, then revert and confirm green.
-- [ ] 4.4 RED (node) `[id]/route.test.ts` — three cases, JSON-round-tripped
+- [x] 4.4 RED (node) `[id]/route.test.ts` — three cases, JSON-round-tripped
   bodies, asserting what the seam **received**, not that the call resolved
   (D10's shape): `tecnico` + `open` → 403
   `{ errors: { form: "Solo un administrador puede editar una orden abierta." } }`;
@@ -323,19 +323,19 @@ spec: *Order Editing Is Gated by Role and Current Status*; design D11)
   409 — the gate reads status from `deps.getById ?? getOrdenServicioById`,
   never `body.status` (spec Scenario "The route reads status from the
   record, not from the body").
-- [ ] 4.5 GREEN — in `handleUpdateOrdenServicio`, keep
+- [x] 4.5 GREEN — in `handleUpdateOrdenServicio`, keep
   `can(user, "service-orders.write")` as-is; **in the field-patch branch
   only** (the `body.status` branch still routes to `transitionOrder`
   untouched), resolve the current order through the existing `getById` seam
   and evaluate `canEditOrderFields` against `current.orden.status` before
   calling `updateOrder`.
-- [ ] 4.6 RED/GREEN — `tecnico` + `in_progress` → 200 and the update seam
+- [x] 4.6 RED/GREEN — `tecnico` + `in_progress` → 200 and the update seam
   receives `hallazgos` as sent (spec Scenario "A permitted patch still
   saves").
-- [ ] 4.7 RED/GREEN — order not found → 404 `not_found` (existing
+- [x] 4.7 RED/GREEN — order not found → 404 `not_found` (existing
   `OrdenServicioNotFoundError` mapping, confirm the new gate doesn't change
   it).
-- [ ] 4.8 RED (jsdom) `service-orders/[id]/page.test.tsx` — mount
+- [x] 4.8 RED (jsdom) `service-orders/[id]/page.test.tsx` — mount
   `ServiceOrderFormTrigger` with `order={orden}`, gated server-side by
   `canEditOrderFields(user.role, orden.status)` (a boolean only crosses to
   the client trigger — no function, no RSC hazard). Assert: control present
@@ -343,9 +343,9 @@ spec: *Order Editing Is Gated by Role and Current Status*; design D11)
   both on `in_progress`, absent for both on `done`/`cancelled`. Assert the
   Spanish trigger label; `render(await Page({ params }))` in the existing
   jsdom project.
-- [ ] 4.9 GREEN — mount the trigger at `min-h-11 min-w-11` beside
+- [x] 4.9 GREEN — mount the trigger at `min-h-11 min-w-11` beside
   `OrderStatusControls` in the detail-page header.
-- [ ] 4.10 `diff` `edit-policy.ts` + its test, `[id]/route.ts` + its test,
+- [x] 4.10 `diff` `edit-policy.ts` + its test, `[id]/route.ts` + its test,
   `service-orders/[id]/page.tsx` + its test before trusting 4.1–4.9.
 - [ ] 4.11 Seed orders across statuses (`open`, `in_progress`,
   `done`/`cancelled`) and confirm access to an `administrador` and a
@@ -358,7 +358,7 @@ spec: *Order Editing Is Gated by Role and Current Status*; design D11)
   confirm no control renders; move the order to `in_progress` and confirm
   both roles see it; move it to `done`/`cancelled` and confirm neither does;
   confirm a permitted patch actually saves.
-- [ ] 4.13 `npm test` (alone) and `npx tsc --noEmit` clean.
+- [x] 4.13 `npm test` (alone) and `npx tsc --noEmit` clean.
 
 ---
 

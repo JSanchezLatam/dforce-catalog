@@ -7,8 +7,15 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const notFound = vi.hoisted(() => vi.fn(() => { throw new Error("NEXT_NOT_FOUND"); }));
-vi.mock("next/navigation", () => ({ notFound }));
-vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders: vi.fn(async () => ({ id: "u1", role: "tecnico" })) }));
+// `useRouter` is here for `ServiceOrderFormTrigger`, which this file mounts for
+// real (see the D11 describe below) — the trigger calls it to `router.refresh()`
+// after a save, and an undefined hook is a TypeError at render, not a skip.
+vi.mock("next/navigation", () => ({ notFound, useRouter: () => ({ refresh: vi.fn() }) }));
+
+const requireSessionFromHeaders = vi.hoisted(() =>
+  vi.fn(async () => ({ id: "u1", role: "tecnico" as Role })),
+);
+vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders }));
 vi.mock("@/modules/auth/policy", () => ({ can: vi.fn(() => true) }));
 vi.mock("@/modules/service-orders/OrderStatusControls", () => ({ OrderStatusControls: () => null }));
 
@@ -19,14 +26,20 @@ vi.mock("@/modules/service-orders/queries", () => ({ getOrdenServicioById }));
 vi.mock("@/modules/customers/queries", () => ({ getClienteById }));
 vi.mock("@/modules/reminders/queries", () => ({ listRemindersForOrder }));
 
-import type { Reminder } from "@/shared/db/schema";
+import type { Role } from "@/modules/auth/roles";
+import type { OrderStatus } from "@/modules/service-orders/transitions";
+import type { OrdenServicio, Reminder } from "@/shared/db/schema";
 import ServiceOrderDetailPage from "./page";
 
-const ORDEN = {
+// Every `orden_servicio` column (schema.ts:412-438) — `updatedAt` was the one
+// missing, and D11 hands this row to a real `ServiceOrderForm` in edit mode,
+// where a fixture shaped more conveniently than the wire tests the fixture.
+const ORDEN: OrdenServicio = {
   id: "o1", clienteId: "c1", vehiculoId: "v1", status: "open", categoria: "revisado",
   description: null, appointmentAt: null, completedAt: null,
   hallazgos: null, recomendaciones: null, observaciones: null,
-  createdAt: new Date("2026-05-01T14:00:00Z"), createdBy: null,
+  createdAt: new Date("2026-05-01T14:00:00Z"), updatedAt: new Date("2026-05-01T14:00:00Z"),
+  createdBy: null,
 };
 
 function detailWith(deactivatedAt: Date | null) {
@@ -43,6 +56,7 @@ function renderPage() {
 
 describe("ServiceOrderDetailPage", () => {
   beforeEach(() => {
+    requireSessionFromHeaders.mockResolvedValue({ id: "u1", role: "tecnico" });
     getOrdenServicioById.mockResolvedValue({ orden: ORDEN, items: [] });
     getClienteById.mockResolvedValue(detailWith(null));
     listRemindersForOrder.mockResolvedValue([]);
@@ -130,5 +144,77 @@ describe("ServiceOrderDetailPage", () => {
     // The car left the customer; its service history did not. This only works
     // because getClienteById reads with includeInactive: true.
     expect(screen.getByRole("link", { name: "ABC123" })).toHaveAttribute("href", "/customers/c1/vehicles/v1");
+  });
+});
+
+/**
+ * D11 — the edit entry point, gated server-side by `canEditOrderFields`. Only
+ * a boolean is evaluated on the server; `ServiceOrderFormTrigger` is a
+ * `"use client"` component receiving the order as plain data, so no function
+ * crosses the RSC boundary.
+ *
+ * `ServiceOrderFormTrigger` is deliberately NOT mocked here: a stub rendering
+ * the label would assert the stub, not that the real trigger mounts and
+ * carries the Spanish label `ServiceOrderForm` gives it in edit mode.
+ *
+ * AGENTS.md, verbatim: jsdom invokes a page as a plain function, so it cannot
+ * see an RSC serialization refusal or a hydration mismatch. These cases prove
+ * the gate decides correctly; they are NOT evidence that the control mounts in
+ * a browser. Task 4.12 is.
+ */
+describe("ServiceOrderDetailPage — the edit control (D11)", () => {
+  beforeEach(() => {
+    getClienteById.mockResolvedValue(detailWith(null));
+    listRemindersForOrder.mockResolvedValue([]);
+  });
+
+  function renderAs(role: Role, status: OrderStatus) {
+    requireSessionFromHeaders.mockResolvedValue({ id: "u1", role });
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status }, items: [] });
+    return renderPage();
+  }
+
+  const EDIT_LABEL = "Editar orden";
+
+  it.each<[Role, OrderStatus]>([
+    ["administrador", "open"],
+    ["administrador", "in_progress"],
+    ["tecnico", "in_progress"],
+  ])("offers the edit control to a %s on a %s order", async (role, status) => {
+    render(await renderAs(role, status));
+
+    expect(screen.getByRole("button", { name: EDIT_LABEL })).toBeInTheDocument();
+  });
+
+  it.each<[Role, OrderStatus]>([
+    ["tecnico", "open"],
+    ["administrador", "done"],
+    ["tecnico", "done"],
+    ["administrador", "cancelled"],
+    ["tecnico", "cancelled"],
+  ])("offers NO edit control to a %s on a %s order", async (role, status) => {
+    render(await renderAs(role, status));
+
+    expect(screen.queryByRole("button", { name: EDIT_LABEL })).not.toBeInTheDocument();
+  });
+
+  /**
+   * AGENTS.md's 44x44 floor. `ServiceOrderForm` renders its edit trigger as
+   * `<Button variant="outline" size="sm">` — `h-7`, 28px — and exposes no
+   * `className` for the mount to pass, so the floor is applied from here with
+   * a child selector on the wrapper. That is why the assertion reads the
+   * wrapper's classes and its button child, not the button's own `className`:
+   * no test in this repo can measure a rendered height (jsdom has no
+   * Tailwind), so this pins the rule's mechanism, and the browser check
+   * measures it.
+   */
+  it("applies the 44x44 floor to the edit control from its mount", async () => {
+    const { container } = render(await renderAs("administrador", "open"));
+
+    const wrapper = container.querySelector("[class*='min-h-11']");
+    expect(wrapper).not.toBeNull();
+    expect(wrapper!.className).toContain("[&>button]:min-h-11");
+    expect(wrapper!.className).toContain("[&>button]:min-w-11");
+    expect(wrapper!.firstElementChild).toBe(screen.getByRole("button", { name: EDIT_LABEL }));
   });
 });
