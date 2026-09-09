@@ -23,7 +23,17 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("[&_tr]:border-b", className)}
+      // The shaded header is the whole of this work unit. The container stays
+      // where it is: EVERY consumer but `UsersTable` already brings its own —
+      // nine through `Card`, four through a hand-rolled `rounded-lg border` —
+      // so a border or radius HERE would double up on all of them.
+      //
+      // Opacity matters. `bg-muted/50` measured invisible in light theme
+      // (`--muted` is already `hsl(240 4.8% 95.9%)`), and full opacity then
+      // exposed a second thing: a wrapper with `rounded-lg` but no `overflow`
+      // does not clip, so the band paints into its corner arcs. Two such
+      // wrappers were given `overflow-hidden` in the same commit.
+      className={cn("bg-muted [&_tr]:border-b", className)}
       {...props}
     />
   )

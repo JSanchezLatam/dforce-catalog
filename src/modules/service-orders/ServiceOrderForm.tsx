@@ -545,7 +545,7 @@ export function ServiceOrderForm({
                 </div>
 
                 {cart.length > 0 && (
-                  <div className="mt-3 rounded-lg border border-border">
+                  <div className="mt-3 overflow-hidden rounded-lg border border-border">
                     <Table>
                       <TableHeader>
                         <TableRow>
