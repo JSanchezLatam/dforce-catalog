@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowDown, ArrowUp, PackageSearch } from "lucide-react";
+import { ArrowDown, ArrowUp, Eye, PackageSearch } from "lucide-react";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
@@ -19,10 +19,16 @@ import {
   parsePageSize,
   type InventorySort,
 } from "@/modules/inventory-view/queries";
+import { InventoryCatalogHandoff } from "@/modules/inventory-view/InventoryCatalogHandoff";
 import { ManualSyncButton } from "@/modules/inventory-sync/ManualSyncButton";
 import { Pagination } from "@/shared/ui/Pagination";
+import { RowActions } from "@/shared/ui/selection/RowActions";
+import { RowCheckbox, SelectAllCheckbox } from "@/shared/ui/selection/RowCheckbox";
+import { SelectionBar } from "@/shared/ui/selection/SelectionBar";
+import { SelectionProvider } from "@/shared/ui/selection/SelectionProvider";
 import { PAGE_HEADING } from "@/shared/ui/styles";
 import { Card, CardContent } from "@/components/ui/card";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -51,6 +57,16 @@ export default async function InventoryPage({
     return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
   }
   const canTriggerSync = can(user, "sync.manual"); // R2 — admin-only manual sync trigger
+  /**
+   * Selection exists on this table for exactly one reason: feeding the
+   * catalog builder. `tecnico` has `inventory.read` but not
+   * `catalogs.generate` (`policy.ts`), and `/builder` refuses them with "No
+   * tienes permiso para ver esta página" — so without this gate the checkbox
+   * column would offer a técnico a bulk action that can only dead-end on a
+   * permission page. No new permission surface: the same flag `/builder`
+   * already checks.
+   */
+  const canGenerateCatalogs = can(user, "catalogs.generate");
 
   const [{ items, total }, categoryL1Options, categoryL2Options, grandTotal] = await Promise.all([
     listInventory(filters, pageWindow, sort),
@@ -66,6 +82,9 @@ export default async function InventoryPage({
   const dbEmpty = total === 0 && !(await hasAnyProducts());
 
   const syncButton = canTriggerSync ? <ManualSyncButton /> : undefined;
+
+  const pageIds = items.map((item) => item.id);
+  const labels = Object.fromEntries(items.map((item) => [item.id, item.name]));
 
   if (dbEmpty) {
     return (
@@ -97,7 +116,17 @@ export default async function InventoryPage({
           />
         </CardContent>
       </Card>
-      {items.length === 0 ? (
+      {/* The provider wraps BOTH branches below, not just the table: a filter
+          that matches nothing renders the empty state instead of the table,
+          and a provider living inside the table branch would unmount on that
+          switch — taking the selection AND the "se limpió la selección"
+          notice with it, in exactly the case the notice explains. Same
+          placement as `customers/page.tsx`. */}
+      <SelectionProvider pageIds={pageIds} labels={labels} filterKey={buildFilterKey(filters)}>
+        <SelectionBar>
+          <InventoryCatalogHandoff />
+        </SelectionBar>
+        {items.length === 0 ? (
         <Card size="sm">
           <CardContent>
             <div className="flex flex-col items-center gap-2 py-12 text-center">
@@ -119,6 +148,11 @@ export default async function InventoryPage({
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {canGenerateCatalogs && (
+                      <TableHead className="w-12">
+                        <SelectAllCheckbox />
+                      </TableHead>
+                    )}
                     {COLUMNS.map((column) =>
                       column.sort ? (
                         <SortableHeader
@@ -137,17 +171,42 @@ export default async function InventoryPage({
                 <TableBody>
                   {items.map((item) => (
                     <TableRow key={item.id}>
+                      {canGenerateCatalogs && (
+                        <TableCell>
+                          <RowCheckbox id={item.id} label={item.name} />
+                        </TableCell>
+                      )}
                       <TableCell className="font-mono text-xs">{item.id}</TableCell>
                       <TableCell>{item.name}</TableCell>
                       <TableCell>{item.categoryL1 ?? "—"}</TableCell>
                       <TableCell>{item.categoryL2 ?? "—"}</TableCell>
                       <TableCell>
-                        <Link
-                          href={`/inventory/${item.id}`}
-                          className="inline-flex h-7 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-xs font-medium whitespace-nowrap text-foreground transition-colors hover:bg-muted"
-                        >
-                          Ver
-                        </Link>
+                        {/* The `h-7` (28px) hand-copied link that used to live
+                            here is deleted, not restyled — it sat under
+                            AGENTS.md's 44x44 floor, and the kebab trigger is
+                            where that floor now lives. */}
+                        <RowActions label={`Acciones de ${item.name}`}>
+                          {/* `render`, not a nested `<Link>`. Measured in jsdom against
+                              base-ui 1.6: with the link NESTED inside the item,
+                              ArrowDown+Enter fires base-ui's click on the `role="menuitem"`
+                              div and it never reaches the anchor — 0 clicks, menu closes, no
+                              navigation. With `render` the anchor IS the menuitem and the
+                              same keystrokes navigate. "Ver" was keyboard-reachable as a bare
+                              link before the kebab existed; it has to stay that way.
+
+                              This does NOT contradict the `buttonVariants` comment on the old
+                              row link: that one rejects base-ui's `Button` COMPONENT wrapping
+                              an anchor. `DropdownMenuItem`'s `render` is the library's
+                              ordinary composition API, a different thing. */}
+                          <DropdownMenuItem
+                            render={
+                              <Link href={`/inventory/${item.id}`} className="flex w-full items-center gap-1.5">
+                                <Eye aria-hidden="true" />
+                                Ver
+                              </Link>
+                            }
+                          />
+                        </RowActions>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -167,9 +226,31 @@ export default async function InventoryPage({
             </Card>
           )}
         </>
-      )}
+        )}
+      </SelectionProvider>
     </div>
   );
+}
+
+/**
+ * D5's filter key — `JSON.stringify` of the normalized filters rather than a
+ * hand-written `a=…|b=…` template like `customers/page.tsx`'s.
+ *
+ * Two free-text fields here (`name` and `id`, both operator-typed) instead of
+ * one, so any separator character can appear inside a value; JSON quoting
+ * removes the collision without anyone having to reason about which field is
+ * safe to put last. `normalizeFilters` inserts keys in a fixed order and only
+ * when set, so the same filters always stringify identically.
+ *
+ * What is NOT in it is the point: `normalizeFilters`' return type has no
+ * `sort`, `page` or `pageSize` member, so the TYPE is what keeps a column
+ * click or a page turn from wiping the operator's selection. It is spelled
+ * `ReturnType<typeof normalizeFilters>` because this file already imports the
+ * `InventoryFilters` COMPONENT under that name — and taking it from the
+ * function keeps the key bound to whatever that function actually returns.
+ */
+function buildFilterKey(filters: ReturnType<typeof normalizeFilters>): string {
+  return JSON.stringify(filters);
 }
 
 /**

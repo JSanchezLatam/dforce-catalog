@@ -50,6 +50,43 @@ export const MAX_PRODUCTS_PER_PAGE = 20; // R5.4
 export const DEFAULT_PRODUCTS_PER_PAGE = 6;
 export const MAX_TOTAL_PRODUCTS = 200; // R5.8/5.9
 
+/**
+ * The one sentence that refuses an over-cap selection.
+ *
+ * Promoted out of `validateCatalogSelection` below the moment it gained a
+ * second caller: `/inventory`'s selection bar refuses the same limit BEFORE
+ * navigating (design D10 point 4), and two hand-written copies of one Spanish
+ * sentence drift the first time anyone rewords either. Same reasoning that
+ * promoted `REFUSAL_MESSAGES` out of `UsersTable.tsx`.
+ */
+export function maxTotalProductsMessage(count: number): string {
+  return `Seleccionaste ${count}, el máximo es ${MAX_TOTAL_PRODUCTS}`;
+}
+
+/**
+ * D10 — `/inventory` hands its selection over as `?products=id1,id2,…`, and
+ * this is the builder page's side of that contract.
+ *
+ * The cap is re-applied here on purpose: `InventoryCatalogHandoff` refuses an
+ * over-cap selection before navigating, but that runs in the browser and the
+ * URL is hand-editable, so the only cap that binds is one the server applies.
+ * `productsByIdsQuery` applies the same one again at the database, which is
+ * the gate a direct POST to `/api/catalog-builder/products` meets instead.
+ *
+ * Ids are free ERP text this app does not mint (`PS0000001`), so nothing here
+ * validates their FORMAT — an id that matches no row is dropped by the lookup
+ * rather than rejected here (spec: "a stale id is dropped, not fabricated").
+ */
+export function parseSeedProductIds(value: string | string[] | undefined): string[] {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw) return [];
+  const ids = raw
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+  return [...new Set(ids)].slice(0, MAX_TOTAL_PRODUCTS);
+}
+
 export class CatalogSelectionValidationError extends Error {
   constructor(public readonly errors: Record<string, string>) {
     super("Invalid catalog selection");
@@ -168,7 +205,7 @@ export function validateCatalogSelection(check: CatalogSelectionCheck): void {
   }
 
   if (check.totalProductCount > MAX_TOTAL_PRODUCTS) {
-    errors.total = `Seleccionaste ${check.totalProductCount}, el máximo es ${MAX_TOTAL_PRODUCTS}`; // R5.8/5.9
+    errors.total = maxTotalProductsMessage(check.totalProductCount); // R5.8/5.9
   }
 
   if (

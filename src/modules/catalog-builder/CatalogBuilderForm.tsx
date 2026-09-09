@@ -85,12 +85,21 @@ export function CatalogBuilderForm({
   templateConfig,
   workshopConfig,
   catalogCount,
+  seedProductIds,
 }: {
   categoryL1Options: string[];
   categoryPairs: CategoryPair[];
   templateConfig: TemplateConfig | null;
   workshopConfig: WorkshopConfig | null;
   catalogCount: number;
+  /**
+   * D10 — the product ids `/inventory` handed over in the URL, already capped
+   * by `parseSeedProductIds` on the server. A plain `string[]` and nothing
+   * else: this is a Server Component boundary, so no function and no `Date`
+   * can cross it, and the builder resolves each id's CURRENT product data
+   * itself rather than trusting anything carried from the list view.
+   */
+  seedProductIds?: string[];
 }) {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
@@ -126,18 +135,42 @@ export function CatalogBuilderForm({
   const [tiers, setTiers] = useState<readonly PriceTier[]>(DEFAULT_PRICE_TIERS);
 
   const categoryRefs = useMemo(() => selectedToCategoryRefs(selectedCategories), [selectedCategories]);
+  /**
+   * Memoized because the prop's default would otherwise be a NEW `[]` on every
+   * render, and this feeds the fetch effect's dependency — an unstable empty
+   * array there is an unbounded request loop.
+   */
+  const seedIds = useMemo(() => seedProductIds ?? [], [seedProductIds]);
+
+  /**
+   * D10 — the two selection modes, as ONE request body.
+   *
+   * The category tree wins when anything is ticked: the seed is where the
+   * operator STARTED, not a mode they are locked into, so picking a category
+   * has to mean what it has always meant. With nothing ticked and no seed
+   * there is nothing to ask for.
+   */
+  const productsRequestBody = useMemo(
+    () =>
+      categoryRefs.length > 0
+        ? { categories: categoryRefs }
+        : seedIds.length > 0
+          ? { productIds: seedIds }
+          : null,
+    [categoryRefs, seedIds],
+  );
 
   // Only the fetch lives here. Clearing the previous selection is not
   // something to observe after the fact — it is what changing the categories
   // MEANS, so it happens in that handler (see `onSelectionChange` below).
   useEffect(() => {
-    if (categoryRefs.length === 0) return;
+    if (!productsRequestBody) return;
 
     let cancelled = false;
     fetch("/api/catalog-builder/products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ categories: categoryRefs }),
+      body: JSON.stringify(productsRequestBody),
     })
       .then((res) => {
         // A 403 from this route is valid JSON, so `res.json()` would RESOLVE
@@ -167,7 +200,7 @@ export function CatalogBuilderForm({
     return () => {
       cancelled = true;
     };
-  }, [categoryRefs]);
+  }, [productsRequestBody]);
 
   useEffect(() => {
     fetch("/api/catalog-builder/queue-depth")
@@ -205,7 +238,25 @@ export function CatalogBuilderForm({
       })),
     [finalProducts, overrides],
   );
-  const title = useMemo(() => deriveCatalogTitle(uniqueL1s(categoryRefs)), [categoryRefs]);
+  /**
+   * D10 point 3 — what counts as "the included categories".
+   *
+   * In category mode these ARE the ticked refs, identically. In product-id
+   * mode nothing is ticked, so they are the distinct L1s the resolved rows
+   * carry: without that fallback every seeded catalog would print the bare
+   * "Catalog" AND dead-end on `validateCatalogSelection`'s "Elegí al menos
+   * una categoría", with no category control on screen to go satisfy it.
+   */
+  const includedCategoryRefs = useMemo<CategoryRef[]>(
+    () =>
+      categoryRefs.length > 0
+        ? categoryRefs
+        : [...new Set(finalProducts.map((p) => p.categoryL1))]
+            .filter((l1): l1 is string => l1 !== null)
+            .map((categoryL1) => ({ categoryL1 })),
+    [categoryRefs, finalProducts],
+  );
+  const title = useMemo(() => deriveCatalogTitle(uniqueL1s(includedCategoryRefs)), [includedCategoryRefs]);
 
   const allVisibleSelected = paginatedProducts.length > 0 && paginatedProducts.every((p) => selectedProductIds.has(p.id));
   const someVisibleSelected = paginatedProducts.some((p) => selectedProductIds.has(p.id));
@@ -248,7 +299,7 @@ export function CatalogBuilderForm({
   function handleContinue() {
     try {
       validateCatalogSelection({
-        includedCategoryCount: categoryRefs.length,
+        includedCategoryCount: includedCategoryRefs.length,
         totalProductCount: finalProducts.length,
         productsPerPage,
         tiers,
@@ -284,7 +335,7 @@ export function CatalogBuilderForm({
           sections,
           products: reviewedProducts,
           productsPerPage,
-          includedCategoryCount: categoryRefs.length,
+          includedCategoryCount: includedCategoryRefs.length,
           tiers,
         }),
       });
@@ -672,7 +723,7 @@ export function CatalogBuilderForm({
           setConfirmError(null);
           if (!open) setIsSubmitting(false);
         }}
-        categories={categoryRefs}
+        categories={includedCategoryRefs}
         title={title}
         productCount={reviewedProducts.length}
         catalogCount={catalogCount}

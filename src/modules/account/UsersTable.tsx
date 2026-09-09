@@ -4,13 +4,22 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ROLE_LABELS } from "@/modules/auth/roles";
+import { BulkResultPanel } from "@/shared/ui/selection/BulkResultPanel";
+import { RowActions } from "@/shared/ui/selection/RowActions";
+import { RowCheckbox, SelectAllCheckbox } from "@/shared/ui/selection/RowCheckbox";
+import { SelectionBar } from "@/shared/ui/selection/SelectionBar";
+import { SelectionProvider } from "@/shared/ui/selection/SelectionProvider";
 import { FIELD_ERROR } from "@/shared/ui/styles";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
-import { UserFormTrigger } from "./UserFormTrigger";
+import { REFUSAL_MESSAGES } from "./refusals";
+import { UserBulkActions } from "./UserBulkActions";
+import { UserForm } from "./UserForm";
 
 export type UserRow = {
   id: string;
@@ -86,23 +95,15 @@ const COLUMNS: readonly { label: string; key: SortKey }[] = [
   { label: "Estado", key: "estado" },
 ];
 
-/**
- * The API answers a refused mutation with the machine reason from
- * `checkAdminSafety`. Echoing that raw code at an admin would be useless — each
- * one has a specific, actionable explanation.
- */
-const REFUSAL_MESSAGES: Record<string, string> = {
-  last_active_admin: "No se puede desactivar al último administrador activo.",
-  self_deactivate: "No puedes desactivar tu propia cuenta desde esta pantalla.",
-  self_role_change: "No puedes cambiar tu propio rol desde esta pantalla.",
-  not_found: "Ese usuario ya no existe. Recarga la página.",
-};
-
 export function UsersTable({ users }: { users: UserRow[] }) {
   const [showInactive, setShowInactive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [sort, setSort] = useState<Sort | null>(null);
+  // The row being edited, NOT a boolean: one dialog serves the whole table, so
+  // it has to know which row opened it. The comment on its JSX below says why
+  // it cannot live inside the row's own kebab.
+  const [editing, setEditing] = useState<UserRow | null>(null);
   const router = useRouter();
 
   // Filtered here rather than refetched: a workshop has a handful of users, so
@@ -118,6 +119,19 @@ export function UsersTable({ users }: { users: UserRow[] }) {
   // functions, no untrusted URL value ever reaches this lookup, so a guard
   // would be unreachable code wearing a comment that claimed otherwise.
   const rows = sort ? [...visible].sort((a, b) => compare(a, b, sort)) : visible;
+
+  // The selection model's three inputs (design D3). `/users` needs no
+  // `SelectionProvider` wrapper written for it — this component is already
+  // `"use client"` and holds every row — but it still renders the shared
+  // provider so `RowCheckbox`, `SelectionBar` and `BulkResultPanel` read the
+  // one selection model rather than four copies of its filter rule (D4).
+  //
+  // `filterKey` is `showInactive` and nothing else: that toggle is this
+  // table's only FILTER, and sorting a column must never clear a selection the
+  // operator has been assembling. There is no pagination here to leave out.
+  const pageIds = rows.map((u) => u.id);
+  const labels = Object.fromEntries(rows.map((u) => [u.id, u.username]));
+  const filterKey = `inactive=${showInactive}`;
 
   async function toggleActive(user: UserRow) {
     setError(null);
@@ -168,72 +182,136 @@ export function UsersTable({ users }: { users: UserRow[] }) {
         </p>
       )}
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            {COLUMNS.map((column) => {
-              const dir = sort?.key === column.key ? sort?.dir : undefined;
-              return (
-                <TableHead
-                  key={column.key}
-                  aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}
-                >
-                  {/* A real <button>, not an <a>: this component is already
-                      "use client" and the sort never leaves the browser, so
-                      there is no URL to navigate to. `min-h-11 min-w-11` is
-                      the 44px hit target — a workshop tablet taps these. */}
-                  <button
-                    type="button"
-                    onClick={() => setSort({ key: column.key, dir: dir === "asc" ? "desc" : "asc" })}
-                    className="-mx-2 inline-flex min-h-11 min-w-11 items-center gap-1 px-2 hover:text-foreground"
-                  >
-                    {column.label}
-                    {dir === "asc" && <ArrowUp className="h-3 w-3" aria-hidden="true" />}
-                    {dir === "desc" && <ArrowDown className="h-3 w-3" aria-hidden="true" />}
-                  </button>
-                </TableHead>
-              );
-            })}
-            <TableHead className="text-right">Acciones</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((user) => {
-            const inactive = user.deactivatedAt !== null;
-            return (
-              <TableRow key={user.id} className={inactive ? "text-muted-foreground" : undefined}>
-                <TableCell>{user.username}</TableCell>
-                <TableCell>{user.name ?? "—"}</TableCell>
-                <TableCell>{user.email ?? "—"}</TableCell>
-                <TableCell>{roleLabel(user.role)}</TableCell>
-                <TableCell>
-                  {/* A text badge, not colour alone — a greyed row is
-                      indistinguishable from an active one to a screen reader. */}
-                  {inactive ? "Inactivo" : "Activo"}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    {/* Editing a deactivated user is not offered: reactivate
-                        first, so the row's state stays unambiguous. */}
-                    {!inactive && <UserFormTrigger user={user} />}
-                    <Button
-                      variant={inactive ? "outline" : "ghost"}
-                      size="sm"
-                      disabled={pendingId === user.id}
-                      onClick={() => toggleActive(user)}
-                    >
-                      {inactive ? "Reactivar" : "Desactivar"}
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+      <SelectionProvider pageIds={pageIds} labels={labels} filterKey={filterKey}>
+        <SelectionBar>
+          <UserBulkActions />
+        </SelectionBar>
+        {/* The refusal map is INJECTED, not owned by the panel: `not_found` means
+            a different thing on `/customers` than it does here, and one shared
+            vocabulary would make every page carry the other three's copy. */}
+        <BulkResultPanel reasons={REFUSAL_MESSAGES} />
+
+        {/* The Card wraps THE TABLE ONLY (D7) — the `Mostrar inactivos` toggle
+            and the error above it stay outside, matching the other three list
+            pages, where the filter strip is its own Card. */}
+        <Card size="sm">
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  {/* `w-10` and no label — `table.tsx` already ships
+                      `[&:has([role=checkbox])]:pr-0` on `TableHead`, so the
+                      column needs no new table primitive. The accessible name
+                      lives on the checkbox. Same shape as `customers/page.tsx`. */}
+                  <TableHead className="w-10">
+                    <SelectAllCheckbox />
+                  </TableHead>
+                  {COLUMNS.map((column) => {
+                    const dir = sort?.key === column.key ? sort?.dir : undefined;
+                    return (
+                      <TableHead
+                        key={column.key}
+                        aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}
+                      >
+                        {/* A real <button>, not an <a>: this component is already
+                            "use client" and the sort never leaves the browser, so
+                            there is no URL to navigate to. `min-h-11 min-w-11` is
+                            the 44px hit target — a workshop tablet taps these. */}
+                        <button
+                          type="button"
+                          onClick={() => setSort({ key: column.key, dir: dir === "asc" ? "desc" : "asc" })}
+                          className="-mx-2 inline-flex min-h-11 min-w-11 items-center gap-1 px-2 hover:text-foreground"
+                        >
+                          {column.label}
+                          {dir === "asc" && <ArrowUp className="h-3 w-3" aria-hidden="true" />}
+                          {dir === "desc" && <ArrowDown className="h-3 w-3" aria-hidden="true" />}
+                        </button>
+                      </TableHead>
+                    );
+                  })}
+                  <TableHead className="text-right">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((user) => {
+                  const inactive = user.deactivatedAt !== null;
+                  return (
+                    <TableRow key={user.id} className={inactive ? "text-muted-foreground" : undefined}>
+                      <TableCell>
+                        <RowCheckbox id={user.id} label={user.username} />
+                      </TableCell>
+                      <TableCell>{user.username}</TableCell>
+                      <TableCell>{user.name ?? "—"}</TableCell>
+                      <TableCell>{user.email ?? "—"}</TableCell>
+                      <TableCell>{roleLabel(user.role)}</TableCell>
+                      <TableCell>
+                        {/* Text, not colour alone — a greyed row is indistinguishable
+                            from an active one to a screen reader. A real `Badge`
+                            since D8; `StatusBadge` is untouched, because widening its
+                            closed 14-member union for one column is a migration this
+                            change does not own. */}
+                        <Badge variant={inactive ? "outline" : "secondary"}>
+                          {inactive ? "Inactivo" : "Activo"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end">
+                          <RowActions label={`Acciones de ${user.username}`}>
+                            {/* Editing a deactivated user is not offered: reactivate
+                                first, so the row's state stays unambiguous. */}
+                            {!inactive && <DropdownMenuItem onClick={() => setEditing(user)}>Editar</DropdownMenuItem>}
+                            {/* A plain item with `onClick`, NOT `render={<button/>}`.
+                                Measured in jsdom against base-ui 1.6: with `render`,
+                                ArrowDown+Enter activates the item 0 times out of 1 —
+                                Enter reaches base-ui's own item handler, and
+                                rendering a real `<button>` replaces it. That is the
+                                REVERSE of unit 2's link item, where `render` was the
+                                fix; what decides it is whether the thing has to stay
+                                an anchor, not the `render` prop itself. */}
+                            <DropdownMenuItem disabled={pendingId === user.id} onClick={() => toggleActive(user)}>
+                              {inactive ? "Reactivar" : "Desactivar"}
+                            </DropdownMenuItem>
+                          </RowActions>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </SelectionProvider>
 
       {visible.length === 0 && (
         <p className="text-sm text-muted-foreground">No hay usuarios para mostrar.</p>
+      )}
+
+      {/* ONE dialog for the table, mounted OUTSIDE every row's kebab — the one
+          thing here that is not free to move. Measured in jsdom against
+          base-ui 1.6:
+
+          - Inside a `DropdownMenuItem`, selecting the item closes the menu and
+            unmounts the dialog with it: 0 dialogs opened, mouse or keyboard.
+          - As a plain child of the menu content the dialog DOES open, but the
+            menu stays open behind it (`data-open` still set) and its
+            `useTypeahead` `preventDefault`s every printable keydown, so the
+            dialog cannot be typed into. React routes synthetic events along the
+            REACT tree, not the DOM one, so portalling the dialog does not
+            escape the menu — only mounting it outside does.
+
+          `UserForm` rather than `UserFormTrigger`: that wrapper exists only to
+          supply `onSaved` from a Server Component, and this file is already
+          `"use client"` with a router of its own. */}
+      {editing && (
+        <UserForm
+          user={editing}
+          open
+          onOpenChange={(next) => {
+            if (!next) setEditing(null);
+          }}
+          onSaved={() => router.refresh()}
+        />
       )}
     </div>
   );

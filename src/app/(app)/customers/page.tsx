@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, Eye, Users } from "lucide-react";
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { CustomerSyncPanel } from "@/modules/customer-import/CustomerSyncPanel";
+import { CustomerBulkActions } from "@/modules/customers/CustomerBulkActions";
 import { CustomerFilters } from "@/modules/customers/CustomerFilters";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
 import {
@@ -16,9 +17,13 @@ import {
 } from "@/modules/customers/queries";
 import { computePageWindow, parsePageSize } from "@/modules/inventory-view/queries";
 import { Pagination } from "@/shared/ui/Pagination";
+import { BulkResultPanel } from "@/shared/ui/selection/BulkResultPanel";
+import { RowActions } from "@/shared/ui/selection/RowActions";
+import { RowCheckbox, SelectAllCheckbox } from "@/shared/ui/selection/RowCheckbox";
+import { SelectionBar } from "@/shared/ui/selection/SelectionBar";
+import { SelectionProvider } from "@/shared/ui/selection/SelectionProvider";
 import { PAGE_HEADING } from "@/shared/ui/styles";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -116,6 +121,13 @@ export default async function CustomersPage({
 
   const pageCount = Math.max(1, Math.ceil(total / pageWindow.limit));
 
+  // The three props that cross into the client (design D3). Every one is a
+  // string, an array of strings, or a `Record<string, string>` — no function,
+  // no `Date`, no class instance. `item.createdAt` IS a `Date` and is
+  // deliberately not among them.
+  const pageIds = items.map((item) => item.id);
+  const labels = Object.fromEntries(items.map((item) => [item.id, item.name]));
+
   return (
     <div className="p-8">
       <div className="mb-6 flex items-start justify-between">
@@ -148,7 +160,18 @@ export default async function CustomersPage({
         </CardContent>
       </Card>
 
-      {items.length === 0 ? (
+      {/* The provider wraps BOTH branches of the conditional below, not just
+          the table. A search that matches nothing renders the empty state
+          instead of the table, and if the provider lived inside the table
+          branch that switch would unmount it — taking the selection AND the
+          "se limpió la selección" notice with it, in precisely the case the
+          notice exists to explain. */}
+      <SelectionProvider pageIds={pageIds} labels={labels} filterKey={buildFilterKey(filters)}>
+        <SelectionBar>
+          <CustomerBulkActions />
+        </SelectionBar>
+        <BulkResultPanel reasons={CUSTOMER_REFUSAL_MESSAGES} />
+        {items.length === 0 ? (
         <Card size="sm">
           <CardContent>
             <div className="flex flex-col items-center gap-2 py-12 text-center">
@@ -225,6 +248,13 @@ export default async function CustomersPage({
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {/* `w-10` and no label: `table.tsx` already ships
+                        `[&:has([role=checkbox])]:pr-0` on `TableHead`, so the
+                        column needs no new table primitive. The accessible
+                        name lives on the checkbox itself. */}
+                    <TableHead className="w-10">
+                      <SelectAllCheckbox />
+                    </TableHead>
                     {COLUMNS.map((column) =>
                       column.sort ? (
                         <SortableHeader
@@ -243,6 +273,9 @@ export default async function CustomersPage({
                 <TableBody>
                   {items.map((item) => (
                     <TableRow key={item.id}>
+                      <TableCell>
+                        <RowCheckbox id={item.id} label={item.name} />
+                      </TableCell>
                       <TableCell className="font-medium">
                         {item.name}
                         {item.deactivatedAt && (
@@ -264,7 +297,8 @@ export default async function CustomersPage({
                       <TableCell>{item.email ?? "—"}</TableCell>
                       <TableCell>{item.plates.length > 0 ? item.plates.join(", ") : "—"}</TableCell>
                       <TableCell>
-                        {/* `buttonVariants` on a plain `Link`, NOT
+                        {/* A plain `Link` inside the item, NOT
+                            `DropdownMenuItem render={<Link/>}` and NOT
                             `<Button render={<Link/>}>`. Measured, both ways:
                             base-ui's Button defaults to `nativeButton: true`
                             and logs "expected a native <button>" to the
@@ -272,15 +306,33 @@ export default async function CustomersPage({
                             while `nativeButton={false}` renders
                             `<a href role="button">` — announcing a navigation
                             as a button and dropping it out of the links list.
-                            `buttonVariants` is the styling without the
-                            behaviour, which is all a link needs. */}
-                        <Link
-                          href={`/customers/${item.id}`}
-                          className={cn(buttonVariants({ variant: "outline", size: "default" }), "min-h-11 min-w-11")}
-                        >
-                          <Eye aria-hidden="true" />
-                          Ver
-                        </Link>
+                            `render` on the menu item has the same shape of
+                            problem: it puts `role="menuitem"` on the anchor.
+                            Nesting the link keeps it a link, which is what
+                            `app-sidebar.tsx`'s collapsed-rail menu already
+                            does in production. */}
+                        <RowActions label={`Acciones de ${item.name}`}>
+                          {/* `render`, not a nested `<Link>`. Measured in jsdom against
+                              base-ui 1.6: with the link NESTED inside the item,
+                              ArrowDown+Enter fires base-ui's click on the `role="menuitem"`
+                              div and it never reaches the anchor — 0 clicks, menu closes, no
+                              navigation. With `render` the anchor IS the menuitem and the
+                              same keystrokes navigate. "Ver" was keyboard-reachable as a bare
+                              link before the kebab existed; it has to stay that way.
+
+                              This does NOT contradict the `buttonVariants` comment on the old
+                              row link: that one rejects base-ui's `Button` COMPONENT wrapping
+                              an anchor. `DropdownMenuItem`'s `render` is the library's
+                              ordinary composition API, a different thing. */}
+                          <DropdownMenuItem
+                            render={
+                              <Link href={`/customers/${item.id}`} className="flex w-full items-center gap-1.5">
+                                <Eye aria-hidden="true" />
+                                Ver
+                              </Link>
+                            }
+                          />
+                        </RowActions>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -300,9 +352,48 @@ export default async function CustomersPage({
             </Card>
           )}
         </>
-      )}
+        )}
+      </SelectionProvider>
     </div>
   );
+}
+
+/**
+ * The bulk panel's refusal vocabulary — injected, never owned by the panel
+ * (design D4). Only the codes `PATCH /api/customers/[id]` can actually answer
+ * with for an `{active}` body are here; an unmapped code renders as the raw
+ * code, which a reader can grep for, rather than as a generic sentence that
+ * tells them nothing.
+ *
+ * `cliente_deactivated` is deliberately absent: `setActivation` never raises
+ * it — deactivating an already-deactivated customer is a `coalesce` and a 200
+ * — and listing a code the route cannot return here would be a claim nobody
+ * checked.
+ */
+const CUSTOMER_REFUSAL_MESSAGES: Record<string, string> = {
+  not_found: "Ese cliente ya no existe. Recargá la página.",
+  Forbidden: "No tenés permiso para cambiar el estado de este cliente.",
+  // `runSequential`'s own code for a `fetch` that threw — the only reason
+  // reaching the panel that no route produced.
+  request_failed: "No se pudo conectar con el servidor. Intentá de nuevo.",
+};
+
+/**
+ * The canonical serialisation of the ACTIVE FILTERS — and of nothing else.
+ *
+ * A change to this string clears the operator's whole selection (design D5),
+ * so what is in it IS the spec's "Sort and pagination do not clear it"
+ * scenario. `sort`, `dir`, `page` and `pageSize` are all absent, and the
+ * strongest guarantee of that is the argument: this takes the already-narrowed
+ * `ClienteFilters`, which `normalizeClienteFilters` builds from `search` and
+ * `status` alone. Reading `searchParams` here instead would put every other
+ * key one typo away from wiping a selection on every column-header click.
+ */
+function buildFilterKey(filters: ClienteFilters): string {
+  // `search` is free text and can contain anything, `|` included, so it goes
+  // last: `status` is a closed three-value enum and cannot be confused with
+  // part of a search term.
+  return `status=${filters.status ?? "active"}|search=${filters.search ?? ""}`;
 }
 
 /**

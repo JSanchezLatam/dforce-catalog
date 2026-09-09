@@ -7,6 +7,7 @@ import {
   deriveCatalogTitle,
   MAX_TOTAL_PRODUCTS,
   matchesAnyCategory,
+  parseSeedProductIds,
   toggleBulkFrame,
   validateCatalogSelection,
   type ProductRef,
@@ -254,5 +255,57 @@ describe("validateCatalogSelection — price tiers", () => {
    */
   it("accepts an omitted selection and leaves the default to the renderer", () => {
     expect(() => validateCatalogSelection(valid)).not.toThrow();
+  });
+});
+
+/**
+ * D10 — `/inventory` hands the builder its selection as `?products=a,b,c`.
+ * The bar already refuses an over-cap selection before navigating, but that
+ * guard is client-side and the URL is hand-editable, so the page re-applies
+ * the same cap on the server.
+ */
+describe("parseSeedProductIds (D10 point 1)", () => {
+  it("splits a comma-separated list", () => {
+    expect(parseSeedProductIds("PS1,PS2,PS3")).toEqual(["PS1", "PS2", "PS3"]);
+  });
+
+  it("reads nothing out of an absent or empty parameter", () => {
+    expect(parseSeedProductIds(undefined)).toEqual([]);
+    expect(parseSeedProductIds("")).toEqual([]);
+    expect(parseSeedProductIds(",,")).toEqual([]);
+  });
+
+  it("takes the first value when Next.js gives an array (repeated query key)", () => {
+    expect(parseSeedProductIds(["PS1,PS2", "PS9"])).toEqual(["PS1", "PS2"]);
+  });
+
+  it("trims stray whitespace and drops empty segments", () => {
+    expect(parseSeedProductIds(" PS1 , ,PS2,")).toEqual(["PS1", "PS2"]);
+  });
+
+  /**
+   * A duplicate id would otherwise spend a slot of the cap and arrive as one
+   * row anyway — `in (...)` returns each product once.
+   */
+  it("keeps each id once", () => {
+    expect(parseSeedProductIds("PS1,PS2,PS1")).toEqual(["PS1", "PS2"]);
+  });
+
+  /**
+   * The input is built independently of the cap and the expectation is the
+   * INPUT's own prefix, so removing or widening the cap changes the result
+   * and turns this red — unlike an assertion phrased purely in terms of
+   * `MAX_TOTAL_PRODUCTS`, which would follow the constant it is meant to pin.
+   */
+  it("refuses to carry more ids than the catalog cap allows", () => {
+    const ids = Array.from({ length: MAX_TOTAL_PRODUCTS + 50 }, (_, i) => `PS${i}`);
+
+    expect(parseSeedProductIds(ids.join(","))).toEqual(ids.slice(0, MAX_TOTAL_PRODUCTS));
+  });
+
+  it("leaves a selection at exactly the cap untouched", () => {
+    const ids = Array.from({ length: MAX_TOTAL_PRODUCTS }, (_, i) => `PS${i}`);
+
+    expect(parseSeedProductIds(ids.join(","))).toEqual(ids);
   });
 });

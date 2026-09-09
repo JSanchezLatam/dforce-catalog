@@ -78,14 +78,38 @@ export function UserForm({
   user,
   triggerLabel,
   onSaved,
+  open: openProp,
+  onOpenChange,
 }: {
   /** Provided => edit mode (PATCH); omitted => create mode (POST). */
   user?: UserFormUser | null;
   triggerLabel?: ReactNode;
   onSaved?: () => void;
+  /**
+   * Controlled mode, the shape `ConfirmGenerateDialog.tsx` already uses. Pass
+   * `open` and the caller owns the state and NO trigger is rendered; omit it
+   * and this component keeps its own trigger and its own state, which is what
+   * every existing caller does.
+   *
+   * It exists because a base-ui `Dialog` cannot live inside a base-ui `Menu`.
+   * `UsersTable.tsx`'s kebab needs the edit dialog mounted OUTSIDE the menu:
+   * measured against base-ui 1.6, a dialog rendered from inside an open menu
+   * has every printable keydown swallowed by the menu's `useTypeahead`, and
+   * one rendered inside a `Menu.Item` is unmounted by the menu closing.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const isEdit = Boolean(user);
-  const [open, setOpen] = useState(false);
+  const controlled = openProp !== undefined;
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlled ? openProp : uncontrolledOpen;
+
+  function setOpen(next: boolean) {
+    if (!controlled) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  }
+
   const [form, setForm] = useState<UserFormState>(() => toFormState(user));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -206,9 +230,11 @@ export function UserForm({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger render={<Button variant={isEdit ? "outline" : "default"} size={isEdit ? "sm" : "default"} />}>
-        {triggerLabel ?? (isEdit ? "Editar" : "Nuevo usuario")}
-      </DialogTrigger>
+      {!controlled && (
+        <DialogTrigger render={<Button variant={isEdit ? "outline" : "default"} size={isEdit ? "sm" : "default"} />}>
+          {triggerLabel ?? (isEdit ? "Editar" : "Nuevo usuario")}
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{isEdit ? "Editar usuario" : "Nuevo usuario"}</DialogTitle>

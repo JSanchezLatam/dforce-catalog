@@ -8,7 +8,8 @@
  * wired into one layer and not the next), which is why the pagination link is
  * asserted here rather than trusted.
  */
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/modules/auth/session", () => ({
@@ -28,6 +29,10 @@ vi.mock("@/modules/customer-import/CustomerSyncPanel", () => ({
   ),
 }));
 vi.mock("@/modules/customers/CustomerFilters", () => ({ CustomerFilters: () => null }));
+// WU5's bulk buttons call `router.refresh()` after the run, exactly as the
+// row-level `toggleActive` in `UsersTable` already does. Nothing else on this
+// page uses the App Router, which is why this mock did not exist before.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const can = vi.hoisted(() => vi.fn<(user: unknown, action: string) => boolean>(() => true));
 const listClientes = vi.hoisted(() => vi.fn());
@@ -180,10 +185,14 @@ describe("CustomersPage — deactivated customers (R20)", () => {
     render(await CustomersPage({ searchParams: Promise.resolve({}) }));
 
     const cells = screen.getAllByRole("cell").map((c) => c.textContent);
-    // Positional: only the phone column can be the empty one here, since the
-    // row seeds a real email and a real plate.
-    expect(cells).not.toContain("");
-    expect(cells).toContain("—");
+    // Indexed on the phone column rather than "no cell in the row is blank".
+    // That blanket form worked only while every cell carried text, and the
+    // Acciones cell is now an icon-only kebab trigger whose `textContent` is
+    // legitimately "" — it would fail this test for the wrong reason while
+    // saying nothing about the phone. Column order, since WU4 put the
+    // selection checkbox first: ☐ | Nombre | Teléfono | Email | Vehículos |
+    // Acciones.
+    expect(cells[2]).toBe("—");
   });
 
   // R20 — searching is how staff reach one specific customer. Before this the
@@ -307,19 +316,59 @@ describe("CustomersPage — deactivated customers (R20)", () => {
 });
 
 /**
- * The row action was restyled from a hand-copied class string onto the shared
- * button vocabulary. Two of the three ways to do that quietly stop it being a
- * link: base-ui's `Button render={<Link/>}` with `nativeButton={false}` emits
- * `<a role="button">`, and a plain `<Button onClick>` emits a `<button>` with
- * no href at all. Either one loses middle-click, "open in new tab", and the
- * link's own announcement — none of which any styling test would notice.
+* The row action moved into a kebab menu (table-redesign WU2). The property
+ * worth pinning is ACTIVATION, not markup — and this block previously got that
+ * wrong in a way that would have shipped.
+ *
+ * The first version asserted `getByRole("link", { name: "Ver" })`. That shape
+ * is only produced by nesting the link INSIDE the item, and measured against
+ * base-ui 1.6 that nesting is keyboard-dead: ArrowDown+Enter fires the click on
+ * the `role="menuitem"` div and it never reaches the anchor. So the assertion
+ * did not merely miss the defect, it FORBADE the fix — the working shape
+ * (`render`) emits `<a role="menuitem">`, which no `getByRole("link")` query
+ * finds. A test that pins the broken shape as correct is the exact class
+ * CLAUDE.md warns about.
+ *
+ * What is asserted now: pressing Enter on the focused item actually activates
+ * the anchor, and the anchor still carries the real `href` so middle-click and
+ * "open in new tab" survive. "Ver" was reachable by Tab+Enter as a bare link
+ * before the kebab existed; that must not regress.
  */
-describe("CustomersPage — the row action stays a link", () => {
-  it("renders Ver as a link to that customer, not a button", async () => {
+describe("CustomersPage — the row action is a kebab whose Ver item is still activatable", () => {
+  it("navigates from the keyboard: ArrowDown then Enter activates the anchor", async () => {
+    const user = userEvent.setup();
     render(await renderPage({}));
 
-    expect(screen.getByRole("link", { name: "Ver" })).toHaveAttribute("href", "/customers/c1");
-    expect(screen.queryByRole("button", { name: "Ver" })).not.toBeInTheDocument();
+    // Named per row, not a bare "Acciones": the page renders one trigger per
+    // customer, and an ambiguous accessible name makes `getByRole` throw as
+    // soon as a second row exists.
+    await user.click(screen.getByRole("button", { name: "Acciones de Retirado Perez" }));
+
+    const item = await screen.findByRole("menuitem", { name: "Ver" });
+    // jsdom does not navigate, so the anchor's own click is the observable.
+    const clicked = vi.fn((e: Event) => e.preventDefault());
+    item.addEventListener("click", clicked);
+
+    await user.keyboard("{ArrowDown}{Enter}");
+
+    expect(clicked).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a real href, so middle-click and open-in-new-tab still work", async () => {
+    const user = userEvent.setup();
+    render(await renderPage({}));
+
+    await user.click(screen.getByRole("button", { name: "Acciones de Retirado Perez" }));
+
+    const item = await screen.findByRole("menuitem", { name: "Ver" });
+    expect(item.tagName).toBe("A");
+    expect(item).toHaveAttribute("href", "/customers/c1");
+  });
+
+  it("leaves no bare Ver link in the row once the kebab owns the action", async () => {
+    render(await renderPage({}));
+
+    expect(screen.queryByRole("link", { name: "Ver" })).not.toBeInTheDocument();
   });
 });
 
@@ -461,5 +510,318 @@ describe("CustomersPage — the unfiltered total behind the stats card", () => {
     expect(screen.getByTestId("sync-panel")).toHaveTextContent("368");
     // The filters the operator is looking at must not reach this count.
     expect(countClientes.mock.calls[1][0]).toEqual({ status: "all" });
+  });
+});
+
+/**
+ * table-redesign WU4 — the selection primitive, landed on customers first.
+ *
+ * Two properties are pinned here and nowhere else, because they are decided by
+ * what THIS PAGE puts in `filterKey`, not by the hook:
+ *
+ * - changing the search term or the status clears the selection, announcing it
+ *   with the exact Spanish sentence the spec fixes;
+ * - sorting a column or turning the page does NOT, which is only true while
+ *   `filterKey` is built from search + status alone. A `sort` leaking into it
+ *   wipes the operator's selection on every column click.
+ *
+ * `rerender` is how a filter change is reproduced: in the app a filter edit is
+ * a URL navigation that re-runs this Server Component and patches the tree,
+ * leaving the client `SelectionProvider` mounted at the same position. That is
+ * the whole premise of D3, and jsdom reproduces the reconciliation faithfully
+ * even though it cannot see the RSC boundary itself.
+ */
+describe("CustomersPage — cross-page selection and the filter rule (WU4)", () => {
+  const PAGE_1 = [
+    row({ id: "c1", name: "Ana Gómez" }),
+    row({ id: "c2", name: "Beto Ruiz" }),
+  ];
+  const PAGE_2 = [row({ id: "c9", name: "Zulema Paz" })];
+
+  beforeEach(() => {
+    listClientes.mockClear();
+    countClientes.mockClear();
+  });
+
+  function renderAt(params: Record<string, string>, items = PAGE_1) {
+    listClientes.mockResolvedValue(items);
+    // More than one page, so paging is a real thing on this screen.
+    countClientes.mockResolvedValue(40);
+    return CustomersPage({ searchParams: Promise.resolve(params) });
+  }
+
+  /**
+   * Let a pending `Reconcile` resolve. Without this a "does not clear"
+   * assertion is a placebo: the clearing is one microtask away and a
+   * synchronous expectation passes while the selection is on its way out.
+   * Measured on `useRowSelection.test.tsx`, where exactly that hid a mutation.
+   */
+  async function settle() {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+
+  it("renders a checkbox per row plus a select-all for the current page", async () => {
+    render(await renderAt({}));
+
+    expect(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Seleccionar Beto Ruiz" })).toBeInTheDocument();
+    // Not "seleccionar todo": there is no server-side select-all-matching in
+    // this change, and the name must not promise one.
+    expect(
+      screen.getByRole("checkbox", { name: "Seleccionar todo lo de esta página" }),
+    ).toBeInTheDocument();
+  });
+
+  it("clears the selection when the search term changes, saying exactly how many went", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(await renderAt({}));
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" }));
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Beto Ruiz" }));
+    expect(screen.getByRole("status")).toHaveTextContent("2 seleccionados");
+
+    rerender(await renderAt({ search: "perez" }));
+
+    // The exact sentence, never loosened — the spec fixes this shape.
+    await waitFor(() =>
+      expect(
+        screen.getByText("Se limpió la selección de 2 al cambiar el filtro"),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" })).not.toBeChecked();
+  });
+
+  it("clears when the status filter changes too", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(await renderAt({}));
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" }));
+    rerender(await renderAt({ status: "all" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Se limpió la selección de 1 al cambiar el filtro"),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  /**
+   * The spec's negative scenario, pinned so it cannot be "improved" back into
+   * a lie. Clearing is unconditional, so most of the cleared rows normally DO
+   * match the new filter; a message claiming otherwise asserts more than the
+   * code knows.
+   */
+  it("does not claim the cleared rows failed to match the new filter", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(await renderAt({}));
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" }));
+    rerender(await renderAt({ search: "gómez" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText("Se limpió la selección de 1 al cambiar el filtro"),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/no coinciden/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/se soltaron/i)).not.toBeInTheDocument();
+  });
+
+  /**
+   * THE regression this test file exists for. `filterKey` is built from search
+   * and status ONLY; put `sort` in it and every column-header click silently
+   * wipes the selection the operator has been assembling.
+   */
+  it("does not clear the selection when a column is sorted", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(await renderAt({}));
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" }));
+    rerender(await renderAt({ sort: "name", dir: "desc" }));
+    await settle();
+
+    expect(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" })).toBeChecked();
+    expect(screen.queryByText(/Se limpió la selección/)).not.toBeInTheDocument();
+  });
+
+  it("does not clear the selection when the page or the page size changes", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(await renderAt({}));
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" }));
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Beto Ruiz" }));
+
+    rerender(await renderAt({ page: "2", pageSize: "50" }, PAGE_2));
+    await settle();
+
+    const bar = screen.getByRole("status");
+    expect(screen.queryByText(/Se limpió la selección/)).not.toBeInTheDocument();
+    expect(bar).toHaveTextContent("2 seleccionados");
+    // The spec's "Off-screen selection is legible, not just counted": the bar
+    // has to say how many are off this page, and be able to name them.
+    expect(bar).toHaveTextContent("2 fuera de esta página");
+    expect(within(bar).getByText("Ana Gómez")).toBeInTheDocument();
+    expect(within(bar).getByText("Beto Ruiz")).toBeInTheDocument();
+  });
+
+  it("puts the rows back checked when the operator returns to page 1", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(await renderAt({}));
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" }));
+    rerender(await renderAt({ page: "2" }, PAGE_2));
+    await settle();
+    rerender(await renderAt({}, PAGE_1));
+    await settle();
+
+    expect(screen.getByRole("checkbox", { name: "Seleccionar Ana Gómez" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Seleccionar Beto Ruiz" })).not.toBeChecked();
+  });
+
+  it("lets the operator drop the whole selection by hand, with no filter message", async () => {
+    const user = userEvent.setup();
+    render(await renderAt({}));
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar todo lo de esta página" }));
+    expect(screen.getByRole("status")).toHaveTextContent("2 seleccionados");
+
+    await user.click(screen.getByRole("button", { name: "Limpiar selección" }));
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Se limpió la selección/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * table-redesign WU5 — bulk activar/desactivar over the EXISTING per-row route
+ * (`customer-management` delta, design D1).
+ *
+ * There is no bulk endpoint and no batched `UPDATE`: the whole transport is a
+ * sequential client loop over `PATCH /api/customers/[id]` with `{active}`, so
+ * every row's precondition is re-read inside its own request and every row's
+ * answer is reported on its own. These tests assert against the injected
+ * `fetch` — one call per selected id, in selection order — because the panel
+ * alone cannot tell a row that was refused apart from one never sent.
+ */
+describe("CustomersPage — bulk activar/desactivar (WU5)", () => {
+  const PAGE = [
+    row({ id: "c1", name: "Ana Gómez" }),
+    row({ id: "c2", name: "Beto Ruiz" }),
+  ];
+
+  beforeEach(() => {
+    listClientes.mockClear();
+    countClientes.mockClear();
+    vi.unstubAllGlobals();
+  });
+
+  function renderAt(items = PAGE) {
+    listClientes.mockResolvedValue(items);
+    countClientes.mockResolvedValue(40);
+    return CustomersPage({ searchParams: Promise.resolve({}) });
+  }
+
+  /**
+   * Keyed by id, so a per-row answer is declared rather than ordered — an
+   * ordered `mockResolvedValueOnce` chain would silently pass whichever
+   * response was left over if the loop ever issued the calls in another order,
+   * which is the very thing being asserted.
+   */
+  function mockCustomersApi(byId: Record<string, { status: number; body?: unknown }> = {}) {
+    const fetchMock = vi.fn(async (url: string) => {
+      const id = url.slice(url.lastIndexOf("/") + 1);
+      const answer = byId[id] ?? { status: 200, body: { cliente: { id } } };
+      return {
+        ok: answer.status >= 200 && answer.status < 300,
+        status: answer.status,
+        json: async () => answer.body ?? {},
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  function patchesInOrder(fetchMock: ReturnType<typeof vi.fn>) {
+    return fetchMock.mock.calls.map(([url, init]) => ({
+      id: String(url).slice(String(url).lastIndexOf("/") + 1),
+      method: (init as { method: string }).method,
+      ...(JSON.parse((init as { body: string }).body) as { active: boolean }),
+    }));
+  }
+
+  function resultPanel() {
+    return screen.getByText(/Se aplic/).closest("[role='status']") as HTMLElement;
+  }
+
+  async function selectAndRun(user: ReturnType<typeof userEvent.setup>, action: string, ...names: string[]) {
+    for (const name of names) {
+      await user.click(screen.getByRole("checkbox", { name: `Seleccionar ${name}` }));
+    }
+    await user.click(screen.getByRole("button", { name: action }));
+  }
+
+  it("sends one PATCH per selected customer, in selection order, never a batch", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockCustomersApi();
+    render(await renderAt());
+
+    await selectAndRun(user, "Desactivar", "Ana Gómez", "Beto Ruiz");
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(patchesInOrder(fetchMock)).toEqual([
+      { id: "c1", method: "PATCH", active: false },
+      { id: "c2", method: "PATCH", active: false },
+    ]);
+  });
+
+  it("sends {active:true} for Activar, the same route the row action already uses", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockCustomersApi();
+    render(await renderAt());
+
+    await selectAndRun(user, "Activar", "Ana Gómez");
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(patchesInOrder(fetchMock)).toEqual([{ id: "c1", method: "PATCH", active: true }]);
+  });
+
+  /**
+   * Spec Scenario "Already-deactivated rows are a silent success, not a
+   * failure". `setDeactivatedAtDb` writes through a `coalesce`, so the route
+   * answers 200 for a row that was already deactivated — the client must
+   * report that as applied and must not invent a failure, nor skip the row.
+   */
+  it("counts an already-deactivated row as applied and lists no failure", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockCustomersApi();
+    render(await renderAt([PAGE[0], row({ id: "c2", name: "Beto Ruiz", deactivatedAt: new Date("2026-01-01") })]));
+
+    await selectAndRun(user, "Desactivar", "Ana Gómez", "Beto Ruiz");
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(resultPanel()).toHaveTextContent("Se aplicaron 2 filas");
+    expect(within(resultPanel()).queryByRole("listitem")).not.toBeInTheDocument();
+  });
+
+  /**
+   * Spec Scenario "Partial success on invalid rows". A row another session
+   * deleted answers 404 `not_found`; the rest of the batch still applies and
+   * the panel NAMES the missing row with its own reason — "1 no se pudo" with
+   * no name is explicitly not acceptable.
+   */
+  it("names a since-deleted customer and still applies the rest of the batch", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockCustomersApi({ c2: { status: 404, body: { error: "not_found" } } });
+    render(await renderAt());
+
+    await selectAndRun(user, "Desactivar", "Ana Gómez", "Beto Ruiz");
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(resultPanel()).toHaveTextContent("Se aplicó 1 fila");
+    const failure = within(resultPanel()).getByRole("listitem");
+    expect(failure).toHaveTextContent("Beto Ruiz");
+    expect(failure).toHaveTextContent("Ese cliente ya no existe. Recargá la página.");
   });
 });

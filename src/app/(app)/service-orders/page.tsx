@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { ArrowDown, ArrowUp, Wrench } from "lucide-react";
+import { ArrowDown, ArrowUp, Eye, Wrench } from "lucide-react";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { computePageWindow, listInventory, parsePageSize } from "@/modules/inventory-view/queries";
+import { OrderBulkStatusActions } from "@/modules/service-orders/OrderBulkStatusActions";
 import { ServiceOrderFilters } from "@/modules/service-orders/ServiceOrderFilters";
 import { ServiceOrderFormTrigger } from "@/modules/service-orders/ServiceOrderFormTrigger";
 import {
@@ -14,23 +15,24 @@ import {
   type OrdenServicioFilters,
   type OrdenSort,
 } from "@/modules/service-orders/queries";
+import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import { formatDateTime } from "@/shared/datetime";
 import { Pagination } from "@/shared/ui/Pagination";
+import { BulkResultPanel } from "@/shared/ui/selection/BulkResultPanel";
+import { RowActions } from "@/shared/ui/selection/RowActions";
+import { RowCheckbox, SelectAllCheckbox } from "@/shared/ui/selection/RowCheckbox";
+import { SelectionBar } from "@/shared/ui/selection/SelectionBar";
+import { SelectionProvider } from "@/shared/ui/selection/SelectionProvider";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 import { PAGE_HEADING } from "@/shared/ui/styles";
 import { Card, CardContent } from "@/components/ui/card";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
 const VALID_STATUS = new Set<OrderStatus>(["open", "in_progress", "done", "cancelled"]);
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  open: "Abierta",
-  in_progress: "En progreso",
-  done: "Completada",
-  cancelled: "Cancelada",
-};
 
 // The parts picker inside ServiceOrderForm still works over an already-
 // fetched list (client-side search+cart idiom, no server round-trip),
@@ -81,6 +83,18 @@ export default async function ServiceOrdersPage({
 
   const pageCount = Math.max(1, Math.ceil(total / pageWindow.limit));
 
+  // The props that cross into the client (design D3). Every one is a string, an
+  // array of strings, or a `Record<string, string>` — no function, no `Date`,
+  // no class instance. `orden.appointmentAt` IS a `Date` and is deliberately
+  // not among them.
+  const pageIds = items.map((orden) => orden.id);
+  const labels = Object.fromEntries(items.map((orden) => [orden.id, `orden ${orden.id}`]));
+  // D9's input: the CURRENT statuses the menu intersects over, for this page's
+  // rows only. A selection that outlived the page it was made on holds ids that
+  // are not in here, and `OrderBulkStatusActions` stands down rather than
+  // guessing at them.
+  const statuses = Object.fromEntries(items.map((orden) => [orden.id, orden.status]));
+
   return (
     <div className="p-8">
       <div className="mb-6 flex items-center justify-between">
@@ -98,7 +112,17 @@ export default async function ServiceOrdersPage({
         </CardContent>
       </Card>
 
-      {items.length === 0 ? (
+      {/* The provider wraps BOTH branches below, not just the table: a filter
+          that matches nothing renders the empty state instead, and a provider
+          living inside the table branch would unmount on that switch — taking
+          the selection AND the "se limpió la selección" notice with it, in
+          precisely the case the notice exists to explain. */}
+      <SelectionProvider pageIds={pageIds} labels={labels} filterKey={buildFilterKey(filters)}>
+        <SelectionBar>
+          <OrderBulkStatusActions statuses={statuses} />
+        </SelectionBar>
+        <BulkResultPanel reasons={ORDER_REFUSAL_MESSAGES} />
+        {items.length === 0 ? (
         <Card size="sm">
           <CardContent>
             <div className="flex flex-col items-center gap-2 py-12 text-center">
@@ -126,6 +150,13 @@ export default async function ServiceOrdersPage({
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {/* `w-10` and no label: `table.tsx` already ships
+                        `[&:has([role=checkbox])]:pr-0` on `TableHead`, so the
+                        column needs no new table primitive. The accessible name
+                        lives on the checkbox itself. */}
+                    <TableHead className="w-10">
+                      <SelectAllCheckbox />
+                    </TableHead>
                     {COLUMNS.map((column) =>
                       column.sort ? (
                         <SortableHeader
@@ -144,19 +175,42 @@ export default async function ServiceOrdersPage({
                 <TableBody>
                   {items.map((orden) => (
                     <TableRow key={orden.id}>
+                      <TableCell>
+                        <RowCheckbox id={orden.id} label={`orden ${orden.id}`} />
+                      </TableCell>
                       <TableCell className="font-mono text-xs">{orden.id}</TableCell>
                       <TableCell>
-                        <StatusBadge status={orden.status} label={STATUS_LABEL[orden.status]} />
+                        <StatusBadge status={orden.status} label={ORDER_STATUS_LABEL[orden.status]} />
                       </TableCell>
                       <TableCell>{orden.description ?? "—"}</TableCell>
                       <TableCell>{formatDateTime(orden.appointmentAt)}</TableCell>
                       <TableCell>
-                        <Link
-                          href={`/service-orders/${orden.id}`}
-                          className="inline-flex h-7 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-xs font-medium whitespace-nowrap text-foreground transition-colors hover:bg-muted"
-                        >
-                          Ver
-                        </Link>
+                        {/* The `h-7` (28px) hand-copied link that used to live
+                            here is deleted, not restyled — it sat under
+                            AGENTS.md's 44x44 floor, and the kebab trigger is
+                            where that floor now lives. */}
+                        <RowActions label={`Acciones de la orden ${orden.id}`}>
+                          {/* `render`, not a nested `<Link>`. Measured in jsdom against
+                              base-ui 1.6: with the link NESTED inside the item,
+                              ArrowDown+Enter fires base-ui's click on the `role="menuitem"`
+                              div and it never reaches the anchor — 0 clicks, menu closes, no
+                              navigation. With `render` the anchor IS the menuitem and the
+                              same keystrokes navigate. "Ver" was keyboard-reachable as a bare
+                              link before the kebab existed; it has to stay that way.
+
+                              This does NOT contradict the `buttonVariants` comment on the old
+                              row link: that one rejects base-ui's `Button` COMPONENT wrapping
+                              an anchor. `DropdownMenuItem`'s `render` is the library's
+                              ordinary composition API, a different thing. */}
+                          <DropdownMenuItem
+                            render={
+                              <Link href={`/service-orders/${orden.id}`} className="flex w-full items-center gap-1.5">
+                                <Eye aria-hidden="true" />
+                                Ver
+                              </Link>
+                            }
+                          />
+                        </RowActions>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -177,8 +231,44 @@ export default async function ServiceOrdersPage({
           )}
         </>
       )}
+      </SelectionProvider>
     </div>
   );
+}
+
+/**
+ * The bulk panel's refusal vocabulary — injected, never owned by the panel
+ * (design D4). Only the codes `PATCH /api/service-orders/[id]` can actually
+ * answer with for a `{status}` body are here; an unmapped code renders as the
+ * raw code, which a reader can grep for, rather than as a generic sentence that
+ * tells them nothing.
+ *
+ * `invalid_transition` is the drift scenario's whole answer: the menu offered
+ * the status because THIS page said the row was `open`, and the row's own
+ * request found it somewhere else.
+ */
+const ORDER_REFUSAL_MESSAGES: Record<string, string> = {
+  invalid_transition: "Su estado actual ya no permite ese cambio. Recargá la página.",
+  not_found: "Esa orden ya no existe. Recargá la página.",
+  Forbidden: "No tenés permiso para cambiar el estado de esta orden.",
+  // `runSequential`'s own code for a `fetch` that threw — the only reason
+  // reaching the panel that no route produced.
+  request_failed: "No se pudo conectar con el servidor. Intentá de nuevo.",
+};
+
+/**
+ * The canonical serialisation of the ACTIVE FILTERS — and of nothing else.
+ *
+ * A change to this string clears the operator's whole selection (design D5), so
+ * what is in it IS the spec's "Sort and pagination do not clear it" scenario.
+ * `sort`, `dir`, `page` and `pageSize` are all absent, and the strongest
+ * guarantee of that is the argument: this takes the already-narrowed
+ * `OrdenServicioFilters`, which `normalizeOrdenFilters` builds from `status`
+ * alone. Reading `searchParams` here instead would put every other key one typo
+ * away from wiping a selection on every column-header click.
+ */
+function buildFilterKey(filters: OrdenServicioFilters): string {
+  return `status=${filters.status ?? "all"}`;
 }
 
 /**

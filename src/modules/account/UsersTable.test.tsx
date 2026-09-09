@@ -4,9 +4,10 @@
  * action each row offers, and what happens when the safety guard refuses.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { checkAdminSafety } from "./service";
 import { UsersTable, type UserRow } from "./UsersTable";
 
 const refresh = vi.fn();
@@ -63,20 +64,47 @@ function rowFor(username: string) {
   return screen.getByRole("row", { name: new RegExp(username) });
 }
 
-/** Body rows, in render order, read back through their first cell (Usuario). */
-function usernamesInOrder() {
-  return screen
-    .getAllByRole("row")
-    .slice(1)
-    .map((row) => within(row).getAllByRole("cell")[0].textContent);
+type User = ReturnType<typeof userEvent.setup>;
+
+/**
+ * The row actions live in a kebab menu (table-redesign WU3). Two consequences
+ * for every assertion below:
+ *
+ * - The menu content is PORTALED to `document.body`, so it is never inside the
+ *   row. `within(rowFor(...))` cannot see it — the item is queried off
+ *   `screen`, which is unambiguous because only one row's menu is ever open.
+ * - The items are `role="menuitem"`, not `role="button"`. The kebab TRIGGER is
+ *   the button, and it is named per row so two rows never collide.
+ */
+async function openRowMenu(user: User, username: string) {
+  await user.click(screen.getByRole("button", { name: `Acciones de ${username}` }));
+  // The popup mounts asynchronously; without this every subsequent query races it.
+  await screen.findByRole("menu");
 }
 
-/** Cell `n` of every body row, in render order. */
+async function clickRowAction(user: User, username: string, action: string) {
+  await openRowMenu(user, username);
+  await user.click(await screen.findByRole("menuitem", { name: action }));
+}
+
+/**
+ * Cell `n` of every body row, in render order, where `n` counts the DATA
+ * columns — Usuario is 0.
+ *
+ * The `+ 1` is the selection checkbox WU5 put in front of them. Absorbing it
+ * here rather than at 15 call sites keeps every assertion below reading in
+ * terms of the column an operator sees.
+ */
 function columnInOrder(index: number) {
   return screen
     .getAllByRole("row")
     .slice(1)
-    .map((row) => within(row).getAllByRole("cell")[index].textContent);
+    .map((row) => within(row).getAllByRole("cell")[index + 1].textContent);
+}
+
+/** Body rows, in render order, read back through their first cell (Usuario). */
+function usernamesInOrder() {
+  return columnInOrder(0);
 }
 
 function activeUser(overrides: Partial<UserRow> & { id: string; username: string }): UserRow {
@@ -118,13 +146,20 @@ describe("UsersTable — which rows are visible", () => {
 
   // A text badge, not colour alone: colour is not an accessible signal and a
   // greyed row reads identically to an active one in a screen reader.
+  //
+  // WU3 (design D8) makes it a real `components/ui/badge.tsx` rather than the
+  // bare text it used to be, so the assertion names the element and not only
+  // the string — bare text would satisfy `getByText` forever.
   it("marks a deactivated row with a visible Inactivo badge", async () => {
     const user = userEvent.setup();
     render(<UsersTable users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
-    expect(within(rowFor("beto")).getByText("Inactivo")).toBeInTheDocument();
+    expect(within(rowFor("beto")).getByText("Inactivo")).toHaveAttribute("data-slot", "badge");
     expect(within(rowFor("ana")).queryByText("Inactivo")).not.toBeInTheDocument();
+    // The active row is badged too — the column is an enum, not a marker that
+    // only appears when something is wrong.
+    expect(within(rowFor("ana")).getByText("Activo")).toHaveAttribute("data-slot", "badge");
   });
 });
 
@@ -149,10 +184,13 @@ describe("UsersTable — the role label it renders", () => {
 });
 
 describe("UsersTable — the action each row offers", () => {
-  it("offers Desactivar on an active row", () => {
+  it("offers Desactivar on an active row", async () => {
+    const user = userEvent.setup();
     render(<UsersTable users={[ACTIVE]} />);
 
-    expect(within(rowFor("ana")).getByRole("button", { name: "Desactivar" })).toBeInTheDocument();
+    await openRowMenu(user, "ana");
+
+    expect(screen.getByRole("menuitem", { name: "Desactivar" })).toBeInTheDocument();
   });
 
   it("offers Reactivar on a deactivated row", async () => {
@@ -160,13 +198,18 @@ describe("UsersTable — the action each row offers", () => {
     render(<UsersTable users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
-    expect(within(rowFor("beto")).getByRole("button", { name: "Reactivar" })).toBeInTheDocument();
+    await openRowMenu(user, "beto");
+
+    expect(screen.getByRole("menuitem", { name: "Reactivar" })).toBeInTheDocument();
   });
 
-  it("offers Editar on an active row", () => {
+  it("offers Editar on an active row", async () => {
+    const user = userEvent.setup();
     render(<UsersTable users={[ACTIVE]} />);
 
-    expect(within(rowFor("ana")).getByRole("button", { name: "Editar" })).toBeInTheDocument();
+    await openRowMenu(user, "ana");
+
+    expect(screen.getByRole("menuitem", { name: "Editar" })).toBeInTheDocument();
   });
 
   // Reactivate first: editing a row whose state is "inactive" leaves it
@@ -176,7 +219,23 @@ describe("UsersTable — the action each row offers", () => {
     render(<UsersTable users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
-    expect(within(rowFor("beto")).queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
+    await openRowMenu(user, "beto");
+
+    // The positive half first: the menu really did open, so the absence below
+    // is Editar missing rather than the query looking at nothing.
+    expect(screen.getByRole("menuitem", { name: "Reactivar" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Editar" })).not.toBeInTheDocument();
+  });
+
+  // One kebab per row, each named after that row's user: two rows on screen
+  // and an ambiguous accessible name makes `getByRole` throw.
+  it("names each row's kebab after that row's user", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    await user.click(screen.getByLabelText("Mostrar inactivos"));
+
+    expect(within(rowFor("ana")).getByRole("button", { name: "Acciones de ana" })).toBeInTheDocument();
+    expect(within(rowFor("beto")).getByRole("button", { name: "Acciones de beto" })).toBeInTheDocument();
   });
 
   it("sends active:false and refreshes on a successful deactivate", async () => {
@@ -184,7 +243,7 @@ describe("UsersTable — the action each row offers", () => {
     const fetchMock = mockFetch({ status: 200, body: { success: true } });
     render(<UsersTable users={[ACTIVE]} />);
 
-    await user.click(within(rowFor("ana")).getByRole("button", { name: "Desactivar" }));
+    await clickRowAction(user, "ana", "Desactivar");
 
     expect(fetchMock).toHaveBeenCalledWith("/api/users/u-1", {
       method: "PATCH",
@@ -200,9 +259,81 @@ describe("UsersTable — the action each row offers", () => {
     render(<UsersTable users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
-    await user.click(within(rowFor("beto")).getByRole("button", { name: "Reactivar" }));
+    await clickRowAction(user, "beto", "Reactivar");
 
     expect(fetchMock.mock.calls[0][1].body).toBe(JSON.stringify({ active: true }));
+  });
+
+  it("opens the edit dialog from the kebab", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[ACTIVE]} />);
+
+    await clickRowAction(user, "ana", "Editar");
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Editar usuario");
+  });
+});
+
+/**
+ * ACTIVATION, not markup — the property unit 2 got wrong in a way that would
+ * have shipped, and the reason these three tests exist at all.
+ *
+ * What was measured here, in jsdom against base-ui 1.6, before the component
+ * was written (numbers are activations out of one keystroke pair):
+ *
+ * - `<DropdownMenuItem onClick>` — keyboard 1, mouse 1. The shape used.
+ * - `<DropdownMenuItem render={<button onClick/>}>` — keyboard **0**. Note
+ *   this is the OPPOSITE of unit 2's link, where `render` was the fix: for a
+ *   button-like item base-ui's own item handler is what fires, and rendering a
+ *   real `<button>` swaps it out for one Enter never reaches.
+ * - `UserFormTrigger` nested inside a `DropdownMenuItem` — 0 dialogs by
+ *   keyboard AND 0 by mouse, because selecting the item closes the menu and
+ *   the dialog unmounts with it.
+ * - `UserFormTrigger` as a plain child of the menu content — the dialog opens,
+ *   but the MENU STAYS OPEN behind it (`data-open` still set) and its
+ *   `useTypeahead` handler `preventDefault`s every printable keydown, so the
+ *   dialog cannot be typed into. That is why the dialog is hoisted out of the
+ *   menu entirely and the item only sets state. The last test below is what
+ *   fails if anyone puts it back.
+ */
+describe("UsersTable — every kebab item is activatable from the keyboard", () => {
+  it("ArrowDown then Enter activates Editar", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[ACTIVE]} />);
+    await openRowMenu(user, "ana");
+
+    await user.keyboard("{ArrowDown}{Enter}");
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Editar usuario");
+  });
+
+  it("ArrowUp then Enter activates Desactivar, the last item", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: {} });
+    render(<UsersTable users={[ACTIVE]} />);
+    await openRowMenu(user, "ana");
+
+    await user.keyboard("{ArrowUp}{Enter}");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].body).toBe(JSON.stringify({ active: false }));
+  });
+
+  // The dialog must be a sibling of the kebab, not a descendant of its menu.
+  // React routes synthetic events along the REACT tree, not the DOM one, so a
+  // dialog portaled from inside the menu still hands its keydowns to the menu's
+  // typeahead, which swallows them. Nothing about the markup shows that.
+  it("the dialog opened from the kebab still accepts typing", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[ACTIVE]} />);
+    await clickRowAction(user, "ana", "Editar");
+    await screen.findByRole("dialog");
+
+    const nameField = screen.getByLabelText("Nombre");
+    await user.clear(nameField);
+    await user.type(nameField, "Ana Nueva");
+
+    expect(nameField).toHaveValue("Ana Nueva");
   });
 });
 
@@ -232,7 +363,7 @@ describe("UsersTable — a throwing refresh is not a connection failure", () => 
     process.on("unhandledRejection", capture);
     try {
       render(<UsersTable users={[ACTIVE]} />);
-      await user.click(within(rowFor("ana")).getByRole("button", { name: "Desactivar" }));
+      await clickRowAction(user, "ana", "Desactivar");
 
       await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
       await vi.waitFor(() => expect(escaped).toContain(boom));
@@ -250,12 +381,14 @@ describe("UsersTable — when the safety guard refuses", () => {
     mockFetch({ status: 400, body: { error: "last_active_admin" } });
     render(<UsersTable users={[ACTIVE]} />);
 
-    await user.click(within(rowFor("ana")).getByRole("button", { name: "Desactivar" }));
+    await clickRowAction(user, "ana", "Desactivar");
 
     expect(await screen.findByRole("alert")).toHaveTextContent("último administrador");
     // The row must not optimistically flip — the server refused, so the user
-    // is still active and the action still available to retry.
-    expect(within(rowFor("ana")).getByRole("button", { name: "Desactivar" })).toBeInTheDocument();
+    // is still active and the action still available to retry. Re-opened,
+    // because selecting an item closes the menu.
+    await openRowMenu(user, "ana");
+    expect(screen.getByRole("menuitem", { name: "Desactivar" })).toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
   });
 
@@ -264,7 +397,7 @@ describe("UsersTable — when the safety guard refuses", () => {
     mockFetch({ status: 400, body: { error: "self_deactivate" } });
     render(<UsersTable users={[ACTIVE]} />);
 
-    await user.click(within(rowFor("ana")).getByRole("button", { name: "Desactivar" }));
+    await clickRowAction(user, "ana", "Desactivar");
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("tu propia cuenta");
@@ -276,7 +409,7 @@ describe("UsersTable — when the safety guard refuses", () => {
     mockFetch({ status: 500, body: {} });
     render(<UsersTable users={[ACTIVE]} />);
 
-    await user.click(within(rowFor("ana")).getByRole("button", { name: "Desactivar" }));
+    await clickRowAction(user, "ana", "Desactivar");
 
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo");
   });
@@ -286,13 +419,17 @@ describe("UsersTable — when the safety guard refuses", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
     render(<UsersTable users={[ACTIVE]} />);
 
-    await user.click(within(rowFor("ana")).getByRole("button", { name: "Desactivar" }));
+    await clickRowAction(user, "ana", "Desactivar");
 
     // The FULL sentence, not a prefix: `CONNECTION_ERROR` is shared by six
     // surfaces now, and a substring match lets its tail be rewritten with
     // this file still green.
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo conectar. Revisa tu conexión e intenta de nuevo.");
-    expect(within(rowFor("ana")).getByRole("button", { name: "Desactivar" })).toBeEnabled();
+    // `aria-disabled`, not `toBeEnabled()`: a `DropdownMenuItem` is a div, and
+    // `toBeDisabled` only reads the `disabled` ATTRIBUTE, so it passes on any
+    // div forever and would prove nothing.
+    await openRowMenu(user, "ana");
+    expect(screen.getByRole("menuitem", { name: "Desactivar" })).not.toHaveAttribute("aria-disabled", "true");
   });
 });
 
@@ -464,5 +601,239 @@ describe("UsersTable — column sorting", () => {
     for (const name of ["Usuario", "Nombre", "Email", "Rol", "Estado"]) {
       expect(screen.getByRole("button", { name })).toBeInTheDocument();
     }
+  });
+});
+
+/**
+ * table-redesign WU5 — bulk activate/deactivate, and the admin-floor invariant
+ * that makes SEQUENCING a safety property rather than a politeness (design D2,
+ * `user-management` delta).
+ *
+ * **The fake API below is stateful on purpose, and that is the whole test.**
+ * A `fetch` that always answers 200 cannot tell a sequential loop apart from a
+ * concurrent one, so a test written against one is a placebo. This one models
+ * the two things that turn the admin floor into a RACE:
+ *
+ * 1. `deactivateUser()` re-reads the active-administrador set INSIDE its own
+ *    transaction, per call (`account/service.ts:468-475`);
+ * 2. under `read committed` there is a window between that read and the
+ *    COMMIT — `await Promise.resolve()` below IS that window. Without it the
+ *    fake would commit synchronously, `Promise.all` at the call site would
+ *    still serialise the check, and the 5.6 mutation would pass green.
+ *
+ * The decision itself is the REAL `checkAdminSafety`, imported rather than
+ * reimplemented: a hand-rolled copy of the two rules would drift from the one
+ * the route actually enforces.
+ */
+describe("UsersTable — bulk activate/deactivate (WU5)", () => {
+  function json(status: number, body: unknown) {
+    return { ok: status >= 200 && status < 300, status, json: async () => body };
+  }
+
+  type FakeUser = { id: string; role: string; active: boolean };
+
+  /**
+   * `actorId` is the session identity the route reads, NOT anything the client
+   * sends — the client never learns who it is, which is precisely why the
+   * per-row refusal has to come back from the server.
+   */
+  function fakeUsersApi(actorId: string, table: readonly FakeUser[]) {
+    const rows = new Map(table.map((u) => [u.id, { ...u }]));
+    const activeAdminIds = () =>
+      [...rows.values()].filter((u) => u.role === "administrador" && u.active).map((u) => u.id);
+
+    const fetchMock = vi.fn(async (url: string, init: { body: string }) => {
+      const id = url.slice(url.lastIndexOf("/") + 1);
+      const { active } = JSON.parse(init.body) as { active: boolean };
+      const row = rows.get(id);
+      if (!row) return json(404, { error: "not_found" });
+
+      if (active) {
+        // `reactivateUser()` never calls `checkAdminSafety` — raising the
+        // count can never violate the floor, so there is no transaction here.
+        row.active = true;
+        return json(200, { success: true });
+      }
+
+      // TX BEGINS — the precondition read.
+      const admins = activeAdminIds();
+      // …and the window between that read and the COMMIT below.
+      await Promise.resolve();
+      const violation = checkAdminSafety({
+        actorId,
+        targetId: id,
+        operation: "deactivate",
+        activeAdminIds: admins,
+      });
+      if (violation) return json(400, { error: violation });
+      row.active = false; // COMMIT
+      return json(200, { success: true });
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+    return { fetchMock, activeAdminIds, rows };
+  }
+
+  /** `PATCH /api/users/<id>` bodies, in the order the runner issued them. */
+  function patchesInOrder(fetchMock: ReturnType<typeof vi.fn>) {
+    return fetchMock.mock.calls.map(([url, init]) => ({
+      id: String(url).slice(String(url).lastIndexOf("/") + 1),
+      ...(JSON.parse((init as { body: string }).body) as { active: boolean }),
+    }));
+  }
+
+  const admin = (id: string, username: string, active = true): UserRow => ({
+    id,
+    username,
+    name: null,
+    email: null,
+    role: "administrador",
+    deactivatedAt: active ? null : "2026-01-01T00:00:00.000Z",
+  });
+  const tech = (id: string, username: string, active = true): UserRow => ({
+    ...admin(id, username, active),
+    role: "tecnico",
+  });
+
+  async function select(user: User, ...usernames: string[]) {
+    for (const username of usernames) {
+      await user.click(screen.getByRole("checkbox", { name: `Seleccionar ${username}` }));
+    }
+  }
+
+  /** The result panel, which is the second `role="status"` region on screen. */
+  function resultPanel() {
+    return screen.getByText(/Se aplic/).closest("[role='status']") as HTMLElement;
+  }
+
+  /**
+   * The user-management spec is explicit that a mixed selection must never be
+   * resolved by one button guessing per row: "Activar" and "Desactivar" are
+   * two always-available actions.
+   */
+  it("offers Activar and Desactivar as two separate, always-available actions", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    await user.click(screen.getByLabelText("Mostrar inactivos"));
+
+    await select(user, "ana", "beto");
+
+    expect(screen.getByRole("button", { name: "Activar" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Desactivar" })).toBeEnabled();
+    // Neither is a per-row inference wearing a bulk label.
+    expect(screen.queryByRole("button", { name: "Reactivar" })).not.toBeInTheDocument();
+  });
+
+  /**
+   * THE binding safety property. Two active administrators, both selected: one
+   * deactivation lands, the second is refused with `last_active_admin`, and the
+   * workshop is left with an administrator.
+   *
+   * The acting admin is deliberately NOT one of the two. `checkAdminSafety`
+   * refuses a self-deactivation before it ever reaches the floor rule, so an
+   * actor inside the selection would exercise rule 1 and never rule 2 — the
+   * scenario would look green while testing nothing about the count.
+   *
+   * Asserted against the injected `fetch` (call order and count) as well as
+   * the panel: a panel-only assertion cannot tell one refused PATCH apart from
+   * one that was never issued.
+   */
+  it("deactivates exactly one of the last two administrators and refuses the other", async () => {
+    const user = userEvent.setup();
+    const { fetchMock, activeAdminIds } = fakeUsersApi("u-otro", [
+      { id: "u-1", role: "administrador", active: true },
+      { id: "u-2", role: "administrador", active: true },
+    ]);
+
+    render(<UsersTable users={[admin("u-1", "ana"), admin("u-2", "beto")]} />);
+    await select(user, "ana", "beto");
+    await user.click(screen.getByRole("button", { name: "Desactivar" }));
+
+    // One request per row, in selection order — never a batched read.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(patchesInOrder(fetchMock)).toEqual([
+      { id: "u-1", active: false },
+      { id: "u-2", active: false },
+    ]);
+
+    // The invariant itself, read off the fake server rather than off the UI.
+    expect(activeAdminIds()).toEqual(["u-2"]);
+
+    const panel = await screen.findByText("No se puede desactivar al último administrador activo.", {
+      exact: false,
+    });
+    expect(panel).toBeInTheDocument();
+    expect(within(resultPanel()).getByText("beto")).toBeInTheDocument();
+    expect(resultPanel()).toHaveTextContent("Se aplicó 1 fila");
+  });
+
+  /**
+   * Self-inclusion is refused per row, not for the whole batch
+   * (`user-management` spec Scenario).
+   */
+  it("processes the other rows and refuses the actor's own account", async () => {
+    const user = userEvent.setup();
+    const { fetchMock, rows } = fakeUsersApi("u-1", [
+      { id: "u-1", role: "administrador", active: true },
+      { id: "u-2", role: "tecnico", active: true },
+      { id: "u-3", role: "tecnico", active: true },
+      { id: "u-4", role: "tecnico", active: true },
+      { id: "u-5", role: "tecnico", active: true },
+    ]);
+
+    render(
+      <UsersTable
+        users={[
+          admin("u-1", "ana"),
+          tech("u-2", "beto"),
+          tech("u-3", "caro"),
+          tech("u-4", "dani"),
+          tech("u-5", "elo"),
+        ]}
+      />,
+    );
+    await select(user, "ana", "beto", "caro", "dani", "elo");
+    await user.click(screen.getByRole("button", { name: "Desactivar" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
+    expect(resultPanel()).toHaveTextContent("Se aplicaron 4 filas");
+    expect(within(resultPanel()).getByText("ana")).toBeInTheDocument();
+    expect(
+      within(resultPanel()).getByText(/No puedes desactivar tu propia cuenta/),
+    ).toBeInTheDocument();
+    // The other four really did apply — a batch that aborted on the refusal
+    // would also show one failure.
+    expect([...rows.values()].filter((r) => r.active).map((r) => r.id)).toEqual(["u-1"]);
+  });
+
+  /**
+   * A mixed selection: "Desactivar" leaves the already-inactive row a no-op
+   * success, never a reported failure (`user-management` spec Scenario). The
+   * client cannot know which rows are already inactive — it must issue the
+   * PATCH for every selected row and let the server answer.
+   */
+  it("reports an already-inactive row as a no-op, not a failure", async () => {
+    const user = userEvent.setup();
+    const { fetchMock } = fakeUsersApi("u-otro", [
+      { id: "u-1", role: "administrador", active: true },
+      { id: "u-2", role: "tecnico", active: true },
+      { id: "u-3", role: "tecnico", active: false },
+    ]);
+
+    render(
+      <UsersTable users={[admin("u-1", "ana"), tech("u-2", "beto"), tech("u-3", "caro", false)]} />,
+    );
+    await user.click(screen.getByLabelText("Mostrar inactivos"));
+    await select(user, "beto", "caro");
+    await user.click(screen.getByRole("button", { name: "Desactivar" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    // The already-inactive row was still sent, not silently dropped.
+    expect(patchesInOrder(fetchMock)).toEqual([
+      { id: "u-2", active: false },
+      { id: "u-3", active: false },
+    ]);
+    expect(resultPanel()).toHaveTextContent("Se aplicaron 2 filas");
+    expect(within(resultPanel()).queryByRole("listitem")).not.toBeInTheDocument();
   });
 });
