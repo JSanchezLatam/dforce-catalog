@@ -29,6 +29,10 @@ vi.mock("@/modules/customer-import/CustomerSyncPanel", () => ({
   ),
 }));
 vi.mock("@/modules/customers/CustomerFilters", () => ({ CustomerFilters: () => null }));
+// WU5's bulk buttons call `router.refresh()` after the run, exactly as the
+// row-level `toggleActive` in `UsersTable` already does. Nothing else on this
+// page uses the App Router, which is why this mock did not exist before.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const can = vi.hoisted(() => vi.fn<(user: unknown, action: string) => boolean>(() => true));
 const listClientes = vi.hoisted(() => vi.fn());
@@ -687,5 +691,137 @@ describe("CustomersPage — cross-page selection and the filter rule (WU4)", () 
 
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(screen.queryByText(/Se limpió la selección/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * table-redesign WU5 — bulk activar/desactivar over the EXISTING per-row route
+ * (`customer-management` delta, design D1).
+ *
+ * There is no bulk endpoint and no batched `UPDATE`: the whole transport is a
+ * sequential client loop over `PATCH /api/customers/[id]` with `{active}`, so
+ * every row's precondition is re-read inside its own request and every row's
+ * answer is reported on its own. These tests assert against the injected
+ * `fetch` — one call per selected id, in selection order — because the panel
+ * alone cannot tell a row that was refused apart from one never sent.
+ */
+describe("CustomersPage — bulk activar/desactivar (WU5)", () => {
+  const PAGE = [
+    row({ id: "c1", name: "Ana Gómez" }),
+    row({ id: "c2", name: "Beto Ruiz" }),
+  ];
+
+  beforeEach(() => {
+    listClientes.mockClear();
+    countClientes.mockClear();
+    vi.unstubAllGlobals();
+  });
+
+  function renderAt(items = PAGE) {
+    listClientes.mockResolvedValue(items);
+    countClientes.mockResolvedValue(40);
+    return CustomersPage({ searchParams: Promise.resolve({}) });
+  }
+
+  /**
+   * Keyed by id, so a per-row answer is declared rather than ordered — an
+   * ordered `mockResolvedValueOnce` chain would silently pass whichever
+   * response was left over if the loop ever issued the calls in another order,
+   * which is the very thing being asserted.
+   */
+  function mockCustomersApi(byId: Record<string, { status: number; body?: unknown }> = {}) {
+    const fetchMock = vi.fn(async (url: string) => {
+      const id = url.slice(url.lastIndexOf("/") + 1);
+      const answer = byId[id] ?? { status: 200, body: { cliente: { id } } };
+      return {
+        ok: answer.status >= 200 && answer.status < 300,
+        status: answer.status,
+        json: async () => answer.body ?? {},
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  function patchesInOrder(fetchMock: ReturnType<typeof vi.fn>) {
+    return fetchMock.mock.calls.map(([url, init]) => ({
+      id: String(url).slice(String(url).lastIndexOf("/") + 1),
+      method: (init as { method: string }).method,
+      ...(JSON.parse((init as { body: string }).body) as { active: boolean }),
+    }));
+  }
+
+  function resultPanel() {
+    return screen.getByText(/Se aplic/).closest("[role='status']") as HTMLElement;
+  }
+
+  async function selectAndRun(user: ReturnType<typeof userEvent.setup>, action: string, ...names: string[]) {
+    for (const name of names) {
+      await user.click(screen.getByRole("checkbox", { name: `Seleccionar ${name}` }));
+    }
+    await user.click(screen.getByRole("button", { name: action }));
+  }
+
+  it("sends one PATCH per selected customer, in selection order, never a batch", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockCustomersApi();
+    render(await renderAt());
+
+    await selectAndRun(user, "Desactivar", "Ana Gómez", "Beto Ruiz");
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(patchesInOrder(fetchMock)).toEqual([
+      { id: "c1", method: "PATCH", active: false },
+      { id: "c2", method: "PATCH", active: false },
+    ]);
+  });
+
+  it("sends {active:true} for Activar, the same route the row action already uses", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockCustomersApi();
+    render(await renderAt());
+
+    await selectAndRun(user, "Activar", "Ana Gómez");
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(patchesInOrder(fetchMock)).toEqual([{ id: "c1", method: "PATCH", active: true }]);
+  });
+
+  /**
+   * Spec Scenario "Already-deactivated rows are a silent success, not a
+   * failure". `setDeactivatedAtDb` writes through a `coalesce`, so the route
+   * answers 200 for a row that was already deactivated — the client must
+   * report that as applied and must not invent a failure, nor skip the row.
+   */
+  it("counts an already-deactivated row as applied and lists no failure", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockCustomersApi();
+    render(await renderAt([PAGE[0], row({ id: "c2", name: "Beto Ruiz", deactivatedAt: new Date("2026-01-01") })]));
+
+    await selectAndRun(user, "Desactivar", "Ana Gómez", "Beto Ruiz");
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(resultPanel()).toHaveTextContent("Se aplicaron 2 filas");
+    expect(within(resultPanel()).queryByRole("listitem")).not.toBeInTheDocument();
+  });
+
+  /**
+   * Spec Scenario "Partial success on invalid rows". A row another session
+   * deleted answers 404 `not_found`; the rest of the batch still applies and
+   * the panel NAMES the missing row with its own reason — "1 no se pudo" with
+   * no name is explicitly not acceptable.
+   */
+  it("names a since-deleted customer and still applies the rest of the batch", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockCustomersApi({ c2: { status: 404, body: { error: "not_found" } } });
+    render(await renderAt());
+
+    await selectAndRun(user, "Desactivar", "Ana Gómez", "Beto Ruiz");
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(resultPanel()).toHaveTextContent("Se aplicó 1 fila");
+    const failure = within(resultPanel()).getByRole("listitem");
+    expect(failure).toHaveTextContent("Beto Ruiz");
+    expect(failure).toHaveTextContent("Ese cliente ya no existe. Recargá la página.");
   });
 });

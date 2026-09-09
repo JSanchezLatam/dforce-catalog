@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, Eye, Users } from "lucide-react";
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { CustomerSyncPanel } from "@/modules/customer-import/CustomerSyncPanel";
+import { CustomerBulkActions } from "@/modules/customers/CustomerBulkActions";
 import { CustomerFilters } from "@/modules/customers/CustomerFilters";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
 import {
@@ -166,8 +167,10 @@ export default async function CustomersPage({
           "se limpió la selección" notice with it, in precisely the case the
           notice exists to explain. */}
       <SelectionProvider pageIds={pageIds} labels={labels} filterKey={buildFilterKey(filters)}>
-        <SelectionBar />
-        <BulkResultPanel />
+        <SelectionBar>
+          <CustomerBulkActions />
+        </SelectionBar>
+        <BulkResultPanel reasons={CUSTOMER_REFUSAL_MESSAGES} />
         {items.length === 0 ? (
         <Card size="sm">
           <CardContent>
@@ -354,6 +357,26 @@ export default async function CustomersPage({
     </div>
   );
 }
+
+/**
+ * The bulk panel's refusal vocabulary — injected, never owned by the panel
+ * (design D4). Only the codes `PATCH /api/customers/[id]` can actually answer
+ * with for an `{active}` body are here; an unmapped code renders as the raw
+ * code, which a reader can grep for, rather than as a generic sentence that
+ * tells them nothing.
+ *
+ * `cliente_deactivated` is deliberately absent: `setActivation` never raises
+ * it — deactivating an already-deactivated customer is a `coalesce` and a 200
+ * — and listing a code the route cannot return here would be a claim nobody
+ * checked.
+ */
+const CUSTOMER_REFUSAL_MESSAGES: Record<string, string> = {
+  not_found: "Ese cliente ya no existe. Recargá la página.",
+  Forbidden: "No tenés permiso para cambiar el estado de este cliente.",
+  // `runSequential`'s own code for a `fetch` that threw — the only reason
+  // reaching the panel that no route produced.
+  request_failed: "No se pudo conectar con el servidor. Intentá de nuevo.",
+};
 
 /**
  * The canonical serialisation of the ACTIVE FILTERS — and of nothing else.

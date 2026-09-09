@@ -4,9 +4,10 @@
  * action each row offers, and what happens when the safety guard refuses.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { checkAdminSafety } from "./service";
 import { UsersTable, type UserRow } from "./UsersTable";
 
 const refresh = vi.fn();
@@ -86,20 +87,24 @@ async function clickRowAction(user: User, username: string, action: string) {
   await user.click(await screen.findByRole("menuitem", { name: action }));
 }
 
-/** Body rows, in render order, read back through their first cell (Usuario). */
-function usernamesInOrder() {
-  return screen
-    .getAllByRole("row")
-    .slice(1)
-    .map((row) => within(row).getAllByRole("cell")[0].textContent);
-}
-
-/** Cell `n` of every body row, in render order. */
+/**
+ * Cell `n` of every body row, in render order, where `n` counts the DATA
+ * columns — Usuario is 0.
+ *
+ * The `+ 1` is the selection checkbox WU5 put in front of them. Absorbing it
+ * here rather than at 15 call sites keeps every assertion below reading in
+ * terms of the column an operator sees.
+ */
 function columnInOrder(index: number) {
   return screen
     .getAllByRole("row")
     .slice(1)
-    .map((row) => within(row).getAllByRole("cell")[index].textContent);
+    .map((row) => within(row).getAllByRole("cell")[index + 1].textContent);
+}
+
+/** Body rows, in render order, read back through their first cell (Usuario). */
+function usernamesInOrder() {
+  return columnInOrder(0);
 }
 
 function activeUser(overrides: Partial<UserRow> & { id: string; username: string }): UserRow {
@@ -596,5 +601,239 @@ describe("UsersTable — column sorting", () => {
     for (const name of ["Usuario", "Nombre", "Email", "Rol", "Estado"]) {
       expect(screen.getByRole("button", { name })).toBeInTheDocument();
     }
+  });
+});
+
+/**
+ * table-redesign WU5 — bulk activate/deactivate, and the admin-floor invariant
+ * that makes SEQUENCING a safety property rather than a politeness (design D2,
+ * `user-management` delta).
+ *
+ * **The fake API below is stateful on purpose, and that is the whole test.**
+ * A `fetch` that always answers 200 cannot tell a sequential loop apart from a
+ * concurrent one, so a test written against one is a placebo. This one models
+ * the two things that turn the admin floor into a RACE:
+ *
+ * 1. `deactivateUser()` re-reads the active-administrador set INSIDE its own
+ *    transaction, per call (`account/service.ts:468-475`);
+ * 2. under `read committed` there is a window between that read and the
+ *    COMMIT — `await Promise.resolve()` below IS that window. Without it the
+ *    fake would commit synchronously, `Promise.all` at the call site would
+ *    still serialise the check, and the 5.6 mutation would pass green.
+ *
+ * The decision itself is the REAL `checkAdminSafety`, imported rather than
+ * reimplemented: a hand-rolled copy of the two rules would drift from the one
+ * the route actually enforces.
+ */
+describe("UsersTable — bulk activate/deactivate (WU5)", () => {
+  function json(status: number, body: unknown) {
+    return { ok: status >= 200 && status < 300, status, json: async () => body };
+  }
+
+  type FakeUser = { id: string; role: string; active: boolean };
+
+  /**
+   * `actorId` is the session identity the route reads, NOT anything the client
+   * sends — the client never learns who it is, which is precisely why the
+   * per-row refusal has to come back from the server.
+   */
+  function fakeUsersApi(actorId: string, table: readonly FakeUser[]) {
+    const rows = new Map(table.map((u) => [u.id, { ...u }]));
+    const activeAdminIds = () =>
+      [...rows.values()].filter((u) => u.role === "administrador" && u.active).map((u) => u.id);
+
+    const fetchMock = vi.fn(async (url: string, init: { body: string }) => {
+      const id = url.slice(url.lastIndexOf("/") + 1);
+      const { active } = JSON.parse(init.body) as { active: boolean };
+      const row = rows.get(id);
+      if (!row) return json(404, { error: "not_found" });
+
+      if (active) {
+        // `reactivateUser()` never calls `checkAdminSafety` — raising the
+        // count can never violate the floor, so there is no transaction here.
+        row.active = true;
+        return json(200, { success: true });
+      }
+
+      // TX BEGINS — the precondition read.
+      const admins = activeAdminIds();
+      // …and the window between that read and the COMMIT below.
+      await Promise.resolve();
+      const violation = checkAdminSafety({
+        actorId,
+        targetId: id,
+        operation: "deactivate",
+        activeAdminIds: admins,
+      });
+      if (violation) return json(400, { error: violation });
+      row.active = false; // COMMIT
+      return json(200, { success: true });
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+    return { fetchMock, activeAdminIds, rows };
+  }
+
+  /** `PATCH /api/users/<id>` bodies, in the order the runner issued them. */
+  function patchesInOrder(fetchMock: ReturnType<typeof vi.fn>) {
+    return fetchMock.mock.calls.map(([url, init]) => ({
+      id: String(url).slice(String(url).lastIndexOf("/") + 1),
+      ...(JSON.parse((init as { body: string }).body) as { active: boolean }),
+    }));
+  }
+
+  const admin = (id: string, username: string, active = true): UserRow => ({
+    id,
+    username,
+    name: null,
+    email: null,
+    role: "administrador",
+    deactivatedAt: active ? null : "2026-01-01T00:00:00.000Z",
+  });
+  const tech = (id: string, username: string, active = true): UserRow => ({
+    ...admin(id, username, active),
+    role: "tecnico",
+  });
+
+  async function select(user: User, ...usernames: string[]) {
+    for (const username of usernames) {
+      await user.click(screen.getByRole("checkbox", { name: `Seleccionar ${username}` }));
+    }
+  }
+
+  /** The result panel, which is the second `role="status"` region on screen. */
+  function resultPanel() {
+    return screen.getByText(/Se aplic/).closest("[role='status']") as HTMLElement;
+  }
+
+  /**
+   * The user-management spec is explicit that a mixed selection must never be
+   * resolved by one button guessing per row: "Activar" and "Desactivar" are
+   * two always-available actions.
+   */
+  it("offers Activar and Desactivar as two separate, always-available actions", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    await user.click(screen.getByLabelText("Mostrar inactivos"));
+
+    await select(user, "ana", "beto");
+
+    expect(screen.getByRole("button", { name: "Activar" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Desactivar" })).toBeEnabled();
+    // Neither is a per-row inference wearing a bulk label.
+    expect(screen.queryByRole("button", { name: "Reactivar" })).not.toBeInTheDocument();
+  });
+
+  /**
+   * THE binding safety property. Two active administrators, both selected: one
+   * deactivation lands, the second is refused with `last_active_admin`, and the
+   * workshop is left with an administrator.
+   *
+   * The acting admin is deliberately NOT one of the two. `checkAdminSafety`
+   * refuses a self-deactivation before it ever reaches the floor rule, so an
+   * actor inside the selection would exercise rule 1 and never rule 2 — the
+   * scenario would look green while testing nothing about the count.
+   *
+   * Asserted against the injected `fetch` (call order and count) as well as
+   * the panel: a panel-only assertion cannot tell one refused PATCH apart from
+   * one that was never issued.
+   */
+  it("deactivates exactly one of the last two administrators and refuses the other", async () => {
+    const user = userEvent.setup();
+    const { fetchMock, activeAdminIds } = fakeUsersApi("u-otro", [
+      { id: "u-1", role: "administrador", active: true },
+      { id: "u-2", role: "administrador", active: true },
+    ]);
+
+    render(<UsersTable users={[admin("u-1", "ana"), admin("u-2", "beto")]} />);
+    await select(user, "ana", "beto");
+    await user.click(screen.getByRole("button", { name: "Desactivar" }));
+
+    // One request per row, in selection order — never a batched read.
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(patchesInOrder(fetchMock)).toEqual([
+      { id: "u-1", active: false },
+      { id: "u-2", active: false },
+    ]);
+
+    // The invariant itself, read off the fake server rather than off the UI.
+    expect(activeAdminIds()).toEqual(["u-2"]);
+
+    const panel = await screen.findByText("No se puede desactivar al último administrador activo.", {
+      exact: false,
+    });
+    expect(panel).toBeInTheDocument();
+    expect(within(resultPanel()).getByText("beto")).toBeInTheDocument();
+    expect(resultPanel()).toHaveTextContent("Se aplicó 1 fila");
+  });
+
+  /**
+   * Self-inclusion is refused per row, not for the whole batch
+   * (`user-management` spec Scenario).
+   */
+  it("processes the other rows and refuses the actor's own account", async () => {
+    const user = userEvent.setup();
+    const { fetchMock, rows } = fakeUsersApi("u-1", [
+      { id: "u-1", role: "administrador", active: true },
+      { id: "u-2", role: "tecnico", active: true },
+      { id: "u-3", role: "tecnico", active: true },
+      { id: "u-4", role: "tecnico", active: true },
+      { id: "u-5", role: "tecnico", active: true },
+    ]);
+
+    render(
+      <UsersTable
+        users={[
+          admin("u-1", "ana"),
+          tech("u-2", "beto"),
+          tech("u-3", "caro"),
+          tech("u-4", "dani"),
+          tech("u-5", "elo"),
+        ]}
+      />,
+    );
+    await select(user, "ana", "beto", "caro", "dani", "elo");
+    await user.click(screen.getByRole("button", { name: "Desactivar" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
+    expect(resultPanel()).toHaveTextContent("Se aplicaron 4 filas");
+    expect(within(resultPanel()).getByText("ana")).toBeInTheDocument();
+    expect(
+      within(resultPanel()).getByText(/No puedes desactivar tu propia cuenta/),
+    ).toBeInTheDocument();
+    // The other four really did apply — a batch that aborted on the refusal
+    // would also show one failure.
+    expect([...rows.values()].filter((r) => r.active).map((r) => r.id)).toEqual(["u-1"]);
+  });
+
+  /**
+   * A mixed selection: "Desactivar" leaves the already-inactive row a no-op
+   * success, never a reported failure (`user-management` spec Scenario). The
+   * client cannot know which rows are already inactive — it must issue the
+   * PATCH for every selected row and let the server answer.
+   */
+  it("reports an already-inactive row as a no-op, not a failure", async () => {
+    const user = userEvent.setup();
+    const { fetchMock } = fakeUsersApi("u-otro", [
+      { id: "u-1", role: "administrador", active: true },
+      { id: "u-2", role: "tecnico", active: true },
+      { id: "u-3", role: "tecnico", active: false },
+    ]);
+
+    render(
+      <UsersTable users={[admin("u-1", "ana"), tech("u-2", "beto"), tech("u-3", "caro", false)]} />,
+    );
+    await user.click(screen.getByLabelText("Mostrar inactivos"));
+    await select(user, "beto", "caro");
+    await user.click(screen.getByRole("button", { name: "Desactivar" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    // The already-inactive row was still sent, not silently dropped.
+    expect(patchesInOrder(fetchMock)).toEqual([
+      { id: "u-2", active: false },
+      { id: "u-3", active: false },
+    ]);
+    expect(resultPanel()).toHaveTextContent("Se aplicaron 2 filas");
+    expect(within(resultPanel()).queryByRole("listitem")).not.toBeInTheDocument();
   });
 });

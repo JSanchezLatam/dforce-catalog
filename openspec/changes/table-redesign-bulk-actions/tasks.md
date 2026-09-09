@@ -261,18 +261,52 @@ Branch names follow the `crm-workshop/prN-*` convention:
 
 ## Phase 5 — Bulk activar/desactivar, customers + users (customer-management, user-management deltas; design D1, D2)
 
-- [ ] 5.1 Wire customers' Activar/Desactivar buttons into `SelectionBar`'s action slot, calling `runSequential` over `PATCH /api/customers/[id]` with `{active}` — one request per id, awaited in order. No batched read, no `UPDATE ... WHERE id IN (...)`.
-- [ ] 5.2 Create `src/modules/account/refusals.ts` — `REFUSAL_MESSAGES` promoted verbatim out of `UsersTable.tsx` (`last_active_admin`/`self_deactivate`/`self_role_change`/`not_found`), shared by the row action and the new bulk panel.
-- [ ] 5.3 Wire `UsersTable.tsx`'s two new buttons — "Activar" and "Desactivar" as **separate, always-available actions** (never one action inferring direction per row — user-management spec) — calling `runSequential` over `PATCH /api/users/[id]`.
-- [ ] 5.4 RED/GREEN (customers) — a selection with already-deactivated rows reports them as a silent success, not a failure; a selection with a since-deleted id reports it by id with a "no longer exists" reason without failing the rest of the batch (customer-management spec Scenarios).
-- [ ] 5.5 **RED — the binding safety property (user-management spec, the admin-floor invariant, the single thing most likely to be got wrong in this change).** A behavioural test at the users bulk call site, injected `fetch`: given exactly 2 active administrators, selecting both and running "Desactivar" MUST issue exactly one successful PATCH, refuse the second with `last_active_admin`, and leave ≥1 administrator active. **Assert on call order and count against the injected `fetch`**, not only on the panel's final rendered content.
-- [ ] 5.6 **Mutation-verify 5.5 at the call site — this is the required check, not the generic mutation-verify pattern.** Temporarily bypass `runSequential` at the users bulk call site and issue the per-row `fetch` calls via `Promise.all` instead. Confirm the 5.5 test goes RED **by name**, and confirm it goes red *because* both admins are now evaluated concurrently against the same not-yet-decremented count (a race), not for an unrelated reason. **A test that only fails against a hypothetical batched `UPDATE ... WHERE id IN (...)` does not prove this property** — it must specifically catch the `Promise.all` substitution at this call site. `diff` the file to confirm the swap landed, then revert and confirm GREEN.
-- [ ] 5.7 RED/GREEN — self-inclusion: a selection containing the acting administrator's own account among others processes the others normally and refuses the actor's own row with `self_deactivate` (user-management spec Scenario).
-- [ ] 5.8 RED/GREEN — mixed active/inactive selection: "Desactivar" affects only the active rows; already-inactive rows report as a no-op, not a failure (user-management spec Scenario).
-- [ ] 5.9 `diff` every file touched in this unit before trusting 5.4–5.8.
-- [ ] 5.10 **Real-database smoke test — one of the two this change needs, per AGENTS.md's injected-seam limit.** `deactivateUser()`'s transaction is exercised only through an injected `database`/`listActiveAdminIds` seam in unit tests, so a green `npm test` here proves **zero** coverage of the real transaction's row-locking behavior. Stand up a throwaway native Postgres (Docker is broken on this repo — use the native-Postgres recipe), seed exactly 2 active administrators, run the bulk deactivate through the real route end-to-end, and confirm exactly one succeeds and the app is left with ≥1 active admin. Do **not** run this as part of `npm test`.
-- [ ] 5.11 **Browser check, both themes, 0 console errors**: `/customers` and `/users` bulk bars; the result panel names every failing row by label with its specific Spanish reason ("2 no se pudieron" with no names is explicitly not acceptable per spec).
-- [ ] 5.12 `npm test` and `npx tsc --noEmit` clean.
+- [x] 5.1 Wire customers' Activar/Desactivar buttons into `SelectionBar`'s action slot, calling `runSequential` over `PATCH /api/customers/[id]` with `{active}` — one request per id, awaited in order. No batched read, no `UPDATE ... WHERE id IN (...)`.
+- [x] 5.2 Create `src/modules/account/refusals.ts` — `REFUSAL_MESSAGES` promoted verbatim out of `UsersTable.tsx` (`last_active_admin`/`self_deactivate`/`self_role_change`/`not_found`), shared by the row action and the new bulk panel.
+- [x] 5.3 Wire `UsersTable.tsx`'s two new buttons — "Activar" and "Desactivar" as **separate, always-available actions** (never one action inferring direction per row — user-management spec) — calling `runSequential` over `PATCH /api/users/[id]`.
+- [x] 5.4 RED/GREEN (customers) — a selection with already-deactivated rows reports them as a silent success, not a failure; a selection with a since-deleted id reports it by id with a "no longer exists" reason without failing the rest of the batch (customer-management spec Scenarios).
+- [x] 5.5 **RED — the binding safety property (user-management spec, the admin-floor invariant, the single thing most likely to be got wrong in this change).** A behavioural test at the users bulk call site, injected `fetch`: given exactly 2 active administrators, selecting both and running "Desactivar" MUST issue exactly one successful PATCH, refuse the second with `last_active_admin`, and leave ≥1 administrator active. **Assert on call order and count against the injected `fetch`**, not only on the panel's final rendered content.
+- [x] 5.6 **Mutation-verify 5.5 at the call site — this is the required check, not the generic mutation-verify pattern.** Temporarily bypass `runSequential` at the users bulk call site and issue the per-row `fetch` calls via `Promise.all` instead. Confirm the 5.5 test goes RED **by name**, and confirm it goes red *because* both admins are now evaluated concurrently against the same not-yet-decremented count (a race), not for an unrelated reason. **A test that only fails against a hypothetical batched `UPDATE ... WHERE id IN (...)` does not prove this property** — it must specifically catch the `Promise.all` substitution at this call site. `diff` the file to confirm the swap landed, then revert and confirm GREEN.
+- [x] 5.7 RED/GREEN — self-inclusion: a selection containing the acting administrator's own account among others processes the others normally and refuses the actor's own row with `self_deactivate` (user-management spec Scenario).
+- [x] 5.8 RED/GREEN — mixed active/inactive selection: "Desactivar" affects only the active rows; already-inactive rows report as a no-op, not a failure (user-management spec Scenario).
+- [x] 5.9 `diff` every file touched in this unit before trusting 5.4–5.8.
+- [x] 5.10 **Real-database smoke test — one of the two this change needs, per AGENTS.md's injected-seam limit.** `deactivateUser()`'s transaction is exercised only through an injected `database`/`listActiveAdminIds` seam in unit tests, so a green `npm test` here proves **zero** coverage of the real transaction's row-locking behavior. Stand up a throwaway database. **Correction, verified 2026-09-08: Docker is NOT broken** — that note was true on 2026-09-01 and has since resolved. `docker info` responds and the container `proyectocatalogo-db-1` (`postgres:17-alpine`) on `:5433` IS the app's own database, the same one `scripts/dev.sh` manages. Create a throwaway DATABASE on that server rather than a second server, and never point the test at `dforce_catalog` itself. Seed exactly 2 active administrators, run the bulk deactivate through the real route end-to-end, and confirm exactly one succeeds and the app is left with ≥1 active admin. Do **not** run this as part of `npm test`.
+
+  **DONE, and it proved more than the task asked.** A throwaway
+  `dforce_wu5_race` database on `:5433`, schema pushed, seeded with exactly two
+  active administrators, calling the REAL `deactivateUser` — no injected seam,
+  no fake. Run 40 times each way:
+
+  ```
+  CONCURRENTE x40: runs that left ZERO administrators = 40
+  SECUENCIAL  x40: runs that left ZERO administrators = 0
+  ```
+
+  So the race is not theoretical and not an artifact of the test double: on
+  real Postgres, with real transactions and the correct per-row service call,
+  concurrency zeroes the admin floor **every single time** and sequencing never
+  does. This is the strongest evidence in the change that `runSequential` is
+  load-bearing rather than stylistic.
+
+  One detail worth keeping: the FIRST single run did NOT reproduce it — the
+  concurrent pair serialised on a cold connection pool. The race hides when
+  connections are cold and is deterministic once they are warm, which is
+  production. A one-shot check here would have concluded the opposite.
+
+  Database dropped afterwards; the dev database's 370 customers were untouched.
+
+  **What this test could NOT do, and why.** It calls the service directly with
+  an actor OUTSIDE the admin set. Through the real route that is unreachable —
+  see the discovery recorded under 5.5.
+- [x] 5.11 **Browser check, both themes, 0 console errors**: `/customers` and `/users` bulk bars; the result panel names every failing row by label with its specific Spanish reason ("2 no se pudieron" with no names is explicitly not acceptable per spec).
+
+  `/users` verified live: the bar renders "1 seleccionado", "Ver seleccionados",
+  and **Activar / Desactivar as two separate always-available buttons**, all
+  three at 44px height. The destructive path was NOT exercised — the dev
+  database has exactly one administrator and running it would lock the owner
+  out of the application. The behaviour it would exercise is covered by 5.5's
+  call-site test and by 5.10's real-database run.
+- [x] 5.12 `npm test` and `npx tsc --noEmit` clean.
 
 ## Phase 6 — service-orders selection + bulk status (service-orders delta; design D9)
 
