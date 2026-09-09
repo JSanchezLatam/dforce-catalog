@@ -39,13 +39,17 @@ Chain strategy: feature-branch-chain
 |---|---|---|---|---|---|
 | 1 | Intake form: picker clear-on-select + deselect (D6); textarea + label (spec "Description Field and Appointment Label"); parts section removed; `observaciones` through form → route → `createOrder` (D7) | PR 1 (base: tracker) | `npx vitest run CustomerPicker ServiceOrderForm service.test` | Browser check, both themes — create-order dialog | Reverting restores the parts cart and single-line description; no DB rows depend on it |
 | 2 | Inline vehicle creation: `POST /api/customers/[id]/vehicles` + `createVehiculo` (D1/D2/D3), `VehicleQuickForm` (D4), year-string guard (D10) | PR 2 (base: PR 1) | `npx vitest run vehicles.test route.test` + `npm run test:e2e -- full-flow` | **e2e is required, not optional** — real Postgres, customer with 3+ active vehicles | Reverting removes the `POST` route; inserted vehicles are ordinary rows and survive the revert |
-| 3 | Printed order: print page, `PrintButton`, `@media print` shell rule, Imprimir link (D8/D9) | PR 3 (base: PR 2) | `npx vitest run print` | **N/A by test — real browser print preview is the verification** (jsdom cannot see `@media print` or `window.print()`) | Reverting removes the print route, the button and the CSS block; zero new SQL to unwind |
-| 4 | Edit entry point gated by role + status: `edit-policy.ts`, detail-page mount, `PATCH` route gate (D11) | PR 4 (base: PR 3) | `npx vitest run edit-policy "service-orders/[id]"` | Browser check — dialog opens on a real order across roles/statuses (RSC mount, invisible to jsdom) | Reverting removes the edit control and the route's status check; `updateOrder`/the PATCH route stay exactly as they are today |
+| 3 | Printed order: print page, `PrintButton`, `@media print` shell rule, Imprimir link (D8/D9) | PR 3 (base: PR 4 — see Delivery order) | `npx vitest run print` | **N/A by test — real browser print preview is the verification** (jsdom cannot see `@media print` or `window.print()`) | Reverting removes the print route, the button and the CSS block; zero new SQL to unwind |
+| 4 | Edit entry point gated by role + status: `edit-policy.ts`, detail-page mount, `PATCH` route gate (D11) | PR 4 (base: PR 2 — see Delivery order) | `npx vitest run edit-policy "service-orders/[id]"` | Browser check — dialog opens on a real order across roles/statuses (RSC mount, invisible to jsdom) | Reverting removes the edit control and the route's status check; `updateOrder`/the PATCH route stay exactly as they are today |
 
 ```
 tracker (draft, no-merge)
-  └── 1 intake ── 2 vehicle insert ── 3 print ── 4 edit gate
+  └── 1 intake ── 2 vehicle insert ── 4 edit gate ── 3 print
 ```
+
+The chain above is the LANDING order (1 → 2 → 4 → 3), which is what a PR base
+has to follow. The unit numbers are phase numbers and deliberately do not run
+in sequence — see "Delivery order" below for why.
 
 ## Delivery order — by what it unblocks, not by phase number
 
@@ -368,6 +372,14 @@ spec: *Order Editing Is Gated by Role and Current Status*; design D11)
   worth closing.
 - A print sheet for a batch of orders, if one-at-a-time printing becomes the
   complaint.
+- **`ServiceOrderForm`'s `products` prop, and the query that feeds it.** The
+  prop is dead since the parts cart came out of creation (D7) but is kept on
+  the type so `ServiceOrderFormTrigger` and `/service-orders/page.tsx` still
+  compile. `page.tsx:78` still fetches the product list into that
+  `Promise.all` and passes it at `:103` — **a live database round trip per
+  page load feeding a prop nobody reads.** Removing the prop, the argument and
+  the query is one deletion, deferred only because it belongs to WU1's files
+  and WU1 is already open as PR #99.
 - **Unbounded `text` on `plate`/`make`/`model`** on both vehicle write paths
   (design Open Question) — a `MAX_TEXT_LENGTH` bound belongs on both routes
   together, not only the new one.

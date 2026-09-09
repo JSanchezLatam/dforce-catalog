@@ -49,13 +49,17 @@ function bodyOf(fetchMock: ReturnType<typeof vi.fn>, call = 0) {
 
 async function openAndFill(
   user: ReturnType<typeof userEvent.setup>,
-  fields: { placa?: string; marca?: string; modelo?: string; año?: string } = { placa: "NEW111" },
+  // Keys in English (AGENTS.md's split is by AUDIENCE: this helper's audience
+  // is the code). The Spanish lives only where it is a user-facing string —
+  // inside `getByLabelText`, as an argument, exactly as `CustomerForm.test.tsx`
+  // does it.
+  fields: { plate?: string; make?: string; model?: string; year?: string } = { plate: "NEW111" },
 ) {
   await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
-  if (fields.placa) await user.type(screen.getByLabelText("Placa"), fields.placa);
-  if (fields.marca) await user.type(screen.getByLabelText("Marca"), fields.marca);
-  if (fields.modelo) await user.type(screen.getByLabelText("Modelo"), fields.modelo);
-  if (fields.año) await user.type(screen.getByLabelText("Año"), fields.año);
+  if (fields.plate) await user.type(screen.getByLabelText("Placa"), fields.plate);
+  if (fields.make) await user.type(screen.getByLabelText("Marca"), fields.make);
+  if (fields.model) await user.type(screen.getByLabelText("Modelo"), fields.model);
+  if (fields.year) await user.type(screen.getByLabelText("Año"), fields.year);
   await user.click(screen.getByRole("button", { name: "Guardar vehículo" }));
 }
 
@@ -65,7 +69,7 @@ describe("VehicleQuickForm (D4 — a vehicle-only form, by construction)", () =>
     const fetchMock = mockFetch({ status: 201, body: { vehiculo: vehiculo() } });
     render(<VehicleQuickForm clienteId="c1" onCreated={vi.fn()} />);
 
-    await openAndFill(user, { placa: "NEW111", marca: "Toyota" });
+    await openAndFill(user, { plate: "NEW111", make: "Toyota" });
 
     expect(fetchMock).toHaveBeenCalledWith("/api/customers/c1/vehicles", expect.objectContaining({ method: "POST" }));
     // `toEqual`, never `objectContaining`: the point is what is ABSENT.
@@ -76,12 +80,12 @@ describe("VehicleQuickForm (D4 — a vehicle-only form, by construction)", () =>
   // number, and the route now refuses a string rather than dropping it. The
   // form's half of that ruling is this coercion, the same `Number(...)`
   // `CustomerForm.buildPayload` already does.
-  it("coerces año to a number before sending it", async () => {
+  it("coerces the year to a number before sending it", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({ status: 201, body: { vehiculo: vehiculo({ year: 2019 }) } });
     render(<VehicleQuickForm clienteId="c1" onCreated={vi.fn()} />);
 
-    await openAndFill(user, { placa: "NEW111", año: "2019" });
+    await openAndFill(user, { plate: "NEW111", year: "2019" });
 
     expect(bodyOf(fetchMock).year).toBe(2019);
   });
