@@ -50,6 +50,19 @@ export const MAX_PRODUCTS_PER_PAGE = 20; // R5.4
 export const DEFAULT_PRODUCTS_PER_PAGE = 6;
 export const MAX_TOTAL_PRODUCTS = 200; // R5.8/5.9
 
+/**
+ * The one sentence that refuses an over-cap selection.
+ *
+ * Promoted out of `validateCatalogSelection` below the moment it gained a
+ * second caller: `/inventory`'s selection bar refuses the same limit BEFORE
+ * navigating (design D10 point 4), and two hand-written copies of one Spanish
+ * sentence drift the first time anyone rewords either. Same reasoning that
+ * promoted `REFUSAL_MESSAGES` out of `UsersTable.tsx`.
+ */
+export function maxTotalProductsMessage(count: number): string {
+  return `Seleccionaste ${count}, el máximo es ${MAX_TOTAL_PRODUCTS}`;
+}
+
 export class CatalogSelectionValidationError extends Error {
   constructor(public readonly errors: Record<string, string>) {
     super("Invalid catalog selection");
@@ -168,7 +181,7 @@ export function validateCatalogSelection(check: CatalogSelectionCheck): void {
   }
 
   if (check.totalProductCount > MAX_TOTAL_PRODUCTS) {
-    errors.total = `Seleccionaste ${check.totalProductCount}, el máximo es ${MAX_TOTAL_PRODUCTS}`; // R5.8/5.9
+    errors.total = maxTotalProductsMessage(check.totalProductCount); // R5.8/5.9
   }
 
   if (

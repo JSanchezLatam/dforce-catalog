@@ -4,8 +4,12 @@
  * behavior incidentally, but scope stays to sorting (mirrors
  * `customers/page.test.tsx`'s "column sorting" describe block from WU1).
  */
-import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const push = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 vi.mock("@/modules/auth/session", () => ({
   requireSessionFromHeaders: vi.fn(async () => ({ id: "u1", role: "tecnico" })),
@@ -145,5 +149,176 @@ describe("InventoryPage — column sorting", () => {
 
     expect(listInventory.mock.calls[0][2]).toBeUndefined();
     expect(screen.getByRole("link", { name: "Name" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * WU7a — the transport half of inventory → generador (`catalog-generation`
+ * delta, design D10). What is pinned here is the SENDING side only: the ids
+ * that leave, and the refusal that stops them leaving. The builder accepting
+ * them is WU7b.
+ *
+ * `filterKey` is `JSON.stringify(filters)` and `InventoryFilters` has no
+ * `sort`/`page`/`pageSize` member, so the type itself is what keeps a column
+ * click from wiping the operator's selection — the rule `customers/page.tsx`
+ * has to hold by hand in its `buildFilterKey`.
+ */
+describe("InventoryPage — selection and the catalog handoff (WU7a)", () => {
+  const PAGE = [
+    row({ id: "PS0000001", name: "Filtro de aceite" }),
+    row({ id: "PS0000002", name: "Bujía" }),
+  ];
+
+  beforeEach(() => {
+    listInventory.mockClear();
+    push.mockClear();
+    can.mockImplementation(() => true);
+  });
+
+  afterEach(() => {
+    can.mockImplementation(() => true);
+  });
+
+  function renderAt(items = PAGE, params: Record<string, string> = {}) {
+    listInventory.mockResolvedValue({ items, total: items.length });
+    return InventoryPage({ searchParams: Promise.resolve(params) });
+  }
+
+  /**
+   * Let anything pending resolve before asserting a NEGATIVE. A synchronous
+   * `expect(push).not.toHaveBeenCalled()` right after a click passes while the
+   * navigation is one microtask away — the placebo that already got past this
+   * change's unit 4 once.
+   */
+  async function settle() {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+
+  /**
+   * The cap is written out as 201/200 rather than as `MAX_TOTAL_PRODUCTS + 1`.
+   * Taken from the constant, this test follows the constant anywhere: raising
+   * the export to 300 left it green — measured, not assumed — which makes it a
+   * test of the arithmetic, not of the limit. The literals are what fail when
+   * the number moves.
+   */
+  it("refuses to send a selection over the 200 cap, in Spanish, before navigating", async () => {
+    const overCap = Array.from({ length: 201 }, (_, i) =>
+      row({ id: `PS${String(i).padStart(7, "0")}`, name: `Producto ${i}` }),
+    );
+    const user = userEvent.setup();
+    render(await renderAt(overCap));
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar todo lo de esta página" }));
+    await user.click(screen.getByRole("button", { name: "Enviar al generador" }));
+    await settle();
+
+    // The same sentence `validateCatalogSelection` already refuses with, not a
+    // second phrasing of the same limit.
+    expect(screen.getByRole("alert")).toHaveTextContent("Seleccionaste 201, el máximo es 200");
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("allows exactly the cap, which is what pins the comparison's direction", async () => {
+    const atCap = Array.from({ length: 200 }, (_, i) =>
+      row({ id: `PS${String(i).padStart(7, "0")}`, name: `Producto ${i}` }),
+    );
+    const user = userEvent.setup();
+    render(await renderAt(atCap));
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar todo lo de esta página" }));
+    await user.click(screen.getByRole("button", { name: "Enviar al generador" }));
+    await settle();
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(push).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands the builder the selected ids as ?products=, comma separated", async () => {
+    const user = userEvent.setup();
+    render(await renderAt());
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Filtro de aceite" }));
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Bujía" }));
+    await user.click(screen.getByRole("button", { name: "Enviar al generador" }));
+    await settle();
+
+    // The exact URL, not a `toContain`: the ids that leave ARE the feature,
+    // and a builder reading `?products=` cannot see a separator that changed.
+    expect(push).toHaveBeenCalledWith("/builder?products=PS0000001,PS0000002");
+  });
+
+  it("renders a checkbox per row plus a select-all for the current page", async () => {
+    render(await renderAt());
+
+    expect(screen.getByRole("checkbox", { name: "Seleccionar Filtro de aceite" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Seleccionar Bujía" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: "Seleccionar todo lo de esta página" }),
+    ).toBeInTheDocument();
+  });
+
+  /**
+   * `tecnico` reads inventory and cannot generate catalogs (`policy.ts`), and
+   * the handoff is the only thing selection does on this table — so offering
+   * the column at all would offer a bulk action whose only outcome is
+   * `/builder`'s permission page.
+   */
+  it("offers no selection at all to a user who cannot generate catalogs", async () => {
+    can.mockImplementation((_user, action) => action !== "catalogs.generate");
+    render(await renderAt());
+
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Enviar al generador" })).not.toBeInTheDocument();
+    // Still a readable inventory, not a denied page.
+    expect(screen.getByText("Filtro de aceite")).toBeInTheDocument();
+  });
+
+  /** WU2's kebab is not regressed by the column that landed to its left. */
+  it("keeps the row kebab and its Ver item", async () => {
+    const user = userEvent.setup();
+    render(await renderAt());
+
+    await user.click(screen.getByRole("button", { name: "Acciones de Filtro de aceite" }));
+    expect(await screen.findByRole("menuitem", { name: "Ver" })).toHaveAttribute(
+      "href",
+      "/inventory/PS0000001",
+    );
+  });
+
+  /**
+   * The negative half of D5 on this table: `filterKey` is built from the
+   * FILTERS only, so sorting a column or turning a page must leave the
+   * selection alone. `settle()` is load-bearing here — the clearing this
+   * asserts against is a promise resolution away.
+   */
+  it("does not clear the selection when a column is sorted or the page size changes", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(await renderAt());
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Filtro de aceite" }));
+    expect(screen.getByRole("status")).toHaveTextContent("1 seleccionado");
+
+    rerender(await renderAt(PAGE, { sort: "name", dir: "desc" }));
+    await settle();
+    rerender(await renderAt(PAGE, { sort: "name", dir: "desc", pageSize: "50", page: "2" }));
+    await settle();
+
+    expect(screen.getByRole("status")).toHaveTextContent("1 seleccionado");
+    expect(screen.queryByText(/Se limpió la selección/)).not.toBeInTheDocument();
+  });
+
+  it("clears the selection when a real filter changes, saying how many went", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(await renderAt());
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Filtro de aceite" }));
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Bujía" }));
+
+    rerender(await renderAt(PAGE, { categoryL1: "REPUESTOS" }));
+    await settle();
+
+    expect(screen.getByText("Se limpió la selección de 2 al cambiar el filtro")).toBeInTheDocument();
   });
 });
