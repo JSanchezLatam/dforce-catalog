@@ -137,7 +137,74 @@ The system MUST provide a print view for an existing `orden_servicio`, reachable
 - WHEN it requests an order's print view
 - THEN the system MUST refuse it exactly as any other order-read route
 
+### Requirement: Order Editing Is Gated by Role and Current Status
+
+The system MUST expose an entry point that opens an existing `orden_servicio` in the order form's edit mode, and MUST allow that edit only when the acting user's role and the order's **current** status jointly permit it.
+
+Today there is no entry point at all: `ServiceOrderFormTrigger` accepts an optional `order` prop that switches `ServiceOrderForm` into edit mode, and the only place it is rendered — the `/service-orders` list-page header — omits that prop, so the trigger is permanently in create mode. The order detail page offers `OrderStatusControls` and links, and no edit control. `updateOrder` and `PATCH /api/service-orders/[id]` exist and are tested; nothing in the UI reaches them, which is why `hallazgos`, `recomendaciones` and `observaciones` are unreachable after creation. This is a missing surface, not a permission denial.
+
+The permitted combinations are exactly:
+
+| Status | `administrador` | `tecnico` |
+|---|---|---|
+| `open` | MUST be allowed | MUST be refused |
+| `in_progress` | MUST be allowed | MUST be allowed |
+| `done` | MUST be refused | MUST be refused |
+| `cancelled` | MUST be refused | MUST be refused |
+
+The gate covers the fields the form and the patch path already carry — `categoria`, `description`, `appointmentAt`, `hallazgos`, `recomendaciones`, `observaciones`. It does not introduce parts anywhere: `producto` line items are absent from creation and from editing alike (see Service Order Creation (R20)).
+
+`done` and `cancelled` refusing everyone is a decision of this change rather than a restatement of the owner's request, which named only `open` and `in_progress`. Those two are already terminal — `assertTransition` gives them no outgoing edges, so a closed order cannot be reopened through the UI. Letting an order's fields be rewritten after closure would make closure reversible through a side door, one field at a time, with the status still reading `Completada`. Correcting a wrongly-closed order is a separate change with its own audit story; it is not this gate loosened.
+
+Both the presence of the control and the acceptance of the write MUST be decided by one shared pure predicate over role and status, so the two cannot drift apart. The UI deciding alone is not sufficient: `PATCH /api/service-orders/[id]` is the trust boundary, and it MUST evaluate the same predicate against the order's status **as read from the database**, never a status supplied in the request body. A refusal MUST answer with a Spanish message and an accurate status code, never a 500.
+
+#### Scenario: Administrador sees the edit control on an open order
+- GIVEN an order in `open` status
+- WHEN an `administrador` opens its detail page
+- THEN the page MUST offer a control that opens the order form in edit mode
+
+#### Scenario: Tecnico sees no edit control on an open order
+- GIVEN an order in `open` status
+- WHEN a `tecnico` opens its detail page
+- THEN the page MUST NOT offer any control that opens the order form in edit mode
+
+#### Scenario: Both roles see the edit control on an in_progress order
+- GIVEN an order in `in_progress` status
+- WHEN either a `tecnico` or an `administrador` opens its detail page
+- THEN the page MUST offer the edit control to both
+
+#### Scenario: Neither role sees the edit control on a closed order
+- GIVEN an order in `done` or in `cancelled` status
+- WHEN either a `tecnico` or an `administrador` opens its detail page
+- THEN the page MUST NOT offer any edit control to either
+
+#### Scenario: The route refuses a patch the UI would not have offered
+- GIVEN an order in `open` status
+- WHEN a `tecnico` sends `PATCH /api/service-orders/[id]` with `hallazgos`
+- THEN the system MUST refuse the patch with a Spanish message, MUST NOT write the field, and MUST NOT answer 500
+
+#### Scenario: The route refuses any patch to a closed order
+- GIVEN an order in `done` status
+- WHEN an `administrador` sends `PATCH /api/service-orders/[id]` with any of the gated fields
+- THEN the system MUST refuse the patch with a Spanish message, MUST NOT write the field, and MUST NOT answer 500
+
+#### Scenario: The route reads status from the record, not from the body
+- GIVEN an order whose stored status is `done`
+- WHEN a patch arrives whose body also claims a status of `in_progress`
+- THEN the gate MUST be evaluated against the stored `done` and the patch MUST be refused
+
+#### Scenario: A permitted patch still saves
+- GIVEN an order in `in_progress` status
+- WHEN a `tecnico` patches `hallazgos` and `recomendaciones`
+- THEN the system MUST persist both values
+
+#### Scenario: The edit control meets the hit-target floor
+- GIVEN a detail page that offers the edit control
+- WHEN it renders
+- THEN that control MUST measure at least 44x44
+
 ## Verification Notes
 
 - `@media print` output and `window.print()` are invisible to jsdom. A real print preview IS the verification for the Printable Work Order requirement — not a substitute for one.
 - `/service-orders` has 0 rows in the dev database today; exercising any of the scenarios above against a rendered order needs seeded data first.
+- The role-and-status gate's eight combinations are a pure function of two enums, so the truth table is fully coverable DB-free — but only the predicate is. Whether the detail page and the route actually consult it is separate coverage, and a green predicate test says nothing about either call site.
