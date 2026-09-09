@@ -4,7 +4,7 @@
 
 | Field | Value |
 |---|---|
-| Estimated changed lines | ~680 across the three units this file specs (WU1 ~250, WU2 ~350, WU4 ~80). WU3 (~500) is blocked — see Phase 3 |
+| Estimated changed lines | ~1,180 (WU1 ~250, WU2 ~350, WU3 ~500, WU4 ~80). ~300 of WU3's are data rows — see Phase 3 |
 | Review budget | 800 lines per PR |
 | 800-line budget risk | Low per unit |
 | Chained PRs recommended | Yes — for WU1 → WU2 only |
@@ -16,21 +16,22 @@
 |---|---|---|---|---|---|
 | 1 | Shared controlled search input (`useUrlFilters` + `SearchFilterInput`); rewire `CustomerFilters`, `InventoryFilters` (×2 inputs), `ServiceOrderFilters`; delete `searchInputRef` and the two stray `router.push`es (D1–D6) | PR 1 (base: tracker) | `npx vitest run useUrlFilters CustomerFilters InventoryFilters ServiceOrderFilters` | jsdom tests + **browser, console open** — the Base UI warning must be gone, `/inventory`'s two-field drop must be gone, back-button re-seeding must work | Reverting restores three uncontrolled inputs, the console warning, and `/inventory`'s stale-closure race — nothing persisted changes |
 | 2 | `cliente`/`vehiculo` joins, search `WHERE`, narrowed `OrdenServicioListItem`, column set, ID truncation, new default order, URL builders (D7–D11) | PR 2 (base: PR 1) | `npx vitest run service-orders/queries service-orders/page text-search` | **e2e against real Postgres, required** — the join is unproven by any green unit suite | Reverting restores `db.select().from(ordenServicio)` and `desc(createdAt)`; no migration, no write path, no row affected |
-| 3 | Vehicle catalog + `marca`/`modelo` selects on both write paths | — **BLOCKED**, see Phase 3 | — | — | — |
+| 3 | Curated vehicle catalog + the shared make/model control with its "Otro" escape, on both write paths (D13–D20) | PR 4 (base: tracker) | `npx vitest run vehicle-catalog VehicleMakeModelFields VehicleQuickForm CustomerForm` | node shape test over ~300 data rows + jsdom on the shared control and both forms + **browser, console open** — no test here measures a height or sees a hydration mismatch | Reverting deletes two new files and restores four `Input`s; `make`/`model` stay plain nullable `text`, so every stored value — catalog or free-text — remains valid with no data repair |
 | 4 | `service_due` restricted to `mant_preventivo`/`mant_correctivo` (D12) | PR 3 (base: tracker) | `npx vitest run reminders/schedule` | node tests, all five categories asserted by name | Reverting restores the reminder for all five categories; already-written `reminder` rows are untouched |
 
 ```
 tracker (draft, no-merge)
   ├── 1 shared search input ── 2 order list join + search + columns
-  ├── 3 vehicle catalog — BLOCKED, owner make/model list required, no tasks written
+  ├── 3 vehicle catalog
   └── 4 reminder category condition
 ```
 
 WU1 → WU2 is the only real dependency. WU4 touches disjoint files
 (`reminders/schedule.ts`, `schedule.test.ts`) and can land before, after, or
-interleaved with the 1→2 chain. WU3 sits at phase 3 in numbering only — it is
-not scheduled and has no branch until the owner supplies the make/model list;
-skipping it does not change the landing order of 1, 2, and 4.
+interleaved with the 1→2 chain. WU3 is likewise disjoint — it touches only
+`customers/vehicle-catalog.ts`, `VehicleMakeModelFields.tsx`,
+`VehicleQuickForm.tsx` and `CustomerForm.tsx`, none of which WU1, WU2 or WU4
+opens — so it can land in any order too.
 
 ## Gates, every unit
 
@@ -392,24 +393,24 @@ Phone*, *Order List Columns Show Customer and Vehicle*, *Unsorted Default
 Order Is Appointment-First*; table-sorting spec: both MODIFIED requirements;
 design D7–D11)
 
-- [ ] 2.1 GREEN (mechanical move, no dedicated test exists today — D8) —
+- [x] 2.1 GREEN (mechanical move, no dedicated test exists today — D8) —
   create `src/shared/db/text-search.ts`, move `unaccentIlike` verbatim,
   including its STABLE-not-IMMUTABLE docstring, from
   `customers/queries.ts:46-48`; export it; `customers/queries.ts` imports it
   instead of declaring it locally. `rg "function unaccentIlike" src/modules/customers/queries.ts`
   returns nothing afterward.
-- [ ] 2.2 Retrofit test (AGENTS.md's Strict-TDD carve-out — no real RED is
+- [x] 2.2 Retrofit test (AGENTS.md's Strict-TDD carve-out — no real RED is
   possible on a pure relocation) — create `src/shared/db/text-search.test.ts`
   asserting `unaccentIlike(cliente.name, '%x%')` renders SQL containing
   `unaccent(` twice and `ilike` once, via `PgDialect().sqlToQuery()` (the
   idiom `service-orders/queries.test.ts:112` already uses). Verify it is
   meaningful: temporarily change `ilike` to `like` in the implementation,
   confirm the test fails, then revert.
-- [ ] 2.3 RED/GREEN — `npx vitest run customers/queries` stays green,
+- [x] 2.3 RED/GREEN — `npx vitest run customers/queries` stays green,
   unmodified: the move did not change `buildClienteSearchWhere`'s rendered
   SQL or its existing test assertions.
 
-- [ ] 2.4 GREEN — comment on `vehiculoPlateExists`
+- [x] 2.4 GREEN — comment on `vehiculoPlateExists`
   (`customers/vehicles.ts:95`) naming the two independent reasons the
   orders path does not call it: it correlates on the CUSTOMER, not the
   order's one named vehicle; and it applies `activeVehiculoFilter()`, which
@@ -417,7 +418,7 @@ design D7–D11)
   the module header recording `vehiculo`'s second value-import site
   (amends vehicles-one-to-many D3's "imported here and nowhere else").
 
-- [ ] 2.5 RED (node) `service-orders/queries.test.ts` — extend
+- [x] 2.5 RED (node) `service-orders/queries.test.ts` — extend
   `OrdenServicioFilters` to `{ status?, search? }`;
   `buildOrdenServicioWhere({ search: "perez" })` renders (via
   `PgDialect().sqlToQuery()`) an `or(...)` over `cliente.name`,
@@ -426,7 +427,7 @@ design D7–D11)
   null` **nor** an `exists (select 1 from "vehiculo"` correlated subquery
   (D7's two things this path must NOT do). Confirm it fails: today's
   function takes only `status`.
-- [ ] 2.6 GREEN — implement the `search` branch in `buildOrdenServicioWhere`
+- [x] 2.6 GREEN — implement the `search` branch in `buildOrdenServicioWhere`
   using plain column comparisons (`unaccentIlike(cliente.name, pattern)`,
   `unaccentIlike(cliente.phone, pattern)`, `unaccentIlike(vehiculo.plate,
   pattern)`), `and`-ed with the existing `status` condition when both are
@@ -434,19 +435,19 @@ design D7–D11)
   Import `unaccentIlike` from `@/shared/db/text-search`. Confirm
   `buildOrdenServicioWhere({})` still returns `undefined` — the existing
   `:19` test passes unmodified.
-- [ ] 2.7 **Mutation-verify 2.5 — the trap D7 exists to avoid.** Swap the
+- [x] 2.7 **Mutation-verify 2.5 — the trap D7 exists to avoid.** Swap the
   plate term for `vehiculoPlateExists(pattern, unaccentIlike)` and add
   `isNull(cliente.deactivatedAt)` to the predicate (i.e., reuse
   `buildClienteSearchWhere`-style logic). Confirm 2.5's "no deactivated_at,
   no correlated subquery" assertions go red **by name**. `diff` to confirm
   the swap landed, then revert and `diff` again to confirm byte-identical.
 
-- [ ] 2.8 RED (node) — `listOrdenesServicio`'s default `queryFn`, inspected
+- [x] 2.8 RED (node) — `listOrdenesServicio`'s default `queryFn`, inspected
   via its rendered SQL, contains `inner join "cliente"` and `inner join
   "vehiculo"` with `ON` predicates matching `ordenServicio.clienteId =
   cliente.id` and `ordenServicio.vehiculoId = vehiculo.id`. Confirm it
   fails against today's bare `db.select().from(ordenServicio)`.
-- [ ] 2.9 GREEN — add both `.innerJoin(...)` calls to `listOrdenesServicio`'s
+- [x] 2.9 GREEN — add both `.innerJoin(...)` calls to `listOrdenesServicio`'s
   default `queryFn`; narrow the `.select({...})` to `OrdenServicioListItem`'s
   shape (a `Pick<OrdenServicio, "id" | "status" | "appointmentAt">` plus
   `clienteName`, `vehiculoPlate`, `vehiculoMake`, `vehiculoModel` — D9,
@@ -455,37 +456,37 @@ design D7–D11)
   production caller (`service-orders/page.tsx`) and the existing test
   fixtures at `queries.test.ts:29,38,44` to the new shape — English keys in
   every fixture object, Spanish only inside quoted string values.
-- [ ] 2.10 RED (node) — `countOrdenesServicio`'s default `queryFn` ALSO
+- [x] 2.10 RED (node) — `countOrdenesServicio`'s default `queryFn` ALSO
   carries both joins (D9's count-parity trap: "missed on the count, the
   list filters and the pager does not — page 2 of a search that has 4
   rows"). Confirm it fails: today's count has no join at all.
-- [ ] 2.11 GREEN — add the identical two `.innerJoin(...)` calls to
+- [x] 2.11 GREEN — add the identical two `.innerJoin(...)` calls to
   `countOrdenesServicio`'s default `queryFn`, sharing
   `buildOrdenServicioWhere(filters)` with the list.
-- [ ] 2.12 **Mutation-verify D9's count-parity claim.** Remove the joins
+- [x] 2.12 **Mutation-verify D9's count-parity claim.** Remove the joins
   from `countOrdenesServicio` only, leaving `listOrdenesServicio`'s intact.
   Confirm 2.10 goes red **by name**. `diff` to confirm, revert, `diff`
   again.
 
-- [ ] 2.13 RED (node) — confirm `queries.test.ts:118`'s existing
+- [x] 2.13 RED (node) — confirm `queries.test.ts:118`'s existing
   `expect(buildOrdenServicioOrderBy(undefined)).toHaveLength(1)` is now RED
   against the new no-sort branch. This is an already-committed guard —
   watch it fail before touching it, do not silently rewrite it.
-- [ ] 2.14 GREEN — the no-sort branch becomes
+- [x] 2.14 GREEN — the no-sort branch becomes
   `[sql`${ordenServicio.appointmentAt} desc nulls last`, desc(createdAt)]`
   (D10); update `:118`'s assertion to `toHaveLength(2)`; add a
   `PgDialect().sqlToQuery()` assertion that the PRIMARY expression's
   rendered SQL contains `desc nulls last` for the unsorted-default case
   specifically (distinct from the existing explicit-sort test at
   `:107-113`). `ORDEN_SORT` is untouched.
-- [ ] 2.15 **Mutation-verify D10.** Revert the no-sort branch to
+- [x] 2.15 **Mutation-verify D10.** Revert the no-sort branch to
   `[desc(createdAt)]` alone. Confirm 2.14's length/content assertions go
   red **by name**. `diff` to confirm, revert, `diff` again.
-- [ ] 2.16 RED/GREEN — `Object.keys(ORDEN_SORT).sort()` still equals
+- [x] 2.16 RED/GREEN — `Object.keys(ORDEN_SORT).sort()` still equals
   `["appointmentAt", "id", "status"]` (existing `:92-94` test, confirm
   untouched — no new sortable column added).
 
-- [ ] 2.17 **Column-ambiguity check — the design's own unverified claim.**
+- [x] 2.17 **Column-ambiguity check — the design's own unverified claim.**
   Read the actual rendered SQL from 2.8/2.9's query (`PgDialect().sqlToQuery()`
   or `.toSQL()`), with all three joined tables' `id` columns in scope, and
   confirm every identifier in the generated `SELECT`/`WHERE`/`ORDER BY` is
@@ -496,7 +497,7 @@ design D7–D11)
   map) — record the ACTUAL output here, do not assume it does or doesn't
   apply to a typed `.select({...})` over a joined query.
 
-- [ ] 2.18 RED (jsdom) `service-orders/page.test.tsx` — the header row has
+- [x] 2.18 RED (jsdom) `service-orders/page.test.tsx` — the header row has
   no `Descripción`, has `Cliente` and `Vehículo`; a seeded row's `ID` cell
   reads exactly the first 8 characters of its id (`87cceecc` from an id
   starting `87cceecc-...`) in a `font-mono` class; for a vehicle with
@@ -506,14 +507,14 @@ design D7–D11)
   auto con su placa" and selected a mockup reading `AB-1234 Hilux`; the
   plate alone does not identify which car is on the lift). Confirm it fails
   against today's `orden.description ?? "—"` column and full-UUID `ID` cell.
-- [ ] 2.19 GREEN — `COLUMNS` drops `Descripción`, adds `Cliente`/`Vehículo`;
+- [x] 2.19 GREEN — `COLUMNS` drops `Descripción`, adds `Cliente`/`Vehículo`;
   the `ID` `TableCell` renders `{orden.id.slice(0, 8)}` in
   `font-mono text-xs`; `Cliente` renders `orden.clienteName`; `Vehículo`
   renders `orden.vehiculoPlate` joined with `orden.vehiculoMake`/
   `orden.vehiculoModel` (e.g. `AB1234 Toyota Hilux`, mirroring the mockup's
   `AB-1234 Hilux` shape) — both fields are now consumed by the page, not
   merely carried on the type.
-- [ ] 2.20 RED (jsdom), same file — a vehicle with `make = NULL` and
+- [x] 2.20 RED (jsdom), same file — a vehicle with `make = NULL` and
   `model = NULL` (spec Scenario "A vehicle with no make or model still
   renders its plate") renders the `Vehículo` cell as the plate alone, with
   no trailing space, no dangling separator, and no empty segment. **A
@@ -522,44 +523,44 @@ design D7–D11)
   (both columns NULL, per `vehiculo.make`/`.model` being nullable `text`).
   Confirm it fails if 2.19's join naively concatenates `${plate} ${make}
   ${model}` without guarding the null case.
-- [ ] 2.21 GREEN — the `Vehículo` cell's render joins only the present
+- [x] 2.21 GREEN — the `Vehículo` cell's render joins only the present
   parts (plate always; make/model appended only when at least one is
   non-null, with no leading/trailing whitespace or stray separator when
   both are absent).
-- [ ] 2.22 RED/GREEN — the detail page (`service-orders/[id]/page.tsx`)
+- [x] 2.22 RED/GREEN — the detail page (`service-orders/[id]/page.tsx`)
   still renders the full UUID unchanged; confirm the existing detail-page
   test already covers this, add one assertion if it does not.
 
-- [ ] 2.23 RED (jsdom) `service-orders/page.test.tsx` — `search` survives a
+- [x] 2.23 RED (jsdom) `service-orders/page.test.tsx` — `search` survives a
   column-header sort click and a page-2 link (D11, the class of bug
   `customers/page.tsx:485-489` names by number). Confirm it fails: today's
   `normalizeOrdenFilters`, `buildSortHref`, `buildPageHrefPattern`,
   `buildFilterKey` know only `status`/`pageSize`.
-- [ ] 2.24 GREEN — `normalizeOrdenFilters` reads `search` via the file's
+- [x] 2.24 GREEN — `normalizeOrdenFilters` reads `search` via the file's
   existing `firstValue`; `buildSortHref`, `buildPageHrefPattern`,
   `buildFilterKey` each add a `search` line mirroring
   `customers/page.tsx`'s exact shape — `buildFilterKey` appends
   `` `|search=${filters.search ?? ""}` `` (search last, since it is free
   text and `status`/`search` must not be confusable, per
   `customers/page.tsx:392-397`'s rationale).
-- [ ] 2.25 GREEN — `ServiceOrderFilters` gains the search box: WU1's fourth
+- [x] 2.25 GREEN — `ServiceOrderFilters` gains the search box: WU1's fourth
   `useUrlFilters`/`SearchFilterInput` call site (D1), wired to `search`,
   label "Filtro", placeholder "Buscar por nombre, placa o teléfono"
   mirroring `CustomerFilters`'s Spanish strings (service-orders spec: "the
   same three columns `buildClienteSearchWhere` already matches").
 
-- [ ] 2.26 `diff` every touched file (`text-search.ts`, `customers/queries.ts`,
+- [x] 2.26 `diff` every touched file (`text-search.ts`, `customers/queries.ts`,
   `customers/vehicles.ts`, `service-orders/queries.ts`,
   `service-orders/ServiceOrderFilters.tsx`, `service-orders/page.tsx`, and
   every touched test) before trusting 2.1–2.25.
 
-- [ ] 2.27 Provision a fresh throwaway Postgres database on
+- [x] 2.27 Provision a fresh throwaway Postgres database on
   `proyectocatalogo-db-1` (`:5433`) with `npx drizzle-kit migrate` on a
   **virgin** database — never `drizzle-kit push`, which poisons it
   (migration `0000` then collides with existing tables and `drizzle-kit
   migrate` exits 1 printing nothing, reading as a broken e2e). Migrations
   live in `src/shared/db/migrations`.
-- [ ] 2.28 Create `describe("order search (E2E)", ...)` in
+- [x] 2.28 Create `describe("order search (E2E)", ...)` in
   `src/e2e/full-flow.e2e.test.ts`, placed BEFORE
   `describe("full catalog-generation flow (E2E)", ...)` (today ~line 1414,
   whose `afterAll` ends the shared connection pool — anything appended after
@@ -571,7 +572,7 @@ design D7–D11)
   with `appointmentAt` YESTERDAY; order C with `appointmentAt = NULL`; one
   order whose vehicle is deactivated AFTER the order is created — every
   fixture row the design's exit criterion names explicitly.
-- [ ] 2.29 e2e (real Postgres, excluded from `npm test`) — assert: search
+- [x] 2.29 e2e (real Postgres, excluded from `npm test`) — assert: search
   "perez" (no accent) finds the order for "Pérez"; search by phone finds
   it; search by plate finds it; **searching the customer's OTHER vehicle's
   plate returns zero rows for the order that references the first
@@ -581,7 +582,7 @@ design D7–D11)
   no `sort` in the URL, the order reads A (appointment next week) → B
   (appointment yesterday) → C (no appointment) — sorted by `appointmentAt`,
   not by creation order, which is the opposite sequence.
-- [ ] 2.30 **Browser check, console open.** Open `/service-orders` with no
+- [x] 2.30 **Browser check, console open.** Open `/service-orders` with no
   filters: confirm headers read `ID · Cliente · Vehículo · Estado · Cita ·
   Acciones`, no `Descripción`; confirm the `ID` cell is 8 characters,
   monospace; confirm the `Vehículo` cell shows plate plus make/model for a
@@ -590,39 +591,242 @@ design D7–D11)
   URL updates and results narrow. Open a result's detail page, confirm the
   full UUID. Click a column-header sort, then page 2 if present, confirm
   the search term survives both.
-- [ ] 2.31 `npm test` (alone) and `npx tsc --noEmit` clean.
+- [x] 2.31 `npm test` (alone) and `npx tsc --noEmit` clean.
 
 ### Phase 2 verification record — fill in during `sdd-apply`
 
 | Task | Evidence |
 |---|---|
-| 2.2 | — |
-| 2.7 | — |
-| 2.12 | — |
-| 2.15 | — |
-| 2.17 | — |
-| 2.20 | — |
-| 2.27 | — |
-| 2.28 | — |
-| 2.29 | — |
-| 2.30 | — |
-| 2.31 | — |
+| 2.2 | `text-search.test.ts`'s `wraps both the column and the pattern in unaccent(), joined by ilike` mutation-verified: swapped `ilike` → `like` in `text-search.ts`, test went red (`expected ... to contain 'ilike'`); `rg` confirmed the mutation landed; reverted, `rg` confirmed byte-identical, suite green (1/1). |
+| 2.7 | Swapped the plate term for `vehiculoPlateExists(pattern, unaccentIlike)` and wrapped the `or(...)` in `and(isNull(cliente.deactivatedAt), ...)` in `queries.ts`. `diff` confirmed the mutation landed. Both named tests went red: `never carries a deactivated_at filter on either table — an order for a deactivated customer or vehicle is still a real order` and `never correlates through an EXISTS subquery — the vehicle is joined one-to-one on this list`. Reverted; `diff` confirmed byte-identical; suite green (28/28). |
+| 2.12 | Removed both `.innerJoin(...)` calls from `ordenServicioCountQuery` only, leaving `ordenServicioListQuery` intact. `diff` confirmed the mutation landed. `countOrdenesServicio's query carries the identical two joins` went red by name (`select count(*) from "orden_servicio"` — no join). Reverted; `diff` confirmed byte-identical; suite green (31/31). |
+| 2.15 | Reverted the no-sort branch to `[tiebreak]` alone. `diff` confirmed the mutation landed. Both `always appends a stable tiebreaker...` (length 2 expected, got 1) and `the unsorted default's primary expression is appointmentAt desc nulls last` (rendered `created_at desc`, no `appointmentAt`/`nulls last`) went red. Reverted; `diff` confirmed byte-identical; suite green (32/32). |
+| 2.17 | Actual rendered `.toSQL()` output for `ordenServicioListQuery({search:"perez",status:"open"}, ..., {key:"id",dir:"asc"})`, captured and recorded verbatim in `queries.ts`'s doc comment: `select "orden_servicio"."id", ... from "orden_servicio" inner join "cliente" on "orden_servicio"."cliente_id" = "cliente"."id" inner join "vehiculo" on "orden_servicio"."vehiculo_id" = "vehiculo"."id" where (...) order by "orden_servicio"."id" asc nulls last, "orden_servicio"."created_at" desc limit $5`. Every identifier is table-qualified — Drizzle's `.select({...})` over typed Column objects does NOT hit the qualifier-elision trap `vehicles.ts:platesSubquery()` documents (that trap is specific to a raw `sql` fragment with hardcoded unqualified names). Regression test added asserting no bare `"id"`. |
+| 2.20 | Mutated `vehiculoLabel` to naive `${plate} ${make} ${model}` concatenation. `diff` confirmed the mutation landed. `shows the plate alone, with no dangling separator, when make and model are both null` went red (`getByText("CD5678")` found no match — the naive version renders `"CD5678 null null"`). Reverted; `diff` confirmed byte-identical; suite green (19/19). |
+| 2.27 | **Run by the orchestrator.** `dforce_wu2_search` on `:5433`, provisioned with `drizzle-kit migrate` on a freshly created database — never `push`, which poisons it for `migrate`. 13 tables. |
+| 2.28 | e2e `describe("order search (E2E)", ...)` written in `src/e2e/full-flow.e2e.test.ts`, placed immediately before `describe("full catalog-generation flow (E2E)", ...)`. Not executed by this agent (no live DB access here). |
+| 2.29 | **Run by the orchestrator: 57/57 against real Postgres**, the eight new `order search (E2E)` assertions included. This is WU2's exit criterion — a green unit suite proves zero coverage of the join or the search `WHERE`. |
+| 2.30 | **Run by the orchestrator** against the owner's dev server with real data: truncated mono ID, `Cliente`, `Vehículo` as `AU5841 Honda CR-V`, no `Descripción`, newest appointment first. Search by plate/name/phone each returned rows, a nonsense term returned none, and clicking `Estado` with a search active kept it (`?search=sanchez&sort=status&dir=asc`). 0 console errors. |
+| 2.31 | **Final gate run by the orchestrator**: `npm test` 1611/1611 · `npx tsc --noEmit` clean · `npm run lint` 0 errors / 14 warnings. The agent's own per-file runs are superseded by this. |
 
 ---
 
-## Phase 3 — Vehicle catalog (BLOCKED)
 
-**No tasks are written for this phase.** WU3 is blocked on the owner
-supplying the make/model corrections to the drafted candidate list
-(proposal.md's Open Question; design.md's "WU3 — Vehicle catalog: not
-designed here"). No decision or task in Phases 1, 2, or 4 depends on it, and
-no file WU3 touches (`customers/vehicle-catalog.ts`, `VehicleQuickForm.tsx`,
-`CustomerForm.tsx`) is touched by any of them. This phase keeps slot 3 in the
-numbering so Phase 4 does not need renumbering when WU3 is eventually
-specced. When the owner's corrections land, `design.md` gets WU3's own
-decisions appended, and this phase gets its own RED/GREEN task list at that
-point — inventing either now would misrepresent both the data and the
-undecided design.
+### WU2 verification record — what was actually run
+
+A green `npm test` proves ZERO coverage of the join and the search `WHERE`
+(AGENTS.md's injected-seam limit). This is the evidence.
+
+| Check | Result |
+|---|---|
+| **e2e, real Postgres** — the exit criterion | **57/57** on a virgin throwaway DB provisioned with `drizzle-kit migrate` (never `push`, which poisons it) |
+| The D7 trap | The e2e seeds a second vehicle for the same customer and asserts that searching ITS plate returns zero orders — the case `vehiculoPlateExists` would have got wrong |
+| Browser, real data | ID truncated to 8 chars monospace; `Cliente`; `Vehículo` showing `AU5841 Honda CR-V` (plate AND make/model); no `Descripción`; newest appointment first |
+| Search, all three fields | plate `AU5841` → 2 · name `sanchez` → 2 · phone `62944732` → 2 · nonsense → 0 |
+| **D11 — the term survives a sort** | Clicking `Estado` with a search active gave `?search=sanchez&sort=status&dir=asc`. This is the bug class `customers/page.tsx` records twice; it does not happen here. |
+| Console | 0 errors |
+
+Gates: `npm test` 1611/1611 · `npx tsc --noEmit` clean · `npm run lint` 0
+errors / 14 warnings (an unused `otherVehicleId` in the new e2e describe was
+removed — the OTHER-vehicle case IS asserted, by plate rather than by captured
+id, so the variable was genuinely spare and not a missing assertion).
+
+The pre-existing committed RED behaved exactly as the design predicted:
+`queries.test.ts`'s `toHaveLength(1)` failed the moment the appointment-first
+default landed, and was updated rather than silently rewritten.
+
+## Phase 3 — Vehicle catalog, and the escape that makes it safe
+(vehicle-catalog spec: all seven requirements; customer-management delta: both
+ADDED requirements; design D13–D20)
+
+**Read D20 before reviewing this phase.** ~300 of WU3's ~500 lines are data
+rows, and nobody reviewing can confirm from memory which models Chery sells in
+Panama. What review is for here is the dataset's SHAPE (3.1–3.4), the ESCAPE
+(3.7–3.10), the NEVER-BLANK rule (3.11–3.13), the RESET (3.14–3.16), and the
+absence of any server or schema change (3.21). The rows themselves are the
+owner's data, corrected by a one-line PR.
+
+**The one thing that did not survive the handoff.** The make list was described
+as 38 makes and enumerates 41 (counted: 10 Japanese, 3 Korean, 11 Chinese,
+6 American, 9 European, 2 Indian). The enumeration is authoritative and no
+artifact in this change writes a count — 3.1 asserts the SET. If 38 was the
+intent, the owner names the three; an agent must not pick them.
+
+- [ ] 3.1 RED (node) — create `src/modules/customers/vehicle-catalog.test.ts`
+  with D13's shape invariants, each `it` named after the invariant it pins so a
+  failure says which one broke: the make SET equals the spec's enumerated 41
+  (`toEqual` on a sorted literal — a set, never a count, because a count rots
+  away from the list it counts and already disagreed with it once); keys
+  sorted; no duplicate key; every make has ≥1 model; every model non-empty and
+  trimmed; no duplicate model within a make; no make named `"Otro"` and none
+  equal to `OTHER`; and `VEHICLE_CATALOG.Toyota` contains `Hilux`, `Fortuner`,
+  `Land Cruiser Prado` and `Rush`. Confirm every test fails: the module does
+  not exist yet.
+- [ ] 3.2 GREEN — create `src/modules/customers/vehicle-catalog.ts`:
+  `VEHICLE_CATALOG` as `Readonly<Record<string, readonly string[]>>` with the
+  41 makes as SORTED keys, `VEHICLE_MAKES = Object.keys(...)`,
+  `modelsForMake(make)` returning `[]` for an unknown make (never a throw — an
+  unknown make is the normal state behind every free-text value, D13), and
+  `export const OTHER = "__otro__"`. Put the origin grouping (Japanese /
+  Korean / Chinese / American / European / Indian) in a comment block above the
+  data, NOT in the structure — it is provenance, and the select never renders
+  it. Model lists are Panama-market, authored per make; they are the part that
+  can be wrong without breaking anything, which is what the escape is for.
+- [ ] 3.3 **Mutation-verify the shape test is not decorative.** Duplicate one
+  model inside one make. Confirm 3.1's no-duplicate-model test goes red **by
+  name**. `diff` to confirm the duplication landed, then revert and `diff`
+  again, confirming byte-identical. (`sd` no-ops on multiline patterns and
+  exits 0 on no match — edit the line directly, do not trust a regex.)
+- [ ] 3.4 **Mutation-verify the vPIC tripwire.** Remove `"Land Cruiser Prado"`
+  from Toyota's models. Confirm 3.1's Toyota-anchors test goes red **by name** —
+  this is the assertion that fires the day someone proposes regenerating the
+  file from vPIC or `us-car-models-data`, both of which omit exactly those four
+  models (design.md's WU3 preamble). `diff` both ways.
+
+- [ ] 3.5 RED (jsdom) — create
+  `src/modules/customers/VehicleMakeModelFields.test.tsx`: the `Marca` select
+  offers every catalog make plus `Otro`; with `make="Toyota"` the `Modelo`
+  select offers Toyota's models plus `Otro` and does NOT offer a model from
+  another make. Drive Base UI selects the way `UserForm.test.tsx:39-42`
+  already does — click the label, then `await screen.findByRole("option", {
+  name })` — not by typing into them. Confirm both fail: the component does not
+  exist.
+- [ ] 3.6 GREEN — create
+  `src/modules/customers/VehicleMakeModelFields.tsx` (`"use client"`) per the
+  design's WU3 Interfaces block: `idPrefix`, `make`, `model`, `onChange`.
+  Two `Select`s with the shipped shadcn wrapper, Spanish labels `Marca` and
+  `Modelo`, placeholders `Seleccioná una marca` / `Seleccioná un modelo`
+  (matching `UserForm`'s `Seleccioná un rol`), and `?? null` on the value so an
+  empty field renders the placeholder rather than a blank option — the exact
+  shape `UserForm.tsx:297` uses.
+
+- [ ] 3.7 RED (jsdom), same file — the escape, both directions: choosing
+  `Otro` in `Marca` reveals a text input labelled `Especificá la marca`; typing
+  in it emits that typed value through `onChange`; the literal string `"Otro"`
+  is NEVER emitted as a make; and then choosing a catalog make in that same
+  select hides the input and emits the catalog make. The last assertion is the
+  no-dead-end rule (D14) — an escape you cannot climb back out of is a support
+  ticket, and it is the half most likely to be skipped.
+- [ ] 3.8 GREEN — implement the `OTHER` sentinel: the select's value is
+  `makeIsOther ? OTHER : (make || null)`, the revealed `Input` writes through
+  `onChange`. Same treatment for `Modelo` under a catalog make, with
+  `Especificá el modelo`.
+- [ ] 3.9 RED (jsdom), same file — with `Marca` in escape mode the `Modelo`
+  field is a `textbox`, not a `combobox`: a select holding one option called
+  "Otro" is a worse control than the text box it replaced (D14).
+- [ ] 3.10 GREEN — the model branch: no list ⇒ plain `Input`.
+
+- [ ] 3.11 RED (jsdom), same file — the never-blank rule, three cases (D15):
+  mounting with `make="Hino"` (not in the catalog) renders the select reading
+  `Otro` and a text input reading `Hino`; mounting with `make="Toyota"`,
+  `model="Coaster"` renders the make as a SELECTED catalog value and the model
+  as a text input reading `Coaster`; and mounting emits **no** `onChange` at
+  all. That third assertion is what a create-path-only test never catches.
+- [ ] 3.12 GREEN — seed escape mode from the stored value with LAZY
+  `useState(() => …)` initialisers, per D15's snippet. Lazy is load-bearing:
+  a non-lazy initialiser re-runs every render and re-seeds off a rebuilt prop
+  mid-typing, which is WU1's D3 lesson wearing different clothes.
+- [ ] 3.13 **Mutation-verify D15's seeding.** Replace both lazy initialisers
+  with `useState(false)`. Confirm 3.11's unknown-stored-make test goes red **by
+  name**. `diff` both ways. Without this, an unknown stored make silently
+  renders as an empty select — the blanking the spec forbids, shipped green.
+
+- [ ] 3.14 RED (jsdom), same file — the reset (D16), and both halves of it:
+  with `make="Toyota"`, `model="Hilux"`, changing the make to `Kia` emits
+  `{ make: "Kia", model: "" }` in ONE `onChange` and the model select then
+  lists Kia's models; changing the make while the model is a free-text value
+  clears it too; and — the other half — mounting with a stored `make`/`model`
+  leaves the model alone (this overlaps 3.11's third assertion deliberately,
+  because 3.16 mutates against both).
+- [ ] 3.15 GREEN — clear the model IN THE MAKE CHANGE HANDLER: emit
+  `{ make: next, model: "" }` and reset `modelIsOther` in the same handler.
+  **No `useEffect` on `make`.** Typing inside the free-text make input does NOT
+  clear the model — in escape mode the model is free text too, so there is no
+  list for it to have fallen off, and a per-keystroke clear is hostile (D16).
+- [ ] 3.16 **Mutation-verify D16 — the primary mutation of this phase, and it
+  is two mutations because the requirement has two halves that can each be
+  satisfied by breaking the other.**
+  (a) Drop `model: ""` from the make change handler. Confirm 3.14's
+  "changing the make empties the model" test goes red **by name**.
+  (b) Revert (a), then re-implement the reset as
+  `useEffect(() => onChange({ make, model: "" }), [make])` — the obvious wrong
+  fix D16 exists to forbid. Confirm 3.14's mount-preservation test (and
+  3.11's "mounting emits no onChange") go red **by name**. If (b) leaves the
+  suite green, the mount case is untested and the never-blank requirement is
+  unpinned — fix the test before continuing.
+  `diff` after each mutation and again after each revert, confirming
+  byte-identical.
+
+- [ ] 3.17 RED/GREEN (jsdom) `VehicleQuickForm.test.tsx` — rewrite only how
+  make and model are DRIVEN (select clicks instead of `type`). Every other
+  assertion stays byte-identical, above all `"sends only plate, make, model and
+  year"` and the `year`-is-a-`number` assertion: those are what say the consent
+  trap stays unreachable (`VehicleQuickForm.tsx`'s header) and that
+  `validation.ts:126`'s already-a-number rule is still satisfied.
+- [ ] 3.18 GREEN — in `VehicleQuickForm.tsx` replace the `Marca` and `Modelo`
+  `Input`s with `<VehicleMakeModelFields idPrefix="vehiculo-rapido" … />`.
+  Leave the `Placa` and `Año` inputs, the four-key body literal, the
+  `Number(year)` coercion, `event.stopPropagation()`, the 400/404/409 branches
+  and every `min-h-11 min-w-11` button untouched.
+- [ ] 3.19 RED/GREEN (jsdom) `CustomerForm.test.tsx` — same rewrite for the
+  vehicle collection, plus the per-card independence assertion from the
+  customer-management delta: selecting a make on the second card must leave the
+  first and third cards' make and model unchanged. Existing plate/year,
+  soft-delete, permanent-delete and reconcile assertions stay unmodified.
+- [ ] 3.20 GREEN — in `CustomerForm.tsx`'s vehicle card replace the `Marca` and
+  `Modelo` `Input`s with `<VehicleMakeModelFields idPrefix={row.key} make={row.make}
+  model={row.model} onChange={(next) => updateVehicle(row.key, next)} />`.
+  `buildPayload`, `activeVehicles`, the deletion flow and `row.key`'s
+  `crypto.randomUUID()` regeneration all stay as they are — D15 relies on that
+  regeneration remounting the fields after a save, so `rg "crypto.randomUUID"
+  src/modules/customers/CustomerForm.tsx` must still return the emptyVehicle
+  factory.
+
+- [ ] 3.21 **Prove the "no server change" claim rather than asserting it**
+  (D18): `git diff --name-only` for this unit must list no file under
+  `src/app/api/`, not `src/modules/customers/validation.ts`, not
+  `src/shared/db/schema.ts`, and no file under the migrations directory. Then
+  `rg "Number\(year\)" src/modules/customers` and `rg "typeof value.year ===
+  \"number\"" src/modules/customers/validation.ts` — both must still hit,
+  confirming the `year` coercion on both ends survived a refactor of the field
+  block next to it.
+- [ ] 3.22 Confirm D19's height ruling landed as written: the two
+  `SelectTrigger`s carry NO `min-h-11` (they are form fields matching their
+  `h-8` sibling `Input`s, precedent `UserForm.tsx:299`), and every action
+  control around them still does — `rg "min-h-11" src/modules/customers/VehicleQuickForm.tsx`
+  must still return the dialog trigger, `Cancelar` and `Guardar vehículo`.
+  **No test in this repo can measure a rendered height**, so this grep plus the
+  browser check at 3.25 is the entire enforcement.
+- [ ] 3.23 Language-split check before the PR: every Spanish string in the two
+  new test files is an ASSERTION or a label being queried; every object key,
+  helper name, `it()` name and variable in those helpers is ENGLISH. Caught
+  twice in review on the previous change, both times as a Spanish object key in
+  a test helper.
+- [ ] 3.24 `diff` `vehicle-catalog.ts`, `VehicleMakeModelFields.tsx`,
+  `VehicleQuickForm.tsx` and `CustomerForm.tsx` before trusting 3.1–3.23.
+- [ ] 3.25 **Browser check, console open.** Open the customer form with a
+  customer holding at least two vehicles, and the order dialog's quick form.
+  Read: the two selects beside `Placa`/`Año` at a narrow width; the revealed
+  `Especificá la marca` input's reflow inside the `sm:grid-cols-2` grid; a
+  41-item make list opened on a touch-sized target; zero console warnings.
+  jsdom sees none of this — it measures no height, reports no hydration
+  mismatch, and would not flag an RSC boundary if one appeared. Record the
+  result in the PR body.
+- [ ] 3.26 `npm test` (alone — this machine produces phantom timeouts when
+  suites overlap) and `npx tsc --noEmit` clean.
+
+### Phase 3 verification record — fill in during `sdd-apply`
+
+| Task | Evidence |
+|---|---|
+| 3.3 | — |
+| 3.4 | — |
+| 3.13 | — |
+| 3.16a | — |
+| 3.16b | — |
+| 3.21 | — |
+| 3.25 | — |
+| 3.26 | — |
 
 ---
 
@@ -774,6 +978,9 @@ warnings.
 - [ ] `npm test` and `npx tsc --noEmit` clean at the end of every unit — all
       three built units
 - [ ] Every unit was opened in a browser with the console read
-- [ ] **Not yet deliverable by this file**: a vehicle not in the catalog is
-      still recordable via "Otro"; both vehicle write paths offer the same
-      makes and models — blocked on WU3, Phase 3
+- [ ] A vehicle not in the catalog is still recordable via "Otro", and
+      choosing "Otro" by mistake is reversible without a reload — WU3
+- [ ] Both vehicle write paths offer the same makes and models, structurally
+      (one shared control, one catalog module) rather than by convention — WU3
+- [ ] A stored make or model outside the catalog opens, survives an unrelated
+      edit, and saves back unchanged — WU3

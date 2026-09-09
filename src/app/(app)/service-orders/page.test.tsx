@@ -42,22 +42,16 @@ vi.mock("@/modules/inventory-view/queries", async (importOriginal) => {
 
 import ServiceOrdersPage from "./page";
 
+/** D9's `OrdenServicioListItem` — the joined, narrowed row shape the page now receives. */
 function orden(overrides: Record<string, unknown> = {}) {
   return {
     id: "o1",
-    clienteId: "c1",
-    vehiculoId: "v1",
     status: "open",
-    categoria: "revisado",
-    description: null,
     appointmentAt: null,
-    completedAt: null,
-    hallazgos: null,
-    recomendaciones: null,
-    observaciones: null,
-    createdBy: null,
-    createdAt: new Date("2026-01-01"),
-    updatedAt: new Date("2026-01-01"),
+    clienteName: "Pérez",
+    vehiculoPlate: "AB1234",
+    vehiculoMake: "Toyota",
+    vehiculoModel: "Hilux",
     ...overrides,
   };
 }
@@ -89,8 +83,61 @@ describe("ServiceOrdersPage — column sorting", () => {
     }
 
     // The negative half: an excluded column has no clickable header.
-    expect(screen.getByRole("columnheader", { name: "Descripción" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Descripción" })).not.toBeInTheDocument();
+    // `Cliente` (unindexed on this list, no joined ORDER BY per D10's
+    // "out of scope") replaces `Descripción` here — that column is gone
+    // entirely now, covered by its own scenario test below.
+    expect(screen.getByRole("columnheader", { name: "Cliente" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Cliente" })).not.toBeInTheDocument();
+  });
+
+  /** service-orders spec Scenario "Descripción column is gone". */
+  it("has no Descripción column, and has Cliente and Vehículo instead", async () => {
+    render(await renderPage({}));
+
+    expect(screen.queryByRole("columnheader", { name: "Descripción" })).not.toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Cliente" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Vehículo" })).toBeInTheDocument();
+  });
+
+  /** service-orders spec Scenario "ID renders truncated". */
+  it("renders the ID cell as exactly the first 8 characters, in monospace — the stored id stays the full UUID", async () => {
+    listOrdenesServicio.mockResolvedValue([orden({ id: "87cceecc-1111-2222-3333-444455556666" })]);
+    countOrdenesServicio.mockResolvedValue(1);
+    render(await ServiceOrdersPage({ searchParams: Promise.resolve({}) }));
+
+    const cell = screen.getByText("87cceecc");
+    expect(cell).toHaveClass("font-mono");
+    expect(cell).not.toHaveTextContent("87cceecc-1111-2222-3333-444455556666");
+  });
+
+  /** service-orders spec Scenario "List shows customer and the car, not just its plate". */
+  it("shows the customer name and the vehicle's plate plus make/model", async () => {
+    listOrdenesServicio.mockResolvedValue([
+      orden({ clienteName: "Pérez", vehiculoPlate: "AB1234", vehiculoMake: "Toyota", vehiculoModel: "Hilux" }),
+    ]);
+    countOrdenesServicio.mockResolvedValue(1);
+    render(await ServiceOrdersPage({ searchParams: Promise.resolve({}) }));
+
+    expect(screen.getByText("Pérez")).toBeInTheDocument();
+    const row = screen.getByText("Pérez").closest("tr")!;
+    expect(within(row).getByText("AB1234 Toyota Hilux")).toBeInTheDocument();
+  });
+
+  /**
+   * service-orders spec Scenario "A vehicle with no make or model still
+   * renders its plate" — the dev database already holds a vehicle shaped
+   * exactly like this fixture, and a fixture with both set (the test above)
+   * cannot catch a naive `${plate} ${make} ${model}` concatenation.
+   */
+  it("shows the plate alone, with no dangling separator, when make and model are both null", async () => {
+    listOrdenesServicio.mockResolvedValue([
+      orden({ vehiculoPlate: "CD5678", vehiculoMake: null, vehiculoModel: null }),
+    ]);
+    countOrdenesServicio.mockResolvedValue(1);
+    render(await ServiceOrdersPage({ searchParams: Promise.resolve({}) }));
+
+    const cell = screen.getByText("CD5678");
+    expect(cell).toHaveTextContent(/^CD5678$/);
   });
 
   it("toggles the active column to desc, preserves the status filter and pageSize, and drops page", async () => {
@@ -154,6 +201,39 @@ describe("ServiceOrdersPage — column sorting", () => {
 
     expect(listOrdenesServicio.mock.calls[0][2]).toBeUndefined();
     expect(screen.getByRole("link", { name: "ID" })).toBeInTheDocument();
+  });
+
+  /**
+   * D11 — the class of bug `customers/page.tsx:485-489` names by number: a
+   * URL builder that does not know about `search` drops it silently the
+   * moment staff click a column header or page 2.
+   */
+  it("keeps the search term on a column-header sort link", async () => {
+    render(await renderPage({ search: "perez" }));
+
+    const url = new URL(screen.getByRole("link", { name: "Estado" }).getAttribute("href")!, "http://localhost");
+    expect(url.searchParams.get("search")).toBe("perez");
+  });
+
+  it("keeps the search term on every pagination link", async () => {
+    render(await renderPage({ search: "perez", sort: "id", dir: "asc" }));
+
+    const pageHrefs = screen
+      .getAllByRole("link")
+      .map((a) => a.getAttribute("href") ?? "")
+      .filter((href) => href.includes("page="));
+
+    expect(pageHrefs.length).toBeGreaterThan(0);
+    for (const href of pageHrefs) {
+      const url = new URL(href, "http://localhost");
+      expect(url.searchParams.get("search")).toBe("perez");
+    }
+  });
+
+  it("hands the search term to listOrdenesServicio alongside status", async () => {
+    render(await renderPage({ search: "perez", status: "open" }));
+
+    expect(listOrdenesServicio.mock.calls[0][0]).toEqual({ status: "open", search: "perez" });
   });
 });
 
@@ -413,5 +493,36 @@ describe("ServiceOrdersPage — bulk status change (WU6)", () => {
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveTextContent("En progreso");
     expect(dialog).not.toHaveTextContent(/no se puede deshacer/i);
+  });
+});
+
+/**
+ * The empty state is a CLAIM, and "todavía no hay órdenes registradas" is false
+ * the moment a search simply misses over a database holding forty of them.
+ * `customers/page.tsx` learned this and wrote it down; this screen taught four
+ * URL builders about `search` and left the fifth consumer of `filters` alone.
+ *
+ * No test reached this before — `rg "No se encontraron órdenes"` over the test
+ * files returned nothing, which is exactly the condition AGENTS.md warns a
+ * green suite about.
+ */
+describe("ServiceOrdersPage — the empty state does not lie", () => {
+  function renderEmpty(params: Record<string, string>) {
+    listOrdenesServicio.mockResolvedValue([]);
+    countOrdenesServicio.mockResolvedValue(0);
+    return ServiceOrdersPage({ searchParams: Promise.resolve(params) });
+  }
+
+  it("says the search matched nothing, not that no orders exist", async () => {
+    render(await renderEmpty({ search: "zzzz" }));
+
+    expect(screen.getByText(/Ninguna orden coincide con la búsqueda/)).toBeInTheDocument();
+    expect(screen.queryByText(/Todavía no hay órdenes de servicio registradas/)).not.toBeInTheDocument();
+  });
+
+  it("still says there are none when there genuinely are none", async () => {
+    render(await renderEmpty({}));
+
+    expect(screen.getByText(/Todavía no hay órdenes de servicio registradas/)).toBeInTheDocument();
   });
 });

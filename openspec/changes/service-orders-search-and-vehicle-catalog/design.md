@@ -316,15 +316,308 @@ test iterates `CATEGORIA_LABEL`'s own keys (a test-only import across modules,
 no production edge) and requires an explicit expected outcome for each, so a new
 enum value fails by name until someone lists it.
 
-## WU3 — Vehicle catalog: not designed here
+## WU3 — Vehicle catalog
 
-**Blocked on the owner supplying the make/model list.** The proposal's Open
-Question names it and scopes it to WU3 alone. No decision above depends on it,
-and no file WU3 touches (`customers/vehicle-catalog.ts`, `VehicleQuickForm.tsx`,
-`CustomerForm.tsx`) is touched by WU1, WU2 or WU4. When the list lands, WU3 gets
-its own decisions appended to this document — including the latent
-`validation.ts:126` trap the archived design already recorded (`year` is kept
-only when it is *already* a number).
+The owner's make list landed, so the block is lifted. D13–D20 are WU3's
+decisions, continuing D1–D12's numbering. WU3 shares no file with WU1, WU2 or
+WU4 and can land in any order relative to them.
+
+**The list, and what it is evidence of.** The owner was shown a drafted
+candidate list and answered *"agregá Lexus, no saques ninguna"* — one addition,
+nothing removed. The list was checked against his own synced product data
+before he saw it, by searching all 699 synced products for each make and
+hand-filtering false positives (`RAM` matched nine rows of
+"CERAMICA"/"LATINAMERICA"/"FRAM"; `MG` matched the spec fragment `120X20MG`;
+`Mini` matched "MINI CHUCHERO"; `Seat` matched "2 ROW SEAT"). What survives:
+
+| Make | Real hits | Make | Real hits |
+|---|---|---|---|
+| Toyota | 40 | Mitsubishi | 4 |
+| Kia | 37 | Chevrolet | 2 |
+| Honda | 21 | Ford | 2 |
+| Nissan | 17 | Lexus | 2 |
+| Suzuki | 16 | BMW · Mazda · Changan · Mercedes-Benz | 1 each |
+| Hyundai | 11 | — | — |
+
+**Read that table correctly: absence from a PARTS catalog is weak evidence
+about the FLEET.** A stereo install, an alignment or an oil change needs no
+brand-specific part, so a make with zero parts rows is not a make that never
+comes through the door. That asymmetry is exactly why the owner kept all of
+them and why the free-text escape is load-bearing rather than a courtesy. The
+table is recorded so nobody re-runs the search and reaches the opposite
+conclusion.
+
+**Why not vPIC, recorded because it WILL be re-proposed.** `vpic.nhtsa.dot.gov`
+was queried live: it returns 58 Toyota models and includes **none** of Hilux,
+Fortuner, Prado or Rush. It carries "Land Cruiser" but not "Land Cruiser
+Prado", a distinct non-US model. vPIC is built on US registrations, and
+`us-car-models-data` is the same data by another route. This is a Panama
+workshop. Any future "let's just use the real dataset" proposal has to answer
+those four models first — which is why the dataset test asserts them by name
+(D13).
+
+---
+
+## D13 — The catalog is one flat data module, authored sorted, with its invariants enforced by a test rather than by prose
+
+`src/modules/customers/vehicle-catalog.ts` — a `Record<make, readonly
+string[]>` and nothing else. No class, no builder, no index, no lazy loader.
+
+| Option | Buys | Costs |
+|---|---|---|
+| `Record<make, models[]>` in one module | `Object.keys` is the make list; `CATALOG[make]` is the model list; the whole thing is `JSON`-shaped and diffs cleanly | key order is authoring order, so "sorted" is a convention a human can break silently |
+| Array of `{ make, models }` | order is explicit and obviously data | every model lookup becomes a `.find()`, for zero gain at 41 keys |
+| Grouped by origin region in the structure | mirrors how the owner thinks about it | the grouping is provenance, not behaviour — putting it in the structure means the UI either flattens it (dead structure) or renders origin groups nobody asked for |
+
+**Chosen: the flat record.** The origin grouping lives in the spec's table and
+in a comment block above the data, where it belongs — it explains where the
+list came from, and the select never renders it.
+
+**The key-order risk is answered by a test, not by discipline.**
+`vehicle-catalog.test.ts` asserts the shape invariants the spec lists:
+make keys equal the spec's enumerated set (as a SET, never a count — the list
+reached this design once with a count that disagreed with its own enumeration,
+and a count is a claim that rots away from the thing it counts), keys sorted,
+no duplicates, no empty model list, no duplicate or untrimmed model within a
+make, no make named `"Otro"` or equal to the escape sentinel, and Toyota
+carrying `Hilux`, `Fortuner`, `Land Cruiser Prado`, `Rush`. Ten-odd assertions
+covering ~300 rows, and the last one is a tripwire on the vPIC regression
+above.
+
+**`modelsForMake(make)` returns `[]` for an unknown make and never throws.** An
+unknown make is the NORMAL state on this screen — every free-text make reaches
+it — so a throw would turn the escape hatch into a crash.
+
+## D14 — "Otro" is an option in the same select plus a revealed input, not a mode toggle and not a combobox
+
+| Option | Buys | Costs |
+|---|---|---|
+| A separate "no está en la lista" checkbox beside the select | the two states are visually explicit | a third control per field, four controls in a two-column grid, and two sources of truth to keep agreeing |
+| A combobox (type-or-pick) | one control, no escape concept at all | Base UI's Select is not one; a combobox is a new component with keyboard, filtering and a11y of its own — a genuinely larger surface than the whole rest of WU3 |
+| **`"Otro"` as the last option; choosing it reveals a text `Input` while the select stays on screen showing "Otro"** | one extra control only while it is needed; the way BACK to the list is the same select the user is already looking at | the select's value and the stored value diverge in that state, so a sentinel is required |
+
+**Chosen: the option plus a revealed input.** The select staying on screen is
+the load-bearing part: it means "Otro" is not a dead end. A staff member who
+picks it by accident selects a real make in the same control and the text input
+disappears. An escape hatch you cannot climb back out of is a support ticket.
+
+**The sentinel.** The select's value in escape mode is `OTHER = "__otro__"`,
+which is not a storable make and is asserted by D13's shape test never to
+collide with one. The literal string `"Otro"` is a LABEL and is never stored;
+what is stored is what staff typed. An empty make passes `null` to the Select
+so the Spanish placeholder renders — the same `?? null` shape
+`UserForm.tsx:297` already uses for `role`.
+
+**When the make is free text, the model has no list**, so the model renders as
+a plain `Input` rather than a select holding one option called "Otro". A
+one-item dropdown is a worse control than the text box it replaced.
+
+## D15 — An unknown STORED value is the escape hatch, not a second mechanism
+
+The spec has two rules that look separate: "Otro reveals free text" and "a
+stored value outside the catalog renders as-is and is never blanked". They are
+the same rule if escape mode is DERIVED at mount:
+
+```ts
+const [makeIsOther, setMakeIsOther] = useState(() => make !== "" && !VEHICLE_MAKES.includes(make));
+const [modelIsOther, setModelIsOther] = useState(() => model !== "" && !modelsForMake(make).includes(model));
+```
+
+A vehicle stored as `make = "Hino"` opens with the select reading "Otro" and
+the text input reading "Hino". Nothing special-cases it, nothing blanks it, and
+the make removed from the catalog last week behaves identically to the make
+that was never in it — one code path, both spec scenarios.
+
+**Why local state and not a pure derivation.** `make === ""` is ambiguous:
+"nothing chosen yet" and "picked Otro, hasn't typed yet" are the same value. A
+purely derived mode snaps back to the select the moment the user clears the
+text box mid-typing, which is unusable. One boolean per field, seeded lazily,
+resolves it — and `useState(() => …)` is lazy on purpose: the initialiser must
+run once, not on every render, or a stale prop rebuild re-seeds mid-typing.
+This is D3's lesson from WU1 in a different form, and it is the reason the
+mutation-verify task for WU3 targets the seeding.
+
+**When the parent replaces the value without going through the handler** — the
+customer form's post-save `resetForm` — the vehicle rows are rebuilt with fresh
+`crypto.randomUUID()` keys, so React remounts and the seeding re-runs. That is
+existing behaviour being relied on, not new behaviour; a task greps to confirm
+the keys are still regenerated.
+
+## D16 — The model reset lives in the make CHANGE HANDLER, never in a `useEffect` on `make`
+
+The requirement is "changing the make must not leave a model from the previous
+make selected". The obvious implementation is the wrong one:
+
+```ts
+useEffect(() => { onChange({ make, model: "" }); }, [make]);   // NO
+```
+
+That effect fires on MOUNT, so opening any existing vehicle for editing blanks
+its stored model on first render — the exact defect the *never blanked*
+requirement forbids, shipped as the fix for a different requirement. It is also
+invisible to a test that only exercises the create path, because a create form
+mounts with an empty model anyway.
+
+**Chosen: clear in the handler.** Selecting a make emits
+`onChange({ make: next, model: "" })` in one update, and resets `modelIsOther`
+to `false` in the same handler. Mounting emits nothing at all.
+
+**Typing inside the free-text make input does NOT clear the model.** Per
+keystroke it would be hostile, and the justification is principled rather than
+pragmatic: in escape mode the model is free text too, so there is no list for a
+model to have fallen off. The clear is tied to a discrete SELECT change, which
+is what "changing the make" means in every one of the spec's scenarios.
+
+## D17 — One shared component owning the make/model PAIR, two call sites
+
+`src/modules/customers/VehicleMakeModelFields.tsx`, used by
+`VehicleQuickForm.tsx` and by each vehicle card in `CustomerForm.tsx`.
+
+D8 warned against extracting a shared thing whose two callers must differ.
+This is the opposite case, and the difference is worth stating: the two paths
+must NOT differ — "both vehicle write paths offer the same makes and models" is
+a success criterion, and the cross-field reset in D16 is real logic that would
+otherwise be written twice and drift once. The shared unit is the make/model
+PAIR, not a generic "select with an escape": the pair is what carries the
+dependency between the two fields.
+
+The component owns no `fetch`, no payload shape and no validation. It takes
+`{ make, model }` and emits `{ make, model }`; both forms keep their existing
+`buildPayload`/`JSON.stringify` untouched, including `year`'s `Number()`
+coercion.
+
+**`idPrefix` rather than fixed ids.** The quick form has one vehicle
+(`vehiculo-rapido-make`); the customer form has N cards keyed by
+`row.key` (`${row.key}-make`). Both are existing conventions in those files and
+neither moves.
+
+## D18 — WU3 touches no server file, no validator, and no migration
+
+`validateVehiculoInput` (`validation.ts:113-145`) is **unchanged**. The catalog
+constrains the FORM, not the column.
+
+Server-side catalog validation was considered and rejected on two independent
+grounds: it would have to accept every free-text "Otro" value anyway, so it
+constrains nothing; and it would make every catalog correction a
+data-compatibility event, since a make removed from the list would start
+rejecting saves of rows already holding it. `make` and `model` stay plain
+nullable `text`.
+
+That is also the entire rollback story. Reverting WU3 deletes one data module
+and one component and restores two `Input`s per path; every value already
+stored — catalog or free-text — is still an ordinary string in a nullable text
+column, so no row needs repair and no migration needs reversing.
+
+**`year` is not in scope and must not be tidied.** The latent trap the archived
+design recorded is still live: `validation.ts:126` keeps `year` only when it is
+ALREADY a number, and both forms coerce with `Number()` before POST
+(`VehicleQuickForm.tsx`'s body literal, `CustomerForm.buildPayload`). An agent
+refactoring the vehicle field block is one line from dropping that coercion and
+silently saving yearless rows. WU3 does not touch it, and a task greps to prove
+it.
+
+## D19 — The select triggers stay `h-8`; 44×44 governs the action controls around them
+
+`Input` is `h-8` (`input.tsx:12`) and `SelectTrigger` is `h-8` at
+`size="default"` (`select.tsx:44`). Make and model sit in a
+`grid sm:grid-cols-2` beside `Placa` and `Año`, and a 44px control in a row of
+32px ones reads as broken, not as accessible.
+
+**Ruling: the two select triggers match their sibling inputs at `h-8`.** They
+are form FIELDS — data entry inside a form the operator is already committed
+to — not action controls. The precedent is shipped and reviewed:
+`UserForm.tsx:299`'s role select is `h-8` with no `min-h-11`, and no select in
+this repo carries one. AGENTS.md's 44×44 floor keeps governing the ACTION
+controls around them, all of which already comply and none of which WU3 edits:
+`VehicleQuickForm`'s `Agregar vehículo` trigger, `Cancelar`, and `Guardar
+vehículo` keep their `min-h-11 min-w-11`.
+
+Written down for the same reason D6 is: **no test in this repo can measure a
+rendered height**, so a reviewer demanding 44px and a later agent "fixing" it
+upward are both one comment away, and this line is the only thing that answers
+them. If the owner tries it on a tablet and disagrees, raising the whole
+vehicle field row — inputs included — is the change to make, not raising two
+controls out of four.
+
+## D20 — What review is for on this unit
+
+~300 of WU3's ~500 lines are data rows. Reading them line by line is neither
+possible nor useful: nobody in the review can confirm from memory that Chery
+sells a Tiggo 7 Pro in Panama, and a reviewer who tries will approve on
+vibes.
+
+The reviewable claims are: the dataset's SHAPE (D13's invariants, all asserted
+by test), the ESCAPE (D14 — can a vehicle outside the list be recorded, and can
+you get back), the RESET (D16 — does changing the make strand a model), the
+NEVER-BLANK rule (D15 — does opening an existing vehicle preserve it), and the
+absence of any server or schema change (D18). Everything else is data the owner
+owns and a one-line PR corrects.
+
+---
+
+## WU3 file changes
+
+| File | Action | Description |
+|---|---|---|
+| `src/modules/customers/vehicle-catalog.ts` | Create | `VEHICLE_CATALOG`, `VEHICLE_MAKES`, `modelsForMake`, `OTHER` (D13). ~300 lines of it is data |
+| `src/modules/customers/vehicle-catalog.test.ts` | Create | the shape invariants + the four vPIC-absent Toyota models (D13) |
+| `src/modules/customers/VehicleMakeModelFields.tsx` | Create | the two selects, the escape, the make→model reset (D14–D17) |
+| `src/modules/customers/VehicleMakeModelFields.test.tsx` | Create | escape both ways, unknown stored value, reset, model-has-no-list-when-make-is-other |
+| `src/modules/customers/VehicleQuickForm.tsx` | Modify | the two `Input`s become the shared control; payload, `year` coercion, dialog and 44×44 buttons untouched |
+| `src/modules/customers/CustomerForm.tsx` | Modify | same swap inside the vehicle card; `buildPayload`, reconcile payload and per-row keys untouched |
+| `src/modules/customers/VehicleQuickForm.test.tsx`, `CustomerForm.test.tsx` | Modify | existing make/model assertions rewritten to drive selects; every other assertion unmodified |
+| `src/modules/customers/validation.ts`, the API routes, `schema.ts`, migrations | **Unchanged** | the catalog constrains the form, not the column (D18) |
+
+## WU3 interfaces
+
+```ts
+// src/modules/customers/vehicle-catalog.ts — plain data, zero I/O.
+// Origin grouping lives in a comment above the data and in the spec's table; the
+// select never renders it (D13).
+export const VEHICLE_CATALOG: Readonly<Record<string, readonly string[]>>;
+export const VEHICLE_MAKES: readonly string[];            // Object.keys, authored sorted, asserted sorted
+/** [] for a make the catalog does not list — the NORMAL state behind every free-text make, so never a throw. */
+export function modelsForMake(make: string): readonly string[];
+/** The select's stand-in for "not in the list". Never storable, never a make (asserted). */
+export const OTHER = "__otro__";
+
+// src/modules/customers/VehicleMakeModelFields.tsx — "use client".
+// Owns: the two selects, the "Otro" escape, and the make→model reset (D14–D16).
+// Owns nothing else: no fetch, no payload shape, no validation, no `year` (D17/D18).
+export function VehicleMakeModelFields(props: {
+  /** "vehiculo-rapido" in the quick form; the vehicle row's `key` in CustomerForm. */
+  idPrefix: string;
+  make: string;
+  model: string;
+  /** Emitted as ONE update — a make change carries `model: ""` with it (D16). */
+  onChange: (next: { make: string; model: string }) => void;
+  className?: string;
+}): React.JSX.Element;
+```
+
+## WU3 testing strategy
+
+| Layer | What | How |
+|---|---|---|
+| Unit (node) | Dataset shape: make set equals the spec's enumeration, keys sorted, no dupes, every make has models, models trimmed/unique, no make collides with `OTHER` or is named "Otro" | `vehicle-catalog.test.ts` — ~10 assertions over ~300 rows (D13/D20) |
+| Unit (node) | Toyota carries `Hilux`, `Fortuner`, `Land Cruiser Prado`, `Rush` | same file — the vPIC tripwire, red the moment anyone regenerates the file from a US source |
+| Component (jsdom) | Escape out and back: picking "Otro" reveals the input; picking a catalog make hides it; the string "Otro" is never emitted as a value | `VehicleMakeModelFields.test.tsx`, driving Base UI selects the way `UserForm.test.tsx:39-42` does (click the label, then `findByRole("option", { name })`) |
+| Component (jsdom) | An unknown stored `make` mounts in escape mode showing that value; an unknown stored `model` under a KNOWN make mounts with the make as a select and the model as text. **Mutation-verify** by dropping the lazy seed to `useState(false)` — the unknown-stored-value test must go red by name | same file (D15) |
+| Component (jsdom) | Changing the make empties the model and re-lists the new make's models; mounting with a stored make+model empties nothing. **Mutation-verify** by dropping `model: ""` from the make handler — the reset test must go red by name | same file (D16) |
+| Component (jsdom) | With the make in escape mode, the model field is a text input and NOT a combobox | same file (D14) |
+| Component (jsdom) | Both write paths: the quick form still POSTs exactly `plate`/`make`/`model`/`year` with `year` a number; the customer form still reconciles per-row without touching siblings | existing `VehicleQuickForm.test.tsx` / `CustomerForm.test.tsx` assertions kept, only the make/model DRIVING rewritten (D17/D18) |
+| **Browser, console open** | The two selects beside `Placa`/`Año` on a narrow viewport; the revealed input's reflow; a 41-item list opened on a touch target. jsdom measures no height and reports no hydration mismatch | recorded in the PR body (D19) |
+
+**What no green suite proves here**: that the model lists are the right models
+for Panama. That is judgement, and the escape is the mitigation.
+
+## WU3 rollout
+
+No migration, no schema change, no backfill, no new package, no new route, no
+`ROUTE_GUARDS` entry, no `policy.ts` action. WU3 branches off the tracker, is
+independent of the WU1 → WU2 chain and of WU4, and reverts by deleting two new
+files and restoring four `Input`s. Every value already stored stays valid,
+which is the whole reason D18 keeps the columns as plain `text`.
 
 ## Data Flow
 
@@ -397,6 +690,10 @@ WU4 — transitionOrder(id, "done")
 | `src/modules/service-orders/service.ts` | **Unchanged** | `transitionOrder` keeps calling for `"service_due"`; the gate is downstream (D12) | — |
 | `src/modules/service-orders/ORDEN_SORT`, `parseOrdenSort` | **Unchanged** | no sort by customer or plate; no joined `ORDER BY` (D10) | — |
 | `src/shared/db/schema.ts`, migrations, `policy.ts`, `ROUTE_GUARDS` | **Unchanged** | no schema change, no new route, no new `Action` anywhere in this change | — |
+
+WU3's files are listed separately under **WU3 file changes** above, with its
+interfaces, testing strategy and rollout, so the unit stays readable as one
+block. It shares no file with WU1, WU2 or WU4.
 
 ## Interfaces
 
@@ -527,8 +824,14 @@ are untouched and still fire.
 
 ## Open Questions
 
-- [ ] **WU3's make/model list.** Blocks WU3's spec and design only; nothing
-      above depends on it.
+- [x] **WU3's make/model list.** ~~Blocks WU3's spec and design only.~~
+      Settled by the owner — the enumerated list is in the `vehicle-catalog`
+      spec and its provenance is in the WU3 section above. **One thing did not
+      survive the handoff cleanly: the list was described as 38 makes and
+      enumerates 41.** The enumeration is treated as authoritative and no count
+      is written into any artifact; the shape test asserts the SET of makes, not
+      a number. If the intent was 38, three makes have to be named before WU3 is
+      applied — do not let an agent pick them.
 - [ ] **Whether `Vehículo` renders make/model beside the plate or the plate
       alone.** The delta only requires the plate to appear. The projection
       carries `make`/`model` (both nullable) so the page can render a muted

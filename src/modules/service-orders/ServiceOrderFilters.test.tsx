@@ -76,6 +76,32 @@ describe("ServiceOrderFilters — status select routes through the one hook", ()
 });
 
 /**
+ * D1's "fourth call site" — the search box `useUrlFilters` was extracted so
+ * this screen could gain one without becoming a second `router.push` (D2:
+ * "without the hook it would ship the same defect a third time").
+ */
+describe("ServiceOrderFilters — search box (D1's fourth call site)", () => {
+  it("shows the URL value on mount, wired to the search key", () => {
+    seedUrl("search=perez");
+    render(<ServiceOrderFilters selected={{ search: "perez" }} pageSize={10} />);
+
+    expect((screen.getByLabelText("Filtro") as HTMLInputElement).value).toBe("perez");
+  });
+
+  it("reflects a keystroke from state before any push lands, then pushes after the debounce", async () => {
+    const user = userEvent.setup();
+    render(<ServiceOrderFilters selected={{}} pageSize={10} />);
+
+    await user.type(screen.getByLabelText("Filtro"), "perez");
+    expect(screen.getByLabelText("Filtro")).toHaveValue("perez");
+    expect(push).not.toHaveBeenCalled();
+
+    await new Promise((resolve) => setTimeout(resolve, 320)); // past the 300ms debounce
+    expect(push).toHaveBeenCalledWith("/service-orders?search=perez");
+  });
+});
+
+/**
  * `Limpiar` used to bypass `applyFilter` with its own `router.push(pathname)`
  * (`:58`) — a second writer, the exact shape D6 removes.
  *

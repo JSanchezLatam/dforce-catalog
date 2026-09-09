@@ -7,21 +7,46 @@
  * so this module is unit-testable with injected fakes and no live Postgres
  * connection.
  */
-import { count, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, or, sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
-import { ordenServicio, ordenServicioItem, type OrdenServicio, type OrdenServicioItem } from "@/shared/db/schema";
+import { unaccentIlike } from "@/shared/db/text-search";
+import { cliente, ordenServicio, ordenServicioItem, vehiculo, type OrdenServicio, type OrdenServicioItem } from "@/shared/db/schema";
 import type { OrderStatus } from "./transitions";
 
 export const DEFAULT_PAGE_SIZE = 10;
 
-export type OrdenServicioFilters = { status?: OrderStatus };
+export type OrdenServicioFilters = { status?: OrderStatus; search?: string };
 
 export type OrdenServicioDetail = { orden: OrdenServicio; items: OrdenServicioItem[] };
 
-/** Pure — R21's status-filter predicate for the list/count queries. */
+/** Mirrors ClienteListItem: a Pick plus the joined fields, nothing wider (D9). */
+export type OrdenServicioListItem = Pick<OrdenServicio, "id" | "status" | "appointmentAt"> & {
+  clienteName: string;
+  vehiculoPlate: string;
+  vehiculoMake: string | null;
+  vehiculoModel: string | null;
+};
+
+/**
+ * Status + search. The plate term is a PLAIN comparison against the joined
+ * `vehiculo.plate` — NOT `vehiculoPlateExists`, which correlates on the
+ * CUSTOMER and filters to active vehicles only (design D7). Shared by the
+ * list and the count query, or the pager offers pages that do not exist
+ * (D9): both add the identical two joins and both build from this one
+ * `WHERE`.
+ */
 export function buildOrdenServicioWhere(filters: OrdenServicioFilters) {
-  return filters.status ? eq(ordenServicio.status, filters.status) : undefined;
+  const status = filters.status ? eq(ordenServicio.status, filters.status) : undefined;
+  const term = filters.search?.trim();
+  if (!term) return status;
+  const pattern = `%${term}%`;
+  const search = or(
+    unaccentIlike(cliente.name, pattern),
+    unaccentIlike(cliente.phone, pattern),
+    unaccentIlike(vehiculo.plate, pattern),
+  );
+  return status ? and(status, search) : search;
 }
 
 /**
@@ -92,37 +117,95 @@ export function parseOrdenSort(searchParams: RawSearchParams): OrdenSort | undef
  * be more prominent than a real one, in either direction — applying `nulls
  * last` to all three columns uniformly is a no-op on the two that are
  * `NOT NULL`.
+ *
+ * D10 — the UNSORTED default also gets `appointmentAt desc nulls last` as its
+ * primary expression, `createdAt desc` staying the tiebreak: the spec's
+ * "Unsorted Default Order Is Appointment-First" requirement, and
+ * `table-sorting`'s NULL-Ordering guarantee extended to cover this default
+ * too (an order with no appointment must not be more prominent than one
+ * with a real date, even with no explicit `?sort=`).
  */
 export function buildOrdenServicioOrderBy(sort?: OrdenSort) {
   const tiebreak = desc(ordenServicio.createdAt);
-  if (!sort) return [tiebreak];
+  if (!sort) return [sql`${ordenServicio.appointmentAt} desc nulls last`, tiebreak];
   const column = ORDEN_SORT[sort.key];
   const primary = sort.dir === "asc" ? sql`${column} asc nulls last` : sql`${column} desc nulls last`;
   return [primary, tiebreak];
 }
 
-/** R21 — paginated + status-filtered service-order list, newest first by default; sortable per D2. */
+/**
+ * D7/D9 — the query behind `listOrdenesServicio`'s default `queryFn`, exposed
+ * for `.toSQL()` the same way `catalog-builder/queries.ts`'s
+ * `productsInCategoriesQuery` is (never executed by a test, only compiled).
+ * Both FKs (`clienteId`, `vehiculoId`) are `.notNull()` with
+ * `onDelete: "restrict"`, so an INNER join cannot silently drop a row — no
+ * order can exist without a live `cliente` and `vehiculo`, and neither
+ * parent can be deleted while an order references it.
+ *
+ * Task 2.17's check, recorded: with all three tables' own `id` columns in
+ * scope, `.select({...})` over typed Column objects (not an interpolated raw
+ * `sql` fragment) renders every identifier table-qualified —
+ * `select "orden_servicio"."id", ... from "orden_servicio" inner join
+ * "cliente" on "orden_servicio"."cliente_id" = "cliente"."id" inner join
+ * "vehiculo" on "orden_servicio"."vehiculo_id" = "vehiculo"."id" ...` —
+ * verified against the actual rendered `.toSQL()` output, not assumed.
+ * `vehicles.ts:platesSubquery()`'s qualifier-elision trap is a DIFFERENT
+ * shape (a raw `sql` fragment embedded inside a field map, with hardcoded
+ * unqualified column names inside it); it does not apply to this query.
+ */
+export function ordenServicioListQuery(
+  filters: OrdenServicioFilters,
+  window: { offset: number; limit: number },
+  sort?: OrdenSort,
+) {
+  return db
+    .select({
+      id: ordenServicio.id,
+      status: ordenServicio.status,
+      appointmentAt: ordenServicio.appointmentAt,
+      clienteName: cliente.name,
+      vehiculoPlate: vehiculo.plate,
+      vehiculoMake: vehiculo.make,
+      vehiculoModel: vehiculo.model,
+    })
+    .from(ordenServicio)
+    .innerJoin(cliente, eq(ordenServicio.clienteId, cliente.id))
+    .innerJoin(vehiculo, eq(ordenServicio.vehiculoId, vehiculo.id))
+    .where(buildOrdenServicioWhere(filters))
+    .orderBy(...buildOrdenServicioOrderBy(sort))
+    .limit(window.limit)
+    .offset(window.offset);
+}
+
+/** R21 — paginated + status/search-filtered service-order list, newest-appointment-first by default; sortable per D2. */
 export async function listOrdenesServicio(
   filters: OrdenServicioFilters,
   window: { offset: number; limit: number },
   sort?: OrdenSort,
-  queryFn: () => Promise<OrdenServicio[]> = () =>
-    db
-      .select()
-      .from(ordenServicio)
-      .where(buildOrdenServicioWhere(filters))
-      .orderBy(...buildOrdenServicioOrderBy(sort))
-      .limit(window.limit)
-      .offset(window.offset),
-): Promise<OrdenServicio[]> {
+  queryFn: () => Promise<OrdenServicioListItem[]> = () => ordenServicioListQuery(filters, window, sort),
+): Promise<OrdenServicioListItem[]> {
   return queryFn();
+}
+
+/**
+ * D9's count-parity trap: the count MUST carry the identical joins the list
+ * does, or the pager offers pages that do not exist — a search predicate over
+ * `cliente.name`/`vehiculo.plate` cannot be evaluated without them.
+ */
+export function ordenServicioCountQuery(filters: OrdenServicioFilters) {
+  return db
+    .select({ value: count() })
+    .from(ordenServicio)
+    .innerJoin(cliente, eq(ordenServicio.clienteId, cliente.id))
+    .innerJoin(vehiculo, eq(ordenServicio.vehiculoId, vehiculo.id))
+    .where(buildOrdenServicioWhere(filters));
 }
 
 /** R21 — total count for the same filter, for pagination math. */
 export async function countOrdenesServicio(
   filters: OrdenServicioFilters,
   queryFn: () => Promise<number> = async () => {
-    const rows = await db.select({ value: count() }).from(ordenServicio).where(buildOrdenServicioWhere(filters));
+    const rows = await ordenServicioCountQuery(filters);
     return rows[0]?.value ?? 0;
   },
 ): Promise<number> {

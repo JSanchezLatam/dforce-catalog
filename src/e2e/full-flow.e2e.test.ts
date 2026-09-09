@@ -26,7 +26,7 @@
  * render.
  */
 import { execSync } from "node:child_process";
-import { eq, gte, inArray, sql } from "drizzle-orm";
+import { count, eq, gte, inArray, sql } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -57,7 +57,7 @@ import { runSync } from "@/modules/inventory-sync/job";
 import { getClienteById } from "@/modules/customers/queries";
 import { deactivateCliente, reactivateCliente } from "@/modules/customers/service";
 import { ImportAlreadyRunningError, runCustomerImport } from "@/modules/customer-import/job";
-import { listOrdenesByVehiculo } from "@/modules/service-orders/queries";
+import { countOrdenesServicio, listOrdenesByVehiculo, listOrdenesServicio } from "@/modules/service-orders/queries";
 import { registerPdfGenerateWorker } from "@/modules/pdf-generation/worker";
 import { proxy } from "@/proxy";
 import { db } from "@/shared/db/client";
@@ -1408,6 +1408,189 @@ describe("single vehicle insert (E2E)", () => {
     const after = await db.select().from(cliente).where(eq(cliente.id, owner.id));
     expect(after[0]).toEqual(before[0]);
     expect(after[0]).toMatchObject(CONSENT);
+  });
+});
+
+/**
+ * service-orders-search-and-vehicle-catalog D7/D9/D10 — WU2's exit criterion.
+ * `listOrdenesServicio`/`countOrdenesServicio` are a bare
+ * `db.select().from(ordenServicio)` in every unit test (AGENTS.md's
+ * injected-seam limit: `vitest.config.ts` points `DATABASE_URL` at a
+ * nonexistent database, so a green `npm test` proves ZERO coverage of the
+ * real join/`WHERE`). This is the row that actually runs it.
+ *
+ * Placed BEFORE `full catalog-generation flow (E2E)` for the reason this
+ * file's header already gives: that describe's `afterAll` ends the shared
+ * connection pool, so anything appended after it never runs. Mirrors
+ * `vehicle search (E2E)`'s `beforeAll`/`afterAll` shape.
+ */
+describe("order search (E2E)", () => {
+  let owner: { id: string };
+  let searchedVehicleId: string;
+  let deactivatedOwner: { id: string };
+  let deactivatedVehicleId: string;
+  let orderA: { id: string };
+  let orderB: { id: string };
+  let orderC: { id: string };
+  let deactivatedOrder: { id: string };
+
+  beforeAll(async () => {
+    execSync("npx drizzle-kit migrate", { stdio: "inherit" });
+
+    const [ownerRow] = await db
+      .insert(cliente)
+      .values({ name: "María Pérez", phone: "50767171717" })
+      .returning({ id: cliente.id });
+    owner = ownerRow;
+
+    const seededVehicles = await db
+      .insert(vehiculo)
+      .values([
+        { clienteId: owner.id, plate: "SRCH01" },
+        { clienteId: owner.id, plate: "SRCH02" }, // the OTHER vehicle — no order references it
+      ])
+      .returning({ id: vehiculo.id });
+    searchedVehicleId = seededVehicles[0].id;
+
+    const [deactivatedOwnerRow] = await db
+      .insert(cliente)
+      .values({ name: "Roberto Núñez", phone: "50767272727" })
+      .returning({ id: cliente.id });
+    deactivatedOwner = deactivatedOwnerRow;
+    const [deactivatedVehicleRow] = await db
+      .insert(vehiculo)
+      .values({ clienteId: deactivatedOwner.id, plate: "SRCH03" })
+      .returning({ id: vehiculo.id });
+    deactivatedVehicleId = deactivatedVehicleRow.id;
+
+    const now = new Date();
+    const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const lastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // Order A — created TODAY (last), appointment NEXT WEEK. Must sort FIRST
+    // under the unsorted default (appointmentAt desc nulls last), which is
+    // the OPPOSITE of creation order — the whole point of this fixture.
+    const [orderARow] = await db
+      .insert(ordenServicio)
+      .values({
+        clienteId: owner.id,
+        vehiculoId: searchedVehicleId,
+        categoria: "revisado",
+        appointmentAt: nextWeek,
+        description: "alineación y balanceo",
+        createdAt: now,
+      })
+      .returning({ id: ordenServicio.id });
+    orderA = orderARow;
+
+    // Order B — created LAST WEEK (first), appointment YESTERDAY.
+    const [orderBRow] = await db
+      .insert(ordenServicio)
+      .values({
+        clienteId: owner.id,
+        vehiculoId: searchedVehicleId,
+        categoria: "mant_preventivo",
+        appointmentAt: yesterday,
+        createdAt: lastWeek,
+      })
+      .returning({ id: ordenServicio.id });
+    orderB = orderBRow;
+
+    // Order C — no appointment at all; must sort LAST regardless of createdAt.
+    const [orderCRow] = await db
+      .insert(ordenServicio)
+      .values({
+        clienteId: owner.id,
+        vehiculoId: searchedVehicleId,
+        categoria: "reparacion",
+        appointmentAt: null,
+        createdAt: now,
+      })
+      .returning({ id: ordenServicio.id });
+    orderC = orderCRow;
+
+    // The vehicle is deactivated AFTER the order already references it —
+    // design D7's second reason `vehiculoPlateExists` is wrong here:
+    // `activeVehiculoFilter()` would hide this order from search entirely.
+    const [deactivatedOrderRow] = await db
+      .insert(ordenServicio)
+      .values({ clienteId: deactivatedOwner.id, vehiculoId: deactivatedVehicleId, categoria: "instalacion" })
+      .returning({ id: ordenServicio.id });
+    deactivatedOrder = deactivatedOrderRow;
+    await db.update(vehiculo).set({ deactivatedAt: now }).where(eq(vehiculo.id, deactivatedVehicleId));
+  }, 60_000);
+
+  afterAll(async () => {
+    const clienteIds = [owner?.id, deactivatedOwner?.id].filter((id): id is string => Boolean(id));
+    if (clienteIds.length === 0) return;
+    await db.delete(ordenServicio).where(inArray(ordenServicio.clienteId, clienteIds));
+    await db.delete(cliente).where(inArray(cliente.id, clienteIds)); // `vehiculo` cascades
+  });
+
+  function idsOf(items: { id: string }[]): string[] {
+    return items.map((item) => item.id);
+  }
+
+  it("finds the order by customer name, accent-folded (no accent in the term, accent in the row)", async () => {
+    const results = await listOrdenesServicio({ search: "perez" }, { offset: 0, limit: 50 });
+    expect(idsOf(results)).toContain(orderA.id);
+  });
+
+  it("finds the order by customer phone", async () => {
+    const results = await listOrdenesServicio({ search: "50767171717" }, { offset: 0, limit: 50 });
+    expect(idsOf(results)).toContain(orderA.id);
+  });
+
+  it("finds the order by its vehicle's plate", async () => {
+    const results = await listOrdenesServicio({ search: "SRCH01" }, { offset: 0, limit: 50 });
+    expect(idsOf(results)).toContain(orderA.id);
+  });
+
+  /**
+   * D7's first reason `vehiculoPlateExists` is wrong for this list: it
+   * correlates on the CUSTOMER, so reusing it would return this customer's
+   * orders for their OTHER car too. The plate belongs to a vehicle no order
+   * references, so the correct answer is zero rows, not "every order this
+   * customer has".
+   */
+  it("searching the customer's OTHER vehicle's plate returns zero orders", async () => {
+    const results = await listOrdenesServicio({ search: "SRCH02" }, { offset: 0, limit: 50 });
+    expect(results).toHaveLength(0);
+  });
+
+  it("still finds the order whose vehicle was deactivated AFTER the order was created", async () => {
+    const results = await listOrdenesServicio({ search: "SRCH03" }, { offset: 0, limit: 50 });
+    expect(idsOf(results)).toContain(deactivatedOrder.id);
+  });
+
+  it("does not match a word present only in description — unindexed free text, no user-meaningful match", async () => {
+    const results = await listOrdenesServicio({ search: "alineación" }, { offset: 0, limit: 50 });
+    expect(idsOf(results)).not.toContain(orderA.id);
+  });
+
+  /**
+   * D9's count-parity claim, proven rather than asserted: the joined count
+   * must equal what a plain `count(*)` gives at the same instant, or the
+   * join is silently duplicating or dropping rows.
+   */
+  it("the unfiltered row count is unchanged from before the join", async () => {
+    const [raw] = await db.select({ value: count() }).from(ordenServicio);
+    const joined = await countOrdenesServicio({});
+    expect(joined).toBe(raw.value);
+  });
+
+  /**
+   * The exit criterion's core claim: `appointmentAt` desc nulls last,
+   * `createdAt` as tiebreak — sorted by APPOINTMENT, which is the OPPOSITE
+   * of these three orders' creation order (B, A/C created, then A last).
+   */
+  it("with no sort in the URL, orders read appointment-next-week, then appointment-yesterday, then no-appointment — not creation order", async () => {
+    const results = await listOrdenesServicio({}, { offset: 0, limit: 50 });
+    const ids = idsOf(results);
+    const relevant = [orderA.id, orderB.id, orderC.id].map((id) => ids.indexOf(id));
+    expect(relevant.every((index) => index !== -1)).toBe(true);
+    expect(relevant).toEqual([...relevant].sort((a, b) => a - b));
   });
 });
 
