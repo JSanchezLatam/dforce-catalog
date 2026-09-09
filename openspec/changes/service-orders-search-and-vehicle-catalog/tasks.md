@@ -592,6 +592,21 @@ design D7–D11)
   full UUID. Click a column-header sort, then page 2 if present, confirm
   the search term survives both.
 - [x] 2.31 `npm test` (alone) and `npx tsc --noEmit` clean.
+- [x] 2.32 **Recorded, not smuggled.** `status` and `pageSize` read through
+  `firstValue` in `buildSortHref` and `buildPageHrefPattern`, not only
+  `search`. `normalizeOrdenFilters` already read `status` that way, so
+  `?status=open&status=done` FILTERED by `open` while every sort and
+  pagination link dropped status entirely. Fixing `search` alone — which is
+  all 2.24 asked for — would have left two of three lying in the same file.
+  Review called the first version a silent scope expansion, correctly: the
+  justification was in a code comment and no test covered it. It has a task
+  number and a test now (`keeps a duplicated status param in the sort and
+  pagination links`, mutation-verified against the old `typeof` check).
+- [x] 2.33 The empty state learned `search` too, and the copy stayed
+  `"Ninguna orden coincide con el filtro."` — true for BOTH branches, and the
+  one thing its own `Limpiar filtro` link agrees with. The first version
+  narrowed it to `"la búsqueda"`, which made a status-only filter contradict
+  its own call to action on screen. Both branches now tested.
 
 ### Phase 2 verification record — fill in during `sdd-apply`
 
@@ -654,7 +669,7 @@ intent, the owner names the three; an agent must not pick them.
 
 - [ ] 3.1 RED (node) — create `src/modules/customers/vehicle-catalog.test.ts`
   with D13's shape invariants, each `it` named after the invariant it pins so a
-  failure says which one broke: the make SET equals the spec's enumerated 41
+  failure says which one broke: the make SET equals the spec's enumerated list
   (`toEqual` on a sorted literal — a set, never a count, because a count rots
   away from the list it counts and already disagreed with it once); keys
   sorted; no duplicate key; every make has ≥1 model; every model non-empty and
@@ -664,7 +679,7 @@ intent, the owner names the three; an agent must not pick them.
   not exist yet.
 - [ ] 3.2 GREEN — create `src/modules/customers/vehicle-catalog.ts`:
   `VEHICLE_CATALOG` as `Readonly<Record<string, readonly string[]>>` with the
-  41 makes as SORTED keys, `VEHICLE_MAKES = Object.keys(...)`,
+  the spec's makes as SORTED keys, `VEHICLE_MAKES = Object.keys(...)`,
   `modelsForMake(make)` returning `[]` for an unknown make (never a throw — an
   unknown make is the normal state behind every free-text value, D13), and
   `export const OTHER = "__otro__"`. Put the origin grouping (Japanese /
@@ -808,7 +823,7 @@ intent, the owner names the three; an agent must not pick them.
   customer holding at least two vehicles, and the order dialog's quick form.
   Read: the two selects beside `Placa`/`Año` at a narrow width; the revealed
   `Especificá la marca` input's reflow inside the `sm:grid-cols-2` grid; a
-  41-item make list opened on a touch-sized target; zero console warnings.
+  full make list opened on a touch-sized target; zero console warnings.
   jsdom sees none of this — it measures no height, reports no hydration
   mismatch, and would not flag an RSC boundary if one appeared. Record the
   result in the PR body.

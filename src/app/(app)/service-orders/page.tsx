@@ -142,7 +142,7 @@ export default async function ServiceOrdersPage({
                     class on the sibling screen. */}
                 {filters.status || filters.search ? (
                   <>
-                    Ninguna orden coincide con la búsqueda.{" "}
+                    Ninguna orden coincide con el filtro.{" "}
                     <Link href="/service-orders" className="text-primary hover:underline">
                       Limpiar filtro
                     </Link>
@@ -383,11 +383,6 @@ function buildSortHref(params: SearchParams, key: keyof typeof ORDEN_SORT, curre
  */
 function buildPageHrefPattern(params: SearchParams, sort: OrdenSort | undefined): string {
   const query = new URLSearchParams();
-  // `firstValue` on all three, not just `search`. `normalizeOrdenFilters`
-  // already reads `status` that way, so `?status=open&status=done` FILTERS by
-  // `open` while every sort and pagination link dropped status entirely —
-  // pre-existing, and exactly the class the comment below names. Fixing one of
-  // three would have left the other two lying in the same file.
   const status = firstValue(params.status);
   if (status) query.set("status", status);
   const size = firstValue(params.pageSize);

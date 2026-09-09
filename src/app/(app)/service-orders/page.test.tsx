@@ -516,8 +516,42 @@ describe("ServiceOrdersPage — the empty state does not lie", () => {
   it("says the search matched nothing, not that no orders exist", async () => {
     render(await renderEmpty({ search: "zzzz" }));
 
-    expect(screen.getByText(/Ninguna orden coincide con la búsqueda/)).toBeInTheDocument();
+    // One sentence for both branches, because it is true for both and because
+    // its own link says "Limpiar filtro" — narrowing it to "la búsqueda" made
+    // the copy and its call to action contradict each other on a status-only
+    // filter.
+    expect(screen.getByText(/Ninguna orden coincide con el filtro/)).toBeInTheDocument();
     expect(screen.queryByText(/Todavía no hay órdenes de servicio registradas/)).not.toBeInTheDocument();
+  });
+
+  // The case the first version of this block walked past: the copy was
+  // narrowed to "búsqueda" while the condition was widened, so a status-only
+  // filter read "no coincide con la búsqueda" beside a link saying "Limpiar
+  // filtro" — the sentence and its own call to action disagreeing on screen.
+  it("says the filter matched nothing when there is a status but no search", async () => {
+    render(await renderEmpty({ status: "done" }));
+
+    expect(screen.getByText(/Ninguna orden coincide con el filtro/)).toBeInTheDocument();
+    expect(screen.queryByText(/Todavía no hay órdenes de servicio registradas/)).not.toBeInTheDocument();
+  });
+
+  /**
+   * Task 2.32 — recorded, not smuggled. `normalizeOrdenFilters` already read
+   * `status` through `firstValue`, so `?status=open&status=done` FILTERED by
+   * `open` while every sort and pagination link dropped status entirely. The
+   * `search` fix in 2.24 would have left two of three lying in the same file,
+   * so all three were converted — and this is the test that was missing when
+   * review called it a silent scope expansion.
+   */
+  it("keeps a duplicated status param in the sort and pagination links", async () => {
+    // `renderPage`, not `renderEmpty`: with zero rows the empty state replaces
+    // the table, so there are no sort headers or pagination links to inspect.
+    render(await renderPage({ status: ["done", "open"] as unknown as string }));
+
+    const links = screen.getAllByRole("link").map((a) => a.getAttribute("href") ?? "");
+    const withStatus = links.filter((href) => href.includes("status="));
+    expect(withStatus.length).toBeGreaterThan(0);
+    for (const href of withStatus) expect(href).toContain("status=done");
   });
 
   it("still says there are none when there genuinely are none", async () => {
