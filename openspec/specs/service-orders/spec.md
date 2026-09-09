@@ -86,3 +86,33 @@ When creating or editing an `orden_servicio`, the customer picker MUST query cus
 - AND a user without `customers.write` MUST still see that message, because rendering nothing is indistinguishable from a search that has not finished
 - GIVEN a `tecnico` with a valid session WHEN they call any service-order route THEN `can()` MUST evaluate `true` and the request MUST succeed exactly as it does today
 - GIVEN an `administrador` with a valid session WHEN they call any service-order route THEN `can()` MUST evaluate `true` and the request MUST succeed
+
+### Requirement: Bulk Status Change Constrained to Legal Transitions
+
+Staff MUST be able to select service orders in the list view (per
+`table-bulk-actions`) and change their status in bulk. The status-change
+menu MUST offer only the target statuses that are legal, via
+`getAllowedTransitions`, for EVERY row in the current selection — the
+intersection of each selected row's legal next states, not the union, and
+not every status unconditionally. The bulk action MUST apply
+`assertTransition` per row against that row's CURRENT status, looping the
+existing single-order transition call sequentially; it MUST NOT read every
+row's status once and apply a single batched update.
+
+Because a bulk transition to `done` or `cancelled` is terminal and cannot be
+undone through the UI, the confirmation step MUST say so before the action
+runs.
+
+#### Scenarios
+
+- GIVEN a selection of 4 orders, 3 `open` and 1 `in_progress`
+- WHEN staff opens the bulk status menu
+- THEN it MUST offer only `cancelled` — the one status legal from every selected row's current status — and MUST NOT offer `in_progress` or `done`
+
+- GIVEN a selection of 3 `open` orders, one of which another session transitions to `done` before the bulk action runs
+- WHEN staff applies "Cancelar" to the original selection
+- THEN the system MUST cancel the 2 orders still `open` and report the third by id with the reason its current status no longer allows that transition
+
+- GIVEN a bulk transition targeting `done` or `cancelled`
+- WHEN staff confirms the action
+- THEN the confirmation copy MUST state that the change cannot be undone through the UI

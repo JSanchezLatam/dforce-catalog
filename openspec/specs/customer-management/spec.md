@@ -251,3 +251,29 @@ worse than an empty one, because staff cannot tell which half is missing.*
 - GIVEN an Interfuerza row whose name is blank WHEN staff runs the import THEN the system MUST skip it rather than substituting any other field as the name
 - GIVEN an 8-digit Interfuerza phone WHEN it is imported THEN the stored value MUST be that same string, with no country code added
 - GIVEN a page of the import that fails after its retries are exhausted WHEN the run aborts THEN no customer from that run MUST remain persisted
+
+### Requirement: Bulk Activate/Deactivate From the List
+
+Staff MUST be able to select customers in the list view (per
+`table-bulk-actions`) and apply Activar or Desactivar to the whole selection.
+The bulk action MUST loop the existing per-row `deactivateCliente`/
+`reactivateCliente` path (`PATCH /api/customers/[id]` with `{active}`)
+sequentially, one row at a time — never a batched `UPDATE`. Applying
+"Desactivar" to a selection that mixes already-deactivated rows MUST leave
+those rows as a no-op success, not a reported failure; the mixed-state
+ambiguity that requires two separate action buttons is specific to
+`user-management`'s admin-floor rule and does not apply here.
+
+#### Scenarios
+
+- GIVEN 8 selected customers, all active
+- WHEN staff runs "Desactivar"
+- THEN the system MUST deactivate all 8 through 8 sequential calls to the existing per-row endpoint, and report 8 successes
+
+- GIVEN a selection of 5 customers where 2 are already deactivated
+- WHEN staff runs "Desactivar"
+- THEN the system MUST report all 5 as applied, without listing the 2 as failures
+
+- GIVEN a selection that includes a customer id since deleted by another session
+- WHEN staff runs the bulk action
+- THEN the system MUST apply it to every valid row and report the missing customer by id with a "no longer exists" reason, without failing the whole batch

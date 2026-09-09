@@ -444,12 +444,15 @@ Branch names follow the `crm-workshop/prN-*` convention:
 
 ## Closing checklist (maps to proposal.md's Success Criteria)
 
-- [ ] Four tables read as one visual component; no double border anywhere, including the two `table.tsx` consumers inside dialogs (Phase 1)
-- [ ] Every kebab trigger measures ≥44×44; both `h-7` links are gone (Phases 2–3)
-- [ ] Selection survives paging across pages 1 and 3; the bar states the off-screen count and offers a way to see/clear it (Phase 4)
-- [ ] A filter change with a live selection clears it, visibly, in the exact Spanish string, and a test asserts it (Phase 4)
-- [ ] Selecting both remaining administrators and hitting Desactivar deactivates exactly one and names the second with `last_active_admin` — asserted by a test AND verified against a real database (Phase 5)
+- [x] Four tables read as one visual component; no double border anywhere, including the two `table.tsx` consumers inside dialogs (Phase 1)
+- [x] Every kebab trigger measures ≥44×44; both `h-7` links are gone (Phases 2–3)
+- [x] Selection survives paging across pages 1 and 3; the bar states the off-screen count and offers a way to see/clear it (Phase 4)
+- [x] A filter change with a live selection clears it, visibly, in the exact Spanish string, and a test asserts it (Phase 4)
+- [x] Selecting both remaining administrators and hitting Desactivar deactivates exactly one and names the second with `last_active_admin` — asserted by a test AND verified against a real database (Phase 5)
+- [ ] **NOT VERIFIED — `/service-orders` has 0 rows in the dev database, so nothing in WU6 is reachable there.** Covered by 15 page tests, 18 helper tests and 8 mutations.
 - [ ] A mixed-status bulk transition applies the legal rows and reports each illegal one by id and reason (Phase 6)
+- [ ] **NOT VERIFIED — the Chrome extension disconnected mid-check and did not reconnect.** The SQL half is covered by the real-database run in 7b.9.
 - [ ] Sending an inventory selection to the generador opens the builder with exactly those products (Phases 7a–7b)
-- [ ] `npm test` and `npx tsc --noEmit` clean at the end of every unit
+- [x] `npm test` and `npx tsc --noEmit` clean at the end of every unit
+- [ ] **PARTIAL — WU1-WU5 and WU7a were opened in a browser with the console clean; WU6 was not, for the 0-rows reason above.**
 - [ ] Every unit that adds a client boundary or a portal was opened in a browser with the console read
