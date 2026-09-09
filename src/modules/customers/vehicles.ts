@@ -297,3 +297,41 @@ export async function applyVehiculoPlan(tx: TxLike, clienteId: string, plan: Veh
     await tx.delete(vehiculo).where(and(eq(vehiculo.clienteId, clienteId), inArray(vehiculo.id, plan.delete)));
   }
 }
+
+/**
+ * The single-vehicle insert. Takes ONE vehicle, returns ONE row.
+ *
+ * D1/D2 — this function exists BECAUSE `planVehiculoReconcile` sixty lines
+ * above cannot be reused for it: that one reads `incoming` as the customer's
+ * WHOLE collection (see its deactivate filter and the "omitted from
+ * `incoming`" comment), so handing it a one-element array deactivates every
+ * other active vehicle the customer owns. It therefore NEVER calls
+ * `planVehiculoReconcile` or `applyVehiculoPlan`, and `vehicles.test.ts`'s
+ * "issues exactly one insert and zero updates" is the guard that says so on
+ * every commit — `applyVehiculoPlan` issues an UPDATE per deactivation, so
+ * routing this through it turns that test red.
+ *
+ * `deps.tx` is the same executor seam `applyVehiculoPlan` takes: a caller
+ * already inside a transaction passes it; `POST /api/customers/[id]/vehicles`
+ * does not, and gets the module's own `db`.
+ */
+export type NewVehiculoInput = Pick<VehiculoInput, "plate" | "make" | "model" | "year">;
+
+export async function createVehiculo(
+  clienteId: string,
+  input: NewVehiculoInput,
+  deps: { tx?: TxLike } = {},
+): Promise<Vehiculo> {
+  const executor = deps.tx ?? db;
+  const [row] = await executor
+    .insert(vehiculo)
+    .values({
+      clienteId,
+      plate: input.plate,
+      make: input.make ?? null,
+      model: input.model ?? null,
+      year: input.year ?? null,
+    })
+    .returning();
+  return row;
+}

@@ -296,6 +296,14 @@ export function CustomerForm({
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // `stopPropagation` is load-bearing, not defensive. React dispatches
+    // events along the REACT tree, not the DOM tree, so this dialog being
+    // portalled out of the DOM does NOT take it out of the ancestor form's
+    // event path. This component renders inside `CustomerPicker`, which
+    // renders inside `ServiceOrderForm`'s own `<form onSubmit>` — measured in
+    // jsdom, an inner submit fired the OUTER handler twice, so saving a new
+    // customer from the order dialog also created the order.
+    event.stopPropagation();
     // A plain save never carries the override — it has to be asked for.
     return submit(false);
   }

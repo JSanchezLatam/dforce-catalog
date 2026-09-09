@@ -14,11 +14,12 @@ vi.mock("@/modules/service-orders/OrderStatusControls", () => ({ OrderStatusCont
 
 const getOrdenServicioById = vi.hoisted(() => vi.fn());
 const getClienteById = vi.hoisted(() => vi.fn());
-const listRemindersForOrder = vi.hoisted(() => vi.fn(async () => []));
+const listRemindersForOrder = vi.hoisted(() => vi.fn<() => Promise<Reminder[]>>(async () => []));
 vi.mock("@/modules/service-orders/queries", () => ({ getOrdenServicioById }));
 vi.mock("@/modules/customers/queries", () => ({ getClienteById }));
 vi.mock("@/modules/reminders/queries", () => ({ listRemindersForOrder }));
 
+import type { Reminder } from "@/shared/db/schema";
 import ServiceOrderDetailPage from "./page";
 
 const ORDEN = {
@@ -80,6 +81,45 @@ describe("ServiceOrderDetailPage", () => {
     expect(screen.getByText("Piezas utilizadas")).toBeInTheDocument();
     expect(screen.getByText("Esta orden no tiene piezas registradas.")).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Pieza" })).not.toBeInTheDocument();
+  });
+
+  /**
+   * The label the owner asked for by name, on the page staff actually reads.
+   * It shipped with no assertion anywhere but the form, and AGENTS.md is
+   * explicit: "Tests assert the Spanish string. Those are what catch an
+   * untranslated screen."
+   *
+   * The negative half is scoped to the `<dt>` terms ON PURPOSE, and the
+   * fixture seeds an `appointment` reminder so that "Cita" IS on the page:
+   * `REMINDER_TYPE_LABEL.appointment` renders it in the Recordatorios table,
+   * and the narrow list-column header on `/service-orders` keeps the short
+   * form deliberately. A document-wide `queryByText("Cita")` would therefore
+   * pass only for as long as nobody seeds a reminder — a green assertion
+   * resting on an empty mock, not on the label under test.
+   */
+  it("labels the start time 'Fecha y hora de inicio', not 'Cita'", async () => {
+    getOrdenServicioById.mockResolvedValue({
+      orden: { ...ORDEN, appointmentAt: new Date("2026-06-02T15:30:00Z") },
+      items: [],
+    });
+    // Every column, not the four this assertion reads: AGENTS.md — "a mock
+    // more convenient than reality tests the mock, not the code."
+    listRemindersForOrder.mockResolvedValue([
+      {
+        id: "r1", ordenId: "o1", clienteId: "c1",
+        type: "appointment", channel: "whatsapp", status: "scheduled",
+        scheduledFor: new Date("2026-06-01T15:30:00Z"), sentAt: null,
+        jobId: null, error: null, createdAt: new Date("2026-05-01T14:00:00Z"),
+      },
+    ]);
+
+    render(await renderPage());
+
+    const terms = screen.getAllByRole("term").map((dt) => dt.textContent);
+    expect(terms).toContain("Fecha y hora de inicio");
+    expect(terms).not.toContain("Cita");
+    // The reminder's own "Cita" is still on the page — that is the point.
+    expect(screen.getByRole("cell", { name: "Cita" })).toBeInTheDocument();
   });
 
   it("still shows the vehicle's identity and link when that vehicle is DEACTIVATED", async () => {

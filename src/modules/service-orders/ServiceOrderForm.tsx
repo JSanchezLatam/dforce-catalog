@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { ClienteListItem } from "@/modules/customers/queries";
+import { VehicleQuickForm } from "@/modules/customers/VehicleQuickForm";
 import { CATEGORIA_LABEL, type ServiceCategory } from "./categories";
 import { CustomerPicker } from "./CustomerPicker";
 import { FIELD_ERROR } from "@/shared/ui/styles";
@@ -394,9 +395,45 @@ export function ServiceOrderForm({
                   </div>
                 )}
                 {showVehiclesEmptyHint && (
-                  <p id={VEHICLES_EMPTY_HINT_ID} className="text-sm text-muted-foreground">
-                    Este cliente no tiene vehículos activos. Agregá uno primero.
-                  </p>
+                  <>
+                    <p id={VEHICLES_EMPTY_HINT_ID} className="text-sm text-muted-foreground">
+                      Este cliente no tiene vehículos activos. Agregá uno primero.
+                    </p>
+                    {/*
+                     * D1/D4 — "agregá uno primero" used to be a dead end: 368
+                     * of 370 customers have no vehicle and `vehiculoId` is NOT
+                     * NULL, so the operator had to leave this dialog to open
+                     * an order at all. Gated on `canCreateCustomer`, the same
+                     * `customers.write` rule the picker's "Crear cliente
+                     * nuevo" uses and the same Action the POST requires (D3).
+                     *
+                     * `VehicleQuickForm`, deliberately NOT `CustomerForm`:
+                     * that one always resends `whatsappOptOut`/`emailOptOut`
+                     * from form state, and `ClienteListItem` does not carry
+                     * either — so reusing it here would silently overwrite a
+                     * customer's consent. See its own docstring.
+                     */}
+                    {canCreateCustomer && (
+                      <VehicleQuickForm
+                        clienteId={clienteId}
+                        onCreated={(newVehiculoId) => {
+                          setVehiculoId(newVehiculoId);
+                          // The list this dialog is holding predates the
+                          // insert. Same lever "Reintentar" pulls: the fetch
+                          // effect keys off `vehiclesRetry`, and re-selecting
+                          // the same customer is a no-op React bails on.
+                          setVehiclesRetry((n) => n + 1);
+                        }}
+                        // Nothing to undo: cancelling adds no vehicle, so
+                        // every error already on screen is still true —
+                        // including "Seleccioná un vehículo válido". Clearing
+                        // them here would erase a refusal the operator has
+                        // not addressed. The prop exists because placing the
+                        // form is the parent's business, not because the
+                        // parent has state to roll back.
+                      />
+                    )}
+                  </>
                 )}
                 {errors.vehiculoId && (
                   <p role="alert" className={FIELD_ERROR}>

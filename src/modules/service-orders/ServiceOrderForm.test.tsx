@@ -388,6 +388,71 @@ describe("ServiceOrderForm", () => {
       expect(screen.getByText(/no tiene vehículos activos/i)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled();
     });
+
+    /**
+     * D1/D4 — the whole reason WU2 exists: only 2 of 370 customers have a
+     * vehicle and `orden_servicio.vehiculoId` is NOT NULL, so the hint above
+     * ("Agregá uno primero") used to be a dead end that sent the operator out
+     * of the dialog. The inline form is that "primero", and it is
+     * `VehicleQuickForm` — never `CustomerForm`, which would resend consent
+     * booleans it does not have (D4).
+     */
+    describe("inline vehicle creation (D1/D4)", () => {
+      async function selectCustomerWithNoVehicles(canCreateCustomer: boolean) {
+        fetchMock.mockImplementation((url: string) => {
+          if (url.includes("/vehicles")) return Promise.resolve(jsonResponse({ vehicles: [] }));
+          return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
+        });
+        render(<ServiceOrderForm canCreateCustomer={canCreateCustomer} />);
+        openDialog();
+        await selectCustomer("Cliente A");
+      }
+
+      it("offers the inline vehicle form beside the empty-garage hint", async () => {
+        await selectCustomerWithNoVehicles(true);
+        expect(screen.getByRole("button", { name: "Agregar vehículo" })).toBeInTheDocument();
+      });
+
+      // Same rule that gates "Crear cliente nuevo" in the picker: writing a
+      // vehicle is `customers.write` (design D3).
+      it("offers nothing to a user who may not write customers", async () => {
+        await selectCustomerWithNoVehicles(false);
+        expect(screen.queryByRole("button", { name: "Agregar vehículo" })).not.toBeInTheDocument();
+      });
+
+      it("selects the vehicle it just created and re-reads the customer's list", async () => {
+        let created = false;
+        fetchMock.mockImplementation((url: string, init?: { method?: string }) => {
+          if (url.includes("/vehicles") && init?.method === "POST") {
+            created = true;
+            return Promise.resolve({
+              ok: true,
+              status: 201,
+              json: async () => ({ vehiculo: vehiculoRow({ id: "v-nuevo", plate: "NEW111" }) }),
+            } as Response);
+          }
+          if (url.includes("/vehicles")) {
+            return Promise.resolve(
+              jsonResponse({ vehicles: created ? [vehiculoRow({ id: "v-nuevo", plate: "NEW111" })] : [] }),
+            );
+          }
+          return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
+        });
+
+        render(<ServiceOrderForm canCreateCustomer />);
+        openDialog();
+        await selectCustomer("Cliente A");
+
+        fireEvent.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+        fireEvent.change(screen.getByLabelText("Placa"), { target: { value: "NEW111" } });
+        fireEvent.click(screen.getByRole("button", { name: "Guardar vehículo" }));
+        await flush();
+        await flush();
+
+        expect(vehicleSelect()).toHaveValue("v-nuevo");
+        expect(screen.queryByText(/no tiene vehículos activos/i)).not.toBeInTheDocument();
+      });
+    });
   });
 
   /**
