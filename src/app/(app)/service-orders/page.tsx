@@ -13,6 +13,7 @@ import {
   ORDEN_SORT,
   parseOrdenSort,
   type OrdenServicioFilters,
+  type OrdenServicioListItem,
   type OrdenSort,
 } from "@/modules/service-orders/queries";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
@@ -46,10 +47,20 @@ function firstValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-/** Pure — R21's status-filter predicate, read from `searchParams`. */
+/** Pure — R21's status filter + D7's search term, read from `searchParams`. */
 function normalizeOrdenFilters(searchParams: SearchParams): OrdenServicioFilters {
   const status = firstValue(searchParams.status);
-  return status && VALID_STATUS.has(status as OrderStatus) ? { status: status as OrderStatus } : {};
+  // Trimmed HERE, because `buildOrdenServicioWhere` already trims and returns
+  // no predicate for whitespace — so `?search=%20%20` applied no filter while
+  // three separate consumers believed one was on: the empty state claimed a
+  // filter had missed, `Limpiar` rendered, and `buildFilterKey` cleared the
+  // operator's selection. Same class as the empty-state defect above: UI state
+  // asserting something the query did not do.
+  const search = firstValue(searchParams.search)?.trim();
+  return {
+    ...(status && VALID_STATUS.has(status as OrderStatus) ? { status: status as OrderStatus } : {}),
+    ...(search ? { search } : {}),
+  };
 }
 
 /**
@@ -129,7 +140,13 @@ export default async function ServiceOrdersPage({
               <Wrench className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
               <h2 className="text-lg font-semibold text-foreground">No se encontraron órdenes</h2>
               <p className="text-sm text-muted-foreground">
-                {filters.status ? (
+                {/* `search` belongs here as much as `status` does. Without it,
+                    a term that matches nothing tells the operator there are no
+                    orders REGISTERED — a claim, and a false one over a database
+                    holding forty. `customers/page.tsx` learned this and wrote
+                    it down three lines below its own branch; this is the same
+                    class on the sibling screen. */}
+                {filters.status || filters.search ? (
                   <>
                     Ninguna orden coincide con el filtro.{" "}
                     <Link href="/service-orders" className="text-primary hover:underline">
@@ -178,11 +195,15 @@ export default async function ServiceOrdersPage({
                       <TableCell>
                         <RowCheckbox id={orden.id} label={`orden ${orden.id}`} />
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{orden.id}</TableCell>
+                      {/* DISPLAY-ONLY truncation (spec's "ID renders truncated") —
+                          the stored `id` stays the full UUID; the detail page
+                          keeps rendering it in full. */}
+                      <TableCell className="font-mono text-xs">{orden.id.slice(0, 8)}</TableCell>
+                      <TableCell>{orden.clienteName}</TableCell>
+                      <TableCell>{vehiculoLabel(orden)}</TableCell>
                       <TableCell>
                         <StatusBadge status={orden.status} label={ORDER_STATUS_LABEL[orden.status]} />
                       </TableCell>
-                      <TableCell>{orden.description ?? "—"}</TableCell>
                       <TableCell>{formatDateTime(orden.appointmentAt)}</TableCell>
                       <TableCell>
                         {/* The `h-7` (28px) hand-copied link that used to live
@@ -264,26 +285,49 @@ const ORDER_REFUSAL_MESSAGES: Record<string, string> = {
  * `sort`, `dir`, `page` and `pageSize` are all absent, and the strongest
  * guarantee of that is the argument: this takes the already-narrowed
  * `OrdenServicioFilters`, which `normalizeOrdenFilters` builds from `status`
- * alone. Reading `searchParams` here instead would put every other key one typo
- * away from wiping a selection on every column-header click.
+ * and `search`. Reading `searchParams` here instead would put every other key
+ * one typo away from wiping a selection on every column-header click.
+ *
+ * `search` goes LAST (D11, mirrors `customers/page.tsx:392-397`): it is free
+ * text and can contain anything, `|` included, while `status` is a closed
+ * four-value enum that cannot be confused with part of a search term.
  */
 function buildFilterKey(filters: OrdenServicioFilters): string {
-  return `status=${filters.status ?? "all"}`;
+  return `status=${filters.status ?? "all"}|search=${filters.search ?? ""}`;
 }
 
 /**
  * The header row, declared HERE rather than derived from `ORDEN_SORT` — same
  * reasoning as `customers/page.tsx`'s `COLUMNS`: deriving it would let a
  * query-layer whitelist change silently reshape the table with no matching
- * `<TableCell>`. `Descripción` has no `sort` on purpose (unindexed free text,
- * no user-meaningful order); `Acciones` never does.
+ * `<TableCell>`. `Cliente` and `Vehículo` have no `sort` on purpose — sorting
+ * by customer name or vehicle plate would need a joined `ORDER BY` with
+ * `unaccent`/`lower` wrapping, new SQL this change does not add
+ * (spec's "Unsorted Default Order Is Appointment-First", out-of-scope note).
+ * `Descripción` is GONE (spec's "Order List Columns Show Customer and
+ * Vehicle"); `Acciones` never sorts.
  */
 const COLUMNS: readonly { label: string; sort?: keyof typeof ORDEN_SORT }[] = [
   { label: "ID", sort: "id" },
+  { label: "Cliente" },
+  { label: "Vehículo" },
   { label: "Estado", sort: "status" },
-  { label: "Descripción" },
   { label: "Cita", sort: "appointmentAt" },
 ];
+
+/**
+ * The `Vehículo` cell identifies the car, not merely its registration (spec's
+ * "List shows customer and the car, not just its plate"): the plate AND the
+ * make/model the workshop knows it by. `make`/`model` are both nullable, so
+ * this degrades to the plate alone with no dangling separator or empty
+ * segment when neither is present — the dev database already holds a
+ * vehicle shaped exactly like that, which a fixture with both set cannot
+ * catch (spec's "A vehicle with no make or model still renders its plate").
+ */
+function vehiculoLabel(orden: Pick<OrdenServicioListItem, "vehiculoPlate" | "vehiculoMake" | "vehiculoModel">): string {
+  const makeModel = [orden.vehiculoMake, orden.vehiculoModel].filter(Boolean).join(" ");
+  return makeModel ? `${orden.vehiculoPlate} ${makeModel}` : orden.vehiculoPlate;
+}
 
 /**
  * table-column-sorting D1 — a real `<a>`/`<Link>` built by this Server
@@ -318,13 +362,22 @@ function SortableHeader({
  * toggles direction; any other column starts at `asc`.
  */
 function buildSortHref(params: SearchParams, key: keyof typeof ORDEN_SORT, currentSort: OrdenSort | undefined): string {
-  const search = new URLSearchParams();
-  if (typeof params.status === "string" && params.status) search.set("status", params.status);
-  if (typeof params.pageSize === "string" && params.pageSize) search.set("pageSize", params.pageSize);
+  const query = new URLSearchParams();
+  // `firstValue` on all three, not just `search`. `normalizeOrdenFilters`
+  // already reads `status` that way, so `?status=open&status=done` FILTERS by
+  // `open` while every sort and pagination link dropped status entirely —
+  // pre-existing, and exactly the class the comment below names. Fixing one of
+  // three would have left the other two lying in the same file.
+  const status = firstValue(params.status);
+  if (status) query.set("status", status);
+  const size = firstValue(params.pageSize);
+  if (size) query.set("pageSize", size);
+  const term = firstValue(params.search);
+  if (term) query.set("search", term);
   const nextDir = currentSort?.key === key && currentSort.dir === "asc" ? "desc" : "asc";
-  search.set("sort", key);
-  search.set("dir", nextDir);
-  return `/service-orders?${search.toString()}`;
+  query.set("sort", key);
+  query.set("dir", nextDir);
+  return `/service-orders?${query.toString()}`;
 }
 
 /**
@@ -335,13 +388,20 @@ function buildSortHref(params: SearchParams, key: keyof typeof ORDEN_SORT, curre
  * cannot be laundered into the pagination links.
  */
 function buildPageHrefPattern(params: SearchParams, sort: OrdenSort | undefined): string {
-  const search = new URLSearchParams();
-  if (typeof params.status === "string" && params.status) search.set("status", params.status);
-  if (typeof params.pageSize === "string" && params.pageSize) search.set("pageSize", params.pageSize);
+  const query = new URLSearchParams();
+  const status = firstValue(params.status);
+  if (status) query.set("status", status);
+  const size = firstValue(params.pageSize);
+  if (size) query.set("pageSize", size);
+  // `firstValue`, matching `normalizeOrdenFilters` — `customers/page.tsx:485-489`'s
+  // comment records the bug a `typeof === "string"` check caused once:
+  // `?search=a&search=b` reads as an array and drops silently.
+  const term = firstValue(params.search);
+  if (term) query.set("search", term);
   if (sort) {
-    search.set("sort", sort.key);
-    search.set("dir", sort.dir);
+    query.set("sort", sort.key);
+    query.set("dir", sort.dir);
   }
-  const query = search.toString();
-  return `/service-orders?${query ? `${query}&` : ""}page={page}`;
+  const rendered = query.toString();
+  return `/service-orders?${rendered ? `${rendered}&` : ""}page={page}`;
 }

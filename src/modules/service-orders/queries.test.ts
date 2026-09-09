@@ -10,9 +10,18 @@ import {
   getOrdenServicioById,
   listOrdenesByVehiculo,
   listOrdenesServicio,
+  ordenServicioCountQuery,
+  ordenServicioListQuery,
   ORDEN_SORT,
   parseOrdenSort,
+  type OrdenServicioListItem,
 } from "./queries";
+
+/** Renders the built condition to real Postgres SQL + bound params, no connection needed. */
+function compileWhere(filters: Parameters<typeof buildOrdenServicioWhere>[0]) {
+  const condition = buildOrdenServicioWhere(filters);
+  return condition === undefined ? undefined : new PgDialect().sqlToQuery(condition);
+}
 
 describe("buildOrdenServicioWhere (R21)", () => {
   it("returns undefined when no status filter is given", () => {
@@ -24,9 +33,103 @@ describe("buildOrdenServicioWhere (R21)", () => {
   });
 });
 
+/**
+ * D7/D9 — the order search joins `cliente` and `vehiculo` directly and
+ * matches the plate as a PLAIN column comparison, never
+ * `vehiculoPlateExists` (which correlates on the CUSTOMER and filters to
+ * active vehicles only — both wrong for an order that names exactly one
+ * vehicle, possibly deactivated afterwards). This is the SQL-text proof: it
+ * cannot prove Postgres accepts it, only that the rendered clause never
+ * contains the two shapes D7 forbids.
+ */
+describe("buildOrdenServicioWhere — search (D7)", () => {
+  it("ORs unaccent-ilike over cliente.name, cliente.phone and vehiculo.plate", () => {
+    const compiled = compileWhere({ search: "perez" });
+    expect(compiled).toBeDefined();
+    expect((compiled!.sql.match(/unaccent\(/g) ?? []).length).toBe(6);
+    expect((compiled!.sql.match(/ilike/g) ?? []).length).toBe(3);
+    expect(compiled!.sql).toContain('"cliente"."name"');
+    expect(compiled!.sql).toContain('"cliente"."phone"');
+    expect(compiled!.sql).toContain('"vehiculo"."plate"');
+    expect(compiled!.params).toContain("%perez%");
+  });
+
+  it("never carries a deactivated_at filter on either table — an order for a deactivated customer or vehicle is still a real order", () => {
+    const compiled = compileWhere({ search: "perez" });
+    expect(compiled!.sql).not.toContain("deactivated_at");
+  });
+
+  it("never correlates through an EXISTS subquery — the vehicle is joined one-to-one on this list", () => {
+    const compiled = compileWhere({ search: "perez" });
+    expect(compiled!.sql).not.toContain('exists (select 1 from "vehiculo"');
+  });
+
+  it("ands the search predicate with the status filter when both are given", () => {
+    const compiled = compileWhere({ search: "perez", status: "open" });
+    expect(compiled!.sql).toContain("unaccent");
+    expect(compiled!.sql).toContain('"orden_servicio"."status"');
+  });
+
+  it("returns undefined for a blank/whitespace-only search term", () => {
+    expect(buildOrdenServicioWhere({ search: "   " })).toBeUndefined();
+  });
+});
+
+/**
+ * D7/D9 — `listOrdenesServicio`'s default `queryFn` joins `cliente` and
+ * `vehiculo` so the search predicate above has something to filter against.
+ * `ordenServicioListQuery`/`ordenServicioCountQuery` are exposed for
+ * `.toSQL()` the same way `catalog-builder/queries.ts`'s
+ * `productsInCategoriesQuery` is — never executed, only compiled.
+ */
+describe("ordenServicioListQuery — joins (D7/D9)", () => {
+  it("inner joins cliente and vehiculo on the order's own FKs", () => {
+    const rendered = ordenServicioListQuery({}, { offset: 0, limit: 10 }).toSQL();
+    expect(rendered.sql).toContain('inner join "cliente"');
+    expect(rendered.sql).toContain('inner join "vehiculo"');
+    expect(rendered.sql).toContain('"orden_servicio"."cliente_id" = "cliente"."id"');
+    expect(rendered.sql).toContain('"orden_servicio"."vehiculo_id" = "vehiculo"."id"');
+  });
+
+  /** D9's count-parity trap: missed here, the list filters and the pager does not. */
+  it("countOrdenesServicio's query carries the identical two joins", () => {
+    const rendered = ordenServicioCountQuery({}).toSQL();
+    expect(rendered.sql).toContain('inner join "cliente"');
+    expect(rendered.sql).toContain('inner join "vehiculo"');
+  });
+
+  /**
+   * Task 2.17 — the design's own unverified claim, checked rather than
+   * assumed. All three joined tables have their own `id` column; every
+   * identifier this query renders must be table-qualified or Postgres (and a
+   * future reader) cannot tell which `id` is meant.
+   */
+  it("qualifies every identifier — no bare column with three tables in scope", () => {
+    const rendered = ordenServicioListQuery({ search: "perez", status: "open" }, { offset: 0, limit: 10 }, { key: "id", dir: "asc" }).toSQL();
+    expect(rendered.sql).not.toMatch(/[^."]"id"/);
+    expect(rendered.sql).toContain('"orden_servicio"."id"');
+    expect(rendered.sql).toContain('"cliente"."id"');
+    expect(rendered.sql).toContain('"vehiculo"."id"');
+  });
+});
+
+/** D9 — the narrowed shape `ordenServicioListQuery`'s `.select({...})` returns. */
+function ordenServicioListItem(overrides: Partial<OrdenServicioListItem> = {}): OrdenServicioListItem {
+  return {
+    id: "o1",
+    status: "open",
+    appointmentAt: null,
+    clienteName: "Pérez",
+    vehiculoPlate: "AB1234",
+    vehiculoMake: "Toyota",
+    vehiculoModel: "Hilux",
+    ...overrides,
+  };
+}
+
 describe("listOrdenesServicio (R21)", () => {
   it("returns whatever the injected queryFn resolves", async () => {
-    const rows = [{ id: "o1", status: "open" }] as unknown as OrdenServicio[];
+    const rows = [ordenServicioListItem()];
     await expect(
       // `sort` moved to the 3rd positional slot (table-column-sorting WU3) —
       // `undefined` here reproduces today's default order.
@@ -35,7 +138,7 @@ describe("listOrdenesServicio (R21)", () => {
   });
 
   it("hands the sort through to the injected queryFn's caller unaffected — the seam does not care about sort shape", async () => {
-    const rows = [{ id: "o1", status: "open" }] as unknown as OrdenServicio[];
+    const rows = [ordenServicioListItem()];
     await expect(
       listOrdenesServicio(
         { status: "open" },
@@ -115,7 +218,22 @@ describe("buildOrdenServicioOrderBy renders valid SQL", () => {
   it("always appends a stable tiebreaker, so paging cannot repeat or skip a row", () => {
     // `status` has only four values — the case the tiebreaker exists for.
     expect(buildOrdenServicioOrderBy({ key: "status", dir: "asc" })).toHaveLength(2);
-    expect(buildOrdenServicioOrderBy(undefined)).toHaveLength(1);
+    // D10 — the unsorted default is now TWO expressions too: `appointmentAt
+    // desc nulls last` primary, `createdAt desc` tiebreak. This was a
+    // COMMITTED RED (length 1) before D10's change landed — confirmed
+    // failing by name in apply-progress, not silently rewritten.
+    expect(buildOrdenServicioOrderBy(undefined)).toHaveLength(2);
+  });
+
+  /**
+   * D10 — distinct from the explicit-sort case above: the UNSORTED default's
+   * primary expression must itself be `appointmentAt desc nulls last`, not
+   * merely two expressions of unspecified content.
+   */
+  it("the unsorted default's primary expression is appointmentAt desc nulls last", () => {
+    const [primary] = buildOrdenServicioOrderBy(undefined);
+    expect(dialect.sqlToQuery(sql`${primary}`).sql).toContain("desc nulls last");
+    expect(dialect.sqlToQuery(sql`${primary}`).sql).toContain('"orden_servicio"."appointment_at"');
   });
 });
 

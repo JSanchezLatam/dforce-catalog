@@ -3,6 +3,13 @@
  * (vehicles-one-to-many, C3, design.md D3 "one owner"). Pages, the picker,
  * and the API only ever see plain arrays (`Vehiculo[]`, `plates: string[]`)
  * built here or composed into `queries.ts` — never a raw query builder.
+ *
+ * `service-orders-search-and-vehicle-catalog` D7 amends the "imported here
+ * and nowhere else" claim below `vehiculoPlateExists` used to carry alone:
+ * `service-orders/queries.ts` is now a SECOND value-import site for
+ * `vehiculo`, joined one-to-one there rather than correlated through this
+ * module — see the comment on `vehiculoPlateExists` for why that path does
+ * not call it.
  */
 import { and, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
@@ -91,6 +98,23 @@ export function platesSubquery(): SQL<string[]> {
  * "one owner" — `vehiculo` is imported from `schema.ts` here and nowhere
  * else). Importing it the other way round would make `queries.ts` ↔
  * `vehicles.ts` circular.
+ *
+ * `service-orders/queries.ts`'s order-list search does NOT call this
+ * function, for two independent reasons (D7):
+ *
+ * 1. This correlates on `vehiculo.clienteId = cliente.id` — it answers "does
+ *    this CUSTOMER own a vehicle with this plate". An order names exactly
+ *    ONE vehicle (`orden_servicio.vehiculoId`); reused here, searching a
+ *    plate would return that customer's orders for their OTHER cars too.
+ * 2. This applies `activeVehiculoFilter()` — active vehicles only. An order
+ *    can reference a vehicle deactivated afterwards
+ *    (`service-orders/[id]/print/page.test.tsx` pins that such a vehicle
+ *    still renders its identity), and reusing this would silently drop
+ *    those orders from search.
+ *
+ * The orders path instead joins `vehiculo` directly and matches the plate as
+ * a plain column comparison — the vehicle is 1:1 on that list, so there is
+ * no customer-level correlation to get wrong.
  */
 export function vehiculoPlateExists(
   pattern: string,

@@ -7,9 +7,9 @@
  * is unit-testable with injected fakes and no live Postgres connection.
  */
 import { and, count, desc, eq, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
-import type { PgColumn } from "drizzle-orm/pg-core";
 
 import { db } from "@/shared/db/client";
+import { unaccentIlike } from "@/shared/db/text-search";
 import { cliente, ordenServicio, type Cliente, type OrdenServicio, type Vehiculo } from "@/shared/db/schema";
 import { listVehiculosByCliente, platesSubquery, vehiculoPlateExists } from "./vehicles";
 
@@ -32,20 +32,6 @@ export type ClienteListItem = Pick<Cliente, "id" | "name" | "phone" | "email" | 
 };
 
 export type ClienteDetail = { cliente: Cliente; orders: OrdenServicio[]; vehicles: Vehiculo[] };
-
-/**
- * `ilike` folds case but NOT accents, so 'María GONZÁLEZ' ilike '%maria%' is
- * false. Wrapping BOTH sides in `unaccent()` (extension enabled by migration
- * 0012) makes the fold symmetric: an unaccented term matches an accented row
- * and vice versa.
- *
- * `unaccent()` is STABLE, not IMMUTABLE, so it can never back an expression
- * index — see design.md's "Migration / Rollout". Correct at 364 rows; a
- * future `pg_trgm` upgrade must account for it.
- */
-function unaccentIlike(column: PgColumn, pattern: string): SQL {
-  return sql`unaccent(${column}) ilike unaccent(${pattern})`;
-}
 
 /**
  * Pure — R19's "partial, case- and accent-insensitive match against name,

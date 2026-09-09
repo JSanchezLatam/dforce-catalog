@@ -4,7 +4,7 @@
  * through the one hook so that later search box cannot become a second
  * writer on this screen (design.md D1, "the fourth call site").
  */
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -76,6 +76,32 @@ describe("ServiceOrderFilters — status select routes through the one hook", ()
 });
 
 /**
+ * D1's "fourth call site" — the search box `useUrlFilters` was extracted so
+ * this screen could gain one without becoming a second `router.push` (D2:
+ * "without the hook it would ship the same defect a third time").
+ */
+describe("ServiceOrderFilters — search box (D1's fourth call site)", () => {
+  it("shows the URL value on mount, wired to the search key", () => {
+    seedUrl("search=perez");
+    render(<ServiceOrderFilters selected={{ search: "perez" }} pageSize={10} />);
+
+    expect((screen.getByLabelText("Filtro") as HTMLInputElement).value).toBe("perez");
+  });
+
+  it("reflects a keystroke from state before any push lands, then pushes after the debounce", async () => {
+    const user = userEvent.setup();
+    render(<ServiceOrderFilters selected={{}} pageSize={10} />);
+
+    await user.type(screen.getByLabelText("Filtro"), "perez");
+    expect(screen.getByLabelText("Filtro")).toHaveValue("perez");
+    expect(push).not.toHaveBeenCalled();
+
+    await new Promise((resolve) => setTimeout(resolve, 320)); // past the 300ms debounce
+    expect(push).toHaveBeenCalledWith("/service-orders?search=perez");
+  });
+});
+
+/**
  * `Limpiar` used to bypass `applyFilter` with its own `router.push(pathname)`
  * (`:58`) — a second writer, the exact shape D6 removes.
  *
@@ -122,6 +148,29 @@ describe("ServiceOrderFilters — page is dropped on every filter change (D5)", 
 
     const url = String(push.mock.calls.at(-1)?.[0]);
     expect(url).toContain("pageSize=50");
+    expect(url).not.toContain("page=7");
+  });
+});
+
+/**
+ * D5 names `/service-orders` explicitly, and the `pageSize` half is covered
+ * above. This is the other half: typing a search while sitting on page 7 must
+ * drop `page`, or the operator lands on a slice of a result set that no longer
+ * exists.
+ */
+describe("ServiceOrderFilters — typing a search drops page (D5)", () => {
+  it("drops page when the search term changes", async () => {
+    const user = userEvent.setup();
+    seedUrl("page=7&status=done");
+    render(<ServiceOrderFilters selected={{ status: "done" }} pageSize={10} />);
+
+    await user.type(screen.getByLabelText("Filtro"), "perez");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    });
+
+    const url = String(push.mock.calls.at(-1)?.[0]);
+    expect(url).toContain("search=perez");
     expect(url).not.toContain("page=7");
   });
 });

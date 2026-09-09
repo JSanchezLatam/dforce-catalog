@@ -62,6 +62,19 @@ describe("ServiceOrderDetailPage", () => {
     listRemindersForOrder.mockResolvedValue([]);
   });
 
+  /**
+   * service-orders spec Scenario "Detail page still shows the full id" —
+   * the list truncates to 8 characters (task 2.19), this page must not.
+   */
+  it("shows the full, untruncated id, unlike the list's 8-character truncation", async () => {
+    const fullId = "87cceecc-1111-2222-3333-444455556666";
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, id: fullId }, items: [] });
+
+    render(await ServiceOrderDetailPage({ params: Promise.resolve({ id: fullId }) }));
+
+    expect(screen.getAllByText(fullId).length).toBeGreaterThan(0);
+  });
+
   it("shows the vehicle as a link to its history, and the category in Spanish", async () => {
     render(await renderPage());
 
