@@ -329,6 +329,30 @@ And a test named *"…not a standalone router.push"* could not check that clause
 an identical URL. Renamed to what it proves, and tightened to assert exactly
 one push.
 
+**GGA round 4 — the same lesson a third time, worth naming as a pattern rather
+than an incident.** The StrictMode fix guarded the MOUNT; the re-seed path
+itself was untouched, so the duplicated-param overwrite still fired on every
+Back or `<Link>` — the far more common trigger. Three rounds running, a fix
+landed on the narrow case while the shared one stood: `/inventory` patched and
+`/customers` left, then the call sites patched and the hook left, now the mount
+guarded and the re-seed left.
+
+Fixed where it belongs: `reseedTextFromSearchParams` reads `getAll` and keeps a
+value only when there is exactly one, mirroring the `typeof params.x ===
+"string"` guard every page already applies. The mount guard is now
+belt-and-braces rather than the only defence, and the RED is an external
+navigation instead of a mount.
+
+The params comparison moved from identity to VALUE — `useSearchParams()`
+returning a fresh object for an unchanged URL (an RSC revalidation) would read
+as a navigation and re-seed over text being typed. Unproven against Next 16 and
+possibly unreachable; taken because it costs a string compare and cannot
+regress the StrictMode case it replaced.
+
+Two nits closed: the D5 `pageSize` test uses `findByRole` for Base UI's
+portalled popup, and `ServiceOrderFilters`' structurally-false `hasTypedText`
+operand carries a comment saying WU2 makes it live so nobody deletes it.
+
 ## Phase 2 — Order list search, columns, and default order
 (service-orders spec: *Order List Search Matches Customer, Vehicle, and
 Phone*, *Order List Columns Show Customer and Vehicle*, *Unsorted Default
