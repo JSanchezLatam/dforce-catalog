@@ -246,6 +246,31 @@ WU2 — so a standalone `router.push(pathname)` and the hook's `clearAll()`
 produce an identical URL, and no black-box assertion can tell them apart. It
 becomes checkable once WU2 adds that screen's search box, and the task says so.
 
+**GGA round 1 found a defect in the fix itself, and it is the one worth
+naming.** `clearAll` emptied the whole key set (`setTextState({})`), while the
+re-seed rebuilds over the keys already in state — so one click of Limpiar
+disabled re-seeding permanently: Back then returned a list filtered by `perez`
+with the box sitting empty. **That is this change's own defect class**, screen
+disagreeing with the list it produced, and it would have shipped in shared code
+on three screens. The existing re-seed test could not catch it because it never
+cleared first. Fixed by keeping the keys and emptying the values, with a RED
+that clears before going back; mutation-verified.
+
+Two more from the same round. A test named *"bound via value not
+defaultValue"* asserted `not.toHaveAttribute("defaultValue")`, which is
+**vacuous** — React maps `defaultValue` onto the `value` attribute, so it
+passes for an uncontrolled input too, and the test proved neither half of its
+own name. Replaced with a behavioural one: type, then assert the box reflects
+the keystroke before any push has landed. Mutation-verified — restoring
+`defaultValue` on the input turns it red. Its sibling was renamed for the same
+reason: it never made that claim, only promised it.
+
+And the debounce timer had no unmount cleanup, so typing and then clicking a
+sidebar link inside the window pushed the operator back off the page they had
+just navigated to. Pre-existing in `CustomerFilters` and moved here — closed
+now precisely because this is one path serving three screens instead of one
+screen's private bug.
+
 ## Phase 2 — Order list search, columns, and default order
 (service-orders spec: *Order List Search Matches Customer, Vehicle, and
 Phone*, *Order List Columns Show Customer and Vehicle*, *Unsorted Default

@@ -236,4 +236,37 @@ describe("useUrlFilters — re-seed only on external navigation", () => {
 
     expect(screen.getByLabelText(/Filtro/)).toHaveValue("ana");
   });
+
+  /**
+   * The re-seed rebuilds over the keys ALREADY in state, so anything that
+   * empties the key set disables it permanently. `clearAll` did exactly that.
+   *
+   * The failure is this change's own defect class, in shared code, on three
+   * screens: Limpiar, then Back, and the list comes back filtered by `perez`
+   * while the box sits empty — a filter the operator can see is off and that
+   * is on. The test above cannot catch it, because it never clears first.
+   */
+  it("re-seeds from an EXTERNAL navigation after Limpiar emptied the box", async () => {
+    const user = userEvent.setup();
+    seedUrl("search=perez");
+    render(<Harness initial={{ search: "perez" }} />);
+    expect(screen.getByLabelText(/Filtro/)).toHaveValue("perez");
+
+    await user.click(screen.getByRole("button", { name: "Limpiar" }));
+    expect(screen.getByLabelText(/Filtro/)).toHaveValue("");
+    // Let Limpiar's own push LAND before going back. In a browser the URL
+    // changes before the operator can reach for the back button, and without
+    // this the hook still counts that push as outstanding and reads the back
+    // navigation as its own.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    });
+
+    // Back button: an external navigation to the filtered URL.
+    await act(async () => {
+      land("/list?search=perez");
+    });
+
+    expect(screen.getByLabelText(/Filtro/)).toHaveValue("perez");
+  });
 });

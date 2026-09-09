@@ -82,15 +82,37 @@ function renderFilters(selected: { id?: string; name?: string } = {}) {
 }
 
 describe("InventoryFilters — both text inputs are controlled", () => {
-  it("#filter-id shows the URL value on mount, bound via value not defaultValue", () => {
+  /**
+   * Behavioural, deliberately. The first draft of this test asserted
+   * `not.toHaveAttribute("defaultValue")`, which is vacuous: React never
+   * renders an attribute by that name — it maps `defaultValue` to the `value`
+   * attribute — so the assertion passes for an uncontrolled input too, and the
+   * test named "bound via value not defaultValue" proved neither half.
+   *
+   * Typing is what tells them apart. An uncontrolled, URL-driven input shows
+   * the keystroke only because the DOM holds it; a controlled one shows it
+   * because state does. So the assertion that carries weight is the one BELOW
+   * — the box reflects the keystroke before any push has landed, and the URL
+   * has not moved.
+   */
+  it("#filter-id shows the URL value on mount", () => {
     seedUrl("id=ABC");
     renderFilters({ id: "ABC" });
-    const input = screen.getByLabelText("ID") as HTMLInputElement;
-    expect(input.value).toBe("ABC");
-    expect(input).not.toHaveAttribute("defaultValue");
+    expect((screen.getByLabelText("ID") as HTMLInputElement).value).toBe("ABC");
   });
 
-  it("#filter-name shows the URL value on mount, bound via value not defaultValue", () => {
+  it("#filter-id reflects a keystroke from state, before any push lands", async () => {
+    const user = userEvent.setup();
+    seedUrl("id=ABC");
+    renderFilters({ id: "ABC" });
+
+    await user.type(screen.getByLabelText("ID"), "X");
+
+    expect(screen.getByLabelText("ID")).toHaveValue("ABCX");
+    expect(push).not.toHaveBeenCalled(); // still inside the debounce window
+  });
+
+  it("#filter-name shows the URL value on mount", () => {
     seedUrl("name=bateria");
     renderFilters({ name: "bateria" });
     const input = screen.getByLabelText("Nombre") as HTMLInputElement;

@@ -86,6 +86,21 @@ export function useUrlFilters(initialText: Record<string, string>, debounceMs = 
     });
   }
 
+  /**
+   * A pending debounce outliving the component pushes the user off the page
+   * they navigated to: type in the search box, click a sidebar link inside the
+   * window, and the timer fires against the pathname it captured. Pre-existing
+   * in `CustomerFilters` and moved here, which is exactly why it is closed now
+   * — this is one path for three screens instead of one screen's problem.
+   */
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      for (const timer of pending.values()) clearTimeout(timer);
+      pending.clear();
+    };
+  }, []);
+
   useEffect(() => {
     // Read BEFORE the decrement (D3) — `wasOurs` is not new information, it
     // is the counter's existing meaning read one line earlier.
@@ -150,7 +165,12 @@ export function useUrlFilters(initialText: Record<string, string>, debounceMs = 
   function clearAll() {
     for (const timer of timers.current.values()) clearTimeout(timer);
     timers.current.clear();
-    setTextState({});
+    // Keys kept, values emptied — NOT `{}`. `reseedTextFromSearchParams`
+    // rebuilds over the keys already in state, so clearing them would disable
+    // the re-seed permanently: Limpiar, then Back, and the list returns
+    // filtered while the box stays empty. That is this change's own defect
+    // class, and it would have shipped on all three screens.
+    setTextState((prev) => Object.fromEntries(Object.keys(prev).map((k) => [k, ""])));
     commit(new URLSearchParams());
   }
 
