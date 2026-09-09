@@ -630,7 +630,7 @@ undecided design.
 (service-orders spec: *Service Due Reminder Restricted to Preventive and
 Corrective Categories*; design D12)
 
-- [ ] 4.1 RED (node) `reminders/schedule.test.ts` — extend `makeOrden` to
+- [x] 4.1 RED (node) `reminders/schedule.test.ts` — extend `makeOrden` to
   accept a `categoria` override (the schema field, `orden_servicio.categoria`,
   `.notNull()`), defaulting to `"mant_preventivo"` so every existing test
   keeps its current behavior unless it opts into a different category.
@@ -641,7 +641,7 @@ Corrective Categories*; design D12)
   `instalacion`/`reparacion`/`revisado` → none. Confirm it fails: today's
   `planReminders` schedules `service_due` for all five categories
   unconditionally.
-- [ ] 4.2 GREEN — in `schedule.ts`, add
+- [x] 4.2 GREEN — in `schedule.ts`, add
   `const SERVICE_DUE_CATEGORIES: readonly OrdenServicio["categoria"][] =
   ["mant_preventivo", "mant_correctivo"]`, typed off the schema enum with no
   new import direction (`schedule.ts` already imports `type { OrdenServicio
@@ -649,15 +649,15 @@ Corrective Categories*; design D12)
   rule, service-orders depends on reminders, never the reverse). Gate the
   existing `if (order.completedAt)` branch in `planReminders` on
   `SERVICE_DUE_CATEGORIES.includes(order.categoria)` as well.
-- [ ] 4.3 RED/GREEN — confirm the `appointment` reminder path is untouched
+- [x] 4.3 RED/GREEN — confirm the `appointment` reminder path is untouched
   for all five categories: `schedule.test.ts`'s existing appointment tests
   keep passing unmodified (the gate only touches the `completedAt`/
   `service_due` branch).
-- [ ] 4.4 **Mutation-verify — the exact mutation named in the prompt.** Add
+- [x] 4.4 **Mutation-verify — the exact mutation named in the prompt.** Add
   `"revisado"` to `SERVICE_DUE_CATEGORIES`. Confirm 4.1's `revisado` case
   goes red **by name**. `diff` to confirm the addition landed, then revert
   and `diff` again to confirm byte-identical.
-- [ ] 4.5 Document the sixth-category guard's actual mechanism: since
+- [x] 4.5 Document the sixth-category guard's actual mechanism: since
   `SERVICE_DUE_CATEGORIES` types off `OrdenServicio["categoria"]`, a real
   sixth enum value needs a migration (out of scope) and cannot be added here
   to prove the point. The guard IS 4.1's `describe.each` over
@@ -665,9 +665,9 @@ Corrective Categories*; design D12)
   without a matching case here fails the test suite by omission, not by
   type error. Add a one-line comment beside `SERVICE_DUE_CATEGORIES` saying
   so, since the type system alone cannot express it.
-- [ ] 4.6 `diff` `schedule.ts` and `schedule.test.ts` before trusting
+- [x] 4.6 `diff` `schedule.ts` and `schedule.test.ts` before trusting
   4.1–4.5.
-- [ ] 4.7 `npm test` (alone) and `npx tsc --noEmit` clean.
+- [x] 4.7 `npm test` (alone) and `npx tsc --noEmit` clean.
 
 ### Phase 4 verification record — fill in during `sdd-apply`
 
@@ -677,6 +677,44 @@ Corrective Categories*; design D12)
 | 4.7 | — |
 
 ---
+
+### WU4 verification record
+
+The 90 days already existed (`SERVICE_DUE_AFTER_DAYS = 90`); the CONDITION did
+not, so `service_due` fired for all five categories. There is no `reminders`
+capability in `openspec/specs/` and `service_due` appears in no consolidated
+spec — the rule had never been written down anywhere but the code, which is
+exactly why nobody noticed it applied to everything.
+
+The category table is driven off `CATEGORIA_LABEL`'s own keys, so a sixth
+category added tomorrow fails this suite until somebody decides whether it
+reminds. Inheriting that decision silently is how the defect started.
+
+Two mutations, both red by name: adding `"revisado"` to
+`SERVICE_DUE_CATEGORIES` breaks its `schedules NO service_due` case, and
+removing the gate entirely breaks `transitionOrder -> done schedules NOTHING
+for a category the rule excludes` — the second being the one that proves the
+gate REACHES the wiring, since `transitionOrder` still calls
+`planAndScheduleReminders` unconditionally.
+
+**One test shipped as a placebo before that second mutation caught it.** The
+sibling was generated with its assertion accidentally stripped, so it asserted
+nothing and passed under mutation. Repaired, not deleted — the case is real,
+the assertion was missing. It is the same defect this record keeps naming in
+other people's work.
+
+An existing test also went red for the right reason: `service.test.ts`'s
+`transitionOrder -> done` fixture omitted `categoria` — a `.notNull()` column —
+and the cast hid it. AGENTS.md's "a mock more convenient than reality tests the
+mock". Spelled out now.
+
+**This REMOVES a reminder** that `instalacion`, `reparacion` and `revisado`
+currently get. `revisado` is Panama's mandatory ANNUAL ATTT inspection, so 90
+days was always the wrong interval for it; 365 is its own change, not this gate
+loosened.
+
+Gates: `npm test` 1590/1590 · `npx tsc --noEmit` clean · lint 0 errors / 14
+warnings.
 
 ## Follow-ups — named, deliberately not folded into this change
 

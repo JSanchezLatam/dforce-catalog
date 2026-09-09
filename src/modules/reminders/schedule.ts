@@ -10,6 +10,20 @@ import type { Cliente, OrdenServicio } from "@/shared/db/schema";
 export const APPOINTMENT_LEAD_HOURS = 24;
 export const SERVICE_DUE_AFTER_DAYS = 90;
 
+/**
+ * The categories a `service_due` reminder follows. The owner's rule is "90 days
+ * after preventive or corrective maintenance" — the 90 days already existed
+ * here; this is the half that did not, which is why the reminder fired for all
+ * five categories: nobody had written down which ones it was for.
+ *
+ * Typed off the SCHEMA enum, deliberately not off
+ * `service-orders/categories.ts`. `service-orders` depends on `reminders`;
+ * importing back would reverse that and create a cycle for a list of two
+ * strings. The test drives the same set from `CATEGORIA_LABEL`, which is where
+ * a new category would have to be declared anyway.
+ */
+const SERVICE_DUE_CATEGORIES: readonly OrdenServicio["categoria"][] = ["mant_preventivo", "mant_correctivo"];
+
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
@@ -59,7 +73,7 @@ export function planReminders(order: OrdenServicio, cliente: Cliente, now: Date)
   if (order.appointmentAt) {
     plan("appointment", new Date(order.appointmentAt.getTime() - APPOINTMENT_LEAD_HOURS * HOUR_MS));
   }
-  if (order.completedAt) {
+  if (order.completedAt && SERVICE_DUE_CATEGORIES.includes(order.categoria)) {
     plan("service_due", new Date(order.completedAt.getTime() + SERVICE_DUE_AFTER_DAYS * DAY_MS));
   }
 

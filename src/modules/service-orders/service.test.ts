@@ -461,8 +461,18 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
     expect(scheduleReminder).not.toHaveBeenCalled();
   });
 
+  /**
+   * `categoria` is spelled out because it is `.notNull()` and the gate reads
+   * it: the fixture used to omit it and the cast hid that, which is the "a
+   * mock more convenient than reality tests the mock" case AGENTS.md names.
+   * Omitted, `order.categoria` is `undefined` and no reminder is scheduled —
+   * for the wrong reason.
+   */
   it("transitionOrder -> done schedules a service_due reminder", async () => {
-    const current = { orden: { id: "o1", clienteId: "c1", status: "in_progress" } as unknown as OrdenServicio, items: [] };
+    const current = {
+      orden: { id: "o1", clienteId: "c1", status: "in_progress", categoria: "mant_preventivo" } as unknown as OrdenServicio,
+      items: [],
+    };
     const database = {
       update: () => ({
         set: (patch: Record<string, unknown>) => ({
@@ -482,6 +492,38 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
     });
 
     expect(scheduleReminder).toHaveBeenCalled();
+  });
+
+  /**
+   * The sibling, and the one that proves the gate REACHES this path.
+   * `planReminders`' own test covers the predicate; this covers the wiring —
+   * `transitionOrder` still calls `planAndScheduleReminders` unconditionally,
+   * so without the gate downstream a `revisado` order would still be booked.
+   */
+  it("transitionOrder -> done schedules NOTHING for a category the rule excludes", async () => {
+    const current = {
+      orden: { id: "o1", clienteId: "c1", status: "in_progress", categoria: "revisado" } as unknown as OrdenServicio,
+      items: [],
+    };
+    const database = {
+      update: () => ({
+        set: (patch: Record<string, unknown>) => ({
+          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
+        }),
+      }),
+      insert: () => ({ values: () => ({ returning: async () => [{ id: "rem-2" }] }) }),
+    };
+    const scheduleReminder = vi.fn().mockResolvedValue("job-2");
+
+    await transitionOrder("o1", "done", {
+      getById: async () => current,
+      db: database as unknown as typeof import("@/shared/db/client").db,
+      now: () => new Date("2026-07-26T12:00:00.000Z"),
+      getClienteById: async () => ({ cliente: clienteRow, orders: [], vehicles: [] }),
+      scheduleReminder,
+    });
+
+    expect(scheduleReminder).not.toHaveBeenCalled();
   });
 
   it("transitionOrder -> cancelled cancels all pending reminders for the order", async () => {
