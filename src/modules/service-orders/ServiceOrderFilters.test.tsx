@@ -4,7 +4,7 @@
  * through the one hook so that later search box cannot become a second
  * writer on this screen (design.md D1, "the fourth call site").
  */
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -148,6 +148,29 @@ describe("ServiceOrderFilters — page is dropped on every filter change (D5)", 
 
     const url = String(push.mock.calls.at(-1)?.[0]);
     expect(url).toContain("pageSize=50");
+    expect(url).not.toContain("page=7");
+  });
+});
+
+/**
+ * D5 names `/service-orders` explicitly, and the `pageSize` half is covered
+ * above. This is the other half: typing a search while sitting on page 7 must
+ * drop `page`, or the operator lands on a slice of a result set that no longer
+ * exists.
+ */
+describe("ServiceOrderFilters — typing a search drops page (D5)", () => {
+  it("drops page when the search term changes", async () => {
+    const user = userEvent.setup();
+    seedUrl("page=7&status=done");
+    render(<ServiceOrderFilters selected={{ status: "done" }} pageSize={10} />);
+
+    await user.type(screen.getByLabelText("Filtro"), "perez");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    });
+
+    const url = String(push.mock.calls.at(-1)?.[0]);
+    expect(url).toContain("search=perez");
     expect(url).not.toContain("page=7");
   });
 });

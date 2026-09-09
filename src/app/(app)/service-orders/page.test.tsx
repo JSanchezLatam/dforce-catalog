@@ -252,6 +252,26 @@ describe("ServiceOrdersPage — column sorting", () => {
  * `/service-orders` has zero rows in the dev database, so the browser check
  * cannot exercise any of this with real data. These tests are the evidence.
  */
+/** URL-builder coverage lives with the other sorting/pagination cases. */
+describe("ServiceOrdersPage — URL builders keep every filter", () => {
+  /**
+   * Task 2.32 — recorded, not smuggled. `normalizeOrdenFilters` already read
+   * `status` through `firstValue`, so `?status=open&status=done` FILTERED by
+   * `open` while every sort and pagination link dropped status entirely. The
+   * `search` fix in 2.24 would have left two of three lying in the same file,
+   * so all three were converted — and this is the test that was missing when
+   * review called it a silent scope expansion.
+   */
+  it("keeps a duplicated status param in the sort and pagination links", async () => {
+    render(await renderPage({ status: ["done", "open"] as unknown as string }));
+
+    const links = screen.getAllByRole("link").map((a) => a.getAttribute("href") ?? "");
+    const withStatus = links.filter((href) => href.includes("status="));
+    expect(withStatus.length).toBeGreaterThan(0);
+    for (const href of withStatus) expect(href).toContain("status=done");
+  });
+});
+
 describe("ServiceOrdersPage — bulk status change (WU6)", () => {
   const OPEN_PAGE = [
     orden({ id: "o1" }),
@@ -535,23 +555,14 @@ describe("ServiceOrdersPage — the empty state does not lie", () => {
     expect(screen.queryByText(/Todavía no hay órdenes de servicio registradas/)).not.toBeInTheDocument();
   });
 
-  /**
-   * Task 2.32 — recorded, not smuggled. `normalizeOrdenFilters` already read
-   * `status` through `firstValue`, so `?status=open&status=done` FILTERED by
-   * `open` while every sort and pagination link dropped status entirely. The
-   * `search` fix in 2.24 would have left two of three lying in the same file,
-   * so all three were converted — and this is the test that was missing when
-   * review called it a silent scope expansion.
-   */
-  it("keeps a duplicated status param in the sort and pagination links", async () => {
-    // `renderPage`, not `renderEmpty`: with zero rows the empty state replaces
-    // the table, so there are no sort headers or pagination links to inspect.
-    render(await renderPage({ status: ["done", "open"] as unknown as string }));
 
-    const links = screen.getAllByRole("link").map((a) => a.getAttribute("href") ?? "");
-    const withStatus = links.filter((href) => href.includes("status="));
-    expect(withStatus.length).toBeGreaterThan(0);
-    for (const href of withStatus) expect(href).toContain("status=done");
+  // `?search=%20%20` applies no predicate — `buildOrdenServicioWhere` trims and
+  // returns undefined — so nothing on screen may claim a filter is active.
+  it("treats a whitespace-only search as no search at all", async () => {
+    render(await renderEmpty({ search: "   " }));
+
+    expect(screen.getByText(/Todavía no hay órdenes de servicio registradas/)).toBeInTheDocument();
+    expect(screen.queryByText(/Ninguna orden coincide con el filtro/)).not.toBeInTheDocument();
   });
 
   it("still says there are none when there genuinely are none", async () => {

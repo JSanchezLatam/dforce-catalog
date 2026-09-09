@@ -50,7 +50,13 @@ function firstValue(value: string | string[] | undefined): string | undefined {
 /** Pure — R21's status filter + D7's search term, read from `searchParams`. */
 function normalizeOrdenFilters(searchParams: SearchParams): OrdenServicioFilters {
   const status = firstValue(searchParams.status);
-  const search = firstValue(searchParams.search);
+  // Trimmed HERE, because `buildOrdenServicioWhere` already trims and returns
+  // no predicate for whitespace — so `?search=%20%20` applied no filter while
+  // three separate consumers believed one was on: the empty state claimed a
+  // filter had missed, `Limpiar` rendered, and `buildFilterKey` cleared the
+  // operator's selection. Same class as the empty-state defect above: UI state
+  // asserting something the query did not do.
+  const search = firstValue(searchParams.search)?.trim();
   return {
     ...(status && VALID_STATUS.has(status as OrderStatus) ? { status: status as OrderStatus } : {}),
     ...(search ? { search } : {}),
