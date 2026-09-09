@@ -151,6 +151,65 @@ describe("POST /api/service-orders (service-orders R20)", () => {
  * back as a 409 rather than an unhandled 500. Its twin in
  * `api/customers/[id]/route.test.ts` exists for the same reason.
  */
+/**
+ * The bug this pins was live and total: the orders table was EMPTY because
+ * EVERY save the form could produce failed. `datetime-local` holds a string —
+ * `""` until someone picks a moment — and JSON has no Date type, so the body's
+ * `appointmentAt` is always a string or absent. `CreateOrdenServicioInput`
+ * declares `Date | null`, so the route spreading the body straight through
+ * handed Drizzle a string, which died on `value.toISOString is not a function`.
+ *
+ * Measured against a real Postgres before the fix: absent and `null` saved;
+ * `""` and `"2026-09-10T09:00"` both threw. That is every value the form emits.
+ *
+ * The PATCH route already converted here and create simply never did — the
+ * declared type was a claim the only real caller could not satisfy, which is
+ * AGENTS.md's "await response.json() makes every declared type a claim".
+ */
+describe("POST /api/service-orders — appointmentAt crosses JSON as a string", () => {
+  const database = {
+    transaction: async (cb: (tx: unknown) => unknown) =>
+      cb({
+        insert: () => ({
+          values: (values: unknown) => ({ returning: async () => [{ id: "o1", status: "open", ...(values as object) }] }),
+        }),
+      }),
+  };
+  const deps = { getClienteById: async () => clienteDetail as never, db: database as never } as never;
+
+  it("stores a real Date when the form sends the datetime-local string", async () => {
+    const response = await handleCreateOrdenServicio(
+      requestWith({ clienteId: "cli-1", vehiculoId: "v1", categoria: "revisado", appointmentAt: "2026-09-10T09:00" }),
+      deps,
+    );
+
+    expect(response.status).toBe(201);
+    const { orden } = await response.json();
+    // Serialised through JSON, so the assertion is on the instant, not the class.
+    expect(new Date(orden.appointmentAt).toISOString()).toBe(new Date("2026-09-10T09:00").toISOString());
+  });
+
+  it('treats the empty field as no appointment rather than crashing', async () => {
+    const response = await handleCreateOrdenServicio(
+      requestWith({ clienteId: "cli-1", vehiculoId: "v1", categoria: "revisado", appointmentAt: "" }),
+      deps,
+    );
+
+    expect(response.status).toBe(201);
+    expect((await response.json()).orden.appointmentAt).toBeNull();
+  });
+
+  it("refuses an unparseable date in Spanish instead of 500ing", async () => {
+    const response = await handleCreateOrdenServicio(
+      requestWith({ clienteId: "cli-1", vehiculoId: "v1", categoria: "revisado", appointmentAt: "no-es-fecha" }),
+      deps,
+    );
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).errors).toEqual({ appointmentAt: "Fecha inválida" });
+  });
+});
+
 describe("POST /api/service-orders — a deactivated cliente (customer-management R20)", () => {
   const deactivated = {
     cliente: { id: "cli-1", deactivatedAt: new Date("2026-09-01") },

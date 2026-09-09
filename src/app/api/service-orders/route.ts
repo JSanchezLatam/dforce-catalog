@@ -21,12 +21,33 @@ export async function handleCreateOrdenServicio(
   }
 
   const body = await request.json();
+
+  // `appointmentAt` arrives as a STRING or not at all — JSON has no Date, and
+  // the form's `datetime-local` holds `""` until someone picks a moment. But
+  // `CreateOrdenServicioInput` declares `Date | null`, so passing the body
+  // straight through hands Drizzle a string and it dies on
+  // `value.toISOString is not a function`. Measured against a real database:
+  // absent and `null` save, `""` and `"2026-09-10T09:00"` both throw — which
+  // is EVERY save this form can produce, and why the orders table was empty.
+  //
+  // The PATCH route at `[id]/route.ts` already converts here; create simply
+  // never did. Same shape, same reason `new Date(garbage)` must be checked:
+  // it yields an Invalid Date rather than throwing.
+  let appointmentAt: Date | null = null;
+  if (body.appointmentAt !== undefined && body.appointmentAt !== null && body.appointmentAt !== "") {
+    const parsed = new Date(body.appointmentAt);
+    if (Number.isNaN(parsed.getTime())) {
+      return NextResponse.json({ errors: { appointmentAt: "Fecha inválida" } }, { status: 400 });
+    }
+    appointmentAt = parsed;
+  }
+
   try {
     // Follow-up 1.18. `createdBy` comes from the SESSION, never from the
     // body — spreading it AFTER `body` is what makes a client-supplied value
     // unable to win. The route is the only place that knows who is acting;
     // everything the body says about identity is a claim, not a fact.
-    const orden = await createOrder({ ...body, createdBy: user.id }, deps);
+    const orden = await createOrder({ ...body, appointmentAt, createdBy: user.id }, deps);
     return NextResponse.json({ orden }, { status: 201 });
   } catch (err) {
     if (err instanceof ClienteDeactivatedError) {
