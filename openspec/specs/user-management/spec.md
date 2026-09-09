@@ -1,10 +1,18 @@
-# Delta for user-management
+# Spec: user-management
 
-(Base spec: `openspec/changes/archive/crm-shell-settings-rbac/specs/user-management/spec.md`
-— this capability has no file under `openspec/specs/` yet; archiving this
-change is what creates one.)
+**This baseline is INCOMPLETE, and that is a known gap, not an oversight in
+reading it.** The file was created by `table-redesign-bulk-actions`' archive by
+copying that change's delta verbatim — preamble and `## ADDED Requirements`
+merge header included — so it holds only the one requirement that change added.
+Every other user-management requirement still lives unconsolidated in
+`openspec/changes/archive/crm-shell-settings-rbac/specs/user-management/spec.md`
+and must be read from there. Consolidating them is its own change.
 
-## ADDED Requirements
+The stray merge header was removed on 2026-09-09: `## ADDED` / `## MODIFIED`
+are instructions for an archiver, consumed rather than copied, and one sitting
+in a consolidated baseline makes the spec claim authorship it does not have.
+
+## REQUIREMENTS
 
 ### Requirement: Bulk Activate/Deactivate Under the Admin-Floor Invariant
 
