@@ -226,7 +226,7 @@ describe("CustomerFilters — page is dropped on every filter change (D5)", () =
     render(<CustomerFilters selected={{ search: "perez" }} pageSize={10} />);
 
     await user.click(screen.getByRole("combobox", { name: "Filas por página" }));
-    await user.click(screen.getByRole("option", { name: "50" }));
+    await user.click(await screen.findByRole("option", { name: "50" }));
 
     const url = String(push.mock.calls.at(-1)?.[0]);
     expect(url).toContain("pageSize=50");

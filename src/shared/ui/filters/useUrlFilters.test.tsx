@@ -246,6 +246,26 @@ describe("useUrlFilters — re-seed only on external navigation", () => {
    * while the box sits empty — a filter the operator can see is off and that
    * is on. The test above cannot catch it, because it never clears first.
    */
+  /**
+   * The mount guard fixed the mount. It did NOT fix the re-seed path, so the
+   * same overwrite fired on every Back or `<Link>` — the far more common
+   * trigger, and the third time in this unit that a fix landed on one caller
+   * while the shared cause stood.
+   *
+   * `?search=A&search=B`: every page's `typeof params.x === "string"` guard
+   * drops a duplicated param, so the LIST is unfiltered. `get()` would answer
+   * `"A"` and put a filter in the box that nothing is applying.
+   */
+  it("ignores a duplicated param on an external navigation, as the page does", async () => {
+    render(<Harness initial={{ search: "" }} />);
+
+    await act(async () => {
+      land("/list?search=A&search=B");
+    });
+
+    expect(screen.getByLabelText(/Filtro/)).toHaveValue("");
+  });
+
   it("re-seeds from an EXTERNAL navigation after Limpiar emptied the box", async () => {
     const user = userEvent.setup();
     seedUrl("search=perez");

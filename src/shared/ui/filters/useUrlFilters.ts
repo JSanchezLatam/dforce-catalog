@@ -91,7 +91,17 @@ export function useUrlFilters(initialText: Record<string, string>, debounceMs = 
   function reseedTextFromSearchParams() {
     setTextState((prev) => {
       const next: Record<string, string> = {};
-      for (const key of Object.keys(prev)) next[key] = searchParams.get(key) ?? "";
+      for (const key of Object.keys(prev)) {
+        // `getAll`, not `get`. A duplicated param (`?id=A&id=B`) is dropped by
+        // every page's `typeof params.x === "string"` guard, so the LIST is
+        // unfiltered — while `get()` answers `"A"` and would put a filter in
+        // the box that nothing is applying. Mirroring the page's own
+        // normalisation here fixes it on EVERY navigation; the mount guard
+        // below then covers only what it was written for instead of being the
+        // single line of defence.
+        const values = searchParams.getAll(key);
+        next[key] = values.length === 1 ? values[0] : "";
+      }
       return next;
     });
   }
@@ -140,7 +150,12 @@ export function useUrlFilters(initialText: Record<string, string>, debounceMs = 
     // dev, which is exactly where the browser check happens (Next 16 defaults
     // `reactStrictMode` to true). Comparing the params themselves cannot
     // regress that way: a remount sees the same object it already saw.
-    const changed = lastSeenParams.current !== searchParams;
+    // By VALUE, not identity: `useSearchParams()` handing back a fresh object
+    // for an unchanged URL (an RSC revalidation) would otherwise read as a
+    // navigation and re-seed over text the operator is mid-way through typing.
+    // Unproven against Next 16 and possibly unreachable — but it costs a
+    // string compare and cannot regress the StrictMode case.
+    const changed = lastSeenParams.current.toString() !== searchParams.toString();
     lastSeenParams.current = searchParams;
     if (changed && !wasOurs) reseedTextFromSearchParams();
     // eslint-disable-next-line react-hooks/exhaustive-deps

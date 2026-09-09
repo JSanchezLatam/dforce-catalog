@@ -47,6 +47,9 @@ export function ServiceOrderFilters({
           </SelectContent>
         </Select>
       </div>
+      {/* `hasTypedText` is structurally false today — this screen has no text
+          field until WU2 adds its search box. Kept, not dead code: WU2 makes it
+          live, and the alternative is re-learning why it is needed. */}
       {(hasTypedText || selected.status) && (
         <Button type="button" variant="outline" size="default" onClick={clearAll}>
           Limpiar
