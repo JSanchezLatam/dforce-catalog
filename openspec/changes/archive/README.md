@@ -17,6 +17,9 @@ active work. New changes go in `openspec/changes/<name>/`, not here.
 | `customer-deactivation` (C2) | 2026-09-06 | 64/70 | **MODIFIED R16 R19**, ADDED R20 | `cliente.deactivated_at`, excluded from list and picker |
 | `customer-import` (C6) | 2026-09-06 | 78/83 | ADDED R21 | Interfuerza customer import, idempotent re-runs |
 | `catalog-price-tier-choice` | 2026-09-06 | 20/22 | — | choose 1 or 2 ERP price lists per catalog (merged 2026-09-01 in PR #53) |
+| `table-column-sorting` | 2026-09-08 | 31/34 | — | sortable columns on the four list tables (PRs #83–#86) |
+| `table-redesign-bulk-actions` | 2026-09-08 | 77/83 | — | shaded headers, row kebabs, cross-page selection, three bulk actions (PRs #88–#96); **created `openspec/specs/user-management/spec.md` from its own delta, preamble and merge header included** |
+| `service-order-intake-and-print` | 2026-09-09 | 75/75 | ADDED single-vehicle insert | intake UX, inline vehicle creation, edit gate by role+status, printed work order (PRs #99–#102) |
 
 † One of C1's 41 is the duplicate-pair merge the owner **dropped**, struck
 through and marked in that `tasks.md` rather than deleted. It counts as closed

@@ -92,7 +92,6 @@ which numbers are shared. Chosen deliberately over both — see proposal.md.*
 The customer list view MUST provide a text search input matching `cliente` records by partial, case-insensitive AND accent-insensitive match against `name`, `phone`, or any of that customer's active vehicle `plate`s. Accent folding MUST apply to both the stored plate and the search term (`unaccent()` on both sides), exactly as it already does for `name`. The plate match MUST be evaluated as an existence check over the customer's vehicle collection — matching if any one active vehicle's plate matches — not a single-column comparison; a customer with zero vehicles MUST still match on `name` or `phone` alone. The same matching MUST also be reachable through `GET /api/customers`, gated by `customers.read`, accepting `search`, `page`, `pageSize`, and `status` parameters (`active` | `inactive` | `all`, defaulting to `active`; see R20). Each result MUST include a `plates: string[]` array of that customer's active vehicle plates (possibly empty) for disambiguation, replacing the single `vehiclePlate` field; a `cliente` with neither `phone` nor any plate on record MUST still render as an identifiable row, not a blank one. WHEN a search yields zero exact matches, the route MUST also return near matches produced from the same relaxed term — a shorter prefix for name/plate, and for `phone` the search TERM reduced to its last significant digits. The relaxation applies to the term only: the comparison still runs against the stored column verbatim, so this guarantee holds exactly as far as `normalizePhone` (`validation.ts`) has already stripped separators on write. A row written by any path that bypasses `normalizePhone` keeps its separators and is NOT covered. This is deliberately NOT fuzzy/similarity matching.
 
 The list view MUST additionally let staff order results by clicking a whitelisted column header (`name`, `phone`, or `email`; see the `table-sorting` capability for the full whitelist, page-reset, invalid-parameter, and NULL-ordering rules that apply here). Sorting and search compose: a sort applies to whatever result set the current search and status filter already produced, never bypassing them. `GET /api/customers` (`handleListClientes`, consumed by `CustomerPicker`) remains deliberately unaffected by this addition — it does not accept a `sort` parameter, and its underlying `listClientes` order argument defaults to today's `desc(createdAt)` when omitted, so the picker's behavior is byte-identical to before.
-(Previously: search and filter had no column-sorting behavior; results returned in a single fixed `desc(createdAt)` order with no way to change it from the UI.)
 
 #### Scenarios
 
@@ -277,3 +276,32 @@ ambiguity that requires two separate action buttons is specific to
 - GIVEN a selection that includes a customer id since deleted by another session
 - WHEN staff runs the bulk action
 - THEN the system MUST apply it to every valid row and report the missing customer by id with a "no longer exists" reason, without failing the whole batch
+
+### Requirement: Single Vehicle Insert Without Reconcile
+
+The system MUST provide `POST /api/customers/[id]/vehicles` to add exactly one `vehiculo` to an existing, active `cliente`, gated by `customers.write`. This insert MUST NOT go through `planVehiculoReconcile` (the `PATCH /api/customers/[id]` vehicle-collection reconciler, which treats its payload's `vehicles` array as the customer's whole collection) and MUST NOT alter any other `vehiculo` row belonging to that customer, nor any `cliente` field, including `whatsappOptOut` and `emailOptOut`. The request payload MUST accept only plate, make, model, and year — no customer field of any kind. Validation MUST reuse the existing per-vehicle rule from the Field Validation requirement (plate required whenever any other vehicle field is set), not a second copy of it.
+
+#### Scenario: Insert leaves the customer's other active vehicles untouched
+- GIVEN a customer with 3 active vehicles
+- WHEN staff inserts a 4th vehicle through this route
+- THEN the customer MUST have 4 active vehicles, with the original 3 rows unchanged
+
+#### Scenario: Insert leaves consent opt-outs untouched
+- GIVEN that same insert
+- WHEN it completes
+- THEN `whatsappOptOut` and `emailOptOut` MUST be byte-identical to their pre-insert values
+
+#### Scenario: Insert requires customers.write
+- GIVEN a session without `customers.write`
+- WHEN it calls this route
+- THEN the system MUST reject it with 403 before any database work
+
+#### Scenario: Plate required when any other vehicle field is set
+- GIVEN a payload with `make` set and no `plate`
+- WHEN it is submitted
+- THEN the system MUST reject it, reusing the existing plate-required-with-any-other-field rule
+
+#### Scenario: Deactivated customer cannot receive a new vehicle
+- GIVEN a deactivated `cliente`
+- WHEN staff attempts this insert against them
+- THEN the system MUST refuse it, consistent with the existing rule against editing a deactivated customer
