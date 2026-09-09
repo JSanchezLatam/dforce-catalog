@@ -395,17 +395,43 @@ Branch names follow the `crm-workshop/prN-*` convention:
 
 ## Phase 7b — Builder accepts a product-id list (catalog-generation delta, resolution half; design D10)
 
-- [ ] 7b.1 `src/app/(app)/builder/page.tsx` — parse `?products=` into `seedProductIds: string[]`, capped at 200 server-side too (defense in depth beyond 7a's client-side cap, in case the URL is hand-edited).
-- [ ] 7b.2 `POST /api/catalog-builder/products` — add a `productIds` branch beside the existing `categories`-only body. Same `catalogs.read` gate, no new `ROUTE_GUARDS` entry needed (this route already has one — confirm `route-guards.test.ts`'s cross-reference check still passes with the new branch).
-- [ ] 7b.3 RED (node) `catalog-builder/queries.test.ts` — `listProductsByIds(ids)` returns the **same projection** as `listProductsInCategories` (`image`, `imageType`, the two-guard `priceLists` aggregate) for a given id set, over an injected query function.
-- [ ] 7b.4 GREEN `listProductsByIds` — **this is the change's only new SQL.** Reuse the projection verbatim; a thinner one silently degrades the review step and the printed prices (D10 point 2).
-- [ ] 7b.5 RED/GREEN — a stale id (removed from inventory since the handoff) is dropped, not fabricated; the builder proceeds with the remaining valid products (catalog-generation spec Scenario).
-- [ ] 7b.6 `CatalogBuilderForm.tsx` — second selection mode: when `seedProductIds` is present, `candidates` come from the id lookup and `selectedCategories` stays empty. `deriveCatalogTitle(uniqueL1s(...))` falls back to the distinct L1s carried on the returned rows rather than an empty category-ref list (D10 point 3).
-- [ ] 7b.7 RED/GREEN — the existing category-tree flow is unaffected by the new mode (catalog-generation spec Scenario "Category-tree mode is unaffected").
-- [ ] 7b.8 `diff` every touched file before trusting 7b.3–7b.7.
-- [ ] 7b.9 **Real-database smoke test — the second and last one this change needs.** `listProductsByIds` against a real throwaway Postgres, confirming its projection matches `listProductsInCategories`'s exactly and that an oversized id list is refused server-side too.
-- [ ] 7b.10 **Browser check, both themes, 0 console errors**: `/inventory` → send to builder → `/builder` opens pre-populated with exactly the selected products in product-id mode, category tree empty, title falls back correctly.
-- [ ] 7b.11 `npm test` and `npx tsc --noEmit` clean.
+- [x] 7b.1 `src/app/(app)/builder/page.tsx` — parse `?products=` into `seedProductIds: string[]`, capped at 200 server-side too (defense in depth beyond 7a's client-side cap, in case the URL is hand-edited).
+- [x] 7b.2 `POST /api/catalog-builder/products` — add a `productIds` branch beside the existing `categories`-only body. Same `catalogs.read` gate, no new `ROUTE_GUARDS` entry needed (this route already has one — confirm `route-guards.test.ts`'s cross-reference check still passes with the new branch).
+- [x] 7b.3 RED (node) `catalog-builder/queries.test.ts` — `listProductsByIds(ids)` returns the **same projection** as `listProductsInCategories` (`image`, `imageType`, the two-guard `priceLists` aggregate) for a given id set, over an injected query function.
+- [x] 7b.4 GREEN `listProductsByIds` — **this is the change's only new SQL.** Reuse the projection verbatim; a thinner one silently degrades the review step and the printed prices (D10 point 2).
+- [x] 7b.5 RED/GREEN — a stale id (removed from inventory since the handoff) is dropped, not fabricated; the builder proceeds with the remaining valid products (catalog-generation spec Scenario).
+- [x] 7b.6 `CatalogBuilderForm.tsx` — second selection mode: when `seedProductIds` is present, `candidates` come from the id lookup and `selectedCategories` stays empty. `deriveCatalogTitle(uniqueL1s(...))` falls back to the distinct L1s carried on the returned rows rather than an empty category-ref list (D10 point 3).
+- [x] 7b.7 RED/GREEN — the existing category-tree flow is unaffected by the new mode (catalog-generation spec Scenario "Category-tree mode is unaffected").
+- [x] 7b.8 `diff` every touched file before trusting 7b.3–7b.7.
+- [x] 7b.9 **Real-database smoke test — the second and last one this change needs.** `listProductsByIds` against a real throwaway Postgres, confirming its projection matches `listProductsInCategories`'s exactly and that an oversized id list is refused server-side too.
+
+  **DONE, with adversarial data.** A throwaway `dforce_wu7b` database seeded
+  with four products, three of them carrying deliberately malformed
+  `PriceLists`. Real Postgres, no injected seam:
+
+  - `["oops"]` (a scalar inside the array) -> `priceLists: null`, no RAISE.
+    Guard 1 holds.
+  - `[{"Name":null,...},{"Name":"Detal",...}]` -> `{"Detal":"9"}`. The NULL-key
+    element is filtered out and the GOOD one survives, instead of the aggregate
+    blowing up. Guard 2 holds, and it is the subtle one — `->>` does not raise
+    on a non-object, so without the filter this hides until the aggregate dies
+    and takes the whole listing with it.
+  - `{"no":"soy-array"}` (an object where an array belongs) -> `null`.
+  - Projection identity: 4 ids reachable by both paths, **0 differences**,
+    field for field — including the trimmed image URL and the trimmed
+    price-list names.
+  - A requested id that does not exist is **dropped, not fabricated**.
+
+  This is the verification the suite structurally cannot give: every unit test
+  supplies `queryFn` or reads rendered SQL text, so a green run proves Postgres
+  was never asked. Database dropped afterwards.
+
+  **One wording note:** 7b.1 says "capped" and this task said "refused". The
+  implementation CAPS — a hand-edited 250-id URL silently loads the first 200.
+  Refusing instead is different behaviour and a different test; flagged rather
+  than quietly picked.
+- [x] 7b.10 **Browser check, both themes, 0 console errors**: `/inventory` → send to builder → `/builder` opens pre-populated with exactly the selected products in product-id mode, category tree empty, title falls back correctly.
+- [x] 7b.11 `npm test` and `npx tsc --noEmit` clean.
 
 ---
 

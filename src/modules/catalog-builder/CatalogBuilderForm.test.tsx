@@ -347,3 +347,174 @@ describe("CatalogBuilderForm — a failed confirm is readable from inside the di
     expect(screen.getByRole("button", { name: "Generar catálogo" })).toBeEnabled();
   });
 });
+
+/**
+ * D10 point 3 — the builder's SECOND selection mode: `/inventory` hands over a
+ * list of product ids and the form resolves them itself, with the category
+ * tree left untouched.
+ */
+describe("CatalogBuilderForm — product-id mode (D10)", () => {
+  const SEEDED = [
+    { id: "PS1", name: "Filtro de aceite", categoryL1: "REPUESTOS", categoryL2: null, image: null, imageType: null, priceLists: null },
+    { id: "PS3", name: "Correa", categoryL1: "MOTOR", categoryL2: null, image: null, imageType: null, priceLists: null },
+  ];
+
+  /** Captures the request BODY, which is what distinguishes the two modes. */
+  function mockProductsFetch(products: unknown[]) {
+    const bodies: unknown[] = [];
+    const fetchMock = vi.fn((url: string, init?: { body?: string }) => {
+      if (url.includes("/products")) {
+        bodies.push(JSON.parse(init?.body ?? "null"));
+        return Promise.resolve({ ok: true, json: async () => ({ products }) });
+      }
+      if (url.includes("/queue-depth")) return Promise.resolve({ ok: true, json: async () => ({ depth: 0 }) });
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return bodies;
+  }
+
+  function renderSeeded(seedProductIds: string[], products: unknown[] = SEEDED) {
+    const bodies = mockProductsFetch(products);
+    render(
+      <CatalogBuilderForm
+        categoryL1Options={["REPUESTOS", "MOTOR"]}
+        categoryPairs={[]}
+        templateConfig={null}
+        workshopConfig={null}
+        catalogCount={0}
+        seedProductIds={seedProductIds}
+      />,
+    );
+    return bodies;
+  }
+
+  it("asks the route for the handed-over ids, not for categories", async () => {
+    const bodies = renderSeeded(["PS1", "PS2", "PS3"]);
+
+    await screen.findByText("Filtro de aceite");
+    expect(bodies).toEqual([{ productIds: ["PS1", "PS2", "PS3"] }]);
+  });
+
+  /**
+   * catalog-generation spec, "Selection opens the builder pre-populated" — and
+   * its stale-id scenario in the same breath: three ids went out, the ERP
+   * still has two, and the builder proceeds with those two rather than
+   * inventing a third or refusing the whole handoff.
+   */
+  it("pre-selects every product that still exists and fabricates nothing for the one that does not", async () => {
+    renderSeeded(["PS1", "PS2", "PS3"]);
+
+    expect(await screen.findByText("Filtro de aceite")).toBeInTheDocument();
+    expect(screen.getByText("Correa")).toBeInTheDocument();
+    expect(screen.queryByText("PS2")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Productos (2 de 2 seleccionados)" })).toBeInTheDocument();
+  });
+
+  it("leaves the category tree unticked — the ids are the selection", async () => {
+    renderSeeded(["PS1", "PS3"]);
+    await screen.findByText("Filtro de aceite");
+
+    await userEvent.setup().click(screen.getByRole("button", { name: /Seleccion.* categor.as/ }));
+    for (const l1 of ["REPUESTOS", "MOTOR"]) {
+      expect(screen.getByRole("checkbox", { name: l1 })).not.toBeChecked();
+    }
+  });
+
+  /**
+   * `deriveCatalogTitle(uniqueL1s(categoryRefs))` has nothing to derive from
+   * in this mode, so the L1s come off the returned ROWS instead. Without the
+   * fallback every seeded catalog would print the bare "Catalog".
+   */
+  it("derives the title from the L1s the returned rows carry", async () => {
+    renderSeeded(["PS1", "PS3"]);
+
+    expect(await screen.findAllByText("Catalog: REPUESTOS, MOTOR")).not.toHaveLength(0);
+  });
+
+  /**
+   * `validateCatalogSelection` refuses a selection with no included category,
+   * so the derived L1s have to feed the count too — otherwise every seeded
+   * catalog dead-ends on "Elegí al menos una categoría" with no category
+   * control to go fix.
+   */
+  it("lets a seeded selection reach the review step", async () => {
+    renderSeeded(["PS1", "PS3"]);
+    await screen.findByText("Filtro de aceite");
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Empezar a generar" }));
+
+    expect(screen.getByRole("button", { name: "Volver a la selección" })).toBeInTheDocument();
+    expect(screen.queryByText("Elegí al menos una categoría")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * 7b.7 — the mode that existed before D10. Every assertion here describes
+ * behavior that shipped long ago; they are pinned because the new mode shares
+ * the same effect, the same `title`, and the same category count.
+ */
+describe("CatalogBuilderForm — the category-tree flow is unaffected", () => {
+  function mockCategoryFetch() {
+    const bodies: unknown[] = [];
+    const fetchMock = vi.fn((url: string, init?: { body?: string }) => {
+      if (url.includes("/products")) {
+        bodies.push(JSON.parse(init?.body ?? "null"));
+        return Promise.resolve({ ok: true, json: async () => ({ products: [CANDIDATE] }) });
+      }
+      if (url.includes("/queue-depth")) return Promise.resolve({ ok: true, json: async () => ({ depth: 0 }) });
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return bodies;
+  }
+
+  async function pickMotor() {
+    const bodies = mockCategoryFetch();
+    const user = userEvent.setup();
+    render(
+      <CatalogBuilderForm
+        categoryL1Options={["Motor"]}
+        categoryPairs={[]}
+        templateConfig={null}
+        workshopConfig={null}
+        catalogCount={0}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Seleccion.* categor.as/ }));
+    await user.click(await screen.findByRole("checkbox", { name: "Motor" }));
+    await screen.findByText("Woofer");
+    return { bodies, user };
+  }
+
+  it("still posts a categories body, and never a productIds one", async () => {
+    const { bodies } = await pickMotor();
+
+    expect(bodies).toEqual([{ categories: [{ categoryL1: "Motor" }] }]);
+  });
+
+  it("still titles the catalog from the TICKED categories, not from the returned rows", async () => {
+    await pickMotor();
+
+    // `CANDIDATE.categoryL1` is "Motor" as well, so this is only meaningful
+    // because nothing is ticked before the click — the assertion that carries
+    // the weight is the empty-selection one below.
+    expect(await screen.findAllByText("Catalog: Motor")).not.toHaveLength(0);
+  });
+
+  it("still requests nothing at all until a category is ticked", async () => {
+    const bodies = mockCategoryFetch();
+    render(
+      <CatalogBuilderForm
+        categoryL1Options={["Motor"]}
+        categoryPairs={[]}
+        templateConfig={null}
+        workshopConfig={null}
+        catalogCount={0}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getAllByText("Catalog")).not.toHaveLength(0));
+    expect(bodies).toEqual([]);
+  });
+});
