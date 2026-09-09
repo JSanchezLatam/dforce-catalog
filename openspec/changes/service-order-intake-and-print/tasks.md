@@ -203,8 +203,9 @@ Vehicle Insert Without Reconcile*; design D1, D2, D3, D4, D10)
 - [x] 2.12 Create `src/modules/customers/VehicleQuickForm.tsx` — `placa`,
   `marca`, `modelo`, `año` only, **no** consent fields, **not**
   `CustomerForm` (D4). Coerces `year` with `Number()` before POST, mirroring
-  `CustomerForm`'s existing coercion (D10). Props: `clienteId`, `onCreated`,
-  `onCancel` per the Interfaces block.
+  `CustomerForm`'s existing coercion (D10). Props: `clienteId` and `onCreated`
+  — the Interfaces block also declared `onCancel`, dropped during this unit's
+  review (see the note beside it in `design.md`).
 - [x] 2.13 RED (jsdom) — pin the consent trap shut: assert the request body
   `VehicleQuickForm` sends carries **no** `whatsappOptOut`, `emailOptOut`, or
   any other `cliente` field (D4). **Mutation-verify**: add a stray consent
@@ -245,9 +246,10 @@ Written because a ticked box is a claim. AGENTS.md: a green `npm test` proves
 Post-GGA in this unit, beyond the task list: the deterministic 409
 (`cliente_deactivated`) no longer falls through to "Intentalo de nuevo" — the
 route answers `{ error }`, not `{ errors }`, so reading only `body.errors`
-buried it. The dead `onCancel` prop was dropped (design's Interfaces block
-still lists it; `DialogClose` already closes the dialog and the sole caller
-passed a no-op). And WU1's `"Fecha y hora de inicio"` on the detail page is
+buried it. The dead `onCancel` prop was dropped
+(`DialogClose` already closes the dialog and the sole caller passed a no-op);
+`design.md`'s Interfaces block was corrected to match during WU4's review,
+having outlived the code by one unit. And WU1's `"Fecha y hora de inicio"` on the detail page is
 now pinned by a test, mutation-verified against `"Cita"`.
 
 ## Phase 3 — Printed order (service-orders spec: *Printable Work Order*;
@@ -347,11 +349,11 @@ spec: *Order Editing Is Gated by Role and Current Status*; design D11)
   `OrderStatusControls` in the detail-page header.
 - [x] 4.10 `diff` `edit-policy.ts` + its test, `[id]/route.ts` + its test,
   `service-orders/[id]/page.tsx` + its test before trusting 4.1–4.9.
-- [ ] 4.11 Seed orders across statuses (`open`, `in_progress`,
+- [x] 4.11 Seed orders across statuses (`open`, `in_progress`,
   `done`/`cancelled`) and confirm access to an `administrador` and a
   `tecnico` session for 4.12 — none of the required combinations exist in
   the dev database today.
-- [ ] 4.12 **Browser check, console open** — jsdom cannot see an RSC
+- [x] 4.12 **Browser check, console open** — jsdom cannot see an RSC
   refusal, and this is a new client mount on server-rendered data: as
   `administrador`, open a seeded `open`-status order and confirm the control
   renders and opens the form pre-filled; as `tecnico` on the same order,
@@ -359,6 +361,32 @@ spec: *Order Editing Is Gated by Role and Current Status*; design D11)
   both roles see it; move it to `done`/`cancelled` and confirm neither does;
   confirm a permitted patch actually saves.
 - [x] 4.13 `npm test` (alone) and `npx tsc --noEmit` clean.
+
+### WU4 verification record — what was actually run, and where
+
+`page.test.tsx` says it itself: those cases prove the gate DECIDES correctly,
+they are not evidence that the control MOUNTS. AGENTS.md documents two shipped
+production defects on exactly this boundary. So this is the evidence.
+
+Throwaway `dforce_wu4_ui` on `:5433`, provisioned with `drizzle-kit migrate`;
+worktree preview on `:3022`; one order per status, one `administrador` and one
+`tecnico` session (rows inserted, no credentials typed).
+
+| Check | Result |
+|---|---|
+| The mount | `Editar orden` renders, and the button reports `__reactFiber` — it hydrated. jsdom could not have told us either way. |
+| **44×44** | **Measured 95×44 px** via `getBoundingClientRect()`. `min-h-11` beats the `h-7` (28px) `size="sm"` sets, and the button is the wrapper's `firstElementChild`, so `[&>button]:` reaches it. No test in this repo can measure a height; this is the only proof the floor is met. |
+| The truth table, from server-rendered HTML | `administrador`: open ✅ in_progress ✅ done ❌ cancelled ❌. `tecnico`: open ❌ in_progress ✅ done ❌ cancelled ❌. All eight cells. |
+| A permitted patch saves | Typed into Hallazgos as `administrador` on the `open` order → Postgres holds the text. This is the thing the owner reported he could not do. |
+| **The route is the boundary, not the UI** | `PATCH` sent directly, bypassing the UI entirely: `tecnico` → `open` = **403** "Solo un administrador puede editar una orden abierta."; `administrador` → `done` = **409** "No se puede editar una orden completada o cancelada."; `tecnico` → `in_progress` = **200** with `hallazgos` as sent. Postgres confirms the two refusals wrote **nothing**. |
+| Console | 0 errors. |
+
+Gate results: `npm test` 1548/1548 · `npx tsc --noEmit` clean · `npm run lint`
+0 errors / 15 warnings (baseline).
+
+**`gga run` exited 0 while printing `STATUS: FAILED`.** The exit code is not the
+verdict — read the `STATUS` line. An earlier run this session exited 1 on the
+same status, so it cannot be relied on either way.
 
 ---
 
