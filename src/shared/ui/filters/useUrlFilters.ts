@@ -86,7 +86,22 @@ export function useUrlFilters(initialText: Record<string, string>, debounceMs = 
    * button, `<Link>` — arrives with the counter at zero and releases it
    * immediately, which is the case this effect is actually for.
    */
-  const pendingPushes = useRef(0);
+  /**
+   * The param strings of every push we have OUTSTANDING, in order. It replaced
+   * a bare tally, and the reason matters: the tally skipped a push whose target
+   * equalled `window.location.search`, which was harmless while it only gated
+   * `pushedParamsRef` — the file's own comment says so — and stopped being
+   * harmless the moment it also gated the re-seed. `window.location` LAGS,
+   * because Next 16 runs `pushState` from an effect after the RSC payload
+   * lands, so a second push aimed back at the still-displayed URL went
+   * uncounted while very much producing its own commit; that commit then read
+   * as EXTERNAL and rebuilt the box from the URL, under the operator's cursor.
+   *
+   * Matching the incoming params against what we actually pushed answers "was
+   * this ours" exactly, in any landing order, and never consults a URL that
+   * cannot answer yet.
+   */
+  const outstanding = useRef<string[]>([]);
 
   function reseedTextFromSearchParams() {
     setTextState((prev) => {
@@ -139,9 +154,11 @@ export function useUrlFilters(initialText: Record<string, string>, debounceMs = 
   useEffect(() => {
     // Read BEFORE the decrement (D3) — `wasOurs` is not new information, it
     // is the counter's existing meaning read one line earlier.
-    const wasOurs = pendingPushes.current > 0;
-    if (wasOurs) pendingPushes.current -= 1;
-    if (pendingPushes.current === 0) pushedParamsRef.current = null;
+    const incoming = searchParams.toString();
+    const index = outstanding.current.indexOf(incoming);
+    const wasOurs = index !== -1;
+    if (wasOurs) outstanding.current.splice(index, 1);
+    if (outstanding.current.length === 0) pushedParamsRef.current = null;
     // Our own push landing must not overwrite text the user typed since —
     // only an EXTERNAL navigation (arrives with the counter at zero) re-seeds.
     // Keyed on the PARAMS, not on "is this the first run". React 19 StrictMode
@@ -175,8 +192,13 @@ export function useUrlFilters(initialText: Record<string, string>, debounceMs = 
     // Only count a push that will actually CHANGE the url: a push to the url
     // we are already on produces no new `searchParams`, so the effect above
     // never fires for it and the increment would never come back down.
-    if (href !== `${pathname}${window.location.search}`) {
-      pendingPushes.current += 1;
+    // Projected against where the ROUTER is heading — the last push we have
+    // outstanding, else the last commit we saw — never against
+    // `window.location`, which has not caught up yet. A push that genuinely
+    // changes nothing produces no commit and so is not recorded.
+    const projected = outstanding.current.at(-1) ?? lastSeenParams.current.toString();
+    if (params.toString() !== projected) {
+      outstanding.current.push(params.toString());
     }
     router.push(href);
   }

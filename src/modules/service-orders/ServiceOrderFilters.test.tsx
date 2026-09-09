@@ -98,3 +98,30 @@ describe("ServiceOrderFilters — Limpiar goes through the hook's clearAll", () 
     expect(push).toHaveBeenCalledTimes(1); // one writer, not two
   });
 });
+
+/**
+ * D5 names `/customers` AND `/service-orders` as the two screens whose
+ * behaviour changes — `applyFilter` drops `page` on a `pageSize` change, where
+ * both previously exempted it. Round 3 covered `/customers` and left this one,
+ * the same one-sibling-patched shape the rest of this unit kept hitting.
+ *
+ * Staying on page 7 while the page size changes shows a slice of a list that
+ * no longer exists.
+ */
+describe("ServiceOrderFilters — page is dropped on every filter change (D5)", () => {
+  it("drops page when pageSize changes", async () => {
+    const user = userEvent.setup();
+    seedUrl("page=7&status=done");
+    render(<ServiceOrderFilters selected={{ status: "done" }} pageSize={10} />);
+
+    // By render order, not by name: this screen's `Select`/`Label` pairs carry
+    // no `htmlFor`/`id`, so Base UI gives the trigger no accessible name.
+    // `Estado` renders first, `Filas por página` last.
+    await user.click(screen.getAllByRole("combobox").at(-1)!);
+    await user.click(await screen.findByRole("option", { name: "50" }));
+
+    const url = String(push.mock.calls.at(-1)?.[0]);
+    expect(url).toContain("pageSize=50");
+    expect(url).not.toContain("page=7");
+  });
+});

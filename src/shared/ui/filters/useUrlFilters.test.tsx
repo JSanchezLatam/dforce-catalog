@@ -5,7 +5,7 @@
  * `useUrlFilters` directly, not through any screen component, because the
  * race lives in the hook now, not in any one filter bar.
  */
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -88,6 +88,7 @@ function Harness({ initial = {} }: { initial?: Record<string, string> }) {
       <label htmlFor="search">Filtro</label>
       <input id="search" value={text.search ?? ""} onChange={(e) => setText("search", e.target.value)} />
       <button onClick={() => applyFilter("status", "all")}>Todos</button>
+      <button onClick={() => applyFilter("status", "")}>Activos</button>
       <button onClick={clearAll}>Limpiar</button>
     </div>
   );
@@ -256,6 +257,42 @@ describe("useUrlFilters — re-seed only on external navigation", () => {
    * drops a duplicated param, so the LIST is unfiltered. `get()` would answer
    * `"A"` and put a filter in the box that nothing is applying.
    */
+  /**
+   * The counter used to skip a push whose target equalled
+   * `window.location.search` — "precision, not a fix for a demonstrated bug",
+   * and true while it only gated `pushedParamsRef`. It stopped being true the
+   * moment it also gated the re-seed: `window.location` LAGS, because Next 16
+   * runs `pushState` from an effect after the RSC payload lands, so a second
+   * push aimed back at the still-displayed URL went uncounted while very much
+   * producing its own commit. That commit then read as EXTERNAL and wiped the
+   * box under the operator's cursor.
+   *
+   * The hook now projects the URL the router is heading to — the last push it
+   * has outstanding, or the last commit it saw — instead of asking
+   * `window.location`, which cannot answer yet.
+   */
+  it("keeps typed text when a second push returns to the URL still on screen", async () => {
+    seedUrl("status=all");
+    pending.delays = [80, 160]; // both slower than the clicks, first lands first
+    render(<Harness initial={{ search: "" }} />);
+
+    // All three synchronously, in one `act`: both pushes must still be in the
+    // air when the text is typed, which is the whole scenario. `user.click`
+    // and `user.type` each advance timers far enough for the first push to
+    // land, which closes the window before it opens.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Activos" })); // → /list
+      fireEvent.click(screen.getByRole("button", { name: "Todos" })); // → /list?status=all
+      fireEvent.change(screen.getByLabelText(/Filtro/), { target: { value: "per" } });
+    });
+    expect(screen.getByLabelText(/Filtro/)).toHaveValue("per"); // typed, before any commit
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 220)); // both commits land, debounce has not
+    });
+    expect(screen.getByLabelText(/Filtro/)).toHaveValue("per");
+  });
+
   it("ignores a duplicated param on an external navigation, as the page does", async () => {
     render(<Harness initial={{ search: "" }} />);
 

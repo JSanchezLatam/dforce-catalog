@@ -353,6 +353,39 @@ Two nits closed: the D5 `pageSize` test uses `findByRole` for Base UI's
 portalled popup, and `ServiceOrderFilters`' structurally-false `hasTypedText`
 operand carries a comment saying WU2 makes it live so nobody deletes it.
 
+**GGA round 5 — and this record has to be honest about what was NOT proven.**
+
+The push counter skipped a push whose target equalled `window.location.search`.
+Its own comment called that "precision, NOT a fix for a demonstrated bug", and
+that was true while it only gated `pushedParamsRef`. It stopped being true the
+moment the same counter also gated the re-seed: `window.location` LAGS, because
+Next 16 runs `pushState` from an effect after the RSC payload lands, so a
+second push aimed back at the still-displayed URL goes uncounted while very
+much producing its own commit. That commit then reads as EXTERNAL and rebuilds
+the box from the URL — under the operator's cursor.
+
+The tally is replaced by matching the incoming params against the list of
+pushes we actually have outstanding, projected against where the ROUTER is
+heading rather than against a URL that cannot answer yet. That is exact in any
+landing order and consults `window.location` not at all.
+
+**GGA reported reproducing the wipe in `CustomerFilters.test.tsx`. Four honest
+attempts to reproduce it at the hook level failed** — driving both pushes
+inside one `act` with `fireEvent`, typing before either commit, and probing the
+pushes and `window.location` to confirm the window genuinely opens (it does:
+`["/list", "/list?status=all"]` with `loc` still `?status=all` at the second
+push). The fix is therefore taken on the MECHANISM, which is documented in this
+file twenty lines above the guard it removes, and not on a red of my own. The
+test that ships pins the two-outstanding-pushes case; it is a regression pin,
+not the reproduction, and calling it one would be the placebo this repo keeps
+catching.
+
+D5's `pageSize` assertion was missing on `/service-orders` — of the two screens
+whose behaviour changed, one was covered and the other left, the same shape as
+rounds 2 and 3. Added, mutation-verified. Its combobox is selected by render
+order because Base UI gives these `Select`/`Label` pairs no accessible name
+without `htmlFor`/`id`.
+
 ## Phase 2 — Order list search, columns, and default order
 (service-orders spec: *Order List Search Matches Customer, Vehicle, and
 Phone*, *Order List Columns Show Customer and Vehicle*, *Unsorted Default
