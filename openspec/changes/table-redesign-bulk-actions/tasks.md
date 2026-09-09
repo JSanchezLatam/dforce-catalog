@@ -365,12 +365,33 @@ Branch names follow the `crm-workshop/prN-*` convention:
 
 ## Phase 7a — Inventory selection + handoff transport (catalog-generation delta, transport half; design D10)
 
-- [ ] 7a.1 Wire a hand-rolled selection wrapper into `inventory/page.tsx` (consuming unit 4's shared model). No `BulkResultPanel` here — this is a navigation, not a per-row mutation.
-- [ ] 7a.2 RED — the selection bar refuses navigating with a selection larger than `MAX_TOTAL_PRODUCTS` (200, `catalog-builder/selection.ts:51`), in Spanish, **before** navigating (D10 point 4).
-- [ ] 7a.3 GREEN — build the `?products=id1,id2,...` URL for client navigation and the ≤200 refusal copy.
-- [ ] 7a.4 `diff` `inventory/page.tsx` and any new wrapper file before trusting 7a.2/7a.3.
-- [ ] 7a.5 **Browser check, both themes, 0 console errors**: `/inventory` selection bar, the >200 refusal message, no regression to the kebab from unit 2.
-- [ ] 7a.6 `npm test` and `npx tsc --noEmit` clean.
+- [x] 7a.1 Wire a hand-rolled selection wrapper into `inventory/page.tsx` (consuming unit 4's shared model). No `BulkResultPanel` here — this is a navigation, not a per-row mutation.
+- [x] 7a.2 RED — the selection bar refuses navigating with a selection larger than `MAX_TOTAL_PRODUCTS` (200, `catalog-builder/selection.ts:51`), in Spanish, **before** navigating (D10 point 4).
+- [x] 7a.3 GREEN — build the `?products=id1,id2,...` URL for client navigation and the ≤200 refusal copy.
+- [x] 7a.4 `diff` `inventory/page.tsx` and any new wrapper file before trusting 7a.2/7a.3.
+- [x] 7a.5 **Browser check, both themes, 0 console errors**: `/inventory` selection bar, the >200 refusal message, no regression to the kebab from unit 2.
+
+  Verified live against the real 699-product inventory: select-all ticks the
+  page, the bar reads "10 seleccionados", "Enviar al generador" measures 44px,
+  and WU2's kebab is untouched in the Acciones column.
+
+  **The >200 refusal was NOT seen in the browser.** Reaching it needs 100 rows
+  per page across three pages, and the Chrome extension disconnected mid-way.
+  It is covered by a test that IS mutation-proven — raising
+  `MAX_TOTAL_PRODUCTS` to 300 turns it red — but that test was a PLACEBO in its
+  first draft: it built `MAX + 1` rows and asserted a template literal built
+  from the same constant, so it tested the arithmetic rather than the limit and
+  stayed green under exactly that mutation. Rewritten with a literal `201` and
+  the literal Spanish sentence. Worth re-checking in a browser when one is
+  available.
+
+  **Two deliberate additions beyond the task text, both kept:** the checkbox
+  column and bar are gated on `can(user, "catalogs.generate")` — `tecnico` has
+  that `false` and `/builder` refuses them, so ungated this offers a technician
+  a bulk action whose only possible outcome is a permission page. And the cap's
+  sentence is promoted into `maxTotalProductsMessage()` rather than retyped, so
+  the two places stating the limit cannot drift.
+- [x] 7a.6 `npm test` and `npx tsc --noEmit` clean.
 
 ## Phase 7b — Builder accepts a product-id list (catalog-generation delta, resolution half; design D10)
 
