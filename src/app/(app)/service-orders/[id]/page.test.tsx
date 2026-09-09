@@ -82,6 +82,26 @@ describe("ServiceOrderDetailPage", () => {
     expect(screen.queryByRole("columnheader", { name: "Pieza" })).not.toBeInTheDocument();
   });
 
+  /**
+   * The label the owner asked for by name, on the page staff actually reads.
+   * It shipped with no assertion anywhere but the form, and AGENTS.md is
+   * explicit: "Tests assert the Spanish string. Those are what catch an
+   * untranslated screen." The negative half matters just as much — the short
+   * "Cita" is kept ON PURPOSE as a width-constrained list-column header, so
+   * this pins the field label without forbidding that header.
+   */
+  it("labels the start time 'Fecha y hora de inicio', not 'Cita'", async () => {
+    getOrdenServicioById.mockResolvedValue({
+      orden: { ...ORDEN, appointmentAt: new Date("2026-06-02T15:30:00Z") },
+      items: [],
+    });
+
+    render(await renderPage());
+
+    expect(screen.getByText("Fecha y hora de inicio")).toBeInTheDocument();
+    expect(screen.queryByText("Cita")).not.toBeInTheDocument();
+  });
+
   it("still shows the vehicle's identity and link when that vehicle is DEACTIVATED", async () => {
     getClienteById.mockResolvedValue(detailWith(new Date("2026-02-01")));
 

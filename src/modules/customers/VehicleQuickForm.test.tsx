@@ -63,7 +63,7 @@ describe("VehicleQuickForm (D4 — a vehicle-only form, by construction)", () =>
   it("sends only plate, make, model and year — no whatsappOptOut, no emailOptOut, no cliente field at all", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({ status: 201, body: { vehiculo: vehiculo() } });
-    render(<VehicleQuickForm clienteId="c1" onCreated={vi.fn()} onCancel={vi.fn()} />);
+    render(<VehicleQuickForm clienteId="c1" onCreated={vi.fn()} />);
 
     await openAndFill(user, { placa: "NEW111", marca: "Toyota" });
 
@@ -79,7 +79,7 @@ describe("VehicleQuickForm (D4 — a vehicle-only form, by construction)", () =>
   it("coerces año to a number before sending it", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({ status: 201, body: { vehiculo: vehiculo({ year: 2019 }) } });
-    render(<VehicleQuickForm clienteId="c1" onCreated={vi.fn()} onCancel={vi.fn()} />);
+    render(<VehicleQuickForm clienteId="c1" onCreated={vi.fn()} />);
 
     await openAndFill(user, { placa: "NEW111", año: "2019" });
 
@@ -90,7 +90,7 @@ describe("VehicleQuickForm (D4 — a vehicle-only form, by construction)", () =>
     const user = userEvent.setup();
     mockFetch({ status: 201, body: { vehiculo: vehiculo({ id: "v-creado" }) } });
     const onCreated = vi.fn();
-    render(<VehicleQuickForm clienteId="c1" onCreated={onCreated} onCancel={vi.fn()} />);
+    render(<VehicleQuickForm clienteId="c1" onCreated={onCreated} />);
 
     await openAndFill(user);
 
@@ -101,7 +101,7 @@ describe("VehicleQuickForm (D4 — a vehicle-only form, by construction)", () =>
     const user = userEvent.setup();
     mockFetch({ status: 400, body: { errors: { plate: "La placa es obligatoria" } } });
     const onCreated = vi.fn();
-    render(<VehicleQuickForm clienteId="c1" onCreated={onCreated} onCancel={vi.fn()} />);
+    render(<VehicleQuickForm clienteId="c1" onCreated={onCreated} />);
 
     await openAndFill(user, {});
 
@@ -109,10 +109,41 @@ describe("VehicleQuickForm (D4 — a vehicle-only form, by construction)", () =>
     expect(onCreated).not.toHaveBeenCalled();
   });
 
+  /**
+   * The route answers a 409 as `{ error: "cliente_deactivated" }` — a single
+   * STRING, no `errors` map — so reading `body.errors` alone lands this on the
+   * generic "Intentalo de nuevo". The refusal is DETERMINISTIC: retrying
+   * returns it forever. `ServiceOrderForm` and `CustomerForm` each shipped
+   * this same defect once and each carries a comment saying so.
+   */
+  it("names the deactivation on a 409 instead of telling the operator to retry", async () => {
+    const user = userEvent.setup();
+    mockFetch({ status: 409, body: { error: "cliente_deactivated" } });
+    const onCreated = vi.fn();
+    render(<VehicleQuickForm clienteId="c1" onCreated={onCreated} />);
+
+    await openAndFill(user);
+
+    expect(await screen.findByText(/fue desactivado/i)).toBeInTheDocument();
+    expect(screen.queryByText(/intentalo de nuevo/i)).not.toBeInTheDocument();
+    expect(onCreated).not.toHaveBeenCalled();
+  });
+
+  it("reports a 404 without inventing a deactivation that did not happen", async () => {
+    const user = userEvent.setup();
+    mockFetch({ status: 404, body: { error: "not_found" } });
+    render(<VehicleQuickForm clienteId="c1" onCreated={vi.fn()} />);
+
+    await openAndFill(user);
+
+    expect(await screen.findByText("No se pudo agregar el vehículo.")).toBeInTheDocument();
+    expect(screen.queryByText(/fue desactivado/i)).not.toBeInTheDocument();
+  });
+
   it("reports a failed request rather than leaving the operator in silence", async () => {
     const user = userEvent.setup();
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
-    render(<VehicleQuickForm clienteId="c1" onCreated={vi.fn()} onCancel={vi.fn()} />);
+    render(<VehicleQuickForm clienteId="c1" onCreated={vi.fn()} />);
 
     await openAndFill(user);
 

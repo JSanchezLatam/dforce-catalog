@@ -2,12 +2,19 @@
 
 ## Review Workload Forecast
 
-The proposal forecast three work units (~750 lines). **This tasks pass adds a
-fourth: D11 (the edit gate) is decided in `design.md` but is absent from its
-own File Changes table — no WU number anywhere against `edit-policy.ts`, the
-detail-page mount, or the `PATCH` route change.** Folding it into WU1 would
-mix "customer/vehicle intake UX" with "role/status authorization" in one PR
-and push WU1 from ~250 to ~500+ lines; it has no functional dependency on
+The proposal forecast three work units (~750 lines); D11 (the edit gate) makes
+a fourth.
+
+**Correction to an earlier draft of this section.** It claimed D11 was absent
+from `design.md`'s File Changes table. That is false: the table assigns unit
+**`0`** to `edit-policy.ts`, its test, the detail-page mount and the `PATCH`
+route change, and the design says "WU0 lands first". This file renumbers that
+WU0 to **WU4** and the "Delivery order" section below is the live plan —
+1 → 2 → 4 → 3. Read the numbering here, not in `design.md`.
+
+The renumbering, not the premise, is what stands: folding the gate into WU1
+would mix "customer/vehicle intake UX" with "role/status authorization" in one
+PR and push WU1 from ~250 to ~500+ lines; it has no functional dependency on
 WU2 (vehicle insert) and only a soft one on WU1 (the edit form inherits the
 textarea). It ships as its own unit, after WU3, because both touch the same
 detail-page header file.
@@ -149,74 +156,95 @@ and Completion Notes Editing*; design D6, D7)
 ## Phase 2 — Inline vehicle creation (customer-management spec: *Single
 Vehicle Insert Without Reconcile*; design D1, D2, D3, D4, D10)
 
-- [ ] 2.1 RED (node) `customers/vehicles.test.ts` — `createVehiculo` against
+- [x] 2.1 RED (node) `customers/vehicles.test.ts` — `createVehiculo` against
   a fake `TxLike` seeded with **3 existing active vehicles**: assert
   **exactly one `insert` call and zero `update` calls** (D2, the guard that
   runs on every commit).
-- [ ] 2.2 GREEN — `createVehiculo(clienteId, input, deps?)` in
+- [x] 2.2 GREEN — `createVehiculo(clienteId, input, deps?)` in
   `customers/vehicles.ts` (sole owner of the `vehiculo` table), a single
   insert. Signature per design's Interfaces block; **never** calls
   `planVehiculoReconcile`/`applyVehiculoPlan`.
-- [ ] 2.3 **Mutation-verify 2.1 — the binding requirement.** Temporarily
+- [x] 2.3 **Mutation-verify 2.1 — the binding requirement.** Temporarily
   route the same input through `planVehiculoReconcile` + `applyVehiculoPlan`
   instead. Confirm the test goes red **by name** (`applyVehiculoPlan` issues
   an `UPDATE` per deactivation, `vehicles.ts:244`). `diff` to confirm the
   swap landed, then revert and confirm green again.
-- [ ] 2.4 RED (node) — a body with `year: "2019"` (string) is **rejected**
+- [x] 2.4 RED (node) — a body with `year: "2019"` (string) is **rejected**
   with 400 `{ errors: { year: "Año inválido" } }`, not silently dropped.
   This is D10's explicit ruling, not a fresh call this phase is making:
   `validateVehiculoInput` (`validation.ts:126`) keeps `year` only when
   `typeof value.year === "number"`, so an unguarded route would drop it
   silently — the identical defect class `POST /api/service-orders` already
   shipped once (D10).
-- [ ] 2.5 GREEN — the route guards `year` explicitly before calling
+- [x] 2.5 GREEN — the route guards `year` explicitly before calling
   `validateVehiculoInput`, matching the `NULLABLE_TEXT_FIELDS` guard shape at
   `service-orders/[id]/route.ts:46-58`.
-- [ ] 2.6 RED (node) `customers/[id]/vehicles/route.test.ts` (new) — POST
+- [x] 2.6 RED (node) `customers/[id]/vehicles/route.test.ts` (new) — POST
   rejects a body carrying `id`, `deleted` or `deactivated` with 400 rather
   than dropping them (D1's trust boundary — `validateVehiculoInput`'s return
   type is collection-shaped and permits `plate: ""` when `deleted === true`).
-- [ ] 2.7 GREEN — `handleCreateVehiculo` accepts only `plate`, `make`,
+- [x] 2.7 GREEN — `handleCreateVehiculo` accepts only `plate`, `make`,
   `model`, `year`; reuses `validateVehiculoInput` on that narrowed shape.
-- [ ] 2.8 RED/GREEN — unknown `clienteId` → 404 `not_found`; deactivated
+- [x] 2.8 RED/GREEN — unknown `clienteId` → 404 `not_found`; deactivated
   `cliente` → 409 `cliente_deactivated` (customer-management spec Scenario
   "Deactivated customer cannot receive a new vehicle"), both from one
   `getClienteById` call before the insert (D3).
-- [ ] 2.9 RED/GREEN — missing `customers.write` → 403 before any database
+- [x] 2.9 RED/GREEN — missing `customers.write` → 403 before any database
   work (spec Scenario "Insert requires customers.write").
-- [ ] 2.10 RED/GREEN — plate required when any other vehicle field is set,
+- [x] 2.10 RED/GREEN — plate required when any other vehicle field is set,
   reusing the existing per-vehicle rule (spec Scenario "Plate required when
   any other vehicle field is set") — not a second copy of the rule.
-- [ ] 2.11 Add `POST: "customers.write"` to the `ROUTE_GUARDS` entry for
+- [x] 2.11 Add `POST: "customers.write"` to the `ROUTE_GUARDS` entry for
   `/api/customers/[id]/vehicles` (D3); update `route-guards.test.ts`.
-- [ ] 2.12 Create `src/modules/customers/VehicleQuickForm.tsx` — `placa`,
+- [x] 2.12 Create `src/modules/customers/VehicleQuickForm.tsx` — `placa`,
   `marca`, `modelo`, `año` only, **no** consent fields, **not**
   `CustomerForm` (D4). Coerces `year` with `Number()` before POST, mirroring
   `CustomerForm`'s existing coercion (D10). Props: `clienteId`, `onCreated`,
   `onCancel` per the Interfaces block.
-- [ ] 2.13 RED (jsdom) — pin the consent trap shut: assert the request body
+- [x] 2.13 RED (jsdom) — pin the consent trap shut: assert the request body
   `VehicleQuickForm` sends carries **no** `whatsappOptOut`, `emailOptOut`, or
   any other `cliente` field (D4). **Mutation-verify**: add a stray consent
   field to the payload build and confirm this test catches it **by name**;
   `diff`, then revert.
-- [ ] 2.14 GREEN — wire `VehicleQuickForm` into `ServiceOrderForm` at
+- [x] 2.14 GREEN — wire `VehicleQuickForm` into `ServiceOrderForm` at
   `VEHICLES_EMPTY_HINT_ID`, gated on `customers.write` (same rule as "Crear
   cliente nuevo"); on success, select the new vehicle and bump
   `vehiclesRetry`.
-- [ ] 2.15 `diff` every file touched in this unit before trusting 2.1–2.14.
-- [ ] 2.16 Seed a customer with **3+ active vehicles** in a throwaway
+- [x] 2.15 `diff` every file touched in this unit before trusting 2.1–2.14.
+- [x] 2.16 Seed a customer with **3+ active vehicles** in a throwaway
   Postgres on the `proyectocatalogo-db-1` server (`:5433`) — explicit
   prerequisite for 2.17, never point it at `dforce_catalog`.
-- [ ] 2.17 **e2e (real Postgres, excluded from `npm test`)** — new describe
+- [x] 2.17 **e2e (real Postgres, excluded from `npm test`)** — new describe
   in `src/e2e/full-flow.e2e.test.ts`: 3 active vehicles + 1 insert through
   the route → **4 active**, none deactivated; `whatsappOptOut`/
   `emailOptOut` byte-identical pre/post. This is the **only** real-SQL proof
   for D1/D2's binding claim, and it only runs when someone runs it — say so
   plainly rather than treating a green `npm test` as coverage of it.
-- [ ] 2.18 **Browser check, both themes, 0 console errors**: order-creation
+- [x] 2.18 **Browser check, both themes, 0 console errors**: order-creation
   dialog for a customer with zero vehicles — add one inline without leaving
   the dialog, confirm it's selected and the order saves.
-- [ ] 2.19 `npm test` (alone) and `npx tsc --noEmit` clean.
+- [x] 2.19 `npm test` (alone) and `npx tsc --noEmit` clean.
+
+### WU2 verification record — what was actually run, and where
+
+Written because a ticked box is a claim. AGENTS.md: a green `npm test` proves
+**zero** real-SQL coverage of the INSERT this unit exists for.
+
+| Task | Evidence |
+|---|---|
+| 2.3 | Re-run independently of the implementing agent. `createVehiculo` rewritten to `planVehiculoReconcile` + `applyVehiculoPlan`; `vehicles.test.ts` went red on 3 tests **by name**, e2e red at `expected 1 to have a length of 4`. Restored byte-identically (`diff` clean). |
+| 2.16 | Throwaway `dforce_wu2_fresh` on `:5433`, provisioned with `drizzle-kit migrate`. **`drizzle-kit push` poisons it** — migration 0000 then collides with existing tables and `drizzle-kit migrate` exits 1 printing no error, which reads as a broken e2e. Use `migrate`, on a virgin database, every run. |
+| 2.17 | `DATABASE_URL=… npm run test:e2e` → **49/49 passed**. The new describe was appended after the catalog-generation one, which ends the shared pool in `afterAll`; it is now placed before it (the file header already warned about this). |
+| 2.18 | Worktree preview on `:3021` against throwaway `dforce_wu2_ui`, dark **and** light, 0 console errors. Customer with no vehicles → "Agregar vehículo" → saved → auto-selected → order saved. Postgres confirms 1 vehicle (`year = 2019`, a number), **0 extra orders** (the nested-form fix holds outside jsdom), and the other customer's 3 vehicles still active. Next 16 refuses a second `next dev` in the same directory, and blocks dev chunks from a cross-origin host — `127.0.0.1` needs `allowedDevOrigins` (set in the throwaway worktree only, never committed). |
+| 2.19 | `npm test` 1519/1519 · `npx tsc --noEmit` clean · `npm run lint` 0 errors / 15 warnings (the documented baseline). |
+
+Post-GGA in this unit, beyond the task list: the deterministic 409
+(`cliente_deactivated`) no longer falls through to "Intentalo de nuevo" — the
+route answers `{ error }`, not `{ errors }`, so reading only `body.errors`
+buried it. The dead `onCancel` prop was dropped (design's Interfaces block
+still lists it; `DialogClose` already closes the dialog and the sole caller
+passed a no-op). And WU1's `"Fecha y hora de inicio"` on the detail page is
+now pinned by a test, mutation-verified against `"Cita"`.
 
 ## Phase 3 — Printed order (service-orders spec: *Printable Work Order*;
 design D8, D9)
@@ -348,9 +376,11 @@ spec: *Order Editing Is Gated by Role and Current Status*; design D11)
 - **Whether deselecting the customer should also clear an in-progress
   `VehicleQuickForm`** — assumed yes (the form is scoped to the selected
   customer and unmounts with the banner); no scenario was written for it.
-- **A per-row edit affordance on `/service-orders`** — the list page has no
-  row-level menu to host one (design D11's rejected option); the detail
-  page is the only entry point this change adds.
+- **A per-row edit affordance on `/service-orders`** — `RowActions` already
+  renders a kebab on every row (`service-orders/page.tsx:192`), so the menu
+  exists; what the row lacks is the session user and the full `orden` the gate
+  needs (design D11). The detail page is the only entry point this change
+  adds.
 
 ## Closing checklist (maps to proposal.md's Success Criteria)
 

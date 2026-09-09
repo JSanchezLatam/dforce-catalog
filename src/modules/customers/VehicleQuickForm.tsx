@@ -46,11 +46,9 @@ import { FIELD_ERROR } from "@/shared/ui/styles";
 export function VehicleQuickForm({
   clienteId,
   onCreated,
-  onCancel,
 }: {
   clienteId: string;
   onCreated: (vehiculoId: string) => void;
-  onCancel: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [plate, setPlate] = useState("");
@@ -103,9 +101,29 @@ export function VehicleQuickForm({
         }),
       });
 
-      if (response.status === 400 || response.status === 404 || response.status === 409) {
+      // 400 is the only status that carries an `errors` MAP (per-field, from
+      // `validateVehiculoInput`). 404 and 409 carry a single `error` STRING,
+      // so `body.errors` is undefined for both and they would fall through to
+      // the generic copy. That matters most for the 409: it is DETERMINISTIC,
+      // and "Intentalo de nuevo" sends the operator round a loop that returns
+      // the identical refusal forever. Same guard, same reason, as
+      // `ServiceOrderForm`'s 409 branch and `CustomerForm`'s shared-phone one.
+      if (response.status === 400) {
         const body = await response.json();
         setErrors(body.errors ?? { form: "No se pudo agregar el vehículo." });
+        return;
+      }
+      if (response.status === 404 || response.status === 409) {
+        // Reachable through the stale-tab race the server guard exists for:
+        // staff A opens this dialog on Juan, staff B deactivates Juan, staff A
+        // saves the vehicle.
+        const body = await response.json();
+        setErrors({
+          form:
+            body.error === "cliente_deactivated"
+              ? "Este cliente fue desactivado. Reactivalo para poder agregarle un vehículo."
+              : "No se pudo agregar el vehículo.",
+        });
         return;
       }
       if (!response.ok) {
@@ -186,7 +204,6 @@ export function VehicleQuickForm({
               render={
                 <Button type="button" variant="outline" className="min-h-11 min-w-11" disabled={isSubmitting} />
               }
-              onClick={onCancel}
             >
               Cancelar
             </DialogClose>

@@ -431,7 +431,6 @@ export function ServiceOrderForm({
                         // not addressed. The prop exists because placing the
                         // form is the parent's business, not because the
                         // parent has state to roll back.
-                        onCancel={() => undefined}
                       />
                     )}
                   </>

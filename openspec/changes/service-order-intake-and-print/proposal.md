@@ -178,9 +178,12 @@ should; it is space for a pen.
 The control that opens an order in edit mode is mounted on the **order detail page**, beside
 `OrderStatusControls`, at `min-h-11 min-w-11`. That page already holds the full `orden` row and the
 session user, and already renders one status-dependent control in that slot. The list page's kebab
-was the alternative and is rejected: there is no per-row menu on `/service-orders` today — its only
-`DropdownMenu` is `OrderBulkStatusActions`, a selection-wide control — so hosting the gate there
-means building a row-level affordance first.
+was the alternative and is rejected — but **not** for the reason an earlier draft of this document
+gave. That draft said no per-row menu existed on `/service-orders`; it does. `RowActions` renders a
+kebab on every row (`service-orders/page.tsx:192`), so the affordance is already there. The real
+reason is that the list row carries neither the session user nor the full `orden`, while the detail
+page already holds both and already renders one status-dependent control in that slot. See
+`design.md` D11, which made this correction first.
 
 Who may edit, and when:
 
