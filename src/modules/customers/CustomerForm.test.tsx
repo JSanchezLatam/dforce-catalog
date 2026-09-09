@@ -59,6 +59,40 @@ function vehicleGroup(index: number) {
   return screen.getByRole("group", { name: `Vehículo ${index}` });
 }
 
+/**
+ * This form renders inside `CustomerPicker`, which renders inside
+ * `ServiceOrderForm`'s own `<form onSubmit>`. React dispatches events along
+ * the REACT tree rather than the DOM tree, so portalling the dialog does NOT
+ * remove it from that ancestor's event path.
+ *
+ * Measured in jsdom on a minimal reproduction before this test existed: an
+ * inner submit fired the inner handler once and the OUTER handler TWICE. In
+ * the app that meant saving a new customer from the order dialog also created
+ * the order — harmless only while orders could not be saved at all, which
+ * stopped being true when the create route's date bug was fixed.
+ *
+ * `stopPropagation` therefore looks defensive and is not. This test is what
+ * stops someone deleting it as noise.
+ */
+describe("CustomerForm — its submit must not reach an ancestor form", () => {
+  it("does not fire the surrounding form's onSubmit", async () => {
+    const user = userEvent.setup();
+    const outerSubmit = vi.fn((e: React.FormEvent) => e.preventDefault());
+    render(
+      <form onSubmit={outerSubmit}>
+        <CustomerForm />
+      </form>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Nuevo cliente" }));
+    await user.type(await screen.findByLabelText("Nombre"), "Ana Prueba");
+    await user.type(screen.getByLabelText("Teléfono"), "6000-0000");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(outerSubmit).not.toHaveBeenCalled();
+  });
+});
+
 describe("CustomerForm — vehicle collection (create)", () => {
   it("shows the Spanish 'Vehículos' section with no rows and no vehicle by default", async () => {
     const user = userEvent.setup();

@@ -71,6 +71,7 @@ import { POST as generatePOST } from "../app/api/catalog-builder/generate/route"
 import { GET as filePOST } from "../app/api/catalogs/[id]/file/route";
 import { GET as customersGET, POST as customersPOST } from "../app/api/customers/route";
 import { PATCH as customersPATCH } from "../app/api/customers/[id]/route";
+import { POST as vehiclesPOST } from "../app/api/customers/[id]/vehicles/route";
 
 const PASSWORD = "Sup3rSecret!1";
 
@@ -1319,6 +1320,94 @@ describe("customer import (E2E)", () => {
 
     expect(result.created).toBe(1);
     expect(createdRows).toHaveLength(1);
+  });
+});
+
+/**
+ * service-order-intake-and-print D1/D2 — the ONLY real-SQL proof that
+ * `POST /api/customers/[id]/vehicles` adds one vehicle without touching the
+ * customer's others. It cannot be bought in `npm test`: every unit test on
+ * that path injects its seam, so a fully green suite proves ZERO coverage of
+ * the INSERT that actually runs (AGENTS.md's injected-seam limit). And it
+ * needs THREE existing active vehicles — a single-vehicle customer cannot
+ * expose `planVehiculoReconcile`'s full-collection-overwrite trap at all,
+ * because there is nothing else to deactivate.
+ *
+ * `src/e2e/**` is excluded from `npm test`, so this runs only when somebody
+ * runs it. WU2 does not ship without it having been run.
+ *
+ * Placed BEFORE the catalog-generation describe for the reason this file's
+ * header already gives: that describe's `afterAll` calls `db.$client.end()` on
+ * the shared module-level pool, so anything after it fails with "Cannot use a
+ * pool after calling end on the pool". Appending here is not free.
+ */
+describe("single vehicle insert (E2E)", () => {
+  let owner: { id: string };
+  let seededVehicleIds: string[] = [];
+  /** Deliberately DIFFERENT from each other: a collapse that wrote one value over both would be invisible if they matched. */
+  const CONSENT = { whatsappOptOut: true, emailOptOut: false };
+
+  beforeAll(async () => {
+    execSync("npx drizzle-kit migrate", { stdio: "inherit" });
+
+    const [row] = await db
+      .insert(cliente)
+      .values({ name: "Vehículo Cuádruple", phone: "50761414141", ...CONSENT })
+      .returning({ id: cliente.id });
+    owner = row;
+
+    const seeded = await db
+      .insert(vehiculo)
+      .values([
+        { clienteId: owner.id, plate: "QQQ111" },
+        { clienteId: owner.id, plate: "QQQ222" },
+        { clienteId: owner.id, plate: "QQQ333" },
+      ])
+      .returning({ id: vehiculo.id });
+    seededVehicleIds = seeded.map((v) => v.id);
+  }, 60_000);
+
+  afterAll(async () => {
+    if (!owner?.id) return;
+    await db.delete(cliente).where(eq(cliente.id, owner.id)); // `vehiculo` cascades
+  });
+
+  const headers = { "x-user-id": "e2e-vehicle-insert", "x-user-role": "tecnico", "Content-Type": "application/json" };
+
+  it("adds a 4th vehicle, leaves the original 3 active and untouched, and never writes a cliente column", async () => {
+    const before = await db.select().from(cliente).where(eq(cliente.id, owner.id));
+    const beforeVehicles = await db.select().from(vehiculo).where(eq(vehiculo.clienteId, owner.id));
+
+    const response = await vehiclesPOST(
+      new NextRequest(`http://localhost/api/customers/${owner.id}/vehicles`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ plate: "QQQ444", make: "Toyota", model: "Hilux", year: 2019 }),
+      }),
+      { params: Promise.resolve({ id: owner.id }) },
+    );
+    expect(response.status).toBe(201);
+
+    const afterVehicles = await db.select().from(vehiculo).where(eq(vehiculo.clienteId, owner.id));
+    // Four ACTIVE, not merely four rows: routing this through
+    // `planVehiculoReconcile` would leave exactly four rows too, with three of
+    // them deactivated.
+    expect(afterVehicles.filter((v) => v.deactivatedAt === null)).toHaveLength(4);
+    for (const id of seededVehicleIds) {
+      const original = beforeVehicles.find((v) => v.id === id)!;
+      expect(afterVehicles.find((v) => v.id === id)).toEqual(original);
+    }
+    // The `year` round trip: `validateVehiculoInput` keeps it only when it is
+    // already a number, so a dropped one would still answer 201 (D10).
+    const inserted = afterVehicles.find((v) => v.plate === "QQQ444")!;
+    expect(inserted).toMatchObject({ make: "Toyota", model: "Hilux", year: 2019, deactivatedAt: null });
+
+    // AGENTS.md: two legally distinct consent regimes, never collapsed. The
+    // whole customer row is compared, not just those two columns — a write to
+    // any `cliente` column from a vehicle insert is a defect.
+    const after = await db.select().from(cliente).where(eq(cliente.id, owner.id));
+    expect(after[0]).toEqual(before[0]);
+    expect(after[0]).toMatchObject(CONSENT);
   });
 });
 

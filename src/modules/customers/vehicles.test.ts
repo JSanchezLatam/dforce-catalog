@@ -6,6 +6,7 @@ import type { Vehiculo } from "@/shared/db/schema";
 import { ClienteValidationError } from "./validation";
 import {
   applyVehiculoPlan,
+  createVehiculo,
   listVehiculosByCliente,
   planVehiculoReconcile,
   platesSubquery,
@@ -357,5 +358,79 @@ describe("applyVehiculoPlan — SEAM: permanent delete refused when service hist
     const { tx, selectCalls } = recordingTx([{ id: "orden-1" }]);
     await applyVehiculoPlan(tx, "c1", { inserts: [], updates: [], deactivate: ["v1"], delete: [] });
     expect(selectCalls).toHaveLength(0);
+  });
+});
+
+/**
+ * D2's guard, the one that runs on every commit. `createVehiculo` adds ONE
+ * vehicle to a customer who may already have others, and the whole point of
+ * it existing beside `planVehiculoReconcile` is that it must never reach it:
+ * that function reads its `incoming` argument as the customer's WHOLE
+ * collection, so a one-element array deactivates every other active vehicle
+ * (`planVehiculoReconcile`'s deactivate filter, and its own comment naming
+ * "omitted from `incoming`"). One INSERT and no UPDATE at all is what that
+ * separation looks like from the outside.
+ *
+ * Seeded with three existing active vehicles for exactly that reason: on a
+ * single-vehicle customer the reconcile path issues no deactivation and this
+ * test could not tell the two implementations apart.
+ */
+function countingTx(existing: Vehiculo[] = [], inserted: Vehiculo = vehiculo({ id: "v-new", plate: "NEW111" })) {
+  const calls = { insert: 0, update: 0, delete: 0, select: 0 };
+  const insertValues: unknown[] = [];
+  const tx = {
+    insert: () => {
+      calls.insert += 1;
+      return {
+        values: (value: unknown) => {
+          insertValues.push(value);
+          // Awaitable AND chainable: `createVehiculo` needs `.returning()`,
+          // `applyVehiculoPlan` awaits `values()` directly.
+          return { returning: async () => [inserted] };
+        },
+      };
+    },
+    update: () => {
+      calls.update += 1;
+      return { set: () => ({ where: async () => undefined }) };
+    },
+    delete: () => {
+      calls.delete += 1;
+      return { where: async () => undefined };
+    },
+    select: () => {
+      calls.select += 1;
+      return { from: () => ({ where: Object.assign(async () => existing, { limit: async () => existing }) }) };
+    },
+  } as unknown as TxLike;
+  return { tx, calls, insertValues };
+}
+
+describe("createVehiculo (D1/D2 — single insert, never the reconcile)", () => {
+  const threeActive = [
+    vehiculo({ id: "v1", plate: "AAA111" }),
+    vehiculo({ id: "v2", plate: "BBB222" }),
+    vehiculo({ id: "v3", plate: "CCC333" }),
+  ];
+
+  it("issues exactly one insert and zero updates for a customer with three active vehicles", async () => {
+    const { tx, calls } = countingTx(threeActive);
+    await createVehiculo("c1", { plate: "NEW111" }, { tx });
+    expect(calls.insert).toBe(1);
+    // `applyVehiculoPlan` issues one UPDATE per deactivation batch, so any
+    // route through `planVehiculoReconcile` lands here as `update: 1`.
+    expect(calls.update).toBe(0);
+  });
+
+  it("inserts one row scoped to the customer, with the optional columns nulled rather than omitted", async () => {
+    const { tx, insertValues } = countingTx(threeActive);
+    await createVehiculo("c1", { plate: "NEW111", make: "Toyota" }, { tx });
+    expect(insertValues).toEqual([{ clienteId: "c1", plate: "NEW111", make: "Toyota", model: null, year: null }]);
+  });
+
+  it("returns the inserted row", async () => {
+    const inserted = vehiculo({ id: "v-new", plate: "NEW111" });
+    const { tx } = countingTx(threeActive, inserted);
+    await expect(createVehiculo("c1", { plate: "NEW111" }, { tx })).resolves.toBe(inserted);
   });
 });
