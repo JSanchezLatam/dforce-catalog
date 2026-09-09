@@ -217,4 +217,38 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
     expect(wrapper!.className).toContain("[&>button]:min-w-11");
     expect(wrapper!.firstElementChild).toBe(screen.getByRole("button", { name: EDIT_LABEL }));
   });
+
+  /**
+   * WU3 (D8) — the spec Scenario "Imprimir navigates to the print view" had no
+   * assertion anywhere: the link shipped in the print unit, whose scope did not
+   * include this file. Pinned here because this is where the control lives.
+   *
+   * It is a `<Link>` styled with `buttonVariants`, deliberately NOT
+   * `<Button render={<Link/>}>` — the reason is recorded at
+   * `customers/[id]/page.tsx:235`. So `getByRole("link")` is the assertion that
+   * would catch someone converting it into a client-component button and
+   * putting the first `"use client"` import onto this page.
+   *
+   * The class assertion is the same mechanism-not-measurement compromise as the
+   * edit control above: jsdom has no Tailwind, so nothing here proves 44 real
+   * pixels. Task 3.12's print preview measures it.
+   */
+  it("offers Imprimir as a plain link to the print view, at the 44x44 floor", async () => {
+    render(await renderAs("tecnico", "done"));
+
+    const link = screen.getByRole("link", { name: "Imprimir" });
+    expect(link).toHaveAttribute("href", "/service-orders/o1/print");
+    expect(link.className).toContain("min-h-11");
+    expect(link.className).toContain("min-w-11");
+  });
+
+  // A closed order still prints — the sheet is a record, not an action, and the
+  // edit gate above refuses `done` for both roles. Rendering both assertions
+  // off the SAME render is what says the two controls are independent.
+  it("offers Imprimir even where the edit control is refused", async () => {
+    render(await renderAs("tecnico", "done"));
+
+    expect(screen.getByRole("link", { name: "Imprimir" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: EDIT_LABEL })).not.toBeInTheDocument();
+  });
 });

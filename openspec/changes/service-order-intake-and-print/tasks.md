@@ -255,44 +255,44 @@ now pinned by a test, mutation-verified against `"Cita"`.
 ## Phase 3 — Printed order (service-orders spec: *Printable Work Order*;
 design D8, D9)
 
-- [ ] 3.1 Create `src/app/(app)/service-orders/[id]/print/page.tsx` — Server
+- [x] 3.1 Create `src/app/(app)/service-orders/[id]/print/page.tsx` — Server
   Component, `requireSessionFromHeaders()` + `can(user,
   "service-orders.read")`, reuses `getOrdenServicioById` +
   `getClienteById` — the same two queries `[id]/page.tsx:76-83` already
   makes. Zero new SQL.
-- [ ] 3.2 RED (jsdom) print `page.test.tsx` — renders cliente
+- [x] 3.2 RED (jsdom) print `page.test.tsx` — renders cliente
   (nombre, teléfono), vehículo (placa, marca, modelo, año), categoría, fecha
   y hora de inicio, descripción, observaciones for a fully-set order (spec
   Scenario "Printed page carries the order's data").
-- [ ] 3.3 GREEN — implement the fields.
-- [ ] 3.4 RED/GREEN — an empty ruled block headed "Trabajo realizado /
+- [x] 3.3 GREEN — implement the fields.
+- [x] 3.4 RED/GREEN — an empty ruled block headed "Trabajo realizado /
   Hallazgos" with a signature line renders **regardless** of whether
   `hallazgos`/`recomendaciones` are set on the order — assert it is never
   populated from either (spec Scenario "Printed page reserves handwriting
   space"; D9 — this is layout, not data).
-- [ ] 3.5 RED/GREEN — a session without `service-orders.read` is refused
+- [x] 3.5 RED/GREEN — a session without `service-orders.read` is refused
   exactly as any other order-read route (spec Scenario "Print view enforces
   the same read gate").
-- [ ] 3.6 Create `src/modules/service-orders/PrintButton.tsx` — `"use
+- [x] 3.6 Create `src/modules/service-orders/PrintButton.tsx` — `"use
   client"`, zero props, `<button onClick={() => window.print()}
   className="print:hidden">`. No `useEffect`, no `typeof document` gate
   (D8 — AGENTS.md names that gate React's documented cause #1 for a
   hydration mismatch).
-- [ ] 3.7 Add `"/service-orders/[id]/print": { GET: "service-orders.read" }`
+- [x] 3.7 Add `"/service-orders/[id]/print": { GET: "service-orders.read" }`
   to `ROUTE_GUARDS`; update `route-guards.test.ts`.
-- [ ] 3.8 Add "Imprimir" `<Link>` on `service-orders/[id]/page.tsx`, styled
+- [x] 3.8 Add "Imprimir" `<Link>` on `service-orders/[id]/page.tsx`, styled
   with `buttonVariants` on the `Link` (not `<Button render={<Link/>}>`, per
-  `customers/page.tsx`'s documented reason) at `min-h-11 min-w-11` (spec
+  `customers/[id]/page.tsx:235`'s documented reason) at `min-h-11 min-w-11` (spec
   Scenario "Imprimir navigates to the print view").
-- [ ] 3.9 Add one `@media print` block to `src/app/globals.css` hiding
+- [x] 3.9 Add one `@media print` block to `src/app/globals.css` hiding
   `[data-slot="sidebar"]`/`"sidebar-trigger"`/`"sidebar-rail"` and zeroing
   `[data-slot="sidebar-inset"]` margin/shadow — selectors verbatim from
   `components/ui/sidebar.tsx` (D8). First `@media print` block in the repo.
-- [ ] 3.10 `diff` every touched file before trusting 3.2–3.9.
-- [ ] 3.11 Seed at least one order with a customer, vehicle, `description`
+- [x] 3.10 `diff` every touched file before trusting 3.2–3.9.
+- [x] 3.11 Seed at least one order with a customer, vehicle, `description`
   and `observaciones` (depends on WU1's create path and WU2's vehicle
   insert already shipping) — `/service-orders` has 0 rows today.
-- [ ] 3.12 **Real print preview, console open — the only verification this
+- [x] 3.12 **Real print preview, console open — the only verification this
   unit has.** jsdom cannot see `@media print` or `window.print()`; no
   assertion can be written for page breaks, margins, or whether the sidebar
   actually vanished. Open a seeded order, click Imprimir, confirm: one page;
@@ -300,7 +300,39 @@ design D8, D9)
   all absent; cliente/vehículo/categoría/fecha/descripción/observaciones
   present; the ruled block and signature line fit; Imprimir measures
   ≥44×44; no console error (RSC refusals are invisible to jsdom).
-- [ ] 3.13 `npm test` (alone) and `npx tsc --noEmit` clean.
+- [x] 3.13 `npm test` (alone) and `npx tsc --noEmit` clean.
+
+### WU3 verification record — what was actually run, and where
+
+jsdom applies no `@media print`, `window.print` is a stub, and a page invoked
+as a plain function has no RSC serialization to violate. So nothing in the
+suite is evidence the sheet prints. This is.
+
+Throwaway `dforce_wu3_ui` on `:5433`, worktree preview on `:3023`, one order
+seeded with **`hallazgos` and `recomendaciones` deliberately filled** — with
+them NULL, a regression that wires them onto the sheet would be invisible.
+
+| Check | Result |
+|---|---|
+| **D9 holds against data that has them** | Neither `hallazgos` nor `recomendaciones` appears in `innerText`. The block renders with its 8 rules and `Firma del técnico`. Note for the next reader: `document.body.textContent` DOES contain them — Next retains the previous page's RSC flight payload in `<script>` tags after a client navigation. Read `innerText` in a browser; the jsdom test's `textContent` scan is correct there because no such payload exists. |
+| The sheet's data | Cliente, teléfono, placa, marca, modelo, año, categoría, `Fecha y hora de inicio`, descripción, observaciones — all present. |
+| **The shell comes off** | The block's declarations applied without the `@media` wrapper move `[data-slot="sidebar-inset"]` from `left: 256px` to `0`, with `margin: 0px` and `box-shadow: none`, and `[data-slot="sidebar"]` to `display: none`. Three of the four selectors match real elements on this page (`sidebar-trigger` renders 0 here). Both `@media print` blocks are present in the CSS Next actually compiled — the shell block and Tailwind's generated `print:hidden`/`print:max-w-none`. |
+| **One page** | Content measures **873 px** against ~960 px usable on Letter at 96 dpi (11 in less 0.5 in margins) — 87 px of slack, and on paper the shell is gone so the description wraps less, not more. A much longer description is the case that would break it. |
+| Imprimir, on the sheet | 77×44 px measured, `print:hidden`, `type="button"`, hydrated. |
+| Imprimir, on the detail page | Renders beside `Editar orden`; both present on an `in_progress` order, and the print link still present on a `done` one where editing is refused. |
+| Console | 0 errors on a full page load. |
+
+Two closing-checklist rows had never actually been verified and were run for
+this record rather than ticked on faith:
+
+- **Deselect clears the chosen vehicle** — `Quitar` (measured **59×44**) empties
+  the customer banner, the search box, and drops the vehicle select back to its
+  placeholder (`value: ""`, 1 option).
+- **`observaciones` round-trips form → detail** — typed into the create dialog,
+  confirmed in Postgres, and read back on the detail page.
+
+Gates: `npm test` · `npx tsc --noEmit` clean · `npm run lint` 0 errors / 15
+warnings (baseline).
 
 ## Phase 4 — Edit entry point, gated by role and current status (service-orders
 spec: *Order Editing Is Gated by Role and Current Status*; design D11)
@@ -424,27 +456,27 @@ same status, so it cannot be relied on either way.
 
 ## Closing checklist (maps to proposal.md's Success Criteria)
 
-- [ ] Selecting a customer clears the search box and result list; the
+- [x] Selecting a customer clears the search box and result list; the
   banner's deselect also clears the chosen vehicle, measures ≥44×44 — WU1
-- [ ] Edit mode offers no deselect — WU1
-- [ ] Adding a vehicle to a customer with 3 active vehicles leaves all 4
+- [x] Edit mode offers no deselect — WU1
+- [x] Adding a vehicle to a customer with 3 active vehicles leaves all 4
   active, proven against real Postgres — WU2 (e2e, exit criterion)
-- [ ] That same insert leaves `whatsappOptOut`/`emailOptOut` byte-identical
+- [x] That same insert leaves `whatsappOptOut`/`emailOptOut` byte-identical
   — WU2 (e2e)
-- [ ] `Descripción` is multi-line; the label reads
+- [x] `Descripción` is multi-line; the label reads
   `Fecha y hora de inicio` — WU1
-- [ ] No parts section at creation; `observaciones` round-trips from form to
+- [x] No parts section at creation; `observaciones` round-trips from form to
   detail view — WU1
-- [ ] A create payload carrying `hallazgos`/`recomendaciones` is still
+- [x] A create payload carrying `hallazgos`/`recomendaciones` is still
   ignored or rejected — WU1
-- [ ] Imprimir produces one page with customer, vehicle, categoría, start
+- [x] Imprimir produces one page with customer, vehicle, categoría, start
   time, descripción, observaciones, and the blank ruled block + signature
   line — verified in a real print preview, WU3
-- [ ] `npm test` and `npx tsc --noEmit` clean at the end of every unit — all
+- [x] `npm test` and `npx tsc --noEmit` clean at the end of every unit — all
   four
-- [ ] Every unit was opened in a browser with the console read; WU3's
+- [x] Every unit was opened in a browser with the console read; WU3's
   verification is a real print preview, never a substitute test
-- [ ] **Not in the original Success Criteria, added by this tasks pass**:
+- [x] **Not in the original Success Criteria, added by this tasks pass**:
   the edit control and the `PATCH` route enforce the exact 8-combination
   role/status truth table, proven by a mutation-verified predicate test, a
   route test, and a browser check across roles and statuses — WU4

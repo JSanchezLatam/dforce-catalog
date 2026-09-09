@@ -10,8 +10,10 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
@@ -134,6 +136,17 @@ export default async function ServiceOrderDetailPage({
                 />
               </div>
             )}
+            {/* D8 — the entry point to the printed work order. `buttonVariants`
+                on a plain `Link`, NOT `<Button render={<Link/>}>`, for the
+                reason `customers/[id]/page.tsx:235` records; this page gains no
+                client component from it. `min-h-11 min-w-11` is AGENTS.md's
+                44x44 floor over `size="default"`'s `h-8`. */}
+            <Link
+              href={`/service-orders/${orden.id}/print`}
+              className={cn(buttonVariants({ variant: "outline", size: "default" }), "min-h-11 min-w-11")}
+            >
+              Imprimir
+            </Link>
             <OrderStatusControls orderId={orden.id} status={orden.status} />
           </div>
         </CardHeader>

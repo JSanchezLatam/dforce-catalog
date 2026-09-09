@@ -63,6 +63,12 @@ export const ROUTE_GUARDS: Record<
   "/customers/[id]/vehicles/[vehicleId]": { GET: "customers.read" },
   "/service-orders": { GET: "service-orders.read" },
   "/service-orders/[id]": { GET: "service-orders.read" },
+  // WU3 — the printed work order (service-order-intake-and-print D8). A page,
+  // not an API route: `filePathToUrl` strips `(app)`, so the dedicated route
+  // living inside that group registers under this key either way. Same read
+  // gate as the detail page it is reached from — it renders a subset of the
+  // same two queries' output and adds no SQL of its own.
+  "/service-orders/[id]/print": { GET: "service-orders.read" },
   "/inventory": { GET: "inventory.read" },
   "/inventory/[id]": { GET: "inventory.read" },
   "/catalogs": { GET: "catalogs.read" },
