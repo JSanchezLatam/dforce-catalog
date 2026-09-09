@@ -108,14 +108,14 @@ describe("ServiceOrderForm", () => {
   });
 
   it("seeds clienteId from selectedCustomer, rendering it as already selected", () => {
-    render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+    render(<ServiceOrderForm selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
     openDialog();
 
     expect(screen.getByText("Ya Elegido")).toBeInTheDocument();
   });
 
   it("keeps submit disabled in create mode when no customer was pre-picked", () => {
-    render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+    render(<ServiceOrderForm canCreateCustomer={false} />);
     openDialog();
 
     expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled();
@@ -156,7 +156,7 @@ describe("ServiceOrderForm", () => {
         return Promise.resolve(jsonResponse({ customers: [], total: 0 }));
       });
 
-      render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      render(<ServiceOrderForm selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
       // No fetch happens at mount — the effect returns early while `open` is
       // false. What this pins is the opposite: opening must be what triggers
       // the load, because the effect owns `vehicles`/`vehiclesLoading` and
@@ -175,7 +175,7 @@ describe("ServiceOrderForm", () => {
 
     /** GGA round 1, finding 2 — same root cause, reached a second way. */
     it("survives re-picking the customer that is already selected", async () => {
-      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      render(<ServiceOrderForm canCreateCustomer={false} />);
       openDialog();
 
       await selectCustomer("Cliente A");
@@ -198,7 +198,7 @@ describe("ServiceOrderForm", () => {
         return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
       });
 
-      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      render(<ServiceOrderForm canCreateCustomer={false} />);
       openDialog();
       await selectCustomer("Cliente A");
 
@@ -211,7 +211,7 @@ describe("ServiceOrderForm", () => {
         return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
       });
 
-      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      render(<ServiceOrderForm canCreateCustomer={false} />);
       openDialog();
       await selectCustomer("Cliente A");
 
@@ -238,7 +238,7 @@ describe("ServiceOrderForm", () => {
         return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
       });
 
-      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      render(<ServiceOrderForm canCreateCustomer={false} />);
       openDialog();
       await selectCustomer("Cliente A");
 
@@ -272,7 +272,7 @@ describe("ServiceOrderForm", () => {
         return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
       });
 
-      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      render(<ServiceOrderForm canCreateCustomer={false} />);
       openDialog();
       await selectCustomer("Cliente A");
       fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
@@ -299,7 +299,7 @@ describe("ServiceOrderForm", () => {
         return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
       });
 
-      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      render(<ServiceOrderForm canCreateCustomer={false} />);
       openDialog();
       await selectCustomer("Cliente A");
 
@@ -308,7 +308,7 @@ describe("ServiceOrderForm", () => {
     });
 
     it("keeps submit disabled until a vehicle is selected, even once a customer is picked", async () => {
-      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      render(<ServiceOrderForm canCreateCustomer={false} />);
       openDialog();
 
       await selectCustomer("Cliente A");
@@ -332,7 +332,7 @@ describe("ServiceOrderForm", () => {
         );
       });
 
-      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      render(<ServiceOrderForm canCreateCustomer={false} />);
       openDialog();
 
       await selectCustomer("Cliente A");
@@ -347,13 +347,40 @@ describe("ServiceOrderForm", () => {
       expect(vehicleSelect().value).toBe("");
     });
 
+    /**
+     * D6 / spec "Deselect clears the chosen vehicle". `vehiculoId` is the
+     * form's own state, keyed off a customer the picker no longer holds — a
+     * stale id survives to the POST and comes back as `InvalidVehiculoError`,
+     * a Spanish ownership refusal the operator cannot act on.
+     *
+     * The discriminator is Guardar, NOT the select's value: deselecting drops
+     * `clienteId`, the option list empties, and a `<select>` with no matching
+     * option reads "" whatever the state says. Guardar is disabled on
+     * `!vehiculoId` directly, so it goes red if only `clienteId` is cleared.
+     */
+    it("clears the chosen vehicle when the customer is deselected", async () => {
+      render(<ServiceOrderForm canCreateCustomer={false} />);
+      openDialog();
+
+      await selectCustomer("Cliente A");
+      fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+      fireEvent.change(categorySelect(), { target: { value: "revisado" } });
+      expect(screen.getByRole("button", { name: "Guardar" })).not.toBeDisabled();
+
+      fireEvent.click(screen.getByRole("button", { name: /quitar cliente/i }));
+
+      expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled();
+      // `clienteId` cleared too: the picker disables on an empty customer.
+      expect(vehicleSelect()).toBeDisabled();
+    });
+
     it("shows a directive Spanish message and keeps submit disabled when the selected customer has zero active vehicles", async () => {
       fetchMock.mockImplementation((url: string) => {
         if (url.includes("/vehicles")) return Promise.resolve(jsonResponse({ vehicles: [] }));
         return Promise.resolve(jsonResponse({ customers: [clienteRow()], total: 1 }));
       });
 
-      render(<ServiceOrderForm products={[]} canCreateCustomer={false} />);
+      render(<ServiceOrderForm canCreateCustomer={false} />);
       openDialog();
 
       await selectCustomer("Cliente A");
@@ -372,7 +399,7 @@ describe("ServiceOrderForm", () => {
    */
   describe("category + notes (C4, task 2.4)", () => {
     it("offers all 5 categories in create mode, with REVISADO as a peer option, no distinct treatment", () => {
-      render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      render(<ServiceOrderForm selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
       openDialog();
 
       // The leading "" is the placeholder create mode now opens on, not a
@@ -396,7 +423,6 @@ describe("ServiceOrderForm", () => {
     it("gives every native control a focus ring, since outline-none kills the global one", () => {
       render(
         <ServiceOrderForm
-          products={[]}
           canCreateCustomer={false}
           order={{ id: "o1", clienteId: "c-a", categoria: "instalacion" } as never}
         />,
@@ -423,26 +449,31 @@ describe("ServiceOrderForm", () => {
      * above would go red.
      */
     it("gives the create-mode vehicle select a focus ring too", () => {
-      render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      render(<ServiceOrderForm selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
       openDialog();
 
       expect(vehicleSelect().className).toContain("outline-none");
       expect(vehicleSelect().className).toContain("focus-visible:ring-3");
     });
 
-    it("does not render note fields in create mode", () => {
-      render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+    /**
+     * D7 splits the three note fields apart. `observaciones` is what the
+     * CUSTOMER said at booking, so it is settable at creation; `hallazgos`
+     * and `recomendaciones` are technician findings that do not exist until
+     * the vehicle has been examined, and stay patch-only.
+     */
+    it("renders observaciones but not hallazgos/recomendaciones in create mode", () => {
+      render(<ServiceOrderForm selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
       openDialog();
 
+      expect(screen.getByLabelText(/observaciones/i)).toBeInTheDocument();
       expect(screen.queryByLabelText(/hallazgos/i)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/recomendaciones/i)).not.toBeInTheDocument();
-      expect(screen.queryByLabelText(/observaciones/i)).not.toBeInTheDocument();
     });
 
     it("renders the category select AND the 3 note fields in edit mode, pre-filled from the order", () => {
       render(
         <ServiceOrderForm
-          products={[]}
           order={
             {
               id: "o1",
@@ -482,7 +513,7 @@ describe("ServiceOrderForm", () => {
       });
       vi.stubGlobal("fetch", fetchMock);
 
-      render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      render(<ServiceOrderForm selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
       openDialog();
       await flush();
 
@@ -497,7 +528,6 @@ describe("ServiceOrderForm", () => {
     it("offers no placeholder in edit mode — the order already has a category", async () => {
       render(
         <ServiceOrderForm
-          products={[]}
           canCreateCustomer={false}
           order={{ id: "o1", clienteId: "c-a", categoria: "reparacion" } as never}
         />,
@@ -515,7 +545,7 @@ describe("ServiceOrderForm", () => {
       });
       vi.stubGlobal("fetch", fetchMock);
 
-      render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      render(<ServiceOrderForm selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
       openDialog();
       await flush();
       fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
@@ -534,7 +564,6 @@ describe("ServiceOrderForm", () => {
 
       render(
         <ServiceOrderForm
-          products={[]}
           order={{ id: "o1", clienteId: "c-a", categoria: "instalacion" } as never}
           canCreateCustomer={false}
         />,
@@ -576,6 +605,94 @@ describe("ServiceOrderForm", () => {
    * The TZ is pinned rather than inherited: on a UTC machine (CI) the
    * assertion below would pass with the bug still in place.
    */
+  /**
+   * WU1 of `service-order-intake-and-print` — the printed sheet is what the
+   * técnico gets, so the dialog stops collecting parts and starts collecting
+   * a description long enough to be worth reading.
+   */
+  describe("intake form (service-order-intake-and-print WU1)", () => {
+    function renderCreate() {
+      render(<ServiceOrderForm selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      openDialog();
+    }
+
+    function renderEdit() {
+      render(
+        <ServiceOrderForm
+          canCreateCustomer={false}
+          order={{ id: "o1", clienteId: "c-a", categoria: "instalacion", description: "x" } as never}
+        />,
+      );
+      openEditDialog();
+    }
+
+    it("renders Descripción as a multi-line textarea in create mode", () => {
+      renderCreate();
+
+      const field = screen.getByLabelText(/descripción/i);
+      expect(field.tagName).toBe("TEXTAREA");
+      // NATIVE_FIELD's focus-ring half — every native control in this form
+      // sets `outline-none`, which kills the global `*:focus-visible` ring.
+      expect(field.className).toContain("outline-none");
+      expect(field.className).toContain("focus-visible:ring-3");
+    });
+
+    it("renders Descripción as a multi-line textarea in edit mode too", () => {
+      renderEdit();
+
+      const field = screen.getByLabelText(/descripción/i);
+      expect(field.tagName).toBe("TEXTAREA");
+      expect(field).toHaveValue("x");
+    });
+
+    it("labels the appointment field exactly 'Fecha y hora de inicio' and keeps it datetime-local", () => {
+      renderCreate();
+
+      expect(screen.getByLabelText("Fecha y hora de inicio")).toHaveAttribute("type", "datetime-local");
+      expect(screen.queryByLabelText("Cita")).not.toBeInTheDocument();
+    });
+
+    it("offers no parts section at creation", () => {
+      renderCreate();
+
+      expect(screen.queryByRole("region", { name: /parts selection/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: "Piezas" })).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/buscar producto/i)).not.toBeInTheDocument();
+    });
+
+    it("offers no customer deselect control in edit mode", () => {
+      renderEdit();
+
+      expect(screen.queryByRole("button", { name: /quitar cliente/i })).not.toBeInTheDocument();
+    });
+
+    it("sends observaciones and no items in the create-mode POST body", async () => {
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (url.includes("/vehicles")) return Promise.resolve(jsonResponse({ vehicles: [vehiculoRow()] }));
+        return Promise.resolve(jsonResponse({ orden: { id: "o1" } }));
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      renderCreate();
+      await flush();
+      fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+      fireEvent.change(categorySelect(), { target: { value: "revisado" } });
+      fireEvent.change(screen.getByLabelText(/descripción/i), { target: { value: "Trae ruido al frenar" } });
+      fireEvent.change(screen.getByLabelText(/observaciones/i), { target: { value: "El cliente espera en el taller" } });
+      fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+      await flush();
+
+      const call = fetchMock.mock.calls.find(([url]) => url === "/api/service-orders")!;
+      const body = JSON.parse((call[1] as RequestInit).body as string);
+      expect(body.observaciones).toBe("El cliente espera en el taller");
+      expect(body.description).toBe("Trae ruido al frenar");
+      expect(body).not.toHaveProperty("items");
+      // The two fields that stay patch-only never reach the create wire.
+      expect(body).not.toHaveProperty("hallazgos");
+      expect(body).not.toHaveProperty("recomendaciones");
+    });
+  });
+
   describe("appointmentAt round-trip (task 2.10)", () => {
     const REAL_TZ = process.env.TZ;
     beforeEach(() => {
@@ -600,7 +717,6 @@ describe("ServiceOrderForm", () => {
     it("shows the appointment in local wall-clock time, not UTC", () => {
       render(
         <ServiceOrderForm
-          products={[]}
           canCreateCustomer={false}
           order={{ id: "o1", clienteId: "c-a", categoria: "instalacion", appointmentAt: STORED } as never}
         />,
@@ -608,7 +724,7 @@ describe("ServiceOrderForm", () => {
       openEditDialog();
 
       // 14:00Z is 09:00 in Panama (UTC-5). The old code rendered "14:00".
-      expect(screen.getByLabelText(/cita/i)).toHaveValue("2026-03-10T09:00");
+      expect(screen.getByLabelText("Fecha y hora de inicio")).toHaveValue("2026-03-10T09:00");
     });
 
     it("does not send appointmentAt at all when the user never touched it", async () => {
@@ -617,7 +733,6 @@ describe("ServiceOrderForm", () => {
 
       render(
         <ServiceOrderForm
-          products={[]}
           canCreateCustomer={false}
           order={{ id: "o1", clienteId: "c-a", categoria: "instalacion", appointmentAt: STORED } as never}
         />,
@@ -643,13 +758,12 @@ describe("ServiceOrderForm", () => {
 
       render(
         <ServiceOrderForm
-          products={[]}
           canCreateCustomer={false}
           order={{ id: "o1", clienteId: "c-a", categoria: "instalacion", appointmentAt: STORED } as never}
         />,
       );
       openEditDialog();
-      fireEvent.change(screen.getByLabelText(/cita/i), { target: { value: "2026-03-10T11:30" } });
+      fireEvent.change(screen.getByLabelText("Fecha y hora de inicio"), { target: { value: "2026-03-10T11:30" } });
       fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
       await flush();
 
@@ -691,7 +805,7 @@ describe("ServiceOrderForm — a deactivated customer's 409 (R20)", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+    render(<ServiceOrderForm selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
     openDialog();
     await flush();
     fireEvent.change(vehicleSelect(), { target: { value: "v-pre" } });
@@ -742,7 +856,7 @@ describe("ServiceOrderForm — a deactivated customer's 409 (R20)", () => {
  *
  * This form was the last of the three without it. It is also the one where the
  * silence costs most: the operator has just picked a customer, a vehicle, a
- * category and possibly a parts cart, and a save that vanishes takes all of it
+ * category and the notes, and a save that vanishes takes all of it
  * with the dialog.
  */
 describe("ServiceOrderForm — a network failure has to say so", () => {
@@ -765,7 +879,7 @@ describe("ServiceOrderForm — a network failure has to say so", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ServiceOrderForm products={[]} selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+    render(<ServiceOrderForm selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
     openDialog();
     await flush();
     fireEvent.change(vehicleSelect(), { target: { value: "v-pre" } });

@@ -45,10 +45,17 @@ export function CustomerPicker({
   selectedCustomer,
   canCreateCustomer,
   onSelect,
+  onDeselect,
 }: {
   selectedCustomer: ClienteListItem | null;
   canCreateCustomer: boolean;
   onSelect: (customer: ClienteListItem) => void;
+  /**
+   * Create mode only. Its presence is what renders the deselect control, so
+   * the order-EDIT form simply omits it: `clienteId` is not patchable, and a
+   * "quitar" that PATCH would refuse is a promise the API does not keep.
+   */
+  onDeselect?: () => void;
 }) {
   const [term, setTerm] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
@@ -106,9 +113,32 @@ export function CustomerPicker({
     debounceRef.current = setTimeout(() => runSearch(value), DEBOUNCE_MS);
   }
 
+  /**
+   * D6 — the pick ends the search. Leaving `term` and the result rows on
+   * screen under the "Cliente seleccionado" banner reads as if nothing
+   * happened, and the truncation/near-match notices then describe a search
+   * the operator has already finished with.
+   *
+   * The pending debounce and the in-flight request are cancelled for the same
+   * reason: a keystroke 300ms before the click would otherwise repaint the
+   * very list this just cleared.
+   */
   function handleSelect(customer: ClienteListItem) {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    abortRef.current?.abort();
+    setTerm("");
+    setResults([]);
+    setTotal(0);
+    setRelaxedFrom(undefined);
+    setHasSearched(false);
+    setError(null);
     setSelected(customer);
     onSelect(customer);
+  }
+
+  function handleDeselect() {
+    setSelected(null);
+    onDeselect?.();
   }
 
   // Zero EXACT matches: either the near-match pass found some (relaxedFrom
@@ -118,8 +148,25 @@ export function CustomerPicker({
   return (
     <div className="flex flex-col gap-3">
       {selected && (
-        <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm text-foreground">
-          Cliente seleccionado: <span className="font-medium">{selected.name}</span>
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 p-3 text-sm text-foreground">
+          <span>
+            Cliente seleccionado: <span className="font-medium">{selected.name}</span>
+          </span>
+          {onDeselect && (
+            // `min-h-11 min-w-11` on top of the button's own `h-8`: AGENTS.md's
+            // 44x44 floor, whose only waiver is the pointer-only sidebar rail.
+            // This dialog is used from a workshop tablet.
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-11 min-w-11 shrink-0"
+              aria-label="Quitar cliente seleccionado"
+              onClick={handleDeselect}
+            >
+              Quitar
+            </Button>
+          )}
         </div>
       )}
 

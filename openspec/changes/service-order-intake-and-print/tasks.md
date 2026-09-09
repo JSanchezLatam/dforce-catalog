@@ -87,64 +87,64 @@ the owner is waiting on.
 Explicit Deselect*, *Description Field and Appointment Label*, R20, *Category
 and Completion Notes Editing*; design D6, D7)
 
-- [ ] 1.1 RED (jsdom) `CustomerPicker.test.tsx` — selecting a customer clears
+- [x] 1.1 RED (jsdom) `CustomerPicker.test.tsx` — selecting a customer clears
   `term`, `results`, `total`, `relaxedFrom` and `hasSearched` (zero tests
   today click "Seleccionar" and then assert search-box state). Confirm it
   fails against current `handleSelect` (`CustomerPicker.tsx:109-112`).
-- [ ] 1.2 GREEN — `handleSelect` clears all five.
-- [ ] 1.3 RED (jsdom) — the selected-customer banner (`:120-124`) renders an
+- [x] 1.2 GREEN — `handleSelect` clears all five.
+- [x] 1.3 RED (jsdom) — the selected-customer banner (`:120-124`) renders an
   explicit deselect control at `min-h-11 min-w-11`, separate from picking a
   different customer; edit mode renders none (spec Scenarios "Deselect
   control meets the hit-target floor", "Edit mode offers no deselect").
-- [ ] 1.4 GREEN — add the control and an `onDeselect?: () => void` prop,
+- [x] 1.4 GREEN — add the control and an `onDeselect?: () => void` prop,
   create-mode only.
-- [ ] 1.5 RED (jsdom) `ServiceOrderForm.test.tsx` — deselecting clears
+- [x] 1.5 RED (jsdom) `ServiceOrderForm.test.tsx` — deselecting clears
   `vehiculoId` (`ServiceOrderForm.tsx:108`) (spec Scenario "Deselect clears
   the chosen vehicle").
-- [ ] 1.6 GREEN — wire `onDeselect` to `setVehiculoId("")`.
-- [ ] 1.7 RED/GREEN — `Descripción` renders as a `<textarea>` using the
+- [x] 1.6 GREEN — wire `onDeselect` to `setVehiculoId("")`.
+- [x] 1.7 RED/GREEN — `Descripción` renders as a `<textarea>` using the
   `NATIVE_FIELD` class (`:38`), on both the create and edit forms (spec
   Scenario "Descripción is multi-line").
-- [ ] 1.8 RED/GREEN — the appointment label reads exactly
+- [x] 1.8 RED/GREEN — the appointment label reads exactly
   `Fecha y hora de inicio`; the field stays `datetime-local`,
   `toDatetimeLocal` untouched (spec Scenario "Appointment label reads the new
   text").
-- [ ] 1.9 GREEN — delete the parts cart section (`:502-582`, `!isEdit` only);
+- [x] 1.9 GREEN — delete the parts cart section (`:502-582`, `!isEdit` only);
   confirm no leftover cart references remain in `ServiceOrderForm.test.tsx`
   (proposal states there are zero today — verify, don't assume).
-- [ ] 1.10 RED (node) `service.test.ts` — enter at the seam boundary with a
+- [x] 1.10 RED (node) `service.test.ts` — enter at the seam boundary with a
   JSON round trip (`JSON.parse(JSON.stringify(formState))`, never a
   hand-typed literal, per D10's shape): `observaciones` reaches the insert
   seam; `items`/`ordenServicioItem` insert is unreachable (gate on
   `items.length > 0` has no caller left).
-- [ ] 1.11 GREEN — `CreateOrdenServicioInput` (`service.ts:120-128`) drops
+- [x] 1.11 GREEN — `CreateOrdenServicioInput` (`service.ts:120-128`) drops
   `items`, adds `observaciones?: string | null` (D7 interfaces block); form
   and `POST /api/service-orders` (`route.ts`) stop forwarding `items`, start
   forwarding `observaciones`.
-- [ ] 1.12 RED/GREEN — spec Scenarios "Hallazgos and recomendaciones stay
+- [x] 1.12 RED/GREEN — spec Scenarios "Hallazgos and recomendaciones stay
   rejected at creation" and "Observaciones stored, hallazgos rejected, from
   the same payload": a create payload carrying `hallazgos`/`recomendaciones`
   is ignored or rejected; `observaciones` persists from the same payload.
-- [ ] 1.13 RED/GREEN — spec Scenario "A new order's Piezas card always shows
+- [x] 1.13 RED/GREEN — spec Scenario "A new order's Piezas card always shows
   its empty state": confirm `[id]/page.tsx`'s Piezas card renders empty for
   an order created after this ships (existing empty-state path, new
   assertion).
-- [ ] 1.14 Confirm spec Scenario "Customer with zero active vehicles blocks
+- [x] 1.14 Confirm spec Scenario "Customer with zero active vehicles blocks
   submission" still passes unchanged after the parts-section removal.
-- [ ] 1.15 **Mutation-verify 1.10** — comment out the route's forwarding of
+- [x] 1.15 **Mutation-verify 1.10** — comment out the route's forwarding of
   `observaciones`; confirm the test goes red **by name**. `diff` to confirm
   the removal landed, then revert and confirm green.
-- [ ] 1.16 `diff` `CustomerPicker.tsx`, `ServiceOrderForm.tsx`, `service.ts`,
+- [x] 1.16 `diff` `CustomerPicker.tsx`, `ServiceOrderForm.tsx`, `service.ts`,
   `route.ts` and every touched test before trusting 1.1–1.15.
-- [ ] 1.17 Seed one customer with an active vehicle in the dev database if
+- [x] 1.17 Seed one customer with an active vehicle in the dev database if
   none suitable exists (only 2/370 customers currently have one) —
   prerequisite for 1.18, not an assumption.
-- [ ] 1.18 **Browser check, both themes, 0 console errors**: create-order
+- [x] 1.18 **Browser check, both themes, 0 console errors**: create-order
   dialog — select a customer and confirm the search box/results clear;
   deselect and confirm the vehicle selection resets; confirm the textarea,
   the new label text, no parts section; fill `observaciones` and save;
   confirm the order persists.
-- [ ] 1.19 `npm test` (alone) and `npx tsc --noEmit` clean.
+- [x] 1.19 `npm test` (alone) and `npx tsc --noEmit` clean.
 
 ## Phase 2 — Inline vehicle creation (customer-management spec: *Single
 Vehicle Insert Without Reconcile*; design D1, D2, D3, D4, D10)

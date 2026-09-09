@@ -43,11 +43,24 @@ export async function handleCreateOrdenServicio(
   }
 
   try {
-    // Follow-up 1.18. `createdBy` comes from the SESSION, never from the
-    // body — spreading it AFTER `body` is what makes a client-supplied value
-    // unable to win. The route is the only place that knows who is acting;
-    // everything the body says about identity is a claim, not a fact.
-    const orden = await createOrder({ ...body, appointmentAt, createdBy: user.id }, deps);
+    // Named fields, not `...body`. Two reasons, both already paid for here:
+    // `createdBy` comes from the SESSION and the body's claim about identity
+    // must not be able to win (follow-up 1.18); and D7 takes `items` off the
+    // create path, so the route stops handing it on at all. `createOrder`'s
+    // own `.values({...})` whitelist still stands behind this — a body's
+    // `hallazgos`/`recomendaciones` reach neither.
+    const orden = await createOrder(
+      {
+        clienteId: body.clienteId,
+        vehiculoId: body.vehiculoId,
+        categoria: body.categoria,
+        description: body.description,
+        observaciones: body.observaciones,
+        appointmentAt,
+        createdBy: user.id,
+      },
+      deps,
+    );
     return NextResponse.json({ orden }, { status: 201 });
   } catch (err) {
     if (err instanceof ClienteDeactivatedError) {

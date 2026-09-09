@@ -26,7 +26,7 @@
 import { eq } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
-import { ordenServicio, ordenServicioItem, reminder, type Cliente, type OrdenServicio } from "@/shared/db/schema";
+import { ordenServicio, reminder, type Cliente, type OrdenServicio } from "@/shared/db/schema";
 import { getClienteById } from "@/modules/customers/queries";
 import { ClienteDeactivatedError } from "@/modules/customers/service";
 import { cancelRemindersForOrder, scheduleReminder } from "@/modules/reminders/job";
@@ -110,69 +110,31 @@ export class InvalidCategoriaError extends Error {
   }
 }
 
-export type CreateOrdenServicioItemInput = {
-  productoId?: string | null;
-  productName: string;
-  unitPrice?: number | null;
-  quantity?: number;
-};
-
 export type CreateOrdenServicioInput = {
   clienteId: string;
   vehiculoId: string;
   categoria: ServiceCategory;
   description?: string | null;
+  /**
+   * D7 — what the CUSTOMER reported at booking, so it is known before anyone
+   * has looked at the vehicle and is settable here. `hallazgos` and
+   * `recomendaciones` are findings and remain patch-only (`updateOrder`).
+   */
+  observaciones?: string | null;
   appointmentAt?: Date | null;
   createdBy?: string | null;
-  items?: CreateOrdenServicioItemInput[];
 };
-
-export type NormalizedOrderItem = {
-  productoId?: string | null;
-  productName: string;
-  unitPrice?: number | null;
-  quantity: number;
-};
-
-/**
- * R20 — duplicate-`producto` policy: MERGE quantities (chosen over
- * append-as-a-second-line). Re-adding the same part to an order just bumps
- * the existing line's quantity instead of producing two rows for the same
- * part on one order — simpler for the parts-used history to read, and
- * matches how a cart/line-item UI conventionally behaves when the same SKU
- * is added twice. Items with NO `productoId` (custom/off-catalog parts, e.g.
- * shop labor entered as a free-text line) are never merged with each other
- * since there is no stable dedupe key for them — silently combining two
- * differently-intentioned custom lines would be surprising, not helpful.
- */
-export function normalizeOrderItems(items: CreateOrdenServicioItemInput[]): NormalizedOrderItem[] {
-  const merged: NormalizedOrderItem[] = [];
-  const indexByProductoId = new Map<string, number>();
-
-  for (const item of items) {
-    const quantity = item.quantity ?? 1;
-
-    if (item.productoId) {
-      const existingIndex = indexByProductoId.get(item.productoId);
-      if (existingIndex !== undefined) {
-        merged[existingIndex] = { ...merged[existingIndex], quantity: merged[existingIndex].quantity + quantity };
-        continue;
-      }
-      indexByProductoId.set(item.productoId, merged.length);
-    }
-
-    merged.push({ ...item, quantity });
-  }
-
-  return merged;
-}
 
 export type CreateOrdenServicioDeps = ReminderWiringDeps;
 
 /**
- * R20 — creates the order + its line items in ONE transaction (all-or-
- * nothing: a mid-write failure leaves no partial order). Rejects unknown
- * `clienteId` BEFORE opening the transaction. Never writes to `producto`.
+ * R20 — creates the order. Rejects unknown `clienteId` BEFORE opening the
+ * transaction. Never writes to `producto`.
+ *
+ * D7 — no line items: creation stopped accepting them when `Piezas` came out
+ * of the intake dialog, and `ordenServicioItem` has no writer left anywhere.
+ * The table and the detail page's "Piezas utilizadas" card both stay, for the
+ * rows that already exist and for a later record-what-was-used flow.
  *
  * R23 — if `appointmentAt` is given, an `appointment` reminder is planned +
  * persisted + scheduled AFTER the transaction commits (never inside it — the
@@ -216,7 +178,6 @@ export async function createOrder(
     throw new InvalidCategoriaError({ categoria: "Elegí un tipo de servicio válido" });
   }
 
-  const items = normalizeOrderItems(input.items ?? []);
   const database = deps.db ?? db;
 
   const orden = await database.transaction(async (tx) => {
@@ -227,22 +188,11 @@ export async function createOrder(
         vehiculoId: input.vehiculoId,
         categoria: input.categoria,
         description: input.description ?? null,
+        observaciones: input.observaciones ?? null,
         appointmentAt: input.appointmentAt ?? null,
         createdBy: input.createdBy ?? null,
       })
       .returning();
-
-    if (items.length > 0) {
-      await tx.insert(ordenServicioItem).values(
-        items.map((item) => ({
-          ordenId: inserted.id,
-          productoId: item.productoId ?? null,
-          productName: item.productName,
-          unitPrice: item.unitPrice ?? null,
-          quantity: item.quantity,
-        })),
-      );
-    }
 
     return inserted;
   });

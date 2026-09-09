@@ -231,3 +231,105 @@ describe("POST /api/service-orders — a deactivated cliente (customer-managemen
     expect(database.transaction).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * D7/D10 — the create payload, entered at the ROUTE with a JSON round trip.
+ *
+ * The shape is not decoration. `POST /api/service-orders` shipped unable to
+ * save anything at all: the route spread the body into `CreateOrdenServicioInput`,
+ * whose `appointmentAt` is declared `Date | null`, and JSON carries no Date, so
+ * Drizzle got the form's `datetime-local` string and died on
+ * `value.toISOString is not a function`. Every unit test passed, because every
+ * unit test handed the function an object it had typed itself.
+ *
+ * So the fixture is the form's own state, put through
+ * `JSON.parse(JSON.stringify(...))` before it is sent. A hand-typed literal
+ * would let a `Date` — or a number, or a `null` the form cannot produce —
+ * survive into the assertion; the round trip guarantees the test can only ever
+ * carry what the wire can carry. And the assertions are on what the insert
+ * seam RECEIVED, never on the call resolving: the fake tx accepts anything.
+ */
+describe("POST /api/service-orders — the form's payload, round-tripped through JSON (D7/D10)", () => {
+  /** Exactly the object `ServiceOrderForm.handleSubmit` stringifies in create mode. */
+  const FORM_STATE = {
+    clienteId: "cli-1",
+    vehiculoId: "v1",
+    categoria: "revisado",
+    description: "Trae ruido al frenar",
+    observaciones: "El cliente espera en el taller",
+    appointmentAt: new Date("2026-09-10T09:00").toISOString(),
+  };
+
+  /** The one thing standing between a hand-typed literal and the wire. */
+  function wire(state: Record<string, unknown>) {
+    return JSON.parse(JSON.stringify(state));
+  }
+
+  function capturingDb() {
+    const inserts: unknown[] = [];
+    const database = {
+      transaction: async (cb: (tx: unknown) => unknown) =>
+        cb({
+          insert: () => ({
+            values: (values: unknown) => {
+              inserts.push(values);
+              // An `ordenServicioItem` insert passes an ARRAY and never calls
+              // `.returning()`, so both shapes have to survive here — a fake
+              // that only answers the order insert would hide the second one.
+              if (Array.isArray(values)) return Promise.resolve(undefined);
+              return { returning: async () => [{ id: "o1", status: "open", ...(values as object) }] };
+            },
+          }),
+        }),
+    };
+    return { database, inserts };
+  }
+
+  const deps = (database: unknown) => ({ getClienteById: async () => clienteDetail as never, db: database as never });
+
+  it("threads observaciones through to the insert seam", async () => {
+    const { database, inserts } = capturingDb();
+
+    const response = await handleCreateOrdenServicio(requestWith(wire(FORM_STATE)), deps(database));
+
+    expect(response.status).toBe(201);
+    const values = inserts[0] as Record<string, unknown>;
+    expect(values.observaciones).toBe("El cliente espera en el taller");
+    expect(values.description).toBe("Trae ruido al frenar");
+    // The original defect, pinned in the same shape: a string on the wire has
+    // to arrive at Drizzle as a Date, or nothing saves at all.
+    expect(values.appointmentAt).toBeInstanceOf(Date);
+  });
+
+  it("stores observaciones and drops hallazgos/recomendaciones from the SAME payload", async () => {
+    const { database, inserts } = capturingDb();
+
+    const response = await handleCreateOrdenServicio(
+      requestWith(wire({ ...FORM_STATE, hallazgos: "no debería llegar", recomendaciones: "tampoco" })),
+      deps(database),
+    );
+
+    expect(response.status).toBe(201);
+    const values = inserts[0] as Record<string, unknown>;
+    expect(values.observaciones).toBe("El cliente espera en el taller");
+    expect(values).not.toHaveProperty("hallazgos");
+    expect(values).not.toHaveProperty("recomendaciones");
+  });
+
+  it("writes no ordenServicioItem row, even for a body that still carries items", async () => {
+    const { database, inserts } = capturingDb();
+
+    const response = await handleCreateOrdenServicio(
+      requestWith(
+        wire({ ...FORM_STATE, items: [{ productoId: "p1", productName: "Filtro de aceite", quantity: 2 }] }),
+      ),
+      deps(database),
+    );
+
+    expect(response.status).toBe(201);
+    // One insert, and it is the order. `ordenServicioItem`'s only writer is
+    // gone, so the line-item insert is unreachable from any caller.
+    expect(inserts).toHaveLength(1);
+    expect(Array.isArray(inserts[0])).toBe(false);
+  });
+});
