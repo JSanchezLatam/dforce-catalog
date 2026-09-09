@@ -6,14 +6,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { useToast } from "@/shared/ui/ToastProvider";
+import { ORDER_STATUS_LABEL } from "./statuses";
 import { getAllowedTransitions, type OrderStatus } from "./transitions";
-
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  open: "Abierta",
-  in_progress: "En progreso",
-  done: "Completada",
-  cancelled: "Cancelada",
-};
 
 /**
  * R21 — status-transition controls for the order-detail page. Renders one
@@ -75,7 +69,7 @@ export function OrderStatusControls({ orderId, status }: { orderId: string; stat
           disabled={isSubmitting}
           onClick={() => transitionTo(next)}
         >
-          {isSubmitting ? "Actualizando…" : `Marcar como ${STATUS_LABEL[next]}`}
+          {isSubmitting ? "Actualizando…" : `Marcar como ${ORDER_STATUS_LABEL[next]}`}
         </Button>
       ))}
     </div>

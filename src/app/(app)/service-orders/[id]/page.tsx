@@ -20,17 +20,11 @@ import { listRemindersForOrder } from "@/modules/reminders/queries";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
 import { OrderStatusControls } from "@/modules/service-orders/OrderStatusControls";
 import { getOrdenServicioById } from "@/modules/service-orders/queries";
+import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import { formatDateTime } from "@/shared/datetime";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 
 export const dynamic = "force-dynamic";
-
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  open: "Abierta",
-  in_progress: "En progreso",
-  done: "Completada",
-  cancelled: "Cancelada",
-};
 
 const REMINDER_TYPE_LABEL: Record<string, string> = {
   appointment: "Cita",

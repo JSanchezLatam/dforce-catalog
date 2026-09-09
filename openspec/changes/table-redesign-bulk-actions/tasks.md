@@ -310,7 +310,7 @@ Branch names follow the `crm-workshop/prN-*` convention:
 
 ## Phase 6 — service-orders selection + bulk status (service-orders delta; design D9)
 
-- [ ] 6.1 **CORRECTED 2026-09-08 — do NOT move it into `transitions.ts`.** The
+- [x] 6.1 **CORRECTED 2026-09-08 — do NOT move it into `transitions.ts`.** The
   canonical home already exists: `src/modules/service-orders/statuses.ts`
   exports `ORDER_STATUS_LABEL` as a `Record<OrderStatus, string>` (so adding a
   fifth status is a `tsc` error, not a silent `undefined`), it has its own test,
@@ -324,15 +324,44 @@ Branch names follow the `crm-workshop/prN-*` convention:
   `ORDER_STATUS_LABEL` from `./statuses`. Still a net deletion; different
   destination. D9 named the wrong file because the exploration never found
   `statuses.ts`.
-- [ ] 6.2 RED (node, beside `transitions.test.ts`) — a pure intersection helper over `getAllowedTransitions` across a mixed-status selection (e.g. 3 `open` + 1 `in_progress` → only `cancelled`); empty-intersection case.
-- [ ] 6.3 GREEN — implement the intersection helper.
-- [ ] 6.4 Wire a hand-rolled selection wrapper (consuming unit 4's `useRowSelection`/`SelectionBar`/`BulkResultPanel`, per D4 — no shared page wrapper) into `service-orders/page.tsx`. The bulk status menu offers **only** the 6.3 intersection, never every status unconditionally (spec Scenario "Menu offers only the legal intersection").
-- [ ] 6.5 GREEN — the bulk action calls `runSequential` over `PATCH /api/service-orders/[id]` with `{status}`, evaluated per row against that row's **current** status.
-- [ ] 6.6 RED/GREEN — concurrent status drift: one row transitions away under another session before the bulk action runs; the bulk action still applies to the rows still legal and reports the drifted one by id with the reason its current status no longer allows the transition (spec Scenario).
-- [ ] 6.7 RED/GREEN — confirmation copy for a bulk move to `done`/`cancelled` states the change is terminal and cannot be undone through the UI (spec Scenario "Terminal-status warning shown before applying").
-- [ ] 6.8 `diff` every touched file before trusting 6.2–6.7.
-- [ ] 6.9 **Browser check, both themes, 0 console errors**: the bulk status menu computes the intersection client-side with no round trip (D9), new client boundary + portal check.
-- [ ] 6.10 `npm test` and `npx tsc --noEmit` clean.
+
+  **And there were THREE duplicates, not two.**
+  `src/app/(app)/service-orders/[id]/page.tsx` declared a local const with the
+  EXACT canonical name, `ORDER_STATUS_LABEL`, typed `Record<string, string>` —
+  so it shadowed the real export inside that file and lost the one property
+  `statuses.ts` exists to provide: that a fifth enum value is a `tsc` error
+  rather than a silent `undefined`. Deleting only the two the task names would
+  have left the worst-typed copy standing, in the file whose name most suggests
+  it uses the shared one. `rg 'open: "Abierta"' src/` now returns exactly one
+  hit.
+- [x] 6.2 RED (node, beside `transitions.test.ts`) — a pure intersection helper over `getAllowedTransitions` across a mixed-status selection (e.g. 3 `open` + 1 `in_progress` → only `cancelled`); empty-intersection case.
+- [x] 6.3 GREEN — implement the intersection helper.
+- [x] 6.4 Wire a hand-rolled selection wrapper (consuming unit 4's `useRowSelection`/`SelectionBar`/`BulkResultPanel`, per D4 — no shared page wrapper) into `service-orders/page.tsx`. The bulk status menu offers **only** the 6.3 intersection, never every status unconditionally (spec Scenario "Menu offers only the legal intersection").
+- [x] 6.5 GREEN — the bulk action calls `runSequential` over `PATCH /api/service-orders/[id]` with `{status}`, evaluated per row against that row's **current** status.
+- [x] 6.6 RED/GREEN — concurrent status drift: one row transitions away under another session before the bulk action runs; the bulk action still applies to the rows still legal and reports the drifted one by id with the reason its current status no longer allows the transition (spec Scenario).
+- [x] 6.7 RED/GREEN — confirmation copy for a bulk move to `done`/`cancelled` states the change is terminal and cannot be undone through the UI (spec Scenario "Terminal-status warning shown before applying").
+- [x] 6.8 `diff` every touched file before trusting 6.2–6.7.
+- [x] 6.9 **Browser check, both themes, 0 console errors**: the bulk status menu computes the intersection client-side with no round trip (D9), new client boundary + portal check.
+
+  **NOT EXERCISED WITH DATA — stated, not ticked over.** `/service-orders` has
+  0 rows in the dev database, so no checkbox, bar, menu or confirm dialog can
+  be reached there at all. The page renders and the console is clean, which is
+  all this environment can show. The evidence for this unit is its 15 page
+  tests plus 18 on the pure helper, and the eight mutations behind them.
+
+  **A design gap D9 did not anticipate, resolved deliberately:** WU4 made the
+  selection outlive the page, but the page only knows the STATUSES of its own
+  rows. Intersecting only the visible ones would promise an action for rows
+  nobody read. The wrapper therefore stands down and names the off-page count
+  rather than guessing, and only a genuine empty intersection renders
+  "No hay ninguna acción común a esta selección".
+
+  **Pre-existing gap matched, not closed:** the list page gates on
+  `service-orders.read` while the route requires `service-orders.write`, so a
+  read-only role sees "Cambiar estado" and gets a legible `Forbidden`. The
+  detail page's `OrderStatusControls` has the same gap on `main`. Closing it is
+  new scope.
+- [x] 6.10 `npm test` and `npx tsc --noEmit` clean.
 
 ## Phase 7a — Inventory selection + handoff transport (catalog-generation delta, transport half; design D10)
 

@@ -48,3 +48,31 @@ export function assertTransition(from: OrderStatus, to: OrderStatus): void {
 export function getAllowedTransitions(from: OrderStatus): OrderStatus[] {
   return ALLOWED_TRANSITIONS[from];
 }
+
+/**
+ * D9 — the target statuses legal from EVERY status in `froms`: the
+ * INTERSECTION of each selected row's `getAllowedTransitions`, which is what
+ * the bulk status menu is allowed to offer.
+ *
+ * Never the union, and never the four statuses unconditionally. A menu built
+ * from the union offers `done` over a selection holding one `open` row, and
+ * each of those rows then comes back an `invalid_transition` the operator had
+ * no way to predict from the menu they were shown — `assertTransition` is
+ * evaluated per row against that row's CURRENT status, so the menu is the only
+ * place the whole-selection rule can be stated up front.
+ *
+ * An empty selection returns `[]` rather than the identity of an intersection
+ * (the universe): nothing is selected, so no bulk action is legal.
+ *
+ * The accumulator is a COPY — `getAllowedTransitions` hands back the live
+ * `ALLOWED_TRANSITIONS` row, and a one-row selection would otherwise return a
+ * writable alias to the state machine itself.
+ */
+export function allowedTransitionsForAll(froms: readonly OrderStatus[]): OrderStatus[] {
+  const [first, ...rest] = froms;
+  if (first === undefined) return [];
+  return rest.reduce<OrderStatus[]>(
+    (common, from) => common.filter((next) => getAllowedTransitions(from).includes(next)),
+    [...getAllowedTransitions(first)],
+  );
+}
