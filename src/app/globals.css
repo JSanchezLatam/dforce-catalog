@@ -172,21 +172,6 @@
   }
 }
 
-/**
- * The first (and only) `@media print` block in the repo — service-order
- * intake-and-print D8.
- *
- * `/service-orders/[id]/print` renders inside the `(app)` route group, whose
- * layout mounts `AppSidebar` as a SIBLING the page cannot reach. Everything
- * inside the page uses Tailwind's `print:` variant instead; this block exists
- * only for what the page has no handle on.
- *
- * Selectors verified against `src/components/ui/sidebar.tsx` at the lines
- * D8 cites — `data-slot="sidebar"` (:170, and again at :188/:215 for the
- * mobile and standard variants, all of which this hides), `"sidebar-trigger"`
- * (:264), `"sidebar-rail"` (:286), `"sidebar-inset"` (:308). A `data-slot`
- * that did not exist would be a silent no-op visible only on paper.
- */
 /*
  * Letter, explicitly. With no `@page` rule the browser picks the size from the
  * print dialog's default, which is per-user and locale-dependent — the owner
@@ -203,6 +188,21 @@
   margin: 12mm;
 }
 
+/**
+ * The first (and only) `@media print` block in the repo — service-order
+ * intake-and-print D8.
+ *
+ * `/service-orders/[id]/print` renders inside the `(app)` route group, whose
+ * layout mounts `AppSidebar` as a SIBLING the page cannot reach. Everything
+ * inside the page uses Tailwind's `print:` variant instead; this block exists
+ * only for what the page has no handle on.
+ *
+ * Selectors verified against `src/components/ui/sidebar.tsx` at the lines
+ * D8 cites — `data-slot="sidebar"` (:170, and again at :188/:215 for the
+ * mobile and standard variants, all of which this hides), `"sidebar-trigger"`
+ * (:264), `"sidebar-rail"` (:286), `"sidebar-inset"` (:308). A `data-slot`
+ * that did not exist would be a silent no-op visible only on paper.
+ */
 @media print {
   [data-slot="sidebar"],
   [data-slot="sidebar-trigger"],
@@ -235,7 +235,6 @@
    */
   html,
   body {
-    width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
   }

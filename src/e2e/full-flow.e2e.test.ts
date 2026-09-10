@@ -1716,6 +1716,15 @@ describe("full catalog-generation flow (E2E)", () => {
     const motorOnly = await listInventory({ categoryL1: "MOTOR" }, { offset: 0, limit: 25 });
     expect(motorOnly.items.map((i) => i.id).sort()).toEqual(["p1", "p2"]);
 
+    // The name search folds accents on BOTH sides, and this is the only proof
+    // it reaches Postgres: `buildWhere`'s unit test asserts that a rendered SQL
+    // STRING contains `unaccent` twice, which says nothing about the database
+    // accepting the expression or returning the row. Measured against the
+    // owner's real catalogue before this shipped, `guia` and `unica` returned
+    // ZERO while the accented rows sat there.
+    const foldedName = await listInventory({ name: "bujia" }, { offset: 0, limit: 25 });
+    expect(foldedName.items.map((i) => i.id)).toEqual(["p2"]); // "bujia" finds "Bujía"
+
     // PR10 — grand total stays 3 regardless of the active filter, unlike
     // `listInventory().total` above which is filter-scoped (motorOnly = 2).
     expect(await countAllProducts()).toBe(3);
