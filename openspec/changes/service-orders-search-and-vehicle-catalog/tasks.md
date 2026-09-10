@@ -841,7 +841,7 @@ intent, the owner names the three; an agent must not pick them.
 | 3.16b | Re-implemented the reset as `useEffect(() => onChange({ make, model: "" }), [make])` (the forbidden pattern), on top of (a)'s revert. `diff` confirmed the mutation landed. Both `mounting emits no onChange at all — the case a create-path-only test never catches` (3.11) and `changing the make empties the model and re-lists the new make's models` (3.14) went RED by name — (b) did NOT leave the suite green, so no test needed strengthening. Reverted; `diff` confirmed byte-identical; suite green (11/11). |
 | 3.21 | `git status --porcelain` lists only `CustomerForm.tsx`, `CustomerForm.test.tsx`, `VehicleQuickForm.tsx`, `VehicleQuickForm.test.tsx` (modified) plus `vehicle-catalog.ts`, `vehicle-catalog.test.ts`, `VehicleMakeModelFields.tsx`, `VehicleMakeModelFields.test.tsx` (new) — no file under `src/app/api/`, no `validation.ts`, no `schema.ts`, no migrations. `rg "Number\(year\)" src/modules/customers` and `rg "Number\(v.year\)"` both still hit (`VehicleQuickForm.tsx:101`, `CustomerForm.tsx:145`); `rg 'typeof value.year === "number"' src/modules/customers/validation.ts` still hits (`validation.ts:126`). |
 | 3.25 | **Not run by this agent — no browser available here.** Needs the orchestrator, per AGENTS.md's second known limit (jsdom cannot see height, reflow, or a hydration mismatch). |
-| 3.26 | `npm test` (alone): **1639/1639 passed**, 111 files. `npx tsc --noEmit`: clean. `npm run lint`: 0 errors / 14 warnings, matching the documented baseline exactly — no new warning introduced. Left unticked per the closing-gate convention (see Phase 1/2's own records, filled in by the orchestrator after GGA). |
+| 3.26 | `npm test` (alone): **1639/1639 passed**, 111 files. `npx tsc --noEmit`: clean. `npm run lint`: 0 errors / 14 warnings, matching the documented baseline exactly — no new warning introduced. **Closed by the orchestrator after two GGA rounds**: 1640/1640, `tsc` clean, lint 0 errors / 14 warnings. |
 
 ---
 
@@ -870,6 +870,27 @@ new make's models* red by name.
 
 Gates: `npm test` 1639/1639 · `npx tsc --noEmit` clean · `npm run lint` 0
 errors / 14 warnings.
+
+**GGA found a placebo, and it MEASURED it rather than arguing.** The commit
+said "both halves are mutation-verified"; one half was not. `changing the make
+also clears a free-text model` rendered the component directly with a fixed
+`model=""` prop — and the component is CONTROLLED, so typing into the escape
+input never advanced it. The assertion was satisfied by the initial value, not
+by the reset, and the D16 mutation left it green while its sibling went red.
+The spec scenario *"switching make drops a free-text model too"* had no
+coverage at all. Driven through the `Harness` now; both go red together.
+
+**And the branch keyed off the wrong question.** `makeIsOther` asks "is the
+make free text"; what matters is "is there a list to choose from". With no make
+chosen — the DEFAULT state of every new vehicle row on both write paths —
+`models` is empty and `Modelo` rendered a combobox whose only option was
+`Otro`, which is exactly the control D14 calls worse than the text box it
+replaces. `models.length === 0` subsumes both cases. It had no test either; it
+does now, mutation-verified against the old condition.
+
+Three smaller ones: a `className` prop neither caller passed, an assertion that
+could not fail (`not.toBe("Otro")` against a `"__otro__"` sentinel), and a
+verification cell reading "left unticked" beside a ticked box.
 
 **Disclosed by the implementing agent rather than claimed:** tasks 3.6–3.10
 were built in one coherent GREEN pass instead of the literal step-by-step

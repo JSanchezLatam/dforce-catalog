@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
+import { OTHER } from "./vehicle-catalog";
 import { VehicleMakeModelFields } from "./VehicleMakeModelFields";
 
 /**
@@ -82,7 +83,7 @@ describe("VehicleMakeModelFields", () => {
     await user.type(makeInput, "Hino");
 
     for (const call of onChange.mock.calls) {
-      expect(call[0].make).not.toBe("Otro");
+      expect(call[0].make).not.toBe(OTHER); // the sentinel, not its label — the label can never be stored
     }
     expect(onChange).toHaveBeenLastCalledWith({ make: "Hino", model: "" });
   });
@@ -104,9 +105,27 @@ describe("VehicleMakeModelFields", () => {
     expect(screen.queryByLabelText("Especificá la marca")).not.toBeInTheDocument();
   });
 
+  /**
+   * The DEFAULT state of every new vehicle row on both write paths, and the
+   * case the first version missed: with no make chosen there is no model list,
+   * so a combobox would open showing `Otro` as its ONLY option — the control
+   * D14 calls worse than the text box it replaced. Keyed off "is there a list"
+   * rather than "is the make free text", which subsumes both.
+   */
+  it("with no Marca chosen yet, Modelo is a textbox — never a select holding only Otro", () => {
+    render(<VehicleMakeModelFields idPrefix="v1" make="" model="" onChange={vi.fn()} />);
+
+    expect(screen.getByRole("textbox", { name: "Modelo" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Modelo" })).not.toBeInTheDocument();
+  });
+
   it("with Marca in escape mode, Modelo is a plain textbox, not a combobox", async () => {
     const user = userEvent.setup();
-    render(<VehicleMakeModelFields idPrefix="v1" make="" model="" onChange={vi.fn()} />);
+    // Through the `Harness` and starting on a real make, so this covers the
+    // ESCAPE path rather than the empty one the case above owns. A bare render
+    // cannot: the component is controlled, so a fixed `make` prop never moves.
+    render(<Harness onChange={vi.fn()} />);
+    await chooseMake(user, "Toyota");
 
     await chooseMake(user, "Otro");
 
@@ -155,11 +174,20 @@ describe("VehicleMakeModelFields", () => {
       expect(screen.queryByRole("option", { name: "Hilux" })).not.toBeInTheDocument();
     });
 
+    /**
+     * Through the `Harness`, not a bare render. The component is CONTROLLED,
+     * so a fixed `model=""` prop never advances — typing into the escape input
+     * changed nothing, and the assertion was satisfied by the INITIAL value
+     * rather than by the reset. Review measured it: the D16 mutation left this
+     * test green while its sibling went red, so the spec scenario "switching
+     * make drops a free-text model too" had no coverage at all.
+     */
     it("changing the make also clears a free-text model", async () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
-      render(<VehicleMakeModelFields idPrefix="v1" make="Toyota" model="" onChange={onChange} />);
+      render(<Harness onChange={onChange} />);
 
+      await chooseMake(user, "Toyota");
       await chooseModel(user, "Otro");
       const modelInput = screen.getByLabelText("Especificá el modelo");
       await user.type(modelInput, "Coaster");

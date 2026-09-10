@@ -5,7 +5,6 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import { OTHER, VEHICLE_MAKES, modelsForMake } from "./vehicle-catalog";
 
 /**
@@ -40,7 +39,6 @@ export function VehicleMakeModelFields({
   make,
   model,
   onChange,
-  className,
 }: {
   /** "vehiculo-rapido" in the quick form; the vehicle row's `key` in `CustomerForm`. */
   idPrefix: string;
@@ -48,7 +46,6 @@ export function VehicleMakeModelFields({
   model: string;
   /** Emitted as ONE update — a make change carries `model: ""` with it (D16). */
   onChange: (next: { make: string; model: string }) => void;
-  className?: string;
 }) {
   const [makeIsOther, setMakeIsOther] = useState(() => make !== "" && !VEHICLE_MAKES.includes(make));
   const [modelIsOther, setModelIsOther] = useState(() => model !== "" && !modelsForMake(make).includes(model));
@@ -93,7 +90,7 @@ export function VehicleMakeModelFields({
   }
 
   return (
-    <div className={cn("contents", className)}>
+    <div className="contents">
       <div className="grid gap-2">
         <Label htmlFor={makeId}>Marca</Label>
         <Select
@@ -123,7 +120,14 @@ export function VehicleMakeModelFields({
 
       <div className="grid gap-2">
         <Label htmlFor={modelId}>Modelo</Label>
-        {makeIsOther ? (
+        {/* `models.length === 0`, not `makeIsOther`. A free-text make always
+            yields an empty list, so this subsumes that case — but it also
+            covers the one `makeIsOther` missed: with no make chosen yet, the
+            default state of every new vehicle row on BOTH write paths, the
+            list is empty and the select would have rendered with `Otro` as its
+            ONLY option. That is the control D14 calls worse than the text box
+            it replaced. */}
+        {models.length === 0 ? (
           // No make selected from the catalog ⇒ no model list to offer. A
           // one-item dropdown holding only "Otro" is a worse control than the
           // plain text box it would replace (D14).
