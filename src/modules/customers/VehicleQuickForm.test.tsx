@@ -47,18 +47,30 @@ function bodyOf(fetchMock: ReturnType<typeof vi.fn>, call = 0) {
   return JSON.parse(fetchMock.mock.calls[call][1].body);
 }
 
+/** Drives the shared `Marca`/`Modelo` selects the way `UserForm.test.tsx:39-42` drives its role select. */
+async function chooseMake(user: ReturnType<typeof userEvent.setup>, label: string) {
+  await user.click(screen.getByLabelText("Marca"));
+  await user.click(await screen.findByRole("option", { name: label }));
+}
+
+async function chooseModel(user: ReturnType<typeof userEvent.setup>, label: string) {
+  await user.click(screen.getByLabelText("Modelo"));
+  await user.click(await screen.findByRole("option", { name: label }));
+}
+
 async function openAndFill(
   user: ReturnType<typeof userEvent.setup>,
   // Keys in English (AGENTS.md's split is by AUDIENCE: this helper's audience
   // is the code). The Spanish lives only where it is a user-facing string —
   // inside `getByLabelText`, as an argument, exactly as `CustomerForm.test.tsx`
-  // does it.
+  // does it. `make`/`model` are now catalog LABELS driven through the shared
+  // selects (design.md D17), not typed text.
   fields: { plate?: string; make?: string; model?: string; year?: string } = { plate: "NEW111" },
 ) {
   await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
   if (fields.plate) await user.type(screen.getByLabelText("Placa"), fields.plate);
-  if (fields.make) await user.type(screen.getByLabelText("Marca"), fields.make);
-  if (fields.model) await user.type(screen.getByLabelText("Modelo"), fields.model);
+  if (fields.make) await chooseMake(user, fields.make);
+  if (fields.model) await chooseModel(user, fields.model);
   if (fields.year) await user.type(screen.getByLabelText("Año"), fields.year);
   await user.click(screen.getByRole("button", { name: "Guardar vehículo" }));
 }

@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { FIELD_ERROR } from "@/shared/ui/styles";
+import { VehicleMakeModelFields } from "./VehicleMakeModelFields";
 
 /**
  * D4 — adds ONE vehicle to an already-chosen customer, from inside the
@@ -169,14 +170,15 @@ export function VehicleQuickForm({
                 </p>
               )}
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="vehiculo-rapido-make">Marca</Label>
-              <Input id="vehiculo-rapido-make" value={make} onChange={(e) => setMake(e.target.value)} />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="vehiculo-rapido-model">Modelo</Label>
-              <Input id="vehiculo-rapido-model" value={model} onChange={(e) => setModel(e.target.value)} />
-            </div>
+            <VehicleMakeModelFields
+              idPrefix="vehiculo-rapido"
+              make={make}
+              model={model}
+              onChange={(next) => {
+                setMake(next.make);
+                setModel(next.model);
+              }}
+            />
             <div className="grid gap-2">
               <Label htmlFor="vehiculo-rapido-year">Año</Label>
               <Input
