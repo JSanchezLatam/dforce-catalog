@@ -424,7 +424,18 @@ MUST NOT schedule a `service_due` reminder.
 the wrong interval for it; it therefore gets a `service_due` at 365 days rather
 than none. That reminder MUST reuse the existing `service_due` reminder type —
 no new `reminder_type` enum value, and therefore no migration and no third
-Kapso template — and MUST NOT tell the customer that 90 days have passed.
+Kapso template. On the EMAIL channel, whose body the app composes, a `revisado`
+reminder MUST name the annual revisado and MUST NOT state that 90 days have
+passed.
+
+**Known limitation — the guarantee above is email-only.** On WhatsApp the app
+sends the single `KAPSO_TEMPLATE_SERVICE_DUE` template with `customer_name` as
+its only parameter, so the body is Meta-approved text that this requirement
+cannot vary per category and the "no third template" constraint above forbids
+splitting. If that approved body names 90 days or `mantenimiento`, a `revisado`
+customer receives it on WhatsApp. The template's text is not readable from this
+repository, so whether it does is currently unknown and unclosed — the interval
+is correct on both channels regardless, and only the wording is at risk.
 
 The interval per category is the whole reminder decision: a category with no
 declared interval is a category with no `service_due`, so nothing inherits a
@@ -455,7 +466,7 @@ reminder by default in either direction.
 - WHEN it transitions to `done`
 - THEN a `service_due` reminder MUST be scheduled for `completedAt` + 365 days, NOT 90
 
-#### Scenario: A REVISADO reminder does not claim 90 days have passed
+#### Scenario: A REVISADO email does not claim 90 days have passed
 - GIVEN a `service_due` reminder on an order with `categoria = "revisado"`
 - WHEN it fires on the email channel
 - THEN the message MUST name the annual revisado and MUST NOT state that 90 days have passed since the last service
