@@ -187,6 +187,22 @@
  * (:264), `"sidebar-rail"` (:286), `"sidebar-inset"` (:308). A `data-slot`
  * that did not exist would be a silent no-op visible only on paper.
  */
+/*
+ * Letter, explicitly. With no `@page` rule the browser picks the size from the
+ * print dialog's default, which is per-user and locale-dependent — the owner
+ * got a sheet noticeably smaller than the page, centred. Panama prints Letter;
+ * saying so here makes the sheet the same on every machine instead of the same
+ * only on the machine it was checked on.
+ *
+ * The margin lives here rather than on the page's padding: `print:p-0` strips
+ * that padding so the content can use the full printable box, and the printer
+ * owns the physical edge.
+ */
+@page {
+  size: letter;
+  margin: 12mm;
+}
+
 @media print {
   [data-slot="sidebar"],
   [data-slot="sidebar-trigger"],
@@ -209,5 +225,18 @@
   [data-slot="sidebar-inset"] {
     background: #fff !important;
     color: #000 !important;
+  }
+
+  /*
+   * The sheet fills the printable box. On screen it is a centred `max-w-3xl`
+   * card, which is right for reading; on paper that same width left a small
+   * block adrift in the middle of a Letter page. `@page` owns the margin now,
+   * so the content takes what is left.
+   */
+  html,
+  body {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 }

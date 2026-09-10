@@ -319,6 +319,23 @@ describe("ServiceOrderPrintPage — the sheet a técnico is handed", () => {
     expect(screen.getByRole("link", { name: /Volver/ }).className).toContain("print:hidden");
   });
 
+  /**
+   * Mechanism, not measurement — jsdom has no Tailwind and cannot measure a
+   * printed page. The sheet is a centred `max-w-3xl` card on SCREEN, which is
+   * right for reading; on paper that same width left a small block adrift in
+   * the middle of a Letter page. `@page { size: letter }` in `globals.css`
+   * owns the size and the margin; these classes hand the content the rest.
+   * The print preview is what settles the real inches.
+   */
+  it("hands the sheet the full printable width on paper, while staying a card on screen", async () => {
+    render(await renderPage());
+
+    const sheet = screen.getByText("Orden de servicio").closest("div[class*='bg-white']");
+    expect(sheet!.className).toContain("max-w-3xl"); // still a card on screen
+    expect(sheet!.className).toContain("print:w-full");
+    expect(sheet!.className).toContain("print:max-w-full");
+  });
+
   it("renders the field labels in red, the colour staff scan the sheet by", async () => {
     render(await renderPage());
 

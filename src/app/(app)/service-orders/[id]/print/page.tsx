@@ -82,7 +82,7 @@ export default async function ServiceOrderPrintPage({
   // AGENTS.md says read `globals.css` before changing a color; this steps
   // outside the theme on purpose rather than extending it.
   return (
-    <div className="mx-auto max-w-3xl bg-white p-8 text-black print:max-w-none print:p-0">
+    <div className="mx-auto max-w-3xl bg-white p-8 text-black print:mx-0 print:w-full print:max-w-full print:p-0">
       <div className="mb-6 flex items-start justify-between gap-4 border-b-2 border-black pb-3">
         <div className="flex items-center gap-3">
           {/* The same singleton the catalog PDF reads, through the same route
