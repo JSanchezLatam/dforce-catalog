@@ -90,8 +90,29 @@ question from whether launchd accepted the job.
 | Requirement | Why it is load-bearing |
 |-------------|------------------------|
 | The repo must **not** live in `~/Desktop`, `~/Documents` or `~/Downloads` | macOS protects those three folders (TCC). A GUI app gets an "allow access" prompt; a launchd job never does — it just fails with `Operation not permitted` and the app never starts. Verified: the identical plist runs the app from `~/` and fails from `~/Desktop`. `install-service` refuses up front rather than installing a service that cannot work. `~/dforce-catalog` is a fine home |
-| **Auto-login must be on** (System Settings → Users & Groups → Automatic login) | Both this service and Homebrew's Postgres are *user* LaunchAgents, and a user LaunchAgent does not load until somebody logs in. Without auto-login, the Mac boots to the login window and the app stays down until a person sits at it — which is precisely the situation this section exists to avoid. This is the single step most likely to be skipped |
+| **Somebody must log in after a boot** — either a person, or automatically (System Settings → Users & Groups → Automatic login) | Both this service and Homebrew's Postgres are *user* LaunchAgents, and a user LaunchAgent does not load until somebody logs in. Until then the Mac sits at the login window with the app down. See the FileVault note below before planning around automatic login: with FileVault on it is not offered at all |
 | `node` comes from nvm | nvm lives in the shell profile, so it is nowhere near launchd's PATH, and a service that inherits the default PATH dies at boot with `npm: command not found`. `install-service` resolves `command -v node` at install time and bakes that absolute directory into the plist's `EnvironmentVariables`. A Node version bump therefore means re-running `install-service` |
+
+### FileVault and automatic login are mutually exclusive
+
+macOS does not offer automatic login while FileVault is on — the option is
+greyed out, because the volume is encrypted and the account password is what
+unlocks it at boot. So "turn on automatic login" is unfollowable advice on a
+FileVault machine, and the dev Mac this was built on is one (`fdesetup status`
+→ `FileVault is On`).
+
+That is not a problem to engineer around, and a LaunchDaemon does not solve it
+either: with FileVault, **nothing** on the disk runs until a human unlocks the
+volume at the pre-boot screen. Check which situation a machine is in with
+`fdesetup status`, then pick:
+
+| FileVault | What a power cut costs |
+|-----------|------------------------|
+| On (recommended) | One password at the pre-boot screen. That unlock *is* the login, so every LaunchAgent — Postgres and this service — comes up right after it. One human action, then unattended |
+| Off + automatic login | Zero human actions, fully unattended. The disk is unencrypted, so a stolen machine hands over the customer database and `.env` |
+
+Encryption is worth more here than skipping one password: the data is real
+customer records, and the machine sits in a workshop.
 
 ### Postgres is not ours to supervise
 
