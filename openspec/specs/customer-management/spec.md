@@ -305,3 +305,71 @@ The system MUST provide `POST /api/customers/[id]/vehicles` to add exactly one `
 - GIVEN a deactivated `cliente`
 - WHEN staff attempts this insert against them
 - THEN the system MUST refuse it, consistent with the existing rule against editing a deactivated customer
+
+### Requirement: Both Vehicle Write Paths Use One Shared Make/Model Control
+
+The two paths that write a `vehiculo` — the order dialog's quick vehicle form
+(`VehicleQuickForm`) and the customer form's vehicle collection
+(`CustomerForm`) — MUST render the same make/model control, fed by the same
+catalog module, rather than each screen assembling its own selects. Offering a
+make on one path and not the other MUST NOT be possible by editing a single
+screen.
+
+The control MUST preserve the existing Spanish labels `Marca` and `Modelo` on
+both paths, and MUST leave `plate` and `year` exactly as they are today —
+including `year`'s existing coercion to a number before submission and the
+validator's existing rule of keeping `year` only when it is already a number.
+WU3 MUST NOT re-solve, refactor, or "tidy" that coercion.
+
+Each path keeps its own field `id`s (the quick form's fixed ids and the
+customer form's per-vehicle-row keyed ids), so a customer form showing several
+vehicle cards still labels each card's make and model unambiguously.
+
+#### Scenario: The order dialog offers the catalog
+- GIVEN staff is creating a service order and opens the quick vehicle form for the chosen customer
+- WHEN they open the "Marca" field
+- THEN it MUST be the catalog select, with the same makes the customer form offers
+
+#### Scenario: A customer with several vehicles labels each card's fields
+- GIVEN a customer form showing three vehicle cards
+- WHEN staff selects a make on the second card
+- THEN only the second card's make MUST change, and the first and third cards' make and model MUST be unaffected
+
+#### Scenario: The quick form still sends exactly four keys
+- GIVEN staff adds a vehicle from the order dialog with a make and model chosen from the catalog
+- WHEN the request is sent
+- THEN its payload MUST carry only plate, make, model and year, with blank optional fields omitted rather than sent as empty strings
+
+#### Scenario: Year behaviour is unchanged
+- GIVEN staff enters a year alongside a catalog make and model
+- WHEN the vehicle is saved
+- THEN the year MUST be persisted exactly as it is today, as a number
+
+### Requirement: Editing an Existing Vehicle Preserves Its Stored Make and Model
+
+Opening an existing `cliente` for editing MUST seed each vehicle card's make
+and model from the stored row and MUST NOT alter them as a side effect of
+rendering. A stored make or model absent from the catalog MUST survive the form
+being opened, another vehicle being edited, another field on the same vehicle
+being edited, and the customer being saved.
+
+Clearing the model in response to a make change MUST be triggered by staff
+changing that make, never by the make arriving from stored data — an
+implementation that reacts to the make VALUE rather than to the make CHANGE
+would blank a legitimately stored model on the first render of every edit form,
+which is the precise failure this requirement forbids.
+
+#### Scenario: Opening an existing customer changes nothing
+- GIVEN a `cliente` with two vehicles, one carrying a make the catalog does not list
+- WHEN staff opens that customer for editing and saves without touching any vehicle
+- THEN both vehicles' stored make and model MUST be unchanged, including the non-catalog one
+
+#### Scenario: Editing one vehicle does not disturb a sibling's model
+- GIVEN a `cliente` with two vehicles, both carrying a catalog make and model
+- WHEN staff changes the first vehicle's make
+- THEN the second vehicle's model MUST be untouched
+
+#### Scenario: An edit to another field leaves make and model alone
+- GIVEN a vehicle with a stored catalog make and model
+- WHEN staff edits only its plate and saves
+- THEN the saved make and model MUST be byte-identical to what was stored
