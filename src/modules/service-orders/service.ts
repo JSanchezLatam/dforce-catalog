@@ -218,12 +218,20 @@ export type UpdateOrdenServicioDeps = {
 } & ReminderWiringDeps;
 
 /**
- * Plain field edits (description/appointmentAt) — status changes go through
- * transitionOrder(). R23 — when `appointmentAt` is part of the patch and its
- * value actually changes (including being cleared to `null`), any pending
- * `appointment` reminder for this order is cancelled first, then a new one
- * is planned+scheduled if the new value is still set — "the old and new
- * reminders MUST NOT both fire" (spec R23 scenario).
+ * Plain field edits (description/appointmentAt/categoria/notes) — status
+ * changes go through transitionOrder(). R23 — a patch replans reminders on two
+ * independent triggers, and "the old and new reminders MUST NOT both fire"
+ * (spec R23 scenario) applies to each:
+ *
+ * - `appointmentAt` changes (including being cleared to `null`): any pending
+ *   `appointment` reminder is cancelled, then a new one planned+scheduled if
+ *   the new value is still set.
+ * - `categoria` changes on an order that HAS a `completedAt`: any pending
+ *   `service_due` is cancelled and replanned, because its interval is
+ *   per-category (`reminders/schedule.ts`) and its email copy is chosen from
+ *   `categoria` at FIRE time. Without this, correcting the category of a
+ *   finished order leaves a reminder booked at the OLD interval that then
+ *   describes the NEW one — a 90-day booking announcing an annual revisado.
  */
 export async function updateOrder(
   id: string,
@@ -243,15 +251,45 @@ export async function updateOrder(
     patch.appointmentAt !== undefined &&
     (patch.appointmentAt?.getTime() ?? null) !== (current.orden.appointmentAt?.getTime() ?? null);
 
-  if (appointmentChanged) {
-    const cancelForOrder = deps.cancelRemindersForOrder ?? cancelRemindersForOrder;
-    await cancelForOrder(id, "appointment", deps);
+  // Only when it ACTUALLY differs: the edit form re-sends every field, so a
+  // patch routinely carries the category it already has, and replanning on that
+  // would cancel and re-book a healthy reminder on every unrelated save.
+  //
+  // `completedAt` gates it because a `service_due` only exists once the work is
+  // finished — its interval is measured from that timestamp. An order still in
+  // progress has no `service_due` to keep in sync.
+  //
+  // Truthiness on `completedAt`, matching the `updated.appointmentAt` check
+  // below: `!== null` would also fire for an `undefined`, which is what a row
+  // missing the column reads as.
+  const serviceDueChanged = Boolean(
+    patch.categoria !== undefined && patch.categoria !== current.orden.categoria && updated.completedAt,
+  );
 
-    if (updated.appointmentAt) {
+  const replanAppointment = appointmentChanged && Boolean(updated.appointmentAt);
+
+  if (appointmentChanged || serviceDueChanged) {
+    const cancelForOrder = deps.cancelRemindersForOrder ?? cancelRemindersForOrder;
+    if (appointmentChanged) await cancelForOrder(id, "appointment", deps);
+    if (serviceDueChanged) await cancelForOrder(id, "service_due", deps);
+
+    if (replanAppointment || serviceDueChanged) {
+      // Fetched once for both branches, and not at all when neither replans
+      // (an appointment cleared to `null` cancels and books nothing).
       const findCliente = deps.getClienteById ?? getClienteById;
       const clienteDetail = await findCliente(updated.clienteId);
       if (clienteDetail) {
-        await planAndScheduleReminders(updated, clienteDetail.cliente, "appointment", deps);
+        if (replanAppointment) {
+          await planAndScheduleReminders(updated, clienteDetail.cliente, "appointment", deps);
+        }
+        if (serviceDueChanged) {
+          // `planReminders` drops any `scheduledFor <= now`, so a category
+          // corrected long after completion cancels the stale reminder and
+          // books nothing. That is the correct outcome, not a gap: the new
+          // interval has already elapsed, and a reminder for it would be
+          // firing late for work the customer had done a year ago.
+          await planAndScheduleReminders(updated, clienteDetail.cliente, "service_due", deps);
+        }
       }
     }
   }

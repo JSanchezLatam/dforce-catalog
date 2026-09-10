@@ -411,26 +411,45 @@ wrapping, new SQL this change does not add.
 - WHEN the list renders
 - THEN order A MUST appear before order B — it sorts by `appointmentAt`, not `createdAt`
 
-### Requirement: Service Due Reminder Restricted to Preventive and Corrective Categories
+### Requirement: Service Due Reminder Interval Per Category
 
 Transitioning an order to `done` MUST schedule a `service_due` reminder ONLY
-when that order's `categoria` is `mant_preventivo` or `mant_correctivo`.
-Transitioning an order of any other category (`instalacion`, `reparacion`,
-`revisado`) to `done` MUST NOT schedule a `service_due` reminder. This
-REMOVES the `service_due` reminder for those three categories — behavior the
-code currently provides (all five categories schedule it) but that has never
-been specified until now. `revisado`'s own annual (not 90-day) reminder is a
-named follow-up, not delivered by this requirement.
+when that order's `categoria` has an interval declared for it, and MUST use
+that category's own interval: 90 days for `mant_preventivo` and
+`mant_correctivo`, 365 days for `revisado`. Transitioning an order whose
+`categoria` has no declared interval (`instalacion`, `reparacion`) to `done`
+MUST NOT schedule a `service_due` reminder.
 
-#### Scenario: Preventive maintenance schedules service_due
+`revisado` is Panama's mandatory ANNUAL ATTT inspection, so 90 days was always
+the wrong interval for it; it therefore gets a `service_due` at 365 days rather
+than none. That reminder MUST reuse the existing `service_due` reminder type —
+no new `reminder_type` enum value, and therefore no migration and no third
+Kapso template. On the EMAIL channel, whose body the app composes, a `revisado`
+reminder MUST name the annual revisado and MUST NOT state that 90 days have
+passed.
+
+**Known limitation — the guarantee above is email-only.** On WhatsApp the app
+sends the single `KAPSO_TEMPLATE_SERVICE_DUE` template with `customer_name` as
+its only parameter, so the body is Meta-approved text that this requirement
+cannot vary per category and the "no third template" constraint above forbids
+splitting. If that approved body names 90 days or `mantenimiento`, a `revisado`
+customer receives it on WhatsApp. The template's text is not readable from this
+repository, so whether it does is currently unknown and unclosed — the interval
+is correct on both channels regardless, and only the wording is at risk.
+
+The interval per category is the whole reminder decision: a category with no
+declared interval is a category with no `service_due`, so nothing inherits a
+reminder by default in either direction.
+
+#### Scenario: Preventive maintenance schedules service_due at 90 days
 - GIVEN an order with `categoria = "mant_preventivo"`
 - WHEN it transitions to `done`
-- THEN a `service_due` reminder MUST be scheduled
+- THEN a `service_due` reminder MUST be scheduled for `completedAt` + 90 days
 
-#### Scenario: Corrective maintenance schedules service_due
+#### Scenario: Corrective maintenance schedules service_due at 90 days
 - GIVEN an order with `categoria = "mant_correctivo"`
 - WHEN it transitions to `done`
-- THEN a `service_due` reminder MUST be scheduled
+- THEN a `service_due` reminder MUST be scheduled for `completedAt` + 90 days
 
 #### Scenario: Installation no longer schedules service_due
 - GIVEN an order with `categoria = "instalacion"`
@@ -442,7 +461,12 @@ named follow-up, not delivered by this requirement.
 - WHEN it transitions to `done`
 - THEN no `service_due` reminder MUST be scheduled
 
-#### Scenario: REVISADO no longer schedules service_due
+#### Scenario: REVISADO schedules service_due a year out
 - GIVEN an order with `categoria = "revisado"`
 - WHEN it transitions to `done`
-- THEN no `service_due` reminder MUST be scheduled
+- THEN a `service_due` reminder MUST be scheduled for `completedAt` + 365 days, NOT 90
+
+#### Scenario: A REVISADO email does not claim 90 days have passed
+- GIVEN a `service_due` reminder on an order with `categoria = "revisado"`
+- WHEN it fires on the email channel
+- THEN the message MUST name the annual revisado and MUST NOT state that 90 days have passed since the last service

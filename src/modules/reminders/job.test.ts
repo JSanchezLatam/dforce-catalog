@@ -446,6 +446,57 @@ describe("runReminder — Phase 7 real provider wiring (default sendViaChannel, 
     expect(sendWhatsAppTemplate).toHaveBeenCalledWith(expect.objectContaining({ templateName: "service_due_reminder" }));
   });
 
+  /**
+   * The email copy branched on reminder TYPE only, so every `service_due` said
+   * "Ya pasaron 90 días". REVISADO's reminder fires a YEAR after the work — the
+   * schedule alone would have shipped a message that lies about its own reason.
+   * The copy branches on `ctx.orden.categoria`, which the context already
+   * carries.
+   *
+   * Inside this describe on purpose: its `beforeEach` resets both provider
+   * mocks. `vi.clearAllMocks()` clears call records, not implementations, and
+   * this repo has shipped tests that passed purely on a leaked `mockResolvedValue`.
+   */
+  it("tells a revisado customer their annual inspection is due, not that 90 days passed", async () => {
+    vi.mocked(sendEmail).mockResolvedValue({ ok: true });
+    const state = {
+      reminder: makeReminder({ status: "scheduled", channel: "email", type: "service_due" }),
+      orden: makeOrden({ categoria: "revisado", completedAt: NOW }),
+      cliente: makeCliente(),
+    };
+    const { fakeDb, refillSelectQueue } = makeFakeDb(state);
+
+    refillSelectQueue();
+    await runReminder("reminder-1", { db: fakeDb as unknown as typeof db, now: () => NOW });
+
+    const [[sent]] = vi.mocked(sendEmail).mock.calls;
+    expect(sent.subject).toBe("Recordatorio de revisado anual");
+    expect(sent.html).toContain("revisado");
+    expect(sent.html).not.toContain("90 días");
+  });
+
+  /**
+   * The other half of the same branch: adding the revisado copy must not
+   * rewrite what a maintenance reminder says. Nothing pinned this string
+   * before, so a careless edit to the shared body was invisible.
+   */
+  it("keeps the 90-day maintenance copy for a mant_preventivo service_due", async () => {
+    vi.mocked(sendEmail).mockResolvedValue({ ok: true });
+    const state = {
+      reminder: makeReminder({ status: "scheduled", channel: "email", type: "service_due" }),
+      orden: makeOrden({ categoria: "mant_preventivo", completedAt: NOW }),
+      cliente: makeCliente(),
+    };
+    const { fakeDb, refillSelectQueue } = makeFakeDb(state);
+
+    refillSelectQueue();
+    await runReminder("reminder-1", { db: fakeDb as unknown as typeof db, now: () => NOW });
+
+    const [[sent]] = vi.mocked(sendEmail).mock.calls;
+    expect(sent.subject).toBe("Recordatorio de servicio pendiente");
+    expect(sent.html).toContain("Ya pasaron 90 días desde tu último servicio");
+  });
+
   it("marks failed and rethrows (so pg-boss retries) when the email provider reports ok:false", async () => {
     vi.mocked(sendEmail).mockReset().mockResolvedValue({ ok: false, reason: "RESEND_API_KEY/RESEND_FROM not configured" });
     const state = {

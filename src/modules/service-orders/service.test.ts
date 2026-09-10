@@ -498,11 +498,14 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
    * The sibling, and the one that proves the gate REACHES this path.
    * `planReminders`' own test covers the predicate; this covers the wiring —
    * `transitionOrder` still calls `planAndScheduleReminders` unconditionally,
-   * so without the gate downstream a `revisado` order would still be booked.
+   * so without the gate downstream an excluded order would still be booked.
+   *
+   * The example was `revisado` until it earned a 365-day `service_due` of its
+   * own; `instalacion` is now the category that genuinely gets none.
    */
   it("transitionOrder -> done schedules NOTHING for a category the rule excludes", async () => {
     const current = {
-      orden: { id: "o1", clienteId: "c1", status: "in_progress", categoria: "revisado" } as unknown as OrdenServicio,
+      orden: { id: "o1", clienteId: "c1", status: "in_progress", categoria: "instalacion" } as unknown as OrdenServicio,
       items: [],
     };
     const database = {
@@ -606,6 +609,176 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
 
     expect(cancelRemindersForOrder).not.toHaveBeenCalled();
     expect(scheduleReminder).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A `service_due` reminder's `scheduledFor` is frozen at completion time from
+   * the category's interval, but `job.ts` reads `categoria` at FIRE time to pick
+   * the copy. Re-categorising a finished order (a legitimate workshop
+   * correction — the PATCH route deliberately allows it on a `done` order)
+   * desynchronised the two:
+   *
+   * - The STALE INTERVAL is pre-existing. Before revisado got its 365-day
+   *   interval, patching `mant_preventivo` -> `revisado` left a 90-day reminder
+   *   booked for a category that was supposed to get none at all.
+   * - The LYING MESSAGE is new, and arrived with the category-aware copy: the
+   *   same 90-day booking now reads "Pasó un año desde tu último revisado".
+   *
+   * One replan closes both. Mirrors the `appointmentChanged` branch exactly —
+   * same `cancelRemindersForOrder` / `planAndScheduleReminders` seams.
+   */
+  function makeCategoriaFixture(ordenOverrides: Record<string, unknown>) {
+    const current = {
+      orden: {
+        id: "o1",
+        clienteId: "c1",
+        status: "done",
+        appointmentAt: null,
+        completedAt: new Date("2026-07-01T00:00:00.000Z"),
+        categoria: "mant_preventivo",
+        ...ordenOverrides,
+      } as unknown as OrdenServicio,
+      items: [] as never[],
+    };
+    const database = {
+      update: () => ({
+        set: (patch: Record<string, unknown>) => ({
+          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
+        }),
+      }),
+      // Echoes the planned values back, exactly as a real `insert ... returning`
+      // does. Without this the fake drops `scheduledFor` and the interval
+      // assertions below could not see a wrong one.
+      insert: () => ({
+        values: (values: Record<string, unknown>) => ({
+          returning: async () => [{ id: "rem-cat", ...values }],
+        }),
+      }),
+    };
+    return {
+      current,
+      database,
+      cancelRemindersForOrder: vi.fn().mockResolvedValue(undefined),
+      scheduleReminder: vi.fn().mockResolvedValue("job-cat"),
+      getClienteById: vi.fn().mockResolvedValue({ cliente: clienteRow, orders: [], vehicles: [] }),
+    };
+  }
+
+  const CATEGORIA_NOW = new Date("2026-07-26T12:00:00.000Z");
+
+  it("updateOrder replans the service_due at the NEW category's interval when categoria changes on a completed order", async () => {
+    const f = makeCategoriaFixture({});
+
+    await updateOrder(
+      "o1",
+      { categoria: "revisado" },
+      {
+        getById: async () => f.current,
+        db: f.database as unknown as typeof import("@/shared/db/client").db,
+        now: () => CATEGORIA_NOW,
+        getClienteById: f.getClienteById,
+        cancelRemindersForOrder: f.cancelRemindersForOrder,
+        scheduleReminder: f.scheduleReminder,
+      },
+    );
+
+    expect(f.cancelRemindersForOrder).toHaveBeenCalledWith("o1", "service_due", expect.anything());
+    // The interval, not just "something was scheduled": at 90 days this reads
+    // 2026-09-29 and the whole fix is a no-op.
+    expect(f.scheduleReminder).toHaveBeenCalledTimes(2);
+    for (const [row] of f.scheduleReminder.mock.calls) {
+      expect(row.type).toBe("service_due");
+      expect(row.scheduledFor).toEqual(new Date("2027-07-01T00:00:00.000Z"));
+    }
+  });
+
+  it("updateOrder cancels and schedules NOTHING when categoria changes to one with no service_due interval", async () => {
+    const f = makeCategoriaFixture({});
+
+    await updateOrder(
+      "o1",
+      { categoria: "instalacion" },
+      {
+        getById: async () => f.current,
+        db: f.database as unknown as typeof import("@/shared/db/client").db,
+        now: () => CATEGORIA_NOW,
+        getClienteById: f.getClienteById,
+        cancelRemindersForOrder: f.cancelRemindersForOrder,
+        scheduleReminder: f.scheduleReminder,
+      },
+    );
+
+    expect(f.cancelRemindersForOrder).toHaveBeenCalledWith("o1", "service_due", expect.anything());
+    expect(f.scheduleReminder).not.toHaveBeenCalled();
+  });
+
+  it("updateOrder does NOT touch reminders when categoria changes on an order that was never completed", async () => {
+    const f = makeCategoriaFixture({ status: "in_progress", completedAt: null });
+
+    await updateOrder(
+      "o1",
+      { categoria: "revisado" },
+      {
+        getById: async () => f.current,
+        db: f.database as unknown as typeof import("@/shared/db/client").db,
+        now: () => CATEGORIA_NOW,
+        getClienteById: f.getClienteById,
+        cancelRemindersForOrder: f.cancelRemindersForOrder,
+        scheduleReminder: f.scheduleReminder,
+      },
+    );
+
+    expect(f.cancelRemindersForOrder).not.toHaveBeenCalled();
+    expect(f.scheduleReminder).not.toHaveBeenCalled();
+    // No branch fired, so the cliente was never looked up.
+    expect(f.getClienteById).not.toHaveBeenCalled();
+  });
+
+  it("updateOrder does NOT touch reminders when the patch re-sends the categoria it already has", async () => {
+    const f = makeCategoriaFixture({});
+
+    await updateOrder(
+      "o1",
+      { categoria: "mant_preventivo" },
+      {
+        getById: async () => f.current,
+        db: f.database as unknown as typeof import("@/shared/db/client").db,
+        now: () => CATEGORIA_NOW,
+        getClienteById: f.getClienteById,
+        cancelRemindersForOrder: f.cancelRemindersForOrder,
+        scheduleReminder: f.scheduleReminder,
+      },
+    );
+
+    expect(f.cancelRemindersForOrder).not.toHaveBeenCalled();
+    expect(f.scheduleReminder).not.toHaveBeenCalled();
+    expect(f.getClienteById).not.toHaveBeenCalled();
+  });
+
+  it("updateOrder fires both branches independently, on one cliente lookup, when a patch carries appointmentAt AND categoria", async () => {
+    const f = makeCategoriaFixture({ appointmentAt: new Date("2026-08-01T10:00:00.000Z") });
+
+    await updateOrder(
+      "o1",
+      { appointmentAt: new Date("2026-08-05T10:00:00.000Z"), categoria: "revisado" },
+      {
+        getById: async () => f.current,
+        db: f.database as unknown as typeof import("@/shared/db/client").db,
+        now: () => CATEGORIA_NOW,
+        getClienteById: f.getClienteById,
+        cancelRemindersForOrder: f.cancelRemindersForOrder,
+        scheduleReminder: f.scheduleReminder,
+      },
+    );
+
+    expect(f.cancelRemindersForOrder).toHaveBeenCalledWith("o1", "appointment", expect.anything());
+    expect(f.cancelRemindersForOrder).toHaveBeenCalledWith("o1", "service_due", expect.anything());
+    const types = f.scheduleReminder.mock.calls.map(([row]) => row.type);
+    expect(types.filter((t: string) => t === "appointment")).toHaveLength(2);
+    expect(types.filter((t: string) => t === "service_due")).toHaveLength(2);
+    // Two branches, one lookup — the constraint that made this branch share the
+    // fetch instead of duplicating the `appointmentChanged` block.
+    expect(f.getClienteById).toHaveBeenCalledTimes(1);
   });
 });
 
