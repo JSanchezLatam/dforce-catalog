@@ -29,6 +29,7 @@ import {
   PLATE_BADGE_MUTED,
   SECTION_HEADING,
 } from "@/shared/ui/styles";
+import { VehicleMakeModelFields } from "./VehicleMakeModelFields";
 
 /**
  * One vehicle row in the form. `key` is a stable, client-only React key
@@ -615,22 +616,12 @@ export function CustomerForm({
                           onChange={(e) => updateVehicle(row.key, { plate: e.target.value })}
                         />
                       </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor={`${row.key}-make`}>Marca</Label>
-                        <Input
-                          id={`${row.key}-make`}
-                          value={row.make}
-                          onChange={(e) => updateVehicle(row.key, { make: e.target.value })}
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor={`${row.key}-model`}>Modelo</Label>
-                        <Input
-                          id={`${row.key}-model`}
-                          value={row.model}
-                          onChange={(e) => updateVehicle(row.key, { model: e.target.value })}
-                        />
-                      </div>
+                      <VehicleMakeModelFields
+                        idPrefix={row.key}
+                        make={row.make}
+                        model={row.model}
+                        onChange={(next) => updateVehicle(row.key, next)}
+                      />
                       <div className="grid gap-2">
                         <Label htmlFor={`${row.key}-year`}>Año</Label>
                         <Input

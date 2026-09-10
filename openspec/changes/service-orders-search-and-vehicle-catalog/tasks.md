@@ -667,7 +667,7 @@ as 38 makes and enumerates 41 (counted: 10 Japanese, 3 Korean, 11 Chinese,
 artifact in this change writes a count — 3.1 asserts the SET. If 38 was the
 intent, the owner names the three; an agent must not pick them.
 
-- [ ] 3.1 RED (node) — create `src/modules/customers/vehicle-catalog.test.ts`
+- [x] 3.1 RED (node) — create `src/modules/customers/vehicle-catalog.test.ts`
   with D13's shape invariants, each `it` named after the invariant it pins so a
   failure says which one broke: the make SET equals the spec's enumerated list
   (`toEqual` on a sorted literal — a set, never a count, because a count rots
@@ -677,7 +677,7 @@ intent, the owner names the three; an agent must not pick them.
   equal to `OTHER`; and `VEHICLE_CATALOG.Toyota` contains `Hilux`, `Fortuner`,
   `Land Cruiser Prado` and `Rush`. Confirm every test fails: the module does
   not exist yet.
-- [ ] 3.2 GREEN — create `src/modules/customers/vehicle-catalog.ts`:
+- [x] 3.2 GREEN — create `src/modules/customers/vehicle-catalog.ts`:
   `VEHICLE_CATALOG` as `Readonly<Record<string, readonly string[]>>` with the
   the spec's makes as SORTED keys, `VEHICLE_MAKES = Object.keys(...)`,
   `modelsForMake(make)` returning `[]` for an unknown make (never a throw — an
@@ -687,18 +687,18 @@ intent, the owner names the three; an agent must not pick them.
   data, NOT in the structure — it is provenance, and the select never renders
   it. Model lists are Panama-market, authored per make; they are the part that
   can be wrong without breaking anything, which is what the escape is for.
-- [ ] 3.3 **Mutation-verify the shape test is not decorative.** Duplicate one
+- [x] 3.3 **Mutation-verify the shape test is not decorative.** Duplicate one
   model inside one make. Confirm 3.1's no-duplicate-model test goes red **by
   name**. `diff` to confirm the duplication landed, then revert and `diff`
   again, confirming byte-identical. (`sd` no-ops on multiline patterns and
   exits 0 on no match — edit the line directly, do not trust a regex.)
-- [ ] 3.4 **Mutation-verify the vPIC tripwire.** Remove `"Land Cruiser Prado"`
+- [x] 3.4 **Mutation-verify the vPIC tripwire.** Remove `"Land Cruiser Prado"`
   from Toyota's models. Confirm 3.1's Toyota-anchors test goes red **by name** —
   this is the assertion that fires the day someone proposes regenerating the
   file from vPIC or `us-car-models-data`, both of which omit exactly those four
   models (design.md's WU3 preamble). `diff` both ways.
 
-- [ ] 3.5 RED (jsdom) — create
+- [x] 3.5 RED (jsdom) — create
   `src/modules/customers/VehicleMakeModelFields.test.tsx`: the `Marca` select
   offers every catalog make plus `Otro`; with `make="Toyota"` the `Modelo`
   select offers Toyota's models plus `Otro` and does NOT offer a model from
@@ -706,7 +706,7 @@ intent, the owner names the three; an agent must not pick them.
   already does — click the label, then `await screen.findByRole("option", {
   name })` — not by typing into them. Confirm both fail: the component does not
   exist.
-- [ ] 3.6 GREEN — create
+- [x] 3.6 GREEN — create
   `src/modules/customers/VehicleMakeModelFields.tsx` (`"use client"`) per the
   design's WU3 Interfaces block: `idPrefix`, `make`, `model`, `onChange`.
   Two `Select`s with the shipped shadcn wrapper, Spanish labels `Marca` and
@@ -715,50 +715,50 @@ intent, the owner names the three; an agent must not pick them.
   empty field renders the placeholder rather than a blank option — the exact
   shape `UserForm.tsx:297` uses.
 
-- [ ] 3.7 RED (jsdom), same file — the escape, both directions: choosing
+- [x] 3.7 RED (jsdom), same file — the escape, both directions: choosing
   `Otro` in `Marca` reveals a text input labelled `Especificá la marca`; typing
   in it emits that typed value through `onChange`; the literal string `"Otro"`
   is NEVER emitted as a make; and then choosing a catalog make in that same
   select hides the input and emits the catalog make. The last assertion is the
   no-dead-end rule (D14) — an escape you cannot climb back out of is a support
   ticket, and it is the half most likely to be skipped.
-- [ ] 3.8 GREEN — implement the `OTHER` sentinel: the select's value is
+- [x] 3.8 GREEN — implement the `OTHER` sentinel: the select's value is
   `makeIsOther ? OTHER : (make || null)`, the revealed `Input` writes through
   `onChange`. Same treatment for `Modelo` under a catalog make, with
   `Especificá el modelo`.
-- [ ] 3.9 RED (jsdom), same file — with `Marca` in escape mode the `Modelo`
+- [x] 3.9 RED (jsdom), same file — with `Marca` in escape mode the `Modelo`
   field is a `textbox`, not a `combobox`: a select holding one option called
   "Otro" is a worse control than the text box it replaced (D14).
-- [ ] 3.10 GREEN — the model branch: no list ⇒ plain `Input`.
+- [x] 3.10 GREEN — the model branch: no list ⇒ plain `Input`.
 
-- [ ] 3.11 RED (jsdom), same file — the never-blank rule, three cases (D15):
+- [x] 3.11 RED (jsdom), same file — the never-blank rule, three cases (D15):
   mounting with `make="Hino"` (not in the catalog) renders the select reading
   `Otro` and a text input reading `Hino`; mounting with `make="Toyota"`,
   `model="Coaster"` renders the make as a SELECTED catalog value and the model
   as a text input reading `Coaster`; and mounting emits **no** `onChange` at
   all. That third assertion is what a create-path-only test never catches.
-- [ ] 3.12 GREEN — seed escape mode from the stored value with LAZY
+- [x] 3.12 GREEN — seed escape mode from the stored value with LAZY
   `useState(() => …)` initialisers, per D15's snippet. Lazy is load-bearing:
   a non-lazy initialiser re-runs every render and re-seeds off a rebuilt prop
   mid-typing, which is WU1's D3 lesson wearing different clothes.
-- [ ] 3.13 **Mutation-verify D15's seeding.** Replace both lazy initialisers
+- [x] 3.13 **Mutation-verify D15's seeding.** Replace both lazy initialisers
   with `useState(false)`. Confirm 3.11's unknown-stored-make test goes red **by
   name**. `diff` both ways. Without this, an unknown stored make silently
   renders as an empty select — the blanking the spec forbids, shipped green.
 
-- [ ] 3.14 RED (jsdom), same file — the reset (D16), and both halves of it:
+- [x] 3.14 RED (jsdom), same file — the reset (D16), and both halves of it:
   with `make="Toyota"`, `model="Hilux"`, changing the make to `Kia` emits
   `{ make: "Kia", model: "" }` in ONE `onChange` and the model select then
   lists Kia's models; changing the make while the model is a free-text value
   clears it too; and — the other half — mounting with a stored `make`/`model`
   leaves the model alone (this overlaps 3.11's third assertion deliberately,
   because 3.16 mutates against both).
-- [ ] 3.15 GREEN — clear the model IN THE MAKE CHANGE HANDLER: emit
+- [x] 3.15 GREEN — clear the model IN THE MAKE CHANGE HANDLER: emit
   `{ make: next, model: "" }` and reset `modelIsOther` in the same handler.
   **No `useEffect` on `make`.** Typing inside the free-text make input does NOT
   clear the model — in escape mode the model is free text too, so there is no
   list for it to have fallen off, and a per-keystroke clear is hostile (D16).
-- [ ] 3.16 **Mutation-verify D16 — the primary mutation of this phase, and it
+- [x] 3.16 **Mutation-verify D16 — the primary mutation of this phase, and it
   is two mutations because the requirement has two halves that can each be
   satisfied by breaking the other.**
   (a) Drop `model: ""` from the make change handler. Confirm 3.14's
@@ -772,23 +772,23 @@ intent, the owner names the three; an agent must not pick them.
   `diff` after each mutation and again after each revert, confirming
   byte-identical.
 
-- [ ] 3.17 RED/GREEN (jsdom) `VehicleQuickForm.test.tsx` — rewrite only how
+- [x] 3.17 RED/GREEN (jsdom) `VehicleQuickForm.test.tsx` — rewrite only how
   make and model are DRIVEN (select clicks instead of `type`). Every other
   assertion stays byte-identical, above all `"sends only plate, make, model and
   year"` and the `year`-is-a-`number` assertion: those are what say the consent
   trap stays unreachable (`VehicleQuickForm.tsx`'s header) and that
   `validation.ts:126`'s already-a-number rule is still satisfied.
-- [ ] 3.18 GREEN — in `VehicleQuickForm.tsx` replace the `Marca` and `Modelo`
+- [x] 3.18 GREEN — in `VehicleQuickForm.tsx` replace the `Marca` and `Modelo`
   `Input`s with `<VehicleMakeModelFields idPrefix="vehiculo-rapido" … />`.
   Leave the `Placa` and `Año` inputs, the four-key body literal, the
   `Number(year)` coercion, `event.stopPropagation()`, the 400/404/409 branches
   and every `min-h-11 min-w-11` button untouched.
-- [ ] 3.19 RED/GREEN (jsdom) `CustomerForm.test.tsx` — same rewrite for the
+- [x] 3.19 RED/GREEN (jsdom) `CustomerForm.test.tsx` — same rewrite for the
   vehicle collection, plus the per-card independence assertion from the
   customer-management delta: selecting a make on the second card must leave the
   first and third cards' make and model unchanged. Existing plate/year,
   soft-delete, permanent-delete and reconcile assertions stay unmodified.
-- [ ] 3.20 GREEN — in `CustomerForm.tsx`'s vehicle card replace the `Marca` and
+- [x] 3.20 GREEN — in `CustomerForm.tsx`'s vehicle card replace the `Marca` and
   `Modelo` `Input`s with `<VehicleMakeModelFields idPrefix={row.key} make={row.make}
   model={row.model} onChange={(next) => updateVehicle(row.key, next)} />`.
   `buildPayload`, `activeVehicles`, the deletion flow and `row.key`'s
@@ -797,7 +797,7 @@ intent, the owner names the three; an agent must not pick them.
   src/modules/customers/CustomerForm.tsx` must still return the emptyVehicle
   factory.
 
-- [ ] 3.21 **Prove the "no server change" claim rather than asserting it**
+- [x] 3.21 **Prove the "no server change" claim rather than asserting it**
   (D18): `git diff --name-only` for this unit must list no file under
   `src/app/api/`, not `src/modules/customers/validation.ts`, not
   `src/shared/db/schema.ts`, and no file under the migrations directory. Then
@@ -805,21 +805,21 @@ intent, the owner names the three; an agent must not pick them.
   \"number\"" src/modules/customers/validation.ts` — both must still hit,
   confirming the `year` coercion on both ends survived a refactor of the field
   block next to it.
-- [ ] 3.22 Confirm D19's height ruling landed as written: the two
+- [x] 3.22 Confirm D19's height ruling landed as written: the two
   `SelectTrigger`s carry NO `min-h-11` (they are form fields matching their
   `h-8` sibling `Input`s, precedent `UserForm.tsx:299`), and every action
   control around them still does — `rg "min-h-11" src/modules/customers/VehicleQuickForm.tsx`
   must still return the dialog trigger, `Cancelar` and `Guardar vehículo`.
   **No test in this repo can measure a rendered height**, so this grep plus the
   browser check at 3.25 is the entire enforcement.
-- [ ] 3.23 Language-split check before the PR: every Spanish string in the two
+- [x] 3.23 Language-split check before the PR: every Spanish string in the two
   new test files is an ASSERTION or a label being queried; every object key,
   helper name, `it()` name and variable in those helpers is ENGLISH. Caught
   twice in review on the previous change, both times as a Spanish object key in
   a test helper.
-- [ ] 3.24 `diff` `vehicle-catalog.ts`, `VehicleMakeModelFields.tsx`,
+- [x] 3.24 `diff` `vehicle-catalog.ts`, `VehicleMakeModelFields.tsx`,
   `VehicleQuickForm.tsx` and `CustomerForm.tsx` before trusting 3.1–3.23.
-- [ ] 3.25 **Browser check, console open.** Open the customer form with a
+- [x] 3.25 **Browser check, console open.** Open the customer form with a
   customer holding at least two vehicles, and the order dialog's quick form.
   Read: the two selects beside `Placa`/`Año` at a narrow width; the revealed
   `Especificá la marca` input's reflow inside the `sm:grid-cols-2` grid; a
@@ -827,23 +827,96 @@ intent, the owner names the three; an agent must not pick them.
   jsdom sees none of this — it measures no height, reports no hydration
   mismatch, and would not flag an RSC boundary if one appeared. Record the
   result in the PR body.
-- [ ] 3.26 `npm test` (alone — this machine produces phantom timeouts when
+- [x] 3.26 `npm test` (alone — this machine produces phantom timeouts when
   suites overlap) and `npx tsc --noEmit` clean.
 
 ### Phase 3 verification record — fill in during `sdd-apply`
 
 | Task | Evidence |
 |---|---|
-| 3.3 | — |
-| 3.4 | — |
-| 3.13 | — |
-| 3.16a | — |
-| 3.16b | — |
-| 3.21 | — |
-| 3.25 | — |
-| 3.26 | — |
+| 3.3 | Duplicated `"Civic"` inside Honda's model list in `vehicle-catalog.ts`. `diff` confirmed the mutation landed. `no duplicate model within a make` went RED by name (`expected 6 to be 7`). Reverted; `diff` confirmed byte-identical; suite green (10/10). |
+| 3.4 | Removed `"Land Cruiser Prado"` from Toyota's models. `diff` confirmed the mutation landed. `Toyota carries the four models vPIC omits (Hilux, Fortuner, Land Cruiser Prado, Rush)` went RED by name. Reverted; `diff` confirmed byte-identical; suite green (10/10). |
+| 3.13 | Replaced both lazy `useState(() => …)` initialisers in `VehicleMakeModelFields.tsx` with `useState(false)`. `diff` confirmed the mutation landed. Both named tests went red: `an unknown stored make mounts in escape mode showing that value` and `a catalog make with an unknown stored model mounts with the make selected and the model as text`. Reverted; `diff` confirmed byte-identical; suite green (11/11). |
+| 3.16a | Dropped `model: ""` from `handleMakeSelect` (kept `model` unchanged). `diff` confirmed the mutation landed. `changing the make empties the model and re-lists the new make's models` went RED by name. Reverted; `diff` confirmed byte-identical. |
+| 3.16b | Re-implemented the reset as `useEffect(() => onChange({ make, model: "" }), [make])` (the forbidden pattern), on top of (a)'s revert. `diff` confirmed the mutation landed. Both `mounting emits no onChange at all — the case a create-path-only test never catches` (3.11) and `changing the make empties the model and re-lists the new make's models` (3.14) went RED by name — (b) did NOT leave the suite green, so no test needed strengthening. Reverted; `diff` confirmed byte-identical; suite green (11/11). |
+| 3.21 | `git status --porcelain` lists only `CustomerForm.tsx`, `CustomerForm.test.tsx`, `VehicleQuickForm.tsx`, `VehicleQuickForm.test.tsx` (modified) plus `vehicle-catalog.ts`, `vehicle-catalog.test.ts`, `VehicleMakeModelFields.tsx`, `VehicleMakeModelFields.test.tsx` (new) — no file under `src/app/api/`, no `validation.ts`, no `schema.ts`, no migrations. `rg "Number\(year\)" src/modules/customers` and `rg "Number\(v.year\)"` both still hit (`VehicleQuickForm.tsx:101`, `CustomerForm.tsx:145`); `rg 'typeof value.year === "number"' src/modules/customers/validation.ts` still hits (`validation.ts:126`). |
+| 3.25 | **Run by the orchestrator** — see the WU3 verification record below: 42 make options with `Otro` last, Toyota listing Hilux/Fortuner/Land Cruiser Prado/Rush, zero app errors. The implementing agent could not: jsdom sees no height, reflow or hydration mismatch, and it has no browser. |
+| 3.26 | `npm test` (alone): **1639/1639 passed**, 111 files. `npx tsc --noEmit`: clean. `npm run lint`: 0 errors / 14 warnings, matching the documented baseline exactly — no new warning introduced. **Closed by the orchestrator after two GGA rounds**: 1640/1640, `tsc` clean, lint 0 errors / 14 warnings. |
 
 ---
+
+
+### WU3 verification record
+
+Browser check run by the orchestrator against the owner's dev server, from the
+order dialog for a customer with no vehicles:
+
+| Check | Result |
+|---|---|
+| Marca is a select | **42 options — every approved make plus `Otro` last.** Lexus, Changan and Tata present; sorted (`Audi`, `BAIC`, `BMW`, `BYD`, `Changan`…). |
+| The anchors | Choosing Toyota lists **Hilux, Fortuner, Land Cruiser, Land Cruiser Prado, Rush** alongside Corolla/Yaris/Camry/RAV4. Those four are the ones vPIC omits, which is the whole reason this catalog is curated in-repo. |
+| Modelo is a select and depends on the make | Empty until a make is chosen; Toyota's list appears on selection. |
+| Console | Zero app errors. The 102 entries present are one identical burst of a Chrome-extension messaging error from an old print-page load, not this feature. |
+
+Dataset verified independently of the implementing agent: every approved make
+present, none missing, and **no count written anywhere in code or tests** — the
+shape test asserts the SET, so a make added later cannot fail on arithmetic.
+`git diff --name-only` proves D18's no-server-change claim: nothing under
+`api/`, `schema.ts`, `migrations/` or `validation.ts`.
+
+The make→model reset was re-mutated independently: dropping `model: ""` from
+the change handler turns *changing the make empties the model and re-lists the
+new make's models* red by name.
+
+Gates: `npm test` 1639/1639 · `npx tsc --noEmit` clean · `npm run lint` 0
+errors / 14 warnings.
+
+**GGA found a placebo, and it MEASURED it rather than arguing.** The commit
+said "both halves are mutation-verified"; one half was not. `changing the make
+also clears a free-text model` rendered the component directly with a fixed
+`model=""` prop — and the component is CONTROLLED, so typing into the escape
+input never advanced it. The assertion was satisfied by the initial value, not
+by the reset, and the D16 mutation left it green while its sibling went red.
+The spec scenario *"switching make drops a free-text model too"* had no
+coverage at all. Driven through the `Harness` now; both go red together.
+
+**And the branch keyed off the wrong question.** `makeIsOther` asks "is the
+make free text"; what matters is "is there a list to choose from". With no make
+chosen — the DEFAULT state of every new vehicle row on both write paths —
+`models` is empty and `Modelo` rendered a combobox whose only option was
+`Otro`, which is exactly the control D14 calls worse than the text box it
+replaces. `models.length === 0` subsumes both cases. It had no test either; it
+does now, mutation-verified against the old condition.
+
+Three smaller ones: a `className` prop neither caller passed, an assertion that
+could not fail (`not.toBe("Otro")` against a `"__otro__"` sentinel), and a
+verification cell reading "left unticked" beside a ticked box.
+
+**GGA round 2 found the one defect an operator could actually reach.**
+`modelsForMake` did `VEHICLE_CATALOG[make] ?? []` over a plain object literal,
+so the PROTOTYPE CHAIN answered: `modelsForMake("constructor")` returned the
+`Object` constructor — a function whose `.length` is 1, which sailed past the
+caller's `models.length === 0` check and reached `.map` on a function.
+Reproduced three ways in jsdom: mounting with `make="constructor"`, mounting
+`make="valueOf"` with a stored model, and simply TYPING `constructor` into
+"Especificá la marca".
+
+The third is why it is a defect and not a curiosity: free text is a
+REQUIREMENT of this capability, so arbitrary staff input is that field's
+designed contract, and a subset of it took the form down on both write paths.
+`Object.hasOwn` closes it — the same trap `service-orders/categories.ts`
+already records, where `"toString" in CATEGORIA_LABEL` is true.
+
+The test that should have caught it was named *"returns an empty array, never a
+throw"* and probed one ordinary string. A name claiming more than its body
+checks is what let this through; it now walks the inherited keys and goes red
+against the old lookup.
+
+**Disclosed by the implementing agent rather than claimed:** tasks 3.6–3.10
+were built in one coherent GREEN pass instead of the literal step-by-step
+RED/GREEN, with AGENTS.md's retrofit carve-out applied — break the built logic,
+confirm red by name, revert with a `diff`. Same evidentiary weight, stated
+plainly.
 
 ## Phase 4 — `service_due` restricted to preventive and corrective categories
 (service-orders spec: *Service Due Reminder Restricted to Preventive and

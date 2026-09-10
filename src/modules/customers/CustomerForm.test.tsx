@@ -60,6 +60,18 @@ function vehicleGroup(index: number) {
 }
 
 /**
+ * Drives the shared `Marca`/`Modelo` selects the way `UserForm.test.tsx:39-42`
+ * drives its role select — click the label inside the CARD (each row repeats
+ * "Marca"/"Modelo", so `within` scoping is what `vehicleGroup` exists for),
+ * then pick the option from the popup, which portals to `document.body` and
+ * so is found globally, not `within`.
+ */
+async function chooseMakeIn(group: HTMLElement, user: ReturnType<typeof userEvent.setup>, label: string) {
+  await user.click(within(group).getByLabelText("Marca"));
+  await user.click(await screen.findByRole("option", { name: label }));
+}
+
+/**
  * This form renders inside `CustomerPicker`, which renders inside
  * `ServiceOrderForm`'s own `<form onSubmit>`. React dispatches events along
  * the REACT tree rather than the DOM tree, so portalling the dialog does NOT
@@ -134,6 +146,29 @@ describe("CustomerForm — vehicle collection (create)", () => {
     expect(within(group).getByLabelText("Año")).toBeInTheDocument();
   });
 
+  /**
+   * customer-management delta, "A customer with several vehicles labels each
+   * card's fields": each card is fed by the SAME shared control (D17), so this
+   * is what proves the three `idPrefix`-keyed instances do not share state —
+   * a bug here would be the shared component leaking one row's selection into
+   * its siblings, not the catalog itself.
+   */
+  it("selecting a make on the second of three cards leaves the first and third untouched", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm />);
+    await open(user, "Nuevo cliente");
+
+    await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+    await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+    await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+
+    await chooseMakeIn(vehicleGroup(2), user, "Kia");
+
+    expect(within(vehicleGroup(1)).getByRole("combobox", { name: "Marca" })).toHaveTextContent("Seleccioná una marca");
+    expect(within(vehicleGroup(2)).getByRole("combobox", { name: "Marca" })).toHaveTextContent("Kia");
+    expect(within(vehicleGroup(3)).getByRole("combobox", { name: "Marca" })).toHaveTextContent("Seleccioná una marca");
+  });
+
   it("fully removes a never-saved row instead of marking it deactivated", async () => {
     const user = userEvent.setup();
     render(<CustomerForm />);
@@ -170,7 +205,7 @@ describe("CustomerForm — vehicle collection (create)", () => {
     await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
     const group = vehicleGroup(1);
     await user.type(within(group).getByLabelText("Placa"), "ABC-123");
-    await user.type(within(group).getByLabelText("Marca"), "Toyota");
+    await chooseMakeIn(group, user, "Toyota");
     await user.click(screen.getByRole("button", { name: "Guardar" }));
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
@@ -319,7 +354,7 @@ describe("CustomerForm — vehicle collection (edit)", () => {
 
     const group = vehicleGroup(1);
     expect(within(group).getByLabelText("Placa")).toHaveValue("ABC111");
-    expect(within(group).getByLabelText("Marca")).toHaveValue("Toyota");
+    expect(within(group).getByRole("combobox", { name: "Marca" })).toHaveTextContent("Toyota");
     expect(within(group).getByLabelText("Año")).toHaveValue(2020);
   });
 
