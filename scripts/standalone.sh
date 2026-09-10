@@ -21,6 +21,8 @@
 #   ./scripts/standalone.sh backup       dump the database to ~/dforce-backups
 #   ./scripts/standalone.sh restore FILE restore a dump (destructive, asks first)
 #   ./scripts/standalone.sh status       where the data lives and what is running
+#   ./scripts/standalone.sh install-service    start the app at login (launchd)
+#   ./scripts/standalone.sh uninstall-service  remove that LaunchAgent
 #
 # Env: APP_PORT (default 3000), PG_FORMULA (default postgresql@17),
 #      DEV_USER / DEV_PASSWORD (default admin / admin123) for the
@@ -45,6 +47,14 @@ DB_USER=dforce
 DB_PASSWORD=dforce
 
 BACKUP_DIR="${BACKUP_DIR:-$HOME/dforce-backups}"
+
+# The workshop Mac gets powered off, so the app has to come back on its own.
+# launchd is the native supervisor; a user LaunchAgent (not a system daemon) is
+# the right scope because the app reads .env out of the operator's home and
+# Postgres is already one of these too.
+LAUNCH_LABEL=com.dforce.catalog
+LAUNCH_PLIST="$HOME/Library/LaunchAgents/$LAUNCH_LABEL.plist"
+LAUNCH_LOG="$HOME/Library/Logs/dforce-catalog.log"
 
 if [ -t 1 ]; then
   RED=$'\033[31m'; GREEN=$'\033[32m'; BLUE=$'\033[34m'; DIM=$'\033[2m'; OFF=$'\033[0m'
@@ -73,6 +83,23 @@ env_value() {
     | tr -d '"'\''' \
     | tr -d '\r' \
     | sed 's/[[:space:]]*$//'
+}
+
+# The address the other machines in the workshop have to type. `next start`
+# already binds 0.0.0.0 (Next 16's default hostname), so LAN access works
+# without any flag — the only thing missing was anybody being told the URL.
+# Prints nothing and returns non-zero when there is no address, because a blank
+# or guessed URL is worse than saying there is none.
+lan_ip() {
+  local iface ip
+  for iface in en0 en1; do
+    ip="$(ipconfig getifaddr "$iface" 2>/dev/null)"
+    if [ -n "$ip" ]; then
+      printf '%s' "$ip"
+      return 0
+    fi
+  done
+  return 1
 }
 
 # --------------------------------------------------------------------------
@@ -455,6 +482,45 @@ $SEED_OUT" \
 }
 
 # --------------------------------------------------------------------------
+# Chromium for the catalog PDFs
+# --------------------------------------------------------------------------
+# src/modules/pdf-generation/worker.ts calls chromium.launch() with no
+# executablePath, so Playwright resolves the binary out of a per-user cache. In
+# the compose setup that binary came from the Docker base image, which is why
+# this step has no counterpart there — and why PDF generation is the one
+# feature that breaks silently on a fresh Mac: everything else works, the job
+# just fails when someone asks for a catalog.
+ensure_playwright_chromium() {
+  step "Chromium de Playwright"
+
+  local cache="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/Library/Caches/ms-playwright}"
+  local dir found=''
+  for dir in "$cache"/chromium-*; do
+    [ -d "$dir" ] && { found=1; break; }
+  done
+
+  if [ -n "$found" ]; then
+    ok "Ya está descargado — no bajo nada"
+  else
+    note "los PDFs del catálogo se arman con Chromium headless; en Docker venía"
+    note "en la imagen base, acá hay que bajarlo una vez (~150 MB)"
+    PW_OUT="$(cd "$ROOT" && npx --yes playwright install chromium 2>&1)" || fail \
+      "No pude instalar Chromium, así que los PDFs del catálogo no van a generarse.
+Salida completa:
+
+$PW_OUT" \
+      "Probalo a mano para ver el error completo (normalmente es red o proxy):
+
+  npx playwright install chromium
+
+El resto de la app funciona sin esto: lo único que falla es generar catálogos."
+    ok "Chromium instalado"
+  fi
+
+  note "caché: $cache"
+}
+
+# --------------------------------------------------------------------------
 # Subcommands
 # --------------------------------------------------------------------------
 cmd_backup() {
@@ -553,6 +619,305 @@ $RESTORE_OUT" \
   ok "Restauradas $(table_count) tabla(s) desde $(basename "$file")"
 }
 
+# --------------------------------------------------------------------------
+# launchd service
+# --------------------------------------------------------------------------
+# `launchctl print` is the only honest answer to "is it loaded": the plist
+# existing on disk says nothing about launchd knowing it.
+service_loaded() {
+  launchctl print "gui/$(id -u)/$LAUNCH_LABEL" >/dev/null 2>&1
+}
+
+# Unloading, on either generation of the API. Not being loaded is a success
+# here, which is what makes install-service re-runnable.
+#
+# The wait at the end is not defensive padding: `launchctl bootout` returns
+# before launchd has finished tearing the job down, and bootstrapping into a job
+# that is still dying fails *while `launchctl print` still reports it loaded*.
+# Without this, a second install-service printed "Cargado en launchd" and left
+# absolutely nothing running — which is exactly the shape of bug this repo keeps
+# finding. Returns non-zero if the job never goes away.
+service_bootout() {
+  launchctl bootout "gui/$(id -u)/$LAUNCH_LABEL" >/dev/null 2>&1 \
+    || launchctl unload -w "$LAUNCH_PLIST" >/dev/null 2>&1 \
+    || true
+
+  local waited=0
+  while service_loaded; do
+    waited=$((waited + 1))
+    [ "$waited" -ge 20 ] && return 1
+    sleep 1
+  done
+  return 0
+}
+
+# Any HTTP status at all proves the server answered. Which status it is belongs
+# to the app (the root redirects to /login), not to launchd.
+app_answers() {
+  local code
+  code="$(curl -s -o /dev/null -m 3 -w '%{http_code}' "http://127.0.0.1:$APP_PORT/" 2>/dev/null)"
+  [ -n "$code" ] && [ "$code" != "000" ]
+}
+
+# A repo path with a & or a < in it would otherwise produce a plist that
+# launchd rejects as malformed, with no hint as to why.
+xml_escape() {
+  printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+}
+
+cmd_install_service() {
+  step "Servicio de arranque automático (launchd)"
+
+  # macOS TCC, and the one failure here that looks like nothing else: a launchd
+  # job never gets the "allow access to your Desktop" prompt a GUI app gets, so
+  # a checkout under ~/Desktop, ~/Documents or ~/Downloads is simply unreadable
+  # to it. Verified on this machine: the identical plist starts the app from ~/
+  # and fails from ~/Desktop with "/bin/bash: …/service-start.sh: Operation not
+  # permitted" and nothing else. Checked before anything is written, because the
+  # alternative is a job that loads cleanly and never runs.
+  case "$ROOT/" in
+    "$HOME/Desktop/"*|"$HOME/Documents/"*|"$HOME/Downloads/"*)
+      fail \
+        "El repo está en una carpeta que macOS protege (Escritorio / Documentos /
+Descargas) y launchd no puede leerla: un servicio no recibe el diálogo de
+permiso que recibe una app, así que el arranque automático fallaría con
+'Operation not permitted' y nada más." \
+        "Mové el checkout fuera de esas tres carpetas. En la Mac del taller el
+lugar natural es el home directamente:
+
+  mv '$ROOT' ~/dforce-catalog
+  cd ~/dforce-catalog
+  ./scripts/standalone.sh install-service
+
+(La otra salida sería darle Acceso Total al Disco a /bin/bash en Ajustes del
+Sistema, que se lo da a CUALQUIER script del sistema. Mover el repo es más
+barato y más seguro.)"
+      ;;
+  esac
+
+  # The service runs `next start`, which serves an already-built .next and
+  # refuses to boot without one. Checking here turns a crash-loop nobody would
+  # look for into a message.
+  [ -d "$ROOT/.next" ] || fail \
+    "No hay build: falta $ROOT/.next, y el servicio corre 'next start', que sin build no levanta." \
+    "Compilá primero y después instalá el servicio:
+
+  ./scripts/standalone.sh --setup-only
+  npm run build
+  ./scripts/standalone.sh install-service"
+
+  [ -f "$ROOT/.env" ] || fail \
+    "Falta .env — el servicio arrancaría y se caería al instante sin DATABASE_URL." \
+    "cp env.example .env
+
+Después corregí DATABASE_URL y volvé a correr:
+
+  ./scripts/standalone.sh install-service"
+
+  [ -n "$(env_value "$ROOT/.env" DATABASE_URL)" ] || fail \
+    "DATABASE_URL no está definida en .env, que es lo único que la app exige para arrancar." \
+    "Agregala a .env y reintentá:
+
+  DATABASE_URL=postgres://$DB_USER:$DB_PASSWORD@localhost:$PG_PORT/$DB_NAME"
+
+  [ -f "$ROOT/scripts/service-start.sh" ] || fail \
+    "Falta scripts/service-start.sh, que es lo que el servicio ejecuta." \
+    "Está en el repo; si desapareció, recuperalo:
+
+  git checkout -- scripts/service-start.sh"
+
+  # node/npm come from nvm, which lives in the shell's profile and is nowhere
+  # near launchd's PATH. Baking the absolute directory resolved right now is
+  # what keeps the service from dying at boot with "npm: command not found".
+  local node_bin node_dir
+  node_bin="$(command -v node 2>/dev/null)"
+  [ -n "$node_bin" ] || fail \
+    "No encontré 'node' en el PATH, así que no sé qué PATH ponerle al servicio." \
+    "nvm use 22   (o instalá Node 20+) y reintentá:
+
+  ./scripts/standalone.sh install-service"
+  node_dir="$(cd "$(dirname "$node_bin")" && pwd)"
+
+  # Stopping any existing instance before the port check, so that whatever is
+  # still on the port afterwards is genuinely somebody else's.
+  service_bootout || fail \
+    "Ya hay un servicio '$LAUNCH_LABEL' cargado y launchd no lo suelta." \
+    "Descargalo a mano y reintentá:
+
+  launchctl bootout gui/$(id -u)/$LAUNCH_LABEL
+  ./scripts/standalone.sh install-service"
+
+  # Somebody else on the port is worth stopping for, and not only because the
+  # job would crash-loop: the check at the end of this function would see an
+  # answer on the port and report success for a process that is not ours.
+  if lsof -nP -iTCP:"$APP_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+    fail \
+      "El puerto $APP_PORT ya está ocupado por otro proceso, así que el servicio no podría arrancar." \
+      "Mirá quién lo tiene:
+
+  lsof -nP -iTCP:$APP_PORT -sTCP:LISTEN
+
+Si es un 'next dev' o una corrida vieja de este script, bajala primero. O dejá
+el servicio en otro puerto:
+
+  APP_PORT=<puerto> ./scripts/standalone.sh install-service"
+  fi
+
+  local service_path
+  service_path="$(xml_escape "$ROOT/scripts/service-start.sh")"
+
+  mkdir -p "$(dirname "$LAUNCH_PLIST")" "$(dirname "$LAUNCH_LOG")" || fail \
+    "No pude crear ~/Library/LaunchAgents o ~/Library/Logs." \
+    "Revisá permisos:
+
+  ls -ld ~/Library/LaunchAgents ~/Library/Logs"
+
+  # Written every time instead of only when missing: the baked PATH and the
+  # repo path both go stale (a new Node version, a moved checkout), and
+  # re-running install-service is how anyone would expect to fix that.
+  cat > "$LAUNCH_PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$LAUNCH_LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>$service_path</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>$(xml_escape "$ROOT")</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>$(xml_escape "$node_dir"):/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>APP_PORT</key>
+    <string>$APP_PORT</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>$(xml_escape "$LAUNCH_LOG")</string>
+  <key>StandardErrorPath</key>
+  <string>$(xml_escape "$LAUNCH_LOG")</string>
+</dict>
+</plist>
+PLIST
+
+  # plutil is the only thing that can tell a plist launchd will read from one it
+  # rejects with a bare "Bootstrap failed: 5".
+  PLUTIL_OUT="$(plutil -lint "$LAUNCH_PLIST" 2>&1)" || fail \
+    "El plist que escribí quedó mal formado, así que no lo cargo. plutil dijo:
+
+$PLUTIL_OUT" \
+    "Mirá el archivo y borralo para reintentar:
+
+  cat '$LAUNCH_PLIST'
+  rm '$LAUNCH_PLIST'
+  ./scripts/standalone.sh install-service"
+
+  ok "Plist escrito: $LAUNCH_PLIST"
+  note "node tomado de $node_dir (nvm no está en el PATH de launchd)"
+
+  BOOT_OUT="$(launchctl bootstrap "gui/$(id -u)" "$LAUNCH_PLIST" 2>&1)"
+  BOOT_RC=$?
+  # Both conditions matter. A non-zero bootstrap on a macOS that has no such
+  # subcommand is what the `load -w` fallback is for; and `service_loaded`
+  # alone was not enough, because a job on its way out still prints as loaded.
+  if [ "$BOOT_RC" -ne 0 ] || ! service_loaded; then
+    LOAD_OUT="$(launchctl load -w "$LAUNCH_PLIST" 2>&1)"
+    service_loaded || fail \
+      "launchd no aceptó el servicio. Dijo:
+
+  bootstrap: ${BOOT_OUT:-(sin salida)}
+  load:      ${LOAD_OUT:-(sin salida)}" \
+      "Probá a mano para ver el error completo:
+
+  launchctl bootstrap gui/$(id -u) '$LAUNCH_PLIST'
+
+Si dice 'Bootstrap failed: 5', normalmente el plist quedó mal formado:
+
+  plutil -lint '$LAUNCH_PLIST'"
+  fi
+  ok "Cargado en launchd (RunAtLoad + KeepAlive)"
+
+  # The part that is worth printing: whether it actually came up. Everything
+  # above only proves launchd accepted the job description.
+  printf '  esperando a que la app conteste en el puerto %s' "$APP_PORT"
+  local waited=0
+  until app_answers; do
+    waited=$((waited + 1))
+    if [ "$waited" -ge 45 ]; then
+      printf '\n'
+      fail \
+        "launchd cargó el servicio pero la app no contestó en 45s en el puerto $APP_PORT." \
+        "El motivo real está en el log del servicio:
+
+  tail -50 '$LAUNCH_LOG'
+
+Causas típicas: falta el build (npm run build), DATABASE_URL apunta a un
+Postgres que no está, o el puerto lo tiene otro proceso:
+
+  lsof -nP -iTCP:$APP_PORT -sTCP:LISTEN"
+    fi
+    printf '.'
+    sleep 1
+  done
+  printf '\n'
+  ok "La app contesta en http://localhost:$APP_PORT"
+
+  local ip
+  if ip="$(lan_ip)"; then
+    ok "Desde las otras máquinas: http://$ip:$APP_PORT"
+  else
+    warn "No pude averiguar la IP de la LAN (ni en0 ni en1 tienen una)"
+    note "sin red no hay URL para las otras máquinas; reintentá cuando haya cable o WiFi"
+  fi
+
+  note "log del servicio: $LAUNCH_LOG"
+  note "hace falta auto-login en Ajustes del Sistema: esto es un LaunchAgent de"
+  note "usuario (igual que el Postgres de Homebrew) y no carga hasta que alguien"
+  note "inicia sesión — ver STANDALONE.md"
+  note "desinstalarlo: ./scripts/standalone.sh uninstall-service"
+}
+
+cmd_uninstall_service() {
+  step "Quitando el servicio de arranque automático"
+
+  if service_loaded; then
+    service_bootout
+    if service_loaded; then
+      fail \
+        "No pude descargar el servicio de launchd." \
+        "Probá a mano:
+
+  launchctl bootout gui/$(id -u)/$LAUNCH_LABEL"
+    fi
+    ok "Descargado de launchd"
+  else
+    ok "No estaba cargado en launchd"
+  fi
+
+  if [ -f "$LAUNCH_PLIST" ]; then
+    rm -f "$LAUNCH_PLIST" || fail \
+      "No pude borrar $LAUNCH_PLIST." \
+      "Borralo a mano:
+
+  rm '$LAUNCH_PLIST'"
+    ok "Plist borrado"
+  else
+    ok "No había plist que borrar"
+  fi
+
+  note "Postgres sigue corriendo: es el servicio de Homebrew, no nuestro"
+  note "(pararlo, si lo querés: brew services stop $PG_FORMULA)"
+  note "el log queda donde estaba: $LAUNCH_LOG"
+}
+
 cmd_status() {
   resolve_pg
   step "Estado"
@@ -587,6 +952,34 @@ cmd_status() {
   if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 \
      && (cd "$ROOT" && docker compose ps --status running --services 2>/dev/null | grep -qx db); then
     warn "El contenedor 'db' sigue levantado — ya no hace falta (docker compose stop db)"
+  fi
+
+  step "Arranque automático de la app"
+  if [ -f "$LAUNCH_PLIST" ]; then
+    if service_loaded; then
+      ok "Servicio instalado y cargado en launchd"
+    else
+      warn "El plist existe pero launchd no lo tiene cargado"
+      note "recargarlo: ./scripts/standalone.sh install-service"
+    fi
+  else
+    warn "No hay servicio instalado — después de un reinicio la app NO vuelve sola"
+    note "instalarlo: ./scripts/standalone.sh install-service"
+  fi
+  note "plist: $LAUNCH_PLIST"
+  note "log:   $LAUNCH_LOG"
+  case "$ROOT/" in
+    "$HOME/Desktop/"*|"$HOME/Documents/"*|"$HOME/Downloads/"*)
+      warn "Este checkout está en Escritorio/Documentos/Descargas: launchd no puede"
+      note "leer ahí, así que el arranque automático NO es posible sin mover el repo"
+      ;;
+  esac
+
+  local ip
+  if ip="$(lan_ip)"; then
+    note "LAN:   http://$ip:$APP_PORT"
+  else
+    note "LAN:   sin IP (ni en0 ni en1) — las otras máquinas no pueden entrar"
   fi
 }
 
@@ -624,10 +1017,12 @@ O usá otro puerto:
   ensure_env
   run_migrations
   seed_first_user
+  ensure_playwright_chromium
 
   if [ "$mode" = "setup-only" ]; then
     printf '\n%s✓ Todo listo.%s La base vive en:\n\n    %s\n\n' "$GREEN" "$OFF" "$PG_DATA_DIR"
     printf '  Arrancar la app:  npm run build && npm start\n'
+    printf '  Al iniciar sesión: ./scripts/standalone.sh install-service\n'
     printf '  Backup:           ./scripts/standalone.sh backup\n\n'
     return 0
   fi
@@ -666,7 +1061,15 @@ $BUILD_OUT" \
   APP_PID=$!
 
   printf '\n  App  → %shttp://localhost:%s%s\n' "$GREEN" "$APP_PORT" "$OFF"
+  if LAN_IP="$(lan_ip)"; then
+    printf '  LAN  → %shttp://%s:%s%s\n' "$GREEN" "$LAN_IP" "$APP_PORT" "$OFF"
+  else
+    printf '  LAN  → %ssin IP (ni en0 ni en1): las otras máquinas no pueden entrar%s\n' "$RED" "$OFF"
+  fi
   printf '  Data → %s%s%s\n' "$DIM" "$PG_DATA_DIR" "$OFF"
+  if [ -n "${LAN_IP:-}" ]; then
+    note "la primera vez macOS puede preguntar si permite conexiones entrantes: hay que aceptar"
+  fi
   printf '\n  %sCtrl-C la baja. Postgres queda corriendo.%s\n\n' "$DIM" "$OFF"
 
   wait "$APP_PID" 2>/dev/null
@@ -682,10 +1085,12 @@ case "${1:-}" in
   backup)  shift; cmd_backup "$@" ;;
   restore) shift; cmd_restore "$@" ;;
   status)  shift; cmd_status "$@" ;;
+  install-service)   shift; cmd_install_service "$@" ;;
+  uninstall-service) shift; cmd_uninstall_service "$@" ;;
   --dev)         cmd_start dev ;;
   --setup-only)  cmd_start setup-only ;;
   -h|--help)
-    sed -n '3,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '3,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
     ;;
   '')      cmd_start prod ;;
   *)
