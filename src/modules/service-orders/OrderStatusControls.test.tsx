@@ -123,3 +123,24 @@ describe("OrderStatusControls — a network failure has to say so", () => {
     await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
   });
 });
+
+/**
+ * These sat at `size="sm"` — `h-7`, 28px — beside `Editar orden` and
+ * `Imprimir`, which both carry the floor, so the detail header rendered three
+ * different button heights. AGENTS.md's standing exception is a filter strip
+ * whose controls read as one control against `h-8` inputs; a detail page on a
+ * workshop tablet is not that.
+ *
+ * The class, not the pixels: jsdom has no Tailwind and cannot measure a
+ * rendered height. The browser check is what settles the real 44.
+ */
+it("keeps every status control at the 44x44 floor", () => {
+  renderControls(); // the harness, which supplies the ToastProvider the component needs
+
+  const buttons = screen.getAllByRole("button", { name: /Marcar como/ });
+  expect(buttons.length).toBeGreaterThan(0);
+  for (const button of buttons) {
+    expect(button.className).toContain("min-h-11");
+    expect(button.className).toContain("min-w-11");
+  }
+});

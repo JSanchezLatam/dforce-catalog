@@ -33,6 +33,10 @@ const getClienteById = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/service-orders/queries", () => ({ getOrdenServicioById }));
 vi.mock("@/modules/customers/queries", () => ({ getClienteById }));
 
+/** The workshop's own name and logo — the same singleton the catalog PDF reads. */
+const getWorkshopConfig = vi.hoisted(() => vi.fn(async () => null as { name: string | null; logoR2Key: string | null } | null));
+vi.mock("@/modules/workshop-config/service", () => ({ getWorkshopConfig }));
+
 import type { Role } from "@/modules/auth/roles";
 import type { Cliente, OrdenServicio, Vehiculo } from "@/shared/db/schema";
 import { formatDateTime } from "@/shared/datetime";
@@ -227,5 +231,61 @@ describe("ServiceOrderPrintPage", () => {
     expect(print).toHaveBeenCalledTimes(1);
 
     print.mockRestore();
+  });
+});
+
+/**
+ * Everything below is what a browser settles and jsdom cannot, EXCEPT the
+ * parts that are structure rather than paint. These pin the structure; the
+ * print preview is what proved the background defect that started this change.
+ */
+describe("ServiceOrderPrintPage — the sheet a técnico is handed", () => {
+  it("carries the workshop's name so the sheet says who did the work", async () => {
+    getWorkshopConfig.mockResolvedValue({ name: "DForce Car Audio", logoR2Key: null });
+
+    render(await renderPage());
+
+    expect(screen.getByText("DForce Car Audio")).toBeInTheDocument();
+  });
+
+  it("shows the workshop logo when one is configured, through the route that serves it", async () => {
+    getWorkshopConfig.mockResolvedValue({ name: "DForce Car Audio", logoR2Key: "logos/abc" });
+
+    render(await renderPage());
+
+    expect(screen.getByRole("img", { name: /DForce Car Audio/ })).toHaveAttribute(
+      "src",
+      "/api/workshop-config/logo",
+    );
+  });
+
+  // Nullable columns: the Administrador may set any subset independently.
+  it("renders no broken image when no logo is configured", async () => {
+    getWorkshopConfig.mockResolvedValue({ name: "DForce Car Audio", logoR2Key: null });
+
+    render(await renderPage());
+
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("offers a way back to the order, which the sheet had no control for", async () => {
+    render(await renderPage());
+
+    const back = screen.getByRole("link", { name: /Volver/ });
+    expect(back).toHaveAttribute("href", "/service-orders/o1");
+  });
+
+  // The back control is for the screen. On paper it is noise, like Imprimir.
+  it("hides the back control from the printed sheet", async () => {
+    render(await renderPage());
+
+    expect(screen.getByRole("link", { name: /Volver/ }).className).toContain("print:hidden");
+  });
+
+  it("renders the field labels in red, the colour staff scan the sheet by", async () => {
+    render(await renderPage());
+
+    const label = screen.getAllByRole("term").find((dt) => dt.textContent === "Cliente");
+    expect(label!.className).toContain("text-red");
   });
 });
