@@ -201,6 +201,11 @@ The order-creation `CustomerPicker` MUST clear its search term, result list, and
 
 The system MUST provide a print view for an existing `orden_servicio`, reachable via an "Imprimir" action on that order's detail page, gated by `service-orders.read`. The view MUST NOT auto-open on order creation. Printing it (`@media print` + `window.print()`) MUST produce one page carrying: cliente (nombre, teléfono), vehículo (placa, marca, modelo, año), categoría, fecha y hora de inicio, descripción, and observaciones. The page MUST also reserve blank ruled space under a "Trabajo realizado / Hallazgos" heading, with a signature line — layout only, with no backing database column.
 
+*(Amended 2026-09-09 by `fix/printed-order-polish` — five owner-reported
+defects on one surface, judged too small for a change folder. Recorded here
+because a baseline nobody can trace is the same problem as a baseline that is
+wrong; the next reader should look for the PR, not for a delta.)*
+
 The sheet MUST identify the workshop that produced it, carrying the `workshop_config` singleton's name and logo — the same record and the same `/api/workshop-config/logo` route the generated catalog already consumes. Both columns are nullable and each renders only when set: a missing logo MUST leave no broken image.
 
 Field labels MUST be red, unconditionally rather than `print:`-scoped, so the sheet reads the same on screen and on paper.
