@@ -201,6 +201,34 @@ The order-creation `CustomerPicker` MUST clear its search term, result list, and
 
 The system MUST provide a print view for an existing `orden_servicio`, reachable via an "Imprimir" action on that order's detail page, gated by `service-orders.read`. The view MUST NOT auto-open on order creation. Printing it (`@media print` + `window.print()`) MUST produce one page carrying: cliente (nombre, teléfono), vehículo (placa, marca, modelo, año), categoría, fecha y hora de inicio, descripción, and observaciones. The page MUST also reserve blank ruled space under a "Trabajo realizado / Hallazgos" heading, with a signature line — layout only, with no backing database column.
 
+*(Amended 2026-09-09 by `fix/printed-order-polish` — five owner-reported
+defects on one surface, judged too small for a change folder. Recorded here
+because a baseline nobody can trace is the same problem as a baseline that is
+wrong; the next reader should look for the PR, not for a delta.)*
+
+The sheet MUST identify the workshop that produced it, carrying the `workshop_config` singleton's name and logo — the same record and the same `/api/workshop-config/logo` route the generated catalog already consumes. Both columns are nullable and each renders only when set: a missing logo MUST leave no broken image.
+
+Field labels MUST be red, unconditionally rather than `print:`-scoped, so the sheet reads the same on screen and on paper.
+
+The view MUST offer a control back to the order it prints, and that control — like the print control itself — MUST be absent from the printed sheet.
+
+Printing MUST produce a light sheet regardless of the app's theme. The `(app)` shell paints `body` and its content container from the theme, so with a dark theme selected the shell prints as a black page around a white sheet; the print rules MUST force those surfaces light rather than relying on the browser's per-user "background graphics" setting.
+
+#### Scenario: The sheet names the workshop
+- GIVEN a `workshop_config` row with a name and a logo
+- WHEN the print view renders
+- THEN the sheet MUST show that name and that logo
+
+#### Scenario: A workshop with no logo prints no broken image
+- GIVEN a `workshop_config` row whose logo is unset
+- WHEN the print view renders
+- THEN no image element MUST be rendered
+
+#### Scenario: The back control never reaches the paper
+- GIVEN the print view
+- WHEN it renders
+- THEN it MUST offer a control back to that order, excluded from the printed output
+
 #### Scenario: Imprimir navigates to the print view
 - GIVEN an order detail page
 - WHEN staff clicks "Imprimir"

@@ -33,8 +33,12 @@ const getClienteById = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/service-orders/queries", () => ({ getOrdenServicioById }));
 vi.mock("@/modules/customers/queries", () => ({ getClienteById }));
 
+/** The workshop's own name and logo — the same singleton the catalog PDF reads. */
+const getWorkshopConfig = vi.hoisted(() => vi.fn<() => Promise<WorkshopConfig | null>>(async () => null));
+vi.mock("@/modules/workshop-config/service", () => ({ getWorkshopConfig }));
+
 import type { Role } from "@/modules/auth/roles";
-import type { Cliente, OrdenServicio, Vehiculo } from "@/shared/db/schema";
+import type { Cliente, OrdenServicio, Vehiculo, WorkshopConfig } from "@/shared/db/schema";
 import { formatDateTime } from "@/shared/datetime";
 import ServiceOrderPrintPage from "./page";
 
@@ -84,16 +88,26 @@ function valueFor(label: string): string {
   return term!.nextElementSibling!.textContent!;
 }
 
+/**
+ * FILE scope, not inside the first `describe`. It used to live in there, and
+ * the second block declared no setup of its own — so its tests passed on mock
+ * IMPLEMENTATIONS that leaked across the block boundary. `vitest.config.ts`
+ * sets neither `clearMocks` nor `mockReset`, and `vi.clearAllMocks()` clears
+ * call records, not implementations, so nothing reset them. Running that block
+ * alone (`-t "the sheet a"`) failed all six on `NEXT_NOT_FOUND`.
+ */
+beforeEach(() => {
+  // These mocks are module-level; without this, call counts accumulate across
+  // tests and `not.toHaveBeenCalled()` below would assert nothing.
+  vi.clearAllMocks();
+  can.mockReturnValue(true);
+  requireSessionFromHeaders.mockResolvedValue({ id: "u1", role: "tecnico" });
+  getOrdenServicioById.mockResolvedValue({ orden: ORDEN, items: [] });
+  getClienteById.mockResolvedValue({ cliente: CLIENTE, orders: [], vehicles: [VEHICULO] });
+  getWorkshopConfig.mockResolvedValue(null);
+});
+
 describe("ServiceOrderPrintPage", () => {
-  beforeEach(() => {
-    // These mocks are module-level; without this, call counts accumulate
-    // across tests and `not.toHaveBeenCalled()` below would assert nothing.
-    vi.clearAllMocks();
-    can.mockReturnValue(true);
-    requireSessionFromHeaders.mockResolvedValue({ id: "u1", role: "tecnico" });
-    getOrdenServicioById.mockResolvedValue({ orden: ORDEN, items: [] });
-    getClienteById.mockResolvedValue({ cliente: CLIENTE, orders: [], vehicles: [VEHICULO] });
-  });
 
   /** Spec Scenario "Printed page carries the order's data". */
   it("prints cliente, vehículo, categoría, fecha y hora de inicio, descripción and observaciones", async () => {
@@ -227,5 +241,91 @@ describe("ServiceOrderPrintPage", () => {
     expect(print).toHaveBeenCalledTimes(1);
 
     print.mockRestore();
+  });
+});
+
+/**
+ * Everything below is what a browser settles and jsdom cannot, EXCEPT the
+ * parts that are structure rather than paint. These pin the structure; the
+ * print preview is what proved the background defect that started this change.
+ */
+/**
+ * Every column of `workshop_config`, not the two these assertions read.
+ * AGENTS.md: "a mock more convenient than reality tests the mock, not the
+ * code" — and the fixtures forty lines above already build complete rows for
+ * exactly that reason.
+ */
+function workshop(overrides: Partial<WorkshopConfig> = {}): WorkshopConfig {
+  return {
+    id: "singleton",
+    name: "DForce Car Audio",
+    logoR2Key: null,
+    logoContentType: null,
+    phone: null,
+    whatsapp: null,
+    email: null,
+    address: null,
+    hours: null,
+    website: null,
+    coverText: null,
+    socialHandles: null,
+    coverImageR2Key: null,
+    coverImageContentType: null,
+    updatedAt: new Date("2026-01-01"),
+    ...overrides,
+  };
+}
+
+describe("ServiceOrderPrintPage — the sheet a técnico is handed", () => {
+  it("carries the workshop's name so the sheet says who did the work", async () => {
+    getWorkshopConfig.mockResolvedValue(workshop());
+
+    render(await renderPage());
+
+    expect(screen.getByText("DForce Car Audio")).toBeInTheDocument();
+  });
+
+  it("shows the workshop logo when one is configured, through the route that serves it", async () => {
+    getWorkshopConfig.mockResolvedValue(workshop({ logoR2Key: "logos/abc", logoContentType: "image/png" }));
+
+    render(await renderPage());
+
+    expect(screen.getByRole("img", { name: /DForce Car Audio/ })).toHaveAttribute(
+      "src",
+      "/api/workshop-config/logo",
+    );
+  });
+
+  // Nullable columns: the Administrador may set any subset independently.
+  it("renders no broken image when no logo is configured", async () => {
+    getWorkshopConfig.mockResolvedValue(workshop());
+
+    render(await renderPage());
+
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("offers a way back to the order, which the sheet had no control for", async () => {
+    render(await renderPage());
+
+    const back = screen.getByRole("link", { name: /Volver/ });
+    expect(back).toHaveAttribute("href", "/service-orders/o1");
+  });
+
+  // The back control is for the screen. On paper it is noise, like Imprimir.
+  it("hides the back control from the printed sheet", async () => {
+    render(await renderPage());
+
+    expect(screen.getByRole("link", { name: /Volver/ }).className).toContain("print:hidden");
+  });
+
+  it("renders the field labels in red, the colour staff scan the sheet by", async () => {
+    render(await renderPage());
+
+    const label = screen.getAllByRole("term").find((dt) => dt.textContent === "Cliente");
+    // The SHADE, not the family. `toContain("text-red")` passed for
+    // `text-red-50` — a near-invisible label on a white sheet, which is the
+    // exact defect this requirement exists to prevent.
+    expect(label!.className).toContain("text-red-700");
   });
 });

@@ -192,4 +192,22 @@
   [data-slot="sidebar-trigger"],
   [data-slot="sidebar-rail"] { display: none !important; }
   [data-slot="sidebar-inset"] { margin: 0 !important; box-shadow: none !important; }
+
+  /*
+   * The half that was missing, and it only shows in a real print PREVIEW.
+   * `body` carries `bg-background` (globals.css:167) and so does
+   * `[data-slot="sidebar-inset"]` (`sidebar.tsx:310`) — in DARK mode that is
+   * `hsl(240 10% 3.9%)`, near black. Hiding the sidebar and zeroing the margin
+   * left the sheet white on a black page: the operator printed a black sheet.
+   *
+   * Forced light rather than left to the browser's "background graphics"
+   * setting, which is per-user and off by default — a sheet whose colour
+   * depends on a checkbox in someone's print dialog is not a fixed sheet.
+   */
+  html,
+  body,
+  [data-slot="sidebar-inset"] {
+    background: #fff !important;
+    color: #000 !important;
+  }
 }

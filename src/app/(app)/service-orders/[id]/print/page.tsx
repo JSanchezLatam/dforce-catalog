@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getClienteById } from "@/modules/customers/queries";
+import { getWorkshopConfig } from "@/modules/workshop-config/service";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
 import { PrintButton } from "@/modules/service-orders/PrintButton";
 import { getOrdenServicioById } from "@/modules/service-orders/queries";
@@ -18,7 +20,13 @@ export const dynamic = "force-dynamic";
 function field(label: string, value: unknown) {
   return (
     <div className="border-b border-black/40 py-1">
-      <dt className="text-[10px] uppercase tracking-wide text-black/60">{label}</dt>
+      {/* Red, not grey. This is the sheet a técnico scans on a bench: the
+          labels are the landmarks, and `print:` is deliberately NOT used —
+          the colour must be the same on screen and on paper, for the same
+          reason `bg-white` is unconditional. `text-red-700` prints as a real
+          red on a monochrome-safe ink rather than the theme's `destructive`,
+          which is tuned for a dark UI and means "error". */}
+      <dt className="text-[10px] uppercase tracking-wide text-red-700">{label}</dt>
       <dd className="text-sm">{value == null || value === "" ? "—" : String(value)}</dd>
     </div>
   );
@@ -61,6 +69,10 @@ export default async function ServiceOrderPrintPage({
   // DEACTIVATED vehicle is still found here and its identity still prints.
   // Same resolution as `[id]/page.tsx`.
   const vehiculo = clienteDetail?.vehicles.find((v) => v.id === orden.vehiculoId);
+  // A third read, and the first this route adds. The catalog PDF already
+  // consumes the same singleton, so the sheet says whose workshop it is
+  // without a new table, a new route, or a new upload path.
+  const workshop = await getWorkshopConfig();
 
   // `bg-white`/`text-black` below are unconditional rather than `print:`-scoped,
   // and that is deliberate on screen too: this route is reachable before anyone
@@ -72,11 +84,37 @@ export default async function ServiceOrderPrintPage({
   return (
     <div className="mx-auto max-w-3xl bg-white p-8 text-black print:max-w-none print:p-0">
       <div className="mb-6 flex items-start justify-between gap-4 border-b-2 border-black pb-3">
-        <div>
-          <h1 className="text-xl font-bold">Orden de servicio</h1>
-          <p className="text-xs text-black/60">N.º {orden.id}</p>
+        <div className="flex items-center gap-3">
+          {/* The same singleton the catalog PDF reads, through the same route
+              that serves it. Both columns are nullable — the Administrador may
+              set a name with no logo or neither — so each renders only when it
+              is there, and a missing logo leaves no broken image. */}
+          {workshop?.logoR2Key ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src="/api/workshop-config/logo"
+              alt={workshop.name ?? "Logo del taller"}
+              className="h-12 w-auto object-contain"
+            />
+          ) : null}
+          <div>
+            {workshop?.name ? <p className="text-sm font-semibold">{workshop.name}</p> : null}
+            <h1 className="text-xl font-bold">Orden de servicio</h1>
+            <p className="text-xs text-black/60">N.º {orden.id}</p>
+          </div>
         </div>
-        <PrintButton />
+        <div className="flex items-center gap-2">
+          {/* A sheet with no way back was a dead end: the only control on it
+              was Imprimir. `print:hidden` for the same reason PrintButton
+              carries it — on paper it is noise. */}
+          <Link
+            href={`/service-orders/${orden.id}`}
+            className="min-h-11 min-w-11 inline-flex items-center rounded-md border border-black/30 px-3 text-sm print:hidden"
+          >
+            Volver
+          </Link>
+          <PrintButton />
+        </div>
       </div>
 
       <dl className="mb-6 grid grid-cols-2 gap-x-8">
