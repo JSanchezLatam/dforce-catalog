@@ -114,6 +114,13 @@ volume at the pre-boot screen. Check which situation a machine is in with
 Encryption is worth more here than skipping one password: the data is real
 customer records, and the machine sits in a workshop.
 
+**On a laptop that table is better than it looks.** A MacBook's battery is a
+UPS: a power cut does not shut it down, so there is no reboot, no pre-boot
+screen and no password to type — the app never goes down in the first place.
+The password in the top row is only ever paid on a real shutdown. So on a
+laptop FileVault costs nothing operationally, and this stops being a trade at
+all: leave it on.
+
 ### Postgres is not ours to supervise
 
 `brew services start postgresql@17` already wrote its own user LaunchAgent
@@ -177,6 +184,25 @@ meaningless. Run `pmset -g cap | grep autorestart` first and skip the line if it
 prints nothing — setting it on a MacBook is a no-op, not a fix.
 
 Display sleep is fine to leave on; it is not sleep.
+
+#### Closing the lid is the one that will actually bite you
+
+`sleep 0` covers the idle timer. It does not cover the lid: closing a MacBook
+suspends it anyway, and the whole workshop loses the app until somebody opens
+it again. Clamshell mode — lid shut and still awake — needs mains power *and*
+an external display *and* an external keyboard or mouse. Take the display away
+and macOS sleeps.
+
+So either leave the lid open, or:
+
+```bash
+sudo pmset -a disablesleep 1
+```
+
+Read that one with your eyes open: `disablesleep` is **not in `man pmset`**. It
+is real — `pmset -g` reports it back as `SleepDisabled` — but an undocumented
+flag is one Apple never promised to keep. Leaving the lid open is the boring
+option, and it cannot be removed in an update.
 
 ### Reading the log
 
@@ -316,6 +342,7 @@ The script explains itself, but the underlying causes are these:
 | App starts, everything is empty | `.env` points at the other Postgres | `./scripts/standalone.sh status` |
 | Service log says `Operation not permitted` | The checkout is in `~/Desktop`, `~/Documents` or `~/Downloads`, which launchd cannot read | Move it: `mv <repo> ~/dforce-catalog`, then `install-service` again |
 | App did not come back after a reboot | Auto-login is off, so no user LaunchAgent loaded — Postgres is down too | System Settings → Users & Groups → Automatic login |
+| Worked all day, then stopped answering on the LAN | Somebody closed the lid. `sleep 0` does not cover it | Open it. To stop it recurring, see "Closing the lid" above |
 | Service log says `npm: command not found` | The plist's baked PATH points at a Node that is gone (nvm upgrade) | `./scripts/standalone.sh install-service` — it re-resolves `node` |
 | Every page returns 500 after a reboot | The app won the race against Postgres. Should not happen now (`service-start.sh` waits), but this is the symptom | `tail ~/Library/Logs/dforce-catalog.log`, then `./scripts/standalone.sh install-service` to reload the service |
 | Catalog PDFs fail, everything else works | Playwright's Chromium was never downloaded on this Mac | `npx playwright install chromium` |
