@@ -3,10 +3,11 @@ import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import {
-  buildInventoryOrderBy,
-  computePageWindow,
   DEFAULT_PAGE_SIZE,
   INVENTORY_SORT,
+  buildInventoryOrderBy,
+  buildWhere,
+  computePageWindow,
   listInventory,
   normalizeFilters,
   parseInventorySort,
@@ -215,5 +216,35 @@ describe("listInventory", () => {
     await expect(
       listInventory({}, { offset: 0, limit: 10 }, undefined, async () => result),
     ).resolves.toEqual(result);
+  });
+});
+
+/**
+ * `/customers` has folded accents on both sides since PR #44; this screen
+ * never did. Searching `bateria` missed every `batería` in a catalogue an ERP
+ * writes accented — a real miss on 699 rows, not a nicety.
+ *
+ * The rendered SQL is the assertion, because the fold IS the `WHERE`: an
+ * injected seam would let a green suite prove nothing about it.
+ */
+describe("buildWhere — the inventory name search folds accents", () => {
+  const dialect = new PgDialect();
+
+  it("wraps BOTH sides in unaccent, so an unaccented term finds an accented row", () => {
+    const where = buildWhere({ name: "bateria" });
+
+    const rendered = dialect.sqlToQuery(sql`${where}`).sql;
+
+    // Both sides: folding only the column leaves the fold one-directional.
+    expect(rendered).toContain("unaccent");
+    expect(rendered.match(/unaccent/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  // The product `id` is an ERP code with no accents to fold, and leaving it as
+  // a plain `ilike` keeps it index-eligible. Stated so nobody "completes" it.
+  it("leaves the id search as a plain ilike", () => {
+    const where = buildWhere({ id: "PH10060" });
+
+    expect(dialect.sqlToQuery(sql`${where}`).sql).not.toContain("unaccent");
   });
 });

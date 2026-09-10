@@ -212,6 +212,8 @@ Field labels MUST be red, unconditionally rather than `print:`-scoped, so the sh
 
 The view MUST offer a control back to the order it prints, and that control — like the print control itself — MUST be absent from the printed sheet.
 
+Printing MUST target **Letter** explicitly and the sheet MUST fill the printable box. With no `@page` rule the browser takes its size from the print dialog's default, which is per-user and locale-dependent, and the screen's centred card width leaves a small block adrift in the middle of the page.
+
 Printing MUST produce a light sheet regardless of the app's theme. The `(app)` shell paints `body` and its content container from the theme, so with a dark theme selected the shell prints as a black page around a white sheet; the print rules MUST force those surfaces light rather than relying on the browser's per-user "background graphics" setting.
 
 #### Scenario: The sheet names the workshop

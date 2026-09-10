@@ -33,7 +33,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <SidebarInset>
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
-            <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+            {/* `print:py-0 print:gap-0` — this wrapper is outside the print page's own
+                `print:p-0`, so its vertical padding stacked on top of `@page`'s
+                12mm margin and pushed the sheet down the paper. It is also the
+                `flex flex-col` that makes the sheet a flex item, which is why
+                `globals.css`'s print rules need `w-full` and not only
+                `max-w-none` — the reason is recorded there. */}
+            <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 print:gap-0 print:py-0">
               {children}
             </div>
           </div>

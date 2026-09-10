@@ -172,6 +172,22 @@
   }
 }
 
+/*
+ * Letter, explicitly. With no `@page` rule the browser picks the size from the
+ * print dialog's default, which is per-user and locale-dependent — the owner
+ * got a sheet noticeably smaller than the page, centred. Panama prints Letter;
+ * saying so here makes the sheet the same on every machine instead of the same
+ * only on the machine it was checked on.
+ *
+ * The margin lives here rather than on the page's padding: `print:p-0` strips
+ * that padding so the content can use the full printable box, and the printer
+ * owns the physical edge.
+ */
+@page {
+  size: letter;
+  margin: 12mm;
+}
+
 /**
  * The first (and only) `@media print` block in the repo — service-order
  * intake-and-print D8.
@@ -209,5 +225,26 @@
   [data-slot="sidebar-inset"] {
     background: #fff !important;
     color: #000 !important;
+  }
+
+  /*
+   * The sheet fills the printable box, and the MECHANISM is worth writing down
+   * because `print:max-w-none` alone reads like it should already do this.
+   *
+   * `(app)/layout.tsx` wraps `{children}` in a `flex flex-col` container, so
+   * the print page's root div is a FLEX ITEM. Per Flexbox §8.3 an item
+   * stretches on the cross axis only when neither cross-axis margin is `auto`
+   * — and the sheet carries `mx-auto`. So dropping the max-width let it
+   * shrink-to-fit its CONTENT and centre: "a small block adrift in the middle
+   * of the page", which is the symptom exactly. `print:w-full` is what beats
+   * shrink-to-fit; `print:max-w-full` is what stops `max-w-3xl` clamping it
+   * back. Neither is redundant.
+   *
+   * `@page` owns the margin, so the content takes what is left.
+   */
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
   }
 }

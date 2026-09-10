@@ -9,6 +9,7 @@ import { and, asc, count, eq, gt, ilike, isNotNull, isNull, or, sql } from "driz
 
 import { db } from "@/shared/db/client";
 import { producto } from "@/shared/db/schema";
+import { unaccentIlike } from "@/shared/db/text-search";
 
 export const DEFAULT_PAGE_SIZE = 10;
 
@@ -154,11 +155,23 @@ export function buildInventoryOrderBy(sort?: InventorySort) {
   return [primary, tiebreak];
 }
 
-function buildWhere(filters: InventoryFilters) {
+/**
+ * Exported for the rendered-SQL test below `queries.test.ts` — the accent
+ * folding is a `WHERE`, and AGENTS.md's injected-seam limit means a green
+ * suite otherwise proves nothing about it.
+ */
+export function buildWhere(filters: InventoryFilters) {
   const conditions = [];
   if (filters.categoryL1) conditions.push(eq(producto.categoryL1, filters.categoryL1));
   if (filters.categoryL2) conditions.push(eq(producto.categoryL2, filters.categoryL2));
-  if (filters.name) conditions.push(ilike(producto.name, `%${filters.name}%`));
+  // `unaccentIlike`, not a bare `ilike`. `/customers` has folded accents on
+  // both sides since PR #44 and this screen never did, so searching `bateria`
+  // missed every `batería` in a 699-product catalogue synced from an ERP that
+  // writes them accented. Both sides, or the fold is one-directional.
+  //
+  // `unaccent()` is STABLE, not IMMUTABLE, so it can never back an index —
+  // the same caveat `text-search.ts` records. Irrelevant at this row count.
+  if (filters.name) conditions.push(unaccentIlike(producto.name, `%${filters.name}%`));
   if (filters.id) conditions.push(ilike(producto.id, `%${filters.id}%`));
   if (filters.stockStatus === "in-stock") conditions.push(gt(producto.stock, 0));
   if (filters.stockStatus === "out-of-stock") conditions.push(or(eq(producto.stock, 0), isNull(producto.stock)));
