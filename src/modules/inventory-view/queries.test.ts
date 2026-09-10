@@ -3,11 +3,11 @@ import { sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 import {
-  buildWhere,
-  buildInventoryOrderBy,
-  computePageWindow,
   DEFAULT_PAGE_SIZE,
   INVENTORY_SORT,
+  buildInventoryOrderBy,
+  buildWhere,
+  computePageWindow,
   listInventory,
   normalizeFilters,
   parseInventorySort,

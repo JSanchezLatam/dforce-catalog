@@ -7,7 +7,6 @@
  */
 import { and, asc, count, eq, gt, ilike, isNotNull, isNull, or, sql } from "drizzle-orm";
 
-
 import { db } from "@/shared/db/client";
 import { producto } from "@/shared/db/schema";
 import { unaccentIlike } from "@/shared/db/text-search";

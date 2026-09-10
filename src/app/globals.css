@@ -228,10 +228,19 @@
   }
 
   /*
-   * The sheet fills the printable box. On screen it is a centred `max-w-3xl`
-   * card, which is right for reading; on paper that same width left a small
-   * block adrift in the middle of a Letter page. `@page` owns the margin now,
-   * so the content takes what is left.
+   * The sheet fills the printable box, and the MECHANISM is worth writing down
+   * because `print:max-w-none` alone reads like it should already do this.
+   *
+   * `(app)/layout.tsx` wraps `{children}` in a `flex flex-col` container, so
+   * the print page's root div is a FLEX ITEM. Per Flexbox §8.3 an item
+   * stretches on the cross axis only when neither cross-axis margin is `auto`
+   * — and the sheet carries `mx-auto`. So dropping the max-width let it
+   * shrink-to-fit its CONTENT and centre: "a small block adrift in the middle
+   * of the page", which is the symptom exactly. `print:w-full` is what beats
+   * shrink-to-fit; `print:max-w-full` is what stops `max-w-3xl` clamping it
+   * back. Neither is redundant.
+   *
+   * `@page` owns the margin, so the content takes what is left.
    */
   html,
   body {
