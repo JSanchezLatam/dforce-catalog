@@ -111,6 +111,24 @@ describe("modelsForMake", () => {
     expect(modelsForMake("Toyota")).toBe(VEHICLE_CATALOG.Toyota);
   });
 
+  /**
+   * The prototype chain is the real case here, and the name used to promise
+   * "never a throw" while probing one ordinary string. `VEHICLE_CATALOG` is a
+   * plain object literal, so `constructor`, `valueOf` and `toString` all
+   * ANSWER — and a `?? []` never fires for them because they are not nullish.
+   * `modelsForMake("constructor")` returned the Object constructor, a function
+   * whose `.length` is 1, which sailed past the caller's emptiness check.
+   *
+   * Not theoretical: free text is a REQUIREMENT of this capability, so a
+   * technician typing `constructor` into "Especificá la marca" is input the
+   * contract invites.
+   */
+  it("returns an empty array for an unknown make, including inherited Object keys", () => {
+    for (const key of ["constructor", "valueOf", "toString", "hasOwnProperty", "__proto__"]) {
+      expect(modelsForMake(key)).toEqual([]);
+    }
+  });
+
   it("returns an empty array, never a throw, for an unknown make", () => {
     expect(() => modelsForMake("Hino")).not.toThrow();
     expect(modelsForMake("Hino")).toEqual([]);

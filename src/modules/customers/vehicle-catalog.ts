@@ -109,5 +109,17 @@ export const OTHER = "__otro__";
  * into a crash the moment staff type a make the list has never heard of.
  */
 export function modelsForMake(make: string): readonly string[] {
-  return VEHICLE_CATALOG[make] ?? [];
+  // `Object.hasOwn`, NOT `??`. `VEHICLE_CATALOG` is a plain object literal, so
+  // its prototype chain answers for `constructor`, `valueOf`, `toString` and
+  // friends — and `?? []` never fires because those are not nullish.
+  // `modelsForMake("constructor")` returned the Object CONSTRUCTOR: a function
+  // whose `.length` is 1, so the caller's `models.length === 0` check passed
+  // it to the select branch and `.map` crashed on a function.
+  //
+  // Reachable, not theoretical: the free-text escape is a REQUIREMENT of this
+  // capability, so arbitrary staff input is that field's designed contract —
+  // typing `constructor` into "Especificá la marca" took the form down. Same
+  // trap `service-orders/categories.ts` already records: `"toString" in
+  // CATEGORIA_LABEL` is true.
+  return Object.hasOwn(VEHICLE_CATALOG, make) ? VEHICLE_CATALOG[make] : [];
 }

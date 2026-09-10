@@ -840,7 +840,7 @@ intent, the owner names the three; an agent must not pick them.
 | 3.16a | Dropped `model: ""` from `handleMakeSelect` (kept `model` unchanged). `diff` confirmed the mutation landed. `changing the make empties the model and re-lists the new make's models` went RED by name. Reverted; `diff` confirmed byte-identical. |
 | 3.16b | Re-implemented the reset as `useEffect(() => onChange({ make, model: "" }), [make])` (the forbidden pattern), on top of (a)'s revert. `diff` confirmed the mutation landed. Both `mounting emits no onChange at all — the case a create-path-only test never catches` (3.11) and `changing the make empties the model and re-lists the new make's models` (3.14) went RED by name — (b) did NOT leave the suite green, so no test needed strengthening. Reverted; `diff` confirmed byte-identical; suite green (11/11). |
 | 3.21 | `git status --porcelain` lists only `CustomerForm.tsx`, `CustomerForm.test.tsx`, `VehicleQuickForm.tsx`, `VehicleQuickForm.test.tsx` (modified) plus `vehicle-catalog.ts`, `vehicle-catalog.test.ts`, `VehicleMakeModelFields.tsx`, `VehicleMakeModelFields.test.tsx` (new) — no file under `src/app/api/`, no `validation.ts`, no `schema.ts`, no migrations. `rg "Number\(year\)" src/modules/customers` and `rg "Number\(v.year\)"` both still hit (`VehicleQuickForm.tsx:101`, `CustomerForm.tsx:145`); `rg 'typeof value.year === "number"' src/modules/customers/validation.ts` still hits (`validation.ts:126`). |
-| 3.25 | **Not run by this agent — no browser available here.** Needs the orchestrator, per AGENTS.md's second known limit (jsdom cannot see height, reflow, or a hydration mismatch). |
+| 3.25 | **Run by the orchestrator** — see the WU3 verification record below: 42 make options with `Otro` last, Toyota listing Hilux/Fortuner/Land Cruiser Prado/Rush, zero app errors. The implementing agent could not: jsdom sees no height, reflow or hydration mismatch, and it has no browser. |
 | 3.26 | `npm test` (alone): **1639/1639 passed**, 111 files. `npx tsc --noEmit`: clean. `npm run lint`: 0 errors / 14 warnings, matching the documented baseline exactly — no new warning introduced. **Closed by the orchestrator after two GGA rounds**: 1640/1640, `tsc` clean, lint 0 errors / 14 warnings. |
 
 ---
@@ -891,6 +891,26 @@ does now, mutation-verified against the old condition.
 Three smaller ones: a `className` prop neither caller passed, an assertion that
 could not fail (`not.toBe("Otro")` against a `"__otro__"` sentinel), and a
 verification cell reading "left unticked" beside a ticked box.
+
+**GGA round 2 found the one defect an operator could actually reach.**
+`modelsForMake` did `VEHICLE_CATALOG[make] ?? []` over a plain object literal,
+so the PROTOTYPE CHAIN answered: `modelsForMake("constructor")` returned the
+`Object` constructor — a function whose `.length` is 1, which sailed past the
+caller's `models.length === 0` check and reached `.map` on a function.
+Reproduced three ways in jsdom: mounting with `make="constructor"`, mounting
+`make="valueOf"` with a stored model, and simply TYPING `constructor` into
+"Especificá la marca".
+
+The third is why it is a defect and not a curiosity: free text is a
+REQUIREMENT of this capability, so arbitrary staff input is that field's
+designed contract, and a subset of it took the form down on both write paths.
+`Object.hasOwn` closes it — the same trap `service-orders/categories.ts`
+already records, where `"toString" in CATEGORIA_LABEL` is true.
+
+The test that should have caught it was named *"returns an empty array, never a
+throw"* and probed one ordinary string. A name claiming more than its body
+checks is what let this through; it now walks the inherited keys and goes red
+against the old lookup.
 
 **Disclosed by the implementing agent rather than claimed:** tasks 3.6–3.10
 were built in one coherent GREEN pass instead of the literal step-by-step
