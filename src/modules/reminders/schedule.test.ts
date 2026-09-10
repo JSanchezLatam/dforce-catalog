@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Cliente, OrdenServicio } from "@/shared/db/schema";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
-import { APPOINTMENT_LEAD_HOURS, planReminders, SERVICE_DUE_AFTER_DAYS } from "./schedule";
+import { APPOINTMENT_LEAD_HOURS, planReminders, SERVICE_DUE_AFTER_DAYS, SERVICE_DUE_ANNUAL_AFTER_DAYS } from "./schedule";
 
 const NOW = new Date("2026-07-26T12:00:00.000Z");
 
@@ -136,30 +136,32 @@ describe("planReminders — R23 timing", () => {
 });
 
 /**
- * The owner's rule: remind 90 days after PREVENTIVE or CORRECTIVE maintenance.
- * The 90 days already existed; the condition did not, so `service_due` fired
- * for all five categories — nobody had ever written down which ones it was
- * for, because reminder scheduling has no capability spec at all.
+ * The owner's rule: a `service_due` reminder follows PREVENTIVE and CORRECTIVE
+ * maintenance at 90 days, and REVISADO at 365. `revisado` is Panama's mandatory
+ * ANNUAL ATTT inspection — 90 days was always the wrong interval for it, which
+ * is why the earlier change dropped it entirely rather than reminding wrong.
+ * This is the follow-up that was named there: it comes back at its real
+ * interval, off the per-category map in `schedule.ts`.
+ *
+ * `instalacion` and `reparacion` stay out. A category absent from that map gets
+ * no `service_due` at all.
  *
  * Driven off `CATEGORIA_LABEL`'s own keys, PLUS an exhaustiveness assertion —
  * and the second half is the load-bearing one. `describe.each` alone cannot
  * fail by omission: it generates a case for a new key, `SCHEDULED` does not
  * contain it, the title becomes "schedules NO service_due", and it passes.
- * That would default a new category to "does not remind" — the same defect
- * this change fixes, with the sign flipped, since the old one defaulted to
- * "reminds". Both are inheritance instead of decision.
+ * That would default a new category to "does not remind" — inheritance instead
+ * of decision, the same shape as the original defect with the sign flipped.
  *
  * So the set is pinned below. A sixth category fails that assertion until
  * somebody edits this list, which is the moment the decision gets made.
  *
- * Note what this REMOVES: `instalacion`, `reparacion` and `revisado` get a
- * reminder today and will not after this. `revisado` is Panama's mandatory
- * ANNUAL ATTT inspection, so 90 days was always the wrong interval for it —
- * 365 is what it actually wants, and that is its own change, not this gate
- * loosened.
+ * The group only asserts THAT a reminder exists, never WHEN — a 365-day
+ * interval collapsed to 90 would pass every case here. `scheduledFor` for
+ * `revisado` is pinned by its own test below.
  */
 describe("planReminders — service_due is restricted by category", () => {
-  const SCHEDULED = new Set(["mant_preventivo", "mant_correctivo"]);
+  const SCHEDULED = new Set(["mant_preventivo", "mant_correctivo", "revisado"]);
   const KNOWN = ["instalacion", "mant_correctivo", "mant_preventivo", "reparacion", "revisado"];
 
   it("fails when a category is added, so nobody inherits the reminder decision", () => {
@@ -181,14 +183,41 @@ describe("planReminders — service_due is restricted by category", () => {
 
   // The gate touches only the `completedAt` branch. An appointment reminder is
   // about a booking, not about what the work turned out to be.
+  //
+  // The example used to be `revisado`, which now DOES get a `service_due` at
+  // 365 days — the premise died with this change, so it is re-pointed at
+  // `instalacion`, which genuinely gets none.
   it("leaves the appointment reminder alone for a category that gets no service_due", () => {
     const orden = makeOrden({
-      categoria: "revisado",
+      categoria: "instalacion",
       appointmentAt: new Date(NOW.getTime() + 48 * 60 * 60 * 1000),
     });
 
     const plans = planReminders(orden, makeCliente(), NOW);
 
     expect(plans.filter((p) => p.type === "appointment")).toHaveLength(2);
+  });
+
+  /**
+   * The interval, not just the existence. REVISADO is an ANNUAL inspection: a
+   * test that only asserted "a service_due exists for revisado" would stay
+   * green at 90 days and prove nothing, since that is exactly the wrong
+   * behaviour this change exists to avoid.
+   */
+  it("schedules revisado's service_due a full year out, at completedAt + SERVICE_DUE_ANNUAL_AFTER_DAYS", () => {
+    const completedAt = new Date("2026-07-01T00:00:00.000Z");
+    const orden = makeOrden({ categoria: "revisado", completedAt });
+
+    const plans = planReminders(orden, makeCliente(), NOW);
+
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const expectedTime = new Date(completedAt.getTime() + SERVICE_DUE_ANNUAL_AFTER_DAYS * DAY_MS);
+    expect(SERVICE_DUE_ANNUAL_AFTER_DAYS).toBe(365);
+    expect(plans.filter((p) => p.type === "service_due")).toEqual([
+      expect.objectContaining({ type: "service_due", channel: "whatsapp", scheduledFor: expectedTime }),
+      expect.objectContaining({ type: "service_due", channel: "email", scheduledFor: expectedTime }),
+    ]);
+    // Spelled out so a 90-day regression names the date it actually produced.
+    expect(plans[0].scheduledFor).toEqual(new Date("2027-07-01T00:00:00.000Z"));
   });
 });

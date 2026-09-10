@@ -498,11 +498,14 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
    * The sibling, and the one that proves the gate REACHES this path.
    * `planReminders`' own test covers the predicate; this covers the wiring —
    * `transitionOrder` still calls `planAndScheduleReminders` unconditionally,
-   * so without the gate downstream a `revisado` order would still be booked.
+   * so without the gate downstream an excluded order would still be booked.
+   *
+   * The example was `revisado` until it earned a 365-day `service_due` of its
+   * own; `instalacion` is now the category that genuinely gets none.
    */
   it("transitionOrder -> done schedules NOTHING for a category the rule excludes", async () => {
     const current = {
-      orden: { id: "o1", clienteId: "c1", status: "in_progress", categoria: "revisado" } as unknown as OrdenServicio,
+      orden: { id: "o1", clienteId: "c1", status: "in_progress", categoria: "instalacion" } as unknown as OrdenServicio,
       items: [],
     };
     const database = {

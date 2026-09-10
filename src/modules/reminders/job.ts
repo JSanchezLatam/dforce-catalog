@@ -112,14 +112,31 @@ export type RunReminderDeps = {
 /** Which Kapso template to use for each reminder `type` — defaults to `env.KAPSO_TEMPLATE_APPOINTMENT`/`KAPSO_TEMPLATE_SERVICE_DUE` (ADR-3's two recommended UTILITY templates). Overridable so tests don't depend on ambient env-at-import-time. */
 export type KapsoTemplateNames = { appointment?: string; service_due?: string };
 
+/**
+ * A `service_due` reminder for a `revisado` order fires 365 days after the
+ * work, not 90 (`schedule.ts`'s `SERVICE_DUE_DAYS_BY_CATEGORY`), so it cannot
+ * reuse the maintenance copy — that body names its own interval and would be
+ * a year out of date on the wire. Branching on `categoria`, which
+ * `ReminderContext` already carries, keeps the reminder TYPE (and therefore
+ * the Kapso template and the `reminder_type` enum) unchanged.
+ */
+function isAnnualRevisado(ctx: ReminderContext): boolean {
+  return ctx.reminder.type === "service_due" && ctx.orden.categoria === "revisado";
+}
+
 function emailSubject(ctx: ReminderContext): string {
-  return ctx.reminder.type === "appointment" ? "Recordatorio de cita de servicio" : "Recordatorio de servicio pendiente";
+  if (ctx.reminder.type === "appointment") return "Recordatorio de cita de servicio";
+  if (isAnnualRevisado(ctx)) return "Recordatorio de revisado anual";
+  return "Recordatorio de servicio pendiente";
 }
 
 function emailHtml(ctx: ReminderContext): string {
   if (ctx.reminder.type === "appointment") {
     const when = ctx.orden.appointmentAt ? formatDateTime(ctx.orden.appointmentAt) : "próximamente";
     return `<p>Hola ${ctx.cliente.name},</p><p>Te recordamos tu cita de servicio programada para ${when}.</p>`;
+  }
+  if (isAnnualRevisado(ctx)) {
+    return `<p>Hola ${ctx.cliente.name},</p><p>Pasó un año desde tu último revisado — ya te toca renovarlo para mantener la placa al día. Escribinos y te agendamos la inspección.</p>`;
   }
   return `<p>Hola ${ctx.cliente.name},</p><p>Ya pasaron 90 días desde tu último servicio — es un buen momento para agendar el próximo mantenimiento.</p>`;
 }
