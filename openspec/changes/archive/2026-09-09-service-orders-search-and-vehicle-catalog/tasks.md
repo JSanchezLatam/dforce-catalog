@@ -1047,28 +1047,54 @@ warnings.
 
 ## Closing checklist (maps to proposal.md's Success Criteria)
 
-- [ ] Typing in the `/customers`, `/inventory`, and `/service-orders` search
+- [x] Typing in the `/customers`, `/inventory`, and `/service-orders` search
       boxes produces zero console warnings, verified in a browser — WU1
-- [ ] Clearing filters empties the box without touching a DOM node by hand —
+- [x] Clearing filters empties the box without touching a DOM node by hand —
       WU1
-- [ ] `/service-orders` finds an order by customer name, by phone, and by
+- [x] `/service-orders` finds an order by customer name, by phone, and by
       plate, proven against real Postgres, with the unfiltered row count
       unchanged — WU2 (e2e, exit criterion)
-- [ ] The list shows customer and the car (plate plus make/model, degrading
+- [x] The list shows customer and the car (plate plus make/model, degrading
       to the plate alone when make/model are absent), a truncated
       8-character ID, and no `Descripción`; the detail page still shows the
       full UUID — WU2
-- [ ] With no `sort` in the URL, orders read newest-appointment-first and
+- [x] With no `sort` in the URL, orders read newest-appointment-first and
       orders without an appointment sit last, proven on data where
       `appointmentAt` and `createdAt` disagree — WU2 (e2e)
-- [ ] Completing a `mant_preventivo` or `mant_correctivo` order schedules
+- [x] Completing a `mant_preventivo` or `mant_correctivo` order schedules
       `service_due`; the other three schedule none — WU4
-- [ ] `npm test` and `npx tsc --noEmit` clean at the end of every unit — all
+- [x] `npm test` and `npx tsc --noEmit` clean at the end of every unit — all
       three built units
-- [ ] Every unit was opened in a browser with the console read
-- [ ] A vehicle not in the catalog is still recordable via "Otro", and
+- [x] Every unit was opened in a browser with the console read
+- [x] A vehicle not in the catalog is still recordable via "Otro", and
       choosing "Otro" by mistake is reversible without a reload — WU3
-- [ ] Both vehicle write paths offer the same makes and models, structurally
+- [x] Both vehicle write paths offer the same makes and models, structurally
       (one shared control, one catalog module) rather than by convention — WU3
-- [ ] A stored make or model outside the catalog opens, survives an unrelated
+- [x] A stored make or model outside the catalog opens, survives an unrelated
       edit, and saves back unchanged — WU3
+
+---
+
+## Closing note — what the checklist above rests on
+
+Ticked against real evidence, and the instrument differs per row. The browser
+settled what only a browser can: the Base UI warning gone on `/customers`,
+`/inventory` keeping BOTH filters where it used to drop one, the back button
+re-seeding, `Limpiar` reachable mid-debounce, the order list rendering
+`AU5841 Honda CR-V` newest-appointment-first, search by name/phone/plate, the
+term surviving a sort click, and 42 make options with Toyota listing Hilux,
+Fortuner, Land Cruiser Prado and Rush. Postgres settled the join: **57/57**.
+Everything else is unit-tested and mutation-verified.
+
+**Five GGA rounds on WU1, three on WU2, two each on WU3 and WU4.** Every round
+found something real, and three of them found defects in the FIXES rather than
+in the original code — `clearAll` disabling the re-seed it depended on, a
+`Limpiar` disabled in the only window it exists for, and an empty state whose
+copy I narrowed while widening its condition. That pattern is the lesson worth
+carrying: on this change, fixing the narrow case and leaving the shared one
+happened four separate times.
+
+Two of the placebos were mine — a stripped assertion, and a controlled
+component rendered with a fixed prop so the value never advanced. Both were
+caught by mutation, not by review reading them, which is exactly why the
+mutation step is not optional here.
