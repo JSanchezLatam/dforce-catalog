@@ -738,6 +738,20 @@ Después corregí DATABASE_URL y volvé a correr:
   ./scripts/standalone.sh install-service"
   node_dir="$(cd "$(dirname "$node_bin")" && pwd)"
 
+  # Homebrew is /opt/homebrew on Apple Silicon but /usr/local on Intel, and
+  # service-start.sh needs `brew` on the PATH to resolve pg_isready out of the
+  # keg-only postgres formula. Hardcoding the Apple Silicon path meant that on
+  # an Intel Mac the wait was skipped and the app started anyway — the exact
+  # boot race service-start.sh exists to prevent, whose symptom is every page
+  # returning 500 after a reboot. Resolved here, like node above.
+  local brew_bin brew_dir service_env_path
+  brew_bin="$(command -v brew 2>/dev/null)"
+  brew_dir=""
+  [ -n "$brew_bin" ] && brew_dir="$(cd "$(dirname "$brew_bin")" && pwd)"
+  service_env_path="$node_dir"
+  [ -n "$brew_dir" ] && service_env_path="$service_env_path:$brew_dir"
+  service_env_path="$service_env_path:/usr/bin:/bin:/usr/sbin:/sbin"
+
   # Stopping any existing instance before the port check, so that whatever is
   # still on the port afterwards is genuinely somebody else's.
   service_bootout || fail \
@@ -792,7 +806,7 @@ el servicio en otro puerto:
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>$(xml_escape "$node_dir"):/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <string>$(xml_escape "$service_env_path")</string>
     <key>APP_PORT</key>
     <string>$APP_PORT</string>
   </dict>
@@ -822,6 +836,11 @@ $PLUTIL_OUT" \
 
   ok "Plist escrito: $LAUNCH_PLIST"
   note "node tomado de $node_dir (nvm no está en el PATH de launchd)"
+  if [ -n "$brew_dir" ]; then
+    note "brew tomado de $brew_dir (de ahí sale pg_isready del formula keg-only)"
+  else
+    warn "No encontré 'brew', así que el servicio no va a poder esperar a Postgres: va a arrancar igual y contestar 500 si la base no está."
+  fi
 
   BOOT_OUT="$(launchctl bootstrap "gui/$(id -u)" "$LAUNCH_PLIST" 2>&1)"
   BOOT_RC=$?
