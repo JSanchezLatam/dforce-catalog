@@ -155,7 +155,7 @@ if (-not $dbUrl) {
 if (-not $pgIsReady) {
     Write-Log 'No encontré pg_isready.exe, así que no puedo esperar a la base.'
     Write-Log 'Arranco igual, pero si la base no está, la app va a contestar 500 a todo.'
-    Write-Log '  Cómo arreglarlo:  instalá PostgreSQL 17 (winget install PostgreSQL.PostgreSQL.17)'
+    Write-Log '  Cómo arreglarlo:  instalá PostgreSQL 17 desde https://www.postgresql.org/download/windows/ (a mano, no con winget)'
 }
 else {
     Write-Log "Esperando a Postgres en ${PgHost}:${PgPort} (hasta ${PgWaitSeconds}s)."

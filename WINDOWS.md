@@ -322,7 +322,7 @@ as the database only protects against mistakes, not against the disk.
 | `npm : File ...\npm.ps1 cannot be loaded because running scripts is disabled` | `npm` resolves to `npm.ps1`, which the default execution policy blocks | Use `npm.cmd` instead — same program, batch wrapper, no machine setting changed |
 | `...standalone.ps1 cannot be loaded because running scripts is disabled` | Default PowerShell 5.1 execution policy | Run it as `powershell -ExecutionPolicy Bypass -File ...`, as every command here does |
 | Accented text prints as `Ã¡`, `Ã³` | The `.ps1` lost its UTF-8 BOM, so 5.1 read it as the ANSI codepage | Restore it from git; do not re-save either script without the BOM |
-| `No encontré ningún servicio de PostgreSQL` | PostgreSQL was never installed, or installed as a portable zip with no service | `winget install PostgreSQL.PostgreSQL.17` |
+| `No encontré ningún servicio de PostgreSQL` | PostgreSQL was never installed, or installed as a portable zip with no service | Install it from <https://www.postgresql.org/download/windows/>, running the .exe by hand — not with `winget` |
 | `no me deja conectar como 'postgres'` | Wrong superuser password | Pass it: `standalone.ps1 -SuperPassword <clave>`. If it is lost, reset it by setting `trust` in `pg_hba.conf`, restarting the service, and running `ALTER USER` |
 | Postgres answers on a port that is not 5432 | Another instance already had 5432 when the installer ran | Check `postgresql.conf` for `port`, then pass `-PgPort <n>` |
 | Migrations fail with `relation already exists` | Schema applied but not recorded | Compare `drizzle.__drizzle_migrations` against `src\shared\db\migrations\meta\_journal.json`. That table is authoritative — `public.__drizzle_migrations` is a leftover nobody reads |

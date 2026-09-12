@@ -216,7 +216,9 @@ function Start-PostgresService {
 Instalá PostgreSQL 17 con el instalador oficial de EDB, que registra el
 servicio de Windows y deja los ejecutables en Archivos de programa:
 
-  winget install PostgreSQL.PostgreSQL.17
+  Bajá el instalador de https://www.postgresql.org/download/windows/ y corrélo
+  A MANO. No lo instales con winget: lo corre en modo desatendido, nunca te
+  muestra la pantalla de la contraseña, y te quedás sin saber cuál es.
 
 (o bajalo de https://www.postgresql.org/download/windows/)
 
