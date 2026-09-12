@@ -20,7 +20,7 @@ stay where they are — these scripts call them there.
 | Requirement | Why it decides whether this works at all |
 |-------------|------------------------------------------|
 | **Windows 10 Pro** with the built-in PowerShell 5.1 | Both scripts target 5.1 on purpose. PowerShell 7 is not needed and not assumed |
-| **PostgreSQL 17**, installed with the official EDB installer | It registers a real Windows service (`postgresql-x64-17`) that starts at boot on its own. Write down the `postgres` superuser password it asks for — the setup script needs it once, to create the role and the database |
+| **PostgreSQL 17**, installed by running the official EDB installer **by hand** | It registers a real Windows service (`postgresql-x64-17`) that starts at boot on its own. Run the downloaded `.exe` yourself and write down the `postgres` superuser password it asks for — the setup script needs it once, to create the role and the database. Do **not** install it with `winget`; see below |
 | **Node 20+ installed machine-wide** | The boot task runs as `SYSTEM`, whose `PATH` is not yours. `install-service` resolves `node` at install time and bakes the absolute directory into the task, exactly like the macOS version bakes it into the plist. A per-user Node (nvm-windows, a portable unzip inside your profile) may be unreadable to `SYSTEM`; the script warns about it |
 | The checkout **not** inside OneDrive | OneDrive's "files on demand" are paged in by the signed-in user's session, not by `SYSTEM`. `C:\dforce-catalog` is a fine home. The script warns rather than refuses here, because this one is not verified |
 
@@ -41,8 +41,18 @@ scripts is disabled on this system.
 sidesteps the policy without changing any machine-wide setting. Every `npm` and
 `npx` call inside the scripts already goes through `.cmd` for this reason.
 
+Download PostgreSQL 17 from
+<https://www.postgresql.org/download/windows/> and **run the installer by
+hand**. It asks for a superuser password on screen; write it down.
+
+**Do not install PostgreSQL with `winget`.** `winget` runs it as
+`--mode unattended --unattendedmodeui none`, so that password screen never
+appears and the installer sets one you were never shown. The first thing you
+learn about it is `FATAL: password authentication failed for user "postgres"`,
+with nothing to type. Recovering from that means editing `pg_hba.conf` — see
+"Postgres installed with winget" below. Node is fine either way.
+
 ```powershell
-winget install PostgreSQL.PostgreSQL.17
 winget install OpenJS.NodeJS.LTS
 # close and reopen PowerShell: PATH only refreshes in a new console
 
@@ -307,6 +317,8 @@ as the database only protects against mistakes, not against the disk.
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
+| `FATAL: password authentication failed for user "postgres"` | PostgreSQL was installed with `winget`, which never showed the password screen | "Postgres installed with winget" above |
+| Every screen works but inventory/customer sync brings nothing | This machine's public IP is not on Interfuerza's allowlist | "Interfuerza needs this machine's public IP allowlisted" above |
 | `npm : File ...\npm.ps1 cannot be loaded because running scripts is disabled` | `npm` resolves to `npm.ps1`, which the default execution policy blocks | Use `npm.cmd` instead — same program, batch wrapper, no machine setting changed |
 | `...standalone.ps1 cannot be loaded because running scripts is disabled` | Default PowerShell 5.1 execution policy | Run it as `powershell -ExecutionPolicy Bypass -File ...`, as every command here does |
 | Accented text prints as `Ã¡`, `Ã³` | The `.ps1` lost its UTF-8 BOM, so 5.1 read it as the ANSI codepage | Restore it from git; do not re-save either script without the BOM |
@@ -324,6 +336,78 @@ as the database only protects against mistakes, not against the disk.
 | Worked yesterday, other machines get nothing today | The DHCP lease moved the IP | `standalone.ps1 status` prints the current one. Reserve it on the router |
 | Machine stayed off after a power cut | BIOS "restore on AC power loss" is not set | Set it in the BIOS; Windows cannot |
 | Catalog PDFs fail, everything else works | Chromium is missing from `C:\ProgramData\ms-playwright` | `$env:PLAYWRIGHT_BROWSERS_PATH = "C:\ProgramData\ms-playwright"; npx.cmd playwright install chromium` |
+
+## Postgres installed with winget: recovering the superuser password
+
+Only needed if the trap above already caught you. There is no way to read the
+password back, so the fix is to set a new one through a temporarily open door.
+
+From an **administrator** PowerShell. Do not hardcode the paths — derive them
+from the service itself, so this works whatever the install location is:
+
+```powershell
+$svc  = (Get-Service postgresql* | Select-Object -First 1).Name
+$img  = (Get-CimInstance Win32_Service -Filter "Name='$svc'").PathName
+$data = [regex]::Match($img, '-D\s+"([^"]+)"').Groups[1].Value
+$hba  = Join-Path $data 'pg_hba.conf'
+Test-Path $hba      # must print True before you go on
+```
+
+Then run these six lines **as one paste**:
+
+```powershell
+Copy-Item $hba "$hba.bak" -Force
+(Get-Content $hba) -replace 'scram-sha-256','trust' -replace '\bmd5\b','trust' | Set-Content $hba
+Restart-Service $svc
+& "$(Split-Path (Split-Path $hba))\bin\psql.exe" -U postgres -h localhost -c "ALTER USER postgres PASSWORD '<your new password>';"
+Copy-Item "$hba.bak" $hba -Force
+Restart-Service $svc
+```
+
+**The last two lines are not optional, and that is why this is one paste.**
+Between line 3 and line 5 that Postgres accepts any local connection with no
+password at all.
+
+Verify the door closed again — this command must *ask* for the password:
+
+```powershell
+& "C:\Program Files\PostgreSQL\17\bin\psql.exe" -U postgres -h localhost -c "SELECT version();"
+```
+
+If it answers without asking, `pg_hba.conf` was not restored. Fix that before
+anything else.
+
+## Interfuerza needs this machine's public IP allowlisted
+
+This is not a Windows thing — it applies to any machine the app runs on, and it
+is the one failure that looks like the app being broken when it is not.
+
+Interfuerza's own documentation: *"Es obligatorio agregar en esta sección todas
+las IPs desde las cuales se recibirán todas las llamadas al API."* A valid token
+is not enough. Calls from an address that is not on their list are refused, so
+`inventory-sync` and `customer-import` fail on a machine that has never been
+allowlisted — while every other screen works normally.
+
+Read this machine's public address:
+
+```powershell
+(Invoke-WebRequest ifconfig.me/ip -UseBasicParsing).Content
+```
+
+Add it under **Configuración → Apps → InterFuerza Api → Configurar**, in the IP
+section.
+
+Two things worth knowing before you do:
+
+- **Only allowlist the machine that is staying.** A test box's address is
+  disposable and clutters the list with an entry nobody can later identify.
+- **If the connection is DHCP, that address will change**, and the sync breaks
+  when it does, silently and with no error in the app. A fixed address from the
+  ISP is what stops that.
+
+Regenerating the token is immediate and has no grace period — the API "comienza
+a denegar cualquier integración que no use el nuevo Token", so every machine
+using it has to be updated in the same sitting.
 
 ## What is not covered here
 

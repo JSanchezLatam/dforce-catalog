@@ -346,6 +346,7 @@ The script explains itself, but the underlying causes are these:
 | Service log says `npm: command not found` | The plist's baked PATH points at a Node that is gone (nvm upgrade) | `./scripts/macos/standalone.sh install-service` — it re-resolves `node` |
 | Every page returns 500 after a reboot | The app won the race against Postgres. Should not happen now (`service-start.sh` waits), but this is the symptom | `tail ~/Library/Logs/dforce-catalog.log`, then `./scripts/macos/standalone.sh install-service` to reload the service |
 | Catalog PDFs fail, everything else works | Playwright's Chromium was never downloaded on this Mac | `npx playwright install chromium` |
+| Every screen works but inventory/customer sync brings nothing | This machine's public IP is not on Interfuerza's allowlist — a valid token is not enough | Read it with `curl -s ifconfig.me`, then add it under Configuración → Apps → InterFuerza Api → Configurar. Full detail in [WINDOWS.md](WINDOWS.md#interfuerza-needs-this-machines-public-ip-allowlisted) — the rule is not platform-specific |
 
 ## Going back to Docker
 
