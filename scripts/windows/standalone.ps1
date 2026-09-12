@@ -455,7 +455,7 @@ function Invoke-Migrations {
     Step 'Migraciones de Drizzle'
 
     if (-not (Test-Path -LiteralPath (Join-Path $Root 'node_modules'))) {
-        Fail 'node_modules no existe — el proyecto no tiene sus dependencias.' 'npm install'
+        Fail 'node_modules no existe — el proyecto no tiene sus dependencias.' 'npm.cmd ci'
     }
 
     # scripts/migrate.mjs reads process.env directly and does NOT load .env —
@@ -561,7 +561,7 @@ $(($out | ForEach-Object { "$_" }) -join "`n")" @"
 Probalo a mano para ver el error completo (normalmente es red o proxy):
 
   `$env:PLAYWRIGHT_BROWSERS_PATH = "$PlaywrightPath"
-  npx playwright install chromium
+  npx.cmd playwright install chromium
 
 El resto de la app funciona sin esto: lo único que falla es generar catálogos.
 "@
@@ -772,7 +772,7 @@ administrador) y repetí el comando:
 Compilá primero y después instalá el servicio:
 
   powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 -SetupOnly
-  npm run build
+  npm.cmd run build
   powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 install-service
 '@
     }
@@ -967,7 +967,7 @@ El motivo real está en el log del servicio:
 
 (esa ruta es la de SYSTEM: hay que leerla desde una consola de administrador)
 
-Causas típicas: falta el build (npm run build), DATABASE_URL apunta a un
+Causas típicas: falta el build (npm.cmd run build), DATABASE_URL apunta a un
 Postgres que no está, o el puerto lo tiene otro proceso:
 
   Get-NetTCPConnection -LocalPort $Port -State Listen
@@ -1232,7 +1232,7 @@ switch ($Command.ToLowerInvariant()) {
             Write-Host ''
             Write-Host '[OK] Todo listo.' -ForegroundColor Green
             Write-Host ''
-            Write-Host '  Arrancar la app:     npm run build; npm start'
+            Write-Host '  Arrancar la app:     npm.cmd run build; npm.cmd start'
             Write-Host '  Al encender:         .\scripts\windows\standalone.ps1 install-service'
             Write-Host '  Backup:              .\scripts\windows\standalone.ps1 backup'
             Write-Host ''

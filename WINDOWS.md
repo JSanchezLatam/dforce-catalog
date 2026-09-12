@@ -29,13 +29,25 @@ stay where they are — these scripts call them there.
 PowerShell 5.1 does not run unsigned scripts by default, so every command below
 goes through `-ExecutionPolicy Bypass`.
 
+That same policy is why every `npm` below is written **`npm.cmd`**. On Windows
+`npm` resolves to `npm.ps1` first, and PowerShell refuses to load it:
+
+```
+npm : File C:\Program Files\nodejs\npm.ps1 cannot be loaded because running
+scripts is disabled on this system.
+```
+
+`npm.cmd` is the batch wrapper next to it and runs the identical thing, so it
+sidesteps the policy without changing any machine-wide setting. Every `npm` and
+`npx` call inside the scripts already goes through `.cmd` for this reason.
+
 ```powershell
 winget install PostgreSQL.PostgreSQL.17
 winget install OpenJS.NodeJS.LTS
 # close and reopen PowerShell: PATH only refreshes in a new console
 
 cd C:\dforce-catalog
-npm ci
+npm.cmd ci
 powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1
 ```
 
@@ -238,9 +250,9 @@ pull, install, migrate or build.
 ```powershell
 cd C:\dforce-catalog
 git pull
-npm ci
+npm.cmd ci
 powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 -SetupOnly
-npm run build
+npm.cmd run build
 powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 install-service
 ```
 
@@ -295,6 +307,7 @@ as the database only protects against mistakes, not against the disk.
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
+| `npm : File ...\npm.ps1 cannot be loaded because running scripts is disabled` | `npm` resolves to `npm.ps1`, which the default execution policy blocks | Use `npm.cmd` instead — same program, batch wrapper, no machine setting changed |
 | `...standalone.ps1 cannot be loaded because running scripts is disabled` | Default PowerShell 5.1 execution policy | Run it as `powershell -ExecutionPolicy Bypass -File ...`, as every command here does |
 | Accented text prints as `Ã¡`, `Ã³` | The `.ps1` lost its UTF-8 BOM, so 5.1 read it as the ANSI codepage | Restore it from git; do not re-save either script without the BOM |
 | `No encontré ningún servicio de PostgreSQL` | PostgreSQL was never installed, or installed as a portable zip with no service | `winget install PostgreSQL.PostgreSQL.17` |
@@ -310,7 +323,7 @@ as the database only protects against mistakes, not against the disk.
 | App answers on `localhost` but not from other machines | No firewall rule, or Windows classified the network as Public | `standalone.ps1 status` shows whether the rule exists. Set the network to Private in Settings → Network |
 | Worked yesterday, other machines get nothing today | The DHCP lease moved the IP | `standalone.ps1 status` prints the current one. Reserve it on the router |
 | Machine stayed off after a power cut | BIOS "restore on AC power loss" is not set | Set it in the BIOS; Windows cannot |
-| Catalog PDFs fail, everything else works | Chromium is missing from `C:\ProgramData\ms-playwright` | `$env:PLAYWRIGHT_BROWSERS_PATH = "C:\ProgramData\ms-playwright"; npx playwright install chromium` |
+| Catalog PDFs fail, everything else works | Chromium is missing from `C:\ProgramData\ms-playwright` | `$env:PLAYWRIGHT_BROWSERS_PATH = "C:\ProgramData\ms-playwright"; npx.cmd playwright install chromium` |
 
 ## What is not covered here
 
