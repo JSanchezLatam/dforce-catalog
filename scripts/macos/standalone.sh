@@ -15,14 +15,14 @@
 # something fails it prints what is wrong and the exact command that fixes it.
 #
 # Usage:
-#   ./scripts/standalone.sh              setup + build + start (production)
-#   ./scripts/standalone.sh --dev        same, but `next dev` instead
-#   ./scripts/standalone.sh --setup-only stop before building/starting the app
-#   ./scripts/standalone.sh backup       dump the database to ~/dforce-backups
-#   ./scripts/standalone.sh restore FILE restore a dump (destructive, asks first)
-#   ./scripts/standalone.sh status       where the data lives and what is running
-#   ./scripts/standalone.sh install-service    start the app at login (launchd)
-#   ./scripts/standalone.sh uninstall-service  remove that LaunchAgent
+#   ./scripts/macos/standalone.sh              setup + build + start (production)
+#   ./scripts/macos/standalone.sh --dev        same, but `next dev` instead
+#   ./scripts/macos/standalone.sh --setup-only stop before building/starting the app
+#   ./scripts/macos/standalone.sh backup       dump the database to ~/dforce-backups
+#   ./scripts/macos/standalone.sh restore FILE restore a dump (destructive, asks first)
+#   ./scripts/macos/standalone.sh status       where the data lives and what is running
+#   ./scripts/macos/standalone.sh install-service    start the app at login (launchd)
+#   ./scripts/macos/standalone.sh uninstall-service  remove that LaunchAgent
 #
 # Env: APP_PORT (default 3000), PG_FORMULA (default postgresql@17),
 #      DEV_USER / DEV_PASSWORD (default admin / admin123) for the
@@ -32,7 +32,7 @@
 
 set -uo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 APP_PORT="${APP_PORT:-3000}"
 PG_FORMULA="${PG_FORMULA:-postgresql@17}"
 
@@ -115,7 +115,7 @@ resolve_pg() {
     "Instalalo desde https://brew.sh y después:
 
   brew install $PG_FORMULA
-  ./scripts/standalone.sh"
+  ./scripts/macos/standalone.sh"
 
   PG_PREFIX="$(brew --prefix "$PG_FORMULA" 2>/dev/null)"
   if [ -z "$PG_PREFIX" ] || [ ! -x "$PG_PREFIX/bin/psql" ]; then
@@ -126,7 +126,7 @@ resolve_pg() {
 Si querés otra versión mayor, pasala por variable — pero tiene que ser
 >= la del contenedor (postgres:17-alpine), o pg_restore rechaza el dump:
 
-  PG_FORMULA=postgresql@18 ./scripts/standalone.sh"
+  PG_FORMULA=postgresql@18 ./scripts/macos/standalone.sh"
   fi
 
   export PATH="$PG_PREFIX/bin:$PATH"
@@ -156,7 +156,7 @@ $INITDB_OUT" \
         "Si el directorio existe pero está a medias, movelo y reintentá:
 
   mv '$PG_DATA_DIR' '$PG_DATA_DIR.roto'
-  ./scripts/standalone.sh"
+  ./scripts/macos/standalone.sh"
       ok "Cluster creado"
     fi
 
@@ -302,11 +302,11 @@ No importo nada por mi cuenta: pisaría la nativa sin que lo pidas." \
 traela encima de la nativa — hace un respaldo antes de tocar nada:
 
   docker compose exec -T db pg_dump -U $DB_USER -Fc $DB_NAME > /tmp/docker.dump
-  ./scripts/standalone.sh restore /tmp/docker.dump
+  ./scripts/macos/standalone.sh restore /tmp/docker.dump
 
 Si la buena es la nativa, decímelo y sigo con ella:
 
-  SKIP_IMPORT=1 ./scripts/standalone.sh
+  SKIP_IMPORT=1 ./scripts/macos/standalone.sh
 
 Para comparar antes de decidir:
 
@@ -319,7 +319,7 @@ Para comparar antes de decidir:
 
   if [ "$docker_up" != "1" ]; then
     ok "El contenedor 'db' no está levantado — arranco con una base vacía"
-    note "si querés traer datos viejos: docker compose up -d db && ./scripts/standalone.sh"
+    note "si querés traer datos viejos: docker compose up -d db && ./scripts/macos/standalone.sh"
     return
   fi
 
@@ -340,7 +340,7 @@ Para comparar antes de decidir:
 Si preferís empezar con una base vacía (los datos del contenedor quedan
 intactos en su volumen):
 
-  SKIP_IMPORT=1 ./scripts/standalone.sh"
+  SKIP_IMPORT=1 ./scripts/macos/standalone.sh"
   fi
 
   if [ ! -s "$dump" ]; then
@@ -531,7 +531,7 @@ cmd_backup() {
 
 O corré el setup completo:
 
-  ./scripts/standalone.sh --setup-only"
+  ./scripts/macos/standalone.sh --setup-only"
 
   mkdir -p "$BACKUP_DIR"
   local out="$BACKUP_DIR/$DB_NAME-$(date +%Y%m%d-%H%M%S).dump"
@@ -554,14 +554,14 @@ $DUMP_OUT" \
   psql -h localhost -p $PG_PORT -U $DB_USER -d $DB_NAME -c '\\dt'"; }
 
   ok "Backup: $out ($(du -h "$out" | cut -f1))"
-  note "restaurarlo: ./scripts/standalone.sh restore '$out'"
+  note "restaurarlo: ./scripts/macos/standalone.sh restore '$out'"
 }
 
 cmd_restore() {
   local file="${1:-}"
   [ -n "$file" ] || fail \
     "No me pasaste qué archivo restaurar." \
-    "./scripts/standalone.sh restore <archivo.dump>
+    "./scripts/macos/standalone.sh restore <archivo.dump>
 
 Los backups viven en $BACKUP_DIR:
 
@@ -589,7 +589,7 @@ Los backups viven en $BACKUP_DIR:
           "Restauración destructiva sin terminal para confirmar." \
           "Corrélo desde una terminal, o asumí el riesgo explícitamente:
 
-  FORCE=1 ./scripts/standalone.sh restore '$file'"
+  FORCE=1 ./scripts/macos/standalone.sh restore '$file'"
       fi
       printf '\n  Escribí %ssi%s para continuar: ' "$RED" "$OFF"
       read -r answer
@@ -687,7 +687,7 @@ lugar natural es el home directamente:
 
   mv '$ROOT' ~/dforce-catalog
   cd ~/dforce-catalog
-  ./scripts/standalone.sh install-service
+  ./scripts/macos/standalone.sh install-service
 
 (La otra salida sería darle Acceso Total al Disco a /bin/bash en Ajustes del
 Sistema, que se lo da a CUALQUIER script del sistema. Mover el repo es más
@@ -702,9 +702,9 @@ barato y más seguro.)"
     "No hay build: falta $ROOT/.next, y el servicio corre 'next start', que sin build no levanta." \
     "Compilá primero y después instalá el servicio:
 
-  ./scripts/standalone.sh --setup-only
+  ./scripts/macos/standalone.sh --setup-only
   npm run build
-  ./scripts/standalone.sh install-service"
+  ./scripts/macos/standalone.sh install-service"
 
   [ -f "$ROOT/.env" ] || fail \
     "Falta .env — el servicio arrancaría y se caería al instante sin DATABASE_URL." \
@@ -712,7 +712,7 @@ barato y más seguro.)"
 
 Después corregí DATABASE_URL y volvé a correr:
 
-  ./scripts/standalone.sh install-service"
+  ./scripts/macos/standalone.sh install-service"
 
   [ -n "$(env_value "$ROOT/.env" DATABASE_URL)" ] || fail \
     "DATABASE_URL no está definida en .env, que es lo único que la app exige para arrancar." \
@@ -720,11 +720,11 @@ Después corregí DATABASE_URL y volvé a correr:
 
   DATABASE_URL=postgres://$DB_USER:$DB_PASSWORD@localhost:$PG_PORT/$DB_NAME"
 
-  [ -f "$ROOT/scripts/service-start.sh" ] || fail \
-    "Falta scripts/service-start.sh, que es lo que el servicio ejecuta." \
+  [ -f "$ROOT/scripts/macos/service-start.sh" ] || fail \
+    "Falta scripts/macos/service-start.sh, que es lo que el servicio ejecuta." \
     "Está en el repo; si desapareció, recuperalo:
 
-  git checkout -- scripts/service-start.sh"
+  git checkout -- scripts/macos/service-start.sh"
 
   # node/npm come from nvm, which lives in the shell's profile and is nowhere
   # near launchd's PATH. Baking the absolute directory resolved right now is
@@ -735,7 +735,7 @@ Después corregí DATABASE_URL y volvé a correr:
     "No encontré 'node' en el PATH, así que no sé qué PATH ponerle al servicio." \
     "nvm use 22   (o instalá Node 20+) y reintentá:
 
-  ./scripts/standalone.sh install-service"
+  ./scripts/macos/standalone.sh install-service"
   node_dir="$(cd "$(dirname "$node_bin")" && pwd)"
 
   # Homebrew is /opt/homebrew on Apple Silicon but /usr/local on Intel, and
@@ -759,7 +759,7 @@ Después corregí DATABASE_URL y volvé a correr:
     "Descargalo a mano y reintentá:
 
   launchctl bootout gui/$(id -u)/$LAUNCH_LABEL
-  ./scripts/standalone.sh install-service"
+  ./scripts/macos/standalone.sh install-service"
 
   # Somebody else on the port is worth stopping for, and not only because the
   # job would crash-loop: the check at the end of this function would see an
@@ -774,11 +774,11 @@ Después corregí DATABASE_URL y volvé a correr:
 Si es un 'next dev' o una corrida vieja de este script, bajala primero. O dejá
 el servicio en otro puerto:
 
-  APP_PORT=<puerto> ./scripts/standalone.sh install-service"
+  APP_PORT=<puerto> ./scripts/macos/standalone.sh install-service"
   fi
 
   local service_path
-  service_path="$(xml_escape "$ROOT/scripts/service-start.sh")"
+  service_path="$(xml_escape "$ROOT/scripts/macos/service-start.sh")"
 
   mkdir -p "$(dirname "$LAUNCH_PLIST")" "$(dirname "$LAUNCH_LOG")" || fail \
     "No pude crear ~/Library/LaunchAgents o ~/Library/Logs." \
@@ -832,7 +832,7 @@ $PLUTIL_OUT" \
 
   cat '$LAUNCH_PLIST'
   rm '$LAUNCH_PLIST'
-  ./scripts/standalone.sh install-service"
+  ./scripts/macos/standalone.sh install-service"
 
   ok "Plist escrito: $LAUNCH_PLIST"
   note "node tomado de $node_dir (nvm no está en el PATH de launchd)"
@@ -901,7 +901,7 @@ Postgres que no está, o el puerto lo tiene otro proceso:
   note "hace falta auto-login en Ajustes del Sistema: esto es un LaunchAgent de"
   note "usuario (igual que el Postgres de Homebrew) y no carga hasta que alguien"
   note "inicia sesión — ver STANDALONE.md"
-  note "desinstalarlo: ./scripts/standalone.sh uninstall-service"
+  note "desinstalarlo: ./scripts/macos/standalone.sh uninstall-service"
 }
 
 cmd_uninstall_service() {
@@ -979,11 +979,11 @@ cmd_status() {
       ok "Servicio instalado y cargado en launchd"
     else
       warn "El plist existe pero launchd no lo tiene cargado"
-      note "recargarlo: ./scripts/standalone.sh install-service"
+      note "recargarlo: ./scripts/macos/standalone.sh install-service"
     fi
   else
     warn "No hay servicio instalado — después de un reinicio la app NO vuelve sola"
-    note "instalarlo: ./scripts/standalone.sh install-service"
+    note "instalarlo: ./scripts/macos/standalone.sh install-service"
   fi
   note "plist: $LAUNCH_PLIST"
   note "log:   $LAUNCH_LOG"
@@ -1026,7 +1026,7 @@ Si es una corrida vieja de este mismo stack, matala:
 
 O usá otro puerto:
 
-  APP_PORT=<puerto> ./scripts/standalone.sh"
+  APP_PORT=<puerto> ./scripts/macos/standalone.sh"
   fi
 
   resolve_pg
@@ -1041,8 +1041,8 @@ O usá otro puerto:
   if [ "$mode" = "setup-only" ]; then
     printf '\n%s✓ Todo listo.%s La base vive en:\n\n    %s\n\n' "$GREEN" "$OFF" "$PG_DATA_DIR"
     printf '  Arrancar la app:  npm run build && npm start\n'
-    printf '  Al iniciar sesión: ./scripts/standalone.sh install-service\n'
-    printf '  Backup:           ./scripts/standalone.sh backup\n\n'
+    printf '  Al iniciar sesión: ./scripts/macos/standalone.sh install-service\n'
+    printf '  Backup:           ./scripts/macos/standalone.sh backup\n\n'
     return 0
   fi
 
@@ -1067,7 +1067,7 @@ O usá otro puerto:
 $BUILD_OUT" \
       "Arreglá los errores de arriba. Para levantar igual y debuggear:
 
-  ./scripts/standalone.sh --dev"
+  ./scripts/macos/standalone.sh --dev"
     ok "Build listo"
   fi
 
@@ -1115,6 +1115,6 @@ case "${1:-}" in
   *)
     fail \
       "No conozco la opción '$1'." \
-      "./scripts/standalone.sh --help"
+      "./scripts/macos/standalone.sh --help"
     ;;
 esac

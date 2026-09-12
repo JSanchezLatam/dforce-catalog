@@ -1,0 +1,5 @@
+# Normalize line endings in the repository to LF. The bash scripts under
+# scripts/macos/ break outright with CRLF (`#!/usr/bin/env bash\r`), and this
+# repo is about to be cloned on Windows, where Git would otherwise check out
+# CRLF by default.
+* text=auto eol=lf

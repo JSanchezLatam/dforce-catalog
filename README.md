@@ -13,7 +13,7 @@ from.
 ## Running locally (the short way)
 
 ```
-./scripts/dev.sh
+./scripts/macos/dev.sh
 ```
 
 Brings up Postgres in Docker, applies migrations, seeds a local administrator
@@ -75,7 +75,7 @@ what you want when running the production image rather than dev mode.
 ### Running without Docker
 
 ```
-./scripts/standalone.sh
+./scripts/macos/standalone.sh
 ```
 
 Runs the whole app against a Homebrew Postgres whose data lives in
@@ -85,6 +85,12 @@ down -v` delete without warning. It handles the move from an existing
 container, backups and restores, and every step is idempotent: a failed run
 is resumed by running it again. See [STANDALONE.md](STANDALONE.md) for the
 subcommands (`backup`, `restore`, `status`) and the environment variables.
+
+That script and everything under `scripts/macos/` is macOS-only (Homebrew,
+launchd, bash). On Windows the equivalent scripts live in `scripts/windows/`
+— see [WINDOWS.md](WINDOWS.md). The cross-platform Node entrypoints
+(`scripts/migrate.mjs`, `scripts/seed-user.mjs`, `scripts/preview-catalog.ts`)
+stay at `scripts/` and are called from both.
 
 By hand instead: `npm install`, set `DATABASE_URL` to a reachable Postgres,
 `npm run db:migrate`, then `npm run dev`. Playwright's Chromium (used to
@@ -232,7 +238,7 @@ a Playwright version bump.
   so the ERP's `Accesorios` and `ACCESORIOS` collapse into one. The
   duplicates still exist upstream in Interfuerza.
 - Nothing is deployed anywhere yet. Before a first deploy:
-  - the PDF queue has to be drained with `scripts/drain-pdf-queue.sh` — the
+  - the PDF queue has to be drained with `scripts/macos/drain-pdf-queue.sh` — the
     job payload shape changed after those jobs were enqueued;
   - `cliente.phone` is `NOT NULL` since migration `0016`, and that migration
     is a bare `SET NOT NULL` that **hard-fails on the first null row rather

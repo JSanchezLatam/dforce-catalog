@@ -13,7 +13,7 @@ with no confirmation and no way back. On a native Postgres the same data sits in
 
 ```bash
 brew install postgresql@17     # once
-./scripts/standalone.sh        # setup + build + start
+./scripts/macos/standalone.sh  # setup + build + start
 ```
 
 That single command starts Postgres as a login-time service, creates the role
@@ -43,14 +43,14 @@ code changes are needed.
 
 | Command | What it does |
 |---------|--------------|
-| `./scripts/standalone.sh` | Full setup, `next build`, then `next start` |
-| `./scripts/standalone.sh --dev` | Same setup, but `next dev` (no build step) |
-| `./scripts/standalone.sh --setup-only` | Database ready, app not started |
-| `./scripts/standalone.sh backup` | `pg_dump -Fc` into `~/dforce-backups/` |
-| `./scripts/standalone.sh restore FILE` | Restore a dump (asks first, backs up first) |
-| `./scripts/standalone.sh status` | Where the data is, what is running, what `.env` points at |
-| `./scripts/standalone.sh install-service` | Start the app at login and keep it up (launchd) |
-| `./scripts/standalone.sh uninstall-service` | Remove that LaunchAgent; Postgres is untouched |
+| `./scripts/macos/standalone.sh` | Full setup, `next build`, then `next start` |
+| `./scripts/macos/standalone.sh --dev` | Same setup, but `next dev` (no build step) |
+| `./scripts/macos/standalone.sh --setup-only` | Database ready, app not started |
+| `./scripts/macos/standalone.sh backup` | `pg_dump -Fc` into `~/dforce-backups/` |
+| `./scripts/macos/standalone.sh restore FILE` | Restore a dump (asks first, backs up first) |
+| `./scripts/macos/standalone.sh status` | Where the data is, what is running, what `.env` points at |
+| `./scripts/macos/standalone.sh install-service` | Start the app at login and keep it up (launchd) |
+| `./scripts/macos/standalone.sh uninstall-service` | Remove that LaunchAgent; Postgres is untouched |
 
 Environment overrides: `APP_PORT` (default 3000), `PG_FORMULA` (default
 `postgresql@17`), `DEV_USER` / `DEV_PASSWORD` for the seeded administrator,
@@ -60,7 +60,7 @@ Environment overrides: `APP_PORT` (default 3000), `PG_FORMULA` (default
 ## The workshop Mac: coming back after a power cut
 
 On the workshop Mac nobody watches a terminal, and the machine gets switched
-off. `./scripts/standalone.sh` on its own is the wrong shape for that: it runs
+off. `./scripts/macos/standalone.sh` on its own is the wrong shape for that: it runs
 the app in the foreground under `trap cleanup EXIT`, so closing the terminal
 window — or logging out, or a power cut — takes the app with it, and nothing
 brings it back.
@@ -72,10 +72,10 @@ launchd is macOS's own supervisor; there is no pm2 or equivalent here on
 purpose.
 
 ```bash
-cd ~/dforce-catalog              # NOT ~/Desktop — see below
-./scripts/standalone.sh          # setup, migrations, build — once, interactively
+cd ~/dforce-catalog            # NOT ~/Desktop — see below
+./scripts/macos/standalone.sh  # setup, migrations, build — once, interactively
 # Ctrl-C once you have seen it work, then:
-./scripts/standalone.sh install-service
+./scripts/macos/standalone.sh install-service
 ```
 
 `install-service` refuses rather than guesses, and it tells you the exact fix
@@ -139,7 +139,7 @@ the database is `src/instrumentation.ts`, which registers the pg-boss workers at
 boot.
 
 So the plist does not exec `standalone.sh` (its `EXIT` trap would kill the very
-app it started). It execs `scripts/service-start.sh`, whose only job is to wait
+app it started). It execs `scripts/macos/service-start.sh`, whose only job is to wait
 on `pg_isready` before handing off with `exec npm run start`. It reads the host
 and port out of `.env`'s `DATABASE_URL` rather than assuming 5432 — on a machine
 that still has Docker, `.env` legitimately points at 5433, and waiting on the
@@ -218,7 +218,7 @@ That is the first place to look for every failure in this section, and the path
 gui/$(id -u)/com.dforce.catalog` is the other half of the picture: whether
 launchd has the job, its PID, and how many times it has restarted.
 
-`./scripts/standalone.sh status` now answers "is the service installed and
+`./scripts/macos/standalone.sh status` now answers "is the service installed and
 loaded, and what is the LAN URL" alongside the database questions it already
 answered.
 
@@ -232,9 +232,9 @@ that yourself and restarting the service:
 cd ~/dforce-catalog
 git pull
 npm ci
-./scripts/standalone.sh --setup-only     # migrations, and the Chromium check
+./scripts/macos/standalone.sh --setup-only     # migrations, and the Chromium check
 npm run build
-./scripts/standalone.sh install-service  # re-runnable: reloads the service
+./scripts/macos/standalone.sh install-service  # re-runnable: reloads the service
 ```
 
 Deliberately not automated. An unattended `git pull && build` on the machine the
@@ -250,7 +250,7 @@ which is why this never needed mentioning before, and why it is the one gap that
 breaks *silently* on a fresh Mac: everything else works, and only the catalog
 job fails.
 
-`./scripts/standalone.sh` now checks for it and downloads it once (~150 MB) if
+`./scripts/macos/standalone.sh` now checks for it and downloads it once (~150 MB) if
 it is missing, as part of the normal setup. Nothing is downloaded when it is
 already there. By hand it is:
 
@@ -274,7 +274,7 @@ answers. The script rewrites exactly this line and leaves a timestamped
 This is the failure worth understanding, because it does not look like a
 failure: with a native Postgres running on 5432 and `.env` still pointing at
 5433 (or the reverse), the app connects successfully to the *wrong* database and
-simply renders as empty. Nothing logs an error. `./scripts/standalone.sh status`
+simply renders as empty. Nothing logs an error. `./scripts/macos/standalone.sh status`
 prints which one `.env` currently points at.
 
 ## Two databases named `dforce_catalog`
@@ -287,13 +287,13 @@ Bring the container's data over (a backup is taken before anything is replaced):
 
 ```bash
 docker compose exec -T db pg_dump -U dforce -Fc dforce_catalog > /tmp/docker.dump
-./scripts/standalone.sh restore /tmp/docker.dump
+./scripts/macos/standalone.sh restore /tmp/docker.dump
 ```
 
 Or keep the native one as-is:
 
 ```bash
-SKIP_IMPORT=1 ./scripts/standalone.sh
+SKIP_IMPORT=1 ./scripts/macos/standalone.sh
 ```
 
 Compare them first if you are unsure:
@@ -309,19 +309,19 @@ A data directory is not a backup. It does not survive a disk failure, a bad
 migration, or a `DELETE` without a `WHERE`. The backup is a dump file.
 
 ```bash
-./scripts/standalone.sh backup
+./scripts/macos/standalone.sh backup
 # → ~/dforce-backups/dforce_catalog-20260830-032350.dump
 ```
 
 Custom format (`-Fc`), so `pg_restore` can restore it selectively and the file is
-compressed. Restore any of them with `./scripts/standalone.sh restore <file>` —
+compressed. Restore any of them with `./scripts/macos/standalone.sh restore <file>` —
 it takes a fresh backup of the current state before replacing it.
 
 For a nightly one, `cron` is enough:
 
 ```bash
 crontab -e
-# 0 2 * * * cd "$HOME/Desktop/Works/Dforce Car/Proyecto Catalogo" && ./scripts/standalone.sh backup >> /tmp/dforce-backup.log 2>&1
+# 0 2 * * * cd "$HOME/Desktop/Works/Dforce Car/Proyecto Catalogo" && ./scripts/macos/standalone.sh backup >> /tmp/dforce-backup.log 2>&1
 ```
 
 Backups live in `$HOME`, outside the repo — they contain real customer data and
@@ -339,13 +339,14 @@ The script explains itself, but the underlying causes are these:
 | `address already in use` on 5432 | Another Postgres (or an old `brew services` entry) | `lsof -nP -iTCP:5432 -sTCP:LISTEN` |
 | Cannot connect as your macOS user | Cluster not created by this Homebrew install | Create the superuser role by hand — the script prints the exact `psql` line |
 | Migrations fail with `relation already exists` | Schema applied but not recorded | Compare `drizzle.__drizzle_migrations` against `src/shared/db/migrations/meta/_journal.json`. That table is authoritative — `public.__drizzle_migrations` is a leftover nobody reads |
-| App starts, everything is empty | `.env` points at the other Postgres | `./scripts/standalone.sh status` |
+| App starts, everything is empty | `.env` points at the other Postgres | `./scripts/macos/standalone.sh status` |
 | Service log says `Operation not permitted` | The checkout is in `~/Desktop`, `~/Documents` or `~/Downloads`, which launchd cannot read | Move it: `mv <repo> ~/dforce-catalog`, then `install-service` again |
 | App did not come back after a reboot | Auto-login is off, so no user LaunchAgent loaded — Postgres is down too | System Settings → Users & Groups → Automatic login |
 | Worked all day, then stopped answering on the LAN | Somebody closed the lid. `sleep 0` does not cover it | Open it. To stop it recurring, see "Closing the lid" above |
-| Service log says `npm: command not found` | The plist's baked PATH points at a Node that is gone (nvm upgrade) | `./scripts/standalone.sh install-service` — it re-resolves `node` |
-| Every page returns 500 after a reboot | The app won the race against Postgres. Should not happen now (`service-start.sh` waits), but this is the symptom | `tail ~/Library/Logs/dforce-catalog.log`, then `./scripts/standalone.sh install-service` to reload the service |
+| Service log says `npm: command not found` | The plist's baked PATH points at a Node that is gone (nvm upgrade) | `./scripts/macos/standalone.sh install-service` — it re-resolves `node` |
+| Every page returns 500 after a reboot | The app won the race against Postgres. Should not happen now (`service-start.sh` waits), but this is the symptom | `tail ~/Library/Logs/dforce-catalog.log`, then `./scripts/macos/standalone.sh install-service` to reload the service |
 | Catalog PDFs fail, everything else works | Playwright's Chromium was never downloaded on this Mac | `npx playwright install chromium` |
+| Every screen works but inventory/customer sync brings nothing | This machine's public IP is not on Interfuerza's allowlist — a valid token is not enough | Read it with `curl -s ifconfig.me`, then add it under Configuración → Apps → InterFuerza Api → Configurar. Full detail in [WINDOWS.md](WINDOWS.md#interfuerza-needs-this-machines-public-ip-allowlisted) — the rule is not platform-specific |
 
 ## Going back to Docker
 
@@ -354,7 +355,7 @@ Nothing is burned. The compose volume is never deleted by this script.
 ```bash
 # .env → back to :5433
 docker compose up -d db
-./scripts/dev.sh
+./scripts/macos/dev.sh
 ```
 
 To move current native data back into the container, dump it and restore it

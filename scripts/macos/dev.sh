@@ -7,14 +7,14 @@
 # files. When a prerequisite is missing it prints exactly what is wrong and
 # the exact command that fixes it, then exits non-zero.
 #
-# Usage:  ./scripts/dev.sh
+# Usage:  ./scripts/macos/dev.sh
 # Env:    APP_PORT (default 3000), SKIP_TYPECHECK=1 to skip the tsc gate,
 #         DEV_USER / DEV_PASSWORD (default admin / admin123) for the
 #         administrator seeded when the users table is empty
 
 set -uo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 APP_PORT="${APP_PORT:-3000}"
 # The host port docker-compose.yml publishes for the `db` service.
 DB_HOST_PORT=5433
@@ -58,7 +58,7 @@ docker info >/dev/null 2>&1 || fail \
   "Abrí Docker Desktop desde Applications y esperá a que el ícono
 de la barra de menú deje de animarse. Después:
 
-  ./scripts/dev.sh"
+  ./scripts/macos/dev.sh"
 ok "Docker daemon respondiendo"
 
 # Checked before pulling images and running migrations: failing on a busy port
@@ -76,7 +76,7 @@ Si es una corrida vieja de este mismo stack, matala:
 
 O corré este script en otro puerto:
 
-  APP_PORT=<puerto> ./scripts/dev.sh"
+  APP_PORT=<puerto> ./scripts/macos/dev.sh"
 fi
 ok "Puerto $APP_PORT libre"
 
@@ -155,7 +155,7 @@ $TSC_OUT" \
 
 Si necesitás levantar igual para debuggear, saltealo por esta vez:
 
-  SKIP_TYPECHECK=1 ./scripts/dev.sh"
+  SKIP_TYPECHECK=1 ./scripts/macos/dev.sh"
   ok "Tipos en verde"
 fi
 
@@ -250,7 +250,7 @@ $SEED_OUT" \
   ok "Usuario '$DEV_USER' creado con rol administrador"
   if [ "$DEV_PASSWORD" = "admin123" ]; then
     printf '    %sclave: admin123 — cambiala desde Mi cuenta, o corré%s\n' "$DIM" "$OFF"
-    printf '    %sDEV_USER=<usuario> DEV_PASSWORD=<clave> ./scripts/dev.sh%s\n' "$DIM" "$OFF"
+    printf '    %sDEV_USER=<usuario> DEV_PASSWORD=<clave> ./scripts/macos/dev.sh%s\n' "$DIM" "$OFF"
   fi
 else
   ok "${USER_COUNT} usuario(s) en la base"
