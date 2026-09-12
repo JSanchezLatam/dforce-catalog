@@ -169,6 +169,27 @@ evidence. Also note the trigger: `Pagination` returns `null` at `pageCount <=
 1`, so one customer in the dev database hid the first defect entirely. A bug
 that depends on data VOLUME does not exist until there is data.
 
+**Third known limit — a secure-context-only browser API is invisible on
+localhost AND invisible in jsdom.** `crypto.randomUUID()` exists only over
+HTTPS or on `localhost`/`127.0.0.1`. The workshop reaches this app from other
+machines at `http://192.168.x.x:3000`, where `crypto` is defined but
+`randomUUID` is not, so "Agregar vehículo" threw `TypeError:
+crypto.randomUUID is not a function` for every user who was not sitting at the
+server — while working perfectly on every developer's localhost, and passing
+1659 tests, because Node's crypto has the method. It shipped and was found by
+an operator, not by us.
+
+So **verification means opening the app at its LAN IP, not at localhost** —
+`http://<ip>:3000`, from another machine. That is the only place this class
+appears. The same trap is armed for `crypto.subtle`, `navigator.clipboard`,
+`mediaDevices`, `geolocation`, service workers and `showSaveFilePicker`: none
+are used in a `"use client"` file today (checked 2026-09-12), and adding one
+without an insecure-context fallback breaks the workshop and nothing else.
+
+Note what this was NOT: it had nothing to do with Windows, and it was not
+introduced by the Windows move. The MacBook plan carried the identical bug,
+waiting for the first employee to open the app from a second machine.
+
 ## Code quality gate
 
 - **`npm test` and `npx tsc --noEmit` clean before a PR.**

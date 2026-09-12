@@ -147,6 +147,39 @@ describe("CustomerForm — vehicle collection (create)", () => {
   });
 
   /**
+   * `crypto.randomUUID` exists ONLY in a secure context — HTTPS, or
+   * localhost/127.0.0.1. The workshop reaches this app from other machines
+   * over `http://192.168.x.x:3000`, which is neither: `crypto` is defined
+   * there, `randomUUID` is not, and "Agregar vehículo" threw
+   * `TypeError: crypto.randomUUID is not a function`.
+   *
+   * That is exactly why nothing caught it — every developer check runs on
+   * localhost, where the flow works perfectly. This test is the only place
+   * the insecure origin exists, so it removes `randomUUID` for its own
+   * duration and puts it back: leaking the deletion would break every test
+   * that runs after it in this file.
+   */
+  it("adds a vehicle row on a plain-http origin, where crypto.randomUUID does not exist", async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis.crypto, "randomUUID");
+    // An own `undefined` shadows the `Crypto.prototype` one, which is where
+    // Node's webcrypto actually defines it — `delete` alone would be a no-op.
+    Object.defineProperty(globalThis.crypto, "randomUUID", { value: undefined, configurable: true });
+
+    try {
+      const user = userEvent.setup();
+      render(<CustomerForm />);
+      await open(user, "Nuevo cliente");
+
+      await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+
+      expect(within(vehicleGroup(1)).getByLabelText("Placa")).toBeInTheDocument();
+    } finally {
+      if (descriptor) Object.defineProperty(globalThis.crypto, "randomUUID", descriptor);
+      else delete (globalThis.crypto as { randomUUID?: unknown }).randomUUID;
+    }
+  });
+
+  /**
    * customer-management delta, "A customer with several vehicles labels each
    * card's fields": each card is fed by the SAME shared control (D17), so this
    * is what proves the three `idPrefix`-keyed instances do not share state —

@@ -65,8 +65,23 @@ type CustomerFormState = {
   emailOptOut: boolean;
 };
 
+/**
+ * NOT `crypto.randomUUID()`, and it must not go back to it: that method exists
+ * only in a SECURE CONTEXT (HTTPS, or localhost/127.0.0.1). The workshop
+ * reaches this app from other machines over `http://192.168.x.x:3000`, where
+ * `crypto` is defined but `randomUUID` is not — "Agregar vehículo" threw
+ * `TypeError: crypto.randomUUID is not a function` there while working
+ * perfectly on every developer's localhost.
+ *
+ * A counter is enough because this key is never an identity: it is a React key,
+ * unique only among one form's rows, and it never reaches the server. The
+ * `new-` prefix is what keeps it clear of the database uuids `toFormState`
+ * gives already-saved rows.
+ */
+let nextVehicleRowKey = 0;
+
 function emptyVehicleRow(): VehiculoRow {
-  return { key: crypto.randomUUID(), plate: "", make: "", model: "", year: "", deactivated: false, deleted: false };
+  return { key: `new-${nextVehicleRowKey++}`, plate: "", make: "", model: "", year: "", deactivated: false, deleted: false };
 }
 
 /**
