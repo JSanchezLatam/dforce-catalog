@@ -57,6 +57,18 @@ evidence.
 - **No real-time stock deduction** anywhere — `producto.stock` is only
   overwritten wholesale by the inventory sync. Adding stock-decrementing logic
   to a new feature is new scope, not a bug fix.
+- **The deployment target is plain HTTP over a LAN, and that is not going to
+  change.** The app runs on one machine in the workshop and everybody else
+  opens it at `http://192.168.x.x:3000` from their own. There is no TLS and no
+  domain, so **the browser is in an INSECURE CONTEXT for every user except
+  whoever is sitting at the server**. Build for that: no API that requires a
+  secure context (`crypto.randomUUID`, `crypto.subtle`, the clipboard, camera,
+  geolocation, service workers) without a fallback that works without it — see
+  the third known testing limit under Testing for the one that already shipped.
+  It also means several people are looking at the same data from different
+  machines at once, so a view that only updates the tab that saved is stale for
+  everyone else by design; `src/hooks/usePollWhileActive.ts` is this repo's
+  answer where that matters.
 - **Security headers** in `next.config.ts`. CSP is deliberately unconfigured:
   it needs the R2/Interfuerza image hosts allowlisted first, or it silently
   breaks product images app-wide.
