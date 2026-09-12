@@ -16,7 +16,7 @@
 #   normal operation — this discards queued work.
 #
 # USAGE
-#   DATABASE_URL=postgres://user:pass@host:5432/db ./scripts/drain-pdf-queue.sh
+#   DATABASE_URL=postgres://user:pass@host:5432/db ./scripts/macos/drain-pdf-queue.sh
 #   Add --yes to skip the confirmation prompt (for a scripted deploy).
 #
 set -euo pipefail

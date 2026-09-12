@@ -83,7 +83,7 @@ Decided 2026-08-12, final. The split is by AUDIENCE, not by file: a
 same line, and that is correct.
 
 - **Spanish** — UI copy, labels, `aria-label`s, validation and error messages,
-  empty states, the generated PDF, `scripts/dev.sh` output. Rioplatense, to
+  empty states, the generated PDF, `scripts/macos/dev.sh` output. Rioplatense, to
   match `Clientes` / `Órdenes de servicio` / `Gestión de usuarios`.
 - **English** — identifiers, comments, test names, commit messages, PR
   descriptions, this file, openspec artifacts.

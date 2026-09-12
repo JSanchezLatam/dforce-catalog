@@ -29,7 +29,7 @@ yarn-error.log*
 # env files — never commit secrets (NFR-4: IFX_TOKEN etc. must stay server-only)
 .env
 .env*.local
-# scripts/standalone.sh backs .env up before rewriting DATABASE_URL — the copy
+# scripts/macos/standalone.sh backs .env up before rewriting DATABASE_URL — the copy
 # carries the same secrets and must never be committed either.
 .env.bak-*
 

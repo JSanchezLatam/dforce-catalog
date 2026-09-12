@@ -25,7 +25,7 @@
 
 set -uo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 APP_PORT="${APP_PORT:-3000}"
 PG_FORMULA="${PG_FORMULA:-postgresql@17}"
 PG_WAIT_SECONDS="${PG_WAIT_SECONDS:-60}"
