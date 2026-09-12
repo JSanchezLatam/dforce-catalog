@@ -12,6 +12,13 @@ import { formatDateTime } from "@/shared/datetime";
 
 export const dynamic = "force-dynamic";
 
+/** Blank to a reader: `null`, `""`, and the `"\n"` a tabbed-through textarea
+ *  leaves behind. `ServiceOrderForm` trims to `null`, but `PATCH` takes any
+ *  string, so the sheet cannot assume the column is already normalised. */
+function hasText(value: string | null | undefined): value is string {
+  return value != null && value.trim() !== "";
+}
+
 /**
  * Always renders, unlike the detail page's `field()` which bails on an empty
  * value: a printed form with a missing row reads as a different form, and the
@@ -27,7 +34,15 @@ function field(label: string, value: unknown) {
           red on a monochrome-safe ink rather than the theme's `destructive`,
           which is tuned for a dark UI and means "error". */}
       <dt className="text-[10px] uppercase tracking-wide text-red-700">{label}</dt>
-      <dd className="text-sm">{value == null || value === "" ? "—" : String(value)}</dd>
+      {/* `whitespace-pre-wrap break-words`: several of these rows carry free
+          text a técnico typed — `Descripción`, `Observaciones`, and now
+          `Hallazgos`/`Recomendaciones`. Without the first, his line breaks
+          collapse into one paragraph on paper; without the second, a long
+          unbroken token (a part number, a URL) runs off the right edge of the
+          sheet instead of wrapping. Harmless on the short rows above. */}
+      <dd className="text-sm whitespace-pre-wrap break-words">
+        {value == null || String(value).trim() === "" ? "—" : String(value)}
+      </dd>
     </div>
   );
 }
@@ -133,18 +148,42 @@ export default async function ServiceOrderPrintPage({
         {field("Observaciones", orden.observaciones)}
       </dl>
 
-      {/* D9 — space for a pen. No column, no field, no state behind it, and
-          deliberately NOT filled from `hallazgos`/`recomendaciones`: doing so
-          would fill the block on a reprint of a worked order, and the block
-          being unconditionally empty is the whole point. Transcribing the
-          handwriting back into `hallazgos` is a proposal follow-up. */}
+      {/* D9, revised by the owner on 2026-09-12: the block now has TWO shapes
+          and the order's own data picks one.
+
+          D9 originally kept this unconditionally blank so a reprint of a
+          worked order could never arrive pre-filled. What it was really
+          protecting is the OTHER half — a fresh order must reach the bench
+          with space for a pen — and that half is untouched: nothing recorded,
+          eight ruled lines, exactly as before.
+
+          Once either column has content the order has been worked and the
+          sheet is a RECORD, not a form. Printing the findings under ruled
+          lines would invite a second, handwritten set of findings that no one
+          ever transcribes — the divergence D9 feared, arriving by the other
+          door. So the lines go and both columns print, each under its own
+          label: `hallazgos` is what was found, `recomendaciones` is what the
+          customer should do next, and merging them loses that.
+
+          One present and one empty switches the whole block to record shape,
+          the absent column keeping its row and printing the same "—" every
+          other blank value on this sheet prints — `field`'s own reason, forty
+          lines up: a printed form with a MISSING row reads as a different
+          form. Half a form and half a record would read as neither. */}
       <section className="border border-black p-3">
         <h2 className="mb-2 text-sm font-bold uppercase tracking-wide">Trabajo realizado / Hallazgos</h2>
-        <div aria-hidden="true">
-          {Array.from({ length: 8 }, (_, i) => (
-            <div key={i} className="h-7 border-b border-black/30" />
-          ))}
-        </div>
+        {hasText(orden.hallazgos) || hasText(orden.recomendaciones) ? (
+          <dl>
+            {field("Hallazgos", orden.hallazgos)}
+            {field("Recomendaciones", orden.recomendaciones)}
+          </dl>
+        ) : (
+          <div aria-hidden="true">
+            {Array.from({ length: 8 }, (_, i) => (
+              <div key={i} className="h-7 border-b border-black/30" />
+            ))}
+          </div>
+        )}
       </section>
 
       <div className="mt-12 flex justify-end">

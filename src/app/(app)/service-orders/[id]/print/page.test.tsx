@@ -10,8 +10,11 @@
  * nothing here is evidence that the sidebar vanishes on paper, that the sheet
  * fits one page, that the margins are right, or that `PrintButton` mounts in a
  * browser. Task 3.12 — a real print preview with the console open — is the
- * only verification this unit has for any of that. These tests cover the data
- * the sheet carries, the block it must never fill, and the read gate.
+ * only verification this unit has for any of that. In particular, no test here
+ * can show that a long `hallazgos` wraps instead of running off the sheet:
+ * that is `whitespace-pre-wrap break-words` against a paper width, and jsdom
+ * measures nothing. These tests cover the data the sheet carries, WHICH of the
+ * two shapes the findings block takes, and the read gate.
  */
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -46,8 +49,8 @@ const APPOINTMENT_AT = new Date("2026-06-02T15:30:00Z");
 
 // Every `orden_servicio` column (schema.ts:410-440), not the six this sheet
 // reads: AGENTS.md — "a mock more convenient than reality tests the mock, not
-// the code." `hallazgos`/`recomendaciones` are SET here on purpose; D9 says
-// the sheet must not print them.
+// the code." `hallazgos`/`recomendaciones` are SET here on purpose: this is a
+// reprint of a WORKED order, and D9-revised says both must reach the paper.
 const ORDEN: OrdenServicio = {
   id: "o1", clienteId: "c1", vehiculoId: "v1", status: "in_progress", categoria: "revisado",
   description: "Ruido en el tren delantero", appointmentAt: APPOINTMENT_AT, completedAt: null,
@@ -86,6 +89,18 @@ function valueFor(label: string): string {
   const term = screen.getAllByRole("term").find((dt) => dt.textContent === label);
   expect(term, `no <dt> labelled "${label}"`).toBeDefined();
   return term!.nextElementSibling!.textContent!;
+}
+
+/**
+ * The ruled lines the técnico writes on, counted from the DOM rather than from
+ * a test hook: they are the `aria-hidden` rows inside the findings section, so
+ * this reads the shipped markup and needs nothing added to it for testing.
+ * Scoped to the section — an `aria-hidden` decoration anywhere else on the
+ * sheet must not be miscounted as pen space.
+ */
+function ruledLineCount(): number {
+  const section = screen.getByText("Trabajo realizado / Hallazgos").closest("section")!;
+  return section.querySelectorAll('[aria-hidden="true"] > div').length;
 }
 
 /**
@@ -140,36 +155,46 @@ describe("ServiceOrderPrintPage", () => {
   });
 
   /**
-   * Spec Scenario "Printed page reserves handwriting space"; D9.
+   * D9-revised. The findings block has exactly two shapes and the four tests
+   * below pin all four input combinations, because the interesting bug is the
+   * sheet picking the WRONG shape — a worked order going out with eight empty
+   * lines where the findings should be, or a fresh one going to the bench with
+   * no room for a pen.
    *
-   * The fixture has BOTH `hallazgos` and `recomendaciones` set, which is the
-   * whole point: this is a reprint of a worked order, and the block still has
-   * to come out blank. Wiring either field into it — the obvious "helpful"
-   * change — fails here.
+   * The fixture has BOTH fields set: this is the reprint of a worked order.
    */
-  it("renders the handwriting block empty even on an order that already has hallazgos and recomendaciones", async () => {
+  it("prints hallazgos, under its own Spanish label, when the order has them", async () => {
     render(await renderPage());
 
     expect(screen.getByText("Trabajo realizado / Hallazgos")).toBeInTheDocument();
-    expect(screen.getByText("Firma del técnico")).toBeInTheDocument();
-
-    // `textContent`, not `queryByText`. Measured during this unit's mutation
-    // round: RTL's default matcher reads an element's DIRECT text-node
-    // children, so wiring BOTH fields into one node renders
-    // "Bujías gastadasCambiar la correa…" and `queryByText` matched neither —
-    // the mutation passed. A substring scan of the whole rendered sheet
-    // catches that wiring and the one-node-each wiring alike.
-    expect(document.body.textContent).not.toContain("Bujías gastadas");
-    expect(document.body.textContent).not.toContain("Cambiar la correa de distribución");
-    // No label either — a "Hallazgos" term would mean the field found its way
-    // onto the sheet under another name.
-    expect(screen.getAllByRole("term").map((dt) => dt.textContent)).not.toContain("Hallazgos");
-    expect(screen.getAllByRole("term").map((dt) => dt.textContent)).not.toContain("Recomendaciones");
+    expect(valueFor("Hallazgos")).toBe("Bujías gastadas");
   });
 
-  /** The same block, on an order that has nothing stored: it is layout, so it
-   *  renders unconditionally rather than depending on any field. */
-  it("renders the handwriting block on an order with no hallazgos or recomendaciones", async () => {
+  /**
+   * Two columns, two meanings. `getAllByRole("term")`/`nextElementSibling`
+   * reads the value of EACH row separately, so merging both fields into one
+   * node — the tempting shortcut — cannot satisfy both of these assertions.
+   */
+  it("prints recomendaciones as recomendaciones, not merged into hallazgos", async () => {
+    render(await renderPage());
+
+    expect(valueFor("Recomendaciones")).toBe("Cambiar la correa de distribución");
+    expect(valueFor("Hallazgos")).not.toContain("correa");
+  });
+
+  /** A worked order is a record, not a form: no ruled lines under the text. */
+  it("drops the ruled lines once there is something recorded", async () => {
+    render(await renderPage());
+
+    expect(ruledLineCount()).toBe(0);
+  });
+
+  /**
+   * The half D9 was protecting, and the reason this is a shape switch rather
+   * than "print it if it is there": a fresh order still goes to the bench with
+   * space for a pen, and the block is still unconditionally empty there.
+   */
+  it("still reserves the eight ruled lines when neither field has content", async () => {
     getOrdenServicioById.mockResolvedValue({
       orden: { ...ORDEN, hallazgos: null, recomendaciones: null },
       items: [],
@@ -179,6 +204,74 @@ describe("ServiceOrderPrintPage", () => {
 
     expect(screen.getByText("Trabajo realizado / Hallazgos")).toBeInTheDocument();
     expect(screen.getByText("Firma del técnico")).toBeInTheDocument();
+    expect(ruledLineCount()).toBe(8);
+    expect(screen.getAllByRole("term").map((dt) => dt.textContent)).not.toContain("Hallazgos");
+    expect(screen.getAllByRole("term").map((dt) => dt.textContent)).not.toContain("Recomendaciones");
+  });
+
+  /**
+   * One present, one empty — the case with a real decision behind it. The
+   * order has been worked, so the sheet switches to record shape whole: the
+   * empty column keeps its row and prints the same "—" every other absent
+   * value on this sheet prints, because (per `field`'s own comment) a printed
+   * form with a MISSING row reads as a different form.
+   */
+  it("prints hallazgos with an em dash for the recomendaciones nobody wrote", async () => {
+    getOrdenServicioById.mockResolvedValue({
+      orden: { ...ORDEN, recomendaciones: null },
+      items: [],
+    });
+
+    render(await renderPage());
+
+    expect(valueFor("Hallazgos")).toBe("Bujías gastadas");
+    expect(valueFor("Recomendaciones")).toBe("—");
+    expect(ruledLineCount()).toBe(0);
+  });
+
+  it("prints recomendaciones with an em dash for the hallazgos nobody wrote", async () => {
+    getOrdenServicioById.mockResolvedValue({
+      orden: { ...ORDEN, hallazgos: null },
+      items: [],
+    });
+
+    render(await renderPage());
+
+    expect(valueFor("Recomendaciones")).toBe("Cambiar la correa de distribución");
+    expect(valueFor("Hallazgos")).toBe("—");
+    expect(ruledLineCount()).toBe(0);
+  });
+
+  /**
+   * A textarea the técnico tabbed through and left holding a newline stores
+   * `"\n"`, not `null` — `ServiceOrderForm` trims, but `PATCH` takes any
+   * string. Blank-looking content must not cost a fresh order its pen space.
+   */
+  it("treats whitespace-only findings as empty and keeps the ruled lines", async () => {
+    getOrdenServicioById.mockResolvedValue({
+      orden: { ...ORDEN, hallazgos: "   ", recomendaciones: "\n" },
+      items: [],
+    });
+
+    render(await renderPage());
+
+    expect(ruledLineCount()).toBe(8);
+  });
+
+  /**
+   * Structure, not paint. `whitespace-pre-wrap` keeps the técnico's line
+   * breaks and `break-words` stops one long unbroken token from running off
+   * the sheet. jsdom has no Tailwind and no page width, so this asserts the
+   * classes are on the value row and NOTHING about how it lands on Letter —
+   * the print preview owns that.
+   */
+  it("gives free-text values the classes that wrap them instead of overflowing", async () => {
+    render(await renderPage());
+
+    const value = screen.getAllByRole("term")
+      .find((dt) => dt.textContent === "Hallazgos")!.nextElementSibling!;
+    expect(value.className).toContain("whitespace-pre-wrap");
+    expect(value.className).toContain("break-words");
   });
 
   /** Spec Scenario "Print view enforces the same read gate". */
