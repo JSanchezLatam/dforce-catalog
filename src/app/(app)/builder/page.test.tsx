@@ -23,8 +23,6 @@ vi.mock("@/modules/auth/policy", () => ({ can }));
 vi.mock("@/modules/catalog-builder/queries", () => ({ listCategoryPairs: vi.fn(async () => []) }));
 vi.mock("@/modules/inventory-view/queries", () => ({ listCategoryL1Options: vi.fn(async () => []) }));
 vi.mock("@/modules/catalog-storage/queries", () => ({ countUploadedCatalogsForUser: vi.fn(async () => 0) }));
-vi.mock("@/modules/template-config/service", () => ({ getTemplateConfig: vi.fn(async () => null) }));
-vi.mock("@/modules/workshop-config/service", () => ({ getWorkshopConfig: vi.fn(async () => null) }));
 vi.mock("@/modules/catalog-builder/CatalogBuilderForm", () => ({
   CatalogBuilderForm: (props: Record<string, unknown>) => {
     formProps(props);

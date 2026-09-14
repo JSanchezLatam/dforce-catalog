@@ -130,12 +130,12 @@ Because SVG logos are permitted, the system MUST mitigate script-execution risk 
 
 ### Requirement: Workshop Logo as Single Source for Branding
 
-The workshop logo (`workshop_config.logoR2Key`) IS the single source for both the sidebar header and catalog PDF branding. The live builder preview reads the logo through the existing authenticated `/api/workshop-config/logo` route; the PDF render worker (which cannot authenticate against that route) MUST resolve `logoR2Key` through `getObject()` and inline the bytes as a `data:` URI before handing HTML to Playwright.
+The workshop logo (`workshop_config.logoR2Key`) IS the single source for both the sidebar header and catalog PDF branding. The live preview reads the logo through the existing authenticated `/api/workshop-config/logo` route (it lived in the catalog builder until 2026-09-14 and now lives in template config, which is the screen that edits this branding — the route and the mechanism are unchanged); the PDF render worker (which cannot authenticate against that route) MUST resolve `logoR2Key` through `getObject()` and inline the bytes as a `data:` URI before handing HTML to Playwright.
 
 #### Scenario: Preview uses the authenticated route
 
 - GIVEN an Administrador uploads a new workshop logo
-- WHEN the catalog builder's live preview renders
+- WHEN the live preview renders
 - THEN it MUST fetch `/api/workshop-config/logo`, unchanged from today's sidebar mechanism
 
 #### Scenario: PDF matches the preview exactly

@@ -109,6 +109,15 @@ preview before save" (`template-config/page.tsx:8`) — stale.
       bytes as data URIs so the two match pixel-for-pixel
       (`CatalogBuilderForm.tsx:752-763`, `specs/workshop-settings/spec.md:133-145`)
 
+## Follow-up from F1 — English copy on `/template-config`
+
+`src/app/(app)/template-config/page.tsx` renders `Template configuration` and
+`You do not have permission to view this page.` in English, against AGENTS.md's
+language rule; every neighbouring page is Spanish. It predates F1 and was left
+out of it deliberately rather than folded in as silent scope.
+
+- [ ] Translate both, and check the other `(app)` pages for the same pattern
+
 ## PR F2 — Catalog selection  ·  *after F1*
 
 `src/modules/catalog-builder/CatalogBuilderForm.tsx`
