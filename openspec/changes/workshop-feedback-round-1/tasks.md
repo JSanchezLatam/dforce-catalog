@@ -8,7 +8,7 @@ must follow PR F1 — both rewrite `CatalogBuilderForm.tsx`.
 
 ---
 
-## PR A — Price lists in the product detail  ·  *independent*
+## PR A — Price lists in the product detail  ·  **DONE** (PR #119)
 
 `src/app/(app)/inventory/[id]/page.tsx`
 
@@ -21,10 +21,10 @@ ERP stores — verified against the dev database:
 | `"Name": "Precio de venta "` | `ListName` |
 | `"Precio": "40.00"` | `Price` |
 
-- [ ] Read `Name` and `Precio`. Note the **trailing space** in the ERP's names —
+- [x] Read `Name` and `Precio`. Note the **trailing space** in the ERP's names —
       `price-lists.ts:62` already trims for this reason; do the same
-- [ ] Test with a fixture whose shape is copied from the real row, not invented
-- [ ] Confirm the three tiers show: `Precio de venta`, `PRECIO TALLER`, `Precio Socio`
+- [x] Test with a fixture whose shape is copied from the real row, not invented
+- [x] Confirm the three tiers show: `Precio de venta`, `PRECIO TALLER`, `Precio Socio`
 
 ## PR B — Service orders: refresh button, and the 1000-row load  ·  *independent*
 
@@ -41,7 +41,7 @@ Both land in this file, so they ship together.
 - [ ] Verify over the LAN, not localhost: this is a latency problem and
       localhost hides it
 
-## PR C — Validation messages in Spanish  ·  *independent*
+## PR C — Validation messages in Spanish  ·  **DONE** (PR #120)
 
 `src/modules/customers/validation.ts`, `src/modules/account/service.ts`
 
@@ -51,8 +51,8 @@ international format…`, `Email must be a valid email address`, `Username is
 required`, `Role must be tecnico or administrador`, `Email is already in use by
 another account`, `Username is already taken`.
 
-- [ ] Translate all twelve. Rioplatense, matching the existing Spanish messages
-- [ ] **Tests assert the Spanish string** (AGENTS.md) — update every test that
+- [x] Translate all twelve. Rioplatense, matching the existing Spanish messages
+- [x] **Tests assert the Spanish string** (AGENTS.md) — update every test that
       asserts the English one rather than loosening it to match both
 
 ## PR D — Catalog visibility  ·  *independent, needs an owner decision first*
