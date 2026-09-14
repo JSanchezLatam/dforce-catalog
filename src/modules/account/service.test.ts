@@ -14,7 +14,28 @@ import {
   deactivateUser,
   reactivateUser,
   AdminSafetyError,
+  MIN_PASSWORD_LENGTH,
 } from "./service";
+
+/**
+ * Asserts BOTH that the call was rejected as a `ProfileValidationError` and the
+ * exact Spanish an operator reads — the routes forward `err.errors` verbatim as
+ * the 400 body, so these literals are the copy rendered under the field.
+ *
+ * AGENTS.md: "Tests assert the Spanish string. Those are what catch an
+ * untranslated screen." A bare `rejects.toThrow(ProfileValidationError)` knows
+ * only that something was rejected, so an English message ships green under it.
+ * The literals stay spelled out per-test rather than imported, for the reason
+ * `shared/ui/messages.ts` gives: an assertion that imports what the code
+ * imports moves with it and catches nothing.
+ *
+ * The promise is awaited twice on purpose — a settled promise can be asserted
+ * on repeatedly, and this keeps the instance check without a second call.
+ */
+async function expectProfileErrors(promise: Promise<unknown>, errors: Record<string, string>): Promise<void> {
+  await expect(promise).rejects.toThrow(ProfileValidationError);
+  await expect(promise).rejects.toMatchObject({ errors });
+}
 
 /**
  * Fake `db.transaction` matching drizzle's shape (same style as
@@ -56,14 +77,15 @@ describe("updateProfile", () => {
     expect(fn).toHaveBeenCalledWith("user-1", { name: null, email: null });
   });
 
-  it("rejects an invalid email format and does NOT persist", async () => {
+  it("rejects an invalid email format in Spanish and does NOT persist", async () => {
     const fn = vi.fn();
-    await expect(
+    await expectProfileErrors(
       updateProfile("user-1", { name: "Juan", email: "not-an-email" }, fn, {
         getCurrentEmail: async () => null,
         findByEmail: async () => null,
       }),
-    ).rejects.toThrow(ProfileValidationError);
+      { email: "El email no es válido." },
+    );
     expect(fn).not.toHaveBeenCalled();
   });
 
@@ -274,41 +296,43 @@ describe("createUser", () => {
     expect(d.insert).not.toHaveBeenCalled();
   });
 
-  it("rejects an empty username", async () => {
+  it("rejects an empty username in Spanish", async () => {
     const d = deps();
 
-    await expect(
-      createUser({ username: "   ", password: "temporal1", role: "tecnico" }, d),
-    ).rejects.toThrow(ProfileValidationError);
+    await expectProfileErrors(createUser({ username: "   ", password: "temporal1", role: "tecnico" }, d), {
+      username: "El nombre de usuario es obligatorio.",
+    });
     expect(d.insert).not.toHaveBeenCalled();
   });
 
   // Same floor as the self-service change, sourced from one exported constant
   // so the admin-create path cannot drift below what users must meet later.
-  it("rejects an initial password shorter than the self-service minimum", async () => {
+  it("rejects an initial password shorter than the self-service minimum, in Spanish", async () => {
     const d = deps();
 
-    await expect(
-      createUser({ username: "ana", password: "abc", role: "tecnico" }, d),
-    ).rejects.toThrow(ProfileValidationError);
+    await expectProfileErrors(createUser({ username: "ana", password: "abc", role: "tecnico" }, d), {
+      password: `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`,
+    });
     expect(d.insert).not.toHaveBeenCalled();
   });
 
-  it("rejects an unknown role rather than trusting the caller", async () => {
+  it("rejects an unknown role rather than trusting the caller, in Spanish", async () => {
     const d = deps();
 
-    await expect(
+    await expectProfileErrors(
       createUser({ username: "ana", password: "temporal1", role: "superadmin" as never }, d),
-    ).rejects.toThrow(ProfileValidationError);
+      { role: "El rol debe ser tecnico o administrador." },
+    );
     expect(d.insert).not.toHaveBeenCalled();
   });
 
-  it("rejects a malformed email", async () => {
+  it("rejects a malformed email in Spanish", async () => {
     const d = deps();
 
-    await expect(
+    await expectProfileErrors(
       createUser({ username: "ana", password: "temporal1", role: "tecnico", email: "not-an-email" }, d),
-    ).rejects.toThrow(ProfileValidationError);
+      { email: "El email no es válido." },
+    );
     expect(d.insert).not.toHaveBeenCalled();
   });
 });
@@ -380,15 +404,16 @@ describe("updateUser", () => {
       expect(revoke).toHaveBeenCalledWith("user-9", null);
     });
 
-    it("rejects a reset password below the shared minimum and writes nothing", async () => {
+    it("rejects a reset password below the shared minimum in Spanish, and writes nothing", async () => {
       const { applyUpdate, revoke, deps } = txDeps();
 
-      await expect(updateUser("admin-1", "user-9", { password: "abc" }, deps)).rejects.toThrow(
-        ProfileValidationError,
-      );
+      await expectProfileErrors(updateUser("admin-1", "user-9", { password: "abc" }, deps), {
+        password: `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`,
+      });
       expect(applyUpdate).not.toHaveBeenCalled();
       expect(revoke).not.toHaveBeenCalled();
     });
+
   });
 
   describe("admin-safety on role changes", () => {
@@ -463,12 +488,24 @@ describe("updateUser", () => {
       expect(applyUpdate).toHaveBeenCalledOnce();
     });
 
-    it("rejects a malformed email", async () => {
+    it("rejects a malformed email in Spanish", async () => {
       const { applyUpdate, deps } = txDeps();
 
-      await expect(
-        updateUser("admin-1", "user-9", { email: "not-an-email" }, deps),
-      ).rejects.toThrow(ProfileValidationError);
+      await expectProfileErrors(updateUser("admin-1", "user-9", { email: "not-an-email" }, deps), {
+        email: "El email no es válido.",
+      });
+      expect(applyUpdate).not.toHaveBeenCalled();
+    });
+
+    // `updateUser` validates the role on its own line, with its own literal —
+    // the `createUser` test above defends a different one. Without this test,
+    // reverting `updateUser`'s role message to English leaves the suite green.
+    it("rejects an unknown role in Spanish, and writes nothing", async () => {
+      const { applyUpdate, deps } = txDeps();
+
+      await expectProfileErrors(updateUser("admin-1", "user-9", { role: "superadmin" as never }, deps), {
+        role: "El rol debe ser tecnico o administrador.",
+      });
       expect(applyUpdate).not.toHaveBeenCalled();
     });
 

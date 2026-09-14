@@ -56,7 +56,7 @@ export async function updateProfile(
 
   if (email !== null && email !== "") {
     if (!EMAIL_FORMAT.test(email)) {
-      throw new ProfileValidationError({ email: "Email must be a valid email address" });
+      throw new ProfileValidationError({ email: "El email no es válido." });
     }
 
     const getCurrentEmail =
@@ -189,13 +189,13 @@ export async function createUser(input: CreateUserInput, deps: CreateUserDeps = 
   const email = input.email?.trim() || null;
   const errors: Record<string, string> = {};
 
-  if (!username) errors.username = "Username is required";
-  if (!isRole(input.role)) errors.role = "Role must be tecnico or administrador";
+  if (!username) errors.username = "El nombre de usuario es obligatorio.";
+  if (!isRole(input.role)) errors.role = "El rol debe ser tecnico o administrador.";
   if (!input.password || input.password.length < MIN_PASSWORD_LENGTH) {
-    errors.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
+    errors.password = `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`;
   }
   if (email !== null && !EMAIL_FORMAT.test(email)) {
-    errors.email = "Email must be a valid email address";
+    errors.email = "El email no es válido.";
   }
   if (Object.keys(errors).length > 0) throw new ProfileValidationError(errors);
 
@@ -373,13 +373,13 @@ export async function updateUser(
   const errors: Record<string, string> = {};
 
   if (input.role !== undefined && !isRole(input.role)) {
-    errors.role = "Role must be tecnico or administrador";
+    errors.role = "El rol debe ser tecnico o administrador.";
   }
   if (input.password !== undefined && input.password.length < MIN_PASSWORD_LENGTH) {
-    errors.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
+    errors.password = `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`;
   }
   if (email !== undefined && email !== "" && !EMAIL_FORMAT.test(email)) {
-    errors.email = "Email must be a valid email address";
+    errors.email = "El email no es válido.";
   }
   if (Object.keys(errors).length > 0) throw new ProfileValidationError(errors);
 

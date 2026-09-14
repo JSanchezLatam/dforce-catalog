@@ -130,7 +130,7 @@ describe("schema — cliente table (Phase 1, task 1.2)", () => {
   it("requires name and phone; email stays optional (0016)", () => {
     expect(findColumn(config.columns, "name").notNull).toBe(true);
     // Migration `0016` — `validation.ts` has always required a phone
-    // ("Phone is required"); the column finally agrees.
+    // ("El teléfono es obligatorio"); the column finally agrees.
     expect(findColumn(config.columns, "phone").notNull).toBe(true);
     expect(findColumn(config.columns, "email").notNull).toBe(false);
   });

@@ -53,10 +53,10 @@ describe("PATCH /api/account", () => {
   });
 
   it("returns 400 with a validation error body when the email format is invalid", async () => {
-    mockUpdateProfile.mockRejectedValue(new ProfileValidationError({ email: "Email must be a valid email address" }));
+    mockUpdateProfile.mockRejectedValue(new ProfileValidationError({ email: "El email no es válido." }));
     const res = await PATCH(req("tecnico", { method: "PATCH", body: JSON.stringify({ email: "not-an-email" }) }));
     expect(res.status).toBe(400);
-    expect((await res.json()).errors).toEqual({ email: "Email must be a valid email address" });
+    expect((await res.json()).errors).toEqual({ email: "El email no es válido." });
   });
 
   it("returns 409 when the email is already used by another account", async () => {

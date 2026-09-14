@@ -14,6 +14,26 @@ const validInput = {
   phone: "+52 55 1234 5678",
 };
 
+/**
+ * Returns the thrown `errors` record so a test can assert the exact Spanish an
+ * operator reads. AGENTS.md: "Tests assert the Spanish string. Those are what
+ * catch an untranslated screen." Without these assertions the suite only knows
+ * that SOMETHING was rejected, and an English message would ship green.
+ *
+ * The literals are spelled out in each test rather than imported, deliberately
+ * — same reasoning as `shared/ui/messages.ts`'s `CONNECTION_ERROR`: a test that
+ * imports what the code imports moves with it and catches nothing.
+ */
+function clienteErrors(input: unknown): Record<string, string> {
+  try {
+    validateClienteInput(input);
+  } catch (err) {
+    if (err instanceof ClienteValidationError) return err.errors;
+    throw err;
+  }
+  throw new Error("expected validateClienteInput to throw");
+}
+
 describe("validateClienteInput (R17)", () => {
   it("accepts a minimal valid input (name + phone only) and normalizes the phone", () => {
     const result = validateClienteInput(validInput);
@@ -21,20 +41,26 @@ describe("validateClienteInput (R17)", () => {
     expect(result.phone).toBe("+525512345678");
   });
 
-  it("rejects a missing name", () => {
+  it("rejects a missing name in Spanish", () => {
     expect(() => validateClienteInput({ ...validInput, name: "" })).toThrow(ClienteValidationError);
+    expect(clienteErrors({ ...validInput, name: "" })).toEqual({ name: "El nombre es obligatorio" });
   });
 
-  it("rejects a missing phone", () => {
+  it("rejects a missing phone in Spanish", () => {
     expect(() => validateClienteInput({ ...validInput, phone: "" })).toThrow(ClienteValidationError);
+    expect(clienteErrors({ ...validInput, phone: "" })).toEqual({ phone: "El teléfono es obligatorio" });
   });
 
-  it("rejects an invalid phone format", () => {
+  it("rejects an invalid phone format in Spanish, and still states the 7-15 digit rule", () => {
     expect(() => validateClienteInput({ ...validInput, phone: "abc123" })).toThrow(ClienteValidationError);
+    expect(clienteErrors({ ...validInput, phone: "abc123" })).toEqual({
+      phone: "El teléfono tiene que tener entre 7 y 15 dígitos, y puede empezar con +",
+    });
   });
 
-  it("rejects an invalid email format when email is provided", () => {
+  it("rejects an invalid email format when email is provided, in Spanish", () => {
     expect(() => validateClienteInput({ ...validInput, email: "not-an-email" })).toThrow(ClienteValidationError);
+    expect(clienteErrors({ ...validInput, email: "not-an-email" })).toEqual({ email: "El email no es válido" });
   });
 
   /**
