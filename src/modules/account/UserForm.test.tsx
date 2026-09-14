@@ -214,7 +214,7 @@ describe("UserForm — when the server refuses", () => {
 
   it("surfaces field errors returned as a 400 map", async () => {
     const user = userEvent.setup();
-    mockFetch({ status: 400, body: { errors: { email: "Email must be a valid email address" } } });
+    mockFetch({ status: 400, body: { errors: { email: "El email no es válido." } } });
     render(<UserForm />);
     await open(user, "Nuevo usuario");
 
@@ -223,7 +223,7 @@ describe("UserForm — when the server refuses", () => {
     await user.type(screen.getByLabelText("Contraseña inicial"), "secreto123");
     await user.click(screen.getByRole("button", { name: "Guardar" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Email must be a valid email address");
+    expect(await screen.findByRole("alert")).toHaveTextContent("El email no es válido.");
   });
 
   // A rejected fetch must not strand the admin on a permanently disabled

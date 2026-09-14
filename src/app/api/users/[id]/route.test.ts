@@ -122,7 +122,7 @@ describe("PATCH /api/users/[id] — failure mapping", () => {
 
   it("returns 400 with field errors on invalid input", async () => {
     const d = deps({
-      updateUser: vi.fn().mockRejectedValue(new ProfileValidationError({ email: "Email must be a valid email address" })),
+      updateUser: vi.fn().mockRejectedValue(new ProfileValidationError({ email: "El email no es válido." })),
     });
 
     const response = await handleUpdateUser(req("administrador", { email: "nope" }), "user-9", d);

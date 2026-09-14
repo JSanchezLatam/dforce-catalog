@@ -68,19 +68,19 @@ export function validateClienteInput(input: unknown): ClienteInput {
 
   const name = typeof value.name === "string" ? value.name.trim() : "";
   if (!name) {
-    errors.name = "Name is required";
+    errors.name = "El nombre es obligatorio";
   }
 
   const rawPhone = typeof value.phone === "string" ? value.phone.trim() : "";
   if (!rawPhone) {
-    errors.phone = "Phone is required";
+    errors.phone = "El teléfono es obligatorio";
   } else if (!isValidPhoneFormat(rawPhone)) {
-    errors.phone = "Phone must be a valid international format (7-15 digits, optional leading +)";
+    errors.phone = "El teléfono tiene que tener entre 7 y 15 dígitos, y puede empezar con +";
   }
 
   const email = trimmedOrUndefined(value.email);
   if (email !== undefined && !EMAIL_FORMAT.test(email)) {
-    errors.email = "Email must be a valid email address";
+    errors.email = "El email no es válido";
   }
 
   const whatsappOptOut = typeof value.whatsappOptOut === "boolean" ? value.whatsappOptOut : undefined;

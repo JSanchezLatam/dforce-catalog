@@ -221,10 +221,6 @@ a Playwright version bump.
   category snapshot is persisted, not the full product selection).
 - A missing/evicted PDF shows a plain JSON 404 body rather than a styled
   in-app message.
-- Validation errors mix languages: newer messages are Spanish per the
-  language rule, older ones (`"Name is required"`) are still English, so a
-  single 400 can render both. Pre-existing; translating them touches several
-  test files.
 - Customers cannot be deleted or deactivated from the UI. The database
   already refuses to delete a customer that has service orders
   (`onDelete: restrict`), but that safety net is never exposed to staff.
