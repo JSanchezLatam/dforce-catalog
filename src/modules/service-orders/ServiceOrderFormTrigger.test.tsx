@@ -104,7 +104,6 @@ function renderTrigger(order?: OrdenServicio | null) {
   return render(
     <ToastProvider>
       <ServiceOrderFormTrigger
-        products={[]}
         order={order}
         selectedCustomer={CUSTOMER}
         canCreateCustomer={false}

@@ -5,11 +5,7 @@ import type { ReactNode } from "react";
 
 import type { OrdenServicio } from "@/shared/db/schema";
 import { useToast } from "@/shared/ui/ToastProvider";
-import {
-  ServiceOrderForm,
-  type ServiceOrderCustomerOption,
-  type ServiceOrderProductOption,
-} from "./ServiceOrderForm";
+import { ServiceOrderForm, type ServiceOrderCustomerOption } from "./ServiceOrderForm";
 
 /**
  * Thin client wrapper around `ServiceOrderForm` for use from server-component
@@ -17,13 +13,11 @@ import {
  * `CustomerFormTrigger.tsx`, for the same RSC function-prop reason.
  */
 export function ServiceOrderFormTrigger({
-  products,
   order,
   selectedCustomer,
   canCreateCustomer,
   triggerLabel,
 }: {
-  products: ServiceOrderProductOption[];
   order?: OrdenServicio | null;
   selectedCustomer?: ServiceOrderCustomerOption | null;
   canCreateCustomer: boolean;
@@ -38,7 +32,6 @@ export function ServiceOrderFormTrigger({
 
   return (
     <ServiceOrderForm
-      products={products}
       order={order}
       selectedCustomer={selectedCustomer}
       canCreateCustomer={canCreateCustomer}

@@ -125,11 +125,6 @@ export default async function ServiceOrderDetailPage({
               <div className="[&>button]:min-h-11 [&>button]:min-w-11">
                 <ServiceOrderFormTrigger
                   order={orden}
-                  /* Dead since the parts cart came out of creation (D7), still
-                     required by the trigger's type. Passing `[]` rather than
-                     adding a product query this page has no other use for —
-                     removing the prop is already a named follow-up. */
-                  products={[]}
                   /* Edit mode never renders `CustomerPicker` (the order's
                      customer is fixed), so this value is unreachable. */
                   canCreateCustomer={false}
