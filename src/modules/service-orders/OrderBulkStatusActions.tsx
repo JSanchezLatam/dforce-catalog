@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { runSequential, type RowOutcome } from "@/shared/bulk/run-sequential";
 import { useSelection } from "@/shared/ui/selection/SelectionProvider";
+import { useToast } from "@/shared/ui/ToastProvider";
 import { ORDER_STATUS_LABEL } from "./statuses";
 import {
   allowedTransitionsForAll,
@@ -72,6 +73,7 @@ export function OrderBulkStatusActions({
 }) {
   const { selected, setResult, clear } = useSelection();
   const router = useRouter();
+  const { addToast } = useToast();
   const [pending, setPending] = useState(false);
   const [target, setTarget] = useState<OrderStatus | null>(null);
 
@@ -114,6 +116,21 @@ export function OrderBulkStatusActions({
     clear();
     setPending(false);
     setTarget(null);
+
+    // The SUCCESSES, not `ids.length`: the drift case is a real outcome of this
+    // run, and "3 órdenes actualizadas" beside a panel naming one that failed
+    // is this component contradicting itself on screen. Zero stays silent —
+    // the panel is already saying what happened, and a success toast over it
+    // would announce a change that never landed.
+    //
+    // ABOVE `router.refresh()`, the ordering `OrderStatusControls` records: a
+    // refresh that throws must not take the confirmation with it, and the bar
+    // the operator was looking at has just been cleared.
+    const applied = outcomes.filter((outcome) => outcome.ok).length;
+    if (applied > 0) {
+      addToast("success", `${applied} ${applied === 1 ? "orden actualizada" : "órdenes actualizadas"}`);
+    }
+
     router.refresh();
   }
 

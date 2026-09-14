@@ -17,6 +17,7 @@ import { SelectionBar } from "@/shared/ui/selection/SelectionBar";
 import { SelectionProvider } from "@/shared/ui/selection/SelectionProvider";
 import { FIELD_ERROR } from "@/shared/ui/styles";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
+import { useToast } from "@/shared/ui/ToastProvider";
 import { REFUSAL_MESSAGES } from "./refusals";
 import { UserBulkActions } from "./UserBulkActions";
 import { UserForm } from "./UserForm";
@@ -105,6 +106,7 @@ export function UsersTable({ users }: { users: UserRow[] }) {
   // it cannot live inside the row's own kebab.
   const [editing, setEditing] = useState<UserRow | null>(null);
   const router = useRouter();
+  const { addToast } = useToast();
 
   // Filtered here rather than refetched: a workshop has a handful of users, so
   // the page already holds them all and the toggle is instant.
@@ -160,6 +162,14 @@ export function UsersTable({ users }: { users: UserRow[] }) {
     }
 
     setPendingId(null);
+    // The row is rendered by the SERVER, so nothing on screen changes until
+    // the refresh lands — and the kebab that was clicked has already closed.
+    // The toast goes first: the mutation is committed, and a refresh that
+    // throws must not be able to swallow the only confirmation of it.
+    //
+    // `deactivatedAt` is the row as the server last rendered it, so a row that
+    // HAD a timestamp is the one that was just reactivated.
+    addToast("success", user.deactivatedAt !== null ? "Usuario reactivado" : "Usuario desactivado");
     router.refresh();
   }
 
@@ -310,7 +320,13 @@ export function UsersTable({ users }: { users: UserRow[] }) {
           onOpenChange={(next) => {
             if (!next) setEditing(null);
           }}
-          onSaved={() => router.refresh()}
+          // Always "actualizado": `editing` is a row that already exists, so
+          // this dialog has no create branch — unlike `UserFormTrigger`,
+          // which serves both.
+          onSaved={() => {
+            addToast("success", "Usuario actualizado");
+            router.refresh();
+          }}
         />
       )}
     </div>

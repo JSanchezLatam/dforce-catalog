@@ -40,6 +40,7 @@ vi.mock("@/modules/inventory-view/queries", async (importOriginal) => {
   return { ...actual, listInventory };
 });
 
+import { ToastProvider } from "@/shared/ui/ToastProvider";
 import ServiceOrdersPage from "./page";
 
 /** D9's `OrdenServicioListItem` — the joined, narrowed row shape the page now receives. */
@@ -285,10 +286,17 @@ describe("ServiceOrdersPage — bulk status change (WU6)", () => {
     vi.unstubAllGlobals();
   });
 
-  function renderAt(items = OPEN_PAGE, params: Record<string, string> = {}) {
+  /**
+   * Wrapped in the `ToastProvider` the app layout mounts around every page:
+   * the bulk action now confirms a finished run with a toast, so without it
+   * `useToast()` throws and this whole block dies at render. The provider is
+   * the real one — it portals into `document.body`, which is what `screen`
+   * queries.
+   */
+  async function renderAt(items = OPEN_PAGE, params: Record<string, string> = {}) {
     listOrdenesServicio.mockResolvedValue(items);
     countOrdenesServicio.mockResolvedValue(40);
-    return ServiceOrdersPage({ searchParams: Promise.resolve(params) });
+    return <ToastProvider>{await ServiceOrdersPage({ searchParams: Promise.resolve(params) })}</ToastProvider>;
   }
 
   /**

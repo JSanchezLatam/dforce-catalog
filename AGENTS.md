@@ -57,6 +57,34 @@ evidence.
 - **No real-time stock deduction** anywhere — `producto.stock` is only
   overwritten wholesale by the inventory sync. Adding stock-decrementing logic
   to a new feature is new scope, not a bug fix.
+- **The deployment target is plain HTTP over a LAN, and that is not going to
+  change.** The app runs on one machine in the workshop and everybody else
+  opens it at `http://192.168.x.x:3000` from their own. There is no TLS and no
+  domain, so **the browser is in an INSECURE CONTEXT for every user except
+  whoever is sitting at the server**. Build for that: no API that requires a
+  secure context (`crypto.randomUUID`, `crypto.subtle`, the clipboard, camera,
+  geolocation, service workers) without a fallback that works without it — see
+  the third known testing limit under Testing for the one that already shipped.
+  It also means several people are looking at the same data from different
+  machines at once, so a view that only updates the tab that saved is stale for
+  everyone else by design; `src/hooks/usePollWhileActive.ts` is this repo's
+  answer where that matters.
+- **Every mutation tells the operator it happened.** Decided 2026-09-13, and it
+  applies to work from here on, not only to what already exists. A create, an
+  edit, a deactivation, a bulk action: on success, `useToast()`'s
+  `addToast("success", …)` beside the `router.refresh()` that is already there.
+  The toast system is `src/shared/ui/Toast*.tsx`, mounted in `app/layout.tsx` —
+  it is hand-rolled and it already solved the hydration-portal trap, so do not
+  replace it with sonner or Base UI's toast. Copy `OrderStatusControls.tsx`.
+  Two rules its comment records and that cost real defects: the toast goes
+  **above** `router.refresh()` and both sit **below** the `try/catch`, because a
+  refresh that throws must not retract the only confirmation of a mutation the
+  server already accepted; and a bulk count reports the rows that actually
+  APPLIED, never `ids.length`, or the message contradicts the failure panel
+  beside it. Copy is Spanish, subject first, verb in the past, no exclamation
+  marks, and the singular when the count is one — `1 cliente desactivado`, not
+  `1 clientes`. Form errors stay inline where the operator is already looking;
+  a toast there says the same thing twice.
 - **Security headers** in `next.config.ts`. CSP is deliberately unconfigured:
   it needs the R2/Interfuerza image hosts allowlisted first, or it silently
   breaks product images app-wide.
@@ -168,6 +196,27 @@ verification** — a test cannot be written for it, and a green run is not
 evidence. Also note the trigger: `Pagination` returns `null` at `pageCount <=
 1`, so one customer in the dev database hid the first defect entirely. A bug
 that depends on data VOLUME does not exist until there is data.
+
+**Third known limit — a secure-context-only browser API is invisible on
+localhost AND invisible in jsdom.** `crypto.randomUUID()` exists only over
+HTTPS or on `localhost`/`127.0.0.1`. The workshop reaches this app from other
+machines at `http://192.168.x.x:3000`, where `crypto` is defined but
+`randomUUID` is not, so "Agregar vehículo" threw `TypeError:
+crypto.randomUUID is not a function` for every user who was not sitting at the
+server — while working perfectly on every developer's localhost, and passing
+1659 tests, because Node's crypto has the method. It shipped and was found by
+an operator, not by us.
+
+So **verification means opening the app at its LAN IP, not at localhost** —
+`http://<ip>:3000`, from another machine. That is the only place this class
+appears. The same trap is armed for `crypto.subtle`, `navigator.clipboard`,
+`mediaDevices`, `geolocation`, service workers and `showSaveFilePicker`: none
+are used in a `"use client"` file today (checked 2026-09-12), and adding one
+without an insecure-context fallback breaks the workshop and nothing else.
+
+Note what this was NOT: it had nothing to do with Windows, and it was not
+introduced by the Windows move. The MacBook plan carried the identical bug,
+waiting for the first employee to open the app from a second machine.
 
 ## Code quality gate
 

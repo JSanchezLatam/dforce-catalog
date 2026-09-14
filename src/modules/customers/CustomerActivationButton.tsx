@@ -6,6 +6,7 @@ import { Power, RotateCcw, TriangleAlert } from "lucide-react";
 
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/shared/ui/ToastProvider";
 
 /**
  * R20 — deactivate or reactivate one customer. Same wrapper shape as
@@ -19,6 +20,7 @@ import { Button } from "@/components/ui/button";
  */
 export function CustomerActivationButton({ clienteId, isActive }: { clienteId: string; isActive: boolean }) {
   const router = useRouter();
+  const { addToast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,15 +38,25 @@ export function CustomerActivationButton({ clienteId, isActive }: { clienteId: s
         setError(failure);
         return;
       }
-      router.refresh();
     } catch {
       // `fetch` REJECTS on a network failure rather than returning a non-ok
       // response, so without this the button re-enabled with nothing on
       // screen and the operator clicked again into the same silence.
       setError(failure);
+      return;
     } finally {
       setIsSubmitting(false);
     }
+
+    // Both of these sit BELOW the try/catch, matching `OrderStatusControls`.
+    // `router.refresh()` used to be inside the `try`, where a refresh that
+    // threw was caught and printed "No se pudo desactivar el cliente." over a
+    // deactivation the server had already accepted — and it would now retract
+    // the confirmation beside it. The toast goes first for the same reason:
+    // the mutation is committed, so nothing downstream may swallow the only
+    // thing that says so on a page whose rows are server-rendered.
+    addToast("success", isActive ? "Cliente desactivado" : "Cliente reactivado");
+    router.refresh();
   }
 
   return (

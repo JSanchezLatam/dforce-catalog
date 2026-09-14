@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { runSequential, type RowOutcome } from "@/shared/bulk/run-sequential";
 import { useSelection } from "@/shared/ui/selection/SelectionProvider";
+import { useToast } from "@/shared/ui/ToastProvider";
 
 /**
  * The bulk half of `/users` — the action slot `SelectionBar` leaves open
@@ -48,6 +49,7 @@ export function UserBulkActions() {
   const { selected, setResult, clear } = useSelection();
   const [pending, setPending] = useState(false);
   const router = useRouter();
+  const { addToast } = useToast();
 
   async function apply(active: boolean) {
     setPending(true);
@@ -64,6 +66,17 @@ export function UserBulkActions() {
     // keeps its labels through `clear()` — is the record of what happened.
     clear();
     setPending(false);
+
+    // Off the OUTCOMES, never off the selection — this is the one surface
+    // where the difference is routine rather than theoretical: the last-admin
+    // guard refuses rows mid-run by design, so a count taken from `selected`
+    // would routinely claim deactivations that never happened. Zero stays
+    // silent; the result panel already names every refusal and its reason.
+    const applied = outcomes.filter((o) => o.ok).length;
+    if (applied > 0) {
+      const s = applied === 1 ? "" : "s";
+      addToast("success", `${applied} usuario${s} ${active ? "reactivado" : "desactivado"}${s}`);
+    }
     router.refresh();
   }
 

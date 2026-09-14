@@ -4,11 +4,22 @@
  * action each row offers, and what happens when the safety guard refuses.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
 
+import { ToastProvider } from "@/shared/ui/ToastProvider";
 import { checkAdminSafety } from "./service";
 import { UsersTable, type UserRow } from "./UsersTable";
+
+/**
+ * Every case below renders inside the REAL provider, not a fake: the toast is
+ * a portal on `document.body`, which is exactly what `screen` queries, so a
+ * success message can be asserted as rendered text rather than as a spy call.
+ * A spy proves the function ran; it does not prove anything reached the
+ * operator's screen.
+ */
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: ToastProvider });
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
@@ -271,6 +282,61 @@ describe("UsersTable — the action each row offers", () => {
     await clickRowAction(user, "ana", "Editar");
 
     expect(await screen.findByRole("dialog")).toHaveTextContent("Editar usuario");
+  });
+});
+
+/**
+ * Every mutation on this table is answered by a `router.refresh()` that
+ * re-renders a SERVER component, so until it lands the row is unchanged and
+ * the kebab has already closed — the operator's only evidence that anything
+ * happened was the row eventually redrawing itself.
+ */
+describe("UsersTable — a mutation the operator can see", () => {
+  it("says the user was deactivated", async () => {
+    const user = userEvent.setup();
+    mockFetch({ status: 200, body: { success: true } });
+    render(<UsersTable users={[ACTIVE]} />);
+
+    await clickRowAction(user, "ana", "Desactivar");
+
+    expect(await screen.findByText("Usuario desactivado")).toBeInTheDocument();
+  });
+
+  it("says the user was reactivated", async () => {
+    const user = userEvent.setup();
+    mockFetch({ status: 200, body: { success: true } });
+    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    await user.click(screen.getByLabelText("Mostrar inactivos"));
+
+    await clickRowAction(user, "beto", "Reactivar");
+
+    expect(await screen.findByText("Usuario reactivado")).toBeInTheDocument();
+  });
+
+  /**
+   * The dialog this table hoists out of the kebab is edit-only — `editing` is
+   * always an existing row — so there is no "creado" branch to get wrong here.
+   */
+  it("says the user was updated after the hoisted edit dialog saves", async () => {
+    const user = userEvent.setup();
+    mockFetch({ status: 200, body: { user: { id: "u-1" } } });
+    render(<UsersTable users={[ACTIVE]} />);
+
+    await clickRowAction(user, "ana", "Editar");
+    await user.click(await screen.findByRole("button", { name: "Guardar" }));
+
+    expect(await screen.findByText("Usuario actualizado")).toBeInTheDocument();
+  });
+
+  it("says nothing when the server refuses the toggle", async () => {
+    const user = userEvent.setup();
+    mockFetch({ status: 400, body: { error: "last_active_admin" } });
+    render(<UsersTable users={[ACTIVE]} />);
+
+    await clickRowAction(user, "ana", "Desactivar");
+
+    await screen.findByRole("alert");
+    expect(screen.queryByText("Usuario desactivado")).not.toBeInTheDocument();
   });
 });
 
