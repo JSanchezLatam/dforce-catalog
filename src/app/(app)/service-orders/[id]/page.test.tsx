@@ -29,6 +29,7 @@ vi.mock("@/modules/reminders/queries", () => ({ listRemindersForOrder }));
 import type { Role } from "@/modules/auth/roles";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import type { OrdenServicio, Reminder } from "@/shared/db/schema";
+import { ToastProvider } from "@/shared/ui/ToastProvider";
 import ServiceOrderDetailPage from "./page";
 
 // Every `orden_servicio` column (schema.ts:412-438) — `updatedAt` was the one
@@ -50,8 +51,13 @@ function detailWith(deactivatedAt: Date | null) {
   };
 }
 
-function renderPage() {
-  return ServiceOrderDetailPage({ params: Promise.resolve({ id: "o1" }) });
+/**
+ * Wrapped in the `ToastProvider` the app layout mounts around every page: the
+ * D11 block below mounts the real `ServiceOrderFormTrigger`, which now
+ * confirms a save with a toast, so without it `useToast()` throws at render.
+ */
+async function renderPage() {
+  return <ToastProvider>{await ServiceOrderDetailPage({ params: Promise.resolve({ id: "o1" }) })}</ToastProvider>;
 }
 
 describe("ServiceOrderDetailPage", () => {

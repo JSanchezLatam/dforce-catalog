@@ -8,9 +8,21 @@
  * wired into one layer and not the next), which is why the pagination link is
  * asserted here rather than trusted.
  */
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { ToastProvider } from "@/shared/ui/ToastProvider";
+
+/**
+ * `CustomerBulkActions` confirms a finished run through `useToast()`, and the
+ * provider is mounted once in `app/layout.tsx` — which a page test never
+ * reaches, because it invokes the page as a plain function. Supplied through
+ * RTL's `wrapper` rather than at each call site: `rerender` keeps it, which
+ * the filter-rule cases below depend on.
+ */
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: ToastProvider });
 
 vi.mock("@/modules/auth/session", () => ({
   requireSessionFromHeaders: vi.fn(async () => ({ id: "u1", role: "tecnico" })),

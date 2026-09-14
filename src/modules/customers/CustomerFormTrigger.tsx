@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
 import type { Cliente, Vehiculo } from "@/shared/db/schema";
+import { useToast } from "@/shared/ui/ToastProvider";
 import { CustomerForm } from "./CustomerForm";
 
 /**
@@ -28,13 +29,26 @@ export function CustomerFormTrigger({
   triggerLabel?: ReactNode;
 }) {
   const router = useRouter();
+  const { addToast } = useToast();
   return (
     <CustomerForm
       cliente={cliente}
       vehicles={vehicles}
       canDeleteVehicle={canDeleteVehicle}
       triggerLabel={triggerLabel}
-      onSaved={() => router.refresh()}
+      onSaved={() => {
+        // `cliente` is what tells edit from create — the same flag
+        // `CustomerForm` reads for its own `isEdit`.
+        //
+        // The toast goes FIRST, above `router.refresh()`, following
+        // `OrderStatusControls`: the server has already accepted the save, so
+        // a refresh that throws must not be able to swallow the one thing
+        // that tells the operator so. `CustomerForm` calls this from OUTSIDE
+        // its try/catch, so a throw here propagates rather than printing
+        // "no se pudo conectar" over a save that succeeded.
+        addToast("success", cliente ? "Cliente actualizado" : "Cliente creado");
+        router.refresh();
+      }}
     />
   );
 }

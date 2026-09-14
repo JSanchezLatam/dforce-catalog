@@ -4,8 +4,18 @@
  * active and deactivated are told apart by WEIGHT rather than a caption — so
  * the deactivated one has to stay reachable, not just styled differently.
  */
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { ToastProvider } from "@/shared/ui/ToastProvider";
+
+/**
+ * `CustomerActivationButton` confirms a deactivation through `useToast()`, and
+ * the provider is mounted once in `app/layout.tsx` — which a page test never
+ * reaches, because it invokes the page as a plain function.
+ */
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: ToastProvider });
 
 const notFound = vi.hoisted(() => vi.fn(() => { throw new Error("NEXT_NOT_FOUND"); }));
 // `useRouter` too: `CustomerActivationButton` (R20) is a client component

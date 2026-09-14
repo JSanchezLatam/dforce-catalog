@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
 import type { OrdenServicio } from "@/shared/db/schema";
+import { useToast } from "@/shared/ui/ToastProvider";
 import {
   ServiceOrderForm,
   type ServiceOrderCustomerOption,
@@ -29,6 +30,12 @@ export function ServiceOrderFormTrigger({
   triggerLabel?: ReactNode;
 }) {
   const router = useRouter();
+  const { addToast } = useToast();
+  // The same prop `ServiceOrderForm` reads for `isEdit` — nothing else here
+  // knows which of the two requests it just made, and "Orden creada" over an
+  // edit claims a second order now exists.
+  const isEdit = Boolean(order);
+
   return (
     <ServiceOrderForm
       products={products}
@@ -36,7 +43,14 @@ export function ServiceOrderFormTrigger({
       selectedCustomer={selectedCustomer}
       canCreateCustomer={canCreateCustomer}
       triggerLabel={triggerLabel}
-      onSaved={() => router.refresh()}
+      onSaved={() => {
+        // ABOVE `router.refresh()`, the ordering `OrderStatusControls` records
+        // for the mirror-image case: a refresh that throws must not take the
+        // only evidence the save happened with it. The dialog has already
+        // closed by here, so the toast is all the operator gets.
+        addToast("success", isEdit ? "Orden actualizada" : "Orden creada");
+        router.refresh();
+      }}
     />
   );
 }

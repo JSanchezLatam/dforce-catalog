@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { runSequential, type RowOutcome } from "@/shared/bulk/run-sequential";
 import { useSelection } from "@/shared/ui/selection/SelectionProvider";
+import { useToast } from "@/shared/ui/ToastProvider";
 
 /**
  * The action slot `SelectionBar` leaves open, filled for `/customers`
@@ -40,6 +41,7 @@ export function CustomerBulkActions() {
   const { selected, setResult, clear } = useSelection();
   const [pending, setPending] = useState(false);
   const router = useRouter();
+  const { addToast } = useToast();
 
   async function apply(active: boolean) {
     setPending(true);
@@ -52,6 +54,19 @@ export function CustomerBulkActions() {
     // through `clear()`, so the failed rows are still named after it.
     clear();
     setPending(false);
+
+    // Off the OUTCOMES, never off the selection: a partial run must not claim
+    // the rows the server refused. Zero stays silent — the result panel
+    // already names every failure, and "0 clientes desactivados" beside it
+    // would be an emptier copy of the same news.
+    //
+    // The `s` covers both words at once: "1 clientes desactivados" is wrong in
+    // Spanish and is exactly the shape a `${n} clientes` template ships.
+    const applied = outcomes.filter((o) => o.ok).length;
+    if (applied > 0) {
+      const s = applied === 1 ? "" : "s";
+      addToast("success", `${applied} cliente${s} ${active ? "reactivado" : "desactivado"}${s}`);
+    }
     router.refresh();
   }
 

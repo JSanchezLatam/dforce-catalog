@@ -69,6 +69,22 @@ evidence.
   machines at once, so a view that only updates the tab that saved is stale for
   everyone else by design; `src/hooks/usePollWhileActive.ts` is this repo's
   answer where that matters.
+- **Every mutation tells the operator it happened.** Decided 2026-09-13, and it
+  applies to work from here on, not only to what already exists. A create, an
+  edit, a deactivation, a bulk action: on success, `useToast()`'s
+  `addToast("success", …)` beside the `router.refresh()` that is already there.
+  The toast system is `src/shared/ui/Toast*.tsx`, mounted in `app/layout.tsx` —
+  it is hand-rolled and it already solved the hydration-portal trap, so do not
+  replace it with sonner or Base UI's toast. Copy `OrderStatusControls.tsx`.
+  Two rules its comment records and that cost real defects: the toast goes
+  **above** `router.refresh()` and both sit **below** the `try/catch`, because a
+  refresh that throws must not retract the only confirmation of a mutation the
+  server already accepted; and a bulk count reports the rows that actually
+  APPLIED, never `ids.length`, or the message contradicts the failure panel
+  beside it. Copy is Spanish, subject first, verb in the past, no exclamation
+  marks, and the singular when the count is one — `1 cliente desactivado`, not
+  `1 clientes`. Form errors stay inline where the operator is already looking;
+  a toast there says the same thing twice.
 - **Security headers** in `next.config.ts`. CSP is deliberately unconfigured:
   it needs the R2/Interfuerza image hosts allowlisted first, or it silently
   breaks product images app-wide.

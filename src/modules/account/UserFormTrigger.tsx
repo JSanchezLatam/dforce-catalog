@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { useToast } from "@/shared/ui/ToastProvider";
 import { UserForm, type UserFormUser } from "./UserForm";
 
 /**
@@ -20,5 +21,19 @@ export function UserFormTrigger({
   triggerLabel?: ReactNode;
 }) {
   const router = useRouter();
-  return <UserForm user={user} triggerLabel={triggerLabel} onSaved={() => router.refresh()} />;
+  const { addToast } = useToast();
+  return (
+    <UserForm
+      user={user}
+      triggerLabel={triggerLabel}
+      onSaved={() => {
+        // `user` is what tells edit from create, the same flag `UserForm`
+        // reads for its own `isEdit`. Toast before `router.refresh()`, as in
+        // `OrderStatusControls`: the save is already committed, so a refresh
+        // that throws must not swallow the only confirmation of it.
+        addToast("success", user ? "Usuario actualizado" : "Usuario creado");
+        router.refresh();
+      }}
+    />
+  );
 }
