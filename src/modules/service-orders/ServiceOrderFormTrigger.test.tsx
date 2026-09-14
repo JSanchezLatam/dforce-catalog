@@ -16,7 +16,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ClienteListItem } from "@/modules/customers/queries";
-import type { Vehiculo } from "@/shared/db/schema";
+import type { OrdenServicio, Vehiculo } from "@/shared/db/schema";
 import { ToastProvider } from "@/shared/ui/ToastProvider";
 import { ServiceOrderFormTrigger } from "./ServiceOrderFormTrigger";
 
@@ -74,12 +74,38 @@ async function flush() {
   });
 }
 
-function renderTrigger(order?: unknown) {
+/**
+ * A complete `OrdenServicio`, not the four fields this file happens to read.
+ * `order as never` stood here, which turned the prop`s declared type into a
+ * claim nobody had checked: the component could start reading `status` or
+ * `completedAt` and every test would keep passing against an object that never
+ * had them. GGA flagged it as the "mock more convenient than reality" pattern
+ * AGENTS.md rules out, and the cast was exactly what hid the gap — `tsc` now
+ * fails if this fixture drifts from the row.
+ */
+const EXISTING_ORDER: OrdenServicio = {
+  id: "o1",
+  clienteId: "c-a",
+  vehiculoId: "v-a",
+  status: "open",
+  categoria: "mant_preventivo",
+  description: null,
+  appointmentAt: null,
+  completedAt: null,
+  hallazgos: null,
+  recomendaciones: null,
+  observaciones: null,
+  createdBy: "u1",
+  createdAt: new Date("2026-09-01T10:00:00Z"),
+  updatedAt: new Date("2026-09-01T10:00:00Z"),
+};
+
+function renderTrigger(order?: OrdenServicio | null) {
   return render(
     <ToastProvider>
       <ServiceOrderFormTrigger
         products={[]}
-        order={order as never}
+        order={order}
         selectedCustomer={CUSTOMER}
         canCreateCustomer={false}
       />
@@ -116,7 +142,7 @@ describe("ServiceOrderFormTrigger — a save that only refreshes the page is a s
    */
   it("announces an updated order after the PATCH lands", async () => {
     mockApi();
-    renderTrigger({ id: "o1", clienteId: "c-a", vehiculoId: "v-a", categoria: "mant_preventivo" });
+    renderTrigger(EXISTING_ORDER);
 
     fireEvent.click(screen.getByRole("button", { name: /editar orden/i }));
     await flush();

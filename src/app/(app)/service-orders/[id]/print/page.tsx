@@ -36,7 +36,7 @@ function field(label: string, value: unknown) {
       <dt className="text-[10px] uppercase tracking-wide text-red-700">{label}</dt>
       {/* `whitespace-pre-wrap break-words`: several of these rows carry free
           text a técnico typed — `Descripción`, `Observaciones`, and now
-          `Hallazgos`/`Recomendaciones`. Without the first, his line breaks
+          `Hallazgos`/`Recomendaciones`. Without the first, their line breaks
           collapse into one paragraph on paper; without the second, a long
           unbroken token (a part number, a URL) runs off the right edge of the
           sheet instead of wrapping. Harmless on the short rows above. */}
