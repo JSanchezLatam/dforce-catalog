@@ -21,7 +21,17 @@ import { Badge } from "@/components/ui/badge";
 export const dynamic = "force-dynamic";
 
 type ProductImage = { src?: string };
-type PriceListEntry = { Price?: string | number; ListName?: string };
+/**
+ * The ERP's shape, verified against all 699 products — NOT `{ListName, Price}`,
+ * which is what this page used to read and why the card rendered blank.
+ *
+ * `Name` carries trailing whitespace ("PRECIO TALLER ") and `Precio` is the
+ * field to show, not `Precio_Real`: they disagree on 37 of those products (95 of the 2097 price-list
+ * entries) and
+ * `Precio_Real` is "0.00" in every one of those. Both rules are the same ones
+ * `src/modules/catalog-builder/price-lists.ts` documents and follows.
+ */
+type PriceListEntry = { Name?: string; Precio?: string | number };
 
 export default async function ProductDetailPage({
   params,
@@ -103,9 +113,9 @@ export default async function ProductDetailPage({
                 <dl>
                   {priceLists.map((pl, i) => (
                     <div key={i} className="grid grid-cols-3 gap-2 py-2 border-b border-border last:border-0">
-                      <dt className="text-sm font-medium text-muted-foreground">{pl.ListName ?? `Lista ${i + 1}`}</dt>
+                      <dt className="text-sm font-medium text-muted-foreground">{pl.Name?.trim() || `Lista ${i + 1}`}</dt>
                       <dd className="col-span-2 text-sm text-foreground">
-                        {pl.Price != null ? `$${Number(pl.Price).toFixed(2)}` : "—"}
+                        {pl.Precio != null ? `$${Number(pl.Precio).toFixed(2)}` : "—"}
                       </dd>
                     </div>
                   ))}
