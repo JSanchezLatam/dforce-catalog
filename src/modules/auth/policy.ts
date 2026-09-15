@@ -32,7 +32,13 @@ export const MATRIX: { readonly [R in "tecnico" | "administrador"]: Grants } = {
     "catalogs.read": true,
     "catalogs.download": true,
     "catalogs.generate": false,
-    "catalogs.listAll": false,
+    // A catalog is a workshop asset, not a personal document — the owner's
+    // decision, 2026-09-15. Without this, `catalogs.read` and
+    // `catalogs.download` above were dead grants: `catalogs/page.tsx` scopes
+    // the list to `userId` when `listAll` is false, and a técnico cannot
+    // `generate`, so their screen was empty by construction and those two
+    // `true`s did nothing. Generation stays administrador-only.
+    "catalogs.listAll": true,
     "template.edit": false,
     "workshop.read": true,
     "workshop.edit": false,

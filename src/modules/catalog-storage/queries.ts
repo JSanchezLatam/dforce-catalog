@@ -36,7 +36,9 @@ export async function listCatalogsForUser(userId: string): Promise<Catalog[]> {
   return db.select().from(catalogs).where(eq(catalogs.userId, userId)).orderBy(desc(catalogs.createdAt));
 }
 
-/** R7.1 — Administrador sees every user's catalogs (caller must already have checked `can(user, "catalogs.listAll")`). */
+/** Every catalog, whoever generated it — a catalog is a workshop asset, not a
+ * personal document (2026-09-15). Both roles hold `catalogs.listAll` now; the
+ * caller must already have checked it. */
 export async function listAllCatalogs(): Promise<Catalog[]> {
   return db.select().from(catalogs).orderBy(desc(catalogs.createdAt));
 }
