@@ -20,8 +20,10 @@ vi.mock("@/modules/service-orders/ServiceOrderFilters", () => ({
   ServiceOrderFilters: () => null,
 }));
 // WU6's bulk status action calls `router.refresh()` after the run, exactly as
-// the row-level `OrderStatusControls` already does. Nothing else on this page
-// uses the App Router, which is why this mock did not exist before.
+// the row-level `OrderStatusControls` already does, and `RefreshListButton`
+// now calls it too — that is what this mock has to satisfy. (It once said
+// nothing else on the page used the App Router; the refresh button made that
+// false.)
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const listOrdenesServicio = vi.hoisted(() => vi.fn());
@@ -577,5 +579,39 @@ describe("ServiceOrdersPage — the empty state does not lie", () => {
     render(await renderEmpty({}));
 
     expect(screen.getByText(/Todavía no hay órdenes de servicio registradas/)).toBeInTheDocument();
+  });
+});
+
+/**
+ * PR B — the two halves that ship together, both about what this page costs to
+ * open over the workshop's LAN.
+ */
+describe("ServiceOrdersPage — refresh control and page payload", () => {
+  beforeEach(() => {
+    listOrdenesServicio.mockClear();
+    countOrdenesServicio.mockClear();
+    listInventory.mockClear();
+  });
+
+  it("mounts the refresh control on the list", async () => {
+    render(await renderPage({}));
+
+    expect(screen.getByRole("button", { name: "Actualizar" })).toBeInTheDocument();
+  });
+
+  /**
+   * The test that matters for the payload half. The picker this list used to
+   * preload for came out of order CREATION (`ServiceOrderForm`'s D7), so the
+   * 1000 rows filled a prop nothing renders — up to ~132 KB of RSC payload on
+   * EVERY navigation to this list, over plain HTTP on a workshop LAN.
+   *
+   * Asserted on the query, not on the rendered output: a test that only
+   * checked the table would stay green with the read still in `Promise.all`,
+   * which is the entire defect.
+   */
+  it("reads no inventory at all — nobody has opened the form", async () => {
+    render(await renderPage({}));
+
+    expect(listInventory).not.toHaveBeenCalled();
   });
 });

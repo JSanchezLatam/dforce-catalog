@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
-import type { OrdenServicio, Producto, Vehiculo } from "@/shared/db/schema";
+import type { OrdenServicio, Vehiculo } from "@/shared/db/schema";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -39,7 +39,6 @@ const NATIVE_FIELD =
 
 /** = `ClienteListItem` — the route body (`GET /api/customers`) maps straight through (design.md). */
 export type ServiceOrderCustomerOption = ClienteListItem;
-export type ServiceOrderProductOption = Pick<Producto, "id" | "name" | "price">;
 
 /**
  * `datetime-local` needs `YYYY-MM-DDTHH:mm` with no timezone suffix — and the
@@ -86,12 +85,6 @@ export function ServiceOrderForm({
   triggerLabel,
   onSaved,
 }: {
-  /**
-   * Unused since the parts cart came out of creation (D7) — kept on the type
-   * so `ServiceOrderFormTrigger` and `/service-orders`'s page, neither of
-   * which this work unit touches, still compile. Removing it is a follow-up.
-   */
-  products?: ServiceOrderProductOption[];
   /** Provided => edit mode (PATCH); omitted => create mode (POST). */
   order?: OrdenServicio | null;
   /**

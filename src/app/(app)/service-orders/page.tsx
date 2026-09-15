@@ -3,8 +3,9 @@ import { ArrowDown, ArrowUp, Eye, Wrench } from "lucide-react";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
-import { computePageWindow, listInventory, parsePageSize } from "@/modules/inventory-view/queries";
+import { computePageWindow, parsePageSize } from "@/modules/inventory-view/queries";
 import { OrderBulkStatusActions } from "@/modules/service-orders/OrderBulkStatusActions";
+import { RefreshListButton } from "@/modules/service-orders/RefreshListButton";
 import { ServiceOrderFilters } from "@/modules/service-orders/ServiceOrderFilters";
 import { ServiceOrderFormTrigger } from "@/modules/service-orders/ServiceOrderFormTrigger";
 import {
@@ -34,14 +35,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 type SearchParams = Record<string, string | string[] | undefined>;
 
 const VALID_STATUS = new Set<OrderStatus>(["open", "in_progress", "done", "cancelled"]);
-
-// The parts picker inside ServiceOrderForm still works over an already-
-// fetched list (client-side search+cart idiom, no server round-trip),
-// capped at 1000 rows — there is no dedicated parts search route yet (known
-// sibling limitation, proposal.md's Out of Scope). The customer picker no
-// longer preloads anything: `customer-search-and-picker` gave it its own
-// `GET /api/customers?search=` route instead (`CustomerPicker.tsx`).
-const PICKER_LIST_LIMIT = 1000;
 
 function firstValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -86,10 +79,23 @@ export default async function ServiceOrdersPage({
     return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
   }
 
-  const [items, total, products] = await Promise.all([
+  // `listInventory({}, { offset: 0, limit: 1000 })` used to be a third leg of
+  // this `Promise.all`, preloading the whole catalogue so `ServiceOrderForm`'s
+  // parts picker could search it client-side. That picker came out of order
+  // CREATION (the form's D7) and took the cart with it — the rows have been
+  // filling a prop nothing reads ever since, and both of this page's mounts
+  // now pass nothing at all. It was up to 699 rows, ~132 KB of RSC payload,
+  // re-read and re-shipped on EVERY render of this list: every filter, every
+  // sort, every page, every `router.refresh()` after a save. Invisible on
+  // localhost; over the workshop's plain-HTTP LAN (AGENTS.md) it is the
+  // leading suspect for "the new order took a while to appear".
+  //
+  // No route replaces it, because nothing consumes it. If parts ever come back
+  // to the form, they get their own `GET /api/products?search=` — the shape
+  // `CustomerPicker` already uses — not a preload of the catalogue.
+  const [items, total] = await Promise.all([
     listOrdenesServicio(filters, pageWindow, sort),
     countOrdenesServicio(filters),
-    listInventory({}, { offset: 0, limit: PICKER_LIST_LIMIT }),
   ]);
 
   const pageCount = Math.max(1, Math.ceil(total / pageWindow.limit));
@@ -110,11 +116,13 @@ export default async function ServiceOrdersPage({
     <div className="p-8">
       <div className="mb-6 flex items-center justify-between">
         <h1 className={PAGE_HEADING}>Órdenes de servicio</h1>
-        <ServiceOrderFormTrigger
-          products={products.items}
-          canCreateCustomer={can(user, "customers.write")}
-          triggerLabel="Nueva orden de servicio"
-        />
+        <div className="flex items-center gap-2">
+          <RefreshListButton />
+          <ServiceOrderFormTrigger
+            canCreateCustomer={can(user, "customers.write")}
+            triggerLabel="Nueva orden de servicio"
+          />
+        </div>
       </div>
 
       <Card size="sm" className="mb-4">
