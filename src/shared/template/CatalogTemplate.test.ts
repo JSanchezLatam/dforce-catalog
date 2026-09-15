@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildIndex, type CatalogIndexSection, type ProductPrintRef } from "./CatalogTemplate";
+import { buildIndex, CatalogTemplate, type CatalogIndexSection, type ProductPrintRef } from "./CatalogTemplate";
 import { INDEX_ROWS_PER_PAGE, firstProductPageNumber } from "./page-geometry";
 
 const FIRST_PRODUCT_PAGE_NUMBER = firstProductPageNumber(1);
@@ -130,5 +130,54 @@ describe("buildIndex — an index longer than one sheet", () => {
     expect(buildIndex(sections).pages).toHaveLength(2);
     expect(rows[0]?.pageNumber).toBe(firstProductPageNumber(2));
     expect(rows[0]?.pageNumber).toBe(FIRST_PRODUCT_PAGE_NUMBER + 1);
+  });
+});
+
+/**
+ * The product grid's vertical space, and why it is no longer left at the
+ * bottom. The full argument lives beside the grid in `CatalogTemplate.tsx`;
+ * these are the two halves of it that a test can actually hold.
+ *
+ * jsdom has NO layout engine, so nothing here proves the page looks right or
+ * that it does not overflow — it can only pin the declarations. The visual
+ * gate is `scripts/preview-catalog.ts`, in a print-media Chromium.
+ */
+describe("the product grid — the page's leftover height", () => {
+  const gridStyle = async (productCount: number): Promise<string> => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const markup = renderToStaticMarkup(
+      CatalogTemplate({
+        title: "Catálogo",
+        branding: null,
+        sections: [],
+        productPages: [Array.from({ length: productCount }, (_, at) => product(String(at), "MOTOR"))],
+      }),
+    );
+    return markup.match(/<div data-product-grid="" style="([^"]*)"/)?.[1] ?? "";
+  };
+
+  it("spreads the leftover height evenly around the rows instead of leaving it all at the bottom", async () => {
+    const style = await gridStyle(6);
+    // `min-height`, not `height`: it is what gives `align-content` a page to
+    // distribute against without ever shrinking a grid that is taller.
+    expect(style).toContain("min-height:100%");
+    expect(style).toContain("align-content:space-evenly");
+  });
+
+  /**
+   * The never-overflow guarantee, as far as jsdom can reach it. `worker.ts`
+   * measures every card in ONE grid and `chunkProducts` packs rows from those
+   * heights, so any declaration here that RESIZES a row changes the numbers
+   * the packer splits against — silently, in a PDF a customer reads.
+   * `space-evenly` only moves rows apart; `stretch` and an `fr` auto-row
+   * would grow them.
+   */
+  it("never resizes a row to fill the page — that would change what the measuring pass measures", async () => {
+    const style = await gridStyle(6);
+    expect(style).not.toMatch(/stretch/);
+    expect(style).not.toMatch(/grid-auto-rows/);
+    // The gap `worker.ts` reads back off the rendered grid and folds into
+    // every measured card height. Distribution must not restate it.
+    expect(style).toContain("gap:14px");
   });
 });
