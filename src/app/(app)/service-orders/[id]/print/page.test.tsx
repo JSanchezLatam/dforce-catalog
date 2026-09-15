@@ -13,8 +13,11 @@
  * only verification this unit has for any of that. In particular, no test here
  * can show that a long `hallazgos` wraps instead of running off the sheet:
  * that is `whitespace-pre-wrap break-words` against a paper width, and jsdom
- * measures nothing. These tests cover the data the sheet carries, WHICH of the
- * two shapes the findings block takes, and the read gate.
+ * measures nothing. Nor can anything here show that a worked order's findings
+ * PLUS its ruled lines still fit one Letter sheet — the line count is chosen
+ * against a page budget no test can measure. These tests cover the data the
+ * sheet carries, what the findings block contains for each combination of the
+ * two columns, and the read gate.
  */
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -155,11 +158,15 @@ describe("ServiceOrderPrintPage", () => {
   });
 
   /**
-   * D9-revised. The findings block has exactly two shapes and the four tests
-   * below pin all four input combinations, because the interesting bug is the
-   * sheet picking the WRONG shape — a worked order going out with eight empty
-   * lines where the findings should be, or a fresh one going to the bench with
-   * no room for a pen.
+   * D9-revised-again (2026-09-15, the owner after using the sheet). The block
+   * is no longer either/or: whatever was recorded prints AND ruled lines
+   * follow it, so every sheet leaves the pen somewhere to go.
+   *
+   * The four tests below pin all four input combinations of the two columns,
+   * and each asserts BOTH halves — what reached the paper, and that the
+   * writing lines are still under it. Asserting only the first half is how the
+   * previous revision shipped: it printed the findings and silently took the
+   * lines away, and no test noticed because none looked.
    *
    * The fixture has BOTH fields set: this is the reprint of a worked order.
    */
@@ -182,17 +189,28 @@ describe("ServiceOrderPrintPage", () => {
     expect(valueFor("Hallazgos")).not.toContain("correa");
   });
 
-  /** A worked order is a record, not a form: no ruled lines under the text. */
-  it("drops the ruled lines once there is something recorded", async () => {
+  /**
+   * The owner's actual report, and the one this revision exists for: he filled
+   * hallazgos and recomendaciones from the computer, printed, and the sheet
+   * came back with nowhere to write. Both columns recorded is the case he was
+   * looking at.
+   *
+   * FOUR lines, not the eight a blank block gets. The page decides that, not
+   * taste: this is one Letter sheet with the signature line below it, and the
+   * two printed rows are already eating the headroom the lines used to have.
+   */
+  it("keeps ruled writing lines under findings that were recorded from the computer", async () => {
     render(await renderPage());
 
-    expect(ruledLineCount()).toBe(0);
+    expect(valueFor("Hallazgos")).toBe("Bujías gastadas");
+    expect(valueFor("Recomendaciones")).toBe("Cambiar la correa de distribución");
+    expect(ruledLineCount()).toBe(4);
   });
 
   /**
-   * The half D9 was protecting, and the reason this is a shape switch rather
-   * than "print it if it is there": a fresh order still goes to the bench with
-   * space for a pen, and the block is still unconditionally empty there.
+   * The fourth combination, and the one that is unchanged: nothing recorded,
+   * so nothing prints and the whole block is pen space — all eight lines, as
+   * it has been since D9.
    */
   it("still reserves the eight ruled lines when neither field has content", async () => {
     getOrdenServicioById.mockResolvedValue({
@@ -211,12 +229,12 @@ describe("ServiceOrderPrintPage", () => {
 
   /**
    * One present, one empty — the case with a real decision behind it. The
-   * order has been worked, so the sheet switches to record shape whole: the
-   * empty column keeps its row and prints the same "—" every other absent
-   * value on this sheet prints, because (per `field`'s own comment) a printed
-   * form with a MISSING row reads as a different form.
+   * order has been worked, so both rows print whole: the empty column keeps
+   * its row and prints the same "—" every other absent value on this sheet
+   * prints, because (per `field`'s own comment) a printed form with a MISSING
+   * row reads as a different form. The writing lines follow either way.
    */
-  it("prints hallazgos with an em dash for the recomendaciones nobody wrote", async () => {
+  it("prints hallazgos with an em dash for the recomendaciones nobody wrote, and still rules lines", async () => {
     getOrdenServicioById.mockResolvedValue({
       orden: { ...ORDEN, recomendaciones: null },
       items: [],
@@ -226,10 +244,10 @@ describe("ServiceOrderPrintPage", () => {
 
     expect(valueFor("Hallazgos")).toBe("Bujías gastadas");
     expect(valueFor("Recomendaciones")).toBe("—");
-    expect(ruledLineCount()).toBe(0);
+    expect(ruledLineCount()).toBe(4);
   });
 
-  it("prints recomendaciones with an em dash for the hallazgos nobody wrote", async () => {
+  it("prints recomendaciones with an em dash for the hallazgos nobody wrote, and still rules lines", async () => {
     getOrdenServicioById.mockResolvedValue({
       orden: { ...ORDEN, hallazgos: null },
       items: [],
@@ -239,7 +257,7 @@ describe("ServiceOrderPrintPage", () => {
 
     expect(valueFor("Recomendaciones")).toBe("Cambiar la correa de distribución");
     expect(valueFor("Hallazgos")).toBe("—");
-    expect(ruledLineCount()).toBe(0);
+    expect(ruledLineCount()).toBe(4);
   });
 
   /**
