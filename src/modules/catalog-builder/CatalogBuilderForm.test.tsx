@@ -63,6 +63,12 @@ async function reachReviewStep(generateResponse?: {
   await user.click(screen.getByRole("button", { name: /Seleccion.* categor.as/ }));
   await user.click(await screen.findByRole("checkbox", { name: "Motor" }));
   await screen.findByText("Woofer");
+  // PR F2 — a category fetch no longer ticks its own candidates, so reaching
+  // the review step now means doing what the operator does: choosing one.
+  // Before F2 this line was absent: whatever the fetch returned arrived
+  // pre-ticked, which here is the single CANDIDATE and in the workshop was all
+  // 188 of them.
+  await user.click(screen.getByRole("checkbox", { name: "Seleccionar Woofer" }));
   // The select-step "Continue" button and the review-step "open confirm
   // dialog" button share this exact label but are mutually exclusive by
   // `step` — only one is ever mounted, so `getByRole` (which throws on a
@@ -464,6 +470,168 @@ describe("CatalogBuilderForm — product-id mode (D10)", () => {
 });
 
 /**
+ * workshop-feedback-round-1 PR F2 — the selection belongs to the operator.
+ *
+ * One root cause behind the three reported symptoms (endless list, no usable
+ * pagination, the button ~188 rows down): every fetched candidate was
+ * auto-selected, so picking 12 of 188 was really DISCARDING 176. That is what
+ * drove the operator to set "Todos" and scroll past every row to reach the
+ * only action on the page.
+ */
+describe("CatalogBuilderForm — the selection is the operator's, not the fetch's (PR F2)", () => {
+  /**
+   * `p3` is the fixture that matters: it is `low_res` AND has an image. The
+   * tempting signal for "sin imagen" is `imageType`, and it is wrong — a
+   * product with no images at all maps to `low_res` too (`mapper.ts:35-44`),
+   * so a filter written against it would delete this product as well.
+   */
+  const THREE = [
+    { id: "p1", name: "Woofer", categoryL1: "Motor", categoryL2: null, image: "https://img/1.jpg", imageType: null, priceLists: null },
+    { id: "p2", name: "Tweeter", categoryL1: "Motor", categoryL2: null, image: null, imageType: "low_res", priceLists: null },
+    { id: "p3", name: "Bobina", categoryL1: "Motor", categoryL2: null, image: "https://img/3.jpg", imageType: "low_res", priceLists: null },
+  ];
+
+  function mockProducts(products: unknown[]) {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes("/products")) return Promise.resolve({ ok: true, json: async () => ({ products }) });
+      if (url.includes("/queue-depth")) return Promise.resolve({ ok: true, json: async () => ({ depth: 0 }) });
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+  }
+
+  async function pickCategory(products: unknown[] = THREE) {
+    mockProducts(products);
+    const user = userEvent.setup();
+    render(<CatalogBuilderForm categoryL1Options={["Motor"]} categoryPairs={[]} catalogCount={0} />);
+    await user.click(screen.getByRole("button", { name: /Seleccion.* categor.as/ }));
+    await user.click(await screen.findByRole("checkbox", { name: "Motor" }));
+    await screen.findByText((products[0] as { name: string }).name);
+    return user;
+  }
+
+  const bar = () => screen.getByRole("region", { name: "Acciones de selección" });
+  const selectAllVisible = () => screen.getByRole("checkbox", { name: "Seleccionar todos los visibles" });
+  const rowBox = (name: string) =>
+    screen.getByRole("checkbox", { name: `Seleccionar ${name}` });
+
+  it("selects nothing when a category fetch lands", async () => {
+    await pickCategory();
+
+    expect(screen.getByRole("heading", { name: "Productos (0 de 3 seleccionados)" })).toBeInTheDocument();
+    for (const p of THREE) expect(rowBox(p.name)).not.toBeChecked();
+  });
+
+  /**
+   * The one exception, and the reason this is not simply "never preselect":
+   * `/inventory` hands over ids the operator TICKED by hand (D10). Discarding
+   * that would make the handoff pointless.
+   */
+  it("keeps the /inventory id-handoff preselected", async () => {
+    mockProducts([THREE[0], THREE[1]]);
+    render(
+      <CatalogBuilderForm
+        categoryL1Options={["Motor"]}
+        categoryPairs={[]}
+        catalogCount={0}
+        seedProductIds={["p1", "p2"]}
+      />,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Productos (2 de 2 seleccionados)" })).toBeInTheDocument();
+  });
+
+  /**
+   * jsdom computes no layout, so `position: sticky` itself is unprovable here
+   * — a browser check. What IS provable, and is the half that actually broke,
+   * is CONTAINMENT: the count and the button used to live in a third card
+   * below a table the operator had set to show all 188 rows. Rendered outside
+   * that list, the bar has somewhere to stick to; rendered inside it, no CSS
+   * could have saved it.
+   */
+  it("renders the count and the generate button outside the scrolling product list", async () => {
+    await pickCategory();
+
+    const actions = bar();
+    expect(screen.getByRole("region", { name: "Selección de productos" })).not.toContainElement(actions);
+    expect(actions.closest("table")).toBeNull();
+    expect(within(actions).getByText("0 de 3 seleccionados")).toBeInTheDocument();
+    expect(within(actions).getByRole("button", { name: "Empezar a generar" })).toBeInTheDocument();
+  });
+
+  it("removes exactly the image-less products, and keeps a low_res one that HAS an image", async () => {
+    const user = await pickCategory();
+    await user.click(selectAllVisible());
+    expect(screen.getByRole("heading", { name: "Productos (3 de 3 seleccionados)" })).toBeInTheDocument();
+
+    await user.click(within(bar()).getByRole("button", { name: "Quitar sin imagen (1)" }));
+
+    expect(rowBox("Woofer")).toBeChecked();
+    expect(rowBox("Bobina")).toBeChecked();
+    expect(rowBox("Tweeter")).not.toBeChecked();
+  });
+
+  it("can undo that removal — a bulk action the operator cannot reverse is the original defect", async () => {
+    const user = await pickCategory();
+    await user.click(selectAllVisible());
+    await user.click(within(bar()).getByRole("button", { name: "Quitar sin imagen (1)" }));
+
+    await user.click(within(bar()).getByRole("button", { name: "Deshacer (1)" }));
+
+    expect(rowBox("Tweeter")).toBeChecked();
+    expect(screen.getByRole("heading", { name: "Productos (3 de 3 seleccionados)" })).toBeInTheDocument();
+  });
+
+  /**
+   * The offer has to die the moment the selection moves on. Left standing, a
+   * "Deshacer (1)" clicked three ticks later would restore the set as it was
+   * BEFORE the removal — silently throwing away every tick the operator has
+   * made since, which is a different action wearing the same word.
+   *
+   * Retrofitted, and then verified the only way a retrofit can be: the guard
+   * was replaced with a bare `imagelessUndo` and this went red by name while
+   * nothing else moved.
+   */
+  it("stops offering the undo once the selection has moved on", async () => {
+    const user = await pickCategory();
+    await user.click(selectAllVisible());
+    await user.click(within(bar()).getByRole("button", { name: "Quitar sin imagen (1)" }));
+    expect(within(bar()).getByRole("button", { name: "Deshacer (1)" })).toBeInTheDocument();
+
+    await user.click(rowBox("Woofer"));
+
+    expect(within(bar()).queryByRole("button", { name: /Deshacer/ })).not.toBeInTheDocument();
+  });
+
+  /**
+   * The cap was enforced only at continue time, which is precisely how 188
+   * auto-selected products sat just under it invisibly. It is NOT relocated —
+   * `validateCatalogSelection` still refuses, on both sides
+   * (`selection.ts:66-77`). This surfaces the number the operator is about to
+   * be refused for, while they can still do something about it.
+   */
+  it("surfaces the 200 cap before Continue, not at continue time", async () => {
+    const many = Array.from({ length: 201 }, (_, i) => ({
+      id: `p${i}`,
+      name: `Producto ${i}`,
+      categoryL1: "Motor",
+      categoryL2: null,
+      image: "https://img/x.jpg",
+      imageType: null,
+      priceLists: null,
+    }));
+    const user = await pickCategory(many);
+
+    await user.click(screen.getByRole("combobox"));
+    await user.click(await screen.findByRole("option", { name: "Todos" }));
+    await user.click(selectAllVisible());
+
+    expect(await within(bar()).findByText("Seleccionaste 201, el máximo es 200")).toBeInTheDocument();
+    expect(within(bar()).getByRole("button", { name: "Empezar a generar" })).toBeDisabled();
+  });
+});
+
+/**
  * 7b.7 — the mode that existed before D10. Every assertion here describes
  * behavior that shipped long ago; they are pinned because the new mode shares
  * the same effect, the same `title`, and the same category count.
@@ -507,6 +675,7 @@ describe("CatalogBuilderForm — the category-tree flow is unaffected", () => {
 
   it("still titles the catalog from the TICKED categories, not from the returned rows", async () => {
     const { user } = await pickMotor();
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Woofer" }));
 
     // `CANDIDATE.categoryL1` is "Motor" as well, so the title could come from
     // either source and this alone would not tell them apart. What pins the

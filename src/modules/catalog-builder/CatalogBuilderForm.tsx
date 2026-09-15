@@ -39,6 +39,8 @@ import {
   DEFAULT_PRODUCTS_PER_PAGE,
   MAX_PRICE_TIERS,
   MAX_PRODUCTS_PER_PAGE,
+  MAX_TOTAL_PRODUCTS,
+  maxTotalProductsMessage,
   MIN_PRICE_TIERS,
   MIN_PRODUCTS_PER_PAGE,
   toggleBulkFrame,
@@ -175,7 +177,20 @@ export function CatalogBuilderForm({
         if (!cancelled) {
           const products: ProductRef[] = body.products ?? [];
           setCandidates(products);
-          setSelectedProductIds(new Set(products.map((p) => p.id)));
+          /**
+           * PR F2 — a fetch produces CANDIDATES, not a selection.
+           *
+           * Preselecting every row made "pick 12 of 188" mean "untick 176",
+           * which is what pushed the operator to "Todos" and buried the only
+           * action on the page under 188 rows. The one exception is the
+           * `/inventory` handoff: those ids are a selection the operator
+           * actually made by hand (D10), and dropping it would make the
+           * handoff pointless. The request body is what tells the two apart —
+           * `productIds` is the seeded mode, `categories` is not.
+           */
+          setSelectedProductIds(
+            "productIds" in productsRequestBody ? new Set(products.map((p) => p.id)) : new Set(),
+          );
           setPage(1);
         }
       })
@@ -274,7 +289,48 @@ export function CatalogBuilderForm({
     });
   }
 
+  /**
+   * PR F2 — "quitar los que no tienen imagen", across the WHOLE selection and
+   * not only the visible page: the operator means "no image-less product goes
+   * in this catalog", and a version that silently spared the rows they had
+   * scrolled past would be the same trap the auto-selection was.
+   *
+   * The signal is `product.image` (`queries.ts:46`) and it has to be.
+   * `imageType` looks like the answer and is not — a product with NO images
+   * maps to `low_res`, the same value a real low-resolution photo gets
+   * (`mapper.ts:35-44`), so filtering on it would also delete every product
+   * whose photo is merely poor.
+   */
+  const imagelessSelectedIds = useMemo(
+    () => candidates.filter((p) => selectedProductIds.has(p.id) && !p.image).map((p) => p.id),
+    [candidates, selectedProductIds],
+  );
 
+  /**
+   * The undo for that one bulk action. A select-all that is easy to hit and
+   * hard to reverse is exactly how the original defect felt from the inside,
+   * so the bulk removal ships with its own way back.
+   *
+   * `after === selectedProductIds` is identity on purpose, not a deep compare:
+   * every setter in this component builds a FRESH `Set`, so the offer survives
+   * exactly as long as the selection is still what the removal left behind.
+   * One tick later, "Deshacer" would be restoring a set the operator has since
+   * edited — which is a different action wearing the same word.
+   */
+  const [imagelessUndo, setImagelessUndo] = useState<{
+    before: Set<string>;
+    after: Set<string>;
+    removed: number;
+  } | null>(null);
+  const undoAvailable = imagelessUndo?.after === selectedProductIds ? imagelessUndo : null;
+
+  function deselectImageless() {
+    const before = selectedProductIds;
+    const after = new Set(before);
+    for (const id of imagelessSelectedIds) after.delete(id);
+    setSelectedProductIds(after);
+    setImagelessUndo({ before, after, removed: imagelessSelectedIds.length });
+  }
 
   /**
    * The cap is enforced by DISABLING the boxes that would break it, so this
@@ -398,6 +454,17 @@ export function CatalogBuilderForm({
 
   const buttonDisabled = candidates.length === 0;
   const queueFullBtn = queueDepth !== null && queueDepth >= 2;
+  /**
+   * PR F2 — the cap, said out loud while it can still be acted on.
+   *
+   * NOT a relocation: `validateCatalogSelection` still refuses the same
+   * selection, the `/inventory` bar still refuses it before navigating, and
+   * `productsByIdsQuery` still slices at the database. Three places on
+   * purpose (`selection.ts:66-77`). This is a fourth SURFACE for a number the
+   * operator previously only met after clicking — which is how 188
+   * auto-selected products sat just under it invisibly.
+   */
+  const overCap = finalProducts.length > MAX_TOTAL_PRODUCTS;
 
   let buttonLabel = "Empezar a generar";
   if (queueFullBtn) buttonLabel = `${queueDepth} en cola — esperar`;
@@ -484,7 +551,11 @@ export function CatalogBuilderForm({
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-10">
+                          {/* Named, because a bare box in a header cell is
+                              "checkbox" to a screen reader and to every test
+                              that has to tell it from the 188 below it. */}
                           <Checkbox
+                            aria-label="Seleccionar todos los visibles"
                             checked={allVisibleSelected || someVisibleSelected}
                             onCheckedChange={toggleAllVisible}
                           />
@@ -513,6 +584,7 @@ export function CatalogBuilderForm({
                         >
                           <TableCell className="w-10" onClick={(e) => e.stopPropagation()}>
                             <Checkbox
+                              aria-label={`Seleccionar ${product.name}`}
                               checked={selectedProductIds.has(product.id)}
                               onCheckedChange={() => toggleProduct(product.id)}
                             />
@@ -587,7 +659,11 @@ export function CatalogBuilderForm({
         />
       )}
 
-      {errors.total && (
+      {/* Select-step totals are reported by the action bar below, which is the
+          one surface guaranteed to be on screen. Rendering them here too would
+          say the same sentence twice, and this copy is the one the sticky bar
+          can cover. */}
+      {errors.total && step === "review" && (
         <p role="alert" className={`mb-4 ${FIELD_ERROR}`}>
           {errors.total}
         </p>
@@ -623,14 +699,91 @@ export function CatalogBuilderForm({
                   </p>
                 )}
               </section>
-              <Button
-                type="button"
-                onClick={handleContinue}
-                disabled={buttonDisabled || queueFullBtn}
-              >
-                {buttonLabel}
-              </Button>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/**
+       * PR F2 — the action bar.
+       *
+       * It used to be the third card, below a table the operator had set to
+       * show every one of its 188 rows, so reaching the only button on the
+       * page meant scrolling past all of them. Sticky, it is one thumb away
+       * from any scroll position — and the count travels with it, because
+       * "12 seleccionados" answers half the question: the operator needs to
+       * know what they are choosing FROM, which is the number that used to be
+       * silently pre-ticked.
+       *
+       * The 44x44 rule applies in full here (AGENTS.md). These are action
+       * controls on a tablet surface, NOT the filter-strip exception — that
+       * waiver is for controls sitting against `h-8` inputs and reading as one
+       * control, and this bar sits against nothing.
+       */}
+      {candidates.length > 0 && step === "select" && (
+        <Card size="sm" className="sticky bottom-0 z-10 mb-4 shadow-lg">
+          <CardContent>
+            <section aria-label="Acciones de selección">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="mr-1 text-sm font-medium text-foreground">
+                    {finalProducts.length} de {candidates.length} seleccionados
+                  </span>
+                  {/* Counted in the label: the operator decides whether to run
+                      a destructive bulk action by knowing what it will take,
+                      not by running it and comparing totals. */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="min-h-11 min-w-11"
+                    disabled={imagelessSelectedIds.length === 0}
+                    onClick={deselectImageless}
+                  >
+                    Quitar sin imagen ({imagelessSelectedIds.length})
+                  </Button>
+                  {undoAvailable && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="min-h-11 min-w-11"
+                      onClick={() => setSelectedProductIds(undoAvailable.before)}
+                    >
+                      Deshacer ({undoAvailable.removed})
+                    </Button>
+                  )}
+                  {finalProducts.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="min-h-11 min-w-11"
+                      onClick={() => setSelectedProductIds(new Set())}
+                    >
+                      Limpiar selección
+                    </Button>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  className="min-h-11 min-w-11"
+                  onClick={handleContinue}
+                  disabled={buttonDisabled || queueFullBtn || overCap}
+                >
+                  {buttonLabel}
+                </Button>
+              </div>
+              {/* Over-cap DISABLES and explains; an empty selection does not.
+                  Zero is where every category fetch now starts, and a red
+                  alert on arrival would be shouting at the operator for having
+                  just got here — that one is reported when they click. */}
+              {(overCap || errors.total) && (
+                <p role="alert" className={`mt-2 ${FIELD_ERROR}`}>
+                  {overCap ? maxTotalProductsMessage(finalProducts.length) : errors.total}
+                </p>
+              )}
+            </section>
           </CardContent>
         </Card>
       )}
