@@ -26,19 +26,19 @@ ERP stores — verified against the dev database:
 - [x] Test with a fixture whose shape is copied from the real row, not invented
 - [x] Confirm the three tiers show: `Precio de venta`, `PRECIO TALLER`, `Precio Socio`
 
-## PR B — Service orders: refresh button, and the 1000-row load  ·  *independent*
+## PR B — Service orders: refresh button, and the 1000-row load  ·  **DONE** (#122)
 
 `src/app/(app)/service-orders/page.tsx`
 
 Both land in this file, so they ship together.
 
-- [ ] Refresh button on the list, calling `router.refresh()`
-- [ ] `listInventory({}, { offset: 0, limit: 1000 })` (`:92`) runs on **every**
+- [x] Refresh button on the list, calling `router.refresh()`
+- [x] `listInventory({}, { offset: 0, limit: 1000 })` (`:92`) runs on **every**
       render of this page, to fill the parts picker inside a form nobody may
       open. ~132 KB per load, measured. Load it when the form opens instead
-- [ ] `PICKER_LIST_LIMIT = 1000` is at `:44`; the comment at `:38-43` says there
+- [x] `PICKER_LIST_LIMIT = 1000` is at `:44`; the comment at `:38-43` says there
       is no dedicated parts-search route yet — read it before choosing the fix
-- [ ] Verify over the LAN, not localhost: this is a latency problem and
+- [x] Verify over the LAN, not localhost: this is a latency problem and
       localhost hides it
 
 ## PR C — Validation messages in Spanish  ·  **DONE** (PR #120)
@@ -67,24 +67,24 @@ asset? If the latter, `catalogs.listAll: true` for `tecnico` is the whole fix.
 - [ ] `route-guards.test.ts` exists to stop an endpoint appearing unguarded —
       check whether it needs a matching entry
 
-## PR E — Page space distribution  ·  *independent, renegotiates a decision*
+## PR E — Page space distribution  ·  **DONE** (#124 + #126)
 
 `src/shared/template/CatalogTemplate.tsx` (grid at :745-757)
 
 `alignContent: "start"` packs rows to the top at their natural height, so any
 page whose count cap binds before its height cap leaves the remainder blank.
 
-- [ ] Distribute the leftover space between rows. **Do not** change how many
+- [x] Distribute the leftover space between rows. **Do not** change how many
       products fit — that is the documented bias described in `proposal.md`
-- [ ] Record the decision in the file, next to the existing reasoning, so the
+- [x] Record the decision in the file, next to the existing reasoning, so the
       next reader does not "fix" it back
-- [ ] `productsPerPage` already accepts 1–20 (`selection.ts:37-38`), so the
+- [x] `productsPerPage` already accepts 1–20 (`selection.ts:37-38`), so the
       owner's 6–10 range needs no change. Confirm before touching it
-- [ ] **Verify in the print preview**, not on screen. jsdom evaluates no
+- [x] **Verify in the print preview**, not on screen. jsdom evaluates no
       `@media print`; this repo has already shipped a print defect from
       checking the page instead of the preview
 
-## PR F1 — Move the preview out of the builder  ·  *before F2*
+## PR F1 — Move the preview out of the builder  ·  **DONE** (#123)
 
 `src/modules/catalog-builder/CatalogBuilderForm.tsx` (:737+),
 `src/modules/template-config/TemplateConfigForm.tsx`
@@ -102,10 +102,10 @@ Meanwhile `template-config` has no preview at all, only a colour swatch
 (`TemplateConfigForm.tsx:95-111`), and its page heading still claims "live
 preview before save" (`template-config/page.tsx:8`) — stale.
 
-- [ ] Remove it from the builder
-- [ ] Add it to template-config, **scaled to fit**
-- [ ] Fix the stale heading
-- [ ] Preserve the authenticated logo/cover URLs: the worker inlines the same
+- [x] Remove it from the builder
+- [x] Add it to template-config, **scaled to fit**
+- [x] Fix the stale heading
+- [x] Preserve the authenticated logo/cover URLs: the worker inlines the same
       bytes as data URIs so the two match pixel-for-pixel
       (`CatalogBuilderForm.tsx:752-763`, `specs/workshop-settings/spec.md:133-145`)
 
@@ -118,7 +118,7 @@ out of it deliberately rather than folded in as silent scope.
 
 - [ ] Translate both, and check the other `(app)` pages for the same pattern
 
-## PR F2 — Catalog selection  ·  *after F1*
+## PR F2 — Catalog selection  ·  **DONE** (#125)
 
 `src/modules/catalog-builder/CatalogBuilderForm.tsx`
 
@@ -128,16 +128,16 @@ which is why the operator sets the page size to "Todos" (`:485`), which is why
 the action button ends up ~188 rows down (it is the third card, `:605-643`, and
 nothing on this page is sticky).
 
-- [ ] Do not preselect everything. Keep the id-handoff from `/inventory`
+- [x] Do not preselect everything. Keep the id-handoff from `/inventory`
       preselected — that one the operator did choose
-- [ ] Sticky action bar: count + button, visible regardless of scroll position
-- [ ] "Deselect those without an image". `product.image` already carries this
+- [x] Sticky action bar: count + button, visible regardless of scroll position
+- [x] "Deselect those without an image". `product.image` already carries this
       (`queries.ts:46`). **`imageType` cannot be used** — a product with no
       images maps to `low_res`, not to a distinct state (`mapper.ts:35-44`)
-- [ ] Surface `MAX_TOTAL_PRODUCTS = 200` before the operator hits Continue —
+- [x] Surface `MAX_TOTAL_PRODUCTS = 200` before the operator hits Continue —
       today it is only enforced at continue time (`selection.ts:208-210`), and
       188 auto-selected sits just under it invisibly
-- [ ] The 200 cap is enforced in three places on purpose (`selection.ts:66-77`).
+- [x] The 200 cap is enforced in three places on purpose (`selection.ts:66-77`).
       Do not relocate it
 
 ## PR G — `useUrlFilters`: filters lost on back-navigation  ·  *shared, alone*
