@@ -178,19 +178,25 @@ export function CatalogBuilderForm({
           const products: ProductRef[] = body.products ?? [];
           setCandidates(products);
           /**
-           * PR F2 — a fetch produces CANDIDATES, not a selection.
+           * Everything the fetch returns arrives SELECTED, in both modes.
            *
-           * Preselecting every row made "pick 12 of 188" mean "untick 176",
-           * which is what pushed the operator to "Todos" and buried the only
-           * action on the page under 188 rows. The one exception is the
-           * `/inventory` handoff: those ids are a selection the operator
-           * actually made by hand (D10), and dropping it would make the
-           * handoff pointless. The request body is what tells the two apart —
-           * `productIds` is the seeded mode, `categories` is not.
+           * PR F2 made the category mode start empty, reasoning that "pick 12
+           * of 188" is easier than "discard 176". That was theory. The owner
+           * then used it against the real catalog and reported the opposite
+           * workflow: the whole fetch arrives ticked and they remove what does
+           * not want, which is what "Quitar sin imagen" is for — one click
+           * that takes out the products that have no business being printed.
+           * Starting empty meant re-ticking by hand the rows they were going to
+           * keep anyway.
+           *
+           * F2's real defect was never the default; it was that the default
+           * was unREVERSIBLE in one gesture and that the only action on the
+           * page sat 188 rows down. Both of those are fixed and stay fixed —
+           * "Limpiar selección", "Quitar sin imagen" with its undo, the count,
+           * the cap surfaced on arrival, and the sticky bar carrying all of
+           * them. This line is the one thing that goes back.
            */
-          setSelectedProductIds(
-            "productIds" in productsRequestBody ? new Set(products.map((p) => p.id)) : new Set(),
-          );
+          setSelectedProductIds(new Set(products.map((p) => p.id)));
           setPage(1);
         }
       })
@@ -293,7 +299,13 @@ export function CatalogBuilderForm({
    * PR F2 — "quitar los que no tienen imagen", across the WHOLE selection and
    * not only the visible page: the operator means "no image-less product goes
    * in this catalog", and a version that silently spared the rows they had
-   * scrolled past would be the same trap the auto-selection was.
+   * scrolled past would leave exactly the products they asked to be rid of in a
+   * catalog they believe is clean.
+   *
+   * This is the button that makes the preselected default work at all — the
+   * owner said as much when asking for the default back. It is the one gesture
+   * that turns 188 ticked rows into the ones worth printing, so it has to mean
+   * all 188 and not the ten on screen.
    *
    * The signal is `product.image` (`queries.ts:46`) and it has to be.
    * `imageType` looks like the answer and is not — a product with NO images
@@ -659,15 +671,11 @@ export function CatalogBuilderForm({
         />
       )}
 
-      {/* Select-step totals are reported by the action bar below, which is the
-          one surface guaranteed to be on screen. Rendering them here too would
-          say the same sentence twice, and this copy is the one the sticky bar
-          can cover. */}
-      {errors.total && step === "review" && (
-        <p role="alert" className={`mb-4 ${FIELD_ERROR}`}>
-          {errors.total}
-        </p>
-      )}
+      {/* `errors.total` has no copy here any more, in EITHER step. It used to
+          be a bare paragraph above the image list — i.e. above the 103 rows,
+          off screen at the moment the route sets it. Each step's action bar
+          carries its own, which is the one surface guaranteed to be in view,
+          and printing it in both places would say the same sentence twice. */}
 
       {step === "select" && (
         <Card size="sm" className="mb-4">
@@ -712,8 +720,9 @@ export function CatalogBuilderForm({
        * page meant scrolling past all of them. Sticky, it is one thumb away
        * from any scroll position — and the count travels with it, because
        * "12 seleccionados" answers half the question: the operator needs to
-       * know what they are choosing FROM, which is the number that used to be
-       * silently pre-ticked.
+       * know what they are choosing FROM. With the fetch pre-ticked again,
+       * "176 de 188" is also the only place the removals already made are
+       * visible without scrolling back through the rows.
        *
        * The 44x44 rule applies in full here (AGENTS.md). These are action
        * controls on a tablet surface, NOT the filter-strip exception — that
@@ -775,9 +784,11 @@ export function CatalogBuilderForm({
                 </Button>
               </div>
               {/* Over-cap DISABLES and explains; an empty selection does not.
-                  Zero is where every category fetch now starts, and a red
-                  alert on arrival would be shouting at the operator for having
-                  just got here — that one is reported when they click. */}
+                  Over-cap IS the arrival state of any category holding more
+                  than 200 products, which is the case this surface exists for.
+                  An empty selection is something the operator did on purpose
+                  (Limpiar, or unticking the lot), so it is reported when they
+                  click rather than shouted at them while they work. */}
               {(overCap || errors.total) && (
                 <p role="alert" className={`mt-2 ${FIELD_ERROR}`}>
                   {overCap ? maxTotalProductsMessage(finalProducts.length) : errors.total}
@@ -829,29 +840,64 @@ export function CatalogBuilderForm({
         </Card>
       )}
 
+      {/**
+       * The review step's action bar.
+       *
+       * F2 gave the select step one and gated it on `step === "select"`, which
+       * left this step with the very complaint F2 was opened to fix: the only
+       * action sat in a card BELOW the whole image list, 103 rows down.
+       *
+       * Not the same controls, because it is not the same task. Nothing is
+       * being chosen here — the selection is frozen and the operator is
+       * checking how each photo will be framed — so there is no bulk
+       * select/deselect and no "N de M". What travels is the count of what is
+       * about to be printed (otherwise stated only in the tuner heading, at
+       * the top of a list already scrolled past) and the two exits. The one
+       * bulk action this step does have, "Enmarcar todos", deliberately stays
+       * where it is: it rewrites the rows, so it belongs beside them.
+       *
+       * Both exits carry the 44x44 minimum (AGENTS.md). Same reasoning F2
+       * wrote for the other bar: these are action controls on a tablet
+       * surface, not the filter-strip waiver, which is for controls sitting
+       * against `h-8` inputs and reading as one control.
+       */}
       {step === "review" && (
-        <Card size="sm" className="mb-4">
+        <Card size="sm" className="sticky bottom-0 z-10 mb-4 shadow-lg">
           <CardContent>
-            <div className="flex flex-wrap items-center justify-between">
-              <Button type="button" variant="outline" onClick={() => setStep("select")}>
-                Volver a la selección
-              </Button>
-              <Button
-                type="button"
-                disabled={reviewedProducts.length === 0}
-                onClick={() => {
-                  setErrors({});
-                  setShowConfirmDialog(true);
-                }}
-              >
-                Empezar a generar
-              </Button>
-            </div>
-            {reviewedProducts.length === 0 && (
-              <p role="alert" className={`mt-2 ${FIELD_ERROR}`}>
-                No hay productos seleccionados
-              </p>
-            )}
+            <section aria-label="Acciones de revisión">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-11 min-w-11"
+                  onClick={() => setStep("select")}
+                >
+                  Volver a la selección
+                </Button>
+                <span className="text-sm font-medium text-foreground">
+                  {reviewedProducts.length} {reviewedProducts.length === 1 ? "producto" : "productos"} en el catálogo
+                </span>
+                <Button
+                  type="button"
+                  className="min-h-11 min-w-11"
+                  disabled={reviewedProducts.length === 0}
+                  onClick={() => {
+                    setErrors({});
+                    setShowConfirmDialog(true);
+                  }}
+                >
+                  Empezar a generar
+                </Button>
+              </div>
+              {/* One alert, never two. A refusal the route just sent is news;
+                  "no hay productos" is the static explanation for the disabled
+                  button, so the route's message wins when both apply. */}
+              {(errors.total || reviewedProducts.length === 0) && (
+                <p role="alert" className={`mt-2 ${FIELD_ERROR}`}>
+                  {errors.total || "No hay productos seleccionados"}
+                </p>
+              )}
+            </section>
           </CardContent>
         </Card>
       )}
