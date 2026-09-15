@@ -12,8 +12,28 @@ const badgeVariants = cva(
         default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
         secondary:
           "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
+        /**
+         * The text colour is deliberately NOT `text-destructive`, and the
+         * numbers are in `badge.test.tsx`: dark's `--destructive`
+         * (hsl(0 62.8% 30.6%)) is a near-maroon built to be a BACKGROUND, so
+         * using it as a foreground on its own 20% tint measures 1.80:1 — the
+         * "0 en stock" chip the owner could not read. Light was no better at
+         * 3.30:1; it just failed quietly. `text-red-700` / `dark:text-red-400`
+         * measure 5.64:1 and 6.24:1 on the same grounds, clearing AA's 4.5:1.
+         *
+         * The tinted ground stays: every alternative that keeps `--destructive`
+         * as the text or as a solid ground still fails light (white on
+         * hsl(0 84.2% 60.2%) is 3.60:1). Raw palette reds are already this
+         * repo's practice where a token does not reach — see
+         * `service-orders/[id]/print/page.tsx:36`.
+         *
+         * `Button`/`Alert`'s destructive variants and the hand-rolled
+         * "Desactivado" chip (`customers/page.tsx:285`) still carry the old
+         * triple and measure the same. That is the `--destructive` token, not
+         * this variant, and it is a follow-up rather than silent scope here.
+         */
         destructive:
-          "bg-destructive/10 text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20",
+          "bg-destructive/10 text-red-700 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:text-red-400 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20",
         outline:
           "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
         ghost:

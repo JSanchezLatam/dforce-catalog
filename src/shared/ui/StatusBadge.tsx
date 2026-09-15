@@ -1,5 +1,7 @@
 import { Ban, BellOff, CheckCircle, Clock, Loader2, MinusCircle, XCircle, type LucideIcon } from "lucide-react";
 
+import { cn } from "@/lib/utils";
+
 export type BadgeStatus =
   | "running"
   | "completed"
@@ -77,10 +79,27 @@ export function statusBadgeClassName(status: BadgeStatus): string {
   return `inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BG[status]} ${STATUS_FG[status]}${isAnimated(status) ? " animate-pulse" : ""}`;
 }
 
-export function StatusBadge({ status, label }: { status: BadgeStatus; label: string }) {
+/**
+ * `className` exists for ONE caller, `ManualSyncButton`, and the reason is in
+ * `StatusBadge.test.tsx`: this chip is 20px (the same as shadcn's `Badge`
+ * `h-5`), which is right in the five places it sits in a table cell, inline in
+ * a heading, or in a grid card's footer (`CatalogGrid.tsx:60` is that last
+ * one), and short only beside `ManualSyncButton`'s `h-8` Button. Growing the component
+ * itself would add height to every service-order, reminder, customer and
+ * vehicle row to fix one toolbar.
+ */
+export function StatusBadge({
+  status,
+  label,
+  className,
+}: {
+  status: BadgeStatus;
+  label: string;
+  className?: string;
+}) {
   const Icon = STATUS_ICON[status];
   return (
-    <span className={statusBadgeClassName(status)}>
+    <span className={cn(statusBadgeClassName(status), className)}>
       <Icon aria-hidden="true" size={14} className={isAnimated(status) ? "animate-spin" : ""} />
       {label}
     </span>

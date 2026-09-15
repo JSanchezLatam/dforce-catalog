@@ -8,6 +8,9 @@ import { useToast } from "@/shared/ui/ToastProvider";
 
 type SyncRunStatus = "running" | "completed" | "failed";
 
+/** 28px, against the Button's `h-8`. The why is at the render site below. */
+const SYNC_BADGE_SIZE = "min-h-7 px-3";
+
 type SyncStatusResponse = {
   running: boolean;
   lastRun: { status: SyncRunStatus; productCount: number | null; finishedAt: string | null } | null;
@@ -104,10 +107,20 @@ export function ManualSyncButton() {
       <Button type="button" onClick={handleClick} disabled={running}>
         {running ? "Sincronizando…" : "Sincronizar inventario"}
       </Button>
+      {/* H2 — the chip beside this Button read as short: 20px against the
+          Button's `h-8`. It is raised to 28px rather than to 32px ON PURPOSE.
+          Matched exactly, a chip the same height as the control next to it
+          starts reading as a second button, and this one is not clickable;
+          4px short of the Button keeps it a status, while the pair still reads
+          as one row. `items-center` on the row already shares their centre
+          axis, so only the height was ever wrong. The other six `StatusBadge`
+          sites are untouched — see the component's docblock. */}
       {running ? (
-        <StatusBadge status="running" label={syncStatusLabel("running")} />
+        <StatusBadge status="running" label={syncStatusLabel("running")} className={SYNC_BADGE_SIZE} />
       ) : (
-        lastRun && <StatusBadge status={lastRun.status} label={syncStatusLabel(lastRun.status)} />
+        lastRun && (
+          <StatusBadge status={lastRun.status} label={syncStatusLabel(lastRun.status)} className={SYNC_BADGE_SIZE} />
+        )
       )}
     </div>
   );
