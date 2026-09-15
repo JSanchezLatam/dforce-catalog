@@ -18,7 +18,7 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { chromium } from "playwright";
+import { chromium, type Page } from "playwright";
 
 import { resolveAllPrices } from "@/modules/catalog-builder/price-lists";
 import { listCategoryPairs, listProductsInCategories } from "@/modules/catalog-builder/queries";
@@ -28,16 +28,107 @@ import {
   validateCatalogSelection,
 } from "@/modules/catalog-builder/selection";
 import { chunkProducts, renderCatalogHtml } from "@/modules/pdf-generation/render";
-import { measureCardHeights, resolveBranding } from "@/modules/pdf-generation/worker";
+import { buildMeasurementProps, buildPrintProps, measureCardHeights, resolveBranding } from "@/modules/pdf-generation/worker";
 import { getTemplateConfig } from "@/modules/template-config/service";
 import { buildWorkshopContact } from "@/modules/workshop-config/contact";
 import { getWorkshopConfig } from "@/modules/workshop-config/service";
 import { getTemplate } from "@/shared/template/registry";
-import type { ProductPrintRef } from "@/shared/template/CatalogTemplate";
+import type { CatalogTemplateProps, ProductPrintRef } from "@/shared/template/CatalogTemplate";
 import { CONTENT_HEIGHT_PX, PAGE_HEIGHT_PX, PAGE_WIDTH_PX } from "@/shared/template/page-geometry";
 import type { PriceTier } from "@/shared/template/price-tiers";
 
 const OUT = join(process.cwd(), "preview-out");
+
+/**
+ * The one check in this file that uses INVENTED products, and the one place
+ * that is right.
+ *
+ * Everything else here previews real rows because faking them hides real
+ * failures. This checks the opposite thing: a page whose rows are NOT all the
+ * same height. Real catalog names top out around two lines — the tallest card
+ * in the dev database is 135px — so no amount of real data reaches a row over
+ * the fill cap, and the case only exists if it is built.
+ *
+ * It shipped once for exactly that reason. `grid-auto-rows: minmax(auto, N)`
+ * reads as "never below the natural card"; it is not, because the card sets
+ * `height: 100%` and `overflow: hidden`, so Chromium clamped a naturally 217px
+ * card to 179px and the price rows went out of a hidden overflow. Silently, in
+ * a PDF a customer reads. jsdom cannot see it (no layout engine), the unit
+ * tests rendered identical cards, and the preview's real rows never got near
+ * the cap. This is the check that does see it.
+ *
+ * Two properties, both read off a real print-media layout:
+ *   - no card is clipped — its content fits the box it was given;
+ *   - the filled grid is no taller than the same page's natural grid, so
+ *     filling never turns a page the packer accepted into one that overflows.
+ */
+async function assertFilledRowsAreHonest(page: Page, props: CatalogTemplateProps): Promise<void> {
+  const card = (id: string, nameLines: number): ProductPrintRef => ({
+    id,
+    name: Array.from({ length: nameLines }, (_, at) => `LINEA DE NOMBRE ${at}`).join(" "),
+    categoryL1: "AUDIO",
+    categoryL2: "BOCINAS",
+    prices: { venta: 40, taller: 35, socio: null },
+  });
+
+  // One tall row and three short ones, then a card taller than the whole sheet
+  // (the spec's "a product taller than a page" scenario, which must still be
+  // placed alone and run visibly off the bottom rather than be trimmed to fit).
+  const mixed = [card("T1", 14), card("S1", 1), card("S2", 1), card("S3", 1), card("S4", 1), card("S5", 1), card("S6", 1), card("S7", 1)];
+  const cases: [string, ProductPrintRef[]][] = [
+    ["mixed row heights", mixed],
+    ["one very tall row", [card("T1", 40), card("S1", 1), card("S2", 1), card("S3", 1)]],
+    ["a card taller than the sheet", [card("G1", 90)]],
+  ];
+
+  const read = async () =>
+    page.evaluate(() => {
+      const grid = document.querySelector("[data-product-grid]");
+      if (!(grid instanceof HTMLElement)) return null;
+      return {
+        height: Math.round(grid.getBoundingClientRect().height),
+        // `getBoundingClientRect` on the grid reports the BOX; the rows can
+        // still be taller than it, so read the content too.
+        content: grid.scrollHeight,
+        clipped: Array.from(grid.children).filter((wrapper) => {
+          const box = wrapper.firstElementChild as HTMLElement;
+          return box.scrollHeight > box.clientHeight + 1;
+        }).length,
+      };
+    });
+
+  let failed = false;
+  for (const [name, products] of cases) {
+    await page.setContent(await renderCatalogHtml(buildMeasurementProps(props, products)), { waitUntil: "domcontentloaded" });
+    const natural = await read();
+    await page.setContent(await renderCatalogHtml(buildPrintProps(props, [products])), { waitUntil: "domcontentloaded" });
+    const filled = await read();
+
+    const naturalContent = natural?.content ?? 0;
+    const grew = (filled?.content ?? 0) > Math.max(naturalContent, CONTENT_HEIGHT_PX);
+    const clipped = (filled?.clipped ?? 0) > 0;
+    console.log(
+      `  ${name.padEnd(30)} natural ${naturalContent}px -> filled ${filled?.content}px` +
+        `${clipped ? `, ${filled?.clipped} CARD(S) CLIPPED` : ""}`,
+    );
+    if (clipped || grew) failed = true;
+
+    // Screenshotted as well as measured. "No card is clipped" is a number a
+    // human can read past; a tall row sitting beside short ones is a thing they
+    // can only judge by looking, and these are the only sheets in `preview-out/`
+    // that have one.
+    const sheet = await page.$('[data-sheet^="product-"]');
+    await sheet?.screenshot({ path: join(OUT, `probe-${name.replaceAll(" ", "-")}.png`) });
+  }
+
+  if (failed) {
+    console.error(
+      "FAIL: filling a page either clipped a card or grew a grid past what its natural rows needed — " +
+        "a product is being trimmed or a page overflowed. See CatalogTemplate's product grid.",
+    );
+    process.exit(1);
+  }
+}
 
 async function main() {
   const requestedTiers = process.env.TIERS?.split(",")
@@ -118,8 +209,13 @@ async function main() {
   await page.emulateMedia({ media: "print" });
 
   // Same two-pass sequence as worker.ts: measure every card in one grid, then
-  // split against the real content height, then render the split.
-  await page.setContent(await renderCatalogHtml({ ...props, productPages: [products] }), {
+  // split against the real content height, then render the split. The props
+  // for both passes are built by the worker's OWN builders rather than by hand
+  // — same reason the query and `measureCardHeights` are imported. Assembling
+  // them here is how the gate drifts from the thing it is gating: the two
+  // passes differ by one prop (`fillPageHeight`), and a copy that sets it on
+  // the wrong one previews a layout nobody generates.
+  await page.setContent(await renderCatalogHtml(buildMeasurementProps(props, products)), {
     waitUntil: "domcontentloaded",
   });
   // The worker's own measurement, imported — same reason the query above is
@@ -134,9 +230,6 @@ async function main() {
   const productPages = chunkProducts(products, 6, cardHeights, CONTENT_HEIGHT_PX);
   console.log(`split into ${productPages.length} product pages: ${productPages.map((p) => p.length).join(" + ")}`);
 
-  const html = await renderCatalogHtml({ ...props, productPages });
-  await page.setContent(html, { waitUntil: "load" });
-
   // Wiped, not just created. This gate's exit criterion is a human looking at
   // the PNGs, so a stale sheet left over from an earlier run is not clutter —
   // it is a wrong answer wearing a plausible filename. Two ways it bit:
@@ -147,6 +240,16 @@ async function main() {
   // log about what it just wrote.
   await rm(OUT, { recursive: true, force: true });
   await mkdir(OUT, { recursive: true });
+
+  // Before the PNGs, the case the PNGs cannot contain. Runs in this same
+  // print-media browser, and hard-fails: a clipped product is not something a
+  // human should have to spot in a screenshot.
+  console.log("\nfilled rows, on pages real data cannot produce:");
+  await assertFilledRowsAreHonest(page, props);
+
+  const html = await renderCatalogHtml(buildPrintProps(props, productPages));
+  await page.setContent(html, { waitUntil: "load" });
+
   const sheets = await page.$$("article > section");
   for (const [index, sheet] of sheets.entries()) {
     // `data-sheet`, not `aria-label`: the label is Spanish prose meant for a

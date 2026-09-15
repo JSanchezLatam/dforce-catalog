@@ -45,7 +45,7 @@ import { createPendingCatalog } from "../catalog-storage/queries";
 import { buildIndexSections } from "../catalog-builder/selection";
 import { CONTENT_HEIGHT_PX, PAGE_HEIGHT_PX, PAGE_WIDTH_PX } from "@/shared/template/page-geometry";
 import { PDF_GENERATE_JOB, PDF_UPLOAD_JOB, type PdfBranding, type PdfGeneratePayload } from "./enqueue";
-import type { CatalogTemplateProps } from "@/shared/template/CatalogTemplate";
+import type { CatalogTemplateProps, ProductPrintRef } from "@/shared/template/CatalogTemplate";
 import { chunkProducts, renderCatalogHtml } from "./render";
 
 export type PdfUploadPayload = {
@@ -188,6 +188,34 @@ export function buildTemplateProps(
   };
 }
 
+/**
+ * The two passes' props, built one above the other so the single prop that
+ * separates them is readable in one glance instead of buried in two
+ * `setContent` calls forty lines apart.
+ *
+ * `fillPageHeight` is stated explicitly in BOTH, `false` included. Omitting it
+ * from the measuring pass would lean on `CatalogTemplate`'s default, and this
+ * is the one field where the default being right is not the point — the point
+ * is that the measuring pass can be SHOWN, by a test that needs no browser, to
+ * measure natural cards. `chunkProducts` splits against whatever this pass
+ * measures; a filled measuring pass would silently paginate the PDF against
+ * heights no printed page has.
+ */
+export function buildMeasurementProps(
+  props: CatalogTemplateProps,
+  products: ProductPrintRef[],
+): CatalogTemplateProps {
+  return { ...props, productPages: products.length > 0 ? [products] : [], fillPageHeight: false };
+}
+
+/** The print pass — pages already decided, rows free to grow into the space those pages were measured to have spare. */
+export function buildPrintProps(
+  props: CatalogTemplateProps,
+  productPages: ProductPrintRef[][],
+): CatalogTemplateProps {
+  return { ...props, productPages, fillPageHeight: true };
+}
+
 export async function renderPdfBuffer(
   payload: PdfGeneratePayload,
   deps: { getObject?: typeof getObject } = {},
@@ -211,7 +239,6 @@ export async function renderPdfBuffer(
     // future `@media print` rule would silently invalidate the measurement.
     await page.emulateMedia({ media: "print" });
 
-    const everythingOnOnePage = payload.products.length > 0 ? [payload.products] : [];
     // `domcontentloaded`, not `load`: no measured height waits on a byte
     // arriving, so the split is the same either way.
     //
@@ -226,7 +253,7 @@ export async function renderPdfBuffer(
     // Blocking on `load` here would download all 200 images purely to throw
     // the document away — the render pass below fetches them again, and this
     // job holds the single queue slot meanwhile.
-    await page.setContent(await renderCatalogHtml({ ...props, productPages: everythingOnOnePage }), {
+    await page.setContent(await renderCatalogHtml(buildMeasurementProps(props, payload.products)), {
       waitUntil: "domcontentloaded",
     });
     const cardHeights = await measureCardHeights(page);
@@ -239,7 +266,7 @@ export async function renderPdfBuffer(
     }
 
     const productPages = chunkProducts(payload.products, payload.productsPerPage, cardHeights, CONTENT_HEIGHT_PX);
-    await page.setContent(await renderCatalogHtml({ ...props, productPages }), { waitUntil: "load" });
+    await page.setContent(await renderCatalogHtml(buildPrintProps(props, productPages)), { waitUntil: "load" });
     // Letter, matching the approved mockups' own 816x1056 sheet and the
     // `@page { size: 8.5in 11in }` rule `renderCatalogHtml` emits. A format
     // that disagrees with that rule scales every page.
