@@ -246,15 +246,32 @@ The review step MUST support a bulk "frame all" toggle that sets `image_type = "
 - WHEN the sidebar renders
 - THEN "Generar Catálogos" MUST be absent (see `app-navigation`)
 
-### Requirement: Pre-Existing Catalogs Remain Listable
+### Requirement: A Catalog Is A Workshop Asset, Not A Personal Document
 
-Restricting `catalogs.generate` MUST NOT affect `catalogs.read`/`catalogs.download` or ownership logic. A `tecnico`'s catalogs generated before this change (or generated on their behalf) MUST remain listable and downloadable exactly as today — ownership/listing logic is untouched by this change.
+Every catalog MUST be listable and downloadable by every role that holds
+`catalogs.read`, regardless of who generated it. `catalogs.generate` stays
+administrador-only.
 
-#### Scenario: Pre-existing catalog still listed
+Amended 2026-09-15, by the owner's decision, and the amendment closes a
+contradiction the earlier wording created rather than merely changing taste.
+That wording preserved `catalogs.read`/`catalogs.download` for a `tecnico` while
+leaving listing scoped to their own `userId` — and since a `tecnico` cannot
+`generate`, they could only ever hold catalogs "generated on their behalf",
+which nothing in the product does. Their "Catálogos Generados" screen was empty
+by construction and both grants were dead. A catalog is sales material a técnico
+shows a customer, so the scoping was the part that was wrong.
 
-- GIVEN a `tecnico` who generated catalogs before this change shipped
-- WHEN they open "Catálogos Generados"
-- THEN their existing catalogs MUST still appear in the list, unchanged
+#### Scenario: Técnico sees a catalog the Administrador generated
+
+- GIVEN an Administrador has generated a catalog
+- WHEN a `tecnico` opens "Catálogos Generados"
+- THEN that catalog MUST appear in their list, and MUST be downloadable
+
+#### Scenario: Técnico still cannot generate
+
+- GIVEN a `tecnico`
+- WHEN they attempt to reach the catalog builder or `POST /api/catalog-builder/generate`
+- THEN it MUST still be refused on `catalogs.generate`
 
 ### Requirement: Workshop Contact Block
 

@@ -33,7 +33,7 @@ const tecnicoGrants: Grants = {
   "catalogs.read": true,
   "catalogs.download": true,
   "catalogs.generate": false,
-  "catalogs.listAll": false,
+  "catalogs.listAll": true,
   "template.edit": false,
   "workshop.read": true,
   "workshop.edit": false,
