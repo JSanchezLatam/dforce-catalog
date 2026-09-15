@@ -27,6 +27,26 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/*": ["node_modules/playwright-core/**/*"],
   },
+  // `next dev` serves its internal resources (`/_next/*`, `/__nextjs_font/*`,
+  // the HMR websocket) ONLY to the origin it was started with — `localhost` by
+  // default — and answers anything else with a bare 403 `Unauthorized`
+  // (`next/dist/server/lib/router-utils/block-cross-site-dev.js`). Reaching a
+  // dev server at its LAN address therefore loads the page and then fails to
+  // hydrate, which does not look like a permissions problem at all: it looks
+  // like a form whose submit button never enables, because the inputs' React
+  // state stays empty when `onChange` never attaches.
+  //
+  // The private ranges rather than one address, because DHCP moves it and the
+  // workshop's router may not hand out `192.168.0.x`. Each `*` matches exactly
+  // one octet and the part count must match, so these cover any private LAN and
+  // nothing public — verified against Next's own matcher, including that
+  // `8.8.8.8` is refused.
+  //
+  // DEV ONLY — `next dev` is the sole reader of this. The workshop runs
+  // `next start` on a build, which has no HMR socket and no such restriction,
+  // so this changes nothing about what ships.
+  allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "172.16.*.*"],
+
   // Baseline security headers — this app had none. CSP is deliberately NOT
   // included here: it needs to allowlist the R2/Interfuerza image hosts
   // LazyImage loads from, and getting that wrong silently breaks product
