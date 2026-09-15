@@ -744,13 +744,73 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
                   cards. It used to select the section's first child div, which
                   the header band silently became the moment this page grew
                   chrome — an attribute cannot be stolen by a sibling. */}
+              {/* The page's leftover height is spread evenly around the rows
+                  instead of pooling under the last one.
+
+                  It used to be `alignContent: "start"`, and the empty bottom
+                  that produced was not an oversight: `productsPerPage` is a
+                  MAXIMUM, not a target (`specs/catalog-generation/spec.md`),
+                  and `worker.ts` over-counts a gap per page on purpose because
+                  "overflowing is the bug, a slightly emptier page is not". So
+                  whenever the count cap binds before the height cap — six
+                  products on a sheet that would take ten — the remainder is
+                  real and by design, and it still is. What changed is only
+                  WHERE it is put: the owner reported a 6- and 8-product page
+                  reading as a half-empty sheet (2026-09-13). Spreading the
+                  remainder does not make one more product fit, so the bias
+                  above is untouched and both spec scenarios still hold.
+
+                  `space-evenly` over `space-between`, measured in
+                  `preview-out/` rather than argued: with 6 cards of ~121px in
+                  a 760px box the remainder is ~370px, and `space-between` puts
+                  all of it into two ~198px voids that read as three
+                  disconnected strips. `space-evenly` splits the same remainder
+                  four ways (~92px), which is also the symmetric one — and it
+                  centres the trailing page that carries a single row, the
+                  worst hole of the lot, where `space-between` would still pin
+                  it to the top.
+
+                  It does NOT make the cards bigger; that is a separate,
+                  reported-but-unfixed half of the complaint. A card cannot be
+                  grown to fill its page here without the page's row count, and
+                  the measuring pass does not have one: `worker.ts` renders
+                  EVERY product in a single grid to measure it. See below.
+
+                  `space-evenly` + `minHeight` is also what keeps this change
+                  out of that measuring pass. `chunkProducts` packs rows from
+                  those measured bounding boxes, so any declaration that
+                  RESIZED a row would change the heights the packer splits
+                  against and could overflow a printed page silently, in a PDF
+                  a customer reads. Two properties rule that out:
+
+                    - `align-content` positions rows; it never sizes them. Only
+                      `stretch` (or an `fr` auto-row) would grow a card, which
+                      is why `AdaptiveCards`' `height: "100%"` still resolves
+                      against an unchanged, content-sized row. Do not
+                      "simplify" this to `stretch`.
+                    - `minHeight: "100%"` means a grid TALLER than its box keeps
+                      its own height, so the free space is exactly 0 and nothing
+                      is distributed at all. The measuring pass holds every
+                      product at once, so that is the case it always lands in —
+                      its layout is what it was before this comment existed, and
+                      the preview confirms it: same 14 cards, same 135px
+                      tallest, same 6+6+2 split before and after. `height`
+                      instead of `minHeight` would have shrunk that grid and put
+                      the answer at the mercy of each keyword's fallback
+                      alignment. A card taller than a whole page likewise still
+                      starts at the top and runs visibly off the bottom, which
+                      `Sheet` deliberately does not clip.
+
+                  jsdom cannot check any of that — no layout engine, no print
+                  media. `scripts/preview-catalog.ts` is the gate. */}
               <div
                 data-product-grid=""
                 style={{
                   display: "grid",
                   gridTemplateColumns: `repeat(${GRID_COLUMNS}, 1fr)`,
                   gap: GRID_GAP_PX,
-                  alignContent: "start",
+                  minHeight: "100%",
+                  alignContent: "space-evenly",
                 }}
               >
                 {page.map((product) => (
