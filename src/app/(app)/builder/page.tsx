@@ -5,13 +5,13 @@ import { countUploadedCatalogsForUser } from "@/modules/catalog-storage/queries"
 import { can } from "@/modules/auth/policy";
 import { listCategoryL1Options } from "@/modules/inventory-view/queries";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
-import { getTemplateConfig } from "@/modules/template-config/service";
-import { getWorkshopConfig } from "@/modules/workshop-config/service";
 import { PAGE_HEADING } from "@/shared/ui/styles";
 
 /**
- * R5 — catalog builder: category/product selection with a live title/index
- * preview (Risk-5's shared `CatalogTemplate`). Building a catalog is
+ * R5 — catalog builder: category/product selection. The live title/index
+ * preview this page used to carry moved to `/template-config`
+ * (workshop-feedback-round-1 PR F1): it could never show a product, and at
+ * full print size it buried the controls. Building a catalog is
  * admin-only (`catalogs.generate` in the permission matrix, checked three
  * lines below) — this page is NOT open to every authenticated user; the
  * denial branch below is the actual gate, not just `proxy.ts`'s session
@@ -20,9 +20,9 @@ import { PAGE_HEADING } from "@/shared/ui/styles";
  * `force-dynamic`: this page now reads `searchParams` (the `/inventory`
  * handoff below), which already forces a request-time render — but the
  * directive stays, because what must never be prerendered here is the
- * category options and template config, and those are just as stale on a
- * visit with NO query string. Without it Next would bake in whatever existed
- * at build time and serve it after inventory or branding changed.
+ * category options, and those are just as stale on a visit with NO query
+ * string. Without it Next would bake in whatever existed at build time and
+ * serve it after inventory changed.
  */
 export const dynamic = "force-dynamic";
 
@@ -46,11 +46,9 @@ export default async function CatalogBuilderPage({
     return <div className="p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
   }
 
-  const [categoryL1Options, categoryPairs, templateConfig, workshopConfig] = await Promise.all([
+  const [categoryL1Options, categoryPairs] = await Promise.all([
     listCategoryL1Options(),
     listCategoryPairs(),
-    getTemplateConfig(),
-    getWorkshopConfig(),
   ]);
 
   const catalogCount = await countUploadedCatalogsForUser(user.id);
@@ -61,8 +59,6 @@ export default async function CatalogBuilderPage({
       <CatalogBuilderForm
         categoryL1Options={categoryL1Options}
         categoryPairs={categoryPairs}
-        templateConfig={templateConfig}
-        workshopConfig={workshopConfig}
         catalogCount={catalogCount}
         seedProductIds={seedProductIds}
       />

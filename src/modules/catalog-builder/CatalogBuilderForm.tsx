@@ -3,16 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckIcon, Search } from "lucide-react";
 
-import { CatalogTemplate } from "@/shared/template/CatalogTemplate";
 import {
   DEFAULT_PRICE_TIERS,
   PRICE_TIER_LABELS,
   PRICE_TIER_ORDER,
   type PriceTier,
 } from "@/shared/template/price-tiers";
-import { getTemplate } from "@/shared/template/registry";
-import { buildWorkshopContact } from "@/modules/workshop-config/contact";
-import type { TemplateConfig, WorkshopConfig } from "@/shared/db/schema";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -30,7 +26,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
-import { CARD, FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
+import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
 import { Pagination } from "@/shared/ui/Pagination";
 import { RETENTION_LIMIT } from "@/modules/catalog-storage/retention-policy";
 
@@ -82,15 +78,11 @@ function uniqueL1s(refs: CategoryRef[]): string[] {
 export function CatalogBuilderForm({
   categoryL1Options,
   categoryPairs,
-  templateConfig,
-  workshopConfig,
   catalogCount,
   seedProductIds,
 }: {
   categoryL1Options: string[];
   categoryPairs: CategoryPair[];
-  templateConfig: TemplateConfig | null;
-  workshopConfig: WorkshopConfig | null;
   catalogCount: number;
   /**
    * D10 — the product ids `/inventory` handed over in the URL, already capped
@@ -731,42 +723,6 @@ export function CatalogBuilderForm({
         error={confirmError}
         onConfirm={handleConfirmGenerate}
       />
-
-      <Card size="sm">
-        <CardContent>
-            <section aria-label="Vista previa">
-            <h2 className={SECTION_HEADING}>Vista previa</h2>
-            <div className={CARD}>
-              <CatalogTemplate
-                title={title}
-                sections={sections}
-                // The preview renders no product cards, so its index-page
-                // FOOTER is the only place the tier choice shows here — and
-                // it sits directly under the checkbox group that sets it.
-                // Without this the preview names the default two lists while
-                // the PDF prints whatever was ticked, on the one screen where
-                // both are visible at once.
-                tiers={tiers}
-                branding={{
-                  templateId: getTemplate(templateConfig?.selectedTemplateId).id,
-                  // The logo route is session-authenticated (the browser sends
-                  // its cookie) — only supply the URL when a logo actually
-                  // exists, so an unset logo renders no <img> instead of a
-                  // broken one (matches the worker's per-key null handling).
-                  logoUrl: workshopConfig?.logoR2Key ? "/api/workshop-config/logo" : null,
-                  coverText: workshopConfig?.coverText ?? null,
-                  // WU5 (design D6) — same gating as logoUrl above, mirrors
-                  // the cover-image route; buildWorkshopContact is the one
-                  // shared mapping generate/route.ts also uses (Risk-5: the
-                  // preview must show the same contact block the PDF does).
-                  coverImageUrl: workshopConfig?.coverImageR2Key ? "/api/workshop-config/cover-image" : null,
-                  contact: buildWorkshopContact(workshopConfig ?? null),
-                }}
-              />
-            </div>
-          </section>
-        </CardContent>
-      </Card>
 
       {previewImage && (
         <ImagePreviewDialog

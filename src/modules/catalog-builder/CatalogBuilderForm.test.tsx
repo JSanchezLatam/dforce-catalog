@@ -58,15 +58,7 @@ async function reachReviewStep(generateResponse?: {
 }) {
   const fetchMock = mockFetch(generateResponse);
   const user = userEvent.setup();
-  render(
-    <CatalogBuilderForm
-      categoryL1Options={["Motor"]}
-      categoryPairs={[]}
-      templateConfig={null}
-      workshopConfig={null}
-      catalogCount={0}
-    />,
-  );
+  render(<CatalogBuilderForm categoryL1Options={["Motor"]} categoryPairs={[]} catalogCount={0} />);
 
   await user.click(screen.getByRole("button", { name: /Seleccion.* categor.as/ }));
   await user.click(await screen.findByRole("checkbox", { name: "Motor" }));
@@ -124,24 +116,14 @@ describe("CatalogBuilderForm — review step picks which price lists print (R13)
   });
 
   /**
-   * The preview sits directly under the checkbox group — the one screen where
-   * the choice and its consequence are visible at once. Its index page carries
-   * the same footer the PDF does (the preview renders no product cards, which
-   * is why the footer is the ONLY place the choice shows there, and why
-   * "the preview has no price rows" was the wrong reason to skip threading
-   * `tiers` into it).
+   * The test that used to sit here ("keeps the live preview's footer honest
+   * about the choice") asserted the tier choice reaching the preview's
+   * index-page footer. PR F1 removed the preview from this form, so that
+   * surface no longer exists here and the test could only have been kept by
+   * asserting something the user cannot see. What survives the move is the
+   * payload assertion below: the choice is what PRINTS, and every tier's
+   * value still travels.
    */
-  it("keeps the live preview's footer honest about the choice", async () => {
-    const { user } = await reachReviewStep();
-
-    expect(screen.getByText("Lista de precios · Venta · Taller")).toBeInTheDocument();
-
-    await user.click(box("Taller"));
-
-    expect(screen.getByText("Lista de precios · Venta")).toBeInTheDocument();
-    expect(screen.queryByText("Lista de precios · Venta · Taller")).not.toBeInTheDocument();
-  });
-
   it("POSTs the chosen tiers, and still sends every tier's VALUE", async () => {
     const { fetchMock, user } = await reachReviewStep();
 
@@ -163,6 +145,31 @@ describe("CatalogBuilderForm — review step picks which price lists print (R13)
     // the payload would mean re-reading the ERP to reprint the same catalog
     // with a different pair.
     expect(body.products[0].prices).toEqual({ venta: 45, taller: 38, socio: null });
+  });
+});
+
+/**
+ * workshop-feedback-round-1 PR F1. The "Vista previa" card that used to sit at
+ * the bottom of this form is gone — it was passed no `productPages`, so it
+ * could never show a product (cover, index and contact only), and it rendered
+ * at full print size (816 x 1056 px per sheet) inside an ordinary card, which
+ * is what overflowed the column and buried the controls under thousands of
+ * pixels. What it COULD show is branding, which is `/template-config`'s job,
+ * so it renders there now — scaled.
+ */
+describe("CatalogBuilderForm — the live preview moved out (PR F1)", () => {
+  it("renders no preview section and no catalog sheet, in either step", async () => {
+    const { user } = await reachReviewStep();
+
+    expect(screen.queryByRole("region", { name: "Vista previa" })).not.toBeInTheDocument();
+    // `data-sheet` is CatalogTemplate's own machine handle for a printed sheet
+    // (cover / index-N / product-N / contact), so this catches the template
+    // being rendered here at all — under any heading, or none.
+    expect(document.querySelectorAll("[data-sheet]")).toHaveLength(0);
+
+    // And not on the way back to the selection step either.
+    await user.click(screen.getByRole("button", { name: "Volver a la selección" }));
+    expect(document.querySelectorAll("[data-sheet]")).toHaveLength(0);
   });
 });
 
@@ -380,8 +387,6 @@ describe("CatalogBuilderForm — product-id mode (D10)", () => {
       <CatalogBuilderForm
         categoryL1Options={["REPUESTOS", "MOTOR"]}
         categoryPairs={[]}
-        templateConfig={null}
-        workshopConfig={null}
         catalogCount={0}
         seedProductIds={seedProductIds}
       />,
@@ -425,11 +430,20 @@ describe("CatalogBuilderForm — product-id mode (D10)", () => {
    * `deriveCatalogTitle(uniqueL1s(categoryRefs))` has nothing to derive from
    * in this mode, so the L1s come off the returned ROWS instead. Without the
    * fallback every seeded catalog would print the bare "Catalog".
+   *
+   * Read off the confirm dialog since PR F1: the preview used to print the
+   * title on its cover, and with the preview gone the dialog is the one place
+   * the operator sees the title before committing to it.
    */
   it("derives the title from the L1s the returned rows carry", async () => {
     renderSeeded(["PS1", "PS3"]);
+    const user = userEvent.setup();
+    await screen.findByText("Filtro de aceite");
 
-    expect(await screen.findAllByText("Catalog: REPUESTOS, MOTOR")).not.toHaveLength(0);
+    await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
+    await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
+
+    expect(await screen.findByText("Catalog: REPUESTOS, MOTOR")).toBeInTheDocument();
   });
 
   /**
@@ -476,8 +490,6 @@ describe("CatalogBuilderForm — the category-tree flow is unaffected", () => {
       <CatalogBuilderForm
         categoryL1Options={["Motor"]}
         categoryPairs={[]}
-        templateConfig={null}
-        workshopConfig={null}
         catalogCount={0}
       />,
     );
@@ -494,27 +506,37 @@ describe("CatalogBuilderForm — the category-tree flow is unaffected", () => {
   });
 
   it("still titles the catalog from the TICKED categories, not from the returned rows", async () => {
-    await pickMotor();
+    const { user } = await pickMotor();
 
-    // `CANDIDATE.categoryL1` is "Motor" as well, so this is only meaningful
-    // because nothing is ticked before the click — the assertion that carries
-    // the weight is the empty-selection one below.
-    expect(await screen.findAllByText("Catalog: Motor")).not.toHaveLength(0);
+    // `CANDIDATE.categoryL1` is "Motor" as well, so the title could come from
+    // either source and this alone would not tell them apart. What pins the
+    // direction is the sibling test above, where the ticked category and the
+    // returned rows' category differ. (This comment used to point at "the
+    // empty-selection one below"; that test no longer asserts a title at all
+    // since PR F1 moved the cover out of this form.)
+    await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
+    await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
+
+    expect(await screen.findByText("Catalog: Motor")).toBeInTheDocument();
   });
 
+  /**
+   * This used to wait for the preview's bare "Catalog" cover as its proof that
+   * the form had finished its first paint. PR F1 took that surface away, so it
+   * waits on the category control instead — a real element of the empty state,
+   * and the one the operator clicks next.
+   */
   it("still requests nothing at all until a category is ticked", async () => {
     const bodies = mockCategoryFetch();
     render(
       <CatalogBuilderForm
         categoryL1Options={["Motor"]}
         categoryPairs={[]}
-        templateConfig={null}
-        workshopConfig={null}
         catalogCount={0}
       />,
     );
 
-    await waitFor(() => expect(screen.getAllByText("Catalog")).not.toHaveLength(0));
+    await screen.findByRole("button", { name: /Seleccion.* categor.as/ });
     expect(bodies).toEqual([]);
   });
 });
