@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildIndex, CatalogTemplate, type CatalogIndexSection, type ProductPrintRef } from "./CatalogTemplate";
+import { buildIndex, CatalogTemplate, MAX_FILLED_ROW_PX, type CatalogIndexSection, type ProductPrintRef } from "./CatalogTemplate";
 import { INDEX_ROWS_PER_PAGE, firstProductPageNumber } from "./page-geometry";
 
 const FIRST_PRODUCT_PAGE_NUMBER = firstProductPageNumber(1);
@@ -134,50 +134,114 @@ describe("buildIndex — an index longer than one sheet", () => {
 });
 
 /**
- * The product grid's vertical space, and why it is no longer left at the
- * bottom. The full argument lives beside the grid in `CatalogTemplate.tsx`;
- * these are the two halves of it that a test can actually hold.
+ * The product grid's vertical space: how the page's leftover height is spread,
+ * and how far a row is allowed to grow into it. The full argument lives beside
+ * the grid in `CatalogTemplate.tsx`.
  *
- * jsdom has NO layout engine, so nothing here proves the page looks right or
- * that it does not overflow — it can only pin the declarations. The visual
- * gate is `scripts/preview-catalog.ts`, in a print-media Chromium.
+ * jsdom has NO layout engine, so nothing here proves the page looks right, or
+ * that a row does not overflow, or that a card is not clipped — it can only
+ * pin the declarations that decide those things in a real browser. Every
+ * number quoted below was measured in a print-media Chromium; the standing
+ * gate is `scripts/preview-catalog.ts`, whose `assertFilledRowsAreHonest`
+ * step renders the mixed-height page real catalog data never produces.
  */
 describe("the product grid — the page's leftover height", () => {
-  const gridStyle = async (productCount: number): Promise<string> => {
+  const gridStyle = async (productCount: number, fillPageHeight?: boolean): Promise<string> => {
     const { renderToStaticMarkup } = await import("react-dom/server");
     const markup = renderToStaticMarkup(
       CatalogTemplate({
-        title: "Catálogo",
+        title: "Cat\u00e1logo",
         branding: null,
         sections: [],
         productPages: [Array.from({ length: productCount }, (_, at) => product(String(at), "MOTOR"))],
+        fillPageHeight,
       }),
     );
     return markup.match(/<div data-product-grid="" style="([^"]*)"/)?.[1] ?? "";
   };
 
   it("spreads the leftover height evenly around the rows instead of leaving it all at the bottom", async () => {
-    const style = await gridStyle(6);
-    // `min-height`, not `height`: it is what gives `align-content` a page to
-    // distribute against without ever shrinking a grid that is taller.
-    expect(style).toContain("min-height:100%");
-    expect(style).toContain("align-content:space-evenly");
+    expect(await gridStyle(6, true)).toContain("align-content:space-evenly");
   });
 
   /**
-   * The never-overflow guarantee, as far as jsdom can reach it. `worker.ts`
-   * measures every card in ONE grid and `chunkProducts` packs rows from those
-   * heights, so any declaration here that RESIZES a row changes the numbers
-   * the packer splits against — silently, in a PDF a customer reads.
-   * `space-evenly` only moves rows apart; `stretch` and an `fr` auto-row
-   * would grow them.
+   * The measuring pass's grid must stay byte-for-byte what it was before
+   * filling existed. `worker.ts` measures every card in ONE grid and
+   * `chunkProducts` packs pages from those heights, so ANY declaration that
+   * resizes a row there changes the numbers the packer splits against —
+   * silently, in a PDF a customer reads.
+   *
+   * Asserted as the whole string rather than a list of absences: the previous
+   * version checked for `stretch` and `grid-auto-rows` by name, which is a
+   * list that only ever grows, and would have missed the `height` below.
+   *
+   * (`worker.test.ts` holds the other half: that the measuring pass never
+   * passes the flag in the first place. Both are needed — this one alone would
+   * pass on a worker that turned filling on for both passes.)
    */
-  it("never resizes a row to fill the page — that would change what the measuring pass measures", async () => {
-    const style = await gridStyle(6);
-    expect(style).not.toMatch(/stretch/);
-    expect(style).not.toMatch(/grid-auto-rows/);
-    // The gap `worker.ts` reads back off the rendered grid and folds into
-    // every measured card height. Distribution must not restate it.
-    expect(style).toContain("gap:14px");
+  it("leaves the measuring pass's grid exactly as it was — that is what the packer splits against", async () => {
+    expect(await gridStyle(6)).toBe(
+      "display:grid;grid-template-columns:repeat(2, 1fr);gap:14px;min-height:100%;align-content:space-evenly",
+    );
+  });
+
+  /**
+   * What actually bounds the growth, and the bug this replaced.
+   *
+   * The first version sized rows with `grid-auto-rows: minmax(auto, N)` over a
+   * `min-height` box and derived N from the page's ROW COUNT. Both halves were
+   * wrong, and Chromium says so:
+   *
+   *   - `min-height` leaves the grid's block size INDEFINITE, and an indefinite
+   *     grid grows every track to its growth limit whatever the page has left.
+   *     The row count was doing the bounding, and a row count only bounds the
+   *     total if every row is under N.
+   *   - `height: 100%` against `ContentBox`'s definite 760px makes the free
+   *     space real: tracks grow by what is actually spare and stop. Measured,
+   *     8 short cards: rows 107 natural -> 180 filled, grid exactly 760.
+   *
+   * So the bound is the page itself, not arithmetic over a count — which is
+   * why no N is computed here any more.
+   */
+  it("bounds the growth with the page's own free space, not with a row count", async () => {
+    const style = await gridStyle(8, true);
+    expect(style).toContain("height:100%");
+    expect(style).not.toContain("min-height:100%");
+  });
+
+  /**
+   * The floor, and the defect that made this test exist.
+   *
+   * `minmax(auto, 180px)` reads like "never below the natural card" and is not
+   * reliably that: a grid item's AUTOMATIC minimum size is qualified by its
+   * overflow and by percentage sizing, and the card sets both (`height: 100%`,
+   * `overflow: hidden`). Measured on the shipped grid, a naturally 217px card
+   * rendered at 179px with its price rows scrolled out of that hidden overflow
+   * — not an overflow, a silently truncated product in a printed catalogue,
+   * which is worse.
+   *
+   * Stated exactly, because overclaiming here is what shipped it: with the
+   * DEFINITE height the test above pins, `auto` stopped clipping in the same
+   * probe. `min-content` is kept anyway — it is the floor whose meaning does
+   * not depend on how a browser resolves an automatic minimum, on a property
+   * whose failure mode is invisible in a PDF. The probe in
+   * `scripts/preview-catalog.ts` is what actually watches for the clipping;
+   * this only pins the declaration.
+   */
+  it("floors a row at its own content rather than at an automatic minimum", async () => {
+    const rowSizing = (await gridStyle(8, true)).match(/grid-auto-rows:([^;]*)/)?.[1];
+    expect(rowSizing).toBe(`minmax(min-content,${MAX_FILLED_ROW_PX}px)`);
+  });
+
+  /**
+   * A page holding one row has a whole 760px box to grow into, and a 760px
+   * card beside a 112px-wide image column is a worse page than the whitespace
+   * it replaced. What the cap leaves over goes back to `space-evenly`.
+   * `MAX_FILLED_ROW_PX` carries the rendered evidence behind the number.
+   */
+  it("caps the growth, so a sparse page does not print a card the height of the sheet", async () => {
+    for (const count of [2, 6, 8]) {
+      expect(await gridStyle(count, true)).toContain(`,${MAX_FILLED_ROW_PX}px)`);
+    }
   });
 });

@@ -166,6 +166,39 @@ export const GRID_COLUMNS = 2;
  */
 const GRID_GAP_PX = 14;
 
+/**
+ * The tallest a filled row may grow, whatever the page has spare. Chosen by
+ * looking at `preview-out/`, not by arithmetic — both alternatives were
+ * rendered against real catalog rows before this number was written down.
+ *
+ * Uncapped, a 3-row page (6 products, the owner's usual setting) gives each
+ * row 244px and fills the sheet exactly. It looks worse than the whitespace it
+ * replaces. The card is a flex row whose image column is a FIXED 112px wide
+ * (`AdaptiveCards`), so at 244px the photo becomes a 1:2.2 strip that
+ * `object-fit: cover` crops the product out of, and the text column — heading
+ * at the top, price table pinned to the bottom by `margin-top: auto` — opens a
+ * ~130px hole down the middle of every card. The sheet ends up full of hollow
+ * cards. The owner asked for "todo el espacio disponible O de manera
+ * simétrica... y los elementos con buen tamaño": a good size, not a maximum
+ * one.
+ *
+ * At 180px the card grows ~50% (121px natural -> 180px), the photo stays a
+ * legible 112x180, and what the cap leaves over goes back to the PR E
+ * `align-content` distribution as even ~48px bands instead of the ~92px ones
+ * the owner reported.
+ *
+ * It is a CEILING on one row, not a target and not a floor. A row whose own
+ * content is taller keeps its height (see the grid below); a page with less to
+ * spare grows its rows less. Nothing here divides the page by a row count —
+ * that arithmetic was the first version of this change and it was wrong.
+ *
+ * Filling the sheet COMPLETELY needs the card's own layout to scale with it —
+ * a wider image column, a price block that does not pin to the bottom — which
+ * changes every measured card height and is its own change with the owner's
+ * eye on it, not a number to raise here.
+ */
+export const MAX_FILLED_ROW_PX = 180;
+
 export type CatalogIndexSection = {
   categoryL1: string;
   categoryL2: string | null;
@@ -197,6 +230,23 @@ export type CatalogTemplateProps = {
   sections: CatalogIndexSection[];
   /** R6.1 — one array per printed page (already chunked by `pdf-generation/render.ts`'s `chunkProducts`). Omitted for the builder's cover+index-only live preview. */
   productPages?: ProductPrintRef[][];
+  /**
+   * Whether each page's rows may grow into the space that page has free.
+   *
+   * This is the ONLY thing separating the PDF worker's two render passes, and
+   * it defaults OFF because the dangerous direction is turning it on by
+   * accident. `pdf-generation` measures every product in one grid, chunks
+   * pages from those natural heights, and only THEN renders the split — so a
+   * row may only ever consume slack the conservative measuring pass already
+   * proved was there. Set it in that measuring pass and the packer splits
+   * against heights no printed page has: fewer products a page, or a silent
+   * overflow in a PDF a customer reads.
+   *
+   * `pdf-generation/worker.ts`'s `buildMeasurementProps`/`buildPrintProps` are
+   * the two call sites, one above the other, and `worker.test.ts` pins which
+   * is which.
+   */
+  fillPageHeight?: boolean;
   /** 'strict' forces all products to OpaqueProductCard; 'adaptive' selects card based on imageType (default: 'strict' for backward compat). */
   defaultImageHandling?: "strict" | "adaptive" | null;
   /**
@@ -538,7 +588,7 @@ function ContentBox({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function CatalogTemplate({ title, branding, sections, productPages = [], defaultImageHandling, tiers }: CatalogTemplateProps) {
+export function CatalogTemplate({ title, branding, sections, productPages = [], defaultImageHandling, tiers, fillPageHeight = false }: CatalogTemplateProps) {
   // Card markup is a template concern regardless of whether branding is
   // configured yet (D1) — `getTemplate` always resolves to a real entry.
   const template = getTemplate(branding?.templateId);
@@ -770,46 +820,96 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
                   worst hole of the lot, where `space-between` would still pin
                   it to the top.
 
-                  It does NOT make the cards bigger; that is a separate,
-                  reported-but-unfixed half of the complaint. A card cannot be
-                  grown to fill its page here without the page's row count, and
-                  the measuring pass does not have one: `worker.ts` renders
-                  EVERY product in a single grid to measure it. See below.
+                  `grid-auto-rows` is the second half, and the half that makes
+                  the cards themselves bigger — the owner asked for both ("que
+                  ocupara todo el espacio disponible o de manera simétrica... y
+                  los elementos con buen tamaño"). It is only ever emitted in
+                  the PRINT pass, and the ORDER of the two passes is why that is
+                  safe at all:
 
-                  `space-evenly` + `minHeight` is also what keeps this change
-                  out of that measuring pass. `chunkProducts` packs rows from
-                  those measured bounding boxes, so any declaration that
-                  RESIZED a row would change the heights the packer splits
-                  against and could overflow a printed page silently, in a PDF
-                  a customer reads. Two properties rule that out:
+                    1. `chunkProducts` decides page membership from measured,
+                       UNSTRETCHED cards — the conservative pass, unchanged.
+                    2. only then does the print pass let an already-decided
+                       page's rows grow into what that page has left over.
 
-                    - `align-content` positions rows; it never sizes them. Only
-                      `stretch` (or an `fr` auto-row) would grow a card, which
-                      is why `AdaptiveCards`' `height: "100%"` still resolves
-                      against an unchanged, content-sized row. Do not
-                      "simplify" this to `stretch`.
-                    - `minHeight: "100%"` means a grid TALLER than its box keeps
-                      its own height, so the free space is exactly 0 and nothing
-                      is distributed at all. The measuring pass holds every
-                      product at once, so that is the case it always lands in —
-                      its layout is what it was before this comment existed, and
-                      the preview confirms it: same 14 cards, same 135px
-                      tallest, same 6+6+2 split before and after. `height`
-                      instead of `minHeight` would have shrunk that grid and put
-                      the answer at the mercy of each keyword's fallback
-                      alignment. A card taller than a whole page likewise still
-                      starts at the top and runs visibly off the bottom, which
-                      `Sheet` deliberately does not clip.
+                  `fillPageHeight` must therefore stay off in the measuring pass:
+                  `worker.ts` holds every product in one grid there, so growing
+                  against it would hand the packer heights nothing prints.
 
-                  jsdom cannot check any of that — no layout engine, no print
-                  media. `scripts/preview-catalog.ts` is the gate. */}
+                  WHAT IS ACTUALLY GUARANTEED — read this before changing a
+                  declaration below, because the first version of this change
+                  promised more than it delivered and shipped a defect:
+
+                    the filled grid is never taller than the SAME page's
+                    natural grid, and never taller than the content box unless
+                    the natural grid already was.
+
+                  That is weaker than "can never overflow", which was the
+                  original claim, and it is the true one. It follows from the
+                  two declarations, each of which was measured in a print-media
+                  Chromium rather than reasoned about:
+
+                    - `height: "100%"` — a DEFINITE block size, against
+                      `ContentBox`'s definite 760px. That is what makes the free
+                      space real: grid track sizing distributes what is actually
+                      spare and stops. `minHeight` leaves the size INDEFINITE,
+                      and an indefinite grid grows every track to its growth
+                      limit regardless of what the page has left — 8 short rows
+                      at a 180px limit come to 762px in a 760px box. The first
+                      version papered over that by deriving the limit from the
+                      page's ROW COUNT, which only bounds the total while every
+                      row is under it. One taller row and the arithmetic is
+                      void.
+
+                    - `minmax(min-content, N)` — the floor that means what it
+                      says. `auto` reads like "never below the natural card" and
+                      is not reliably that: a grid item's AUTOMATIC minimum size
+                      is qualified by its overflow and by percentage sizing, and
+                      the card sets both (`height: 100%`, `overflow: hidden`).
+                      Measured, on the shipped `min-height` grid: with
+                      `minmax(auto, 179px)` a naturally 217px card rendered at
+                      179px with its price rows scrolled out of that hidden
+                      overflow — a silently truncated product, which is worse
+                      than the overflow it was avoiding.
+
+                      Honesty about the interaction, because overclaiming here
+                      is what shipped the defect: once the box above is
+                      DEFINITE, `auto` stopped clipping in the same probe. So
+                      `height` is what fixes the bound and `min-content` is what
+                      makes the floor independent of how Chromium resolves an
+                      item's automatic minimum — belt and braces, deliberately,
+                      on a property whose failure mode is invisible in a PDF.
+                      Measured with both: the 217px row stays 217px, the short
+                      rows grow to 167px, and the grid totals exactly 760px.
+
+                  So a card taller than a whole page keeps its full height,
+                  starts at the top, and runs visibly off the bottom — which
+                  `Sheet` deliberately does not clip, and which the spec
+                  requires. `stretch` would grow rows too, but with no ceiling;
+                  see `MAX_FILLED_ROW_PX` for why a 760px card is not the
+                  answer.
+
+                  The measuring pass keeps `minHeight: "100%"` and nothing else,
+                  byte for byte what it was before filling existed: its grid
+                  holds every product at once, so it is always taller than its
+                  box, free space is 0, and nothing is distributed. The preview
+                  confirms it — same 14 cards, same 135px tallest, same 6+6+2
+                  split before and after.
+
+                  jsdom can check none of this: no layout engine, no print
+                  media, and unit tests render identical cards, which is exactly
+                  the shape that hid the clipping. `scripts/preview-catalog.ts`
+                  is the gate, and its `assertFilledRowsAreHonest` step builds
+                  the mixed-height page real catalog data never produces. */}
               <div
                 data-product-grid=""
                 style={{
                   display: "grid",
                   gridTemplateColumns: `repeat(${GRID_COLUMNS}, 1fr)`,
                   gap: GRID_GAP_PX,
-                  minHeight: "100%",
+                  ...(fillPageHeight
+                    ? { height: "100%", gridAutoRows: `minmax(min-content,${MAX_FILLED_ROW_PX}px)` }
+                    : { minHeight: "100%" }),
                   alignContent: "space-evenly",
                 }}
               >

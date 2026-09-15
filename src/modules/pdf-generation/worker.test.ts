@@ -11,7 +11,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { PdfBranding } from "./enqueue";
-import { resolveBranding, buildTemplateProps } from "./worker";
+import { resolveBranding, buildMeasurementProps, buildPrintProps, buildTemplateProps } from "./worker";
 
 describe("resolveBranding — D3 logo data-URI resolution", () => {
   it("returns null branding unchanged", async () => {
@@ -168,5 +168,35 @@ describe("buildTemplateProps — what both render passes are measured against", 
     // Defaulting here too would put the fallback in two places, and the second
     // copy is the one that drifts.
     expect(buildTemplateProps(payload, null).tiers).toBeUndefined();
+  });
+
+  /**
+   * The two passes differ in exactly one prop, and getting it backwards is
+   * invisible everywhere else: `chunkProducts` packs pages from what the
+   * measuring pass measured, so a measuring pass that GREW its rows would hand
+   * the packer heights no printed page has — fewer products a page, or an
+   * overflow, in a PDF a customer reads. Chromium is the only thing that can
+   * see the difference, and no unit test runs one.
+   *
+   * `CatalogTemplate.test.ts` holds the other half: that a grid rendered
+   * without the flag declares no row sizing at all.
+   */
+  it("never lets the measuring pass fill the page — it measures the natural card", () => {
+    const props = buildMeasurementProps(buildTemplateProps(payload, null), payload.products);
+
+    expect(props.fillPageHeight).toBe(false);
+    expect(props.productPages).toEqual([payload.products]);
+  });
+
+  it("fills the page in the print pass, against the split the measurement produced", () => {
+    const pages = [[payload.products[0]!], [payload.products[0]!]];
+    const props = buildPrintProps(buildTemplateProps(payload, null), pages);
+
+    expect(props.fillPageHeight).toBe(true);
+    expect(props.productPages).toBe(pages);
+  });
+
+  it("gives the measuring pass no page at all when there are no products", () => {
+    expect(buildMeasurementProps(buildTemplateProps(payload, null), []).productPages).toEqual([]);
   });
 });
