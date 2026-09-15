@@ -88,6 +88,9 @@ export default async function ServiceOrderPrintPage({
   // consumes the same singleton, so the sheet says whose workshop it is
   // without a new table, a new route, or a new upload path.
   const workshop = await getWorkshopConfig();
+  // Either column counts: one filled and one empty still means the order was
+  // worked, and the block below prints both rows rather than half a form.
+  const recorded = hasText(orden.hallazgos) || hasText(orden.recomendaciones);
 
   // `bg-white`/`text-black` below are unconditional rather than `print:`-scoped,
   // and that is deliberate on screen too: this route is reachable before anyone
@@ -148,42 +151,49 @@ export default async function ServiceOrderPrintPage({
         {field("Observaciones", orden.observaciones)}
       </dl>
 
-      {/* D9, revised by the owner on 2026-09-12: the block now has TWO shapes
-          and the order's own data picks one.
+      {/* D9, revised twice, and this is what the owner actually asked for after
+          printing a worked order: what was recorded prints AND ruled lines
+          follow it. Not one or the other. He wants somewhere to write on the
+          sheet after it comes out of the printer, whatever is already on it.
 
-          D9 originally kept this unconditionally blank so a reprint of a
-          worked order could never arrive pre-filled. What it was really
-          protecting is the OTHER half — a fresh order must reach the bench
-          with space for a pen — and that half is untouched: nothing recorded,
-          eight ruled lines, exactly as before.
+          The two earlier positions are both dead, and are recorded here only
+          so neither gets re-derived. D9 kept the block unconditionally blank
+          so a reprint could never arrive pre-filled; on 2026-09-12 the owner
+          reversed that, and the implementation then swung to the other
+          extreme, dropping the lines wherever content printed on the theory
+          that ruled lines under findings "invite a second handwritten set
+          nobody transcribes". That theory was ours, not the owner's, who has used the
+          sheet and wants the pen space regardless.
 
-          Once either column has content the order has been worked and the
-          sheet is a RECORD, not a form. Printing the findings under ruled
-          lines would invite a second, handwritten set of findings that no one
-          ever transcribes — the divergence D9 feared, arriving by the other
-          door. So the lines go and both columns print, each under its own
-          label: `hallazgos` is what was found, `recomendaciones` is what the
-          customer should do next, and merging them loses that.
+          So both columns print under their own labels — `hallazgos` is what
+          was found, `recomendaciones` is what the customer should do next, and
+          merging them loses that — with the absent one keeping its row and its
+          "—", for `field`'s own reason a hundred lines up: a printed form with
+          a MISSING row reads as a different form.
 
-          One present and one empty switches the whole block to record shape,
-          the absent column keeping its row and printing the same "—" every
-          other blank value on this sheet prints — `field`'s own reason, forty
-          lines up: a printed form with a MISSING row reads as a different
-          form. Half a form and half a record would read as neither. */}
+          FOUR lines after content, eight when nothing was recorded. The page
+          decides that, not taste. Letter at `@page { margin: 12mm }` leaves
+          roughly 965px of printable height; everything on this sheet other
+          than the block's inner content is about 530px, and the two printed
+          rows take ~86px more at one line each. Four `h-7` rows (112px) leave
+          ~240px of slack — around eleven more wrapped lines of findings before
+          the signature line is pushed onto a second sheet. Eight rows would
+          leave ~125px, about six, and a técnico's hallazgos run long. A
+          two-page work order is the regression this number exists to avoid.
+          Nothing in jsdom measures any of this: it is a print-preview check. */}
       <section className="border border-black p-3">
         <h2 className="mb-2 text-sm font-bold uppercase tracking-wide">Trabajo realizado / Hallazgos</h2>
-        {hasText(orden.hallazgos) || hasText(orden.recomendaciones) ? (
-          <dl>
+        {recorded ? (
+          <dl className="mb-2">
             {field("Hallazgos", orden.hallazgos)}
             {field("Recomendaciones", orden.recomendaciones)}
           </dl>
-        ) : (
-          <div aria-hidden="true">
-            {Array.from({ length: 8 }, (_, i) => (
-              <div key={i} className="h-7 border-b border-black/30" />
-            ))}
-          </div>
-        )}
+        ) : null}
+        <div aria-hidden="true">
+          {Array.from({ length: recorded ? 4 : 8 }, (_, i) => (
+            <div key={i} className="h-7 border-b border-black/30" />
+          ))}
+        </div>
       </section>
 
       <div className="mt-12 flex justify-end">
