@@ -63,12 +63,11 @@ async function reachReviewStep(generateResponse?: {
   await user.click(screen.getByRole("button", { name: /Seleccion.* categor.as/ }));
   await user.click(await screen.findByRole("checkbox", { name: "Motor" }));
   await screen.findByText("Woofer");
-  // PR F2 — a category fetch no longer ticks its own candidates, so reaching
-  // the review step now means doing what the operator does: choosing one.
-  // Before F2 this line was absent: whatever the fetch returned arrived
-  // pre-ticked, which here is the single CANDIDATE and in the workshop was all
-  // 188 of them.
-  await user.click(screen.getByRole("checkbox", { name: "Seleccionar Woofer" }));
+  // No tick here on purpose. A category fetch preselects its candidates again
+  // (see "preselects every candidate when a category fetch lands"), so ticking
+  // the single CANDIDATE would be clicking a box that is ALREADY checked — it
+  // would read as the step that reaches the review step and would in fact
+  // UNTICK it, leaving this helper dead-ending on an empty selection.
   // The select-step "Continue" button and the review-step "open confirm
   // dialog" button share this exact label but are mutually exclusive by
   // `step` — only one is ever mounted, so `getByRole` (which throws on a
@@ -470,15 +469,23 @@ describe("CatalogBuilderForm — product-id mode (D10)", () => {
 });
 
 /**
- * workshop-feedback-round-1 PR F2 — the selection belongs to the operator.
+ * workshop-feedback-round-1 PR F2, as corrected 2026-09-15 — the selection
+ * arrives complete and stays reversible.
  *
- * One root cause behind the three reported symptoms (endless list, no usable
- * pagination, the button ~188 rows down): every fetched candidate was
- * auto-selected, so picking 12 of 188 was really DISCARDING 176. That is what
- * drove the operator to set "Todos" and scroll past every row to reach the
- * only action on the page.
+ * F2 read the three reported symptoms (endless list, no usable pagination, the
+ * button ~188 rows down) as one cause, the auto-selection, and removed it. Half
+ * of that was right and half was not, and the owner settled which: the default
+ * is what they want — everything ticked, remove what does not belong, with
+ * "Quitar sin imagen" doing most of the removing. What actually hurt was that
+ * the default could not be undone in one gesture, with the only action on the
+ * page 188 rows below.
+ *
+ * So these tests pin the default AND its escape hatches together. Do not
+ * "simplify" by dropping either: a preselection nobody can clear in one click
+ * is the defect, and an empty arrival is the thing that was tried and rejected
+ * in use.
  */
-describe("CatalogBuilderForm — the selection is the operator's, not the fetch's (PR F2)", () => {
+describe("CatalogBuilderForm — the selection arrives complete and stays reversible", () => {
   /**
    * `p3` is the fixture that matters: it is `low_res` AND has an image. The
    * tempting signal for "sin imagen" is `imageType`, and it is wrong — a
@@ -511,21 +518,33 @@ describe("CatalogBuilderForm — the selection is the operator's, not the fetch'
   }
 
   const bar = () => screen.getByRole("region", { name: "Acciones de selección" });
-  const selectAllVisible = () => screen.getByRole("checkbox", { name: "Seleccionar todos los visibles" });
   const rowBox = (name: string) =>
     screen.getByRole("checkbox", { name: `Seleccionar ${name}` });
 
-  it("selects nothing when a category fetch lands", async () => {
+  /**
+   * INVERTED, not deleted. This slot used to hold "selects nothing when a
+   * category fetch lands" — PR F2's pin on the opposite default, argued from
+   * the theory that "pick 12 of 188" beats "discard 176". The owner then used
+   * it with real data and reported the reverse: everything ticked on
+   * arrival, removing what does not belong, which is the workflow "Quitar
+   * sin imagen" was built to serve. Ground truth beats the argument, so the
+   * default goes back and the pin is inverted rather than dropped — the next
+   * person to "improve" this meets a red test instead of silence.
+   */
+  it("preselects every candidate when a category fetch lands", async () => {
     await pickCategory();
 
-    expect(screen.getByRole("heading", { name: "Productos (0 de 3 seleccionados)" })).toBeInTheDocument();
-    for (const p of THREE) expect(rowBox(p.name)).not.toBeChecked();
+    expect(screen.getByRole("heading", { name: "Productos (3 de 3 seleccionados)" })).toBeInTheDocument();
+    for (const p of THREE) expect(rowBox(p.name)).toBeChecked();
   });
 
   /**
-   * The one exception, and the reason this is not simply "never preselect":
-   * `/inventory` hands over ids the operator TICKED by hand (D10). Discarding
-   * that would make the handoff pointless.
+   * Both modes preselect now, so this is no longer an exception — but it is
+   * still worth its own test, because the two arrive at the same state for
+   * different reasons. A category fetch ticks everything it returned; this
+   * ticks the ids the operator had already TICKED BY HAND in `/inventory`
+   * (D10). A future change that narrows the category default must not quietly
+   * take the handoff with it.
    */
   it("keeps the /inventory id-handoff preselected", async () => {
     mockProducts([THREE[0], THREE[1]]);
@@ -555,13 +574,15 @@ describe("CatalogBuilderForm — the selection is the operator's, not the fetch'
     const actions = bar();
     expect(screen.getByRole("region", { name: "Selección de productos" })).not.toContainElement(actions);
     expect(actions.closest("table")).toBeNull();
-    expect(within(actions).getByText("0 de 3 seleccionados")).toBeInTheDocument();
+    expect(within(actions).getByText("3 de 3 seleccionados")).toBeInTheDocument();
     expect(within(actions).getByRole("button", { name: "Empezar a generar" })).toBeInTheDocument();
   });
 
   it("removes exactly the image-less products, and keeps a low_res one that HAS an image", async () => {
     const user = await pickCategory();
-    await user.click(selectAllVisible());
+    // Arrives at 3 of 3 by itself. The `selectAllVisible()` click that used to
+    // sit here is gone rather than kept as ceremony: against the restored
+    // default it would have DESELECTED all three.
     expect(screen.getByRole("heading", { name: "Productos (3 de 3 seleccionados)" })).toBeInTheDocument();
 
     await user.click(within(bar()).getByRole("button", { name: "Quitar sin imagen (1)" }));
@@ -573,7 +594,6 @@ describe("CatalogBuilderForm — the selection is the operator's, not the fetch'
 
   it("can undo that removal — a bulk action the operator cannot reverse is the original defect", async () => {
     const user = await pickCategory();
-    await user.click(selectAllVisible());
     await user.click(within(bar()).getByRole("button", { name: "Quitar sin imagen (1)" }));
 
     await user.click(within(bar()).getByRole("button", { name: "Deshacer (1)" }));
@@ -594,7 +614,6 @@ describe("CatalogBuilderForm — the selection is the operator's, not the fetch'
    */
   it("stops offering the undo once the selection has moved on", async () => {
     const user = await pickCategory();
-    await user.click(selectAllVisible());
     await user.click(within(bar()).getByRole("button", { name: "Quitar sin imagen (1)" }));
     expect(within(bar()).getByRole("button", { name: "Deshacer (1)" })).toBeInTheDocument();
 
@@ -609,8 +628,13 @@ describe("CatalogBuilderForm — the selection is the operator's, not the fetch'
    * `validateCatalogSelection` still refuses, on both sides
    * (`selection.ts:66-77`). This surfaces the number the operator is about to
    * be refused for, while they can still do something about it.
+   *
+   * With the preselection restored this is the arrival state, not something
+   * the operator has to build: 201 candidates land ticked and the refusal is
+   * already on screen. That is the case the surface exists for — a fetch that
+   * overshoots the cap by itself is exactly what the 188-product category did.
    */
-  it("surfaces the 200 cap before Continue, not at continue time", async () => {
+  it("surfaces the 200 cap on arrival, not at continue time", async () => {
     const many = Array.from({ length: 201 }, (_, i) => ({
       id: `p${i}`,
       name: `Producto ${i}`,
@@ -620,14 +644,109 @@ describe("CatalogBuilderForm — the selection is the operator's, not the fetch'
       imageType: null,
       priceLists: null,
     }));
-    const user = await pickCategory(many);
-
-    await user.click(screen.getByRole("combobox"));
-    await user.click(await screen.findByRole("option", { name: "Todos" }));
-    await user.click(selectAllVisible());
+    await pickCategory(many);
 
     expect(await within(bar()).findByText("Seleccionaste 201, el máximo es 200")).toBeInTheDocument();
     expect(within(bar()).getByRole("button", { name: "Empezar a generar" })).toBeDisabled();
+  });
+
+  /**
+   * The other half of the restored default: it has to be UNDOABLE in one
+   * gesture, or "everything ticked" is the trap the 188 rows were. "Limpiar
+   * selección" is that gesture, and it only exists while something is ticked.
+   */
+  it("clears the preselection in one click", async () => {
+    const user = await pickCategory();
+
+    await user.click(within(bar()).getByRole("button", { name: "Limpiar selección" }));
+
+    expect(screen.getByRole("heading", { name: "Productos (0 de 3 seleccionados)" })).toBeInTheDocument();
+    for (const p of THREE) expect(rowBox(p.name)).not.toBeChecked();
+  });
+});
+
+/**
+ * workshop-feedback-round-1, correction to PR F2 — the REVIEW step needed a bar
+ * too.
+ *
+ * F2 gated its sticky bar on `step === "select"`, so the second step
+ * ("Revisar imágenes (103 productos)") still put its only action after the full
+ * 103-row list: the exact complaint F2 was opened to fix, one step further in.
+ *
+ * What goes in it is not the select bar's set — this step is a different task.
+ * The operator is not choosing products any more, so there is no bulk
+ * select/deselect and no "N de M": the controls are the two exits (back, or
+ * generate) plus the count of what is about to be printed, which is otherwise
+ * only stated in the tuner heading that has scrolled away. "Enmarcar todos" is
+ * this step's one bulk action and it deliberately stays put — it lives in
+ * `ProductLayoutTuner.tsx`, beside the rows it rewrites.
+ */
+describe("CatalogBuilderForm — the review step has its own action bar", () => {
+  const bar = () => screen.getByRole("region", { name: "Acciones de revisión" });
+
+  /**
+   * jsdom computes no layout, so whether the bar STICKS is a browser check and
+   * is not claimed here.
+   *
+   * Two things ARE claimed, and the second one is why this test is not the
+   * placebo the obvious version would have been. Containment — the bar is not
+   * inside the image list — was already true before this change: the actions
+   * lived in their own card, just a card the operator only met after 103 rows.
+   * An assertion that cannot fail without editing `ProductLayoutTuner.tsx` is
+   * not evidence, so it is kept as a boundary guard and NOT as the proof.
+   *
+   * The proof is the `sticky bottom-0` on the bar's own card, which is the
+   * entire fix and the one part jsdom can see at all — as a class name, never
+   * as behavior. Delete it and this goes red; whether the browser then honors
+   * it is the check a human does.
+   */
+  it("renders the actions in a sticky bar outside the scrolling image list", async () => {
+    await reachReviewStep();
+
+    const tuner = screen.getByRole("heading", { name: /Revisar imágenes/ }).closest('[data-slot="card"]');
+    expect(tuner).not.toContainElement(bar());
+    const card = bar().closest('[data-slot="card"]')!;
+    expect(card.className).toContain("sticky");
+    expect(card.className).toContain("bottom-0");
+    expect(within(bar()).getByRole("button", { name: "Volver a la selección" })).toBeInTheDocument();
+    // The count travels with the bar: the tuner's own heading carries it too,
+    // at the top of a list the operator has scrolled past.
+    expect(within(bar()).getByText("1 producto en el catálogo")).toBeInTheDocument();
+    // Guard, not a RED: the review step already had exactly one "Empezar a
+    // generar" and adding a bar is the obvious way to end up with two.
+    expect(screen.getAllByRole("button", { name: "Empezar a generar" })).toHaveLength(1);
+    expect(within(bar()).getByRole("button", { name: "Empezar a generar" })).toBeInTheDocument();
+  });
+
+  /**
+   * The route's refusal has ONE surface on this step, and it is the bar. It
+   * used to be a bare paragraph above the tuner — i.e. above the 103 rows,
+   * off-screen at the moment it is set. Moving it rather than adding it is the
+   * whole point: two alerts with the same sentence is the other way this
+   * correction could have gone wrong.
+   */
+  it("shows a route refusal in the bar, once, and not also above the list", async () => {
+    const { user } = await reachReviewStep({
+      ok: false,
+      status: 409,
+      json: async () => ({ error: "Cola llena — intentá de nuevo cuando termine un trabajo" }),
+    });
+
+    await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
+    await user.click(await screen.findByRole("button", { name: "Generar catálogo" }));
+
+    const shown = await screen.findAllByText(/Cola llena/);
+    // One in the open dialog, one in the bar behind it — and nowhere else.
+    expect(shown).toHaveLength(2);
+    expect(within(screen.getByRole("dialog")).getByText(/Cola llena/)).toBeInTheDocument();
+    // `hidden: true` is required, not laziness: the open dialog marks the rest
+    // of the tree `aria-hidden`, so the bar is off the accessibility tree
+    // while the operator is reading the dialog's copy. This asserts the second
+    // copy is the BAR's — before this change it was a bare paragraph sitting
+    // above the image list, which is where it would still be if the bar were
+    // added without moving it.
+    const behind = shown.find((el) => el.closest('[aria-hidden="true"]') !== null)!;
+    expect(screen.getByRole("region", { name: "Acciones de revisión", hidden: true })).toContainElement(behind);
   });
 });
 
@@ -675,7 +794,6 @@ describe("CatalogBuilderForm — the category-tree flow is unaffected", () => {
 
   it("still titles the catalog from the TICKED categories, not from the returned rows", async () => {
     const { user } = await pickMotor();
-    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Woofer" }));
 
     // `CANDIDATE.categoryL1` is "Motor" as well, so the title could come from
     // either source and this alone would not tell them apart. What pins the
