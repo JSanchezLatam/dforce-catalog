@@ -55,16 +55,16 @@ another account`, `Username is already taken`.
 - [x] **Tests assert the Spanish string** (AGENTS.md) — update every test that
       asserts the English one rather than loosening it to match both
 
-## PR D — Catalog visibility  ·  *independent, needs an owner decision first*
+## PR D — Catalog visibility  ·  **DONE** (#128)
 
 `src/modules/auth/policy.ts`, `src/app/(app)/catalogs/page.tsx`
 
 See `proposal.md`. Blocked on: is a catalog a personal document or a workshop
 asset? If the latter, `catalogs.listAll: true` for `tecnico` is the whole fix.
 
-- [ ] Owner decides
-- [ ] Apply, and add the test that a técnico sees a catalog they did not generate
-- [ ] `route-guards.test.ts` exists to stop an endpoint appearing unguarded —
+- [x] Owner decides
+- [x] Apply, and add the test that a técnico sees a catalog they did not generate
+- [x] `route-guards.test.ts` exists to stop an endpoint appearing unguarded —
       check whether it needs a matching entry
 
 ## PR E — Page space distribution  ·  **DONE** (#124 + #126)
@@ -140,22 +140,35 @@ nothing on this page is sticky).
 - [x] The 200 cap is enforced in three places on purpose (`selection.ts:66-77`).
       Do not relocate it
 
-## PR G — `useUrlFilters`: filters lost on back-navigation  ·  *shared, alone*
+## PR G — `useUrlFilters`: filters lost on back-navigation  ·  **CLOSED, no defect**
 
-`src/shared/ui/filters/useUrlFilters.ts`
+Reproduced in a browser against the real catalog before writing anything, which
+is what the task said to do: filter `/inventory` by name, open a product from
+the row menu, press the browser's Back button. **The filter came back** — URL,
+input value and filtered rows. The owner confirms it behaves for them too.
 
-**Cause not established. Do not start by writing a fix.** The filters do live in
-the URL and the state is seeded from it on mount (`:43`, lazily and on purpose —
-see the comment). Reproduce in a browser first; `CustomerFilters.tsx` documents
-two previously shipped-and-reverted attempts at this hook, so the ground is
-known to be treacherous.
+So `useUrlFilters` never had this defect, and it is worth saying why that
+mattered: `CustomerFilters.tsx` documents two shipped-and-reverted attempts at
+this hook. Going straight to a fix would have been the third, against a bug that
+was not there.
 
-- [ ] Reproduce: search, open a product, go back
-- [ ] Establish the cause with evidence before changing anything
-- [ ] Fix, then check **all four** consumers: inventory, customers, service
-      orders, and the vehicle make/model picker
+- [x] Reproduce first
+- [x] Establish the cause with evidence — there is no defect to explain
+- [x] Closed without touching the hook
 
-## PR H — `StatusBadge` sizing  ·  *shared, alone*
+### One real thing found while reproducing, not fixed
+
+The product detail's breadcrumb is `<Link href="/inventory" />`
+(`inventory/[id]/page.tsx:72`) — the bare path, with no search params. Going
+"back" that way does drop the filter, and it sits top-left where "back" is
+expected.
+
+Not built: the owner reports the flow works for them, so nobody is currently
+hurt by it, and inventing work from a hypothesis is how the two reverted
+attempts happened. If it ever gets reported, the same pattern is in the
+customers, service-orders and vehicle breadcrumbs — check all four, not one.
+
+## PR H — `StatusBadge` sizing  ·  **DONE** (#132)
 
 `src/shared/ui/StatusBadge.tsx`
 
@@ -163,19 +176,21 @@ Reported as "the sync badge is not the same size as the button". The component
 is used by seven surfaces — catalogs, inventory sync, users, service orders
 (list and detail), customers, vehicles — so a change inside it is app-wide.
 
-- [ ] Decide whether the fix belongs in the badge or beside the one button that
+- [x] Decide whether the fix belongs in the badge or beside the one button that
       looks wrong. Prefer the narrower one unless every surface is wrong
-- [ ] AGENTS.md's 44×44 rule applies to action controls; a badge is not one, but
+- [x] AGENTS.md's 44×44 rule applies to action controls; a badge is not one, but
       whatever sits beside it is
-- [ ] Check all seven surfaces after
+- [x] Check all seven surfaces after
 
 ---
 
-## Not started: the stock badge
+## The stock badge — located and fixed (#132)
 
-> "El badge de Stock se ve muy tímido y no se aprecia bien en modo oscuro"
+It was on the product DETAIL page, not the list: `{product.stock} en stock` at
+`inventory/[id]/page.tsx:87`. The reason a grep for it failed is that the only
+`En stock`/`Sin stock` strings in the code are the filter dropdown's options —
+the badge composes its label from the number. Found by opening the page.
 
-**Could not locate it.** The only `En stock` / `Sin stock` strings in the code
-are the filter dropdown's options (`InventoryFilters.tsx:121-122`), not a badge
-on a row. Needs the owner to say which screen shows it before this can be
-scoped — deliberately not guessed.
+Measured rather than eyeballed, and worse than reported: the destructive badge
+variant was **3.30:1 in light** and **1.80:1 in dark**, both under AA. Fixed in
+the variant, since both of its call sites had it.
