@@ -76,3 +76,24 @@ describe("ProductDetailPage — Listas de precios", () => {
     expect(priceFor("Precio Socio")).toBe("$0.00");
   });
 });
+
+/**
+ * H2's sibling defect, reported on this same screen: the owner opened
+ * `/inventory/PS0000570` in dark mode and could not read the "0 en stock" chip.
+ * The fix is in `Badge`'s `destructive` variant (measurements and the reasoning
+ * are in `src/components/ui/badge.test.tsx`); this test is the link from the
+ * screen that was reported back to it, so a later edit that swaps the variant
+ * here for a hand-rolled chip does not quietly reintroduce the old red.
+ *
+ * It asserts a class, not a colour: jsdom resolves no CSS variables and
+ * measures no contrast.
+ */
+describe("ProductDetailPage — the stock chip", () => {
+  it("marks a product at zero with the legible destructive red, in both themes", async () => {
+    render(await renderPage());
+    const chip = screen.getByText("0 en stock");
+
+    expect(chip).toHaveClass("text-red-700");
+    expect(chip).toHaveClass("dark:text-red-400");
+  });
+});
