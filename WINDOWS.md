@@ -90,7 +90,7 @@ powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 install-
 | `standalone.ps1 install-service` | Register the boot task and the firewall rule (needs admin) |
 | `standalone.ps1 uninstall-service` | Remove both; PostgreSQL is untouched (needs admin) |
 | `standalone.ps1 status` | What is running, what `.env` points at, whether the task is there and whether the app answers |
-| `standalone.ps1 backup` | `pg_dump -Fc` into `%USERPROFILE%\dforce-backups` |
+| `standalone.ps1 backup` | `pg_dump -Fc`, scratch-restore verification, upload to R2, Sentry heartbeat — see "Backups" below |
 | `standalone.ps1 restore <file>` | Restore a dump — asks first, and backs up the current state before replacing it |
 
 Parameters: `-Port` (3000), `-PgHost` (localhost), `-PgPort` (5432),
@@ -281,7 +281,10 @@ powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 install-
 
 `-SetupOnly` runs any pending migrations (idempotent — a release with no schema
 change is a no-op there). `install-service` re-registers the task, restarts the
-app and prints the LAN URL.
+app and prints the LAN URL. It also grants the `dforce` role `CREATEDB` (needed
+by the backup's scratch-restore verification, see "Backups" below), which asks
+for the `postgres` superuser password once — pass it non-interactively with
+`-SuperPassword <clave>` if this update runs unattended.
 
 **After:**
 
@@ -328,28 +331,85 @@ Nothing logs an error. `standalone.ps1 status` prints which one `.env` points at
 
 ## Backups
 
+Automatic. `install-service` registers `DforceCatalogoBackup` — a Task
+Scheduler task that runs `standalone.ps1 backup` every day at **12:00**, as
+`SYSTEM`, with `StartWhenAvailable` and `RunOnlyIfNetworkAvailable` (a machine
+that was off at noon runs it after boot instead of skipping the day). The same
+`backup` command can also be run by hand at any time:
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 backup
-# -> C:\Users\<you>\dforce-backups\dforce_catalog-20260911-143012.dump
 ```
 
-Custom format (`-Fc`), same as the macOS path, so the two are interchangeable.
-`restore <file>` takes a fresh backup of the current state before replacing
-anything.
+**The pipeline**, every run: a Sentry check-in (`in_progress`) → `pg_dump -Fc`
+into `%USERPROFILE%\dforce-backups` (`-BackupDir` to change it) → a
+`pg_restore -l` pre-check → a scratch restore into a throwaway `dforce_verify`
+database (`createdb` → `pg_restore --exit-on-error --no-owner` → `dropdb`,
+always dropped in a `finally`, never `-C`) → upload of the dump **and** the
+run log to R2 under `backups/`, via `node scripts\upload-backup.mjs` → a
+check-in of `ok`. Exit code `0` means verified **and** uploaded.
 
-A nightly one is another scheduled task:
+**Any step can fail**, and every failure looks the same: it appends to the log,
+sends a check-in of `error`, sends one Sentry event naming the exact step
+(e.g. `Backup failed at subida a R2`), and exits `1`. A dump that fails the
+`pg_restore -l` pre-check or the scratch restore is renamed to
+`<dump>.dump.corrupt` — left under its real name it would look like a valid
+backup and `restore` would accept it.
 
-```powershell
-$action  = New-ScheduledTaskAction -Execute "powershell.exe" `
-  -Argument '-ExecutionPolicy Bypass -File C:\dforce-catalog\scripts\windows\standalone.ps1 backup' `
-  -WorkingDirectory C:\dforce-catalog
-$trigger = New-ScheduledTaskTrigger -Daily -At 2am
-Register-ScheduledTask -TaskName DforceCatalogoBackup -Action $action -Trigger $trigger
-```
+Because SYSTEM already holds this trust (it is the same account the boot task
+runs as), it now also holds the R2 write credentials and the Sentry DSN,
+pulled from `.env` at run time — never baked into the task definition or
+passed on the command line.
+
+### One-time setup
+
+1. Create a Sentry project and put its DSN in `.env` as `SENTRY_DSN`. The app
+   itself also reads `SENTRY_DSN` (server-side errors) and
+   `NEXT_PUBLIC_SENTRY_DSN` (browser-side errors) independently of the backup
+   heartbeat. **An empty `SENTRY_DSN` disables the heartbeat**, exactly like an
+   empty `NEXT_PUBLIC_SENTRY_DSN` disables the in-app SDK: leaving either blank
+   is the rollback for that one.
+2. Create the R2 lifecycle rule once, so old dumps expire instead of
+   accumulating forever:
+   ```
+   wrangler r2 bucket lifecycle add <BUCKET> backups-30d backups/ --expire-days 30
+   ```
+   (or the same rule from the Cloudflare dashboard). This is the only place
+   retention is enforced — nothing in the code deletes an old dump.
+3. Re-run `install-service`. On top of everything it already did, it now also
+   grants the `dforce` role `CREATEDB` (needed to create `dforce_verify`) and
+   registers `DforceCatalogoBackup` — see the note under "Updating the code"
+   above about the superuser password it asks for.
+
+### Reading the monitor
+
+Sentry → **Crons** shows the `dforce-catalog-backup` monitor. A green check
+means the last `ok` arrived inside its window; a missed check-in — the
+machine was off, the network was down, or the task never ran — shows up there
+as a late or missing run within `checkin_margin` (180 minutes) of the 12:00
+schedule, and as a run that took longer than `max_runtime` (30 minutes) if it
+hangs. The cron's timezone is `.env`'s `BACKUP_TIMEZONE`, defaulting to
+`America/Panama` if unset.
+
+### `service.log` is cumulative
+
+`%USERPROFILE%\dforce-backups\service.log` (or `<BackupDir>\service.log`) is
+appended to, never rotated or truncated, so it grows without bound and every
+run's R2 copy contains every prior run's lines too — its own run's outcome is
+written to it only after the upload, so that copy never contains itself. This
+is the backup's own log file, separate from the app's `service.log` under
+`%SystemRoot%\System32\config\systemprofile\...` documented under "Reading the
+log" above.
+
+`restore <file>` still takes a fresh backup of the current state (through the
+same `pg_dump -Fc`, without the verify/upload/heartbeat pipeline) before
+replacing anything.
 
 Backups live outside the repo — they contain real customer data and must never
-be committed. Copy them off the machine periodically; a backup on the same disk
-as the database only protects against mistakes, not against the disk.
+be committed. The R2 copy is the off-site one: a dump that only exists on the
+same disk as the database protects against mistakes, not against the disk, so
+a day whose upload failed (an `error` check-in) is a day without an off-site
+backup until the next successful run.
 
 ## When something fails
 
@@ -374,6 +434,10 @@ as the database only protects against mistakes, not against the disk.
 | Worked yesterday, other machines get nothing today | The DHCP lease moved the IP | `standalone.ps1 status` prints the current one. Reserve it on the router |
 | Machine stayed off after a power cut | BIOS "restore on AC power loss" is not set | Set it in the BIOS; Windows cannot |
 | Catalog PDFs fail, everything else works | Chromium is missing from `C:\ProgramData\ms-playwright` | `$env:PLAYWRIGHT_BROWSERS_PATH = "C:\ProgramData\ms-playwright"; npx.cmd playwright install chromium` |
+| Backup fails: `No pude crear 'dforce_verify' para verificar el backup` | The `dforce` role never got `CREATEDB` | Re-run `install-service` (asks for the superuser password once, grants it) |
+| Backup fails: `Faltan credenciales R2_* en .env` | `R2_ENDPOINT`/`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`/`R2_BUCKET` incomplete | The dump was already verified locally; fill the four keys in `.env` and rerun `backup` |
+| Backup fails: `No encontré node (...) para subir el backup a R2` | Node is not on the resolved path the scheduled task was baked with | Install Node machine-wide, or re-run `install-service` (re-resolves and re-bakes `-NodeDir`) |
+| A `.dump.corrupt` file appears in the backup folder | `pg_restore -l` or the scratch restore failed on that dump | Read the Sentry event / `service.log` for the step, check the Postgres log, and retry the backup |
 
 ## Postgres installed with winget: recovering the superuser password
 

@@ -39,9 +39,9 @@ Build pairs (disjoint files): WU1 ∥ WU3, then WU2 ∥ WU4 (WU4 imports `@sentr
 
 ## Phase 2: Backup Docs (WU2, PR2)
 
-- [ ] 2.1 `WINDOWS.md`/`WINDOWS.es.md`: rewrite Backups as automatic; state SYSTEM holds R2 creds + DSN; document one-time Sentry project/DSN and `wrangler r2 bucket lifecycle add <BUCKET> backups-30d backups/ --expire-days 30`; `install-service` re-run note (CREATEDB grant + task registration); reading the monitor.
-- [ ] 2.2 Diff check: compare code-block lines of both files (excluding `#` comments) — must be empty; record the diff.
-- [ ] 2.3 `STANDALONE.md`: macOS parity note. `env.example`: add `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `BACKUP_TIMEZONE`.
+- [x] 2.1 `WINDOWS.md`/`WINDOWS.es.md`: rewrite Backups as automatic; state SYSTEM holds R2 creds + DSN; document one-time Sentry project/DSN and `wrangler r2 bucket lifecycle add <BUCKET> backups-30d backups/ --expire-days 30`; `install-service` re-run note (CREATEDB grant + task registration); reading the monitor.
+- [x] 2.2 Diff check: compare code-block lines of both files (excluding `#` comments) — must be empty; record the diff. Two pre-existing full-line-`#`-exempt mismatches remain (`git rev-parse --short HEAD  # <translated comment>` and `Test-Path $hba  # <translated comment>`), both inline trailing comments outside this WU's scope and outside the Backups section, present unchanged on `HEAD` before this WU (verified: `diff <(git show HEAD:WINDOWS.md | awk ...) <(git show HEAD:WINDOWS.es.md | awk ...)` shows the same 2 lines). Zero new mismatches were introduced by this WU's edits.
+- [x] 2.3 `STANDALONE.md`: macOS parity note. `env.example`: add `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `BACKUP_TIMEZONE`.
 
 ## Phase 3: Sentry App (WU3, PR3)
 

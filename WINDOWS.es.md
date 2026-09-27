@@ -94,7 +94,7 @@ powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 install-
 | `standalone.ps1 install-service` | Registra la tarea de arranque y la regla del firewall (requiere administrador) |
 | `standalone.ps1 uninstall-service` | Elimina ambas; PostgreSQL queda intacto (requiere administrador) |
 | `standalone.ps1 status` | Qué está corriendo, a qué apunta `.env`, si la tarea existe y si la aplicación responde |
-| `standalone.ps1 backup` | `pg_dump -Fc` en `%USERPROFILE%\dforce-backups` |
+| `standalone.ps1 backup` | `pg_dump -Fc`, verificación por restauración de prueba, subida a R2, heartbeat a Sentry: ver "Respaldos" más abajo |
 | `standalone.ps1 restore <file>` | Restaura un dump; pregunta primero y respalda el estado actual antes de reemplazarlo |
 
 Parámetros: `-Port` (3000), `-PgHost` (localhost), `-PgPort` (5432),
@@ -297,7 +297,11 @@ powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 install-
 
 `-SetupOnly` ejecuta las migraciones pendientes (idempotente: una versión sin
 cambios de esquema no hace nada ahí). `install-service` vuelve a registrar la
-tarea, reinicia la aplicación e imprime la URL de la LAN.
+tarea, reinicia la aplicación e imprime la URL de la LAN. También otorga al rol
+`dforce` el permiso `CREATEDB` (que la verificación por restauración de prueba
+del respaldo necesita, ver "Respaldos" más abajo), lo que pide una vez la
+contraseña del superusuario `postgres`: si esta actualización corre sin
+supervisión, pásela con `-SuperPassword <clave>`.
 
 **Después:**
 
@@ -345,29 +349,89 @@ registra un error. `standalone.ps1 status` imprime a cuál apunta `.env`.
 
 ## Respaldos
 
+Automático. `install-service` registra `DforceCatalogoBackup`: una tarea del
+Programador de tareas que ejecuta `standalone.ps1 backup` todos los días a las
+**12:00**, como `SYSTEM`, con `StartWhenAvailable` y `RunOnlyIfNetworkAvailable`
+(una máquina que estaba apagada al mediodía lo corre apenas arranca, en lugar
+de saltarse el día). El mismo comando `backup` también se puede correr a mano
+en cualquier momento:
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 backup
-# -> C:\Users\<you>\dforce-backups\dforce_catalog-20260911-143012.dump
 ```
 
-Formato custom (`-Fc`), igual que la ruta de macOS, así que los dos son
-intercambiables. `restore <file>` toma un respaldo fresco del estado actual antes
-de reemplazar nada.
+**El flujo**, en cada corrida: un check-in a Sentry (`in_progress`) →
+`pg_dump -Fc` en `%USERPROFILE%\dforce-backups` (`-BackupDir` para cambiarlo) →
+un pre-chequeo con `pg_restore -l` → una restauración de prueba en una base
+descartable `dforce_verify` (`createdb` → `pg_restore --exit-on-error
+--no-owner` → `dropdb`, siempre eliminada en un `finally`, nunca `-C`) → subida
+del dump **y** del log de la corrida a R2 bajo `backups/`, vía `node
+scripts\upload-backup.mjs` → un check-in de `ok`. El código de salida `0`
+significa verificado **y** subido.
 
-Uno nocturno es otra tarea programada:
+**Cualquier paso puede fallar**, y toda falla se ve igual: se agrega al log, se
+envía un check-in de `error`, se envía un evento a Sentry que nombra el paso
+exacto (por ejemplo, `Backup failed at subida a R2`), y sale con código `1`. Un
+dump que falla en el pre-chequeo `pg_restore -l` o en la restauración de
+prueba se renombra a `<dump>.dump.corrupt`: dejado con su nombre real
+parecería un respaldo válido y `restore` lo aceptaría.
 
-```powershell
-$action  = New-ScheduledTaskAction -Execute "powershell.exe" `
-  -Argument '-ExecutionPolicy Bypass -File C:\dforce-catalog\scripts\windows\standalone.ps1 backup' `
-  -WorkingDirectory C:\dforce-catalog
-$trigger = New-ScheduledTaskTrigger -Daily -At 2am
-Register-ScheduledTask -TaskName DforceCatalogoBackup -Action $action -Trigger $trigger
-```
+Como `SYSTEM` ya tiene esa confianza (es la misma cuenta con la que corre la
+tarea de arranque), ahora también tiene las credenciales de escritura de R2 y
+el DSN de Sentry, leídos de `.env` en el momento de la corrida — nunca fijados
+en la definición de la tarea ni pasados por línea de comandos.
+
+### Configuración inicial (una sola vez)
+
+1. Cree un proyecto de Sentry y ponga su DSN en `.env` como `SENTRY_DSN`. La
+   propia aplicación también lee `SENTRY_DSN` (errores del servidor) y
+   `NEXT_PUBLIC_SENTRY_DSN` (errores del navegador) de forma independiente del
+   heartbeat del respaldo. **Un `SENTRY_DSN` vacío desactiva el heartbeat**,
+   igual que un `NEXT_PUBLIC_SENTRY_DSN` vacío desactiva el SDK dentro de la
+   app: dejar cualquiera de los dos en blanco es el rollback de ese.
+2. Cree la regla de ciclo de vida de R2 una sola vez, para que los dumps
+   viejos vayan expirando en lugar de acumularse para siempre:
+   ```
+   wrangler r2 bucket lifecycle add <BUCKET> backups-30d backups/ --expire-days 30
+   ```
+   (o la misma regla desde el panel de Cloudflare). Este es el único lugar
+   donde se aplica la retención: nada en el código borra un dump viejo.
+3. Vuelva a ejecutar `install-service`. Además de todo lo que ya hacía, ahora
+   también otorga al rol `dforce` el permiso `CREATEDB` (necesario para crear
+   `dforce_verify`) y registra `DforceCatalogoBackup`: vea la nota bajo
+   "La actualización" más arriba sobre la contraseña de superusuario que pide.
+
+### Leer el monitor
+
+Sentry → **Crons** muestra el monitor `dforce-catalog-backup`. Una marca
+verde significa que el último `ok` llegó dentro de su ventana; un check-in
+perdido (la máquina estaba apagada, la red estaba caída, o la tarea nunca
+corrió) aparece ahí como una corrida tardía o ausente dentro de
+`checkin_margin` (180 minutos) del horario de las 12:00, y como una corrida
+que tardó más que `max_runtime` (30 minutos) si se cuelga. El huso horario
+del cron es `BACKUP_TIMEZONE` de `.env`, que por defecto es `America/Panama`
+si no está definida.
+
+### `service.log` es acumulativo
+
+`%USERPROFILE%\dforce-backups\service.log` (o `<BackupDir>\service.log`) se
+agrega, nunca se rota ni se trunca, así que crece sin límite y la copia en R2
+de cada corrida contiene también las líneas de todas las corridas anteriores;
+el resultado de cada corrida se escribe en el archivo solo después de la
+subida, así que esa copia nunca se contiene a sí misma. Este es el log propio
+del respaldo, distinto del `service.log` de la aplicación bajo
+`%SystemRoot%\System32\config\systemprofile\...` documentado en "Leer el
+registro" más arriba.
+
+`restore <file>` todavía toma un respaldo fresco del estado actual (con el
+mismo `pg_dump -Fc`, sin el flujo de verificación/subida/heartbeat) antes de
+reemplazar nada.
 
 Los respaldos viven fuera del repositorio: contienen datos reales de clientes y
-nunca deben commitearse. Cópielos fuera de la máquina periódicamente; un
-respaldo en el mismo disco que la base de datos solo protege contra errores, no
-contra el disco.
+nunca deben commitearse. La copia en R2 es la copia fuera del sitio: un dump que
+solo existe en el mismo disco que la base de datos protege contra errores, no
+contra el disco, así que un día cuya subida falló (un check-in `error`) es un
+día sin respaldo externo hasta la siguiente corrida exitosa.
 
 ## Cuando algo falla
 
@@ -392,6 +456,10 @@ contra el disco.
 | Ayer funcionaba, hoy las otras máquinas no obtienen nada | La concesión DHCP movió la IP | `standalone.ps1 status` imprime la actual. Resérvela en el router |
 | La máquina quedó apagada después de un corte de energía | El "restore on AC power loss" del BIOS no está configurado | Configúrelo en el BIOS; Windows no puede |
 | Los PDFs del catálogo fallan, todo lo demás funciona | Falta Chromium en `C:\ProgramData\ms-playwright` | `$env:PLAYWRIGHT_BROWSERS_PATH = "C:\ProgramData\ms-playwright"; npx.cmd playwright install chromium` |
+| El respaldo falla: `No pude crear 'dforce_verify' para verificar el backup` | El rol `dforce` nunca recibió `CREATEDB` | Vuelva a ejecutar `install-service` (pide la contraseña de superusuario una vez y lo otorga) |
+| El respaldo falla: `Faltan credenciales R2_* en .env` | `R2_ENDPOINT`/`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`/`R2_BUCKET` incompletas | El dump ya quedó verificado localmente; complete las cuatro claves en `.env` y vuelva a correr `backup` |
+| El respaldo falla: `No encontré node (...) para subir el backup a R2` | Node no está en la ruta que la tarea programada tenía fijada | Instale Node a nivel de máquina, o vuelva a ejecutar `install-service` (resuelve y fija `-NodeDir` de nuevo) |
+| Aparece un archivo `.dump.corrupt` en la carpeta de respaldos | `pg_restore -l` o la restauración de prueba fallaron en ese dump | Lea el evento de Sentry / `service.log` para el paso, revise el log de Postgres, y reintente el respaldo |
 
 ## Postgres instalado con winget: recuperar la contraseña del superusuario
 
