@@ -44,7 +44,9 @@ sidesteps the policy without changing any machine-wide setting. Every `npm` and
 
 Download PostgreSQL 17 from
 <https://www.postgresql.org/download/windows/> and **run the installer by
-hand**. It asks for a superuser password on screen; write it down.
+hand**. It asks for a superuser password on screen; write it down. The
+installer does not put `psql` on `PATH`, so call it by its full path:
+`& "C:\Program Files\PostgreSQL\17\bin\psql.exe" -U postgres …`.
 
 **Do not install PostgreSQL with `winget`.** `winget` runs it as
 `--mode unattended --unattendedmodeui none`, so that password screen never
@@ -286,6 +288,12 @@ by the backup's scratch-restore verification, see "Backups" below), which asks
 for the `postgres` superuser password once — pass it non-interactively with
 `-SuperPassword <clave>` if this update runs unattended.
 
+npm 12 skips install scripts until they are approved, and the app needs them
+for `bcrypt` (login) and `sharp` (images): if `npm.cmd ci` prints "install
+scripts blocked", follow what it prints ("Run `npm install-scripts ls` to
+review, or `npm install-scripts approve <pkg>` to allow") with `npm.cmd`, and
+approve the listed packages before `npm.cmd run build`.
+
 **After:**
 
 1. Open the app **from another machine, at the LAN IP** — not on the server.
@@ -368,7 +376,10 @@ passed on the command line.
    `NEXT_PUBLIC_SENTRY_DSN` (browser-side errors) independently of the backup
    heartbeat. **An empty `SENTRY_DSN` disables the heartbeat**, exactly like an
    empty `NEXT_PUBLIC_SENTRY_DSN` disables the in-app SDK: leaving either blank
-   is the rollback for that one.
+   is the rollback for that one. Copy the DSN from Sentry → Settings →
+   Projects → dforce-catalog → Client Keys: a DSN from another project makes
+   every heartbeat log `heartbeat '…' falló: The remote server returned an
+   error: (403) Forbidden.` while the backup itself still succeeds.
 2. Create the R2 lifecycle rule once, so old dumps expire instead of
    accumulating forever:
    ```
@@ -389,7 +400,8 @@ machine was off, the network was down, or the task never ran — shows up there
 as a late or missing run within `checkin_margin` (180 minutes) of the 12:00
 schedule, and as a run that took longer than `max_runtime` (30 minutes) if it
 hangs. The cron's timezone is `.env`'s `BACKUP_TIMEZONE`, defaulting to
-`America/Panama` if unset.
+`America/Panama` if unset. The monitor only appears in Crons after the first
+check-in sent with a valid DSN.
 
 ### `service.log` is cumulative
 
@@ -399,7 +411,9 @@ run's R2 copy contains every prior run's lines too — its own run's outcome is
 written to it only after the upload, so that copy never contains itself. This
 is the backup's own log file, separate from the app's `service.log` under
 `%SystemRoot%\System32\config\systemprofile\...` documented under "Reading the
-log" above.
+log" above. Windows PowerShell 5.1 reads this BOM-less UTF-8 file as ANSI
+(`RestauraciÃ³n`), so read it with
+`Get-Content <BackupDir>\service.log -Tail 40 -Encoding UTF8`.
 
 `restore <file>` still takes a fresh backup of the current state (through the
 same `pg_dump -Fc`, without the verify/upload/heartbeat pipeline) before
@@ -437,6 +451,7 @@ backup until the next successful run.
 | Backup fails: `No pude crear 'dforce_verify' para verificar el backup` | The `dforce` role never got `CREATEDB` | Re-run `install-service` (asks for the superuser password once, grants it) |
 | Backup fails: `Faltan credenciales R2_* en .env` | `R2_ENDPOINT`/`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`/`R2_BUCKET` incomplete | The dump was already verified locally; fill the four keys in `.env` and rerun `backup` |
 | Backup fails: `No encontré node (...) para subir el backup a R2` | Node is not on the resolved path the scheduled task was baked with | Install Node machine-wide, or re-run `install-service` (re-resolves and re-bakes `-NodeDir`) |
+| Backup log shows `heartbeat '…' falló: The remote server returned an error: (403) Forbidden.` | `SENTRY_DSN` belongs to another Sentry project | Paste the dforce-catalog DSN (Sentry → Settings → Projects → dforce-catalog → Client Keys) |
 | A `.dump.corrupt` file appears in the backup folder | `pg_restore -l` or the scratch restore failed on that dump | Read the Sentry event / `service.log` for the step, check the Postgres log, and retry the backup |
 
 ## Postgres installed with winget: recovering the superuser password

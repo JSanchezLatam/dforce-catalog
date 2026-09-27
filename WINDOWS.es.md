@@ -47,7 +47,9 @@ por esta razón.
 
 Descargue PostgreSQL 17 desde
 <https://www.postgresql.org/download/windows/> y **ejecute el instalador a
-mano**. Pide una contraseña de superusuario en pantalla; anótela.
+mano**. Pide una contraseña de superusuario en pantalla; anótela. El
+instalador no agrega `psql` al `PATH`, así que invóquelo con su ruta completa:
+`& "C:\Program Files\PostgreSQL\17\bin\psql.exe" -U postgres …`.
 
 **No instale PostgreSQL con `winget`.** `winget` lo ejecuta como
 `--mode unattended --unattendedmodeui none`, así que esa pantalla de contraseña
@@ -303,6 +305,13 @@ del respaldo necesita, ver "Respaldos" más abajo), lo que pide una vez la
 contraseña del superusuario `postgres`: si esta actualización corre sin
 supervisión, pásela con `-SuperPassword <clave>`.
 
+npm 12 omite los scripts de instalación hasta que se aprueban, y la aplicación
+los necesita para `bcrypt` (inicio de sesión) y `sharp` (imágenes): si
+`npm.cmd ci` imprime "install scripts blocked", siga lo que imprime ("Run
+`npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to
+allow") con `npm.cmd`, y apruebe los paquetes listados antes de
+`npm.cmd run build`.
+
 **Después:**
 
 1. Abra la aplicación **desde otra máquina, en la IP de la LAN**, no en el
@@ -388,7 +397,11 @@ en la definición de la tarea ni pasados por línea de comandos.
    `NEXT_PUBLIC_SENTRY_DSN` (errores del navegador) de forma independiente del
    heartbeat del respaldo. **Un `SENTRY_DSN` vacío desactiva el heartbeat**,
    igual que un `NEXT_PUBLIC_SENTRY_DSN` vacío desactiva el SDK dentro de la
-   app: dejar cualquiera de los dos en blanco es el rollback de ese.
+   app: dejar cualquiera de los dos en blanco es el rollback de ese. Copie el
+   DSN desde Sentry → Settings → Projects → dforce-catalog → Client Keys: un
+   DSN de otro proyecto hace que cada heartbeat registre `heartbeat '…' falló:
+   The remote server returned an error: (403) Forbidden.` aunque el respaldo
+   en sí termine bien.
 2. Cree la regla de ciclo de vida de R2 una sola vez, para que los dumps
    viejos vayan expirando en lugar de acumularse para siempre:
    ```
@@ -410,7 +423,8 @@ corrió) aparece ahí como una corrida tardía o ausente dentro de
 `checkin_margin` (180 minutos) del horario de las 12:00, y como una corrida
 que tardó más que `max_runtime` (30 minutos) si se cuelga. El huso horario
 del cron es `BACKUP_TIMEZONE` de `.env`, que por defecto es `America/Panama`
-si no está definida.
+si no está definida. El monitor solo aparece en Crons después del primer
+check-in enviado con un DSN válido.
 
 ### `service.log` es acumulativo
 
@@ -421,7 +435,9 @@ el resultado de cada corrida se escribe en el archivo solo después de la
 subida, así que esa copia nunca se contiene a sí misma. Este es el log propio
 del respaldo, distinto del `service.log` de la aplicación bajo
 `%SystemRoot%\System32\config\systemprofile\...` documentado en "Leer el
-registro" más arriba.
+registro" más arriba. Windows PowerShell 5.1 lee este archivo UTF-8 sin BOM
+como ANSI (`RestauraciÃ³n`), así que léalo con
+`Get-Content <BackupDir>\service.log -Tail 40 -Encoding UTF8`.
 
 `restore <file>` todavía toma un respaldo fresco del estado actual (con el
 mismo `pg_dump -Fc`, sin el flujo de verificación/subida/heartbeat) antes de
@@ -459,6 +475,7 @@ día sin respaldo externo hasta la siguiente corrida exitosa.
 | El respaldo falla: `No pude crear 'dforce_verify' para verificar el backup` | El rol `dforce` nunca recibió `CREATEDB` | Vuelva a ejecutar `install-service` (pide la contraseña de superusuario una vez y lo otorga) |
 | El respaldo falla: `Faltan credenciales R2_* en .env` | `R2_ENDPOINT`/`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`/`R2_BUCKET` incompletas | El dump ya quedó verificado localmente; complete las cuatro claves en `.env` y vuelva a correr `backup` |
 | El respaldo falla: `No encontré node (...) para subir el backup a R2` | Node no está en la ruta que la tarea programada tenía fijada | Instale Node a nivel de máquina, o vuelva a ejecutar `install-service` (resuelve y fija `-NodeDir` de nuevo) |
+| El log del respaldo muestra `heartbeat '…' falló: The remote server returned an error: (403) Forbidden.` | `SENTRY_DSN` pertenece a otro proyecto de Sentry | Pegue el DSN de dforce-catalog (Sentry → Settings → Projects → dforce-catalog → Client Keys) |
 | Aparece un archivo `.dump.corrupt` en la carpeta de respaldos | `pg_restore -l` o la restauración de prueba fallaron en ese dump | Lea el evento de Sentry / `service.log` para el paso, revise el log de Postgres, y reintente el respaldo |
 
 ## Postgres instalado con winget: recuperar la contraseña del superusuario
