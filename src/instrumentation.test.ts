@@ -16,10 +16,12 @@ vi.mock("./instrumentation-node", () => ({
 const init = vi.fn();
 const captureException = vi.fn();
 const captureRequestError = vi.fn();
+const flush = vi.fn().mockResolvedValue(true);
 vi.mock("@sentry/nextjs", () => ({
   init,
   captureException,
   captureRequestError,
+  flush,
 }));
 
 const VALID_DSN = "https://public@o0.ingest.sentry.io/0";
@@ -31,6 +33,10 @@ describe("instrumentation register()", () => {
   beforeEach(() => {
     originalNextRuntime = process.env.NEXT_RUNTIME;
     originalSentryDsn = process.env.SENTRY_DSN;
+    // An ambient DSN on a machine that already has this feature deployed
+    // must not leak into a test that asserts "unset" behavior.
+    delete process.env.SENTRY_DSN;
+    delete process.env.NEXT_RUNTIME;
   });
 
   afterEach(() => {
@@ -76,7 +82,7 @@ describe("instrumentation register()", () => {
     expect(registerNodeWorkers).not.toHaveBeenCalled();
   });
 
-  it("captures a worker bootstrap failure with Sentry and rethrows it unchanged", async () => {
+  it("captures a worker bootstrap failure with Sentry, flushes before rethrowing it unchanged", async () => {
     process.env.NEXT_RUNTIME = "nodejs";
     process.env.SENTRY_DSN = VALID_DSN;
     const boom = new Error("boom");
@@ -86,5 +92,9 @@ describe("instrumentation register()", () => {
 
     await expect(register()).rejects.toBe(boom);
     expect(captureException).toHaveBeenCalledWith(boom);
+    expect(flush).toHaveBeenCalledTimes(1);
+    expect(captureException.mock.invocationCallOrder[0]).toBeLessThan(
+      flush.mock.invocationCallOrder[0],
+    );
   });
 });

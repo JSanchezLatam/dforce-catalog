@@ -53,7 +53,7 @@ Build pairs (disjoint files): WU1 ∥ WU3, then WU2 ∥ WU4 (WU4 imports `@sentr
 - [x] 3.6 `env.ts`: `SENTRY_DSN` optional + sensitive; `NEXT_PUBLIC_SENTRY_DSN` optional, not sensitive.
 - [x] 3.7 Mutation-verify 3.2: revert the DSN guard, confirm the RED test fails by name.
 - [x] 3.8 `npm run build` (Turbopack): confirm no edge-runtime warning from `withSentryConfig`.
-- [ ] 3.9 Manual proof: open the app from a 2nd machine at the LAN IP, trigger a client error, confirm it reaches Sentry with no replay/trace/source-map.
+- [ ] 3.9 Manual proof: open the app from a 2nd machine at the LAN IP, trigger a client error, confirm it reaches Sentry with no replay/trace/source-map; and force a real bootstrap throw with a DSN set (e.g. temporarily point `DATABASE_URL` at a closed port) and confirm the event arrives in Sentry before the process exits.
 
 ## Phase 4: Job Failure Wrapper (WU4, PR4, needs WU3)
 

@@ -58,6 +58,13 @@ export async function register(): Promise<void> {
       await registerNodeWorkers();
     } catch (error) {
       Sentry.captureException(error);
+      // captureException only QUEUES the event — the transport sends it
+      // asynchronously. The rethrow below reaches Next's startup handler,
+      // which calls process.exit(1) immediately
+      // (node_modules/next/dist/server/lib/start-server.js:426-430), so
+      // without waiting for the queued event to actually leave the process
+      // it would never reach Sentry.
+      await Sentry.flush(2000);
       throw error;
     }
   }
