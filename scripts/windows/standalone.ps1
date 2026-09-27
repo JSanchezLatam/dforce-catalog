@@ -955,8 +955,20 @@ $(($uploadOut | ForEach-Object { "$_" }) -join "`n")" 'Revisá las credenciales 
 # logic. For a manual spot-check of an old file, not a scheduled run: never
 # sends a cron check-in (SkipHeartbeat, see Fail) and never uploads anything.
 function Invoke-VerifyDump([string] $file) {
-    if (-not $file -or -not (Test-Path -LiteralPath $file)) {
+    if (-not $file) {
+        Fail 'No me pasaste qué archivo verificar.' @"
+  .\scripts\windows\standalone.ps1 verify-dump <archivo.dump>
+"@
+    }
+    if (-not (Test-Path -LiteralPath $file)) {
         Fail "No encontré el archivo '$file' para verificar." 'powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 verify-dump <archivo.dump>'
+    }
+    # Test-Path alone passes for a directory, and Rename-CorruptDump below would
+    # then rename the whole backup folder (or any other non-dump file, like
+    # .env) on a failed check — must reject BEFORE $script:BackupStep is set,
+    # so this never logs, never fires a Sentry event, and never renames anything.
+    if ((-not (Test-Path -LiteralPath $file -PathType Leaf)) -or ($file.ToLowerInvariant() -notmatch '\.dump$')) {
+        Fail "'$file' no es un archivo .dump — verify-dump solo acepta un archivo .dump existente, nunca una carpeta ni otro tipo de archivo." 'powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 verify-dump <archivo.dump>'
     }
 
     $script:SkipHeartbeat = $true

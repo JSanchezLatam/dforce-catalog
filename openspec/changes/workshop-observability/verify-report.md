@@ -14,6 +14,8 @@ build_exit_code: 0
 build_output_hash: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 ```
 
+> **Snapshot note**: this report was captured before task 1.8 (`verify-dump` subcommand) was added. Task 1.8 closes this report's single CRITICAL finding below (`database-backup` "Corrupt dump never uploads" — zero runtime evidence); the report is regenerated after the owner's manual proof of 1.8.
+
 ## Verification Report
 
 **Change**: workshop-observability
