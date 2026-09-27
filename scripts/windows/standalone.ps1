@@ -48,9 +48,15 @@ param(
 
     [string] $BackupDir = '',
 
+    # Baked in by install-service (SYSTEM's PATH may not include Node), mirrors service-start.ps1's -NodeDir.
+    [string] $NodeDir = '',
+
     # Skip the destructive-restore confirmation (for a non-interactive shell).
     [switch] $Yes
 )
+
+# SYSTEM's default TLS lags; Sentry's endpoints below need 1.2.
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
 # The compose file publishes 5433 to stay out of a local Postgres' way, which
 # is why moving to a native server means rewriting exactly one line of .env.
@@ -61,6 +67,8 @@ $EnvFile  = Join-Path $Root '.env'
 $Wrapper  = Join-Path $PSScriptRoot 'service-start.ps1'
 $TaskName = 'DforceCatalogo'
 $FirewallRuleName = 'Dforce Catalogo (Next.js)'
+$BackupTaskName = 'DforceCatalogoBackup'
+$BackupMonitorSlug = 'dforce-catalog-backup'
 
 if (-not $BackupDir) { $BackupDir = Join-Path $env:USERPROFILE 'dforce-backups' }
 
@@ -88,7 +96,14 @@ function Warn([string] $m) { Write-Host "  [!]  $m" -ForegroundColor Yellow }
 function Note([string] $m) { Write-Host "       $m" -ForegroundColor DarkGray }
 
 # Fail <what is wrong> <how to fix it>
+# When $script:BackupStep is set, this is also the one place a backup failure
+# reports itself: log, error check-in, and a Sentry event naming the step.
 function Fail([string] $what, [string] $how) {
+    if ($script:BackupStep) {
+        Write-BackupLog "Backup falló en el paso '$($script:BackupStep)': $what"
+        Send-CheckIn 'error'
+        Send-BackupFailureEvent $script:BackupStep $what
+    }
     Write-Host ''
     Write-Host "[X] $what" -ForegroundColor Red
     Write-Host ''
@@ -146,6 +161,12 @@ function Resolve-PgBin {
 
 $script:PgBin = ''
 function PgExe([string] $name) { return (Join-Path $script:PgBin $name) }
+
+# Backup-run state, read by Fail/Send-CheckIn/Send-BackupFailureEvent; unset outside Invoke-Backup.
+$script:BackupStep = $null
+$script:BackupLogFile = ''
+$script:SentryDsn = ''
+$script:CheckInId = $null
 
 function Test-PgUp {
     if (-not $script:PgBin) { return $false }
@@ -362,6 +383,30 @@ $(($out | ForEach-Object { "$_" }) -join "`n")" @"
         }
         Ok "Base '$DbName' creada"
     }
+}
+
+# dforce_verify needs CREATEDB on $DbUser; granted once here, via superuser, not on every backup.
+function Grant-BackupCreatedb {
+    Step 'Permiso para verificar backups (CREATEDB)'
+
+    $script:PgBin = Resolve-PgBin
+    if (-not $script:PgBin -or -not (Test-PgUp)) {
+        Fail 'Postgres no está corriendo, así que no puedo otorgar el permiso de CREATEDB.' @'
+Arrancá el servicio desde una consola de administrador:
+
+  Start-Service postgresql-x64-17
+'@
+    }
+
+    $pass = Get-SuperPassword
+    $grant = Invoke-Psql -User $SuperUser -Password $pass -Database 'postgres' `
+        -Query "alter role ""$DbUser"" createdb;"
+    if ($grant.Code -ne 0) {
+        Fail "No pude otorgarle CREATEDB al rol '$DbUser', que la verificación de backups necesita. Salida completa:
+
+$($grant.Out)" "Otorgalo a mano con psql como '$SuperUser' y reintentá: alter role ""$DbUser"" createdb;"
+    }
+    Ok "Rol '$DbUser' ahora puede crear bases (CREATEDB) para verificar backups"
 }
 
 # Number of user tables already in the target database. Empty string when the
@@ -624,21 +669,8 @@ function Resolve-NodeDir {
 # --------------------------------------------------------------------------
 # backup / restore
 # --------------------------------------------------------------------------
-function Invoke-Backup {
-    $script:PgBin = Resolve-PgBin
-    if (-not $script:PgBin) {
-        Fail 'No encontré los binarios de PostgreSQL, así que no puedo hacer el backup.' @'
-Agregá C:\Program Files\PostgreSQL\17\bin al PATH del sistema y reintentá.
-'@
-    }
-    if (-not (Test-PgUp)) {
-        Fail 'Postgres no está corriendo, así que no hay de dónde sacar el backup.' @'
-Arrancá el servicio desde una consola de administrador:
-
-  Start-Service postgresql-x64-17
-'@
-    }
-
+# pg_dump only — no verify/upload/heartbeat. Invoke-Restore's safety copy calls this, not the full pipeline.
+function New-Dump {
     New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null
     $out = Join-Path $BackupDir ("$DbName-" + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.dump')
 
@@ -671,8 +703,176 @@ Verificá que la base tenga datos:
 "@
     }
 
-    Ok ("Backup: $out ({0:N1} MB)" -f ($item.Length / 1MB))
-    Note "restaurarlo: .\scripts\windows\standalone.ps1 restore `"$out`""
+    Ok ("Backup: $($item.FullName) ({0:N1} MB)" -f ($item.Length / 1MB))
+    Note "restaurarlo: .\scripts\windows\standalone.ps1 restore `"$($item.FullName)`""
+    return $item
+}
+
+# UTF-8 without a BOM — this file gets uploaded to R2 next to the dump.
+function Write-BackupLog([string] $message) {
+    $line = '[{0}] {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $message
+    try {
+        $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+        [System.IO.File]::AppendAllText($script:BackupLogFile, $line + "`r`n", $utf8NoBom)
+    }
+    catch { }
+    Note $message
+}
+
+# POST to Sentry Cron Monitors (org/project/key from the DSN). Never fails the backup — logged only.
+function Send-CheckIn([string] $status) {
+    if (-not $script:SentryDsn) {
+        Write-BackupLog 'heartbeat omitido: no hay SENTRY_DSN en .env'
+        return
+    }
+    if (-not $script:CheckInId) { $script:CheckInId = [guid]::NewGuid().ToString() }
+
+    $timezone = Get-EnvValue $EnvFile 'BACKUP_TIMEZONE'
+    if (-not $timezone) { $timezone = 'America/Panama' }
+
+    $body = @{
+        check_in_id    = $script:CheckInId
+        status         = $status
+        monitor_config = @{
+            schedule       = @{ type = 'crontab'; value = '0 12 * * *' }
+            timezone       = $timezone
+            checkin_margin = 180
+            max_runtime    = 30
+        }
+    } | ConvertTo-Json -Depth 5
+
+    try {
+        $uri = [Uri]$script:SentryDsn
+        $url = "https://$($uri.Host)/api$($uri.AbsolutePath)/cron/$BackupMonitorSlug/$($uri.UserInfo)/"
+        Invoke-RestMethod -Uri $url -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 15 | Out-Null
+        Write-BackupLog "heartbeat '$status' enviado"
+    }
+    catch {
+        Write-BackupLog "heartbeat '$status' falló: $($_.Exception.Message)"
+    }
+}
+
+# The cron check-in has no message field, so the failed step goes to Sentry's envelope endpoint instead.
+function Send-BackupFailureEvent([string] $step, [string] $detail) {
+    if (-not $script:SentryDsn) { return }
+    try {
+        $uri = [Uri]$script:SentryDsn
+        $eventId = [guid]::NewGuid().ToString('N')
+        $sentAt = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+        $event = @{ event_id = $eventId; timestamp = $sentAt; platform = 'other'; level = 'error'
+            message = @{ formatted = "Backup failed at $step" }; extra = @{ detail = $detail } } |
+            ConvertTo-Json -Compress -Depth 5
+        $body = (@{ event_id = $eventId; sent_at = $sentAt } | ConvertTo-Json -Compress) + "`n" +
+            (@{ type = 'event' } | ConvertTo-Json -Compress) + "`n$event"
+        $auth = "Sentry sentry_version=7, sentry_key=$($uri.UserInfo), sentry_client=dforce-backup/1.0"
+        Invoke-RestMethod -Uri "https://$($uri.Host)/api$($uri.AbsolutePath)/envelope/" -Method Post -Body $body `
+            -ContentType 'application/x-sentry-envelope' -Headers @{ 'X-Sentry-Auth' = $auth } -TimeoutSec 15 | Out-Null
+    }
+    catch {
+        Write-BackupLog "no pude enviar el evento de error a Sentry: $($_.Exception.Message)"
+    }
+}
+
+# pg_restore -l is a fast pre-check (a truncated dump lists fine but dies on
+# a real restore); the scratch restore into dforce_verify is what matters.
+# Never -C/--create. dropdb runs in `finally`; Fail only after that cleanup.
+function Test-DumpRestorable([string] $dumpFile) {
+    $listOut = & (PgExe 'pg_restore.exe') -l $dumpFile 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Fail "pg_restore -l no pudo leer el dump — el archivo está corrupto o incompleto. Salida completa:
+
+$(($listOut | ForEach-Object { "$_" }) -join "`n")" 'Revisá que pg_dump haya terminado sin errores y reintentá el backup.'
+    }
+
+    $previous = $env:PGPASSWORD
+    $env:PGPASSWORD = $DbPassword
+    try {
+        & (PgExe 'dropdb.exe') -h $PgHost -p "$PgPort" -U $DbUser --if-exists 'dforce_verify' 2>&1 | Out-Null
+        & (PgExe 'createdb.exe') -h $PgHost -p "$PgPort" -U $DbUser 'dforce_verify' 2>&1 | Out-Null
+        $restoreOut = & (PgExe 'pg_restore.exe') -h $PgHost -p "$PgPort" -U $DbUser -d 'dforce_verify' `
+            '--exit-on-error' '--no-owner' $dumpFile 2>&1
+        $restoreCode = $LASTEXITCODE
+    }
+    finally {
+        & (PgExe 'dropdb.exe') -h $PgHost -p "$PgPort" -U $DbUser --if-exists 'dforce_verify' 2>&1 | Out-Null
+        $env:PGPASSWORD = $previous
+    }
+
+    if ($restoreCode -ne 0) {
+        Fail "La restauración de prueba en 'dforce_verify' falló — el dump no es confiable. Salida completa:
+
+$(($restoreOut | ForEach-Object { "$_" }) -join "`n")" 'Revisá el log de Postgres (Get-Content ...\data\log\*.log -Tail 50) y reintentá el backup.'
+    }
+    Write-BackupLog 'Restauración de prueba en dforce_verify: OK'
+}
+
+# Full pipeline: in_progress → pg_dump → verify → upload → ok. Every exit is through Fail.
+function Invoke-Backup {
+    New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null
+    $script:BackupLogFile = Join-Path $BackupDir 'service.log'
+    $script:SentryDsn = Get-EnvValue $EnvFile 'SENTRY_DSN'
+    $script:BackupStep = 'inicio'
+
+    $script:PgBin = Resolve-PgBin
+    if (-not $script:PgBin) {
+        Fail 'No encontré los binarios de PostgreSQL, así que no puedo hacer el backup.' @'
+Agregá C:\Program Files\PostgreSQL\17\bin al PATH del sistema y reintentá.
+'@
+    }
+    if (-not (Test-PgUp)) {
+        Fail 'Postgres no está corriendo, así que no hay de dónde sacar el backup.' @'
+Arrancá el servicio desde una consola de administrador:
+
+  Start-Service postgresql-x64-17
+'@
+    }
+
+    Write-BackupLog 'Backup iniciado'
+    Send-CheckIn 'in_progress'
+
+    $script:BackupStep = 'pg_dump'
+    $item = New-Dump
+
+    $script:BackupStep = 'verificación (pg_restore -l / restauración de prueba)'
+    Test-DumpRestorable $item.FullName
+
+    if ($NodeDir -and (Test-Path -LiteralPath $NodeDir)) {
+        $env:Path = "$NodeDir;$env:Path"
+    }
+
+    $r2Endpoint = Get-EnvValue $EnvFile 'R2_ENDPOINT'
+    $r2AccessKey = Get-EnvValue $EnvFile 'R2_ACCESS_KEY_ID'
+    $r2SecretKey = Get-EnvValue $EnvFile 'R2_SECRET_ACCESS_KEY'
+    $r2Bucket = Get-EnvValue $EnvFile 'R2_BUCKET'
+
+    $script:BackupStep = 'subida a R2'
+    if (-not ($r2Endpoint -and $r2AccessKey -and $r2SecretKey -and $r2Bucket)) {
+        Fail 'Faltan credenciales R2_* en .env, así que no puedo subir el backup fuera del sitio.' @'
+El dump ya quedó verificado en el disco local. Completá en .env: R2_ENDPOINT,
+R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET y volvé a correr el backup.
+'@
+    }
+
+    $r2Values = @{ R2_ENDPOINT = $r2Endpoint; R2_ACCESS_KEY_ID = $r2AccessKey; R2_SECRET_ACCESS_KEY = $r2SecretKey; R2_BUCKET = $r2Bucket }
+    $previousEnv = @{}
+    foreach ($k in $r2Values.Keys) { $previousEnv[$k] = [Environment]::GetEnvironmentVariable($k); [Environment]::SetEnvironmentVariable($k, $r2Values[$k]) }
+    try {
+        $uploadOut = & node (Join-Path $Root 'scripts\upload-backup.mjs') $item.FullName $script:BackupLogFile 2>&1
+        $uploadCode = $LASTEXITCODE
+    }
+    finally {
+        foreach ($k in $previousEnv.Keys) { [Environment]::SetEnvironmentVariable($k, $previousEnv[$k]) }
+    }
+    if ($uploadCode -ne 0) {
+        Fail "La subida a R2 falló. Salida completa:
+
+$(($uploadOut | ForEach-Object { "$_" }) -join "`n")" 'Revisá las credenciales R2_* en .env y la conectividad de red.'
+    }
+
+    Write-BackupLog 'Backup subido a R2'
+    Send-CheckIn 'ok'
+    Ok "Backup verificado y subido: $($item.FullName)"
+    exit 0
 }
 
 function Invoke-Restore([string] $file) {
@@ -718,7 +918,7 @@ Corrélo desde una terminal, o asumí el riesgo explícitamente:
             }
         }
         Step 'Respaldo previo por las dudas'
-        Invoke-Backup
+        New-Dump | Out-Null
     }
 
     Step 'Restaurando'
@@ -752,6 +952,42 @@ Verificá que el archivo sea un dump de formato custom (-Fc):
 # --------------------------------------------------------------------------
 function Get-BootTask {
     return (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)
+}
+
+function Get-BackupTask {
+    return (Get-ScheduledTask -TaskName $BackupTaskName -ErrorAction SilentlyContinue)
+}
+
+# Registers the daily backup task; -Force makes re-running install-service idempotent.
+function Register-BackupTask([string] $resolvedNodeDir) {
+    Step 'Backup automático (Programador de tareas de Windows)'
+
+    $principal = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\SYSTEM' `
+                                            -LogonType ServiceAccount -RunLevel Highest
+    $trigger = New-ScheduledTaskTrigger -Daily -At '12:00'
+    # ExecutionTimeLimit > Sentry's max_runtime (30 min), so Sentry reports first.
+    $settings = New-ScheduledTaskSettingsSet `
+        -StartWhenAvailable -RunOnlyIfNetworkAvailable `
+        -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 1)
+
+    $powershellExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $argumentLine = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{0}" backup -BackupDir "{1}" -NodeDir "{2}"' `
+                    -f $PSCommandPath, $BackupDir, $resolvedNodeDir
+    $action = New-ScheduledTaskAction -Execute $powershellExe -Argument $argumentLine -WorkingDirectory $Root
+
+    $registerError = $null
+    $registered = Register-ScheduledTask -TaskName $BackupTaskName `
+        -Action $action -Trigger $trigger -Principal $principal -Settings $settings `
+        -Description 'Dforce Catalogo: backup diario verificado, subido a R2, con heartbeat en Sentry.' `
+        -Force -ErrorAction SilentlyContinue -ErrorVariable registerError
+
+    if (-not $registered) {
+        Fail "El Programador de tareas no aceptó la tarea de backup. Dijo:
+
+$(($registerError | ForEach-Object { "$_" }) -join "`n")" "Register-ScheduledTask -TaskName $BackupTaskName -Action `$action -Trigger `$trigger -Principal `$principal -Settings `$settings -Force"
+    }
+    Ok "Tarea '$BackupTaskName' registrada (todos los días a las 12:00, como SYSTEM)"
+    Note 'si la máquina estaba apagada al mediodía, corre apenas prende y hay red'
 }
 
 function Install-BootTask {
@@ -994,6 +1230,9 @@ Postgres que no está, o el puerto lo tiene otro proceso:
 
     Note "log del servicio: $SystemLogFile"
     Note 'desinstalarlo: .\scripts\windows\standalone.ps1 uninstall-service'
+
+    Grant-BackupCreatedb
+    Register-BackupTask $nodeDir
 }
 
 function Uninstall-BootTask {
@@ -1021,6 +1260,22 @@ Probá a mano desde una consola de administrador:
     }
     else {
         Ok 'No había tarea que borrar'
+    }
+
+    if (Get-BackupTask) {
+        Stop-ScheduledTask -TaskName $BackupTaskName -ErrorAction SilentlyContinue
+        Unregister-ScheduledTask -TaskName $BackupTaskName -Confirm:$false -ErrorAction SilentlyContinue
+        if (Get-BackupTask) {
+            Fail "No pude borrar la tarea '$BackupTaskName'." @"
+Probá a mano desde una consola de administrador:
+
+  Unregister-ScheduledTask -TaskName $BackupTaskName -Confirm:`$false
+"@
+        }
+        Ok 'Tarea de backup borrada'
+    }
+    else {
+        Ok 'No había tarea de backup que borrar'
     }
 
     $rule = Get-NetFirewallRule -DisplayName $FirewallRuleName -ErrorAction SilentlyContinue
@@ -1089,6 +1344,19 @@ function Show-Status {
     else {
         Warn 'No hay tarea instalada — después de un reinicio la app NO vuelve sola'
         Note 'instalarla: .\scripts\windows\standalone.ps1 install-service'
+    }
+
+    Step 'Backup automático'
+    $backupTask = Get-BackupTask
+    if ($backupTask) {
+        $backupInfo = Get-ScheduledTaskInfo -TaskName $BackupTaskName -ErrorAction SilentlyContinue
+        Ok "Tarea '$BackupTaskName' instalada — estado: $($backupTask.State)"
+        if ($backupInfo) {
+            Note "última corrida: $($backupInfo.LastRunTime)  resultado: $($backupInfo.LastTaskResult)"
+        }
+    }
+    else {
+        Warn 'No hay tarea de backup instalada — correlo: install-service'
     }
 
     if (Get-NetFirewallRule -DisplayName $FirewallRuleName -ErrorAction SilentlyContinue) {
