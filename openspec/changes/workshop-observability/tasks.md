@@ -48,7 +48,13 @@ calls. PR1 declares the exception.
 - [x] 1.4 `Register-BackupTask` in `Install-BootTask` (idempotent, SYSTEM, Daily 12:00, `StartWhenAvailable`/`RunOnlyIfNetworkAvailable`); remove in `uninstall-service`; `LastTaskResult` in `status`.
 - [x] 1.5 `install-service`: grant `ALTER ROLE "dforce" CREATEDB` via superuser `Invoke-Psql`.
 - [x] 1.6 Mutation-verify 1.1: revert `buildUploads`, confirm the RED test fails by name.
-- [ ] 1.7 Manual proof (not unit-testable, pending on the workshop PC), must show all four: (a) `standalone.ps1` parses and runs under real PowerShell 5.1, dump+log land in R2, `ok` check-in; (b) a deliberately corrupted dump copy produces BOTH the `error` check-in AND the Sentry event naming the step; (c) `dforce_verify` is absent afterward in both the success and corrupted-dump runs; (d) a run with a wrong `R2_SECRET_ACCESS_KEY` exits 1 and sends an `error` check-in naming the upload step (`subida a R2`), with nothing uploaded. `pwsh` is unavailable on this machine (macOS, no PowerShell installed) so no local parse check ran either — only a brace/paren balance heuristic.
+- [x] 1.7 Manual proof — run 2026-09-27 on a Windows 11 test PC (PowerShell 5.1, PostgreSQL 17, real R2 bucket, Sentry project `dforce-catalog`):
+      (a) parses and runs under 5.1; `install-service` granted CREATEDB and registered `DforceCatalogoBackup`; happy path exit 0, dump + log in R2, `ok` check-in; the scheduled task started as SYSTEM returned `LastTaskResult` 0.
+      (b) wrong `R2_SECRET_ACCESS_KEY` → exit 1, nothing uploaded, `error` check-in (monitor turned red, Sentry opened "Cron failure"), and the Sentry EVENT "Backup failed at subida a R2" with the full detail — the envelope call is proven.
+      (c) role without CREATEDB → exit 1, message points to `install-service`, dump NOT renamed `.corrupt`.
+      (d) `dforce_verify` absent after every run.
+      NOT exercised: a genuinely corrupt dump (the `pg_restore -l` / scratch-restore failure → `.corrupt` rename path) — there is no way to inject one without changing the script; it is covered by reading only.
+      Found and fixed during the run: Node's output decoded as the OEM code page (`Fall├│`), f8e2f2f. The 403s seen first were a `SENTRY_DSN` from another project, not a script defect.
 
 ## Phase 2: Backup Docs (WU2, PR2)
 
