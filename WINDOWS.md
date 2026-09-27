@@ -1,4 +1,5 @@
 # Running on Windows (no Docker)
+> Versión en español: [WINDOWS.es.md](WINDOWS.es.md).
 
 The Windows counterpart of `STANDALONE.md`: the app, a PostgreSQL installed as
 a real Windows service, and a Task Scheduler task that brings both back after a
@@ -257,8 +258,20 @@ never supposed to exit at all.
 The task runs `next start`, which serves the already-built `.next`. It does not
 pull, install, migrate or build.
 
+Deliberately not automated. An unattended `git pull && build` on the machine the
+workshop depends on turns a bad commit into an outage nobody is watching.
+
+**Before touching anything** — a backup and the commit to return to:
+
 ```powershell
 cd C:\dforce-catalog
+powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 backup
+git rev-parse --short HEAD    # write this down: it is the rollback target
+```
+
+**The update:**
+
+```powershell
 git pull
 npm.cmd ci
 powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 -SetupOnly
@@ -266,8 +279,33 @@ npm.cmd run build
 powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 install-service
 ```
 
-Deliberately not automated. An unattended `git pull && build` on the machine the
-workshop depends on turns a bad commit into an outage nobody is watching.
+`-SetupOnly` runs any pending migrations (idempotent — a release with no schema
+change is a no-op there). `install-service` re-registers the task, restarts the
+app and prints the LAN URL.
+
+**After:**
+
+1. Open the app **from another machine, at the LAN IP** — not on the server.
+   The insecure-context class of bug (`AGENTS.md`, Testing, third known limit)
+   is only visible there.
+2. Walk through what the release changed. The PR list on `main` since the
+   rollback commit is the checklist: `git log --oneline --merges <commit>..HEAD`.
+
+**Rollback** — the code first, the database only if it was actually changed:
+
+```powershell
+git checkout <commit written down above>
+npm.cmd ci
+npm.cmd run build
+powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 install-service
+# only if a migration ran and has to be undone:
+powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 restore <dump from the backup above>
+```
+
+While at the machine, also check the two settings that live outside Windows
+and decide whether the URL survives a power cut: the **DHCP reservation** on
+the router and **"Restore on AC Power Loss"** in the BIOS — see "The LAN URL
+moves" and "Never sleeping" above.
 
 ## The one `.env` change
 
