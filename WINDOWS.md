@@ -93,6 +93,7 @@ powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 install-
 | `standalone.ps1 uninstall-service` | Remove both; PostgreSQL is untouched (needs admin) |
 | `standalone.ps1 status` | What is running, what `.env` points at, whether the task is there and whether the app answers |
 | `standalone.ps1 backup` | `pg_dump -Fc`, scratch-restore verification, upload to R2, Sentry heartbeat — see "Backups" below |
+| `standalone.ps1 verify-dump <file>` | Re-run the scratch-restore check against an existing dump — no heartbeat, no upload |
 | `standalone.ps1 restore <file>` | Restore a dump — asks first, and backs up the current state before replacing it |
 
 Parameters: `-Port` (3000), `-PgHost` (localhost), `-PgPort` (5432),

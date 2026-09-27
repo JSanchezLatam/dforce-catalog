@@ -16,6 +16,7 @@
       ... uninstall-service          remove that task and its firewall rule
       ... status                     what is running and what .env points at
       ... backup                     pg_dump -Fc, scratch-restore check, upload to R2, Sentry heartbeat
+      ... verify-dump <archivo>      re-run the scratch-restore check on an existing dump, no heartbeat, no upload
       ... restore <archivo.dump>     restore a dump (asks first, backs up first)
 
     NOTE ON FILE ENCODING: this file is saved as UTF-8 WITH a BOM on purpose.
@@ -98,10 +99,13 @@ function Note([string] $m) { Write-Host "       $m" -ForegroundColor DarkGray }
 # Fail <what is wrong> <how to fix it>
 # When $script:BackupStep is set, this is also the one place a backup failure
 # reports itself: log, error check-in, and a Sentry event naming the step.
+# $script:SkipHeartbeat (set by verify-dump) suppresses only the check-in —
+# a manual check of an old file is not a backup run and must never turn the
+# daily monitor red or fake a run happening; the log and Sentry event still fire.
 function Fail([string] $what, [string] $how) {
     if ($script:BackupStep) {
         Write-BackupLog "Backup falló en el paso '$($script:BackupStep)': $what"
-        Send-CheckIn 'error'
+        if (-not $script:SkipHeartbeat) { Send-CheckIn 'error' }
         Send-BackupFailureEvent $script:BackupStep $what
     }
     Write-Host ''
@@ -162,11 +166,13 @@ function Resolve-PgBin {
 $script:PgBin = ''
 function PgExe([string] $name) { return (Join-Path $script:PgBin $name) }
 
-# Backup-run state, read by Fail/Send-CheckIn/Send-BackupFailureEvent; unset outside Invoke-Backup.
+# Backup-run state, read by Fail/Send-CheckIn/Send-BackupFailureEvent; set only
+# by Invoke-Backup and Invoke-VerifyDump (the latter also sets SkipHeartbeat).
 $script:BackupStep = $null
 $script:BackupLogFile = ''
 $script:SentryDsn = ''
 $script:CheckInId = $null
+$script:SkipHeartbeat = $false
 
 function Test-PgUp {
     if (-not $script:PgBin) { return $false }
@@ -837,12 +843,13 @@ $(($restoreOut | ForEach-Object { "$_" }) -join "`n")" 'Revisá el log de Postgr
     Write-BackupLog 'Restauración de prueba en dforce_verify: OK'
 }
 
-# Full pipeline: in_progress → pg_dump → verify → upload → ok. Every exit is through Fail.
-function Invoke-Backup {
+# Shared by Invoke-Backup and Invoke-VerifyDump: both scratch-restore into
+# dforce_verify and need the log file, the DSN, and a live Postgres connection
+# derived from .env, not from -PgHost/... defaults.
+function Initialize-BackupContext {
     New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null
     $script:BackupLogFile = Join-Path $BackupDir 'service.log'
     $script:SentryDsn = Get-EnvValue $EnvFile 'SENTRY_DSN'
-    $script:BackupStep = 'inicio'
 
     # The scheduled task bakes no DB connection (design decision 4 — no
     # secrets on argv), so this run derives host/port/user/password/database
@@ -875,6 +882,12 @@ Arrancá el servicio desde una consola de administrador:
   Start-Service postgresql-x64-17
 '@
     }
+}
+
+# Full pipeline: in_progress → pg_dump → verify → upload → ok. Every exit is through Fail.
+function Invoke-Backup {
+    $script:BackupStep = 'inicio'
+    Initialize-BackupContext
 
     Write-BackupLog 'Backup iniciado'
     Send-CheckIn 'in_progress'
@@ -937,6 +950,36 @@ $(($uploadOut | ForEach-Object { "$_" }) -join "`n")" 'Revisá las credenciales 
     Write-BackupLog 'Backup subido a R2'
     Send-CheckIn 'ok'
     Ok "Backup verificado y subido: $($item.FullName)"
+    exit 0
+}
+
+# Re-runs Test-DumpRestorable against an EXISTING dump — no new verification
+# logic. For a manual spot-check of an old file, not a scheduled run: never
+# sends a cron check-in (SkipHeartbeat, see Fail) and never uploads anything.
+function Invoke-VerifyDump([string] $file) {
+    if (-not $file) {
+        Fail 'No me pasaste qué archivo verificar.' @"
+  .\scripts\windows\standalone.ps1 verify-dump <archivo.dump>
+"@
+    }
+    if (-not (Test-Path -LiteralPath $file)) {
+        Fail "No encontré el archivo '$file' para verificar." 'powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 verify-dump <archivo.dump>'
+    }
+    # Test-Path alone passes for a directory, and Rename-CorruptDump below would
+    # then rename the whole backup folder (or any other non-dump file, like
+    # .env) on a failed check — must reject BEFORE $script:BackupStep is set,
+    # so this never logs, never fires a Sentry event, and never renames anything.
+    if ((-not (Test-Path -LiteralPath $file -PathType Leaf)) -or ($file.ToLowerInvariant() -notmatch '\.dump$')) {
+        Fail "'$file' no es un archivo .dump — verify-dump solo acepta un archivo .dump existente, nunca una carpeta ni otro tipo de archivo." 'powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 verify-dump <archivo.dump>'
+    }
+
+    $script:SkipHeartbeat = $true
+    $script:BackupStep = 'verificación manual (verify-dump)'
+    Initialize-BackupContext
+
+    Test-DumpRestorable (Resolve-Path -LiteralPath $file).Path
+
+    Ok "Dump verificado: $file"
     exit 0
 }
 
@@ -1539,6 +1582,7 @@ Dforce Catálogo — despliegue en Windows sin Docker.
   standalone.ps1 uninstall-service      quita esa tarea y su regla de firewall
   standalone.ps1 status                 qué está corriendo y a dónde apunta .env
   standalone.ps1 backup                 pg_dump -Fc, verificación por restore, subida a R2, heartbeat a Sentry
+  standalone.ps1 verify-dump <archivo>  re-verifica un dump existente (mismo chequeo que backup), sin heartbeat ni subida
   standalone.ps1 restore <archivo>      restaura un dump (pregunta y respalda antes)
 
 Parámetros: -Port 3000  -PgPort 5432  -PgHost localhost  -SuperPassword <clave>
@@ -1557,6 +1601,7 @@ Más detalle en WINDOWS.md.
 # --------------------------------------------------------------------------
 switch ($Command.ToLowerInvariant()) {
     'backup'            { Invoke-Backup; break }
+    'verify-dump'       { Invoke-VerifyDump $Arg; break }
     'restore'           { Invoke-Restore $Arg; break }
     'status'            { Show-Status; break }
     'install-service'   { Install-BootTask; break }
