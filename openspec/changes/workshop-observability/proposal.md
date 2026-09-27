@@ -8,7 +8,7 @@ The workshop PC has no automatic backup: the nightly task is a manual snippet in
 
 ### In Scope
 - **Backup pipeline**: `install-service` registers `DforceCatalogoBackup` (daily 12:00, SYSTEM, `StartWhenAvailable`, `RunOnlyIfNetworkAvailable`). `standalone.ps1 backup` runs `pg_dump` → `pg_restore -l` pre-check → scratch restore (`createdb`/`pg_restore --exit-on-error --no-owner`/`dropdb`) → upload dump + `service.log` to R2 via new `scripts/upload-backup.mjs` → Sentry cron check-in (`in_progress`, then `ok`/`error`, `monitor_config` upsert).
-- **Sentry app errors** (`@sentry/nextjs@11`): server in `instrumentation.ts` (Sentry import first, then pg-boss bootstrap; `onRequestError`), edge config, browser via `instrumentation-client.ts`, `withSentryConfig` with `sourcemaps.disable`. Errors only.
+- **Sentry app errors** (`@sentry/nextjs@11`): server in `instrumentation.ts` (Sentry import first, then pg-boss bootstrap; `onRequestError`), browser via `instrumentation-client.ts`, `withSentryConfig` with `sourcemaps.disable`. No edge config: `proxy.ts` is Node-only and nothing declares the edge runtime (design decision 13). Errors only.
 - **Job failures**: capture-and-rethrow wrapper at the 4 `boss.work()` sites.
 - **Docs**: `WINDOWS.md` + `WINDOWS.es.md` together, `STANDALONE.md` parity note, `env.example`.
 
@@ -29,7 +29,7 @@ None.
 
 ## Approach
 
-Follow the exploration's approaches 1–5: plain `.mjs` (like `migrate.mjs`), `Get-EnvValue` for SYSTEM env, DSN-derived cron URL over `Invoke-RestMethod`, injected-deps wrapper for testability. `SENTRY_DSN`/`NEXT_PUBLIC_SENTRY_DSN` sensitive in `env.ts`.
+Follow the exploration's approaches 1–5: plain `.mjs` (like `migrate.mjs`), `Get-EnvValue` for SYSTEM env, DSN-derived cron URL over `Invoke-RestMethod`, injected-deps wrapper for testability. `SENTRY_DSN` sensitive in `env.ts`; `NEXT_PUBLIC_SENTRY_DSN` is not, because a `NEXT_PUBLIC_` value ships in every browser bundle (design decision 17).
 
 ## Affected Areas
 
@@ -37,7 +37,7 @@ Follow the exploration's approaches 1–5: plain `.mjs` (like `migrate.mjs`), `G
 |------|--------|
 | `scripts/windows/standalone.ps1` | Modified |
 | `scripts/upload-backup.mjs` | New |
-| `src/instrumentation*.ts`, `sentry.*.config.ts`, `next.config.ts`, `package.json` | New/Modified |
+| `src/instrumentation*.ts`, `src/instrumentation-client.ts`, `next.config.ts`, `package.json` | New/Modified |
 | `src/shared/config/env.ts` | Modified |
 | 4 worker files + `shared/jobs` | Modified |
 | `WINDOWS*.md`, `STANDALONE.md`, `env.example` | Modified |
@@ -55,7 +55,7 @@ Follow the exploration's approaches 1–5: plain `.mjs` (like `migrate.mjs`), `G
 
 ## Delivery
 
-Four disjoint work units, docs travelling with their unit: (1) backup pipeline + upload script, (2) Sentry server/client/config, (3) job wrapper, (4) remaining docs. Stacked PRs to `main` if the tasks forecast exceeds 400 lines.
+Four disjoint work units, docs travelling with their unit: (1) backup pipeline + upload script, (2) backup docs + `env.example`, (3) Sentry server/client/config, (4) job wrapper (needs 3). Stacked PRs to `main`; the tasks forecast (~650 lines) confirmed the split.
 
 ## Rollback Plan
 
