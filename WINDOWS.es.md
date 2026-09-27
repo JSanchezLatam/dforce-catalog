@@ -97,6 +97,7 @@ powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 install-
 | `standalone.ps1 uninstall-service` | Elimina ambas; PostgreSQL queda intacto (requiere administrador) |
 | `standalone.ps1 status` | Qué está corriendo, a qué apunta `.env`, si la tarea existe y si la aplicación responde |
 | `standalone.ps1 backup` | `pg_dump -Fc`, verificación por restauración de prueba, subida a R2, heartbeat a Sentry: ver "Respaldos" más abajo |
+| `standalone.ps1 verify-dump <file>` | Repite la verificación por restauración de prueba sobre un dump existente: sin heartbeat, sin subida |
 | `standalone.ps1 restore <file>` | Restaura un dump; pregunta primero y respalda el estado actual antes de reemplazarlo |
 
 Parámetros: `-Port` (3000), `-PgHost` (localhost), `-PgPort` (5432),

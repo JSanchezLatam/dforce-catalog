@@ -55,6 +55,7 @@ calls. PR1 declares the exception.
       (d) `dforce_verify` absent after every run.
       NOT exercised: a genuinely corrupt dump (the `pg_restore -l` / scratch-restore failure → `.corrupt` rename path) — there is no way to inject one without changing the script; it is covered by reading only.
       Found and fixed during the run: Node's output decoded as the OEM code page (`Fall├│`), f8e2f2f. The 403s seen first were a `SENTRY_DSN` from another project, not a script defect.
+- [ ] 1.8 `standalone.ps1 verify-dump <file>` subcommand: reuses `Test-DumpRestorable` against an existing dump file (no new verification logic); never sends a cron check-in (a manual check of an old file must not turn the daily monitor red or fake a run) and never uploads anything; a missing/nonexistent file argument fails via `Fail` with the usage line and renames nothing. Owner's manual proof (Windows test PC): truncate a real dump, run `verify-dump` against it, and confirm exit 1, the file renamed `.corrupt`, a Sentry EVENT naming the step, no check-in sent, and `dforce_verify` absent afterward.
 
 ## Phase 2: Backup Docs (WU2, PR2)
 
