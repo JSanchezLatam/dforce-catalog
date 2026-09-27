@@ -81,7 +81,7 @@ calls. PR1 declares the exception.
 - [x] 4.3 Wrap the 4 `boss.work()` sites: `inventory-sync/job.ts`, `reminders/job.ts`, `catalog-storage/upload-status.ts`, `pdf-generation/worker.ts`.
 - [x] 4.4 `reminders/job.test.ts`: assert the captured handler still rejects (retry/deadletter preserved). Same case added to the other three sites' own test files (none had a `register*Worker` test before this WU).
 - [x] 4.5 Mutation-verify 4.1: revert the rethrow, confirm the RED test fails by name. Also mutation-verified per-site: removing `withJobCapture` at each of the 4 sites fails that site's new test by name.
-- [ ] 4.6 Manual proof (pending, workshop PC): force a real job throw; Sentry event carries `job`/`jobId` tags AND pg-boss still marks the job failed/retry.
+- [x] 4.6 Manual proof — 2026-09-27, Windows 11 test PC: with a wrong `R2_SECRET_ACCESS_KEY`, generating a catalog made `pdf-generate` throw; Sentry received 3 events tagged `job=pdf-generate` and the same `jobId` with `handled: yes` — the original attempt plus pg-boss's 2 retries, which proves the rethrow left retry behaviour unchanged.
 
 ## Not Tasked (follow-ups, not built)
 
