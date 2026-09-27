@@ -64,7 +64,8 @@ export async function register(): Promise<void> {
       // (node_modules/next/dist/server/lib/start-server.js:426-430), so
       // without waiting for the queued event to actually leave the process
       // it would never reach Sentry.
-      await Sentry.flush(2000);
+      // A rejected flush must never replace the bootstrap error pg-boss and Next need to see.
+      await Sentry.flush(2000).catch(() => {});
       throw error;
     }
   }
