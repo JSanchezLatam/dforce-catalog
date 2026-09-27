@@ -166,11 +166,13 @@ function Resolve-PgBin {
 $script:PgBin = ''
 function PgExe([string] $name) { return (Join-Path $script:PgBin $name) }
 
-# Backup-run state, read by Fail/Send-CheckIn/Send-BackupFailureEvent; unset outside Invoke-Backup.
+# Backup-run state, read by Fail/Send-CheckIn/Send-BackupFailureEvent; set only
+# by Invoke-Backup and Invoke-VerifyDump (the latter also sets SkipHeartbeat).
 $script:BackupStep = $null
 $script:BackupLogFile = ''
 $script:SentryDsn = ''
 $script:CheckInId = $null
+$script:SkipHeartbeat = $false
 
 function Test-PgUp {
     if (-not $script:PgBin) { return $false }
