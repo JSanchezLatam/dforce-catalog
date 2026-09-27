@@ -72,9 +72,10 @@ async function main() {
   }
 }
 
-// realpathSync, not a plain string/path.resolve compare: a junction, a
-// symlink, or a drive-letter case difference would otherwise make main()
-// never run — exit 0, nothing uploaded, no error anywhere.
+// realpathSync, not a plain string/path.resolve compare: a junction or a
+// symlink would otherwise make main() never run — exit 0, nothing uploaded,
+// no error anywhere. Drive-letter case is NOT covered (unverified on Windows);
+// standalone.ps1 also requires both "Subido:" lines, so a silent skip fails.
 export function isMainModule(moduleUrl, invokedPath) {
   if (!invokedPath) return false;
   try {

@@ -37,7 +37,7 @@ Follow the exploration's approaches 1–5: plain `.mjs` (like `migrate.mjs`), `G
 |------|--------|
 | `scripts/windows/standalone.ps1` | Modified |
 | `scripts/upload-backup.mjs` | New |
-| `src/instrumentation*.ts`, `sentry.*.config.ts`, `next.config.ts`, `package.json` | New/Modified |
+| `src/instrumentation*.ts`, `src/instrumentation-client.ts`, `next.config.ts`, `package.json` | New/Modified |
 | `src/shared/config/env.ts` | Modified |
 | 4 worker files + `shared/jobs` | Modified |
 | `WINDOWS*.md`, `STANDALONE.md`, `env.example` | Modified |
@@ -55,7 +55,7 @@ Follow the exploration's approaches 1–5: plain `.mjs` (like `migrate.mjs`), `G
 
 ## Delivery
 
-Four disjoint work units, docs travelling with their unit: (1) backup pipeline + upload script, (2) Sentry server/client/config, (3) job wrapper, (4) remaining docs. Stacked PRs to `main` if the tasks forecast exceeds 400 lines.
+Four disjoint work units, docs travelling with their unit: (1) backup pipeline + upload script, (2) backup docs + `env.example`, (3) Sentry server/client/config, (4) job wrapper (needs 3). Stacked PRs to `main`; the tasks forecast (~650 lines) confirmed the split.
 
 ## Rollback Plan
 

@@ -15,7 +15,7 @@
       ... install-service            start the app at system boot (Task Scheduler)
       ... uninstall-service          remove that task and its firewall rule
       ... status                     what is running and what .env points at
-      ... backup                     pg_dump -Fc into %USERPROFILE%\dforce-backups
+      ... backup                     pg_dump -Fc, scratch-restore check, upload to R2, Sentry heartbeat
       ... restore <archivo.dump>     restore a dump (asks first, backs up first)
 
     NOTE ON FILE ENCODING: this file is saved as UTF-8 WITH a BOM on purpose.
@@ -1531,11 +1531,11 @@ Dforce Catálogo — despliegue en Windows sin Docker.
   standalone.ps1 install-service        arranca la app al encender la máquina
   standalone.ps1 uninstall-service      quita esa tarea y su regla de firewall
   standalone.ps1 status                 qué está corriendo y a dónde apunta .env
-  standalone.ps1 backup                 pg_dump -Fc a %USERPROFILE%\dforce-backups
+  standalone.ps1 backup                 pg_dump -Fc, verificación por restore, subida a R2, heartbeat a Sentry
   standalone.ps1 restore <archivo>      restaura un dump (pregunta y respalda antes)
 
 Parámetros: -Port 3000  -PgPort 5432  -PgHost localhost  -SuperPassword <clave>
-            -SeedUser admin  -SeedPassword admin123  -BackupDir <carpeta>  -Yes
+            -SeedUser admin  -SeedPassword admin123  -BackupDir <carpeta>  -NodeDir <carpeta>  -Yes
 
 Todo esto se corre así (PowerShell 5.1 no ejecuta scripts sin permiso):
 
