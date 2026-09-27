@@ -64,15 +64,15 @@ calls. PR1 declares the exception.
 
 ## Phase 3: Sentry App (WU3, PR3)
 
-- [ ] 3.1 `npm install @sentry/nextjs@11` (pin exact major).
-- [ ] 3.2 RED `src/instrumentation.test.ts`: mocked SDK — `init` runs before `registerNodeWorkers` (`invocationCallOrder`); no DSN → no `init`; bootstrap throw is captured and rethrown.
-- [ ] 3.3 GREEN `src/instrumentation.ts`: DSN guard, `Sentry.init` as first statement of the `nodejs` branch, `registerNodeWorkers()` in `try/catch`, `export const onRequestError`.
-- [ ] 3.4 `src/instrumentation-client.ts`: same guard on `NEXT_PUBLIC_SENTRY_DSN`; exports `onRouterTransitionStart`; no replay/tracing.
-- [ ] 3.5 `next.config.ts`: `withSentryConfig(nextConfig, {sourcemaps:{disable:true}, release:{create:false}, telemetry:false, silent:true})`.
-- [ ] 3.6 `env.ts`: `SENTRY_DSN` optional + sensitive; `NEXT_PUBLIC_SENTRY_DSN` optional, not sensitive.
-- [ ] 3.7 Mutation-verify 3.2: revert the DSN guard, confirm the RED test fails by name.
-- [ ] 3.8 `npm run build` (Turbopack): confirm no edge-runtime warning from `withSentryConfig`.
-- [ ] 3.9 Manual proof: open the app from a 2nd machine at the LAN IP, trigger a client error, confirm it reaches Sentry with no replay/trace/source-map.
+- [x] 3.1 `npm install @sentry/nextjs@11` (pin exact major).
+- [x] 3.2 RED `src/instrumentation.test.ts`: mocked SDK — `init` runs before `registerNodeWorkers` (`invocationCallOrder`); no DSN → no `init`; bootstrap throw is captured and rethrown.
+- [x] 3.3 GREEN `src/instrumentation.ts`: DSN guard, `Sentry.init` as first statement of the `nodejs` branch, `registerNodeWorkers()` in `try/catch`, `export const onRequestError`.
+- [x] 3.4 `src/instrumentation-client.ts`: same guard on `NEXT_PUBLIC_SENTRY_DSN`; exports `onRouterTransitionStart`; no replay/tracing.
+- [x] 3.5 `next.config.ts`: `withSentryConfig(nextConfig, {sourcemaps:{disable:true}, release:{create:false, name: <git SHA>}, telemetry:false, silent:true})`, imported from the `@sentry/nextjs/config` subpath (v11 moved it off the root export). `silent`/`telemetry` are both needed: the bundler plugin warns "No auth token provided" on every build before it even reads `release.create`, and reports build telemetry by default — `silent`/`telemetry:false` are the only way to keep an intentionally token-less build quiet.
+- [x] 3.6 `env.ts`: `SENTRY_DSN` optional + sensitive; `NEXT_PUBLIC_SENTRY_DSN` optional, not sensitive.
+- [x] 3.7 Mutation-verify 3.2: revert the DSN guard, confirm the RED test fails by name.
+- [x] 3.8 `npm run build` (Turbopack): confirm no edge-runtime warning from `withSentryConfig`.
+- [x] 3.9 Manual proof — 2026-09-27, Windows 11 test PC, build 8156531: an error thrown in the browser of a SECOND machine (Mac) at `http://192.168.0.15:3000` reached Sentry as DFORCE-CATALOG-3 (insecure context, release = git SHA, no user IP); with `DATABASE_URL` at a closed port the pg-boss bootstrap died and DFORCE-CATALOG-4 still arrived with `handled: yes` (capture → flush → rethrow proven). Bonus: `onRequestError` captured the failing `GET /api/workshop-config/logo` requests during the job test.
 
 ## Phase 4: Job Failure Wrapper (WU4, PR4, needs WU3)
 

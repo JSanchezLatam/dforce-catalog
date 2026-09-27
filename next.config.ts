@@ -1,5 +1,10 @@
 import type { NextConfig } from "next";
 import path from "node:path";
+import { execSync } from "node:child_process";
+// v11 exports withSentryConfig only from the `/config` subpath, not from
+// the package root (confirmed: node_modules/@sentry/nextjs/package.json's
+// "exports" map).
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 const nextConfig: NextConfig = {
   // Self-hosted Docker deployment as a single long-lived Node process
@@ -68,4 +73,34 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// `release.create: false` disables the plugin's own release resolution
+// entirely (confirmed: getFinalConfigObjectUtils.js's `resolveReleaseName`
+// short-circuits to `release.name`, and without an explicit name buildTime.js
+// never sets `_sentryRelease`), so design.md decision 16's
+// "defaults to the build-time git SHA" premise does not hold; `release.name`
+// below supplies it explicitly instead.
+function getReleaseName(): string | undefined {
+  if (process.env.SENTRY_RELEASE) return process.env.SENTRY_RELEASE;
+  try {
+    return execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+  } catch {
+    // A build outside a git checkout (e.g. a tarball) must still succeed.
+    return undefined;
+  }
+}
+
+// error-monitoring (design.md decision 16): no `org`/`project`/`authToken`
+// (uploads disabled — `sourcemaps.disable`/`release.create: false`), no
+// `tunnelRoute` (LAN, no ad-blockers to route around), no webpack-only
+// options (this build uses Turbopack). `silent`: the bundler plugin warns
+// "No auth token provided" on every build BEFORE it reads `release.create`, so
+// this is the only way to keep an intentionally token-less build quiet.
+// `telemetry: false`: the plugin otherwise reports build data to Sentry.
+export default withSentryConfig(nextConfig, {
+  sourcemaps: { disable: true },
+  release: { create: false, name: getReleaseName() },
+  silent: true,
+  telemetry: false,
+});

@@ -23,10 +23,52 @@
  * static import there broke `next build` (confirmed with both Turbopack and
  * webpack) the moment this file made that module reachable from the app's
  * build graph for the first time. See render.ts's header for the full story.
+ *
+ * error-monitoring (design.md decision 13, spec.md "Server-Side Error
+ * Capture Ordering"): Sentry init is the FIRST statement of the `nodejs`
+ * branch, before the worker bootstrap, so a bootstrap failure is itself
+ * captured. Reads `process.env` directly rather than `env.ts`, because
+ * `env.ts` throws on a missing `DATABASE_URL` before init could ever run.
+ * An explicit DSN guard — no init call at all when unset — rather than
+ * relying on the SDK's own no-DSN no-op (decision 14).
  */
+import * as Sentry from "@sentry/nextjs";
+
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    const dsn = process.env.SENTRY_DSN || undefined;
+    if (dsn) {
+      Sentry.init({
+        dsn,
+        environment: process.env.NODE_ENV,
+        // `release` is deliberately omitted here — `next.config.ts`'s
+        // `withSentryConfig` supplies it via `release.name` (git SHA),
+        // inlined at build time (design.md decision 16 amendment).
+        // v11 replaced the old `sendDefaultPii: false` boolean with a
+        // granular `dataCollection` object whose `userInfo` (IP address,
+        // etc.) defaults to `true` (confirmed:
+        // node_modules/@sentry/core/build/types/types/datacollection.d.ts).
+        // `userInfo: false` is the direct equivalent of the old default.
+        dataCollection: { userInfo: false },
+      });
+    }
+
     const { registerNodeWorkers } = await import("./instrumentation-node");
-    await registerNodeWorkers();
+    try {
+      await registerNodeWorkers();
+    } catch (error) {
+      Sentry.captureException(error);
+      // captureException only QUEUES the event — the transport sends it
+      // asynchronously. The rethrow below reaches Next's startup handler,
+      // which calls process.exit(1) immediately
+      // (node_modules/next/dist/server/lib/start-server.js:426-430), so
+      // without waiting for the queued event to actually leave the process
+      // it would never reach Sentry.
+      // A rejected flush must never replace the bootstrap error pg-boss and Next need to see.
+      await Sentry.flush(2000).catch(() => {});
+      throw error;
+    }
   }
 }
+
+export const onRequestError = Sentry.captureRequestError;
