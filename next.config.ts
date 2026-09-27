@@ -75,8 +75,8 @@ const nextConfig: NextConfig = {
 
 // `release.create: false` disables the plugin's own release resolution
 // entirely (confirmed: getFinalConfigObjectUtils.js's `resolveReleaseName`
-// short-circuits to `release.name` — undefined here otherwise — and
-// buildTime.js never sets `_sentryRelease`), so design.md decision 16's
+// short-circuits to `release.name`, and without an explicit name buildTime.js
+// never sets `_sentryRelease`), so design.md decision 16's
 // "defaults to the build-time git SHA" premise does not hold; `release.name`
 // below supplies it explicitly instead.
 function getReleaseName(): string | undefined {
