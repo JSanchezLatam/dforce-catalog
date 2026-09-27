@@ -23,10 +23,43 @@
  * static import there broke `next build` (confirmed with both Turbopack and
  * webpack) the moment this file made that module reachable from the app's
  * build graph for the first time. See render.ts's header for the full story.
+ *
+ * error-monitoring (design.md decision 13, spec.md "Server-Side Error
+ * Capture Ordering"): Sentry init is the FIRST statement of the `nodejs`
+ * branch, before the worker bootstrap, so a bootstrap failure is itself
+ * captured. Reads `process.env` directly rather than `env.ts`, because
+ * `env.ts` throws on a missing `DATABASE_URL` before init could ever run.
+ * An explicit DSN guard — no init call at all when unset — rather than
+ * relying on the SDK's own no-DSN no-op (decision 14).
  */
+import * as Sentry from "@sentry/nextjs";
+import { version } from "../package.json";
+
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    const dsn = process.env.SENTRY_DSN || undefined;
+    if (dsn) {
+      Sentry.init({
+        dsn,
+        environment: "workshop",
+        release: version,
+        // v11 replaced the old `sendDefaultPii: false` boolean with a
+        // granular `dataCollection` object whose `userInfo` (IP address,
+        // etc.) defaults to `true` (confirmed:
+        // node_modules/@sentry/core/build/types/types/datacollection.d.ts).
+        // `userInfo: false` is the direct equivalent of the old default.
+        dataCollection: { userInfo: false },
+      });
+    }
+
     const { registerNodeWorkers } = await import("./instrumentation-node");
-    await registerNodeWorkers();
+    try {
+      await registerNodeWorkers();
+    } catch (error) {
+      Sentry.captureException(error);
+      throw error;
+    }
   }
 }
+
+export const onRequestError = Sentry.captureRequestError;

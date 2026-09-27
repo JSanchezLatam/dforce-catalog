@@ -64,6 +64,19 @@ export const env = {
   KAPSO_TEMPLATE_APPOINTMENT: optional("KAPSO_TEMPLATE_APPOINTMENT"),
   /** Approved UTILITY template name for `type: "service_due"` reminders (ADR-3). */
   KAPSO_TEMPLATE_SERVICE_DUE: optional("KAPSO_TEMPLATE_SERVICE_DUE"),
+  /**
+   * error-monitoring (design.md decision 17) — server-side Sentry DSN, read
+   * directly from `process.env` by `instrumentation.ts` (before this module
+   * could throw on a missing `DATABASE_URL`), and here too for
+   * `SENSITIVE_ENV_KEYS` and any other reader. Optional: an empty DSN
+   * disables the SDK entirely (spec.md).
+   */
+  SENTRY_DSN: optional("SENTRY_DSN"),
+  /**
+   * Same DSN, but inlined into the browser bundle at build time — NOT
+   * sensitive, since `NEXT_PUBLIC_*` ships in every client bundle already.
+   */
+  NEXT_PUBLIC_SENTRY_DSN: optional("NEXT_PUBLIC_SENTRY_DSN"),
 } as const;
 
 /** Keys that must never be included in logs, error messages, or responses. */
@@ -74,4 +87,5 @@ export const SENSITIVE_ENV_KEYS = [
   "R2_SECRET_ACCESS_KEY",
   "RESEND_API_KEY",
   "KAPSO_API_KEY",
+  "SENTRY_DSN",
 ] as const;

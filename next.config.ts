@@ -1,5 +1,9 @@
 import type { NextConfig } from "next";
 import path from "node:path";
+// v11 moved this to a subpath export (@sentry/nextjs's package.json
+// "exports" map has no root "./config" — confirmed:
+// node_modules/@sentry/nextjs/package.json).
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 const nextConfig: NextConfig = {
   // Self-hosted Docker deployment as a single long-lived Node process
@@ -68,4 +72,16 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// error-monitoring (design.md decision 16): no `org`/`project`/`authToken`
+// (uploads disabled — `sourcemaps.disable`/`release.create: false`), no
+// `tunnelRoute` (LAN, no ad-blockers to route around), no webpack-only
+// options (this build uses Turbopack). `silent`: the bundler plugin warns
+// "No auth token provided" on every build BEFORE it reads `release.create`, so
+// this is the only way to keep an intentionally token-less build quiet.
+// `telemetry: false`: the plugin otherwise reports build data to Sentry.
+export default withSentryConfig(nextConfig, {
+  sourcemaps: { disable: true },
+  release: { create: false },
+  silent: true,
+  telemetry: false,
+});

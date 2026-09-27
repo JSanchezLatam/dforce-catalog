@@ -45,14 +45,14 @@ Build pairs (disjoint files): WU1 ∥ WU3, then WU2 ∥ WU4 (WU4 imports `@sentr
 
 ## Phase 3: Sentry App (WU3, PR3)
 
-- [ ] 3.1 `npm install @sentry/nextjs@11` (pin exact major).
-- [ ] 3.2 RED `src/instrumentation.test.ts`: mocked SDK — `init` runs before `registerNodeWorkers` (`invocationCallOrder`); no DSN → no `init`; bootstrap throw is captured and rethrown.
-- [ ] 3.3 GREEN `src/instrumentation.ts`: DSN guard, `Sentry.init` as first statement of the `nodejs` branch, `registerNodeWorkers()` in `try/catch`, `export const onRequestError`.
-- [ ] 3.4 `src/instrumentation-client.ts`: same guard on `NEXT_PUBLIC_SENTRY_DSN`; exports `onRouterTransitionStart`; no replay/tracing.
-- [ ] 3.5 `next.config.ts`: `withSentryConfig(nextConfig, {sourcemaps:{disable:true}, release:{create:false}, telemetry:false, silent:true})`.
-- [ ] 3.6 `env.ts`: `SENTRY_DSN` optional + sensitive; `NEXT_PUBLIC_SENTRY_DSN` optional, not sensitive.
-- [ ] 3.7 Mutation-verify 3.2: revert the DSN guard, confirm the RED test fails by name.
-- [ ] 3.8 `npm run build` (Turbopack): confirm no edge-runtime warning from `withSentryConfig`.
+- [x] 3.1 `npm install @sentry/nextjs@11` (pin exact major).
+- [x] 3.2 RED `src/instrumentation.test.ts`: mocked SDK — `init` runs before `registerNodeWorkers` (`invocationCallOrder`); no DSN → no `init`; bootstrap throw is captured and rethrown.
+- [x] 3.3 GREEN `src/instrumentation.ts`: DSN guard, `Sentry.init` as first statement of the `nodejs` branch, `registerNodeWorkers()` in `try/catch`, `export const onRequestError`.
+- [x] 3.4 `src/instrumentation-client.ts`: same guard on `NEXT_PUBLIC_SENTRY_DSN`; exports `onRouterTransitionStart`; no replay/tracing.
+- [x] 3.5 `next.config.ts`: `withSentryConfig(nextConfig, {sourcemaps:{disable:true}, release:{create:false}})`, imported from the `@sentry/nextjs/config` subpath (v11 moved it off the root export — `node_modules/@sentry/nextjs/package.json`'s `exports` map has no root re-export). `telemetry`/`silent` dropped per the WU3 delegation (not per WU3's own line above) — see apply-progress for the resulting build-output tradeoff.
+- [x] 3.6 `env.ts`: `SENTRY_DSN` optional + sensitive; `NEXT_PUBLIC_SENTRY_DSN` optional, not sensitive.
+- [x] 3.7 Mutation-verify 3.2: revert the DSN guard, confirm the RED test fails by name.
+- [x] 3.8 `npm run build` (Turbopack): confirm no edge-runtime warning from `withSentryConfig`.
 - [ ] 3.9 Manual proof: open the app from a 2nd machine at the LAN IP, trigger a client error, confirm it reaches Sentry with no replay/trace/source-map.
 
 ## Phase 4: Job Failure Wrapper (WU4, PR4, needs WU3)
