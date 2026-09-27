@@ -303,6 +303,14 @@ psql -h localhost -p 5432 -U dforce -d dforce_catalog -c '\dt'
 docker compose exec -T db psql -U dforce -d dforce_catalog -c '\dt'
 ```
 
+## Backup parity with Windows
+
+`./scripts/macos/standalone.sh backup` stays local-only: `pg_dump -Fc` into
+`~/dforce-backups/`, nothing more. It does not upload to R2, does not run the
+scratch-restore verification, and sends no Sentry heartbeat — this Mac is a
+dev machine, not the workshop's production box, which is what `WINDOWS.md`'s
+"Backups" section documents.
+
 ## Not losing data
 
 A data directory is not a backup. It does not survive a disk failure, a bad
