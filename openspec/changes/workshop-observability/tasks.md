@@ -84,7 +84,8 @@ Local dump pruning in `%USERPROFILE%\dforce-backups`; macOS `standalone.sh` back
 Note for WU2 docs: `$BackupDir\service.log` is cumulative across runs and gets
 uploaded WHOLE under each dump's key, so it grows without bound and each R2
 copy after the first duplicates every prior run's lines — WU2 should decide
-whether to document this as-is or truncate/rotate it. Also: a non-default
-`-DbPassword` needs to be baked into `Register-BackupTask`'s action line
-(currently only `-BackupDir`/`-NodeDir` are passed), or the scheduled task
-runs with the default password and `New-Dump`/`Test-DumpRestorable` fail.
+whether to document this as-is or truncate/rotate it. (GGA fix round:
+`Register-BackupTask` now bakes `-PgHost`/`-PgPort`/`-DbName`/`-DbUser`/
+`-DbPassword` into the task's action line whenever any of the five differs
+from its script default, alongside the always-baked `-BackupDir`/`-NodeDir`
+— so a non-default install no longer registers a task that fails every day.)

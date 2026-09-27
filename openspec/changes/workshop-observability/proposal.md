@@ -8,7 +8,7 @@ The workshop PC has no automatic backup: the nightly task is a manual snippet in
 
 ### In Scope
 - **Backup pipeline**: `install-service` registers `DforceCatalogoBackup` (daily 12:00, SYSTEM, `StartWhenAvailable`, `RunOnlyIfNetworkAvailable`). `standalone.ps1 backup` runs `pg_dump` → `pg_restore -l` pre-check → scratch restore (`createdb`/`pg_restore --exit-on-error --no-owner`/`dropdb`) → upload dump + `service.log` to R2 via new `scripts/upload-backup.mjs` → Sentry cron check-in (`in_progress`, then `ok`/`error`, `monitor_config` upsert).
-- **Sentry app errors** (`@sentry/nextjs@11`): server in `instrumentation.ts` (Sentry import first, then pg-boss bootstrap; `onRequestError`), edge config, browser via `instrumentation-client.ts`, `withSentryConfig` with `sourcemaps.disable`. Errors only.
+- **Sentry app errors** (`@sentry/nextjs@11`): server in `instrumentation.ts` (Sentry import first, then pg-boss bootstrap; `onRequestError`), browser via `instrumentation-client.ts`, `withSentryConfig` with `sourcemaps.disable`. No edge config: `proxy.ts` is Node-only and nothing declares the edge runtime (design decision 13). Errors only.
 - **Job failures**: capture-and-rethrow wrapper at the 4 `boss.work()` sites.
 - **Docs**: `WINDOWS.md` + `WINDOWS.es.md` together, `STANDALONE.md` parity note, `env.example`.
 
@@ -29,7 +29,7 @@ None.
 
 ## Approach
 
-Follow the exploration's approaches 1–5: plain `.mjs` (like `migrate.mjs`), `Get-EnvValue` for SYSTEM env, DSN-derived cron URL over `Invoke-RestMethod`, injected-deps wrapper for testability. `SENTRY_DSN`/`NEXT_PUBLIC_SENTRY_DSN` sensitive in `env.ts`.
+Follow the exploration's approaches 1–5: plain `.mjs` (like `migrate.mjs`), `Get-EnvValue` for SYSTEM env, DSN-derived cron URL over `Invoke-RestMethod`, injected-deps wrapper for testability. `SENTRY_DSN` sensitive in `env.ts`; `NEXT_PUBLIC_SENTRY_DSN` is not, because a `NEXT_PUBLIC_` value ships in every browser bundle (design decision 17).
 
 ## Affected Areas
 

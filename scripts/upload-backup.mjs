@@ -29,13 +29,13 @@ async function main() {
   const [dumpPath, logArg] = process.argv.slice(2);
   let logPath = logArg;
   if (!dumpPath) {
-    console.error("Usage: node scripts/upload-backup.mjs <dump.dump> [service.log]");
+    console.error("Uso: node scripts/upload-backup.mjs <dump.dump> [service.log]");
     process.exit(1);
   }
 
   const { R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET } = process.env;
   if (!R2_ENDPOINT || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !R2_BUCKET) {
-    console.error("Missing R2_ENDPOINT/R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY/R2_BUCKET");
+    console.error("Faltan variables R2_ENDPOINT/R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY/R2_BUCKET");
     process.exit(1);
   }
 
@@ -76,7 +76,7 @@ async function main() {
 // space in the checkout path never matches process.argv[1] (migrate.mjs lesson).
 if (fileURLToPath(import.meta.url) === path.resolve(process.argv[1] ?? "")) {
   main().catch((err) => {
-    console.error("Upload failed:", err);
+    console.error("Falló la subida:", err);
     process.exit(1);
   });
 }

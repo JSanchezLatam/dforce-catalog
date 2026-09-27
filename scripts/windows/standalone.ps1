@@ -744,6 +744,9 @@ function Send-CheckIn([string] $status) {
     try {
         $uri = [Uri]$script:SentryDsn
         $url = "https://$($uri.Host)/api$($uri.AbsolutePath)/cron/$BackupMonitorSlug/$($uri.UserInfo)/"
+        # $status ('in_progress'/'ok'/'error'), the crontab, and $timezone (an
+        # IANA id, e.g. America/Panama) are all ASCII — no UTF-8 byte fix needed
+        # here, unlike Send-BackupFailureEvent's Spanish $detail.
         Invoke-RestMethod -Uri $url -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 15 | Out-Null
         Write-BackupLog "heartbeat '$status' enviado"
     }
@@ -759,13 +762,17 @@ function Send-BackupFailureEvent([string] $step, [string] $detail) {
         $uri = [Uri]$script:SentryDsn
         $eventId = [guid]::NewGuid().ToString('N')
         $sentAt = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
-        $event = @{ event_id = $eventId; timestamp = $sentAt; platform = 'other'; level = 'error'
+        $sentryEvent = @{ event_id = $eventId; timestamp = $sentAt; platform = 'other'; level = 'error'
             message = @{ formatted = "Backup failed at $step" }; extra = @{ detail = $detail } } |
             ConvertTo-Json -Compress -Depth 5
         $body = (@{ event_id = $eventId; sent_at = $sentAt } | ConvertTo-Json -Compress) + "`n" +
-            (@{ type = 'event' } | ConvertTo-Json -Compress) + "`n$event"
+            (@{ type = 'event' } | ConvertTo-Json -Compress) + "`n$sentryEvent"
         $auth = "Sentry sentry_version=7, sentry_key=$($uri.UserInfo), sentry_client=dforce-backup/1.0"
-        Invoke-RestMethod -Uri "https://$($uri.Host)/api$($uri.AbsolutePath)/envelope/" -Method Post -Body $body `
+        # PS 5.1 encodes a string -Body as ISO-8859-1; $step/$detail carry Spanish
+        # accents (e.g. the corrupt-dump case), which would send invalid UTF-8 to
+        # an endpoint that expects it. Send raw UTF-8 bytes instead.
+        Invoke-RestMethod -Uri "https://$($uri.Host)/api$($uri.AbsolutePath)/envelope/" -Method Post `
+            -Body ([Text.Encoding]::UTF8.GetBytes($body)) `
             -ContentType 'application/x-sentry-envelope' -Headers @{ 'X-Sentry-Auth' = $auth } -TimeoutSec 15 | Out-Null
     }
     catch {
@@ -776,10 +783,21 @@ function Send-BackupFailureEvent([string] $step, [string] $detail) {
 # pg_restore -l is a fast pre-check (a truncated dump lists fine but dies on
 # a real restore); the scratch restore into dforce_verify is what matters.
 # Never -C/--create. dropdb runs in `finally`; Fail only after that cleanup.
+# Renames a dump that failed verification to <name>.corrupt (kept for
+# forensics, same reason New-Dump deletes an empty one): left under its real
+# name, it looks like a valid backup and `restore` would accept it.
+function Rename-CorruptDump([string] $dumpFile) {
+    $corruptPath = "$dumpFile.corrupt"
+    Move-Item -LiteralPath $dumpFile -Destination $corruptPath -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $corruptPath) { return $corruptPath }
+    return $dumpFile
+}
+
 function Test-DumpRestorable([string] $dumpFile) {
     $listOut = & (PgExe 'pg_restore.exe') -l $dumpFile 2>&1
     if ($LASTEXITCODE -ne 0) {
-        Fail "pg_restore -l no pudo leer el dump — el archivo está corrupto o incompleto. Salida completa:
+        $corruptPath = Rename-CorruptDump $dumpFile
+        Fail "pg_restore -l no pudo leer el dump — el archivo está corrupto o incompleto. Lo renombré a '$corruptPath'. Salida completa:
 
 $(($listOut | ForEach-Object { "$_" }) -join "`n")" 'Revisá que pg_dump haya terminado sin errores y reintentá el backup.'
     }
@@ -799,7 +817,8 @@ $(($listOut | ForEach-Object { "$_" }) -join "`n")" 'Revisá que pg_dump haya te
     }
 
     if ($restoreCode -ne 0) {
-        Fail "La restauración de prueba en 'dforce_verify' falló — el dump no es confiable. Salida completa:
+        $corruptPath = Rename-CorruptDump $dumpFile
+        Fail "La restauración de prueba en 'dforce_verify' falló — el dump no es confiable. Lo renombré a '$corruptPath'. Salida completa:
 
 $(($restoreOut | ForEach-Object { "$_" }) -join "`n")" 'Revisá el log de Postgres (Get-Content ...\data\log\*.log -Tail 50) y reintentá el backup.'
     }
@@ -836,8 +855,13 @@ Arrancá el servicio desde una consola de administrador:
     $script:BackupStep = 'verificación (pg_restore -l / restauración de prueba)'
     Test-DumpRestorable $item.FullName
 
-    if ($NodeDir -and (Test-Path -LiteralPath $NodeDir)) {
-        $env:Path = "$NodeDir;$env:Path"
+    $script:BackupStep = 'subida a R2'
+    # Resolved to a full path, never a bare 'node': `& node` on a missing command
+    # throws instead of setting $LASTEXITCODE, which would leave $uploadCode
+    # holding dropdb's exit code (0) from Test-DumpRestorable above — a false 'ok'.
+    $nodeExe = if ($NodeDir) { Join-Path $NodeDir 'node.exe' } else { (Get-Command node -ErrorAction SilentlyContinue).Source }
+    if (-not $nodeExe -or -not (Test-Path -LiteralPath $nodeExe)) {
+        Fail "No encontré node ($nodeExe) para subir el backup a R2." 'Instalá Node (winget install OpenJS.NodeJS.LTS) o pasá -NodeDir con la carpeta correcta.'
     }
 
     $r2Endpoint = Get-EnvValue $EnvFile 'R2_ENDPOINT'
@@ -845,7 +869,6 @@ Arrancá el servicio desde una consola de administrador:
     $r2SecretKey = Get-EnvValue $EnvFile 'R2_SECRET_ACCESS_KEY'
     $r2Bucket = Get-EnvValue $EnvFile 'R2_BUCKET'
 
-    $script:BackupStep = 'subida a R2'
     if (-not ($r2Endpoint -and $r2AccessKey -and $r2SecretKey -and $r2Bucket)) {
         Fail 'Faltan credenciales R2_* en .env, así que no puedo subir el backup fuera del sitio.' @'
 El dump ya quedó verificado en el disco local. Completá en .env: R2_ENDPOINT,
@@ -857,7 +880,8 @@ R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET y volvé a correr el backup.
     $previousEnv = @{}
     foreach ($k in $r2Values.Keys) { $previousEnv[$k] = [Environment]::GetEnvironmentVariable($k); [Environment]::SetEnvironmentVariable($k, $r2Values[$k]) }
     try {
-        $uploadOut = & node (Join-Path $Root 'scripts\upload-backup.mjs') $item.FullName $script:BackupLogFile 2>&1
+        $LASTEXITCODE = 0
+        $uploadOut = & $nodeExe (Join-Path $Root 'scripts\upload-backup.mjs') $item.FullName $script:BackupLogFile 2>&1
         $uploadCode = $LASTEXITCODE
     }
     finally {
@@ -970,9 +994,19 @@ function Register-BackupTask([string] $resolvedNodeDir) {
         -StartWhenAvailable -RunOnlyIfNetworkAvailable `
         -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 1)
 
+    # Baked in only when non-default, same as -BackupDir/-NodeDir: a task
+    # registered against a non-default Postgres would otherwise fail every
+    # day with no way to tell why from Task Scheduler alone.
+    $extraParams = ''
+    if ($PgHost -ne 'localhost')       { $extraParams += " -PgHost `"$PgHost`"" }
+    if ($PgPort -ne 5432)              { $extraParams += " -PgPort $PgPort" }
+    if ($DbName -ne 'dforce_catalog')  { $extraParams += " -DbName `"$DbName`"" }
+    if ($DbUser -ne 'dforce')          { $extraParams += " -DbUser `"$DbUser`"" }
+    if ($DbPassword -ne 'dforce')      { $extraParams += " -DbPassword `"$DbPassword`"" }
+
     $powershellExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $argumentLine = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{0}" backup -BackupDir "{1}" -NodeDir "{2}"' `
-                    -f $PSCommandPath, $BackupDir, $resolvedNodeDir
+    $argumentLine = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{0}" backup -BackupDir "{1}" -NodeDir "{2}"{3}' `
+                    -f $PSCommandPath, $BackupDir, $resolvedNodeDir, $extraParams
     $action = New-ScheduledTaskAction -Execute $powershellExe -Argument $argumentLine -WorkingDirectory $Root
 
     $registerError = $null
