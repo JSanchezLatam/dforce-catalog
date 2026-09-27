@@ -13,15 +13,16 @@
  * replay integration, no profiling (decision 15 — out of scope).
  */
 import * as Sentry from "@sentry/nextjs";
-import { version } from "../package.json";
 
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN || undefined;
 
 if (dsn) {
   Sentry.init({
     dsn,
-    environment: "workshop",
-    release: version,
+    environment: process.env.NODE_ENV,
+    // `release` is deliberately omitted here — `next.config.ts`'s
+    // `withSentryConfig` supplies it via `release.name` (git SHA),
+    // inlined at build time (design.md decision 16 amendment).
     // See instrumentation.ts: v11 replaced `sendDefaultPii: false` with a
     // granular `dataCollection` object defaulting to `true`.
     dataCollection: { userInfo: false },

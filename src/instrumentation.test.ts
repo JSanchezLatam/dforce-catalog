@@ -6,7 +6,7 @@
  * mocked at the module boundary — this test asserts call order and
  * conditional invocation, not SDK internals.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const registerNodeWorkers = vi.fn().mockResolvedValue(undefined);
 vi.mock("./instrumentation-node", () => ({
@@ -25,9 +25,19 @@ vi.mock("@sentry/nextjs", () => ({
 const VALID_DSN = "https://public@o0.ingest.sentry.io/0";
 
 describe("instrumentation register()", () => {
+  let originalNextRuntime: string | undefined;
+  let originalSentryDsn: string | undefined;
+
+  beforeEach(() => {
+    originalNextRuntime = process.env.NEXT_RUNTIME;
+    originalSentryDsn = process.env.SENTRY_DSN;
+  });
+
   afterEach(() => {
-    delete process.env.NEXT_RUNTIME;
-    delete process.env.SENTRY_DSN;
+    if (originalNextRuntime === undefined) delete process.env.NEXT_RUNTIME;
+    else process.env.NEXT_RUNTIME = originalNextRuntime;
+    if (originalSentryDsn === undefined) delete process.env.SENTRY_DSN;
+    else process.env.SENTRY_DSN = originalSentryDsn;
     vi.clearAllMocks();
     vi.resetModules();
   });

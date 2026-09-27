@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 import path from "node:path";
-// v11 moved this to a subpath export (@sentry/nextjs's package.json
-// "exports" map has no root "./config" — confirmed:
-// node_modules/@sentry/nextjs/package.json).
+import { execSync } from "node:child_process";
+// v11 exports withSentryConfig only from the `/config` subpath, not from
+// the package root (confirmed: node_modules/@sentry/nextjs/package.json's
+// "exports" map).
 import { withSentryConfig } from "@sentry/nextjs/config";
 
 const nextConfig: NextConfig = {
@@ -72,6 +73,24 @@ const nextConfig: NextConfig = {
   },
 };
 
+// `release.create: false` disables the plugin's own release resolution
+// entirely (confirmed: getFinalConfigObjectUtils.js's `resolveReleaseName`
+// short-circuits to `release.name` — undefined here otherwise — and
+// buildTime.js never sets `_sentryRelease`), so design.md decision 16's
+// "defaults to the build-time git SHA" premise does not hold; `release.name`
+// below supplies it explicitly instead.
+function getReleaseName(): string | undefined {
+  if (process.env.SENTRY_RELEASE) return process.env.SENTRY_RELEASE;
+  try {
+    return execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+  } catch {
+    // A build outside a git checkout (e.g. a tarball) must still succeed.
+    return undefined;
+  }
+}
+
 // error-monitoring (design.md decision 16): no `org`/`project`/`authToken`
 // (uploads disabled — `sourcemaps.disable`/`release.create: false`), no
 // `tunnelRoute` (LAN, no ad-blockers to route around), no webpack-only
@@ -81,7 +100,7 @@ const nextConfig: NextConfig = {
 // `telemetry: false`: the plugin otherwise reports build data to Sentry.
 export default withSentryConfig(nextConfig, {
   sourcemaps: { disable: true },
-  release: { create: false },
+  release: { create: false, name: getReleaseName() },
   silent: true,
   telemetry: false,
 });

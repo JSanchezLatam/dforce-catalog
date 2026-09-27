@@ -33,7 +33,6 @@
  * relying on the SDK's own no-DSN no-op (decision 14).
  */
 import * as Sentry from "@sentry/nextjs";
-import { version } from "../package.json";
 
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === "nodejs") {
@@ -41,8 +40,10 @@ export async function register(): Promise<void> {
     if (dsn) {
       Sentry.init({
         dsn,
-        environment: "workshop",
-        release: version,
+        environment: process.env.NODE_ENV,
+        // `release` is deliberately omitted here — `next.config.ts`'s
+        // `withSentryConfig` supplies it via `release.name` (git SHA),
+        // inlined at build time (design.md decision 16 amendment).
         // v11 replaced the old `sendDefaultPii: false` boolean with a
         // granular `dataCollection` object whose `userInfo` (IP address,
         // etc.) defaults to `true` (confirmed:
