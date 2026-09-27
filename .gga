@@ -30,7 +30,7 @@ PROVIDER="claude"
 #   FILE_PATTERNS="*.ts,*.tsx"
 #   FILE_PATTERNS="*.py"
 #   FILE_PATTERNS="*.go,*.mod"
-FILE_PATTERNS="*.ts,*.tsx,*.js,*.jsx"
+FILE_PATTERNS="*.ts,*.tsx,*.js,*.jsx,*.mjs,*.ps1"
 
 # File patterns to exclude from review (comma-separated)
 # Default: none
