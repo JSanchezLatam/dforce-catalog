@@ -1,8 +1,20 @@
+import type { PgBoss } from "pg-boss";
 import { describe, expect, it, vi } from "vitest";
 
 import type { db } from "@/shared/db/client";
 import type { PdfUploadPayload } from "../pdf-generation/worker";
-import { buildCatalogPdfKey, handlePdfUpload, isFinalAttempt } from "./upload-status";
+import { buildCatalogPdfKey, handlePdfUpload, isFinalAttempt, registerPdfUploadWorker } from "./upload-status";
+import { PDF_UPLOAD_JOB } from "../pdf-generation/enqueue";
+
+// WU4 (design.md decision 18) — capture.ts's withJobCapture defaults its
+// `report` param to Sentry.captureException; mocking it here lets the
+// registerPdfUploadWorker test below assert on the real wiring without a
+// live Sentry transport. vi.hoisted is required because "./upload-status"
+// above is a STATIC import that resolves "@sentry/nextjs" via capture.ts
+// before any later bare top-level const would run (see reminders/job.test.ts's
+// fuller comment on this exact TDZ trap).
+const { captureException } = vi.hoisted(() => ({ captureException: vi.fn() }));
+vi.mock("@sentry/nextjs", () => ({ captureException }));
 
 const PAYLOAD: PdfUploadPayload = {
   catalogId: "cat-1",
@@ -91,5 +103,29 @@ describe("handlePdfUpload — Risk-1 upload_status state machine (R11.5)", () =>
 
     expect(updates).toEqual([{ uploadStatus: "uploading" }, { uploadStatus: "failed" }]);
     expect(unlink).toHaveBeenCalledWith(PAYLOAD.pdfBufferRef);
+  });
+});
+
+describe("registerPdfUploadWorker", () => {
+  it("wraps the boss.work handler with withJobCapture: a throw is reported with job/jobId tags and pg-boss still sees the rejection", async () => {
+    captureException.mockClear();
+    const createQueue = vi.fn().mockResolvedValue(undefined);
+    const work = vi.fn().mockResolvedValue(undefined);
+    const boss = { createQueue, work } as unknown as PgBoss;
+
+    await registerPdfUploadWorker({ getBoss: async () => boss });
+
+    expect(work).toHaveBeenCalledWith(PDF_UPLOAD_JOB, { includeMetadata: true }, expect.any(Function));
+    const registeredHandler = work.mock.calls[0][2] as (jobs: unknown[]) => Promise<void>;
+    // Empty jobs array: the site's callback reads `jobs[0]`, which is
+    // undefined, so `handlePdfUpload(undefined, ...)`'s destructuring of
+    // `job.data` throws synchronously — a deterministic failure that needs
+    // no real DB.
+    await expect(registeredHandler([])).rejects.toBeInstanceOf(TypeError);
+
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(captureException).toHaveBeenCalledWith(expect.any(TypeError), {
+      tags: { job: PDF_UPLOAD_JOB, jobId: "unknown" },
+    });
   });
 });

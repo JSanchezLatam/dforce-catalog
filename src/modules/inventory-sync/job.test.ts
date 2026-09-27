@@ -3,7 +3,24 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { db } from "@/shared/db/client";
 import { SyncAbortError } from "./client";
-import { hasActiveSyncRun, INVENTORY_SYNC_JOB, requestManualSync, runSync, SyncAlreadyRunningError } from "./job";
+import {
+  hasActiveSyncRun,
+  INVENTORY_SYNC_JOB,
+  registerInventorySyncWorker,
+  requestManualSync,
+  runSync,
+  SyncAlreadyRunningError,
+} from "./job";
+
+// WU4 (design.md decision 18) — capture.ts's withJobCapture defaults its
+// `report` param to Sentry.captureException; mocking it here lets the
+// registerInventorySyncWorker test below assert on the real wiring without
+// a live Sentry transport. vi.hoisted is required because "./job" above is
+// a STATIC import that resolves "@sentry/nextjs" via capture.ts before any
+// later bare top-level const would run (see reminders/job.test.ts's fuller
+// comment on this exact TDZ trap).
+const { captureException } = vi.hoisted(() => ({ captureException: vi.fn() }));
+vi.mock("@sentry/nextjs", () => ({ captureException }));
 
 describe("requestManualSync — Risk-6 explicit active-run check (R2.5)", () => {
   it("rejects with SyncAlreadyRunningError and never enqueues when a sync is already running", async () => {
@@ -35,6 +52,29 @@ describe("requestManualSync — Risk-6 explicit active-run check (R2.5)", () => 
       { mode: "manual", filters: { l1: "Motor" }, triggeredBy: "admin-1" },
       expect.objectContaining({ singletonKey: INVENTORY_SYNC_JOB }),
     );
+  });
+});
+
+describe("registerInventorySyncWorker", () => {
+  it("wraps the boss.work handler with withJobCapture: a throw is reported with job/jobId tags and pg-boss still sees the rejection", async () => {
+    captureException.mockClear();
+    const createQueue = vi.fn().mockResolvedValue(undefined);
+    const work = vi.fn().mockResolvedValue(undefined);
+    const boss = { createQueue, work } as unknown as PgBoss;
+
+    await registerInventorySyncWorker({ getBoss: async () => boss });
+
+    expect(work).toHaveBeenCalledWith(INVENTORY_SYNC_JOB, { localConcurrency: 1 }, expect.any(Function));
+    const registeredHandler = work.mock.calls[0][2] as (jobs: unknown[]) => Promise<void>;
+    // Empty jobs array: the site's `async ([job]) => ...` destructures
+    // `job` as undefined, so `job.data` throws synchronously — a
+    // deterministic failure that needs no real DB.
+    await expect(registeredHandler([])).rejects.toBeInstanceOf(TypeError);
+
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(captureException).toHaveBeenCalledWith(expect.any(TypeError), {
+      tags: { job: INVENTORY_SYNC_JOB, jobId: "unknown" },
+    });
   });
 });
 

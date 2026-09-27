@@ -13,13 +13,14 @@
  * didn't) can never re-send the same message to a customer.
  */
 import { and, eq } from "drizzle-orm";
-import type { PgBoss } from "pg-boss";
+import type { Job, PgBoss } from "pg-boss";
 
 import { formatDateTime } from "@/shared/datetime";
 import { env } from "@/shared/config/env";
 import { db } from "@/shared/db/client";
 import { cliente, ordenServicio, reminder, type Cliente, type OrdenServicio, type Reminder } from "@/shared/db/schema";
 import { getBoss } from "@/shared/jobs/boss";
+import { withJobCapture } from "@/shared/jobs/capture";
 import { sendEmail } from "./providers/email";
 import { sendWhatsAppTemplate } from "./providers/whatsapp";
 import type { ReminderType } from "./schedule";
@@ -309,7 +310,15 @@ export type RegisterReminderWorkerDeps = { getBoss?: typeof getBoss };
 export async function registerReminderWorker(deps: RegisterReminderWorkerDeps = {}): Promise<void> {
   const boss = await (deps.getBoss ?? getBoss)();
   await ensureQueue(boss);
-  await boss.work(REMINDER_SEND_JOB, { localConcurrency: 1 }, async ([job]) => {
-    await runReminder((job.data as { reminderId: string }).reminderId);
-  });
+  await boss.work(
+    REMINDER_SEND_JOB,
+    { localConcurrency: 1 },
+    // Explicit <Job> — boss.work has no explicit ReqData generic here, so
+    // TypeScript can't infer withJobCapture's J from the surrounding
+    // contextual type alone (unlike inventory-sync/pdf-generation's
+    // `boss.work<Payload>(...)`, which supplies it).
+    withJobCapture<Job>(REMINDER_SEND_JOB, async ([job]) => {
+      await runReminder((job.data as { reminderId: string }).reminderId);
+    }),
+  );
 }

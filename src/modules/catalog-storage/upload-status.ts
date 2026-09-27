@@ -29,6 +29,7 @@ import type { JobWithMetadata } from "pg-boss";
 import { db } from "@/shared/db/client";
 import { catalogs } from "@/shared/db/schema";
 import { getBoss } from "@/shared/jobs/boss";
+import { withJobCapture } from "@/shared/jobs/capture";
 import { PDF_UPLOAD_JOB } from "../pdf-generation/enqueue";
 import type { PdfUploadPayload } from "../pdf-generation/worker";
 import { putObject } from "./r2";
@@ -56,6 +57,7 @@ type UploadDeps = {
   runRetentionForUser?: typeof runRetentionForUser;
   readFile?: typeof readFile;
   unlink?: typeof unlink;
+  getBoss?: typeof getBoss;
 };
 
 /**
@@ -99,9 +101,13 @@ export async function handlePdfUpload(job: UploadJobLike, deps: UploadDeps = {})
 }
 
 export async function registerPdfUploadWorker(deps: UploadDeps = {}): Promise<void> {
-  const boss = await getBoss();
+  const boss = await (deps.getBoss ?? getBoss)();
   await boss.createQueue(PDF_UPLOAD_JOB);
-  await boss.work(PDF_UPLOAD_JOB, { includeMetadata: true }, async (jobs: JobWithMetadata<PdfUploadPayload>[]) => {
-    await handlePdfUpload(jobs[0], deps);
-  });
+  await boss.work(
+    PDF_UPLOAD_JOB,
+    { includeMetadata: true },
+    withJobCapture(PDF_UPLOAD_JOB, async (jobs: JobWithMetadata<PdfUploadPayload>[]) => {
+      await handlePdfUpload(jobs[0], deps);
+    }),
+  );
 }
