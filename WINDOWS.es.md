@@ -290,6 +290,9 @@ git rev-parse --short HEAD    # anote esto: es el objetivo del rollback
 **La actualización:**
 
 ```powershell
+Stop-ScheduledTask DforceCatalogo
+Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force
+git checkout -- package-lock.json
 git pull
 npm.cmd ci
 powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 -SetupOnly
@@ -305,12 +308,21 @@ del respaldo necesita, ver "Respaldos" más abajo), lo que pide una vez la
 contraseña del superusuario `postgres`: si esta actualización corre sin
 supervisión, pásela con `-SuperPassword <clave>`.
 
-npm 12 omite los scripts de instalación hasta que se aprueban, y la aplicación
-los necesita para `bcrypt` (inicio de sesión) y `sharp` (imágenes): si
-`npm.cmd ci` imprime "install scripts blocked", siga lo que imprime ("Run
-`npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to
-allow") con `npm.cmd`, y apruebe los paquetes listados antes de
-`npm.cmd run build`.
+Las dos primeras líneas detienen la aplicación, porque `npm.cmd ci` borra
+`node_modules` y Windows se niega a eliminar un archivo nativo `.node` que la
+aplicación en ejecución tiene cargado (por ejemplo,
+`@next\swc-win32-x64-msvc\next-swc.win32-x64-msvc.node`): la falla es
+`npm error code EPERM ... unlink`. Ejecútelas desde un PowerShell de
+administrador; `install-service` al final vuelve a iniciar la aplicación. La
+tercera línea descarta la reescritura de `package-lock.json` que `npm.cmd ci`
+deja bajo npm 12, que de otro modo bloquearía el `git pull`.
+
+Las aprobaciones de scripts de instalación de npm 12 están confirmadas en
+`package.json` (`allowScripts`, fijadas a versiones exactas), así que
+`npm.cmd ci` los ejecuta; si una actualización de dependencias cambia una de
+esas versiones, npm 12 lo vuelve a bloquear e imprime la solución, que es
+`npm.cmd install-scripts approve <pkg>` seguido de hacer commit del cambio
+resultante en `package.json`.
 
 **Después:**
 
@@ -324,6 +336,9 @@ allow") con `npm.cmd`, y apruebe los paquetes listados antes de
 **Rollback**: primero el código, la base de datos solo si realmente cambió:
 
 ```powershell
+Stop-ScheduledTask DforceCatalogo
+Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force
+git checkout -- package-lock.json
 git checkout <commit written down above>
 npm.cmd ci
 npm.cmd run build

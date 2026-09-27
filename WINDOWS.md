@@ -274,6 +274,9 @@ git rev-parse --short HEAD    # write this down: it is the rollback target
 **The update:**
 
 ```powershell
+Stop-ScheduledTask DforceCatalogo
+Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force
+git checkout -- package-lock.json
 git pull
 npm.cmd ci
 powershell -ExecutionPolicy Bypass -File scripts\windows\standalone.ps1 -SetupOnly
@@ -288,11 +291,19 @@ by the backup's scratch-restore verification, see "Backups" below), which asks
 for the `postgres` superuser password once — pass it non-interactively with
 `-SuperPassword <clave>` if this update runs unattended.
 
-npm 12 skips install scripts until they are approved, and the app needs them
-for `bcrypt` (login) and `sharp` (images): if `npm.cmd ci` prints "install
-scripts blocked", follow what it prints ("Run `npm install-scripts ls` to
-review, or `npm install-scripts approve <pkg>` to allow") with `npm.cmd`, and
-approve the listed packages before `npm.cmd run build`.
+The first two lines stop the app, because `npm.cmd ci` deletes `node_modules`
+and Windows refuses to unlink a native `.node` file the running app has loaded
+(e.g. `@next\swc-win32-x64-msvc\next-swc.win32-x64-msvc.node`): the failure is
+`npm error code EPERM ... unlink`. Run them from an administrator PowerShell;
+`install-service` at the end starts the app again. The third line discards the
+`package-lock.json` rewrite that `npm.cmd ci` leaves behind under npm 12, which
+would otherwise block the `git pull`.
+
+npm 12's install-script approvals are committed in `package.json`
+(`allowScripts`, pinned to exact versions), so `npm.cmd ci` runs them; if a
+dependency upgrade changes one of those versions, npm 12 blocks it again and
+prints the fix, which is `npm.cmd install-scripts approve <pkg>` followed by
+committing the resulting `package.json` change.
 
 **After:**
 
@@ -305,6 +316,9 @@ approve the listed packages before `npm.cmd run build`.
 **Rollback** — the code first, the database only if it was actually changed:
 
 ```powershell
+Stop-ScheduledTask DforceCatalogo
+Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force
+git checkout -- package-lock.json
 git checkout <commit written down above>
 npm.cmd ci
 npm.cmd run build
