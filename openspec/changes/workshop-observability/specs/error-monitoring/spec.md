@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Server, edge, browser, and background-job error reporting to Sentry so app
+Server, browser, and background-job error reporting to Sentry so app
 and job failures are visible to the owner, with no behavior change when
 Sentry is not configured.
 
@@ -11,14 +11,14 @@ Sentry is not configured.
 ### Requirement: Sentry Disabled Without a DSN
 
 When `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` are both empty or unset, the
-system MUST NOT initialize the server, edge, or browser Sentry SDK, and MUST
+system MUST NOT initialize the server or browser Sentry SDK, and MUST
 NOT send any event or check-in. The app's behavior MUST be identical to its
 behavior before this change.
 
 #### Scenario: Empty DSNs produce no Sentry activity
 
 - GIVEN `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` are both unset
-- WHEN the app starts and an error occurs anywhere (server, edge, browser)
+- WHEN the app starts and an error occurs anywhere (server or browser; the app has no edge runtime code)
 - THEN no Sentry init runs and no network call to a Sentry ingest host is
   made
 - AND the app continues to behave exactly as it did before this change
