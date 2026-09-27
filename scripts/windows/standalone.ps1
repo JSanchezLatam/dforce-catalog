@@ -806,14 +806,26 @@ $(($listOut | ForEach-Object { "$_" }) -join "`n")" 'Revisá que pg_dump haya te
     $env:PGPASSWORD = $DbPassword
     try {
         & (PgExe 'dropdb.exe') -h $PgHost -p "$PgPort" -U $DbUser --if-exists 'dforce_verify' 2>&1 | Out-Null
-        & (PgExe 'createdb.exe') -h $PgHost -p "$PgPort" -U $DbUser 'dforce_verify' 2>&1 | Out-Null
-        $restoreOut = & (PgExe 'pg_restore.exe') -h $PgHost -p "$PgPort" -U $DbUser -d 'dforce_verify' `
-            '--exit-on-error' '--no-owner' $dumpFile 2>&1
-        $restoreCode = $LASTEXITCODE
+        $createOut = & (PgExe 'createdb.exe') -h $PgHost -p "$PgPort" -U $DbUser 'dforce_verify' 2>&1
+        $createCode = $LASTEXITCODE
+        if ($createCode -eq 0) {
+            $restoreOut = & (PgExe 'pg_restore.exe') -h $PgHost -p "$PgPort" -U $DbUser -d 'dforce_verify' `
+                '--exit-on-error' '--no-owner' $dumpFile 2>&1
+            $restoreCode = $LASTEXITCODE
+        }
     }
     finally {
         & (PgExe 'dropdb.exe') -h $PgHost -p "$PgPort" -U $DbUser --if-exists 'dforce_verify' 2>&1 | Out-Null
         $env:PGPASSWORD = $previous
+    }
+
+    # createdb failing (CREATEDB not granted, a leftover connection) says
+    # nothing about the dump — pg_restore never even ran, so this does NOT
+    # rename it, unlike the two genuine verification failures below.
+    if ($createCode -ne 0) {
+        Fail "No pude crear 'dforce_verify' para verificar el backup. Salida completa:
+
+$(($createOut | ForEach-Object { "$_" }) -join "`n")" 'El rol necesita CREATEDB — volvé a correr install-service, que otorga ese permiso.'
     }
 
     if ($restoreCode -ne 0) {
@@ -831,6 +843,24 @@ function Invoke-Backup {
     $script:BackupLogFile = Join-Path $BackupDir 'service.log'
     $script:SentryDsn = Get-EnvValue $EnvFile 'SENTRY_DSN'
     $script:BackupStep = 'inicio'
+
+    # The scheduled task bakes no DB connection (design decision 4 — no
+    # secrets on argv), so this run derives host/port/user/password/database
+    # from DATABASE_URL, falling back to the -PgHost/... params when absent.
+    # $script: is required, not cosmetic: New-Dump/Test-DumpRestorable are
+    # defined at script scope and would otherwise keep reading the original
+    # param-bound values, not a plain local reassignment made in this function.
+    $dbUrl = Get-EnvValue $EnvFile 'DATABASE_URL'
+    if ($dbUrl) {
+        $parsed = [Uri]$dbUrl
+        $userInfo = $parsed.UserInfo -split ':', 2
+        if ($userInfo[0]) { $script:DbUser = [Uri]::UnescapeDataString($userInfo[0]) }
+        if ($userInfo.Count -gt 1) { $script:DbPassword = [Uri]::UnescapeDataString($userInfo[1]) }
+        if ($parsed.Host) { $script:PgHost = $parsed.Host }
+        if ($parsed.Port -gt 0) { $script:PgPort = $parsed.Port }
+        $dbNameFromUrl = $parsed.AbsolutePath.TrimStart('/')
+        if ($dbNameFromUrl) { $script:DbName = $dbNameFromUrl }
+    }
 
     $script:PgBin = Resolve-PgBin
     if (-not $script:PgBin) {
@@ -880,15 +910,19 @@ R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET y volvé a correr el backup.
     $previousEnv = @{}
     foreach ($k in $r2Values.Keys) { $previousEnv[$k] = [Environment]::GetEnvironmentVariable($k); [Environment]::SetEnvironmentVariable($k, $r2Values[$k]) }
     try {
-        $LASTEXITCODE = 0
         $uploadOut = & $nodeExe (Join-Path $Root 'scripts\upload-backup.mjs') $item.FullName $script:BackupLogFile 2>&1
         $uploadCode = $LASTEXITCODE
     }
     finally {
         foreach ($k in $previousEnv.Keys) { [Environment]::SetEnvironmentVariable($k, $previousEnv[$k]) }
     }
-    if ($uploadCode -ne 0) {
-        Fail "La subida a R2 falló. Salida completa:
+    # Belt and braces: exit 0 alone doesn't prove both objects actually went up
+    # (item 4's silent-no-op class — a bad main() guard exits 0 having uploaded
+    # nothing). Both the dump and $script:BackupLogFile are always passed, so
+    # a real upload always prints exactly 2 "Subido:" lines.
+    $uploadedCount = ($uploadOut | Select-String -Pattern '^Subido: ').Count
+    if ($uploadCode -ne 0 -or $uploadedCount -lt 2) {
+        Fail "La subida a R2 falló (o subió menos objetos de los esperados: $uploadedCount de 2). Salida completa:
 
 $(($uploadOut | ForEach-Object { "$_" }) -join "`n")" 'Revisá las credenciales R2_* en .env y la conectividad de red.'
     }
@@ -994,19 +1028,12 @@ function Register-BackupTask([string] $resolvedNodeDir) {
         -StartWhenAvailable -RunOnlyIfNetworkAvailable `
         -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 1)
 
-    # Baked in only when non-default, same as -BackupDir/-NodeDir: a task
-    # registered against a non-default Postgres would otherwise fail every
-    # day with no way to tell why from Task Scheduler alone.
-    $extraParams = ''
-    if ($PgHost -ne 'localhost')       { $extraParams += " -PgHost `"$PgHost`"" }
-    if ($PgPort -ne 5432)              { $extraParams += " -PgPort $PgPort" }
-    if ($DbName -ne 'dforce_catalog')  { $extraParams += " -DbName `"$DbName`"" }
-    if ($DbUser -ne 'dforce')          { $extraParams += " -DbUser `"$DbUser`"" }
-    if ($DbPassword -ne 'dforce')      { $extraParams += " -DbPassword `"$DbPassword`"" }
-
+    # Only -BackupDir/-NodeDir are baked in — never -DbPassword (design decision
+    # 4: secrets never on argv, and never in a Task Scheduler definition either).
+    # Invoke-Backup derives the connection from DATABASE_URL in .env instead.
     $powershellExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-    $argumentLine = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{0}" backup -BackupDir "{1}" -NodeDir "{2}"{3}' `
-                    -f $PSCommandPath, $BackupDir, $resolvedNodeDir, $extraParams
+    $argumentLine = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "{0}" backup -BackupDir "{1}" -NodeDir "{2}"' `
+                    -f $PSCommandPath, $BackupDir, $resolvedNodeDir
     $action = New-ScheduledTaskAction -Execute $powershellExe -Argument $argumentLine -WorkingDirectory $Root
 
     $registerError = $null

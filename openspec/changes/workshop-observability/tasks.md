@@ -43,12 +43,12 @@ that works (upload script first, `.ps1` second) would merge a script nothing
 calls. PR1 declares the exception.
 
 - [x] 1.1 RED `scripts/upload-backup.test.mjs`: `buildUploads` returns `backups/<dump>` + `backups/<base>.service.log` keys; log omitted → dump only.
-- [x] 1.2 GREEN `scripts/upload-backup.mjs`: pure `buildUploads` + `S3Client{region:"auto", requestChecksumCalculation/responseChecksumValidation:"WHEN_REQUIRED"}`; `main()` guarded by `fileURLToPath(import.meta.url)===path.resolve(process.argv[1])`.
+- [x] 1.2 GREEN `scripts/upload-backup.mjs`: pure `buildUploads` + `S3Client{region:"auto", requestChecksumCalculation/responseChecksumValidation:"WHEN_REQUIRED"}`; `main()` guarded by `isMainModule` (GGA round 2: `realpathSync`-based, resolves symlinks/junctions/case — a plain `path.resolve` string compare could silently never run `main()`).
 - [x] 1.3 `standalone.ps1`: Tls12 line; `New-Dump`; verify pipeline (`pg_restore -l` → `dforce_verify` createdb/restore/dropdb in `finally`); `Send-CheckIn` (`in_progress`/`ok`/`error`, `monitor_config` upsert, `BACKUP_TIMEZONE` default `America/Panama`); `Fail` hook (log + error check-in + Sentry event naming the step, `exit 1`).
 - [x] 1.4 `Register-BackupTask` in `Install-BootTask` (idempotent, SYSTEM, Daily 12:00, `StartWhenAvailable`/`RunOnlyIfNetworkAvailable`); remove in `uninstall-service`; `LastTaskResult` in `status`.
 - [x] 1.5 `install-service`: grant `ALTER ROLE "dforce" CREATEDB` via superuser `Invoke-Psql`.
 - [x] 1.6 Mutation-verify 1.1: revert `buildUploads`, confirm the RED test fails by name.
-- [ ] 1.7 Manual proof (not unit-testable, pending on the workshop PC), must show all three: (a) `standalone.ps1` parses and runs under real PowerShell 5.1, dump+log land in R2, `ok` check-in; (b) a deliberately corrupted dump copy produces BOTH the `error` check-in AND the Sentry event naming the step; (c) `dforce_verify` is absent afterward in both the success and corrupted-dump runs. `pwsh` is unavailable on this machine (macOS, no PowerShell installed) so no local parse check ran either — only a brace/paren balance heuristic.
+- [ ] 1.7 Manual proof (not unit-testable, pending on the workshop PC), must show all four: (a) `standalone.ps1` parses and runs under real PowerShell 5.1, dump+log land in R2, `ok` check-in; (b) a deliberately corrupted dump copy produces BOTH the `error` check-in AND the Sentry event naming the step; (c) `dforce_verify` is absent afterward in both the success and corrupted-dump runs; (d) a run with a wrong `R2_SECRET_ACCESS_KEY` exits 1 and sends an `error` check-in naming the upload step (`subida a R2`), with nothing uploaded. `pwsh` is unavailable on this machine (macOS, no PowerShell installed) so no local parse check ran either — only a brace/paren balance heuristic.
 
 ## Phase 2: Backup Docs (WU2, PR2)
 
@@ -84,8 +84,7 @@ Local dump pruning in `%USERPROFILE%\dforce-backups`; macOS `standalone.sh` back
 Note for WU2 docs: `$BackupDir\service.log` is cumulative across runs and gets
 uploaded WHOLE under each dump's key, so it grows without bound and each R2
 copy after the first duplicates every prior run's lines — WU2 should decide
-whether to document this as-is or truncate/rotate it. (GGA fix round:
-`Register-BackupTask` now bakes `-PgHost`/`-PgPort`/`-DbName`/`-DbUser`/
-`-DbPassword` into the task's action line whenever any of the five differs
-from its script default, alongside the always-baked `-BackupDir`/`-NodeDir`
-— so a non-default install no longer registers a task that fails every day.)
+whether to document this as-is or truncate/rotate it. (GGA round 2: the task
+reads the connection from `DATABASE_URL` in `.env` at run time instead —
+`Register-BackupTask` bakes only `-BackupDir`/`-NodeDir`, never a password,
+onto the task's action line.)

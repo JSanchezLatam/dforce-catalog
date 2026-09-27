@@ -5,7 +5,7 @@
 // buildUploads is unit-tested — the S3Client half has no mock-free way to
 // test it here (AGENTS.md's injected-seam limit); the real-bucket smoke
 // test in tasks.md is its verification.
-import { createReadStream } from "node:fs";
+import { createReadStream, realpathSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -72,9 +72,19 @@ async function main() {
   }
 }
 
-// fileURLToPath, not .pathname: a URL pathname stays percent-encoded, so a
-// space in the checkout path never matches process.argv[1] (migrate.mjs lesson).
-if (fileURLToPath(import.meta.url) === path.resolve(process.argv[1] ?? "")) {
+// realpathSync, not a plain string/path.resolve compare: a junction, a
+// symlink, or a drive-letter case difference would otherwise make main()
+// never run — exit 0, nothing uploaded, no error anywhere.
+export function isMainModule(moduleUrl, invokedPath) {
+  if (!invokedPath) return false;
+  try {
+    return realpathSync(fileURLToPath(moduleUrl)) === realpathSync(invokedPath);
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule(import.meta.url, process.argv[1])) {
   main().catch((err) => {
     console.error("Falló la subida:", err);
     process.exit(1);
