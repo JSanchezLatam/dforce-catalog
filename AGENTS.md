@@ -250,9 +250,12 @@ waiting for the first employee to open the app from a second machine.
 gga run --pr-mode --diff-only
 ```
 
-Configured in `.gga` (v2.10.1): provider `claude`, `*.ts,*.tsx,*.js,*.jsx`,
-excluding only `*.d.ts`, rules from this file, `TIMEOUT="900"`. No environment
-variables needed. `gga run --ci` reviews just the last commit.
+Configured in `.gga` (v2.10.1): provider `claude`,
+`*.ts,*.tsx,*.js,*.jsx,*.mjs,*.ps1` (`.mjs` and `.ps1` added 2026-09-26, after
+the backup PR — three files, two of them under `scripts/` — came back "No
+matching files changed" with exit 0), excluding only `*.d.ts`, rules from this
+file, `TIMEOUT="900"`. No environment variables needed. `gga run --ci` reviews
+just the last commit.
 
 - **Run `gga config` first on any new machine.** GGA loads `.gga` via
   `source <(…)`, which is a silent no-op on the bash 3.2 macOS ships — every
