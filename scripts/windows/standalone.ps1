@@ -909,11 +909,18 @@ R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET y volvé a correr el backup.
     $r2Values = @{ R2_ENDPOINT = $r2Endpoint; R2_ACCESS_KEY_ID = $r2AccessKey; R2_SECRET_ACCESS_KEY = $r2SecretKey; R2_BUCKET = $r2Bucket }
     $previousEnv = @{}
     foreach ($k in $r2Values.Keys) { $previousEnv[$k] = [Environment]::GetEnvironmentVariable($k); [Environment]::SetEnvironmentVariable($k, $r2Values[$k]) }
+    # Node writes UTF-8, but PowerShell 5.1 decodes captured stdout with the
+    # console OEM code page, so 'Falló' would reach the log and Sentry as 'Fall├│'.
+    $previousOutputEncoding = [Console]::OutputEncoding
     try {
+        # Best-effort: without a console the setter throws, and garbled accents
+        # are not worth a failed backup.
+        try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
         $uploadOut = & $nodeExe (Join-Path $Root 'scripts\upload-backup.mjs') $item.FullName $script:BackupLogFile 2>&1
         $uploadCode = $LASTEXITCODE
     }
     finally {
+        try { [Console]::OutputEncoding = $previousOutputEncoding } catch { }
         foreach ($k in $previousEnv.Keys) { [Environment]::SetEnvironmentVariable($k, $previousEnv[$k]) }
     }
     # Belt and braces: exit 0 alone doesn't prove both objects actually went up
