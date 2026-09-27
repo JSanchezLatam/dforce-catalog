@@ -57,12 +57,12 @@ Build pairs (disjoint files): WU1 ∥ WU3, then WU2 ∥ WU4 (WU4 imports `@sentr
 
 ## Phase 4: Job Failure Wrapper (WU4, PR4, needs WU3)
 
-- [ ] 4.1 RED `src/shared/jobs/capture.test.ts`: `withJobCapture` calls `report` with `{job, jobId}` tags, then rethrows the same error unchanged.
-- [ ] 4.2 GREEN `src/shared/jobs/capture.ts`: `withJobCapture(job, handler, report = Sentry.captureException)`.
-- [ ] 4.3 Wrap the 4 `boss.work()` sites: `inventory-sync/job.ts`, `reminders/job.ts`, `catalog-storage/upload-status.ts`, `pdf-generation/worker.ts`.
-- [ ] 4.4 `reminders/job.test.ts`: assert the captured handler still rejects (retry/deadletter preserved).
-- [ ] 4.5 Mutation-verify 4.1: revert the rethrow, confirm the RED test fails by name.
-- [ ] 4.6 Manual proof: force a real job throw; Sentry event carries `job`/`jobId` tags AND pg-boss still marks the job failed/retry.
+- [x] 4.1 RED `src/shared/jobs/capture.test.ts`: `withJobCapture` calls `report` with `{job, jobId}` tags, then rethrows the same error unchanged.
+- [x] 4.2 GREEN `src/shared/jobs/capture.ts`: `withJobCapture(job, handler, report = Sentry.captureException)`.
+- [x] 4.3 Wrap the 4 `boss.work()` sites: `inventory-sync/job.ts`, `reminders/job.ts`, `catalog-storage/upload-status.ts`, `pdf-generation/worker.ts`.
+- [x] 4.4 `reminders/job.test.ts`: assert the captured handler still rejects (retry/deadletter preserved). Same case added to the other three sites' own test files (none had a `register*Worker` test before this WU).
+- [x] 4.5 Mutation-verify 4.1: revert the rethrow, confirm the RED test fails by name. Also mutation-verified per-site: removing `withJobCapture` at each of the 4 sites fails that site's new test by name.
+- [ ] 4.6 Manual proof (pending, workshop PC): force a real job throw; Sentry event carries `job`/`jobId` tags AND pg-boss still marks the job failed/retry.
 
 ## Not Tasked (follow-ups, not built)
 

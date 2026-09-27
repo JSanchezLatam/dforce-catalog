@@ -8,10 +8,21 @@
  * actual crux of this work unit, gets real (injected-dependency) unit
  * coverage instead of being untestable-by-association with Playwright.
  */
+import type { PgBoss } from "pg-boss";
 import { describe, expect, it, vi } from "vitest";
 
-import type { PdfBranding } from "./enqueue";
-import { resolveBranding, buildMeasurementProps, buildPrintProps, buildTemplateProps } from "./worker";
+import { PDF_GENERATE_JOB, type PdfBranding } from "./enqueue";
+import { resolveBranding, buildMeasurementProps, buildPrintProps, buildTemplateProps, registerPdfGenerateWorker } from "./worker";
+
+// WU4 (design.md decision 18) — capture.ts's withJobCapture defaults its
+// `report` param to Sentry.captureException; mocking it here lets the
+// registerPdfGenerateWorker test below assert on the real wiring without a
+// live Sentry transport. vi.hoisted is required because "./worker" above is
+// a STATIC import that resolves "@sentry/nextjs" via capture.ts before any
+// later bare top-level const would run (see reminders/job.test.ts's fuller
+// comment on this exact TDZ trap).
+const { captureException } = vi.hoisted(() => ({ captureException: vi.fn() }));
+vi.mock("@sentry/nextjs", () => ({ captureException }));
 
 describe("resolveBranding — D3 logo data-URI resolution", () => {
   it("returns null branding unchanged", async () => {
@@ -198,5 +209,28 @@ describe("buildTemplateProps — what both render passes are measured against", 
 
   it("gives the measuring pass no page at all when there are no products", () => {
     expect(buildMeasurementProps(buildTemplateProps(payload, null), []).productPages).toEqual([]);
+  });
+});
+
+describe("registerPdfGenerateWorker", () => {
+  it("wraps the boss.work handler with withJobCapture: a throw is reported with job/jobId tags and pg-boss still sees the rejection", async () => {
+    captureException.mockClear();
+    const createQueue = vi.fn().mockResolvedValue(undefined);
+    const work = vi.fn().mockResolvedValue(undefined);
+    const boss = { createQueue, work } as unknown as PgBoss;
+
+    await registerPdfGenerateWorker({ getBoss: async () => boss });
+
+    expect(work).toHaveBeenCalledWith(PDF_GENERATE_JOB, { localConcurrency: 1 }, expect.any(Function));
+    const registeredHandler = work.mock.calls[0][2] as (jobs: unknown[]) => Promise<void>;
+    // Empty jobs array: the site's `async ([job]) => ...` destructures
+    // `job` as undefined, so `job.data` throws synchronously — a
+    // deterministic failure that needs no real browser/DB.
+    await expect(registeredHandler([])).rejects.toBeInstanceOf(TypeError);
+
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(captureException).toHaveBeenCalledWith(expect.any(TypeError), {
+      tags: { job: PDF_GENERATE_JOB, jobId: "unknown" },
+    });
   });
 });

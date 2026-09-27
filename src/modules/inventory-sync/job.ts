@@ -4,6 +4,7 @@ import type { PgBoss } from "pg-boss";
 import { db } from "@/shared/db/client";
 import { producto, syncRuns, type SyncRun } from "@/shared/db/schema";
 import { getBoss } from "@/shared/jobs/boss";
+import { withJobCapture } from "@/shared/jobs/capture";
 import { fetchAllProducts, type SyncFilters } from "./client";
 import { parseProduct } from "./mapper";
 
@@ -177,15 +178,21 @@ export async function runSync(
   }
 }
 
+export type RegisterInventorySyncWorkerDeps = { getBoss?: typeof getBoss };
+
 /** Registers the pg-boss worker that actually executes `runSync` for both the weekly schedule and manual sends. */
-export async function registerInventorySyncWorker(): Promise<void> {
-  const boss = await getBoss();
+export async function registerInventorySyncWorker(deps: RegisterInventorySyncWorkerDeps = {}): Promise<void> {
+  const boss = await (deps.getBoss ?? getBoss)();
   await ensureQueue(boss);
   // Deviation from design.md's literal `teamSize:1`: pg-boss 12.26.2 (the
   // pinned version — confirmed via node_modules/pg-boss/dist/types.d.ts)
   // renamed that option to `localConcurrency`. Same intent: at most 1
   // concurrent inventory-sync job per node.
-  await boss.work<SyncPayload>(INVENTORY_SYNC_JOB, { localConcurrency: 1 }, async ([job]) => {
-    await runSync(job.data);
-  });
+  await boss.work<SyncPayload>(
+    INVENTORY_SYNC_JOB,
+    { localConcurrency: 1 },
+    withJobCapture(INVENTORY_SYNC_JOB, async ([job]) => {
+      await runSync(job.data);
+    }),
+  );
 }

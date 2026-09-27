@@ -23,6 +23,16 @@ import { sendWhatsAppTemplate } from "./providers/whatsapp";
 vi.mock("./providers/email", () => ({ sendEmail: vi.fn() }));
 vi.mock("./providers/whatsapp", () => ({ sendWhatsAppTemplate: vi.fn() }));
 
+// WU4 (design.md decision 18) — capture.ts's withJobCapture defaults its
+// `report` param to Sentry.captureException; mocking it here lets the
+// registerReminderWorker test below assert on the real wiring without a
+// live Sentry transport. `vi.hoisted` (not a bare top-level const, unlike
+// instrumentation.test.ts's mocks) is required here because "./job" above
+// is a STATIC import that resolves "@sentry/nextjs" via capture.ts before
+// any later top-level statement would run — a bare const hits its TDZ.
+const { captureException } = vi.hoisted(() => ({ captureException: vi.fn() }));
+vi.mock("@sentry/nextjs", () => ({ captureException }));
+
 const NOW = new Date("2026-07-26T12:00:00.000Z");
 
 function makeReminder(overrides: Partial<Reminder> = {}): Reminder {
@@ -632,5 +642,25 @@ describe("registerReminderWorker", () => {
 
     expect(createQueue).toHaveBeenCalledWith(REMINDER_DLQ);
     expect(work).toHaveBeenCalledWith(REMINDER_SEND_JOB, { localConcurrency: 1 }, expect.any(Function));
+  });
+
+  it("wraps the handler with withJobCapture: a throw is reported with job/jobId tags and pg-boss still sees the rejection (retry/deadletter preserved)", async () => {
+    captureException.mockClear();
+    const createQueue = vi.fn().mockResolvedValue(undefined);
+    const work = vi.fn().mockResolvedValue(undefined);
+    const boss = { createQueue, work } as unknown as PgBoss;
+
+    await registerReminderWorker({ getBoss: async () => boss });
+
+    const registeredHandler = work.mock.calls[0][2] as (jobs: unknown[]) => Promise<void>;
+    // Empty jobs array: the site's `async ([job]) => ...` destructures
+    // `job` as undefined, so `job.data` throws synchronously — a
+    // deterministic failure that needs no real DB.
+    await expect(registeredHandler([])).rejects.toBeInstanceOf(TypeError);
+
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(captureException).toHaveBeenCalledWith(expect.any(TypeError), {
+      tags: { job: REMINDER_SEND_JOB, jobId: "unknown" },
+    });
   });
 });

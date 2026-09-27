@@ -39,6 +39,7 @@ import { join } from "node:path";
 import { chromium, type Page } from "playwright";
 
 import { getBoss } from "@/shared/jobs/boss";
+import { withJobCapture } from "@/shared/jobs/capture";
 import type { CatalogTemplateBranding } from "@/shared/template/CatalogTemplate";
 import { getObject } from "../catalog-storage/r2";
 import { createPendingCatalog } from "../catalog-storage/queries";
@@ -276,25 +277,31 @@ export async function renderPdfBuffer(
   }
 }
 
+export type RegisterPdfGenerateWorkerDeps = { getBoss?: typeof getBoss };
+
 /** Registers the pg-boss worker — `localConcurrency:1` is R12.1's single active slot (same deviation from design.md's literal `teamSize:1` as inventory-sync/job.ts, confirmed via node_modules/pg-boss/dist/types.d.ts). */
-export async function registerPdfGenerateWorker(): Promise<void> {
-  const boss = await getBoss();
+export async function registerPdfGenerateWorker(deps: RegisterPdfGenerateWorkerDeps = {}): Promise<void> {
+  const boss = await (deps.getBoss ?? getBoss)();
   await boss.createQueue(PDF_GENERATE_JOB);
   await boss.createQueue(PDF_UPLOAD_JOB);
 
-  await boss.work<PdfGeneratePayload>(PDF_GENERATE_JOB, { localConcurrency: 1 }, async ([job]) => {
-    const buffer = await renderPdfBuffer(job.data);
-    const pdfBufferRef = await handoffPdfBuffer(job.data.catalogId, buffer);
-    // Risk-1 (PR8) — insert the catalogs row BEFORE enqueuing pdf-upload, so
-    // a crash at any later point still leaves a visible "pending" row.
-    await createPendingCatalog(job.data);
-    await boss.send(
-      PDF_UPLOAD_JOB,
-      { catalogId: job.data.catalogId, userId: job.data.userId, pdfBufferRef } satisfies PdfUploadPayload,
-      { retryLimit: 2, retryDelay: 30 }, // R11.5 — pg-boss's own native retry (see catalog-storage/upload-status.ts)
-    );
-    // Returning here resolves the job — pg-boss frees this worker's
-    // localConcurrency:1 slot right now, at "PDF generated", regardless of
-    // how long the decoupled upload+retention (catalog-storage) takes.
-  });
+  await boss.work<PdfGeneratePayload>(
+    PDF_GENERATE_JOB,
+    { localConcurrency: 1 },
+    withJobCapture(PDF_GENERATE_JOB, async ([job]) => {
+      const buffer = await renderPdfBuffer(job.data);
+      const pdfBufferRef = await handoffPdfBuffer(job.data.catalogId, buffer);
+      // Risk-1 (PR8) — insert the catalogs row BEFORE enqueuing pdf-upload, so
+      // a crash at any later point still leaves a visible "pending" row.
+      await createPendingCatalog(job.data);
+      await boss.send(
+        PDF_UPLOAD_JOB,
+        { catalogId: job.data.catalogId, userId: job.data.userId, pdfBufferRef } satisfies PdfUploadPayload,
+        { retryLimit: 2, retryDelay: 30 }, // R11.5 — pg-boss's own native retry (see catalog-storage/upload-status.ts)
+      );
+      // Returning here resolves the job — pg-boss frees this worker's
+      // localConcurrency:1 slot right now, at "PDF generated", regardless of
+      // how long the decoupled upload+retention (catalog-storage) takes.
+    }),
+  );
 }
