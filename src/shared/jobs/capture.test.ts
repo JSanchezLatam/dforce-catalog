@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import { withJobCapture } from "./capture";
 
 describe("withJobCapture", () => {
-  it("passes the resolved value through and never calls report on success", async () => {
+  it("resolves on success and never calls report", async () => {
     const handler = vi.fn().mockResolvedValue(undefined);
     const report = vi.fn();
     const wrapped = withJobCapture("reminder-send", handler, report);
