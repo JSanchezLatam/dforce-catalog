@@ -137,7 +137,7 @@ export function buildIndexSections(products: ProductRef[]): CatalogIndexSection[
 
 /** R5.5 — auto-derived from the current selection so the title updates live, with no free-text field to keep in sync. */
 export function deriveCatalogTitle(includedCategoryL1Names: string[]): string {
-  return includedCategoryL1Names.length > 0 ? `Catalog: ${includedCategoryL1Names.join(", ")}` : "Catalog";
+  return includedCategoryL1Names.length > 0 ? `Catálogo: ${includedCategoryL1Names.join(", ")}` : "Catálogo";
 }
 
 export type ImageTypeOverride = "transparent" | "opaque" | "low_res" | null;

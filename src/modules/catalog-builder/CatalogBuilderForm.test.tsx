@@ -434,7 +434,7 @@ describe("CatalogBuilderForm — product-id mode (D10)", () => {
   /**
    * `deriveCatalogTitle(uniqueL1s(categoryRefs))` has nothing to derive from
    * in this mode, so the L1s come off the returned ROWS instead. Without the
-   * fallback every seeded catalog would print the bare "Catalog".
+   * fallback every seeded catalog would print the bare "Catálogo".
    *
    * Read off the confirm dialog since PR F1: the preview used to print the
    * title on its cover, and with the preview gone the dialog is the one place
@@ -448,7 +448,7 @@ describe("CatalogBuilderForm — product-id mode (D10)", () => {
     await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
     await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
 
-    expect(await screen.findByText("Catalog: REPUESTOS, MOTOR")).toBeInTheDocument();
+    expect(await screen.findByText("Catálogo: REPUESTOS, MOTOR")).toBeInTheDocument();
   });
 
   /**
@@ -536,6 +536,19 @@ describe("CatalogBuilderForm — the selection arrives complete and stays revers
 
     expect(screen.getByRole("heading", { name: "Productos (3 de 3 seleccionados)" })).toBeInTheDocument();
     for (const p of THREE) expect(rowBox(p.name)).toBeChecked();
+  });
+
+  // "Todos" is bound to `String(candidates.length)`, and Base UI's bare
+  // `<SelectValue />` prints the VALUE — so the trigger read "3", a page size
+  // the list never offered, instead of the "Todos" the operator picked.
+  it("shows Todos in the page-size trigger once Todos is picked", async () => {
+    const user = await pickCategory();
+    const trigger = within(screen.getByText("Filas por página").parentElement!).getByRole("combobox");
+
+    await user.click(trigger);
+    await user.click(await screen.findByRole("option", { name: "Todos" }));
+
+    expect(trigger.querySelector('[data-slot="select-value"]')).toHaveTextContent(/^Todos$/);
   });
 
   /**
@@ -804,11 +817,11 @@ describe("CatalogBuilderForm — the category-tree flow is unaffected", () => {
     await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
     await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
 
-    expect(await screen.findByText("Catalog: Motor")).toBeInTheDocument();
+    expect(await screen.findByText("Catálogo: Motor")).toBeInTheDocument();
   });
 
   /**
-   * This used to wait for the preview's bare "Catalog" cover as its proof that
+   * This used to wait for the preview's bare "Catálogo" cover as its proof that
    * the form had finished its first paint. PR F1 took that surface away, so it
    * waits on the category control instead — a real element of the empty state,
    * and the one the operator clicks next.

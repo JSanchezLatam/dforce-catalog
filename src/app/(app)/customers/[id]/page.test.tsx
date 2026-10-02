@@ -187,3 +187,17 @@ describe("CustomerDetailPage — activation button permission gate (R21)", () =>
     expect(screen.queryByRole("button", { name: "Reactivar" })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * AGENTS.md: "Tests assert the Spanish string. Those are what catch an
+ * untranslated screen." Same wording as every other gated page.
+ */
+describe("CustomerDetailPage — read gate", () => {
+  it("refuses a session without customers.read in Spanish", async () => {
+    can.mockReturnValueOnce(false);
+
+    render(await renderPage());
+
+    expect(screen.getByText("No tenés permiso para ver esta página.")).toBeInTheDocument();
+  });
+});

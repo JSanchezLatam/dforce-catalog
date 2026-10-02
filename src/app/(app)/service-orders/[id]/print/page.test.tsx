@@ -300,10 +300,7 @@ describe("ServiceOrderPrintPage", () => {
 
     expect(can).toHaveBeenCalledWith({ id: "u1", role: "tecnico" }, "service-orders.read");
     // AGENTS.md: "Tests assert the Spanish string. Those are what catch an
-    // untranslated screen." Six pages already use this exact wording
-    // (`builder`, `catalogs`, `inventory`, `users`, `workshop-config`,
-    // `customers/[id]/vehicles/[vehicleId]`); five others still carry an
-    // English copy of the same sentence, which is its own change.
+    // untranslated screen." Every gated page uses this exact wording.
     expect(screen.getByText("No tenés permiso para ver esta página.")).toBeInTheDocument();
     // Not "the data happens to be absent" — the page must not have queried.
     expect(getOrdenServicioById).not.toHaveBeenCalled();

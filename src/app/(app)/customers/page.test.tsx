@@ -837,3 +837,17 @@ describe("CustomersPage — bulk activar/desactivar (WU5)", () => {
     expect(failure).toHaveTextContent("Ese cliente ya no existe. Recargá la página.");
   });
 });
+
+/**
+ * AGENTS.md: "Tests assert the Spanish string. Those are what catch an
+ * untranslated screen." Same wording as every other gated page.
+ */
+describe("CustomersPage — read gate", () => {
+  it("refuses a session without customers.read in Spanish", async () => {
+    can.mockReturnValueOnce(false);
+
+    render(await CustomersPage({ searchParams: Promise.resolve({}) }));
+
+    expect(screen.getByText("No tenés permiso para ver esta página.")).toBeInTheDocument();
+  });
+});

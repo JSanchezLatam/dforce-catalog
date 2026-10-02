@@ -13,6 +13,9 @@ import { SearchFilterInput } from "@/shared/ui/filters/SearchFilterInput";
 import { useUrlFilters } from "@/shared/ui/filters/useUrlFilters";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+// `items` for the stock select: a bare `<SelectValue />` prints the raw value
+// (`in-stock`) instead of the option's label.
+const STOCK_LABELS: Record<string, string> = { "in-stock": "En stock", "out-of-stock": "Sin stock" };
 
 /**
  * `id` and `name` are the screen the reported defect was measured on: one
@@ -110,6 +113,7 @@ export function InventoryFilters({
       <div className="flex flex-col gap-1">
         <Label>Stock</Label>
         <Select
+          items={STOCK_LABELS}
           value={selected.stockStatus ?? ""}
           onValueChange={(v) => applyFilter("stockStatus", v ?? "")}
         >
@@ -118,8 +122,8 @@ export function InventoryFilters({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="">Todos</SelectItem>
-            <SelectItem value="in-stock">En stock</SelectItem>
-            <SelectItem value="out-of-stock">Sin stock</SelectItem>
+            <SelectItem value="in-stock">{STOCK_LABELS["in-stock"]}</SelectItem>
+            <SelectItem value="out-of-stock">{STOCK_LABELS["out-of-stock"]}</SelectItem>
           </SelectContent>
         </Select>
       </div>

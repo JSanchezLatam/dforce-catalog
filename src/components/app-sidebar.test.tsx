@@ -45,7 +45,7 @@ const NAV_GROUPS: NavGroup[] = [
         id: "config-catalogos",
         label: "Config. de catálogos",
         icon: "template-config",
-        children: [{ kind: "link", href: "/template-config", label: "Configuración de template", icon: "template-config" }],
+        children: [{ kind: "link", href: "/template-config", label: "Configuración de plantillas", icon: "template-config" }],
       },
     ],
   },
@@ -134,12 +134,12 @@ describe("AppSidebar — collapsible nav groups", () => {
 
     const parentTrigger = screen.getByRole("button", { name: "Config. de catálogos" });
     expect(parentTrigger).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("link", { name: "Configuración de template" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Configuración de plantillas" })).toBeInTheDocument();
 
     await user.click(parentTrigger);
 
     expect(parentTrigger).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("link", { name: "Configuración de template" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Configuración de plantillas" })).not.toBeInTheDocument();
     // The parent's own group ("Configuración") must stay open — its sibling
     // link must still be present.
     expect(screen.getByRole("link", { name: "Config. del CRM" })).toBeInTheDocument();

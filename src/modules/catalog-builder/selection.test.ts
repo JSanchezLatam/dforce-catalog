@@ -65,11 +65,11 @@ describe("buildIndexSections (R5.5/5.6)", () => {
 
 describe("deriveCatalogTitle (R5.5)", () => {
   it("joins the included L1 category names", () => {
-    expect(deriveCatalogTitle(["Motor", "Accesorios"])).toBe("Catalog: Motor, Accesorios");
+    expect(deriveCatalogTitle(["Motor", "Accesorios"])).toBe("Catálogo: Motor, Accesorios");
   });
 
   it("falls back to a plain title with no categories selected", () => {
-    expect(deriveCatalogTitle([])).toBe("Catalog");
+    expect(deriveCatalogTitle([])).toBe("Catálogo");
   });
 });
 
