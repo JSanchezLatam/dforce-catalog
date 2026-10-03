@@ -54,12 +54,25 @@ beforeEach(() => {
 });
 
 describe("TemplateConfigForm — gallery picker", () => {
-  it("renders exactly the one registry entry, pre-selected as the default", () => {
+  it("renders both registry entries, with the classic one pre-selected as the default", () => {
     render(<TemplateConfigForm initialConfig={null} workshopConfig={null} />);
 
     const radio = screen.getByRole("radio", { name: /Dforce Clásico/ });
     expect(radio).toBeChecked();
-    expect(screen.getAllByRole("radio")).toHaveLength(1);
+    expect(screen.getByRole("radio", { name: /Portada completa/ })).not.toBeChecked();
+    expect(screen.getAllByRole("radio")).toHaveLength(2);
+  });
+
+  // The preview carries a title shaped like a real one ("Catálogo: <text>"), so
+  // the full-cover template shows the split lead + heavy main line it will print.
+  it("previews the full-cover title split once that template is picked", async () => {
+    const user = userEvent.setup();
+    render(<TemplateConfigForm initialConfig={null} workshopConfig={null} />);
+
+    await user.click(screen.getByRole("radio", { name: /Portada completa/ }));
+
+    expect(screen.getByText("Catálogo:")).toBeInTheDocument();
+    expect(screen.getByText("Productos")).toBeInTheDocument();
   });
 
   // The legacy branding inputs (logo URL, colors, typography, cover text)

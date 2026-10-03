@@ -4,6 +4,9 @@
  * without a browser or a database. `worker.ts` is the only file in this
  * module that imports Playwright.
  */
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
 import { CatalogTemplate, GRID_COLUMNS, type CatalogTemplateProps, type ProductPrintRef } from "@/shared/template/CatalogTemplate";
 import { getTemplate } from "@/shared/template/registry";
 
@@ -72,6 +75,34 @@ export function chunkProducts(
   return pages;
 }
 
+const FONTS_DIR = path.join(process.cwd(), "src/shared/template/fonts");
+let inlinedFontCss: Promise<string> | undefined;
+
+/**
+ * `saira.css` with each `url("./x.woff2")` swapped for a base64 `data:` URI.
+ * `setContent` gives the page no origin, so a relative URL would never load,
+ * and the workshop PC may be offline. One CSS file stays the source of truth
+ * (the preview imports the same one). Memoised: the files never change at
+ * runtime, and the worker renders twice per job.
+ */
+function loadInlinedFontCss(): Promise<string> {
+  inlinedFontCss ??= (async () => {
+    const css = await readFile(path.join(FONTS_DIR, "saira.css"), "utf8");
+    const files = [...css.matchAll(/url\("\.\/([^"]+\.woff2)"\)/g)].map((match) => match[1]);
+    const uris = new Map(
+      await Promise.all(
+        files.map(async (file) => [file, `data:font/woff2;base64,${(await readFile(path.join(FONTS_DIR, file))).toString("base64")}`] as const),
+      ),
+    );
+    return css.replace(/url\("\.\/([^"]+\.woff2)"\)/g, (_, file: string) => `url("${uris.get(file)}")`);
+  })();
+  // A failed read must not be cached forever.
+  inlinedFontCss.catch(() => {
+    inlinedFontCss = undefined;
+  });
+  return inlinedFontCss;
+}
+
 /**
  * R6.1 — renders the SAME `CatalogTemplate` component the builder's live
  * preview uses (Risk-5, design.md "New Risks Flagged" #5) to a full HTML
@@ -98,6 +129,9 @@ export async function renderCatalogHtml(props: CatalogTemplateProps): Promise<st
   // of quiet duplicate the packing above must not end up measuring against.
   const { renderToStaticMarkup } = await import("react-dom/server");
   const body = renderToStaticMarkup(CatalogTemplate(props));
+  // Only a template that brings its own cover sets type in Saira; shipping
+  // ~130KB of base64 into every Clásico document (twice per job) would be waste.
+  const fontCss = props.branding && getTemplate(props.branding.templateId).Cover ? await loadInlinedFontCss() : "";
   return `<!DOCTYPE html>
 <html>
   <head>
@@ -112,6 +146,7 @@ export async function renderCatalogHtml(props: CatalogTemplateProps): Promise<st
       * { box-sizing: border-box; }
       /* The registry font already carries its own fallback ("Arial, sans-serif"),
          so appending another one produced "..., sans-serif, sans-serif". */
+      ${fontCss}
       body { font-family: ${props.branding ? getTemplate(props.branding.templateId).font : "sans-serif"}; margin: 0; -webkit-font-smoothing: antialiased; }
       /* Deliberately NO global \`img { max-width: 100% }\`. The cover photo is
          902px wide on an 816px sheet and hangs off the right edge by design

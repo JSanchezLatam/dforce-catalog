@@ -37,16 +37,16 @@ Rule for every task pair: RED test, confirm red, GREEN, then mutation-verify (re
 
 ## WU2: Portada completa (PR 2)
 
-- [ ] 2.1 RED: registry has 2 entries, `KNOWN_TEMPLATE_IDS` includes `full-cover`, gallery shows 2 radios (`TemplateConfigForm.test.tsx:62`). GREEN: `template-ids.ts`, `registry.ts`, stub `full-cover.tsx`.
-- [ ] 2.2 RED: Clásico render has no `Saira` and no `mix-blend-mode:screen`; existing `render.test.ts` and `CatalogTemplate.test.ts` pass unedited.
-- [ ] 2.3 GREEN `registry-types.ts` (`CoverProps`, `BackProps`, `Cover?`, `Back?`) and `CatalogTemplate.tsx` seams: wrap `:630-700`, add `&& !template.Back` at `:934` plus sibling block. Zero modified lines inside `:630-700` and `:935-1071`; check the diff.
-- [ ] 2.4 RED `full-cover.test.tsx`: first-`": "` split (lead 54px, main 800); no `": "` is all main; `titleSize` 118/84/64 at 12/24 chars; no photo gives `#0b0b0b` and no `<img>`; no logo gives no `<img>`; no name and no `coverText` omits the divider.
-- [ ] 2.5 GREEN `Cover` per `mockup/cover-and-back.html`: gradient, logo `mix-blend-mode: screen`, red rule, balance wrap, 2 lines max.
-- [ ] 2.6 RED back: rows mirror the presence filter, socials, footer "Precios sujetos a cambio sin previo aviso"; no contact gives no back sheet; no photo gives no strip. GREEN `Back` (lucide icons keyed by row).
-- [ ] 2.7 Vendor 6 latin Saira woff2, `OFL.txt` and `saira.css` into `src/shared/template/fonts/`.
-- [ ] 2.8 RED `render.test.ts`: HTML has `data:font/woff2;base64` `@font-face` and no `url(./`. GREEN `render.ts` inlining (memoised read). Import CSS in `TemplateConfigForm.tsx`; `PREVIEW_TITLE = "Catálogo: Productos"`.
-- [ ] 2.9 RED `worker` test: `document.fonts.ready` awaited before `page.pdf`. GREEN `worker.ts:274`.
-- [ ] 2.10 Mutation-verify 2.1-2.9 by name.
+- [x] 2.1 RED: registry has 2 entries, `KNOWN_TEMPLATE_IDS` includes `full-cover`, gallery shows 2 radios (`TemplateConfigForm.test.tsx:62`). GREEN: `template-ids.ts`, `registry.ts`, stub `full-cover.tsx`.
+- [x] 2.2 RED: Clásico render has no `Saira` and no `mix-blend-mode:screen`; existing `render.test.ts` and `CatalogTemplate.test.ts` pass unedited.
+- [x] 2.3 GREEN `registry-types.ts` (`CoverProps`, `BackProps`, `Cover?`, `Back?`) and `CatalogTemplate.tsx` seams: wrap `:630-700`, add `&& !template.Back` at `:934` plus sibling block. Zero modified lines inside `:630-700` and `:935-1071`; check the diff.
+- [x] 2.4 RED `full-cover.test.tsx`: first-`": "` split (lead 54px, main 800); no `": "` is all main; `titleSize` 118/84/64 at 12/24 chars; no photo gives `#0b0b0b` and no `<img>`; no logo gives no `<img>`; no name and no `coverText` omits the divider.
+- [x] 2.5 GREEN `Cover` per `mockup/cover-and-back.html`: gradient, logo `mix-blend-mode: screen`, red rule, balance wrap, 2 lines max.
+- [x] 2.6 RED back: rows mirror the presence filter, socials, footer "Precios sujetos a cambio sin previo aviso"; no contact gives no back sheet; no photo gives no strip. GREEN `Back` (lucide icons keyed by row).
+- [x] 2.7 Vendor 6 latin Saira woff2, `OFL.txt` and `saira.css` into `src/shared/template/fonts/`.
+- [x] 2.8 RED `render.test.ts`: HTML has `data:font/woff2;base64` `@font-face` and no `url(./`. GREEN `render.ts` inlining (memoised read). Import CSS in `TemplateConfigForm.tsx`; `PREVIEW_TITLE = "Catálogo: Productos"`.
+- [x] 2.9 RED `worker` test: `document.fonts.ready` awaited before `page.pdf`. GREEN `worker.ts:274`.
+- [x] 2.10 Mutation-verify 2.1-2.9 by name.
 
 ## Verification tests cannot cover
 

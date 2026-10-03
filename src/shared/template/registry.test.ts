@@ -35,4 +35,17 @@ describe("CATALOG_TEMPLATES", () => {
     const ids = CATALOG_TEMPLATES.map((template) => template.id).sort();
     expect(ids).toEqual([...KNOWN_TEMPLATE_IDS].sort());
   });
+
+  it("registers the full-cover template next to the classic one, in gallery order", () => {
+    expect(CATALOG_TEMPLATES.map((template) => template.id)).toEqual(["dforce-classic", "full-cover"]);
+    expect(KNOWN_TEMPLATE_IDS).toContain("full-cover");
+    expect(getTemplate("full-cover").name).toBe("Portada completa");
+  });
+
+  it("gives only the full-cover template the cover and back seams", () => {
+    expect(getTemplate("full-cover").Cover).toBeTypeOf("function");
+    expect(getTemplate("full-cover").Back).toBeTypeOf("function");
+    expect(getTemplate("dforce-classic").Cover).toBeUndefined();
+    expect(getTemplate("dforce-classic").Back).toBeUndefined();
+  });
 });

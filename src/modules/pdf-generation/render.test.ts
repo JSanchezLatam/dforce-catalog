@@ -901,3 +901,112 @@ describe("renderCatalogHtml — product prices", () => {
     expect(html).toMatch(/>Venta<\/span><span[^>]*>\$45\.00</);
   });
 });
+
+/**
+ * Template seams (catalog-cover-templates WU2). Clásico must render exactly as
+ * it did before the seams existed: its output carries nothing of Saira and no
+ * screen blend. The full-cover template must replace the cover and the contact
+ * sheet through `CatalogTemplate`, which still owns the `<Sheet>` wrappers.
+ */
+describe("renderCatalogHtml — cover and back seams", () => {
+  const contact = {
+    name: "DForce Car Audio",
+    phone: "203-7212",
+    whatsapp: null,
+    email: null,
+    address: "Rio Abajo, Calle 14.",
+    hours: null,
+    website: null,
+    socialHandles: { Instagram: "@dforcecar" },
+  };
+  const render = (templateId: string, withContact = true) =>
+    renderCatalogHtml({
+      title: "Catálogo: Repuestos",
+      branding: {
+        templateId,
+        logoUrl: "data:image/jpeg;base64,AAAA",
+        coverImageUrl: "data:image/jpeg;base64,BBBB",
+        coverText: "Catálogo de productos",
+        contact: withContact ? contact : null,
+      },
+      sections: [],
+    });
+  const count = (html: string, needle: string) => html.split(needle).length - 1;
+
+  it("Clásico output carries no Saira and no screen blend", async () => {
+    const html = await render("dforce-classic");
+
+    expect(html).toContain('data-sheet="cover"');
+    expect(html).toContain('data-sheet="contact"');
+    expect(html).not.toContain("Saira");
+    expect(html).not.toContain("mix-blend-mode:screen");
+  });
+
+  it("full-cover swaps the cover for its own and keeps exactly one cover sheet", async () => {
+    const html = await render("full-cover");
+
+    expect(count(html, 'data-sheet="cover"')).toBe(1);
+    expect(html).toContain("Saira Condensed");
+    expect(html).toContain("mix-blend-mode:screen");
+    // The Clásico wedge is the marker of the stock cover.
+    expect(html).not.toContain("clip-path:polygon(0 64%");
+  });
+
+  it("full-cover swaps the contact sheet for its own, exactly one, same disclaimer", async () => {
+    const html = await render("full-cover");
+    const back = html.slice(html.indexOf('data-sheet="contact"'));
+
+    expect(count(html, 'data-sheet="contact"')).toBe(1);
+    expect(count(html, "Precios sujetos a cambio sin previo aviso")).toBe(1);
+    expect(back).toContain("TELÉFONO");
+    expect(back).toContain("203-7212");
+    expect(back).toContain("DIRECCIÓN");
+    // Presence filter, as in Clásico: unset fields print no label at all.
+    expect(back).not.toContain("WHATSAPP");
+    expect(back).toContain("@dforcecar");
+    expect(html).not.toContain("SEGUINOS EN REDES");
+  });
+
+  it("full-cover prints no contact sheet when there is nothing to put on it", async () => {
+    const html = await render("full-cover", false);
+
+    expect(html).toContain('data-sheet="cover"');
+    expect(html).not.toContain('data-sheet="contact"');
+  });
+});
+
+/**
+ * The worker hands Chromium a bare HTML string via `setContent`, which has no
+ * origin to resolve a `url(./x.woff2)` against, and the workshop PC may be
+ * offline. So the fonts must travel INSIDE the document, as data URIs.
+ */
+describe("renderCatalogHtml — vendored Saira fonts", () => {
+  const withTemplate = (templateId: string) =>
+    renderCatalogHtml({ title: "C", branding: { templateId, logoUrl: null, coverText: null }, sections: [] });
+
+  it("inlines every Saira face as a woff2 data URI for the full-cover template", async () => {
+    const html = await withTemplate("full-cover");
+
+    expect(html.match(/@font-face/g)).toHaveLength(4);
+    expect(html.match(/src: url\("data:font\/woff2;base64,[A-Za-z0-9+/=]{1000,}"\)/g)).toHaveLength(4);
+    expect(html).toContain('font-family: "Saira Condensed"');
+    expect(html).toContain('font-family: "Saira"');
+    expect(html).not.toContain("url(./");
+    expect(html).not.toContain('url("./');
+  });
+
+  it("leaves the stylesheet of a template that never uses Saira without any font payload", async () => {
+    const html = await withTemplate("dforce-classic");
+
+    expect(html).not.toContain("@font-face");
+    expect(html).not.toContain("base64");
+  });
+
+  it("embeds real woff2 bytes, not placeholders", async () => {
+    const html = await withTemplate("full-cover");
+    const payload = html.match(/data:font\/woff2;base64,([A-Za-z0-9+/=]+)/)![1];
+
+    // The woff2 container signature.
+    expect(Buffer.from(payload, "base64").subarray(0, 4).toString("latin1")).toBe("wOF2");
+  });
+});
