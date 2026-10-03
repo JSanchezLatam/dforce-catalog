@@ -33,7 +33,7 @@ function toFormState(config: TemplateConfig | null): FormState {
 
 /**
  * The title the preview's cover and index carry. A catalog's real title is
- * derived from the selection that produced it (`deriveCatalogTitle`), which
+ * typed by the operator in the builder (`formatCatalogTitle`), which
  * this screen has none of — so it says what it is. Spanish, like everything
  * printed on the sheet.
  */

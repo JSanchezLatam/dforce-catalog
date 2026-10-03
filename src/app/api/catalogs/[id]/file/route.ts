@@ -6,6 +6,22 @@ import { getCatalogById } from "@/modules/catalog-storage/queries";
 import { getObject } from "@/modules/catalog-storage/r2";
 
 /**
+ * `catalogs.title` is operator-typed, so it can hold a `"` (ends the quoted
+ * filename early) or a character above U+00FF (`Headers` throws on it).
+ * RFC 6266: an ASCII `filename=` fallback for old clients plus the exact
+ * title in `filename*`, percent-encoded with RFC 5987's stricter attr-char set.
+ */
+function contentDisposition(disposition: "inline" | "attachment", title: string): string {
+  const name = `${title}.pdf`;
+  const fallback = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x20-\x7e]|["\\]/g, "_");
+  const encoded = encodeURIComponent(name).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
+
+/**
  * R7.3/7.4 — one route serves both in-browser preview (default,
  * `Content-Disposition: inline`) and download (`?download=1`, `attachment`),
  * so there's exactly one place that checks ownership + upload_status + R2
@@ -52,7 +68,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   return new NextResponse(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `${isDownload ? "attachment" : "inline"}; filename="${catalog.title}.pdf"`,
+      "Content-Disposition": contentDisposition(isDownload ? "attachment" : "inline", catalog.title),
     },
   });
 }
