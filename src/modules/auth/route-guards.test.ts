@@ -45,6 +45,9 @@ export const ROUTE_GUARDS: Record<
   "/api/service-orders/[id]": { PATCH: "service-orders.write" },
   "/api/inventory-sync/manual": { GET: "sync.manual", POST: "sync.manual" },
   "/api/template-config": { GET: "template.edit", POST: "template.edit" },
+  // Per-template cover image (catalog-cover-templates WU3a): template config,
+  // so it shares `template.edit` with the route above, GET included.
+  "/api/template-config/cover-image/[templateId]": { GET: "template.edit", POST: "template.edit", DELETE: "template.edit" },
   "/api/workshop-config": { GET: "workshop.read", POST: "workshop.edit" },
   "/api/workshop-config/logo": { GET: "workshop.read", POST: "workshop.edit", DELETE: "workshop.edit" },
   "/api/workshop-config/cover-image": { GET: "workshop.read", POST: "workshop.edit", DELETE: "workshop.edit" },

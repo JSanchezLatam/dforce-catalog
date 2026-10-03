@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Configuración de template: imagen de portada por plantilla</title>
+<!--
+  WU3 mockup. Reproduces /template-config as it renders today
+  (src/app/(app)/template-config/page.tsx, TemplateConfigForm.tsx,
+  app-sidebar.tsx) in the light shadcn neutral palette (globals.css:81-116),
+  plus the one addition: an image slot under each gallery entry. The slot is
+  the existing LogoUploadField (native file input + "Eliminar"), raised to
+  44px targets. The Clásico thumbnail is a neutral placeholder (the real one
+  is the workshop's white car on grey, which is not in the repo); Portada
+  completa uses login-hero.jpg as a stand-in. A toast confirms the upload.
+-->
+<style>
+  :root {
+    --background: hsl(0 0% 100%); --foreground: hsl(240 10% 3.9%);
+    --card: hsl(0 0% 100%); --primary: hsl(240 5.9% 10%); --primary-foreground: hsl(0 0% 98%);
+    --muted: hsl(240 4.8% 95.9%); --muted-foreground: hsl(240 3.8% 46.1%);
+    --border: hsl(240 5.9% 90%); --input: hsl(240 5.9% 90%); --ring: hsl(240 5.9% 10%);
+    --sidebar: hsl(0 0% 98%); --sidebar-foreground: hsl(240 5.3% 26.1%);
+    --sidebar-accent: hsl(240 4.8% 95.9%); --sidebar-border: hsl(220 13% 91%);
+    --success: hsl(142 71% 45%); --radius: 0.5rem;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; width: 1280px; font-family: Geist, system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--foreground); background: var(--background); font-size: 14px; }
+  .shell { display: flex; min-height: 1180px; }
+  aside { width: 256px; flex: none; background: var(--sidebar); border-right: 1px solid var(--sidebar-border); color: var(--sidebar-foreground); display: flex; flex-direction: column; padding: 8px; }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 8px; height: 48px; font-weight: 600; color: var(--foreground); }
+  .brand .logo { width: 32px; height: 32px; border-radius: 8px; background: #111; color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+  .group-label { display: flex; justify-content: space-between; padding: 0 8px; height: 32px; align-items: center; font-size: 12px; color: hsl(240 5.3% 26.1% / .7); font-weight: 500; }
+  .sep { height: 1px; background: var(--sidebar-border); margin: 4px 8px; }
+  .item { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; border-radius: 6px; font-size: 14px; }
+  .item svg { width: 16px; height: 16px; flex: none; }
+  .sub { margin-left: 14px; padding-left: 10px; border-left: 1px solid var(--sidebar-border); }
+  .item.active { background: var(--sidebar-accent); font-weight: 500; color: var(--foreground); }
+  .spacer { flex: 1; }
+  main { flex: 1; padding: 24px 0; }
+  .page { padding: 32px; }
+  h1 { margin: 0 0 24px; font-size: 32px; font-weight: 700; }
+  .card { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 24px; box-shadow: 0 1px 2px rgb(0 0 0 / .04); }
+  .stack { display: flex; flex-direction: column; gap: 24px; }
+  h2 { margin: 0 0 12px; font-size: 18px; font-weight: 600; }
+  .gallery { display: flex; flex-wrap: wrap; gap: 24px; }
+  .entry { display: flex; flex-direction: column; gap: 12px; width: 300px; }
+  .tile { display: flex; flex-direction: column; align-items: center; gap: 8px; border: 1px solid var(--input); border-radius: 8px; padding: 12px; align-self: flex-start; }
+  .tile.checked { border-color: var(--ring); }
+  .tile input { margin: 0; accent-color: var(--primary); }
+  .swatch { width: 96px; height: 124px; background: #111; border: 2px solid #D42027; border-radius: 4px; }
+  .field { display: grid; gap: 8px; }
+  label.lbl { font-size: 14px; font-weight: 500; }
+  .thumb { width: 96px; height: 96px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: #fff; }
+  .thumb img { width: 100%; height: 100%; object-fit: contain; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .file { display: flex; align-items: center; gap: 8px; min-height: 44px; width: 220px; border: 1px solid var(--input); border-radius: 8px; padding: 0 10px; font-size: 13px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; }
+  .file b { font-weight: 500; color: var(--foreground); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 12px; border-radius: 8px; font-size: 14px; font-weight: 500; border: 1px solid var(--border); background: var(--background); }
+  .btn.primary { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); height: 32px; min-height: 0; align-self: flex-start; padding: 0 10px; }
+  .help { margin: 0; font-size: 12px; color: var(--muted-foreground); line-height: 1.4; }
+  .select { display: flex; justify-content: space-between; align-items: center; height: 32px; border: 1px solid var(--input); border-radius: 8px; padding: 0 10px; }
+  .preview { border: 1px solid var(--border); border-radius: 12px; padding: 16px; max-height: 70vh; overflow: hidden; }
+  .sheet { position: relative; width: 490px; height: 634px; overflow: hidden; background: #0b0b0b; color: #fff; }
+  .sheet img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .sheet .shade { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,.92) 0%, rgba(0,0,0,.35) 45%, rgba(0,0,0,.85) 100%); }
+  .sheet .title { position: absolute; left: 36px; right: 36px; bottom: 48px; font-family: "Saira Condensed", "Arial Narrow", sans-serif; }
+  .sheet .rule { width: 56px; height: 4px; background: #D42027; margin-bottom: 14px; }
+  .sheet .lead { font-size: 32px; font-weight: 300; text-transform: uppercase; }
+  .sheet .main { font-size: 70px; font-weight: 800; line-height: .9; text-transform: uppercase; }
+  .sheet .brandmark { position: absolute; top: 30px; left: 36px; font-weight: 800; letter-spacing: .08em; font-size: 20px; }
+  .toast { position: fixed; right: 16px; bottom: 16px; display: flex; align-items: center; gap: 8px; border-radius: 8px; padding: 12px 16px; background: var(--success); color: #fff; font-size: 14px; box-shadow: 0 4px 6px rgb(0 0 0 / .1); }
+  .note { position: absolute; font-size: 12px; background: #fff7d6; border: 1px solid #e6c200; color: #5a4a00; padding: 4px 8px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside>
+    <div class="brand"><span class="logo">DF</span>Dforce</div>
+    <div class="group-label">CRM <span>⌄</span></div>
+    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg>Clientes</div>
+    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg>Órdenes de servicio</div>
+    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/></svg>Inventario</div>
+    <div class="sep"></div>
+    <div class="group-label">Catálogo <span>⌄</span></div>
+    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Generar Catálogos</div>
+    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V5a2 2 0 0 1 2-2h14v16H6a2 2 0 0 0-2 2"/></svg>Catálogos Generados</div>
+    <div class="spacer"></div>
+    <div class="sep"></div>
+    <div class="group-label">Configuración <span>⌄</span></div>
+    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Config. del CRM</div>
+    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Config. de catálogos <span style="margin-left:auto">⌄</span></div>
+    <div class="sub"><div class="item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Configuración de template</div></div>
+    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4"/></svg>Gestión de usuarios</div>
+    <div class="sep"></div>
+    <div class="item" style="height:48px"><span class="logo" style="width:32px;height:32px;border-radius:8px;background:var(--primary);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700">J</span><span style="display:grid;line-height:1.2"><b style="font-weight:600;color:var(--foreground)">Jorge</b><span style="font-size:12px;color:var(--muted-foreground)">Administrador</span></span></div>
+  </aside>
+
+  <main>
+    <div class="page">
+      <h1>Template configuration</h1>
+      <div class="stack">
+        <div class="card">
+          <div class="stack" style="gap:16px">
+            <div>
+              <h2>Plantilla del catálogo</h2>
+              <div class="gallery">
+
+                <div class="entry">
+                  <label class="tile"><input type="radio" name="t" /><span class="swatch"></span><span>Dforce Clásico</span></label>
+                  <div class="field">
+                    <label class="lbl">Imagen de portada de Dforce Clásico</label>
+                    <div class="thumb" style="background:#e6e6e6;display:grid;place-items:center">
+                      <svg width="64" height="40" viewBox="0 0 64 40" aria-hidden="true"><path d="M6 28h52v-6l-8-3-8-9H22l-9 9-7 2z" fill="#fff" stroke="#bdbdbd"/><circle cx="18" cy="29" r="5" fill="#555"/><circle cx="46" cy="29" r="5" fill="#555"/></svg>
+                    </div>
+                    <div class="row"><span class="file"><b>Seleccionar archivo</b> Sin archivos seleccionados</span><span class="btn">Eliminar</span></div>
+                    <p class="help">Producto recortado sobre fondo claro: se funde con el blanco de la portada. PNG, JPEG, WebP o SVG (máx. 2MB).</p>
+                  </div>
+                </div>
+
+                <div class="entry">
+                  <label class="tile checked"><input type="radio" name="t" checked /><span class="swatch"></span><span>Portada completa</span></label>
+                  <div class="field">
+                    <label class="lbl">Imagen de portada de Portada completa</label>
+                    <div class="thumb"><img src="../../../../src/app/login/assets/login-hero.jpg" alt="" style="object-fit:contain" /></div>
+                    <div class="row"><span class="file"><b>Seleccionar archivo</b> Sin archivos seleccionados</span><span class="btn">Eliminar</span></div>
+                    <p class="help">Foto oscura a página completa: la portada la oscurece arriba para el logo. PNG, JPEG, WebP o SVG (máx. 2MB).</p>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="lbl">Manejo de imágenes</label>
+              <div class="select"><span>Estricto (todos los productos enmarcados)</span><span>⌄</span></div>
+            </div>
+
+            <span class="btn primary">Guardar</span>
+          </div>
+        </div>
+
+        <div class="card" style="padding:16px">
+          <h2>Vista previa</h2>
+          <div class="preview">
+            <div class="sheet">
+              <img src="../../../../src/app/login/assets/login-hero.jpg" alt="" />
+              <div class="shade"></div>
+              <div class="brandmark">DFORCE</div>
+              <div class="title"><div class="rule"></div><div class="lead">Catálogo:</div><div class="main">Productos</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" role="status">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+  Imagen de portada guardada
+  <span style="margin-left:8px">✕</span>
+</div>
+</body>
+</html>

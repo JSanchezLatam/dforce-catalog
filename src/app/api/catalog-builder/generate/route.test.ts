@@ -179,10 +179,18 @@ describe("isGenerateBody — the rest of the product shape", () => {
  * workshop-owned fields) + `getTemplateConfig()` (`selectedTemplateId`, the
  * template-fixed choice), not the old four-field `templateConfig` object.
  */
-const { mockEnqueue, mockGetTemplateConfig, mockGetWorkshopConfig, mockGetQueuePosition, mockCountUploaded } =
+const {
+  mockEnqueue,
+  mockGetTemplateConfig,
+  mockListCoverImages,
+  mockGetWorkshopConfig,
+  mockGetQueuePosition,
+  mockCountUploaded,
+} =
   vi.hoisted(() => ({
     mockEnqueue: vi.fn(),
     mockGetTemplateConfig: vi.fn(),
+    mockListCoverImages: vi.fn(),
     mockGetWorkshopConfig: vi.fn(),
     mockGetQueuePosition: vi.fn(),
     mockCountUploaded: vi.fn(),
@@ -194,6 +202,7 @@ vi.mock("@/modules/pdf-generation/enqueue", async (importOriginal) => {
 });
 vi.mock("@/modules/template-config/service", () => ({
   getTemplateConfig: (...args: unknown[]) => mockGetTemplateConfig(...args),
+  listTemplateCoverImages: (...args: unknown[]) => mockListCoverImages(...args),
 }));
 vi.mock("@/modules/workshop-config/service", () => ({
   getWorkshopConfig: (...args: unknown[]) => mockGetWorkshopConfig(...args),
@@ -217,6 +226,7 @@ describe("POST — branding assembly (design D2/D3)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockEnqueue.mockResolvedValue({ jobId: "job-1" });
+    mockListCoverImages.mockResolvedValue([]);
     mockGetQueuePosition.mockResolvedValue(0);
     mockCountUploaded.mockResolvedValue(0);
   });
@@ -286,17 +296,16 @@ describe("POST — branding assembly (design D2/D3)", () => {
     );
   });
 
-  // WU5 (design D6, task 6.12) — the cover-image fields and the contact
-  // block travel in PdfBranding the same way logo/coverText already do.
-  it("carries the cover-image fields and every contact column from getWorkshopConfig()", async () => {
+  // WU5 (design D6, task 6.12) — the contact block travels in PdfBranding the
+  // same way logo/coverText already do. The cover image no longer comes from
+  // here: see "per-template cover image" below.
+  it("carries every contact column from getWorkshopConfig()", async () => {
     mockGetTemplateConfig.mockResolvedValue({ selectedTemplateId: "dforce-classic" });
     mockGetWorkshopConfig.mockResolvedValue({
       name: "Dforce Car Audio",
       logoR2Key: null,
       logoContentType: null,
       coverText: null,
-      coverImageR2Key: "covers/1.jpg",
-      coverImageContentType: "image/jpeg",
       phone: "555-1234",
       whatsapp: null,
       email: "taller@ejemplo.com",
@@ -309,8 +318,6 @@ describe("POST — branding assembly (design D2/D3)", () => {
     await POST(generateRequest());
 
     const branding = mockEnqueue.mock.calls[0][0].branding;
-    expect(branding.coverImageR2Key).toBe("covers/1.jpg");
-    expect(branding.coverImageContentType).toBe("image/jpeg");
     expect(branding.contact).toEqual({
       name: "Dforce Car Audio",
       phone: "555-1234",
@@ -325,6 +332,69 @@ describe("POST — branding assembly (design D2/D3)", () => {
 });
 
 /**
+ * catalog-cover-templates WU3a — the cover photo is chosen per template. The
+ * worker is untouched: it already inlines whatever `coverImageR2Key` the job
+ * carries. The legacy `workshop_config` key is never read here (migration
+ * `0020` copied it once).
+ */
+describe("POST — per-template cover image", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEnqueue.mockResolvedValue({ jobId: "job-1" });
+    mockGetQueuePosition.mockResolvedValue(0);
+    mockCountUploaded.mockResolvedValue(0);
+    mockGetWorkshopConfig.mockResolvedValue(null);
+  });
+
+  const classic = { templateId: "dforce-classic", r2Key: "covers/dforce-classic/1.png", contentType: "image/png" };
+  const full = { templateId: "full-cover", r2Key: "covers/full-cover/2.jpg", contentType: "image/jpeg" };
+
+  it("uses the selected template's own row", async () => {
+    mockGetTemplateConfig.mockResolvedValue({ selectedTemplateId: "full-cover" });
+    mockListCoverImages.mockResolvedValue([classic, full]);
+
+    await POST(generateRequest());
+
+    const branding = mockEnqueue.mock.calls[0][0].branding;
+    expect(branding.coverImageR2Key).toBe("covers/full-cover/2.jpg");
+    expect(branding.coverImageContentType).toBe("image/jpeg");
+  });
+
+  it("never uses another template's key", async () => {
+    mockGetTemplateConfig.mockResolvedValue({ selectedTemplateId: "dforce-classic" });
+    mockListCoverImages.mockResolvedValue([classic, full]);
+
+    await POST(generateRequest());
+
+    expect(mockEnqueue.mock.calls[0][0].branding.coverImageR2Key).toBe("covers/dforce-classic/1.png");
+  });
+
+  it("passes null when the selected template has no row, even if workshop_config still holds a key", async () => {
+    mockGetTemplateConfig.mockResolvedValue({ selectedTemplateId: "full-cover" });
+    mockListCoverImages.mockResolvedValue([classic]);
+    mockGetWorkshopConfig.mockResolvedValue({
+      coverImageR2Key: "covers/legacy.jpg",
+      coverImageContentType: "image/jpeg",
+    });
+
+    await POST(generateRequest());
+
+    const branding = mockEnqueue.mock.calls[0][0].branding;
+    expect(branding.coverImageR2Key).toBeNull();
+    expect(branding.coverImageContentType).toBeNull();
+  });
+
+  it("resolves the default template's row when nothing is selected", async () => {
+    mockGetTemplateConfig.mockResolvedValue(null);
+    mockListCoverImages.mockResolvedValue([classic, full]);
+
+    await POST(generateRequest());
+
+    expect(mockEnqueue.mock.calls[0][0].branding.coverImageR2Key).toBe("covers/dforce-classic/1.png");
+  });
+});
+
+/**
  * R13 — the route re-runs the SAME pure validator the client ran. The
  * checkbox group cannot express these states, which is exactly why the server
  * must still refuse them: the UI is convenience, the route is the boundary.
@@ -333,6 +403,7 @@ describe("POST — price tier selection", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockEnqueue.mockResolvedValue({ jobId: "job-1" });
+    mockListCoverImages.mockResolvedValue([]);
     mockGetQueuePosition.mockResolvedValue(0);
     mockCountUploaded.mockResolvedValue(0);
     mockGetTemplateConfig.mockResolvedValue({ selectedTemplateId: "dforce-classic" });
@@ -376,6 +447,7 @@ describe("POST — operator-typed title", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockEnqueue.mockResolvedValue({ jobId: "job-1" });
+    mockListCoverImages.mockResolvedValue([]);
     mockGetQueuePosition.mockResolvedValue(0);
     mockCountUploaded.mockResolvedValue(0);
     mockGetTemplateConfig.mockResolvedValue({ selectedTemplateId: "dforce-classic" });

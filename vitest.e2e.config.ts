@@ -15,6 +15,9 @@ export default defineConfig({
     include: ["src/e2e/**/*.e2e.test.ts"],
     testTimeout: 60_000, // real Chromium render + real pg-boss job polling
     hookTimeout: 60_000,
+    // Every file's beforeAll runs `drizzle-kit migrate` against the same
+    // database; two of them racing on a fresh one collide.
+    fileParallelism: false,
   },
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },

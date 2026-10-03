@@ -1,11 +1,14 @@
 import { eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 
-import { templateConfig } from "@/shared/db/schema";
+import { templateConfig, templateCoverImage } from "@/shared/db/schema";
 import {
+  deleteTemplateCoverImage,
   getTemplateConfig,
+  listTemplateCoverImages,
   saveTemplateConfig,
   TemplateConfigValidationError,
+  upsertTemplateCoverImage,
   validateTemplateConfigInput,
 } from "./service";
 
@@ -119,5 +122,91 @@ describe("selectedTemplateId persistence (R8.4)", () => {
     expect(where).toHaveBeenCalledWith(eq(templateConfig.id, "singleton"));
     expect(limit).toHaveBeenCalledWith(1);
     expect(result).toEqual(row);
+  });
+});
+
+/**
+ * catalog-cover-templates WU3a — one cover photo per template. Injected-seam
+ * tests: the real SQL (PK upsert, RETURNING) is proved by
+ * `src/e2e/template-cover-image.e2e.test.ts`.
+ */
+describe("template cover image service", () => {
+  it("listTemplateCoverImages selects every row of template_cover_image", async () => {
+    const rows = [
+      { templateId: "dforce-classic", r2Key: "covers/dforce-classic/1.png", contentType: "image/png" },
+      { templateId: "full-cover", r2Key: "covers/full-cover/2.jpg", contentType: "image/jpeg" },
+    ];
+    const from = vi.fn().mockResolvedValue(rows);
+    const db = { select: vi.fn().mockReturnValue({ from }) };
+
+    const result = await listTemplateCoverImages(db as never);
+
+    expect(from).toHaveBeenCalledWith(templateCoverImage);
+    expect(result).toEqual(rows);
+  });
+
+  describe("upsertTemplateCoverImage", () => {
+    function stubDb(previous: Array<{ r2Key: string }>) {
+      const where = vi.fn().mockResolvedValue(previous);
+      const from = vi.fn().mockReturnValue({ where });
+      const onConflictDoUpdate = vi.fn().mockResolvedValue(undefined);
+      const values = vi.fn().mockReturnValue({ onConflictDoUpdate });
+      const db = { select: vi.fn().mockReturnValue({ from }), insert: vi.fn().mockReturnValue({ values }) };
+      return { db, where, values, onConflictDoUpdate };
+    }
+
+    it("returns the previous key when a row existed, and replaces it", async () => {
+      const { db, where, values, onConflictDoUpdate } = stubDb([{ r2Key: "covers/full-cover/old.png" }]);
+
+      const prev = await upsertTemplateCoverImage(
+        "full-cover",
+        { r2Key: "covers/full-cover/new.jpg", contentType: "image/jpeg" },
+        db as never,
+      );
+
+      expect(prev).toBe("covers/full-cover/old.png");
+      expect(where).toHaveBeenCalledWith(eq(templateCoverImage.templateId, "full-cover"));
+      expect(values.mock.calls[0][0]).toEqual(
+        expect.objectContaining({ templateId: "full-cover", r2Key: "covers/full-cover/new.jpg", contentType: "image/jpeg" }),
+      );
+      const { target, set } = onConflictDoUpdate.mock.calls[0][0] as { target: unknown; set: Record<string, unknown> };
+      expect(target).toBe(templateCoverImage.templateId);
+      expect(set).toEqual(expect.objectContaining({ r2Key: "covers/full-cover/new.jpg", contentType: "image/jpeg" }));
+    });
+
+    it("returns null when the template had no row", async () => {
+      const { db } = stubDb([]);
+
+      const prev = await upsertTemplateCoverImage(
+        "dforce-classic",
+        { r2Key: "covers/dforce-classic/1.png", contentType: "image/png" },
+        db as never,
+      );
+
+      expect(prev).toBeNull();
+    });
+  });
+
+  describe("deleteTemplateCoverImage", () => {
+    function stubDb(removed: Array<{ r2Key: string }>) {
+      const returning = vi.fn().mockResolvedValue(removed);
+      const where = vi.fn().mockReturnValue({ returning });
+      const db = { delete: vi.fn().mockReturnValue({ where }) };
+      return { db, where };
+    }
+
+    it("returns the removed object key", async () => {
+      const { db, where } = stubDb([{ r2Key: "covers/dforce-classic/1.png" }]);
+
+      expect(await deleteTemplateCoverImage("dforce-classic", db as never)).toBe("covers/dforce-classic/1.png");
+      expect(db.delete).toHaveBeenCalledWith(templateCoverImage);
+      expect(where).toHaveBeenCalledWith(eq(templateCoverImage.templateId, "dforce-classic"));
+    });
+
+    it("returns null when there was nothing to remove", async () => {
+      const { db } = stubDb([]);
+
+      expect(await deleteTemplateCoverImage("full-cover", db as never)).toBeNull();
+    });
   });
 });

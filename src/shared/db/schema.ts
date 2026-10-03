@@ -170,6 +170,22 @@ export const templateConfig = pgTable("template_config", {
 export type TemplateConfig = typeof templateConfig.$inferSelect;
 
 /**
+ * One cover photo per template (catalog-cover-templates WU3a): a shared photo
+ * always ruined one of the covers. `template_id` is the registry id and has no
+ * FK because registry ids live in code (`shared/template/template-ids.ts`). A
+ * missing row means "no photo" — there is no runtime fallback to the legacy
+ * `workshop_config.cover_image_*` columns; migration `0020` copied them once.
+ */
+export const templateCoverImage = pgTable("template_cover_image", {
+  templateId: text("template_id").primaryKey(),
+  r2Key: text("r2_key").notNull(),
+  contentType: text("content_type"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type TemplateCoverImage = typeof templateCoverImage.$inferSelect;
+
+/**
  * `catalogs` — R7 (list/preview/download) + R11 (R2 upload, retention).
  *
  * `id` is minted by the generate route (api/catalog-builder/generate/
