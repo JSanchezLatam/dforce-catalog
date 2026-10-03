@@ -34,7 +34,7 @@ const CONFIGURACION_ITEMS: (NavLink | NavParent)[] = [
     icon: "template-config",
     action: "template.edit",
     children: [
-      { kind: "link", href: "/template-config", label: "Configuración de template", icon: "template-config", action: "template.edit" },
+      { kind: "link", href: "/template-config", label: "Configuración de plantillas", icon: "template-config", action: "template.edit" },
     ],
   },
   // Gated on the same `users.manage` action that /users and /api/users

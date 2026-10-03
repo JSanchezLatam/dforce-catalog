@@ -14,6 +14,10 @@ const IMAGE_TYPE_LABELS: Record<string, string> = {
   low_res: "Baja res.",
 };
 
+// `items` for the selector: a bare `<SelectValue />` prints the raw value
+// (`opaque`, `__auto__`) instead of the option's label.
+const SELECT_ITEMS: Record<string, string> = { __auto__: "Auto", ...IMAGE_TYPE_LABELS };
+
 const IMAGE_TYPE_VARIANTS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   transparent: "default",
   opaque: "secondary",
@@ -73,6 +77,7 @@ export function ProductLayoutTuner({
                   </Badge>
                 )}
                 <Select
+                  items={SELECT_ITEMS}
                   value={effectiveType ?? "__auto__"}
                   onValueChange={(v) => onOverride(product.id, v === "__auto__" ? null : (v as "transparent" | "opaque" | "low_res"))}
                 >

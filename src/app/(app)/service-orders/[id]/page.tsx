@@ -74,7 +74,7 @@ export default async function ServiceOrderDetailPage({
   const { id } = await params;
   const user = await requireSessionFromHeaders();
   if (!can(user, "service-orders.read")) {
-    return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
+    return <div className="p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
   }
 
   const detail = await getOrdenServicioById(id);

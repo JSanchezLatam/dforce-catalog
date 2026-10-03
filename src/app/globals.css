@@ -228,6 +228,16 @@
   }
 
   /*
+   * The black FRAME around the sheet, seen on paper at the workshop 2026-10-02.
+   * The `@page` margin is not html or body — it is the CANVAS, and Chrome
+   * paints it from `color-scheme`, so the background rule above cannot reach
+   * it. next-themes (`enableColorScheme`) writes `color-scheme: dark` INLINE on
+   * <html>, hence `!important`: nothing else beats an inline style.
+   * Visible only in a real print preview or PDF — jsdom has no canvas to paint.
+   */
+  html { color-scheme: light !important; }
+
+  /*
    * The sheet fills the printable box, and the MECHANISM is worth writing down
    * because `print:max-w-none` alone reads like it should already do this.
    *

@@ -174,3 +174,21 @@ describe("ServiceOrderFilters — typing a search drops page (D5)", () => {
     expect(url).not.toContain("page=7");
   });
 });
+
+/**
+ * Base UI's bare `<SelectValue />` prints the selected VALUE: the status
+ * trigger read `in_progress` while its list said "En progreso".
+ */
+describe("ServiceOrderFilters — the status trigger shows the Spanish label", () => {
+  it.each([
+    ["open", "Abierta"],
+    ["in_progress", "En progreso"],
+    ["done", "Completada"],
+    ["cancelled", "Cancelada"],
+  ] as const)("shows %s as %s", (value, label) => {
+    seedUrl(`status=${value}`);
+    render(<ServiceOrderFilters selected={{ status: value }} pageSize={10} />);
+
+    expect(screen.getAllByRole("combobox")[0].querySelector('[data-slot="select-value"]')).toHaveTextContent(new RegExp(`^${label}$`));
+  });
+});

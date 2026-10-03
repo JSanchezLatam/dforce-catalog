@@ -176,7 +176,7 @@ export function TreeSelect({
           </div>
           <div className="max-h-60 overflow-auto p-1">
             {filteredItems.length === 0 && (
-              <p className="py-6 text-center text-sm text-muted-foreground">No categories found</p>
+              <p className="py-6 text-center text-sm text-muted-foreground">No se encontraron categorías</p>
             )}
             <ul className="space-y-0.5">
               {filteredItems.map((item) => {
