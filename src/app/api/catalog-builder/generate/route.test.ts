@@ -366,3 +366,39 @@ describe("POST — price tier selection", () => {
     expect(payload.products[0].prices).toEqual({ venta: 45, taller: 38, socio: 32 });
   });
 });
+
+/**
+ * The client posts what the operator TYPED; the route owns the stored title.
+ * A client that posts a finished "Catálogo: …" string would be prefixed twice,
+ * so the contract is raw text in, `formatCatalogTitle` out.
+ */
+describe("POST — operator-typed title", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEnqueue.mockResolvedValue({ jobId: "job-1" });
+    mockGetQueuePosition.mockResolvedValue(0);
+    mockCountUploaded.mockResolvedValue(0);
+    mockGetTemplateConfig.mockResolvedValue({ selectedTemplateId: "dforce-classic" });
+    mockGetWorkshopConfig.mockResolvedValue({});
+  });
+
+  it("refuses 41 characters with a 400 naming the title field, and enqueues nothing", async () => {
+    const response = await POST(generateRequest({ title: "a".repeat(41) }));
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).errors.title).toBe("El título no puede superar los 40 caracteres");
+    expect(mockEnqueue).not.toHaveBeenCalled();
+  });
+
+  it("stores the title the server formats, not the raw body", async () => {
+    await POST(generateRequest({ title: "  Repuestos   de motor " }));
+
+    expect(mockEnqueue).toHaveBeenCalledWith(expect.objectContaining({ title: "Catálogo: Repuestos de motor" }));
+  });
+
+  it("stores the bare title when the typed text is empty", async () => {
+    await POST(generateRequest({ title: "" }));
+
+    expect(mockEnqueue).toHaveBeenCalledWith(expect.objectContaining({ title: "Catálogo" }));
+  });
+});

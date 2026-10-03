@@ -154,6 +154,63 @@ describe("CatalogBuilderForm — review step picks which price lists print (R13)
 });
 
 /**
+ * The catalog title is what the operator types in the review step. The field
+ * posts the RAW text and the route formats it, so a drifted client cannot
+ * store a different title than the server would.
+ */
+describe("CatalogBuilderForm — the operator-typed title", () => {
+  const field = () => screen.getByRole("textbox", { name: "Título del catálogo" });
+
+  it("is capped at 40 characters on the input itself", async () => {
+    await reachReviewStep();
+
+    expect(field()).toHaveAttribute("maxlength", "40");
+  });
+
+  it("updates the title shown in the confirm dialog as the operator types", async () => {
+    const { user } = await reachReviewStep();
+
+    await user.type(field(), "  Repuestos   de motor ");
+    await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Catálogo: Repuestos de motor")).toBeInTheDocument();
+  });
+
+  it("posts the typed text, not a pre-formatted title", async () => {
+    const { fetchMock, user } = await reachReviewStep();
+
+    await user.type(field(), "Audio");
+    await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
+    await user.click(await screen.findByRole("button", { name: "Generar catálogo" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith("/api/catalog-builder/generate", expect.anything()),
+    );
+    const call = fetchMock.mock.calls.find(([url]) => url === "/api/catalog-builder/generate")!;
+    const [, init] = call as unknown as [string, RequestInit];
+    expect(JSON.parse(init.body as string).title).toBe("Audio");
+  });
+
+  it("renders a title error from the route beside the field", async () => {
+    const { user } = await reachReviewStep({
+      ok: false,
+      status: 400,
+      json: async () => ({ errors: { title: "El título no puede superar los 40 caracteres" } }),
+    });
+
+    await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
+    await user.click(await screen.findByRole("button", { name: "Generar catálogo" }));
+
+    // Closing the dialog is how the operator gets back to the field.
+    await user.keyboard("{Escape}");
+    const alert = await screen.findByText("El título no puede superar los 40 caracteres", { selector: "p[role=alert]" });
+    expect(alert).toBeInTheDocument();
+    expect(field()).toHaveAccessibleDescription("El título no puede superar los 40 caracteres");
+  });
+});
+
+/**
  * workshop-feedback-round-1 PR F1. The "Vista previa" card that used to sit at
  * the bottom of this form is gone — it was passed no `productPages`, so it
  * could never show a product (cover, index and contact only), and it rendered
@@ -432,15 +489,11 @@ describe("CatalogBuilderForm — product-id mode (D10)", () => {
   });
 
   /**
-   * `deriveCatalogTitle(uniqueL1s(categoryRefs))` has nothing to derive from
-   * in this mode, so the L1s come off the returned ROWS instead. Without the
-   * fallback every seeded catalog would print the bare "Catalog".
-   *
-   * Read off the confirm dialog since PR F1: the preview used to print the
-   * title on its cover, and with the preview gone the dialog is the one place
-   * the operator sees the title before committing to it.
+   * The title is typed, never derived: a seeded selection of REPUESTOS and
+   * MOTOR rows must not leak either name into it. Read off the confirm dialog,
+   * the one place the operator sees the title before committing to it.
    */
-  it("derives the title from the L1s the returned rows carry", async () => {
+  it("does not derive the title from the L1s the returned rows carry", async () => {
     renderSeeded(["PS1", "PS3"]);
     const user = userEvent.setup();
     await screen.findByText("Filtro de aceite");
@@ -448,7 +501,8 @@ describe("CatalogBuilderForm — product-id mode (D10)", () => {
     await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
     await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
 
-    expect(await screen.findByText("Catalog: REPUESTOS, MOTOR")).toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Catálogo")).toBeInTheDocument();
   });
 
   /**
@@ -792,19 +846,14 @@ describe("CatalogBuilderForm — the category-tree flow is unaffected", () => {
     expect(bodies).toEqual([{ categories: [{ categoryL1: "Motor" }] }]);
   });
 
-  it("still titles the catalog from the TICKED categories, not from the returned rows", async () => {
+  it("does not title the catalog from the TICKED categories either", async () => {
     const { user } = await pickMotor();
 
-    // `CANDIDATE.categoryL1` is "Motor" as well, so the title could come from
-    // either source and this alone would not tell them apart. What pins the
-    // direction is the sibling test above, where the ticked category and the
-    // returned rows' category differ. (This comment used to point at "the
-    // empty-selection one below"; that test no longer asserts a title at all
-    // since PR F1 moved the cover out of this form.)
     await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
     await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
 
-    expect(await screen.findByText("Catalog: Motor")).toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Catálogo")).toBeInTheDocument();
   });
 
   /**

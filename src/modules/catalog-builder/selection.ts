@@ -135,9 +135,16 @@ export function buildIndexSections(products: ProductRef[]): CatalogIndexSection[
   );
 }
 
-/** R5.5 — auto-derived from the current selection so the title updates live, with no free-text field to keep in sync. */
-export function deriveCatalogTitle(includedCategoryL1Names: string[]): string {
-  return includedCategoryL1Names.length > 0 ? `Catalog: ${includedCategoryL1Names.join(", ")}` : "Catalog";
+/** The operator-typed title is capped here, on the client (`maxLength`) and on the generate route. */
+export const MAX_CATALOG_TITLE_LENGTH = 40;
+
+/** Trim and collapse inner whitespace — the form in which a typed title is measured and stored. */
+const normalizeTitleText = (typed: string): string => typed.trim().replace(/\s+/g, " ");
+
+/** The catalog title is typed by the operator; it is never derived from category names. */
+export function formatCatalogTitle(typed: string): string {
+  const text = normalizeTitleText(typed);
+  return text ? `Catálogo: ${text}` : "Catálogo";
 }
 
 export type ImageTypeOverride = "transparent" | "opaque" | "low_res" | null;
@@ -190,6 +197,8 @@ export type CatalogSelectionCheck = {
    * (`DEFAULT_PRICE_TIERS`) — the rule here only governs an explicit choice.
    */
   tiers?: readonly PriceTier[];
+  /** What the operator typed, before `formatCatalogTitle`. Omitted when the caller has no title to check. */
+  titleInput?: string;
 };
 
 /** R5.4/5.7/5.8-9 — throws with ALL field errors collected (same convention as `validateTemplateConfigInput`). */
@@ -229,6 +238,10 @@ export function validateCatalogSelection(check: CatalogSelectionCheck): void {
     } else if (check.tiers.length < MIN_PRICE_TIERS || check.tiers.length > MAX_PRICE_TIERS) {
       errors.tiers = `Elegí ${MIN_PRICE_TIERS} o ${MAX_PRICE_TIERS} listas de precios`;
     }
+  }
+
+  if (check.titleInput !== undefined && normalizeTitleText(check.titleInput).length > MAX_CATALOG_TITLE_LENGTH) {
+    errors.title = `El título no puede superar los ${MAX_CATALOG_TITLE_LENGTH} caracteres`;
   }
 
   if (Object.keys(errors).length > 0) {

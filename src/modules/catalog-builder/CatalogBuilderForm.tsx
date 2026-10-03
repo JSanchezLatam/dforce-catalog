@@ -35,7 +35,8 @@ import { resolveAllPrices } from "./price-lists";
 import {
   buildIndexSections,
   CatalogSelectionValidationError,
-  deriveCatalogTitle,
+  formatCatalogTitle,
+  MAX_CATALOG_TITLE_LENGTH,
   DEFAULT_PRODUCTS_PER_PAGE,
   MAX_PRICE_TIERS,
   MAX_PRODUCTS_PER_PAGE,
@@ -71,10 +72,6 @@ function selectedToCategoryRefs(selected: string[]): CategoryRef[] {
     const [l1, l2] = s.split("::");
     return l2 ? { categoryL1: l1, categoryL2: l2 } : { categoryL1: l1 };
   });
-}
-
-function uniqueL1s(refs: CategoryRef[]): string[] {
-  return [...new Set(refs.map((r) => r.categoryL1))];
 }
 
 export function CatalogBuilderForm({
@@ -127,6 +124,8 @@ export function CatalogBuilderForm({
    * which row comes first.
    */
   const [tiers, setTiers] = useState<readonly PriceTier[]>(DEFAULT_PRICE_TIERS);
+  /** What the operator typed, raw: the route formats it, this form only previews the result. */
+  const [titleInput, setTitleInput] = useState("");
 
   const categoryRefs = useMemo(() => selectedToCategoryRefs(selectedCategories), [selectedCategories]);
   /**
@@ -256,9 +255,10 @@ export function CatalogBuilderForm({
    *
    * In category mode these ARE the ticked refs, identically. In product-id
    * mode nothing is ticked, so they are the distinct L1s the resolved rows
-   * carry: without that fallback every seeded catalog would print the bare
-   * "Catalog" AND dead-end on `validateCatalogSelection`'s "Elegí al menos
-   * una categoría", with no category control on screen to go satisfy it.
+   * carry: without that fallback every seeded catalog would dead-end on
+   * `validateCatalogSelection`'s "Elegí al menos una categoría", with no
+   * category control on screen to go satisfy it. They no longer feed the
+   * title, which the operator types.
    */
   const includedCategoryRefs = useMemo<CategoryRef[]>(
     () =>
@@ -269,7 +269,7 @@ export function CatalogBuilderForm({
             .map((categoryL1) => ({ categoryL1 })),
     [categoryRefs, finalProducts],
   );
-  const title = useMemo(() => deriveCatalogTitle(uniqueL1s(includedCategoryRefs)), [includedCategoryRefs]);
+  const title = formatCatalogTitle(titleInput);
 
   const allVisibleSelected = paginatedProducts.length > 0 && paginatedProducts.every((p) => selectedProductIds.has(p.id));
   const someVisibleSelected = paginatedProducts.some((p) => selectedProductIds.has(p.id));
@@ -391,7 +391,7 @@ export function CatalogBuilderForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title,
+          title: titleInput,
           sections,
           products: reviewedProducts,
           productsPerPage,
@@ -802,6 +802,24 @@ export function CatalogBuilderForm({
       {step === "review" && (
         <Card size="sm" className="mb-4">
           <CardContent>
+            <div className="mb-4">
+              <Label htmlFor="catalog-title">Título del catálogo</Label>
+              <Input
+                id="catalog-title"
+                className="mt-1"
+                value={titleInput}
+                maxLength={MAX_CATALOG_TITLE_LENGTH}
+                placeholder="Opcional, por ejemplo: Repuestos"
+                aria-invalid={errors.title ? true : undefined}
+                aria-describedby={errors.title ? "catalog-title-error" : undefined}
+                onChange={(event) => setTitleInput(event.target.value)}
+              />
+              {errors.title && (
+                <p id="catalog-title-error" role="alert" className={`mt-2 ${FIELD_ERROR}`}>
+                  {errors.title}
+                </p>
+              )}
+            </div>
             <fieldset>
               <legend className="text-sm font-medium">Listas de precios</legend>
               <p className="mt-1 mb-3 text-sm text-muted-foreground">

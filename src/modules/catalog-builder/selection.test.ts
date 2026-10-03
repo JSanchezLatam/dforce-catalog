@@ -4,7 +4,8 @@ import {
   applySelection,
   buildIndexSections,
   CatalogSelectionValidationError,
-  deriveCatalogTitle,
+  formatCatalogTitle,
+  MAX_CATALOG_TITLE_LENGTH,
   MAX_TOTAL_PRODUCTS,
   matchesAnyCategory,
   parseSeedProductIds,
@@ -63,13 +64,50 @@ describe("buildIndexSections (R5.5/5.6)", () => {
   });
 });
 
-describe("deriveCatalogTitle (R5.5)", () => {
-  it("joins the included L1 category names", () => {
-    expect(deriveCatalogTitle(["Motor", "Accesorios"])).toBe("Catalog: Motor, Accesorios");
+describe("formatCatalogTitle", () => {
+  it("prefixes the typed text", () => {
+    expect(formatCatalogTitle("Repuestos")).toBe("Catálogo: Repuestos");
   });
 
-  it("falls back to a plain title with no categories selected", () => {
-    expect(deriveCatalogTitle([])).toBe("Catalog");
+  it("trims and collapses inner whitespace", () => {
+    expect(formatCatalogTitle("  Repuestos \t  de   motor ")).toBe("Catálogo: Repuestos de motor");
+  });
+
+  it("falls back to the bare title when empty or whitespace only", () => {
+    expect(formatCatalogTitle("")).toBe("Catálogo");
+    expect(formatCatalogTitle("   \n ")).toBe("Catálogo");
+  });
+});
+
+describe("validateCatalogSelection — title", () => {
+  const valid = { includedCategoryCount: 1, totalProductCount: 10, productsPerPage: 10 };
+  const titleErrors = (titleInput: string) => {
+    try {
+      validateCatalogSelection({ ...valid, titleInput });
+    } catch (err) {
+      if (err instanceof CatalogSelectionValidationError) return err.errors.title;
+      throw err;
+    }
+    return undefined;
+  };
+
+  it("pins the limit at 40", () => {
+    expect(MAX_CATALOG_TITLE_LENGTH).toBe(40);
+  });
+
+  it("accepts 40 characters and refuses 41 with a Spanish error", () => {
+    expect(titleErrors("a".repeat(40))).toBeUndefined();
+    expect(titleErrors("a".repeat(41))).toBe("El título no puede superar los 40 caracteres");
+  });
+
+  it("measures after trimming and collapsing, so padding never counts", () => {
+    expect(titleErrors(`  ${"a".repeat(40)}  `)).toBeUndefined();
+    expect(titleErrors(`${"a".repeat(20)}    ${"a".repeat(19)}`)).toBeUndefined();
+  });
+
+  it("is optional: omitted and empty both pass", () => {
+    expect(() => validateCatalogSelection(valid)).not.toThrow();
+    expect(titleErrors("")).toBeUndefined();
   });
 });
 

@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { can } from "@/modules/auth/policy";
-import { CatalogSelectionValidationError, validateCatalogSelection } from "@/modules/catalog-builder/selection";
+import {
+  CatalogSelectionValidationError,
+  formatCatalogTitle,
+  validateCatalogSelection,
+} from "@/modules/catalog-builder/selection";
 import { requireSession } from "@/modules/auth/session";
 import { countUploadedCatalogsForUser } from "@/modules/catalog-storage/queries";
 import { shouldWarnOfEviction } from "@/modules/catalog-storage/retention";
@@ -28,6 +32,7 @@ import type { PriceTier } from "@/shared/template/price-tiers";
  * selection is valid" claim for what becomes a real queued job).
  */
 type GenerateBody = {
+  /** What the operator typed, NOT the finished title: the route formats and stores it. */
   title: string;
   sections: CatalogIndexSection[];
   // Print-ready, not selection-shaped: every product carries all three
@@ -142,6 +147,7 @@ export async function POST(request: NextRequest) {
       totalProductCount: body.products.length,
       productsPerPage: body.productsPerPage,
       tiers: body.tiers,
+      titleInput: body.title,
     });
   } catch (err) {
     if (err instanceof CatalogSelectionValidationError) {
@@ -161,7 +167,7 @@ export async function POST(request: NextRequest) {
     const { jobId } = await enqueueCatalogPdf({
       catalogId: crypto.randomUUID(),
       userId: user.id,
-      title: body.title,
+      title: formatCatalogTitle(body.title),
       branding: {
         templateId: getTemplate(template?.selectedTemplateId).id,
         logoR2Key: workshop?.logoR2Key ?? null,

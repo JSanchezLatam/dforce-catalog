@@ -27,13 +27,13 @@ Rule for every task pair: RED test, confirm red, GREEN, then mutation-verify (re
 
 ## WU1: Title rule and filename (PR 1)
 
-- [ ] 1.1 RED `selection.test.ts`: `formatCatalogTitle` trims, collapses whitespace, empty gives `Catálogo`, else `Catálogo: <text>`.
-- [ ] 1.2 GREEN `selection.ts`: add `formatCatalogTitle`, `MAX_CATALOG_TITLE_LENGTH = 40`; remove `deriveCatalogTitle`.
-- [ ] 1.3 RED validator: 40 passes, 41 fails with Spanish `errors.title`. GREEN: `titleInput` in `validateCatalogSelection`.
-- [ ] 1.4 RED route test: 41 chars gives 400 with `errors.title`, no job enqueued; stored title is `formatCatalogTitle(body.title)`. GREEN `generate/route.ts`.
-- [ ] 1.5 RED `CatalogBuilderForm` test: typing updates the confirm dialog title; `errors.title` renders. GREEN: "Título del catálogo" `Input` (`maxLength={40}`); reword comment at `:259-261`.
-- [ ] 1.6 RED `file/route` test: title with `"` and `—` responds 200, header has ASCII `filename=` plus `filename*=UTF-8''`. GREEN: RFC 5987 header.
-- [ ] 1.7 Mutation-verify 1.1-1.6 by name.
+- [x] 1.1 RED `selection.test.ts`: `formatCatalogTitle` trims, collapses whitespace, empty gives `Catálogo`, else `Catálogo: <text>`.
+- [x] 1.2 GREEN `selection.ts`: add `formatCatalogTitle`, `MAX_CATALOG_TITLE_LENGTH = 40`; remove `deriveCatalogTitle`.
+- [x] 1.3 RED validator: 40 passes, 41 fails with Spanish `errors.title`. GREEN: `titleInput` in `validateCatalogSelection`.
+- [x] 1.4 RED route test: 41 chars gives 400 with `errors.title`, no job enqueued; stored title is `formatCatalogTitle(body.title)`. GREEN `generate/route.ts`.
+- [x] 1.5 RED `CatalogBuilderForm` test: typing updates the confirm dialog title; `errors.title` renders. GREEN: "Título del catálogo" `Input` (`maxLength={40}`); reword comment at `:259-261`.
+- [x] 1.6 RED `file/route` test: title with `"` and `—` responds 200, header has ASCII `filename=` plus `filename*=UTF-8''`. GREEN: RFC 5987 header.
+- [x] 1.7 Mutation-verify 1.1-1.6 by name.
 
 ## WU2: Portada completa (PR 2)
 
