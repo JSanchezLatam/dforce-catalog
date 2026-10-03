@@ -12,16 +12,20 @@ import { catalogs, type Catalog } from "@/shared/db/schema";
 import type { PdfGeneratePayload } from "../pdf-generation/enqueue";
 
 /**
- * Risk-1 — inserted by pdf-generation/worker.ts right after render+handoff,
- * BEFORE the `pdf-upload` job is even sent, so a crash at any later point
- * still leaves a visible row instead of a silently orphaned temp file (see
- * upload-status.ts's header comment). This also resolves PR7's "PR8 MUST"
- * handoff gap: `title`/`categories` come from the SAME `pdf-generate`
- * payload the worker already has in hand — no `pdf-upload` payload change
- * was needed.
+ * Risk-1 — inserted by pdf-generation/enqueue.ts inside the same advisory-
+ * locked transaction that sends the `pdf-generate` job (`executor` is that
+ * transaction), so the row exists from the moment Generar returns: /catalogs
+ * shows it `pending`, and a render that fails for good has a row to mark
+ * `failed`. It used to be inserted by the worker AFTER the render, which hid
+ * the catalog while it rendered and left a failed render with no row at all.
+ * `title`/`categories` come from the `pdf-generate` payload itself, so the
+ * `pdf-upload` payload still needs no `title`.
  */
-export async function createPendingCatalog(payload: PdfGeneratePayload): Promise<void> {
-  await db.insert(catalogs).values({
+export async function createPendingCatalog(
+  payload: PdfGeneratePayload,
+  executor: { insert: typeof db.insert } = db,
+): Promise<void> {
+  await executor.insert(catalogs).values({
     id: payload.catalogId,
     userId: payload.userId,
     title: payload.title,

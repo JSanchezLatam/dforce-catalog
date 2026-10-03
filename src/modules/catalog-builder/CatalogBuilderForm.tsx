@@ -29,6 +29,7 @@ import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
 import { Pagination } from "@/shared/ui/Pagination";
 import { RETENTION_LIMIT } from "@/modules/catalog-storage/retention-policy";
+import { MAX_QUEUE_DEPTH } from "@/modules/pdf-generation/queue-limits";
 
 import type { CategoryPair } from "./queries";
 import { resolveAllPrices } from "./price-lists";
@@ -72,6 +73,13 @@ function selectedToCategoryRefs(selected: string[]): CategoryRef[] {
     const [l1, l2] = s.split("::");
     return l2 ? { categoryL1: l1, categoryL2: l2 } : { categoryL1: l1 };
   });
+}
+
+/** `queuePosition` counts the jobs AHEAD of this one (pdf-generation/position.ts): 0 is rendering now. */
+function describeQueuePosition(queuePosition: number | null): string {
+  if (queuePosition == null) return "El catálogo empezó a generarse.";
+  if (queuePosition === 0) return "Se está generando ahora.";
+  return `Está en la cola, con ${queuePosition} ${queuePosition === 1 ? "catálogo" : "catálogos"} por delante.`;
 }
 
 export function CatalogBuilderForm({
@@ -465,7 +473,7 @@ export function CatalogBuilderForm({
   }
 
   const buttonDisabled = candidates.length === 0;
-  const queueFullBtn = queueDepth !== null && queueDepth >= 2;
+  const queueFullBtn = queueDepth !== null && queueDepth >= MAX_QUEUE_DEPTH;
   /**
    * PR F2 — the cap, said out loud while it can still be acted on.
    *
@@ -540,6 +548,9 @@ export function CatalogBuilderForm({
                   <div className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
                     <Label>Filas por página</Label>
                     <Select
+                      // "Todos" is bound to the candidate COUNT, so a bare
+                      // `<SelectValue />` would print that number instead.
+                      items={{ "10": "10", "25": "25", "50": "50", [String(candidates.length)]: "Todos" }}
                       value={String(pageSize)}
                       onValueChange={(v) => {
                         setPageSize(Number(v));
@@ -957,7 +968,7 @@ export function CatalogBuilderForm({
           <DialogHeader className="items-center text-center">
             <DialogTitle>Catálogo en proceso</DialogTitle>
             <DialogDescription>
-              El catálogo empezó a generarse{queuePosition != null ? ` (posición ${queuePosition} en la cola)` : ""}.
+              {describeQueuePosition(queuePosition)}
               {evictionWarning ? ` Ya tenés ${RETENTION_LIMIT} catálogos guardados: el más antiguo se eliminará cuando este esté listo.` : ""}
             </DialogDescription>
           </DialogHeader>

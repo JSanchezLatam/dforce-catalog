@@ -615,3 +615,17 @@ describe("ServiceOrdersPage — refresh control and page payload", () => {
     expect(listInventory).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * AGENTS.md: "Tests assert the Spanish string. Those are what catch an
+ * untranslated screen." Same wording as every other gated page.
+ */
+describe("ServiceOrdersPage — read gate", () => {
+  it("refuses a session without service-orders.read in Spanish", async () => {
+    can.mockReturnValueOnce(false);
+
+    render(await ServiceOrdersPage({ searchParams: Promise.resolve({}) }));
+
+    expect(screen.getByText("No tenés permiso para ver esta página.")).toBeInTheDocument();
+  });
+});

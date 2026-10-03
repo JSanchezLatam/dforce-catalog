@@ -279,3 +279,22 @@ describe("InventoryFilters — Limpiar goes through the shared writer", () => {
     expect((screen.getByLabelText("Nombre") as HTMLInputElement).value).toBe("");
   });
 });
+
+/**
+ * Base UI's bare `<SelectValue />` prints the selected VALUE: the stock
+ * trigger read `in-stock` while its list said "En stock".
+ */
+describe("InventoryFilters — the stock trigger shows the Spanish label", () => {
+  it.each([
+    ["in-stock", "En stock"],
+    ["out-of-stock", "Sin stock"],
+  ])("shows %s as %s", (value, label) => {
+    seedUrl(`stockStatus=${value}`);
+    render(
+      <InventoryFilters categoryL1Options={[]} categoryL2Options={[]} selected={{ stockStatus: value }} pageSize={10} />,
+    );
+
+    const trigger = screen.getByText("Stock").parentElement!.querySelector("[role=combobox]")!;
+    expect(trigger.querySelector('[data-slot="select-value"]')).toHaveTextContent(new RegExp(`^${label}$`));
+  });
+});
