@@ -21,7 +21,13 @@ vi.mock("@/modules/auth/session", () => ({
   requireSessionFromHeaders: vi.fn(async () => ({ id: "u1", role: "administrador" })),
 }));
 vi.mock("@/modules/auth/policy", () => ({ can }));
-vi.mock("@/modules/template-config/service", () => ({ getTemplateConfig: vi.fn(async () => null) }));
+const COVER_ROWS = [
+  { templateId: "full-cover", r2Key: "covers/full-cover/2.jpg", contentType: "image/jpeg", updatedAt: new Date() },
+];
+vi.mock("@/modules/template-config/service", () => ({
+  getTemplateConfig: vi.fn(async () => null),
+  listTemplateCoverImages: vi.fn(async () => COVER_ROWS),
+}));
 vi.mock("@/modules/workshop-config/service", () => ({ getWorkshopConfig: vi.fn(async () => WORKSHOP) }));
 vi.mock("@/modules/template-config/TemplateConfigForm", () => ({
   TemplateConfigForm: (props: Record<string, unknown>) => {
@@ -41,6 +47,15 @@ describe("TemplateConfigPage — branding for the preview (PR F1)", () => {
     render(await TemplateConfigPage());
 
     expect(formProps.mock.calls.at(-1)?.[0].workshopConfig).toEqual(WORKSHOP);
+  });
+
+  // A plain `Record<templateId, r2Key>`: the page is a Server Component, so
+  // what crosses to the client form must be serialisable (no functions, no
+  // Date-bearing rows).
+  it("hands the form each template's cover key, read from template_cover_image", async () => {
+    render(await TemplateConfigPage());
+
+    expect(formProps.mock.calls.at(-1)?.[0].coverImageKeys).toEqual({ "full-cover": "covers/full-cover/2.jpg" });
   });
 
   it("still refuses the page to a user without template.edit", async () => {

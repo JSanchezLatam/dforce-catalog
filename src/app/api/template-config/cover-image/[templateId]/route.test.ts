@@ -165,6 +165,17 @@ describe("template-config cover-image/[templateId] route", () => {
       expect(mockUpsert).not.toHaveBeenCalled();
     });
 
+    it("rejects an SVG cover with 400 and stores nothing", async () => {
+      const form = new FormData();
+      form.append("file", new Blob(['<svg xmlns="http://www.w3.org/2000/svg"></svg>'], { type: "image/svg+xml" }), "c.svg");
+
+      const res = await POST(req("administrador", { method: "POST", body: form }), ctx("full-cover"));
+
+      expect(res.status).toBe(400);
+      expect(mockPutObject).not.toHaveBeenCalled();
+      expect(mockUpsert).not.toHaveBeenCalled();
+    });
+
     it("rejects when no file is provided", async () => {
       const res = await POST(req("administrador", { method: "POST", body: new FormData() }), ctx("full-cover"));
       expect(res.status).toBe(400);

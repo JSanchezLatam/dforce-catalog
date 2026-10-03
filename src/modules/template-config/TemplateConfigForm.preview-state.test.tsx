@@ -18,7 +18,7 @@
  * `getTemplate` -> the rendered `<article>`.
  */
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // `vi.hoisted`, because `vi.mock`'s factory is hoisted above every top-level
@@ -38,14 +38,17 @@ vi.mock("@/shared/template/registry", async (importOriginal) => {
   };
 });
 
+import { ToastProvider } from "@/shared/ui/ToastProvider";
 import { TemplateConfigForm } from "./TemplateConfigForm";
+
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: ToastProvider });
 
 const previewFont = () => document.querySelector("article")!.style.fontFamily;
 
 describe("TemplateConfigForm — the preview shows what you are about to save (PR F1)", () => {
   it("re-renders the preview with the template just picked, before any save", async () => {
     const user = userEvent.setup();
-    render(<TemplateConfigForm initialConfig={null} workshopConfig={null} />);
+    render(<TemplateConfigForm initialConfig={null} workshopConfig={null} coverImageKeys={{}} />);
 
     const before = previewFont();
     expect(before).not.toBe("");
@@ -60,7 +63,7 @@ describe("TemplateConfigForm — the preview shows what you are about to save (P
     render(
       <TemplateConfigForm
         initialConfig={{ id: "singleton", selectedTemplateId: "alt-template", defaultImageHandling: "strict", updatedAt: new Date() }}
-        workshopConfig={null}
+        workshopConfig={null} coverImageKeys={{}}
       />,
     );
 

@@ -1,7 +1,7 @@
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { TemplateConfigForm } from "@/modules/template-config/TemplateConfigForm";
-import { getTemplateConfig } from "@/modules/template-config/service";
+import { getTemplateConfig, listTemplateCoverImages } from "@/modules/template-config/service";
 import { getWorkshopConfig } from "@/modules/workshop-config/service";
 import { PAGE_HEADING } from "@/shared/ui/styles";
 
@@ -10,7 +10,7 @@ import { PAGE_HEADING } from "@/shared/ui/styles";
  * catalog the current, UNSAVED choice would produce
  * (workshop-feedback-round-1 PR F1 moved that preview here from the builder,
  * where it could never show a product and rendered at full print size). The
- * branding it draws — logo, cover photo, cover text, contact — is
+ * branding it draws — logo, cover text, contact — is
  * workshop-owned and read-only here, which is why `getWorkshopConfig` is
  * fetched alongside the template config.
  *
@@ -31,12 +31,18 @@ export default async function TemplateConfigPage() {
     );
   }
 
-  const [config, workshopConfig] = await Promise.all([getTemplateConfig(), getWorkshopConfig()]);
+  const [config, workshopConfig, coverImages] = await Promise.all([
+    getTemplateConfig(),
+    getWorkshopConfig(),
+    listTemplateCoverImages(),
+  ]);
+  // Plain strings only: this crosses into a "use client" form.
+  const coverImageKeys = Object.fromEntries(coverImages.map((row) => [row.templateId, row.r2Key]));
 
   return (
     <div className="p-8">
       <h1 className={PAGE_HEADING}>Configuración de plantillas</h1>
-      <TemplateConfigForm initialConfig={config} workshopConfig={workshopConfig} />
+      <TemplateConfigForm initialConfig={config} workshopConfig={workshopConfig} coverImageKeys={coverImageKeys} />
     </div>
   );
 }
