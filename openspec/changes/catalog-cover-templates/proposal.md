@@ -14,6 +14,7 @@ Scope is deliberately minimal (owner, 2026-10-03: "solo era cambiar la portada")
 - Catalog title typed by the operator ("Título del catálogo", optional, max 40 characters). Heading is `Catálogo: <text>`, or `Catálogo` when empty. The stored `catalogs.title` and the PDF filename follow. Applies to both templates and replaces `deriveCatalogTitle`.
 - Self-hosted Saira woff2 files (OFL), inlined into the worker's HTML because the workshop PC may be offline.
 - Download filename made safe for any typed title (RFC 5987 `filename*`).
+- Per-template cover image (owner, 2026-10-03, added after a real render). Clásico multiplies the photo onto white, while "Portada completa" fills the page and darkens it, so one shared photo always ruins one cover. Each template gets an image slot in "Configuración de template". The "Imagen de portada" field leaves "Config. del CRM", and today's image becomes Clásico's in migration `0020`.
 
 ### Out of Scope
 - Clásico refactor or extraction, golden snapshots.
@@ -27,8 +28,8 @@ Scope is deliberately minimal (owner, 2026-10-03: "solo era cambiar la portada")
 - None
 
 ### Modified Capabilities
-- `template-config`: multi-entry gallery; per-template cover and back layouts with fallbacks.
-- `workshop-settings`: documents the existing cover image as workshop-owned content.
+- `template-config`: multi-entry gallery; per-template cover and back layouts with fallbacks; per-template cover image.
+- `workshop-settings`: the cover image becomes the one template-owned exception to the FORM/CONTENT rule.
 - `catalog-generation`: operator-typed catalog title.
 
 ## Approach
@@ -44,7 +45,9 @@ Scope is deliberately minimal (owner, 2026-10-03: "solo era cambiar la portada")
 | `src/modules/pdf-generation/render.ts`, `worker.ts` | Modified | Font inlining, wait for fonts |
 | `src/modules/catalog-builder/` (`selection.ts`, `CatalogBuilderForm.tsx`) | Modified | Title input and rule |
 | `src/app/api/catalog-builder/generate/route.ts`, `src/app/api/catalogs/[id]/file/route.ts` | Modified | Title validation, filename |
-| `src/modules/template-config/TemplateConfigForm.tsx` | Modified | Font CSS import, preview title |
+| `src/modules/template-config/TemplateConfigForm.tsx` | Modified | Font CSS import, preview title, per-template image slots |
+| `src/shared/db/schema.ts`, migration `0020`, `src/app/api/template-config/cover-image/[templateId]/route.ts` | New/Modified | Per-template cover image storage and routes |
+| `src/modules/workshop-config/WorkshopConfigForm.tsx`, `src/app/api/workshop-config/cover-image/` | Modified/Deleted | Cover image field and route retired |
 
 ## Risks
 
@@ -57,7 +60,7 @@ Scope is deliberately minimal (owner, 2026-10-03: "solo era cambiar la portada")
 
 ## Rollback Plan
 
-Remove the `full-cover` registry entry; orphaned selections fall back to the default (R8.4). The title input is a single revert of its commit; titles already stored stay as typed.
+Remove the `full-cover` registry entry; orphaned selections fall back to the default (R8.4). The title input is a single revert of its commit; titles already stored stay as typed. Per-template images revert with their PRs. The workshop columns are never cleared, so the old field works again, unless Clásico's image was replaced in the meantime: the replacement deleted that R2 object, and the cover then renders without a photo (null-not-throw, `worker.ts:84-93`).
 
 ## Dependencies
 
@@ -70,3 +73,4 @@ Remove the `full-cover` registry entry; orphaned selections fall back to the def
 - [ ] "Portada completa" matches the mockup in the preview and in the printed PDF (logo reads solid).
 - [ ] Typed title prints as `Catálogo: <text>`; empty prints `Catálogo`; 41 characters are refused on both client and server.
 - [ ] A PDF generated offline uses Saira.
+- [ ] Each template prints its own cover image. Clásico keeps today's image with no action, and "Portada completa" without an image prints the dark fallback.

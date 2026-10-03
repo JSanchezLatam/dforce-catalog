@@ -84,6 +84,39 @@ N/A — no routing, shell, subprocess, VCS/PR automation, executable-file classi
 
 No migration. A browser tab opened before the deploy still sends the old derived title (`Catalog: A, B`). It either gets prefixed or fails the length check. Reload fixes it.
 
+## WU3: Per-Template Cover Image
+
+Owner decision, 2026-10-03: one shared photo always ruins one cover. Visual source: `mockup/template-config-images.html`. The worker needs no change. `PdfBranding` already carries an R2 key per job (`generate/route.ts:179-180`), and `resolveBranding` already inlines it (`worker.ts:102-105`). Only the place that chooses the key changes.
+
+| Decision | Options | Tradeoff | Choice |
+|---|---|---|---|
+| Storage | jsonb map on `template_config` / table | a map makes upload/delete a read-modify-write on the singleton row | `template_cover_image(template_id text PK, r2_key text NOT NULL, content_type text, updated_at)`, with no FK, because ids live in code (`template-ids.ts:12`) |
+| Legacy image | runtime fallback to `workshop_config` for every template / for Clásico only / copy it once | A fallback for every template shows the white car on "Portada completa", the exact defect the owner rejected. Any runtime fallback adds a branch to three readers, and "Eliminar" on Clásico would bring the old image back | The `0020` migration (`drizzle-kit generate`, schema changed) ends with `INSERT … SELECT 'dforce-classic', cover_image_r2_key, cover_image_content_type, now() FROM workshop_config WHERE cover_image_r2_key IS NOT NULL`, the same backfill pattern as `0013`. There is no runtime fallback. "Portada completa" starts with no image and uses the dark fallback that is already specified |
+| Who picks the key | worker / generate route | the route already reads both configs (`route.ts:164`) | route: add `listTemplateCoverImages()` to that `Promise.all`, then `find(templateId)` |
+| Routes | one route per template / `[templateId]` | — | `src/app/api/template-config/cover-image/[templateId]/route.ts`, a line-for-line copy of `workshop-config/cover-image/route.ts`. Unknown id → 404. Key `covers/<id>/<ts>.<ext>`. DELETE also deletes the object (with `.catch`). The GET headers are copied verbatim, including the CSP sandbox, because `validateLogo` accepts SVG |
+| Permission | `workshop.*` / `template.edit` | the image is now template config, and only that admin page reads it | `template.edit` for GET/POST/DELETE (`page.tsx:25`, `template-config/route.ts:16`). One `ROUTE_GUARDS` row (`route-guards.test.ts:47`) |
+| Upload UI | new Subir/Cambiar/Quitar component / existing `LogoUploadField` | it is already parametrised by `label`/`endpoint`/`helpText` (`LogoUploadField.tsx:14-20`) | Reuse it unchanged except `min-h-11` on its file `Input` and "Eliminar" (`:86-99`; both are 32px or less today), which also fixes the logo field |
+| Slot placement | inside the tile's `<label>` / beside it | a file input inside the radio's `<label>` (`TemplateConfigForm.tsx:132`) toggles the radio and nests interactive content | each entry becomes a column: the tile `<label>`, then the slot. Label `Imagen de portada de ${name}` (two slots need unique accessible names). Per-template hint as `helpText`, from a `Record<TemplateId, string>` so a third template fails `tsc` until it has one |
+| Toast | — | `LogoUploadField` calls `onUpdate` only after `res.ok` (`:57-58`, `:70`) | in `onUpdate`, `addToast("success", key ? "Imagen de portada guardada" : "Imagen de portada quitada")`. No `router.refresh`: the preview reads local state |
+| Preview | — | the builder has no preview since F1 (`TemplateConfigForm.tsx:61-67`) | `coverImageUrl = keys[selectedId] ? \`/api/template-config/cover-image/${id}?v=${key}\` : null` replaces `:227`. `?v=` defeats the 60 s cache |
+| Workshop field | redirect / remove | — | remove `WorkshopConfigForm.tsx:146-153` and its two tests (`WorkshopConfigForm.test.tsx:254-273`). Delete the workshop route plus its test and guard row. Keep the columns: dropping them blocks rollback (follow-up) |
+
+Data flow: upload → route → R2 put, upsert row, delete the old object. Generate: `selectedTemplateId` → row → `PdfBranding.coverImageR2Key` → worker (unchanged). Page → `listTemplateCoverImages()` → form `coverImageKeys`.
+
+**Size and split**, authored lines (snapshot and journal excluded):
+
+| PR | Scope | ~Lines |
+|---|---|---|
+| WU3a | schema, `0020`, three service functions (`list`, upsert, delete) + tests, `[templateId]` route + test, guard row, generate route + test | 340 |
+| WU3b | page, form slots, toast and preview + tests, `LogoUploadField` targets, the workshop field removed | 190 |
+| WU3c | delete the workshop cover-image route, its test and its guard row (deletion only) | 280 |
+
+**Owner approval (2026-10-03):** `mockup/template-config-images.png` approved, including "Portada completa" starting on the dark no-photo cover until it gets its own image. Delivery: two PRs — WU3a, then WU3b and WU3c together (WU3c is deletion only). Help text must not mention SVG: covers accept PNG, JPEG or WebP.
+
+Testing: route tests copy `cover-image/route.test.ts` and add an unknown-id 404 and a cross-template isolation case. The generate route picks the selected template's row, and passes null when the row is absent even if the workshop key is set. Form: two slots, unique labels, toast text, and the preview `src` follows the radio. Real SQL: an e2e upsert/list/delete row, and the backfill proven inside `BEGIN … ROLLBACK` (memory: migrations recipe). Browser: at the LAN IP, upload to both slots and switch the radio, then check the PDF for both templates.
+
+Threat matrix: N/A (an upload route that mirrors an existing one; no shell, subprocess or VCS boundary).
+
 ## Open Questions
 
 - [ ] Merge order with PRs #145 and #146. This change rewrites the same `deriveCatalogTitle` lines and the same form and spec.
