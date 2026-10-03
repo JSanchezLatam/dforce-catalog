@@ -25,8 +25,8 @@ export default async function TemplateConfigPage() {
   if (!can(user, "template.edit")) {
     return (
       <div className="p-8">
-        <h1 className={PAGE_HEADING}>Template configuration</h1>
-        <p className="text-sm text-foreground">You do not have permission to view this page.</p>
+        <h1 className={PAGE_HEADING}>Configuración de plantillas</h1>
+        <p className="text-sm text-foreground">No tenés permiso para ver esta página.</p>
       </div>
     );
   }
@@ -41,7 +41,7 @@ export default async function TemplateConfigPage() {
 
   return (
     <div className="p-8">
-      <h1 className={PAGE_HEADING}>Template configuration</h1>
+      <h1 className={PAGE_HEADING}>Configuración de plantillas</h1>
       <TemplateConfigForm initialConfig={config} workshopConfig={workshopConfig} coverImageKeys={coverImageKeys} />
     </div>
   );

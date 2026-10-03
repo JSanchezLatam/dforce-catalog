@@ -76,7 +76,7 @@ export default async function ServiceOrdersPage({
 
   const user = await requireSessionFromHeaders();
   if (!can(user, "service-orders.read")) {
-    return <div className="p-8"><p className="text-sm text-foreground">You do not have permission to view this page.</p></div>;
+    return <div className="p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
   }
 
   // `listInventory({}, { offset: 0, limit: 1000 })` used to be a third leg of

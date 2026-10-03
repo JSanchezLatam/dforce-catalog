@@ -42,7 +42,7 @@ export function ServiceOrderFilters({
       />
       <div className="flex flex-col gap-1">
         <Label>Estado</Label>
-        <Select value={selected.status ?? ""} onValueChange={(v) => applyFilter("status", v ?? "")}>
+        <Select items={STATUS_OPTIONS} value={selected.status ?? ""} onValueChange={(v) => applyFilter("status", v ?? "")}>
           <SelectTrigger className="w-44">
             <SelectValue placeholder="Todos" />
           </SelectTrigger>

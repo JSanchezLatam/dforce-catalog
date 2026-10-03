@@ -8,7 +8,7 @@
  * The form is stubbed, as in `builder/page.test.tsx`: what is under test is
  * the props this Server Component hands over, not the form's markup.
  */
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { WorkshopConfig } from "@/shared/db/schema";
@@ -63,5 +63,14 @@ describe("TemplateConfigPage — branding for the preview (PR F1)", () => {
     render(await TemplateConfigPage());
 
     expect(formProps).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { level: 1, name: "Configuración de plantillas" })).toBeInTheDocument();
+    expect(screen.getByText("No tenés permiso para ver esta página.")).toBeInTheDocument();
+  });
+
+  /** Same name as the nav entry that leads here (`nav-items.ts`). */
+  it("titles the page in Spanish", async () => {
+    render(await TemplateConfigPage());
+
+    expect(screen.getByRole("heading", { level: 1, name: "Configuración de plantillas" })).toBeInTheDocument();
   });
 });

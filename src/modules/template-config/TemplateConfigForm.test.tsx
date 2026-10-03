@@ -348,3 +348,27 @@ describe("TemplateConfigForm — the preview follows the selected template's ima
     await vi.waitFor(() => expect(coverSrc()).toBe("/api/template-config/cover-image/dforce-classic?v=covers/dforce-classic/9.png"));
   });
 });
+
+/**
+ * Base UI's bare `<SelectValue />` prints the selected VALUE — Chrome showed
+ * `strict` in this trigger while the list read "Estricto (…)".
+ */
+describe("TemplateConfigForm — the image-handling trigger shows the Spanish label", () => {
+  it("shows the strict default as Estricto, not the raw value", () => {
+    render(<TemplateConfigForm initialConfig={null} workshopConfig={null} coverImageKeys={{}} />);
+
+    const trigger = screen.getByRole("combobox", { name: "Manejo de imágenes" });
+    expect(trigger.querySelector('[data-slot="select-value"]')).toHaveTextContent(/^Estricto \(todos los productos enmarcados\)$/);
+  });
+
+  it("shows adaptive as Adaptativo once chosen", async () => {
+    const user = userEvent.setup();
+    render(<TemplateConfigForm initialConfig={null} workshopConfig={null} coverImageKeys={{}} />);
+
+    const trigger = screen.getByRole("combobox", { name: "Manejo de imágenes" });
+    await user.click(trigger);
+    await user.click(await screen.findByRole("option", { name: /Adaptativo/ }));
+
+    expect(trigger.querySelector('[data-slot="select-value"]')).toHaveTextContent(/^Adaptativo \(diseño según cada imagen\)$/);
+  });
+});

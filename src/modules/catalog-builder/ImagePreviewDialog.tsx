@@ -23,7 +23,7 @@ export function ImagePreviewDialog({ src, alt, onClose }: { src: string; alt: st
               }
             >
               <XIcon />
-              <span className="sr-only">Close</span>
+              <span className="sr-only">Cerrar</span>
             </DialogClose>
             <LazyImage src={src} alt={alt} className="max-h-[85vh] max-w-[85vw] min-h-[200px] min-w-[200px]" />
           </div>

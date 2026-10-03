@@ -1,7 +1,16 @@
 import type { PgBoss } from "pg-boss";
 import { describe, expect, it, vi } from "vitest";
 
-import { enqueueCatalogPdf, MAX_QUEUE_DEPTH, PDF_GENERATE_JOB, QueueFullError, type PdfGeneratePayload } from "./enqueue";
+import type { db } from "@/shared/db/client";
+
+import {
+  enqueueCatalogPdf,
+  MAX_QUEUE_DEPTH,
+  PDF_GENERATE_JOB,
+  PDF_GENERATE_RETRY,
+  QueueFullError,
+  type PdfGeneratePayload,
+} from "./enqueue";
 
 const PAYLOAD: PdfGeneratePayload = {
   catalogId: "cat-1",
@@ -27,11 +36,16 @@ function fakeDatabase(depth: number) {
       if (calls === 1) return { rows: [] }; // pg_advisory_xact_lock
       return { rows: [{ count: depth }] }; // count(*) query
     }),
+    // Every test injects `createPendingCatalog`; reaching the tx's own insert
+    // would mean the injected seam was bypassed.
+    insert: (() => {
+      throw new Error("unexpected tx.insert — inject createPendingCatalog");
+    }) as unknown as typeof db.insert,
   };
   const database = {
     transaction: async <T>(fn: (transactionTx: typeof tx) => Promise<T>) => fn(tx),
   };
-  return { database, executed: () => tx.execute.mock.calls.length };
+  return { database, tx, executed: () => tx.execute.mock.calls.length };
 }
 
 describe("enqueueCatalogPdf — Risk-2 depth cap", () => {
@@ -41,10 +55,14 @@ describe("enqueueCatalogPdf — Risk-2 depth cap", () => {
     const createQueue = vi.fn().mockResolvedValue(undefined);
     const boss = { send, createQueue } as unknown as PgBoss;
 
-    const result = await enqueueCatalogPdf(PAYLOAD, { getBoss: async () => boss, database });
+    const result = await enqueueCatalogPdf(PAYLOAD, {
+      getBoss: async () => boss,
+      database,
+      createPendingCatalog: vi.fn().mockResolvedValue(undefined),
+    });
 
     expect(result).toEqual({ jobId: "job-123" });
-    expect(send).toHaveBeenCalledWith(PDF_GENERATE_JOB, PAYLOAD);
+    expect(send).toHaveBeenCalledWith(PDF_GENERATE_JOB, PAYLOAD, PDF_GENERATE_RETRY);
     // Exactly 2 tx.execute() calls: advisory lock, then depth count — that
     // ordering (lock BEFORE count, both inside the same transaction) is what
     // makes the guarantee hold under real concurrent Postgres transactions.
@@ -60,10 +78,14 @@ describe("enqueueCatalogPdf — Risk-2 depth cap", () => {
     const createQueue = vi.fn().mockResolvedValue(undefined);
     const boss = { send, createQueue } as unknown as PgBoss;
 
-    await expect(enqueueCatalogPdf(PAYLOAD, { getBoss: async () => boss, database })).rejects.toBeInstanceOf(
-      QueueFullError,
-    );
+    const createPendingCatalog = vi.fn();
+
+    await expect(
+      enqueueCatalogPdf(PAYLOAD, { getBoss: async () => boss, database, createPendingCatalog }),
+    ).rejects.toBeInstanceOf(QueueFullError);
     expect(send).not.toHaveBeenCalled();
+    // A refused request must leave nothing on /catalogs to explain.
+    expect(createPendingCatalog).not.toHaveBeenCalled();
   });
 
   it("enqueues right at the boundary (depth = MAX_QUEUE_DEPTH - 1)", async () => {
@@ -72,7 +94,9 @@ describe("enqueueCatalogPdf — Risk-2 depth cap", () => {
     const createQueue = vi.fn().mockResolvedValue(undefined);
     const boss = { send, createQueue } as unknown as PgBoss;
 
-    await expect(enqueueCatalogPdf(PAYLOAD, { getBoss: async () => boss, database })).resolves.toEqual({
+    await expect(
+      enqueueCatalogPdf(PAYLOAD, { getBoss: async () => boss, database, createPendingCatalog: vi.fn() }),
+    ).resolves.toEqual({
       jobId: "job-124",
     });
   });
@@ -83,8 +107,50 @@ describe("enqueueCatalogPdf — Risk-2 depth cap", () => {
     const createQueue = vi.fn().mockResolvedValue(undefined);
     const boss = { send, createQueue } as unknown as PgBoss;
 
-    await expect(enqueueCatalogPdf(PAYLOAD, { getBoss: async () => boss, database })).rejects.toThrow(
+    await expect(
+      enqueueCatalogPdf(PAYLOAD, { getBoss: async () => boss, database, createPendingCatalog: vi.fn() }),
+    ).rejects.toThrow(
       "pg-boss rejected",
     );
+  });
+});
+
+/**
+ * The `catalogs` row used to be inserted by the WORKER, after the render. An
+ * operator who opened /catalogs right after Generar saw nothing, and a render
+ * that failed left nothing to mark failed. The row is now born here, at
+ * enqueue — inside the advisory-locked transaction, so a send that throws
+ * rolls it back with everything else. That rollback is Postgres's, not this
+ * fake's: `full-flow.e2e.test.ts` is where it is proven.
+ */
+describe("enqueueCatalogPdf — the catalogs row is created at enqueue", () => {
+  it("inserts the pending row through the locked transaction, after the depth check and before the send", async () => {
+    const { database, tx, executed } = fakeDatabase(0);
+    const order: string[] = [];
+    const createPendingCatalog = vi.fn(async () => {
+      order.push(`insert after ${executed()} executes`);
+    });
+    const send = vi.fn(async () => {
+      order.push("send");
+      return "job-9";
+    });
+    const boss = { send, createQueue: vi.fn().mockResolvedValue(undefined) } as unknown as PgBoss;
+
+    await enqueueCatalogPdf(PAYLOAD, { getBoss: async () => boss, database, createPendingCatalog });
+
+    expect(createPendingCatalog).toHaveBeenCalledWith(PAYLOAD, tx);
+    expect(order).toEqual(["insert after 2 executes", "send"]);
+  });
+
+  it("lets a send failure escape the transaction, so the row is rolled back with it", async () => {
+    const { database } = fakeDatabase(0);
+    const createPendingCatalog = vi.fn().mockResolvedValue(undefined);
+    const send = vi.fn().mockRejectedValue(new Error("pg-boss down"));
+    const boss = { send, createQueue: vi.fn().mockResolvedValue(undefined) } as unknown as PgBoss;
+
+    await expect(enqueueCatalogPdf(PAYLOAD, { getBoss: async () => boss, database, createPendingCatalog })).rejects.toThrow(
+      "pg-boss down",
+    );
+    expect(createPendingCatalog).toHaveBeenCalledTimes(1);
   });
 });
