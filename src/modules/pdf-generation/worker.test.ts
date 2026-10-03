@@ -11,8 +11,16 @@
 import type { PgBoss } from "pg-boss";
 import { describe, expect, it, vi } from "vitest";
 
-import { PDF_GENERATE_JOB, type PdfBranding } from "./enqueue";
-import { resolveBranding, buildMeasurementProps, buildPrintProps, buildTemplateProps, registerPdfGenerateWorker } from "./worker";
+import type { db } from "@/shared/db/client";
+import { PDF_GENERATE_JOB, PDF_UPLOAD_JOB, type PdfBranding, type PdfGeneratePayload } from "./enqueue";
+import {
+  resolveBranding,
+  buildMeasurementProps,
+  buildPrintProps,
+  buildTemplateProps,
+  handlePdfGenerate,
+  registerPdfGenerateWorker,
+} from "./worker";
 
 // WU4 (design.md decision 18) — capture.ts's withJobCapture defaults its
 // `report` param to Sentry.captureException; mocking it here lets the
@@ -221,7 +229,14 @@ describe("registerPdfGenerateWorker", () => {
 
     await registerPdfGenerateWorker({ getBoss: async () => boss });
 
-    expect(work).toHaveBeenCalledWith(PDF_GENERATE_JOB, { localConcurrency: 1 }, expect.any(Function));
+    // `includeMetadata` is what puts retryCount/retryLimit on the job — without
+    // it both are undefined, `isFinalAttempt` is never true, and a render that
+    // fails for good leaves the row "pending" forever.
+    expect(work).toHaveBeenCalledWith(
+      PDF_GENERATE_JOB,
+      { localConcurrency: 1, includeMetadata: true },
+      expect.any(Function),
+    );
     const registeredHandler = work.mock.calls[0][2] as (jobs: unknown[]) => Promise<void>;
     // Empty jobs array: the site's `async ([job]) => ...` destructures
     // `job` as undefined, so `job.data` throws synchronously — a
@@ -232,5 +247,98 @@ describe("registerPdfGenerateWorker", () => {
     expect(captureException).toHaveBeenCalledWith(expect.any(TypeError), {
       tags: { job: PDF_GENERATE_JOB, jobId: "unknown" },
     });
+  });
+});
+
+/**
+ * The `catalogs` row is created at enqueue now (enqueue.ts), so the worker no
+ * longer inserts it — and a retry after a half-finished attempt can no longer
+ * hit a primary-key violation on a row it already wrote. What the worker owns
+ * instead is the one transition nobody else can make: a render that fails on
+ * its LAST attempt marks the row `failed`, which is what tells the operator.
+ */
+describe("handlePdfGenerate — the row's fate when the render fails", () => {
+  const payload: PdfGeneratePayload = {
+    catalogId: "cat-1",
+    userId: "user-1",
+    title: "Catálogo Motor",
+    branding: null,
+    sections: [],
+    products: [],
+    productsPerPage: 10,
+  };
+
+  /** Fake `db.update(table).set(patch).where(cond)` — same shape as upload-status.test.ts's. */
+  function fakeDatabase() {
+    const updates: Record<string, unknown>[] = [];
+    const database = {
+      update: () => ({ set: (patch: Record<string, unknown>) => ({ where: async () => void updates.push(patch) }) }),
+    };
+    return { database: database as unknown as typeof db, updates };
+  }
+
+  it("hands the rendered PDF to pdf-upload and writes nothing to the row itself", async () => {
+    const { database, updates } = fakeDatabase();
+    const send = vi.fn().mockResolvedValue("upload-1");
+
+    await handlePdfGenerate(
+      { data: payload, retryCount: 0, retryLimit: 1 },
+      {
+        boss: { send },
+        database,
+        renderPdfBuffer: vi.fn().mockResolvedValue(Buffer.from("%PDF")),
+        handoffPdfBuffer: vi.fn().mockResolvedValue("/tmp/cat-1.pdf"),
+      },
+    );
+
+    expect(send).toHaveBeenCalledWith(
+      PDF_UPLOAD_JOB,
+      { catalogId: "cat-1", userId: "user-1", pdfBufferRef: "/tmp/cat-1.pdf" },
+      { retryLimit: 2, retryDelay: 30 },
+    );
+    expect(updates).toEqual([]);
+  });
+
+  it("on a non-final failure, rethrows and leaves the row pending for pg-boss's retry", async () => {
+    const { database, updates } = fakeDatabase();
+    const boom = new Error("Chromium crashed");
+
+    await expect(
+      handlePdfGenerate(
+        { data: payload, retryCount: 0, retryLimit: 1 },
+        { boss: { send: vi.fn() }, database, renderPdfBuffer: vi.fn().mockRejectedValue(boom) },
+      ),
+    ).rejects.toBe(boom);
+    expect(updates).toEqual([]);
+  });
+
+  it("on the final failure, marks the row failed and still rethrows the original error", async () => {
+    const { database, updates } = fakeDatabase();
+    const boom = new Error("Chromium crashed");
+
+    await expect(
+      handlePdfGenerate(
+        { data: payload, retryCount: 1, retryLimit: 1 },
+        { boss: { send: vi.fn() }, database, renderPdfBuffer: vi.fn().mockRejectedValue(boom) },
+      ),
+    ).rejects.toBe(boom);
+    expect(updates).toEqual([{ uploadStatus: "failed" }]);
+  });
+
+  it("also marks the row failed when the render worked but handing it to pdf-upload failed for good", async () => {
+    const { database, updates } = fakeDatabase();
+
+    await expect(
+      handlePdfGenerate(
+        { data: payload, retryCount: 1, retryLimit: 1 },
+        {
+          boss: { send: vi.fn().mockRejectedValue(new Error("pg-boss down")) },
+          database,
+          renderPdfBuffer: vi.fn().mockResolvedValue(Buffer.from("%PDF")),
+          handoffPdfBuffer: vi.fn().mockResolvedValue("/tmp/cat-1.pdf"),
+        },
+      ),
+    ).rejects.toThrow("pg-boss down");
+    expect(updates).toEqual([{ uploadStatus: "failed" }]);
   });
 });

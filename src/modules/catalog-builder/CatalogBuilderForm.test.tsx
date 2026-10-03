@@ -23,13 +23,17 @@ const CANDIDATE = {
   priceLists: { "Precio de venta": "45.00", "PRECIO TALLER": "38.00", "Precio Socio": "0.00" },
 };
 
-function mockFetch(generateResponse?: { ok: boolean; status: number; json: () => Promise<unknown> }) {
+function mockFetch(
+  generateResponse?: { ok: boolean; status: number; json: () => Promise<unknown> },
+  depth = 0,
+) {
   const fetchMock = vi.fn((url: string) => {
     if (url.includes("/products")) {
       return Promise.resolve({ ok: true, json: async () => ({ products: [CANDIDATE] }) });
     }
     if (url.includes("/queue-depth")) {
-      return Promise.resolve({ ok: true, json: async () => ({ depth: 0 }) });
+      // The route's real body: `{ depth, maxDepth: MAX_QUEUE_DEPTH }`.
+      return Promise.resolve({ ok: true, json: async () => ({ depth, maxDepth: 3 }) });
     }
     if (url.includes("/generate")) {
       return Promise.resolve(
@@ -825,5 +829,69 @@ describe("CatalogBuilderForm — the category-tree flow is unaffected", () => {
 
     await screen.findByRole("button", { name: /Seleccion.* categor.as/ });
     expect(bodies).toEqual([]);
+  });
+});
+
+/**
+ * The server caps the queue at MAX_QUEUE_DEPTH (3: one rendering, two
+ * waiting). The button used to give up at 2, refusing a request the server
+ * would have accepted.
+ */
+describe("CatalogBuilderForm — the Generar button agrees with the server's queue cap", () => {
+  async function selectStep(depth: number) {
+    mockFetch(undefined, depth);
+    const user = userEvent.setup();
+    render(<CatalogBuilderForm categoryL1Options={["Motor"]} categoryPairs={[]} catalogCount={0} />);
+    await user.click(screen.getByRole("button", { name: /Seleccion.* categor.as/ }));
+    await user.click(await screen.findByRole("checkbox", { name: "Motor" }));
+    await screen.findByText("Woofer");
+  }
+
+  it("still lets the operator generate with two jobs in the queue", async () => {
+    await selectStep(2);
+
+    expect(screen.getByRole("button", { name: "Empezar a generar" })).toBeEnabled();
+  });
+
+  it("blocks generating once the queue holds three", async () => {
+    await selectStep(3);
+
+    expect(await screen.findByRole("button", { name: "3 en cola — esperar" })).toBeDisabled();
+  });
+});
+
+/**
+ * `queuePosition` counts the jobs AHEAD of this one (position.ts), so 0 is
+ * "rendering right now" — "posición 0 en la cola" read as a bug.
+ */
+describe("CatalogBuilderForm — the success dialog says where the catalog is", () => {
+  async function confirmWithPosition(queuePosition: number) {
+    const { user } = await reachReviewStep({
+      ok: true,
+      status: 200,
+      json: async () => ({ jobId: "job-1", queuePosition, evictionWarning: false }),
+    });
+    await user.click(screen.getByRole("button", { name: "Empezar a generar" }));
+    await user.click(await screen.findByRole("button", { name: "Generar catálogo" }));
+    return screen.findByRole("dialog");
+  }
+
+  it("says it is generating now when nothing is ahead", async () => {
+    const dialog = await confirmWithPosition(0);
+
+    expect(within(dialog).getByText(/Se está generando ahora\./)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/posición/)).not.toBeInTheDocument();
+  });
+
+  it("uses the singular for one catalog ahead", async () => {
+    const dialog = await confirmWithPosition(1);
+
+    expect(within(dialog).getByText(/1 catálogo por delante\./)).toBeInTheDocument();
+  });
+
+  it("uses the plural for two catalogs ahead", async () => {
+    const dialog = await confirmWithPosition(2);
+
+    expect(within(dialog).getByText(/2 catálogos por delante\./)).toBeInTheDocument();
   });
 });

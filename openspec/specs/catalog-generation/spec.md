@@ -331,3 +331,62 @@ coinciden con el filtro") is out of scope for this change.
 - GIVEN a handed-off selection containing a product id since removed from inventory
 - WHEN the builder resolves the selection
 - THEN it MUST drop that id and proceed with the remaining valid products, rather than failing the whole handoff
+
+### Requirement: Catalog Row Lifecycle
+
+A `catalogs` row MUST exist, with `upload_status = pending`, from the moment a
+generation request is accepted — it MUST be created in the same transaction
+that enqueues the `pdf-generate` job, never by the render worker after the PDF
+is rendered. A request the queue refuses MUST leave no row behind. When the
+render fails on its final attempt, the row MUST be set to `failed`, so
+"Mis catálogos" is where the operator learns of it; the failure MUST still be
+reported to error monitoring. The final attempt is defined by the retry policy
+the application sets on the `pdf-generate` job, not by a queue library default.
+A retried render attempt MUST NOT create a second row.
+
+Added 2026-10-03. The row used to be inserted by the worker after the render:
+an operator who opened "Mis catálogos" right after Generar saw nothing, a render
+that failed for good left nothing to mark `failed`, and a retry after a
+half-finished attempt could hit a primary-key violation on the row it had
+already written.
+
+#### Scenario: The catalog is listed as soon as generation is accepted
+
+- GIVEN an Administrador confirms generation and the queue has room
+- WHEN the request returns
+- THEN a `catalogs` row for that catalog MUST already exist with `upload_status = pending`
+- AND "Mis catálogos" MUST list it without waiting for the render
+
+#### Scenario: A full queue creates no row
+
+- GIVEN the `pdf-generate` queue already holds `MAX_QUEUE_DEPTH` jobs
+- WHEN a generation request arrives
+- THEN it MUST be refused with the queue-full response
+- AND no `catalogs` row MUST be created for it
+
+#### Scenario: A failed enqueue leaves no row
+
+- GIVEN the row has been inserted inside the enqueue transaction
+- WHEN sending the `pdf-generate` job fails
+- THEN the transaction MUST roll back and no `catalogs` row MUST remain
+
+#### Scenario: A render that fails for good marks the catalog failed
+
+- GIVEN a `pdf-generate` job whose render fails on every attempt
+- WHEN its final attempt fails
+- THEN the catalog's row MUST be `failed`
+- AND the error MUST still be rethrown so error monitoring captures it and the job is recorded as failed
+
+#### Scenario: A render that fails once and then succeeds is not marked failed
+
+- GIVEN a render that fails on a non-final attempt
+- WHEN that attempt fails
+- THEN the row MUST stay `pending` while the retry is scheduled
+
+#### Scenario: The operator is told when the catalog finishes or fails
+
+- GIVEN "Mis catálogos" is open and shows the catalog `pending`
+- WHEN its row becomes `uploaded` or `failed`
+- THEN the list MUST update without a manual reload
+- AND a notice MUST say the catalog is ready, or that it could not be generated
+- AND a catalog already `uploaded` or `failed` when the page first loaded MUST NOT be announced
