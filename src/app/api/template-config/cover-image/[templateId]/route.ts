@@ -8,14 +8,15 @@ import {
   listTemplateCoverImages,
   upsertTemplateCoverImage,
 } from "@/modules/template-config/service";
-import { validateLogo, MAX_UPLOAD_BYTES } from "@/modules/workshop-config/logo";
+import { validateCover, MAX_UPLOAD_BYTES } from "@/modules/workshop-config/logo";
 import { KNOWN_TEMPLATE_IDS } from "@/shared/template/template-ids";
 
 /**
  * Per-template cover photo (catalog-cover-templates WU3a). Same upload idiom
  * as the retired `workshop-config/cover-image` route, keyed by the registry id
- * in the URL. `validateLogo` is reused as-is: it sniffs image bytes
- * generically. It accepts SVG, which is why GET keeps the CSP sandbox.
+ * in the URL. Uploads go through `validateCover` (PNG, JPEG or WebP only);
+ * GET keeps the CSP sandbox because a row migrated from the workshop's
+ * legacy cover may still hold an SVG.
  *
  * Every method needs `template.edit`: the photo is template config and only
  * the template-config admin page reads it.
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest, context: Context) {
 
   let cover;
   try {
-    cover = validateLogo(Buffer.from(await file.arrayBuffer()));
+    cover = validateCover(Buffer.from(await file.arrayBuffer()));
   } catch {
     return NextResponse.json({ error: "Invalid image format" }, { status: 400 });
   }

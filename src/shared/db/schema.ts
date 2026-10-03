@@ -71,9 +71,9 @@ export const workshopConfig = pgTable("workshop_config", {
   /**
    * Catalog cover photo (catalog-templates-and-workshop-info WU5, design D6)
    * — same R2-key + content-type pair as `logoR2Key`/`logoContentType`,
-   * uploaded through the same route pattern (`api/workshop-config/cover-image/
-   * route.ts`, mirrors `logo/route.ts`). Null renders no cover photo — the
-   * cover degrades to the template's red/black block, never a broken `<img>`.
+   * LEGACY: nothing reads or writes these since catalog-cover-templates WU3
+   * (each template owns its photo in `template_cover_image`; migration `0020`
+   * copied this one into Clásico's row). Kept so a rollback still has the data.
    */
   coverImageR2Key: text("cover_image_r2_key"),
   coverImageContentType: text("cover_image_content_type"),

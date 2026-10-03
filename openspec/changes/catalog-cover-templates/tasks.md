@@ -105,26 +105,26 @@ Rule for every pair: RED test, confirm red BY NAME, GREEN, then mutation-verify 
 
 ## WU3b: Form slots and workshop field removal (PR B)
 
-- [ ] 6.1 RED `page` test: `page.tsx` passes `coverImageKeys` from `listTemplateCoverImages()`. GREEN `src/app/(dashboard)/.../template-config/page.tsx` (`:25` permission unchanged).
-- [ ] 6.2 RED `TemplateConfigForm.test.tsx`: two slots with unique labels `Imagen de portada de Dforce Clásico` / `... de Portada completa`; the file input is NOT inside the radio's `<label>`. GREEN: each entry becomes a column (tile `<label>`, then `LogoUploadField` slot).
-- [ ] 6.3 RED: per-template help text from a `Record<TemplateId, string>` (compile-time exhaustive); text in Spanish and mentions PNG, JPEG or WebP and 2MB, and does NOT contain `SVG` (assert absence by regex; the mockup's SVG wording is superseded by the owner note). GREEN.
-- [ ] 6.4 RED toast: upload success calls `addToast("success", "Imagen de portada guardada")`, removal `"Imagen de portada quitada"`; no toast when the response is not ok. GREEN in `onUpdate`, with no `router.refresh` (preview reads local state). If a refresh is ever added, toast goes ABOVE it and both BELOW the `try/catch`.
-- [ ] 6.5 RED preview: `coverImageUrl` is `/api/template-config/cover-image/<id>?v=<key>` for the selected radio and null when that template has no key; switching the radio changes the `src`. GREEN: replace `:227`.
-- [ ] 6.6 44x44 targets: add `min-h-11` (and `min-w-11` on "Eliminar") to `LogoUploadField`'s file `Input` and "Eliminar" (`:86-99`); also fixes the logo field. A test cannot assert height, so measure in the browser in 6.12 and say so in the PR.
-- [ ] 6.7 RED `WorkshopConfigForm.test.tsx`: "Imagen de portada" field is absent (replaces the two tests at `:254-273`). GREEN: remove `WorkshopConfigForm.tsx:146-153`. Keep the DB columns (follow-up).
-- [ ] 6.8 Mutation-verify 6.1-6.7 by name (re-add the field, put the input inside the label, drop a toast).
+- [x] 6.1 RED `page` test: `page.tsx` passes `coverImageKeys` from `listTemplateCoverImages()`. GREEN `src/app/(dashboard)/.../template-config/page.tsx` (`:25` permission unchanged).
+- [x] 6.2 RED `TemplateConfigForm.test.tsx`: two slots with unique labels `Imagen de portada de Dforce Clásico` / `... de Portada completa`; the file input is NOT inside the radio's `<label>`. GREEN: each entry becomes a column (tile `<label>`, then `LogoUploadField` slot).
+- [x] 6.3 RED: per-template help text from a `Record<TemplateId, string>` (compile-time exhaustive); text in Spanish and mentions PNG, JPEG or WebP and 2MB, and does NOT contain `SVG` (assert absence by regex; the mockup's SVG wording is superseded by the owner note). GREEN.
+- [x] 6.4 RED toast: upload success calls `addToast("success", "Imagen de portada guardada")`, removal `"Imagen de portada quitada"`; no toast when the response is not ok. (Also done in 6.x: `validateCover` rejects SVG on the per-template route, `LogoUploadField allowSvg={false}`.) GREEN in `onUpdate`, with no `router.refresh` (preview reads local state). If a refresh is ever added, toast goes ABOVE it and both BELOW the `try/catch`.
+- [x] 6.5 RED preview: `coverImageUrl` is `/api/template-config/cover-image/<id>?v=<key>` for the selected radio and null when that template has no key; switching the radio changes the `src`. GREEN: replace `:227`.
+- [x] 6.6 44x44 targets: add `min-h-11` (and `min-w-11` on "Eliminar") to `LogoUploadField`'s file `Input` and "Eliminar" (`:86-99`); also fixes the logo field. A test cannot assert height, so measure in the browser in 6.12 and say so in the PR.
+- [x] 6.7 RED `WorkshopConfigForm.test.tsx`: "Imagen de portada" field is absent (replaces the two tests at `:254-273`). GREEN: remove `WorkshopConfigForm.tsx:146-153`. Keep the DB columns (follow-up).
+- [x] 6.8 Mutation-verify 6.1-6.7 by name (re-add the field, put the input inside the label, drop a toast).
 
 ## WU3c: Retire the workshop route (PR B, separate commit)
 
-- [ ] 7.1 Confirm no callers: `rg "workshop-config/cover-image"` returns only the files to delete. Then delete `src/app/api/workshop-config/cover-image/route.ts`, its test and its `ROUTE_GUARDS` row.
-- [ ] 7.2 RED/GREEN guard: `route-guards.test.ts` still passes and the new template route row remains (mutate: remove the new row, the guard test goes red).
-- [ ] 7.3 `npx tsc --noEmit`, `npm test`, `npm run lint`, then `gga run --pr-mode --diff-only` with `PR_BASE_BRANCH` pinned to PR A's branch (auto-detect resolves to `main`).
+- [x] 7.1 Confirm no callers: `rg "workshop-config/cover-image"` returns only the files to delete. Then delete `src/app/api/workshop-config/cover-image/route.ts`, its test and its `ROUTE_GUARDS` row.
+- [x] 7.2 RED/GREEN guard: `route-guards.test.ts` still passes and the new template route row remains (mutate: remove the new row, the guard test goes red).
+- [ ] 7.3 (gates run in apply: npm test 1840 green, tsc clean, lint 0/14; GGA left to orchestrator) `npx tsc --noEmit`, `npm test`, `npm run lint`, then `gga run --pr-mode --diff-only` with `PR_BASE_BRANCH` pinned to PR A's branch (auto-detect resolves to `main`).
 
 ## WU3 Verification tests cannot cover
 
-- [ ] 8.1 Create a THROWAWAY user and use a QA-only key prefix; never generate catalogs as a real user against production R2 (retention deletes production catalogs).
-- [ ] 8.2 At `http://<LAN-ip>:3000`, not localhost: upload in both slots, switch the radio, confirm the preview follows, read the console for hydration errors, confirm the toast shows and "Eliminar" works.
-- [ ] 8.3 Measure the file input and "Eliminar" at 44x44 or more in the browser.
+- [x] 8.1 Create a THROWAWAY user and use a QA-only key prefix; never generate catalogs as a real user against production R2 (retention deletes production catalogs).
+- [ ] 8.2 (partial 2026-10-03: uploaded to Portada completa at the LAN IP, toast shown, preview followed the radio, no hydration errors; Clásico slot upload and the UI Eliminar click not exercised) At `http://<LAN-ip>:3000`, not localhost: upload in both slots, switch the radio, confirm the preview follows, read the console for hydration errors, confirm the toast shows and "Eliminar" works.
+- [x] 8.3 (measured at 192.168.0.12: file input 256x44, Eliminar 71x44) Measure the file input and "Eliminar" at 44x44 or more in the browser.
 - [ ] 8.4 Generate a PDF per template (throwaway DB); each cover shows its own image, and "Portada completa" without one shows the dark fallback.
-- [ ] 8.5 Delete the QA objects from R2 and the throwaway user afterwards; confirm Clásico still has the migrated image.
+- [x] 8.5 (QA image deleted via DELETE, HeadObject → NotFound; QA user dropped; Clásico keeps covers/1790624572187.jpg) Delete the QA objects from R2 and the throwaway user afterwards; confirm Clásico still has the migrated image.
 - [ ] 8.6 At archive, merge the template-config and workshop-settings deltas (the cover-image field removal is a MODIFIED scenario, not a rename).

@@ -77,3 +77,14 @@ export function validateLogo(buffer: Buffer): LogoResult {
 
   throw new Error("Unrecognised image format");
 }
+
+/**
+ * A catalog cover is a photo: PNG, JPEG or WebP, 2MB. `validateLogo` also
+ * takes SVG (a logo can be vector), which has no business on a full-bleed
+ * cover, so it is refused here rather than in each route.
+ */
+export function validateCover(buffer: Buffer): LogoResult {
+  const result = validateLogo(buffer);
+  if (result.contentType === "image/svg+xml") throw new Error("SVG is not accepted for covers");
+  return result;
+}

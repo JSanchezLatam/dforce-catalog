@@ -12,12 +12,14 @@ type Props = {
   currentType: string | null;
   onUpdate: (key: string | null, contentType: string | null) => void;
   /** WU5 (design D6, task 6.6) — parametrized so the same upload UI serves
-   * both the logo (`/api/workshop-config/logo`) and the cover image
-   * (`/api/workshop-config/cover-image`, mirrors the logo route exactly).
+   * both the logo (`/api/workshop-config/logo`) and the per-template cover
+   * image (`/api/template-config/cover-image/<id>`).
    * Defaults preserve the pre-WU5 logo behaviour unchanged. */
   label?: string;
   endpoint?: string;
   helpText?: string;
+  /** Logos may be vector; a photo (the per-template cover) may not. */
+  allowSvg?: boolean;
 };
 
 export function LogoUploadField({
@@ -26,6 +28,7 @@ export function LogoUploadField({
   onUpdate,
   label = "Logo del taller",
   endpoint = "/api/workshop-config/logo",
+  allowSvg = true,
   helpText = "El logo se guarda inmediatamente al subirlo. Formatos: PNG, JPEG, WebP o SVG (máx. 2MB, SVG: 512KB).",
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -49,7 +52,7 @@ export function LogoUploadField({
     const res = await fetch(endpoint, { method: "POST", body: form });
 
     if (!res.ok) {
-      setError(`No se pudo subir la imagen. Verifica que sea una imagen válida (PNG, JPEG, WebP o SVG).`);
+      setError(`No se pudo subir la imagen. Verifica que sea una imagen válida (${allowSvg ? "PNG, JPEG, WebP o SVG" : "PNG, JPEG o WebP"}).`);
       setUploading(false);
       return;
     }
@@ -87,14 +90,14 @@ export function LogoUploadField({
           id={`image-upload-${endpoint}`}
           ref={inputRef}
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+          accept={allowSvg ? "image/png,image/jpeg,image/webp,image/svg+xml" : "image/png,image/jpeg,image/webp"}
           onChange={handleFile}
           disabled={uploading}
-          className="max-w-64"
+          className="min-h-11 max-w-64"
         />
 
         {preview && (
-          <Button type="button" variant="outline" size="sm" onClick={handleDelete} disabled={uploading}>
+          <Button type="button" variant="outline" size="sm" className="min-h-11 min-w-11" onClick={handleDelete} disabled={uploading}>
             Eliminar
           </Button>
         )}

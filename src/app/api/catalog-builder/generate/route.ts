@@ -181,10 +181,10 @@ export async function POST(request: NextRequest) {
         logoR2Key: workshop?.logoR2Key ?? null,
         logoContentType: workshop?.logoContentType ?? null,
         coverText: workshop?.coverText ?? null,
-        // `buildWorkshopContact` is the one shared mapping this route and the
-        // builder's live preview both use (Risk-5).
         coverImageR2Key: coverImage?.r2Key ?? null,
         coverImageContentType: coverImage?.contentType ?? null,
+        // `buildWorkshopContact` is the one shared mapping this route and the
+        // builder's live preview both use (Risk-5).
         contact: buildWorkshopContact(workshop ?? null),
       },
       sections: body.sections,

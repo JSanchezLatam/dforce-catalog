@@ -8,6 +8,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CARD, FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
+import { useToast } from "@/shared/ui/ToastProvider";
+import { LogoUploadField } from "@/modules/workshop-config/LogoUploadField";
+import type { KNOWN_TEMPLATE_IDS } from "@/shared/template/template-ids";
 import "@/shared/template/fonts/saira.css";
 import { CatalogTemplate } from "@/shared/template/CatalogTemplate";
 import { CATALOG_TEMPLATES, getTemplate } from "@/shared/template/registry";
@@ -24,6 +27,19 @@ function toFormState(config: TemplateConfig | null): FormState {
     selectedTemplateId: getTemplate(config?.selectedTemplateId).id,
   };
 }
+
+/**
+ * What each template's photo should look like. A `Record` over the known ids,
+ * so a third template fails `tsc` until it says. Covers are raster only
+ * (`validateCover`), hence no SVG.
+ */
+const COVER_HELP: Record<(typeof KNOWN_TEMPLATE_IDS)[number], string> = {
+  "dforce-classic":
+    "Producto recortado sobre fondo claro: se funde con el blanco de la portada. PNG, JPEG o WebP (máx. 2MB).",
+  "full-cover":
+    "Foto oscura a página completa: la portada la oscurece arriba para el logo. PNG, JPEG o WebP (máx. 2MB).",
+};
+const GENERIC_COVER_HELP = "PNG, JPEG o WebP (máx. 2MB).";
 
 /**
  * The title the preview's cover and index carry. A catalog's real title is
@@ -69,6 +85,7 @@ const PREVIEW_ZOOM = 0.6;
 export function TemplateConfigForm({
   initialConfig,
   workshopConfig,
+  coverImageKeys,
 }: {
   initialConfig: TemplateConfig | null;
   /**
@@ -78,7 +95,14 @@ export function TemplateConfigForm({
    * like the workshop's catalog instead of a blank template.
    */
   workshopConfig: WorkshopConfig | null;
+  /**
+   * `template_cover_image` as `{ [templateId]: r2Key }`. Plain strings on
+   * purpose: this prop crosses a Server -> Client boundary.
+   */
+  coverImageKeys: Record<string, string>;
 }) {
+  const { addToast } = useToast();
+  const [coverKeys, setCoverKeys] = useState(coverImageKeys);
   const [form, setForm] = useState<FormState>(() => toFormState(initialConfig));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -86,6 +110,22 @@ export function TemplateConfigForm({
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
     setStatus("idle");
+  }
+
+  /**
+   * Called by `LogoUploadField` only after the server accepted the upload or
+   * the removal. No `router.refresh()`: the preview reads `coverKeys`.
+   * ponytail: if a refresh is ever added, the toast goes ABOVE it and both
+   * BELOW any try/catch (see `OrderStatusControls`).
+   */
+  function handleCoverUpdate(templateId: string, key: string | null) {
+    setCoverKeys((prev) => {
+      const next = { ...prev };
+      if (key) next[templateId] = key;
+      else delete next[templateId];
+      return next;
+    });
+    addToast("success", key ? "Imagen de portada guardada" : "Imagen de portada quitada");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -129,36 +169,48 @@ export function TemplateConfigForm({
               </h2>
               <div role="radiogroup" aria-labelledby="template-gallery-heading" className="flex flex-wrap gap-4">
                 {CATALOG_TEMPLATES.map((template) => (
-                  <label
-                    key={template.id}
-                    className="flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-input p-3 has-[:checked]:border-ring"
-                  >
-                    <input
-                      type="radio"
-                      name="selectedTemplateId"
-                      value={template.id}
-                      checked={form.selectedTemplateId === template.id}
-                      onChange={() => update("selectedTemplateId", template.id)}
+                  // The slot is a SIBLING of the tile's <label>: a file input
+                  // inside it would toggle the radio on every click.
+                  <div key={template.id} className="flex max-w-sm flex-col gap-3">
+                    <label
+                      className="flex cursor-pointer flex-col items-center gap-2 self-start rounded-lg border border-input p-3 has-[:checked]:border-ring"
+                    >
+                      <input
+                        type="radio"
+                        name="selectedTemplateId"
+                        value={template.id}
+                        checked={form.selectedTemplateId === template.id}
+                        onChange={() => update("selectedTemplateId", template.id)}
+                      />
+                      {/*
+                        A real thumbnail asset (`template.thumbnail`, e.g.
+                        "/templates/dforce-classic.png") does not exist yet — no
+                        design tool produced one for this PR. A swatch avoids
+                        shipping a broken <img>; swap it for a real thumbnail
+                        once one exists.
+                      */}
+                      <div
+                        aria-hidden="true"
+                        style={{
+                          width: 96,
+                          height: 124,
+                          background: template.primaryColors.secondary,
+                          border: `2px solid ${template.primaryColors.primary}`,
+                          borderRadius: 4,
+                        }}
+                      />
+                      <span className="text-sm">{template.name}</span>
+                    </label>
+                    <LogoUploadField
+                      currentKey={coverKeys[template.id] ?? null}
+                      currentType={null}
+                      onUpdate={(key) => handleCoverUpdate(template.id, key)}
+                      label={`Imagen de portada de ${template.name}`}
+                      endpoint={`/api/template-config/cover-image/${template.id}`}
+                      helpText={COVER_HELP[template.id as keyof typeof COVER_HELP] ?? GENERIC_COVER_HELP}
+                      allowSvg={false}
                     />
-                    {/*
-                      A real thumbnail asset (`template.thumbnail`, e.g.
-                      "/templates/dforce-classic.png") does not exist yet — no
-                      design tool produced one for this PR. A swatch avoids
-                      shipping a broken <img>; swap it for a real thumbnail
-                      once one exists.
-                    */}
-                    <div
-                      aria-hidden="true"
-                      style={{
-                        width: 96,
-                        height: 124,
-                        background: template.primaryColors.secondary,
-                        border: `2px solid ${template.primaryColors.primary}`,
-                        borderRadius: 4,
-                      }}
-                    />
-                    <span className="text-sm">{template.name}</span>
-                  </label>
+                  </div>
                 ))}
               </div>
             </div>
@@ -223,8 +275,11 @@ export function TemplateConfigForm({
                     // Source for Branding").
                     logoUrl: workshopConfig?.logoR2Key ? "/api/workshop-config/logo" : null,
                     coverText: workshopConfig?.coverText ?? null,
-                    // Same gating, mirroring the cover-image route.
-                    coverImageUrl: workshopConfig?.coverImageR2Key ? "/api/workshop-config/cover-image" : null,
+                    // The SELECTED template's own photo; `?v=` defeats the
+                    // route's 60 s cache after a replace.
+                    coverImageUrl: coverKeys[form.selectedTemplateId]
+                      ? `/api/template-config/cover-image/${form.selectedTemplateId}?v=${coverKeys[form.selectedTemplateId]}`
+                      : null,
                     // The one shared mapping `generate/route.ts` also uses, so
                     // the contact page here is the contact page printed.
                     contact: buildWorkshopContact(workshopConfig ?? null),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { validateLogo } from "./logo";
+import { RASTER_SIZE_LIMIT, validateCover, validateLogo } from "./logo";
 
 function pngMagic(): Buffer {
   return Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -142,5 +142,28 @@ describe("validateLogo — SVG sanitized output stability", () => {
 
   it("rejects corrupt/malformed file", () => {
     expect(() => validateLogo(Buffer.from([0x89, 0x50, 0x4e]))).toThrow();
+  });
+});
+
+// catalog-cover-templates WU3b: a cover is a photo, never vector markup. The
+// logo validator accepts SVG; the cover one must not.
+describe("validateCover — raster only", () => {
+  it.each([
+    ["PNG", pngMagic(), "image/png"],
+    ["JPEG", jpegMagic(), "image/jpeg"],
+    ["WebP", webpMagic(), "image/webp"],
+  ])("accepts a %s", (_name, bytes, contentType) => {
+    expect(validateCover(bytes).contentType).toBe(contentType);
+  });
+
+  it("rejects an otherwise valid SVG", () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><circle r="4"/></svg>';
+    expect(() => validateLogo(svgBuffer(svg))).not.toThrow(); // the logo validator takes it
+    expect(() => validateCover(svgBuffer(svg))).toThrow(/SVG/);
+  });
+
+  it("keeps the 2MB cap on rasters", () => {
+    const big = Buffer.concat([pngMagic(), Buffer.alloc(RASTER_SIZE_LIMIT)]);
+    expect(() => validateCover(big)).toThrow(/2MB/);
   });
 });
