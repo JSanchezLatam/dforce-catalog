@@ -13,7 +13,7 @@
 import { eq } from "drizzle-orm";
 
 import { db as defaultDb } from "@/shared/db/client";
-import { templateConfig, type TemplateConfig } from "@/shared/db/schema";
+import { templateConfig, templateCoverImage, type TemplateConfig, type TemplateCoverImage } from "@/shared/db/schema";
 import { KNOWN_TEMPLATE_IDS } from "@/shared/template/template-ids";
 
 const SINGLETON_ID = "singleton";
@@ -94,4 +94,47 @@ export async function saveTemplateConfig(
     .onConflictDoUpdate({ target: templateConfig.id, set: { ...value, updatedAt } })
     .returning();
   return row;
+}
+
+/** Every stored per-template cover photo; a template with no row has no photo. */
+export async function listTemplateCoverImages(
+  db: { select: typeof defaultDb.select } = defaultDb,
+): Promise<TemplateCoverImage[]> {
+  return db.select().from(templateCoverImage);
+}
+
+/**
+ * Stores `templateId`'s cover photo and returns the object key it replaced
+ * (null if none) so the caller can delete the orphaned R2 object.
+ * ponytail: read-then-upsert, not one statement — two concurrent uploads for
+ * the same template can orphan one R2 object; harmless, fix with a CTE if it
+ * ever matters.
+ */
+export async function upsertTemplateCoverImage(
+  templateId: string,
+  image: { r2Key: string; contentType: string },
+  db: { select: typeof defaultDb.select; insert: typeof defaultDb.insert } = defaultDb,
+): Promise<string | null> {
+  const [previous] = await db
+    .select({ r2Key: templateCoverImage.r2Key })
+    .from(templateCoverImage)
+    .where(eq(templateCoverImage.templateId, templateId));
+  const updatedAt = new Date();
+  await db
+    .insert(templateCoverImage)
+    .values({ templateId, ...image, updatedAt })
+    .onConflictDoUpdate({ target: templateCoverImage.templateId, set: { ...image, updatedAt } });
+  return previous?.r2Key ?? null;
+}
+
+/** Removes `templateId`'s cover photo row and returns its object key (null if there was none). */
+export async function deleteTemplateCoverImage(
+  templateId: string,
+  db: { delete: typeof defaultDb.delete } = defaultDb,
+): Promise<string | null> {
+  const [removed] = await db
+    .delete(templateCoverImage)
+    .where(eq(templateCoverImage.templateId, templateId))
+    .returning({ r2Key: templateCoverImage.r2Key });
+  return removed?.r2Key ?? null;
 }

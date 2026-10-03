@@ -11,7 +11,7 @@ import { countUploadedCatalogsForUser } from "@/modules/catalog-storage/queries"
 import { shouldWarnOfEviction } from "@/modules/catalog-storage/retention";
 import { enqueueCatalogPdf, QueueFullError } from "@/modules/pdf-generation/enqueue";
 import { getQueuePosition } from "@/modules/pdf-generation/position";
-import { getTemplateConfig } from "@/modules/template-config/service";
+import { getTemplateConfig, listTemplateCoverImages } from "@/modules/template-config/service";
 import { getWorkshopConfig } from "@/modules/workshop-config/service";
 import { buildWorkshopContact } from "@/modules/workshop-config/contact";
 import { getTemplate } from "@/shared/template/registry";
@@ -161,7 +161,15 @@ export async function POST(request: NextRequest) {
   // text content. `getWorkshopConfig()` can return a non-null row with every
   // field null (migration 0008 seeds a singleton row) — read fields
   // individually rather than branching on either config being `null`.
-  const [template, workshop] = await Promise.all([getTemplateConfig(), getWorkshopConfig()]);
+  const [template, workshop, coverImages] = await Promise.all([
+    getTemplateConfig(),
+    getWorkshopConfig(),
+    listTemplateCoverImages(),
+  ]);
+  const templateId = getTemplate(template?.selectedTemplateId).id;
+  // The cover photo belongs to the template, not the workshop: a missing row
+  // means no photo, never a fallback to `workshop_config` (migration 0020).
+  const coverImage = coverImages.find((c) => c.templateId === templateId);
 
   try {
     const { jobId } = await enqueueCatalogPdf({
@@ -169,15 +177,14 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       title: formatCatalogTitle(body.title),
       branding: {
-        templateId: getTemplate(template?.selectedTemplateId).id,
+        templateId,
         logoR2Key: workshop?.logoR2Key ?? null,
         logoContentType: workshop?.logoContentType ?? null,
         coverText: workshop?.coverText ?? null,
-        // WU5 (design D6) — same optional-in-a-non-null-row nullability as
-        // the fields above; `buildWorkshopContact` is the one shared mapping
-        // this route and the builder's live preview both use (Risk-5).
-        coverImageR2Key: workshop?.coverImageR2Key ?? null,
-        coverImageContentType: workshop?.coverImageContentType ?? null,
+        // `buildWorkshopContact` is the one shared mapping this route and the
+        // builder's live preview both use (Risk-5).
+        coverImageR2Key: coverImage?.r2Key ?? null,
+        coverImageContentType: coverImage?.contentType ?? null,
         contact: buildWorkshopContact(workshop ?? null),
       },
       sections: body.sections,

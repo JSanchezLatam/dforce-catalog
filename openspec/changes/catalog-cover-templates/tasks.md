@@ -93,15 +93,15 @@ Rule for every pair: RED test, confirm red BY NAME, GREEN, then mutation-verify 
 
 ## WU3a: Storage, routes, generate (PR A)
 
-- [ ] 5.1 RED `route-guards.test.ts`: row for `/api/template-config/cover-image/[templateId]` GET/POST/DELETE requires `template.edit`. GREEN: add the row (`:47`) with the route in 5.7.
-- [ ] 5.2 `schema.ts`: add `templateCoverImage` (`template_id text PK`, `r2_key text NOT NULL`, `content_type text`, `updated_at`), no FK. Run `drizzle-kit generate` to produce `0020`.
-- [ ] 5.3 Append to `0020`: `INSERT INTO template_cover_image … SELECT 'dforce-classic', cover_image_r2_key, cover_image_content_type, now() FROM workshop_config WHERE cover_image_r2_key IS NOT NULL` (pattern of `0013`). No runtime fallback.
-- [ ] 5.4 RED service tests (injected seam): `listTemplateCoverImages` returns rows; upsert replaces and returns the previous key; delete returns the removed key or null. GREEN: three functions in `src/modules/template-config/service.ts`.
-- [ ] 5.5 RED e2e `src/e2e/template-cover-image.e2e.test.ts` (throwaway DB recipe, never the dev DB): real upsert, list, replace, delete, and PK uniqueness across two ids. GREEN: fix any real-SQL defect found.
-- [ ] 5.6 Backfill smoke on a THROWAWAY copy (`pg_dump` to a scratch DB): inside `BEGIN … ROLLBACK`, run `0020`'s INSERT with a set key (row appears under `dforce-classic`) and with NULL (no row). Record the result in the PR body. Never run it destructively on the dev DB's real data.
-- [ ] 5.7 RED route tests (copy `workshop-config/cover-image/route.test.ts`): unknown id 404 on GET/POST/DELETE; no `template.edit` 403, nothing stored; POST stores under `covers/<id>/<ts>.<ext>` and deletes the old object; DELETE removes row and object (`.catch` on R2 failure); cross-template isolation (upload for A leaves B untouched); GET keeps CSP sandbox headers. GREEN: `src/app/api/template-config/cover-image/[templateId]/route.ts`.
-- [ ] 5.8 RED `generate/route.test.ts`: `selectedTemplateId` picks that template's row key; no row gives `coverImageR2Key: null` even when `workshop_config` has a key; the other template's key is never used. GREEN: add `listTemplateCoverImages()` to the `Promise.all` (`route.ts:164`) and `find(templateId)`. Worker untouched.
-- [ ] 5.9 Mutation-verify 5.1-5.8 by name; `npx tsc --noEmit`, `npm test`, `npm run lint` (14 warnings), `gga run --pr-mode --diff-only`.
+- [x] 5.1 RED `route-guards.test.ts`: row for `/api/template-config/cover-image/[templateId]` GET/POST/DELETE requires `template.edit`. GREEN: add the row (`:47`) with the route in 5.7.
+- [x] 5.2 `schema.ts`: add `templateCoverImage` (`template_id text PK`, `r2_key text NOT NULL`, `content_type text`, `updated_at`), no FK. Run `drizzle-kit generate` to produce `0020`.
+- [x] 5.3 Append to `0020`: `INSERT INTO template_cover_image … SELECT 'dforce-classic', cover_image_r2_key, cover_image_content_type, now() FROM workshop_config WHERE cover_image_r2_key IS NOT NULL` (pattern of `0013`). No runtime fallback.
+- [x] 5.4 RED service tests (injected seam): `listTemplateCoverImages` returns rows; upsert replaces and returns the previous key; delete returns the removed key or null. GREEN: three functions in `src/modules/template-config/service.ts`.
+- [x] 5.5 RED e2e `src/e2e/template-cover-image.e2e.test.ts` (throwaway DB recipe, never the dev DB): real upsert, list, replace, delete, and PK uniqueness across two ids. GREEN: fix any real-SQL defect found.
+- [x] 5.6 Backfill smoke on a THROWAWAY copy (`pg_dump` to a scratch DB): inside `BEGIN … ROLLBACK`, run `0020`'s INSERT with a set key (row appears under `dforce-classic`) and with NULL (no row). Record the result in the PR body. Never run it destructively on the dev DB's real data.
+- [x] 5.7 RED route tests (copy `workshop-config/cover-image/route.test.ts`): unknown id 404 on GET/POST/DELETE; no `template.edit` 403, nothing stored; POST stores under `covers/<id>/<ts>.<ext>` and deletes the old object; DELETE removes row and object (`.catch` on R2 failure); cross-template isolation (upload for A leaves B untouched); GET keeps CSP sandbox headers. GREEN: `src/app/api/template-config/cover-image/[templateId]/route.ts`.
+- [x] 5.8 RED `generate/route.test.ts`: `selectedTemplateId` picks that template's row key; no row gives `coverImageR2Key: null` even when `workshop_config` has a key; the other template's key is never used. GREEN: add `listTemplateCoverImages()` to the `Promise.all` (`route.ts:164`) and `find(templateId)`. Worker untouched.
+- [x] 5.9 Mutation-verify 5.1-5.8 by name; `npx tsc --noEmit`, `npm test`, `npm run lint` (14 warnings), `gga run --pr-mode --diff-only`.
 
 ## WU3b: Form slots and workshop field removal (PR B)
 
