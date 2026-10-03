@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CARD, FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
+import "@/shared/template/fonts/saira.css";
 import { CatalogTemplate } from "@/shared/template/CatalogTemplate";
 import { CATALOG_TEMPLATES, getTemplate } from "@/shared/template/registry";
 import { buildWorkshopContact } from "@/modules/workshop-config/contact";
@@ -30,7 +31,7 @@ function toFormState(config: TemplateConfig | null): FormState {
  * this screen has none of — so it says what it is. Spanish, like everything
  * printed on the sheet.
  */
-const PREVIEW_TITLE = "Catálogo de productos";
+const PREVIEW_TITLE = "Catálogo: Productos";
 
 /**
  * `zoom`, not `transform: scale`, and the difference is the whole point: a

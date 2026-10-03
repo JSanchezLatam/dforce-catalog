@@ -627,6 +627,18 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
           invisible — so the sheet never wears the wedge's colour. */}
       {/* The one sheet that clips: the cover photo is 902px wide on an 816px
           sheet and hangs off the right edge by design. */}
+      {template.Cover ? (
+        <Sheet sheet="cover" label="Portada" style={{ overflow: "hidden" }}>
+          <template.Cover
+            title={title}
+            logoUrl={branding?.logoUrl ?? null}
+            coverImageUrl={coverImageUrl}
+            workshopName={workshopName}
+            coverText={branding?.coverText ?? null}
+            red={red}
+          />
+        </Sheet>
+      ) : (
       <Sheet sheet="cover" label="Portada" style={{ overflow: "hidden" }}>
         {coverImageUrl && (
           <img
@@ -698,6 +710,7 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
           </p>
         )}
       </Sheet>
+      )}
 
       {/* Template_Catalogo.op, page "1 · Índice" — a table with a dark header
           row, tinted alternating rows, the count in grey and the page number
@@ -931,7 +944,7 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
           `null` — for a workshop that has not filled contact info in yet.
           Guarding on `contact != null` alone appended a blank black page to
           every catalog from such a workshop. */}
-      {hasContactContent(contact) && contact && (
+      {hasContactContent(contact) && contact && !template.Back && (
         <Sheet sheet="contact" label="Contacto" style={{ background: black }}>
           {/* Thin red rule across the top, and the red note band across the
               bottom — the two marks that stop the page reading as a slab of
@@ -1068,6 +1081,21 @@ export function CatalogTemplate({ title, branding, sections, productPages = [], 
               Precios sujetos a cambio sin previo aviso
             </span>
           </div>
+        </Sheet>
+      )}
+
+      {/* The template's own contact sheet, when it brings one. Rows are the
+          same presence-filtered list the stock sheet prints, so the two can
+          never disagree about which fields exist. */}
+      {hasContactContent(contact) && contact && template.Back && (
+        <Sheet sheet="contact" label="Contacto" style={{ overflow: "hidden" }}>
+          <template.Back
+            rows={CONTACT_ROWS.flatMap((row) => (contact[row.key] ? [{ key: row.key, label: row.label, value: contact[row.key] as string }] : []))}
+            socials={Object.entries(contact.socialHandles ?? {})}
+            logoUrl={branding?.logoUrl ?? null}
+            coverImageUrl={coverImageUrl}
+            red={red}
+          />
         </Sheet>
       )}
     </article>

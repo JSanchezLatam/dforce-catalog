@@ -268,6 +268,11 @@ export async function renderPdfBuffer(
 
     const productPages = chunkProducts(payload.products, payload.productsPerPage, cardHeights, CONTENT_HEIGHT_PX);
     await page.setContent(await renderCatalogHtml(buildPrintProps(props, productPages)), { waitUntil: "load" });
+    // `load` does not wait for font faces: a face first used by the document is
+    // fetched lazily, so `page.pdf()` could print the fallback face. The data-URI
+    // faces `renderCatalogHtml` inlines are local, but still decode asynchronously.
+    // Only the print pass needs this: the measuring pass sizes Arial cards.
+    await page.evaluate(() => document.fonts.ready);
     // Letter, matching the approved mockups' own 816x1056 sheet and the
     // `@page { size: 8.5in 11in }` rule `renderCatalogHtml` emits. A format
     // that disagrees with that rule scales every page.

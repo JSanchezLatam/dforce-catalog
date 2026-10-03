@@ -9,5 +9,5 @@
  * importing `registry.ts` for its gallery never risks pulling this module's
  * server-only neighbor in through a shared barrel.
  */
-export const KNOWN_TEMPLATE_IDS = ["dforce-classic"] as const;
+export const KNOWN_TEMPLATE_IDS = ["dforce-classic", "full-cover"] as const;
 export const DEFAULT_TEMPLATE_ID: (typeof KNOWN_TEMPLATE_IDS)[number] = "dforce-classic";

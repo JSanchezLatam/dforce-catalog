@@ -1,4 +1,5 @@
 import { dforceClassic } from "./templates/dforce-classic";
+import { fullCover } from "./templates/full-cover";
 import { DEFAULT_TEMPLATE_ID } from "./template-ids";
 import type { CatalogTemplateDef } from "./registry-types";
 
@@ -12,7 +13,7 @@ export type { CatalogTemplateDef } from "./registry-types";
  * its own `pickCard` branch); WU3 makes `CatalogTemplate` call `getTemplate()`
  * and delegate to `Card`.
  */
-export const CATALOG_TEMPLATES: CatalogTemplateDef[] = [dforceClassic];
+export const CATALOG_TEMPLATES: CatalogTemplateDef[] = [dforceClassic, fullCover];
 
 /** R8.4 — an unknown or missing id (never-persisted, or orphaned by a registry edit) falls back to the default; never returns null/throws. */
 export function getTemplate(id?: string | null): CatalogTemplateDef {

@@ -12,7 +12,7 @@ import type { PgBoss } from "pg-boss";
 import { describe, expect, it, vi } from "vitest";
 
 import { PDF_GENERATE_JOB, type PdfBranding } from "./enqueue";
-import { resolveBranding, buildMeasurementProps, buildPrintProps, buildTemplateProps, registerPdfGenerateWorker } from "./worker";
+import { resolveBranding, buildMeasurementProps, buildPrintProps, buildTemplateProps, registerPdfGenerateWorker, renderPdfBuffer } from "./worker";
 
 // WU4 (design.md decision 18) — capture.ts's withJobCapture defaults its
 // `report` param to Sentry.captureException; mocking it here lets the
@@ -23,6 +23,11 @@ import { resolveBranding, buildMeasurementProps, buildPrintProps, buildTemplateP
 // comment on this exact TDZ trap).
 const { captureException } = vi.hoisted(() => ({ captureException: vi.fn() }));
 vi.mock("@sentry/nextjs", () => ({ captureException }));
+
+// `renderPdfBuffer` launches Chromium; the ORDER of its page calls is the
+// behaviour under test here, so the browser is a recorder.
+const { launch } = vi.hoisted(() => ({ launch: vi.fn() }));
+vi.mock("playwright", () => ({ chromium: { launch } }));
 
 describe("resolveBranding — D3 logo data-URI resolution", () => {
   it("returns null branding unchanged", async () => {
@@ -232,5 +237,45 @@ describe("registerPdfGenerateWorker", () => {
     expect(captureException).toHaveBeenCalledWith(expect.any(TypeError), {
       tags: { job: PDF_GENERATE_JOB, jobId: "unknown" },
     });
+  });
+});
+
+
+describe("renderPdfBuffer — fonts settle before the page is printed", () => {
+  it("awaits document.fonts.ready after the final setContent and before page.pdf", async () => {
+    const events: string[] = [];
+    const page = {
+      emulateMedia: vi.fn(async () => {}),
+      setContent: vi.fn(async (_html: string, options: { waitUntil: string }) => {
+        events.push(`setContent:${options.waitUntil}`);
+      }),
+      // The measuring helper evaluates its own function; the font wait is the
+      // one that reads `document.fonts`. Distinguish them by what they do.
+      evaluate: vi.fn(async (fn: () => unknown) => {
+        if (String(fn).includes("document.fonts.ready")) {
+          events.push("fonts.ready");
+          return undefined;
+        }
+        return [];
+      }),
+      pdf: vi.fn(async () => {
+        events.push("pdf");
+        return Buffer.from("%PDF");
+      }),
+    };
+    launch.mockResolvedValue({ newPage: async () => page, close: async () => {} });
+
+    const buffer = await renderPdfBuffer({
+      catalogId: "c1",
+      userId: "u1",
+      title: "Catálogo: Repuestos",
+      branding: { templateId: "full-cover", logoR2Key: null, logoContentType: null, coverText: null },
+      sections: [],
+      products: [],
+      productsPerPage: 6,
+    });
+
+    expect(buffer.toString()).toBe("%PDF");
+    expect(events.slice(-3)).toEqual(["setContent:load", "fonts.ready", "pdf"]);
   });
 });
