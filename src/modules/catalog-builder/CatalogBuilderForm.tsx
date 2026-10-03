@@ -265,7 +265,7 @@ export function CatalogBuilderForm({
    * In category mode these ARE the ticked refs, identically. In product-id
    * mode nothing is ticked, so they are the distinct L1s the resolved rows
    * carry: without that fallback every seeded catalog would print the bare
-   * "Catalog" AND dead-end on `validateCatalogSelection`'s "Elegí al menos
+   * "Catálogo" AND dead-end on `validateCatalogSelection`'s "Elegí al menos
    * una categoría", with no category control on screen to go satisfy it.
    */
   const includedCategoryRefs = useMemo<CategoryRef[]>(
@@ -548,6 +548,9 @@ export function CatalogBuilderForm({
                   <div className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
                     <Label>Filas por página</Label>
                     <Select
+                      // "Todos" is bound to the candidate COUNT, so a bare
+                      // `<SelectValue />` would print that number instead.
+                      items={{ "10": "10", "25": "25", "50": "50", [String(candidates.length)]: "Todos" }}
                       value={String(pageSize)}
                       onValueChange={(v) => {
                         setPageSize(Number(v));

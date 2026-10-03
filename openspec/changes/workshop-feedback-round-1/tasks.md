@@ -116,7 +116,9 @@ preview before save" (`template-config/page.tsx:8`) — stale.
 language rule; every neighbouring page is Spanish. It predates F1 and was left
 out of it deliberately rather than folded in as silent scope.
 
-- [ ] Translate both, and check the other `(app)` pages for the same pattern
+- [x] Translate both, and check the other `(app)` pages for the same pattern
+      (`fix/spanish-copy-selects`: four more pages carried the same refusal,
+      plus selects that rendered raw values)
 
 ## PR F2 — Catalog selection  ·  **DONE** (#125)
 

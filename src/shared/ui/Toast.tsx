@@ -40,7 +40,7 @@ export function Toast({
         type="button"
         onClick={onDismiss}
         className="ml-2 rounded p-0.5 transition-colors hover:opacity-70"
-        aria-label="Dismiss"
+        aria-label="Cerrar"
       >
         <X aria-hidden="true" size={16} />
       </button>
