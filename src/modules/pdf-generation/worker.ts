@@ -21,13 +21,12 @@
  * boundary as `pdfBufferRef` — matching design.md's literal payload shape
  * `{ catalogId, userId, pdfBufferRef }` (unchanged by PR8).
  *
- * PR7's "PR8 MUST" gap — `pdf-upload`'s payload has no `title`/`categories`
- * for the `catalogs` row — is resolved here, NOT by widening that payload:
- * `createPendingCatalog()` inserts the row right below, while this worker
- * still has the full `pdf-generate` payload (title, sections) in hand. The
- * `pdf-upload` worker (catalog-storage/upload-status.ts) only ever needs
- * `catalogId`/`userId`/`pdfBufferRef` to know WHICH already-existing row to
- * update.
+ * The `catalogs` row is NOT created here: enqueue.ts inserts it `pending`
+ * inside the transaction that sends this job, so it exists before the render
+ * starts and a retried attempt never re-inserts it. This worker's one write to
+ * it is `failed`, on the final attempt (`handlePdfGenerate`). The `pdf-upload`
+ * worker (catalog-storage/upload-status.ts) only ever needs
+ * `catalogId`/`userId`/`pdfBufferRef` to know WHICH existing row to update.
  *
  * `pdf-upload` is enqueued with pg-boss's native `retryLimit:2`/`retryDelay:
  * 30` (R11.5) — see catalog-storage/upload-status.ts for why that worker
@@ -36,13 +35,17 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { eq } from "drizzle-orm";
+import type { JobWithMetadata, PgBoss } from "pg-boss";
 import { chromium, type Page } from "playwright";
 
+import { db } from "@/shared/db/client";
+import { catalogs } from "@/shared/db/schema";
 import { getBoss } from "@/shared/jobs/boss";
 import { withJobCapture } from "@/shared/jobs/capture";
 import type { CatalogTemplateBranding } from "@/shared/template/CatalogTemplate";
 import { getObject } from "../catalog-storage/r2";
-import { createPendingCatalog } from "../catalog-storage/queries";
+import { isFinalAttempt } from "../catalog-storage/upload-status";
 import { buildIndexSections } from "../catalog-builder/selection";
 import { CONTENT_HEIGHT_PX, PAGE_HEIGHT_PX, PAGE_WIDTH_PX } from "@/shared/template/page-geometry";
 import { PDF_GENERATE_JOB, PDF_UPLOAD_JOB, type PdfBranding, type PdfGeneratePayload } from "./enqueue";
@@ -277,6 +280,48 @@ export async function renderPdfBuffer(
   }
 }
 
+type GenerateJobLike = { data: PdfGeneratePayload; retryCount: number; retryLimit: number };
+
+type GenerateDeps = {
+  boss: Pick<PgBoss, "send">;
+  database?: typeof db;
+  renderPdfBuffer?: typeof renderPdfBuffer;
+  handoffPdfBuffer?: typeof handoffPdfBuffer;
+};
+
+/**
+ * One `pdf-generate` attempt. On the FINAL failed attempt (`retryCount >=
+ * retryLimit`, the same rule as `pdf-upload`, against enqueue.ts's
+ * `PDF_GENERATE_RETRY`) the row is marked `failed` — the only way the
+ * operator ever learns a render died, since /catalogs is the notification
+ * surface. The error is rethrown either way, so `withJobCapture` still reports
+ * it and pg-boss still records the job as failed.
+ *
+ * A process crash or a job expiry never reaches this `catch`: those are failed
+ * by pg-boss's maintenance, not by a handler, and leave the row `pending`.
+ */
+export async function handlePdfGenerate(job: GenerateJobLike, deps: GenerateDeps): Promise<void> {
+  const database = deps.database ?? db;
+  const { catalogId, userId } = job.data;
+  try {
+    const buffer = await (deps.renderPdfBuffer ?? renderPdfBuffer)(job.data);
+    const pdfBufferRef = await (deps.handoffPdfBuffer ?? handoffPdfBuffer)(catalogId, buffer);
+    await deps.boss.send(
+      PDF_UPLOAD_JOB,
+      { catalogId, userId, pdfBufferRef } satisfies PdfUploadPayload,
+      { retryLimit: 2, retryDelay: 30 }, // R11.5 — pg-boss's own native retry (see catalog-storage/upload-status.ts)
+    );
+    // Returning here resolves the job — pg-boss frees this worker's
+    // localConcurrency:1 slot right now, at "PDF generated", regardless of
+    // how long the decoupled upload+retention (catalog-storage) takes.
+  } catch (err) {
+    if (isFinalAttempt(job)) {
+      await database.update(catalogs).set({ uploadStatus: "failed" }).where(eq(catalogs.id, catalogId));
+    }
+    throw err;
+  }
+}
+
 export type RegisterPdfGenerateWorkerDeps = { getBoss?: typeof getBoss };
 
 /** Registers the pg-boss worker — `localConcurrency:1` is R12.1's single active slot (same deviation from design.md's literal `teamSize:1` as inventory-sync/job.ts, confirmed via node_modules/pg-boss/dist/types.d.ts). */
@@ -285,23 +330,13 @@ export async function registerPdfGenerateWorker(deps: RegisterPdfGenerateWorkerD
   await boss.createQueue(PDF_GENERATE_JOB);
   await boss.createQueue(PDF_UPLOAD_JOB);
 
-  await boss.work<PdfGeneratePayload>(
+  await boss.work(
     PDF_GENERATE_JOB,
-    { localConcurrency: 1 },
-    withJobCapture(PDF_GENERATE_JOB, async ([job]) => {
-      const buffer = await renderPdfBuffer(job.data);
-      const pdfBufferRef = await handoffPdfBuffer(job.data.catalogId, buffer);
-      // Risk-1 (PR8) — insert the catalogs row BEFORE enqueuing pdf-upload, so
-      // a crash at any later point still leaves a visible "pending" row.
-      await createPendingCatalog(job.data);
-      await boss.send(
-        PDF_UPLOAD_JOB,
-        { catalogId: job.data.catalogId, userId: job.data.userId, pdfBufferRef } satisfies PdfUploadPayload,
-        { retryLimit: 2, retryDelay: 30 }, // R11.5 — pg-boss's own native retry (see catalog-storage/upload-status.ts)
-      );
-      // Returning here resolves the job — pg-boss frees this worker's
-      // localConcurrency:1 slot right now, at "PDF generated", regardless of
-      // how long the decoupled upload+retention (catalog-storage) takes.
+    // `includeMetadata` puts retryCount/retryLimit on the job; without it
+    // `isFinalAttempt` never fires and a dead render stays "pending".
+    { localConcurrency: 1, includeMetadata: true },
+    withJobCapture(PDF_GENERATE_JOB, async ([job]: JobWithMetadata<PdfGeneratePayload>[]) => {
+      await handlePdfGenerate(job, { boss });
     }),
   );
 }

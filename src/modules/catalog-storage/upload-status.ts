@@ -16,7 +16,7 @@
  * code is needed for that bound; the "holding" is simply the local temp file
  * (written by worker.ts) staying on disk until success or final failure.
  *
- * Risk-1's actual mitigation lives in pdf-generation/worker.ts + queries.ts's
+ * Risk-1's actual mitigation lives in pdf-generation/enqueue.ts + queries.ts's
  * `createPendingCatalog`: a `catalogs` row exists with `uploadStatus:
  * "pending"` BEFORE this worker ever runs, so a crash at any point — before
  * this job starts, mid-retry, or after final failure — always leaves a
