@@ -1,8 +1,6 @@
 /* eslint-disable @next/next/no-img-element --
    This markup is also rendered by renderToStaticMarkup for Playwright, with
    data: URIs; next/image needs a Next runtime and a loader for neither. */
-import { Clock, Globe, Mail, MapPin, MessageCircle, Phone, type LucideIcon } from "lucide-react";
-
 import type { BackProps, CatalogTemplateDef, ContactRowKey, CoverProps } from "../registry-types";
 import { dforceClassic } from "./dforce-classic";
 
@@ -100,13 +98,43 @@ function Cover({ title, logoUrl, coverImageUrl, workshopName, coverText, red }: 
   );
 }
 
-const ROW_ICONS: Record<ContactRowKey, LucideIcon> = {
-  phone: Phone,
-  whatsapp: MessageCircle,
-  email: Mail,
-  hours: Clock,
-  address: MapPin,
-  website: Globe,
+/*
+ * lucide's path data, drawn as plain <svg>. NOT lucide-react: it is a
+ * "use client" module, and the pdf-generate worker renders this inside the Next
+ * server graph, where calling a client component throws.
+ */
+const ROW_ICONS: Record<ContactRowKey, React.ReactNode> = {
+  phone: (
+    <path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384" />
+  ),
+  whatsapp: (
+    <path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" />
+  ),
+  email: (
+    <>
+      <path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7" />
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+    </>
+  ),
+  hours: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 6v6l4 2" />
+    </>
+  ),
+  address: (
+    <>
+      <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" />
+      <circle cx="12" cy="10" r="3" />
+    </>
+  ),
+  website: (
+    <>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+      <path d="M2 12h20" />
+    </>
+  ),
 };
 
 /** Phone and WhatsApp share the first line; the rest take a whole line unless email and website pair up. */
@@ -153,7 +181,6 @@ function Back({ rows, socials, logoUrl, coverImageUrl, red }: BackProps) {
         <div style={{ width: 64, height: 6, background: red, marginTop: 18, marginBottom: 34 }} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 48, rowGap: 26 }}>
           {rows.map((row) => {
-            const Icon = ROW_ICONS[row.key];
             return (
               <div
                 key={row.key}
@@ -166,7 +193,20 @@ function Back({ rows, socials, logoUrl, coverImageUrl, red }: BackProps) {
                   ...(isWide(row.key, rows) ? { gridColumn: "1 / -1" } : {}),
                 }}
               >
-                <Icon size={26} color={red} strokeWidth={2} style={{ marginTop: 4 }} />
+                <svg
+                  width={26}
+                  height={26}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke={red}
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  style={{ marginTop: 4 }}
+                >
+                  {ROW_ICONS[row.key]}
+                </svg>
                 <div style={{ minWidth: 0 }}>
                   <div style={LABEL_STYLE}>{row.label}</div>
                   <div style={{ marginTop: 4, fontSize: 22, fontWeight: 500, lineHeight: 1.3, overflowWrap: "anywhere" }}>{row.value}</div>

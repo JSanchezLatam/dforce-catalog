@@ -1,8 +1,26 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { BackProps, CoverProps } from "../registry-types";
 import { Back, Cover, splitTitle, titleSize } from "./full-cover";
+
+/*
+ * In the Next server graph (the pdf-generate worker runs inside it via
+ * instrumentation.ts) lucide-react is a "use client" module: calling any of its
+ * exports from renderToStaticMarkup throws. Vitest resolves it as a plain module,
+ * so mock it to throw the same way — a template that imports it fails here too.
+ */
+vi.mock("lucide-react", () => ({
+  __esModule: true,
+  ...Object.fromEntries(
+    ["Clock", "Globe", "Mail", "MapPin", "MessageCircle", "Phone", "Icon"].map((name) => [
+      name,
+      () => {
+        throw new Error(`Attempted to call the default export of lucide-react (${name}) from the server, but it's on the client.`);
+      },
+    ]),
+  ),
+}));
 
 const RED = "#D42027";
 const html = (node: React.ReactElement) => renderToStaticMarkup(node);
@@ -148,6 +166,19 @@ describe("Back", () => {
 
     expect(count(markup, "<svg")).toBe(5);
     expect(markup).toContain('stroke="#123456"');
+  });
+
+  it("draws its icons as inline svg without calling into lucide-react, a client module on the server", () => {
+    const rows: BackProps["rows"] = [...back().rows, { key: "website", label: "WEB", value: "dforce.com" }];
+    const markup = html(<Back {...back({ rows })} />);
+
+    expect(count(markup, "<svg")).toBe(6);
+    expect(markup).toContain('d="M13.832 16.568'); // phone
+    expect(markup).toContain('d="M2.992 16.342'); // message-circle
+    expect(markup).toContain('d="m22 7-8.991 5.727'); // mail
+    expect(markup).toContain('d="M12 6v6l4 2"'); // clock
+    expect(markup).toContain('d="M20 10c0 4.993'); // map-pin
+    expect(markup).toContain('d="M12 2a14.5 14.5'); // globe
   });
 
   it("gives email its own line, but pairs it with the website when both exist", () => {
