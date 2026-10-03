@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Mockup de portadas — catalog-cover-templates</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; background: #d9d9d9; font-family: Arial, sans-serif; color: #111; }
+  h1.page-title { margin: 0 0 6px; font-size: 20px; }
+  p.page-note { margin: 0 0 24px; font-size: 13px; color: #444; }
+  .row { display: flex; gap: 32px; align-items: flex-start; }
+  figure { margin: 0; }
+  figcaption { margin-bottom: 10px; font-size: 14px; font-weight: 700; }
+  figcaption span { display: block; font-weight: 400; font-size: 12px; color: #555; margin-top: 2px; }
+  /* 816x1056 CSS px = Letter 8.5x11in at 96dpi, shown at half size. */
+  .scale { zoom: 0.5; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+  .sheet { position: relative; width: 816px; height: 1056px; background: #fff; overflow: hidden; font-family: Arial, sans-serif; }
+
+  /* Logo placeholder (the real logo is a colour badge on a transparent PNG). */
+  .logo { display: flex; flex-direction: column; align-items: center; line-height: 1; }
+  .logo .mark { font-style: italic; font-weight: 900; color: #D42027; letter-spacing: -1px; }
+  .logo .sub { font-weight: 800; color: #fff; letter-spacing: 3px; }
+
+  /* (a) Dforce Clásico — CatalogTemplate.tsx:630-699, coordinate for coordinate. */
+  .classic .photo { position: absolute; top: 74px; right: -118px; width: 902px; mix-blend-mode: multiply; }
+  .classic .stripe { position: absolute; left: 84px; top: 620px; width: 430px; height: 5px; background: #D42027; transform: rotate(-27.2deg); }
+  .classic .wedge { position: absolute; left: 0; top: 400px; width: 816px; height: 656px; background: #111111; clip-path: polygon(0 64%, 100% 0, 100% 100%, 0 100%); }
+  .classic .plate { position: absolute; top: 46px; left: 48px; width: 196px; height: 74px; border-radius: 4px; background: #111111; display: flex; align-items: center; justify-content: center; }
+  .classic .plate .mark { font-size: 30px; }
+  .classic .plate .sub { font-size: 9px; margin-top: 4px; }
+  .classic .titlebox { position: absolute; right: 48px; bottom: 96px; display: flex; gap: 22px; align-items: stretch; }
+  .classic .titlebox h2 { margin: 0; max-width: 430px; text-align: right; color: #fff; font-size: 52px; font-weight: 800; line-height: 1.04; letter-spacing: -1px; text-transform: uppercase; }
+  .classic .titlebox .bar { width: 6px; background: #D42027; }
+  .classic .workshop { position: absolute; left: 48px; bottom: 100px; margin: 0; color: #fff; font-size: 12px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; }
+  .classic .covertext { position: absolute; left: 48px; bottom: 74px; margin: 0; color: #7a7a7a; font-size: 10px; letter-spacing: .6px; }
+
+  /* (b)/(c) Portada completa — proposed FullBleedCover. */
+  .full .base { position: absolute; inset: 0; background: #111111; }
+  .full .photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  /* Gradient from src/app/login/page.tsx:80, top stop raised 0.25 -> 0.45 for the logo. */
+  .full .overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.85) 0%, rgba(0,0,0,.55) 30%, rgba(0,0,0,.10) 65%, rgba(0,0,0,.45) 100%); }
+  .full .logo { position: absolute; top: 56px; left: 56px; align-items: flex-start; }
+  .full .logo .mark { font-size: 54px; }
+  .full .logo .sub { font-size: 15px; margin-top: 6px; }
+  .full .bar { position: absolute; left: 56px; bottom: 238px; width: 72px; height: 6px; background: #D42027; }
+  .full h2 { position: absolute; left: 56px; bottom: 128px; margin: 0; max-width: 620px; color: #fff; font-size: 56px; font-weight: 800; line-height: 1.04; letter-spacing: -1px; text-transform: uppercase; }
+  .full .workshop { position: absolute; left: 56px; bottom: 92px; margin: 0; color: #fff; font-size: 12px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; }
+  .full .covertext { position: absolute; left: 56px; bottom: 64px; margin: 0; color: rgba(255,255,255,.85); font-size: 13px; letter-spacing: .6px; }
+</style>
+</head>
+<body>
+  <h1 class="page-title">Portadas del catálogo — mockup para aprobación</h1>
+  <p class="page-note">Hoja Carta (8,5 × 11 in), mostrada a la mitad de su tamaño. Foto provisoria: la imagen del login (736 × 981).</p>
+
+  <div class="row">
+    <figure>
+      <figcaption>(a) Dforce Clásico<span>Como se imprime hoy. No cambia.</span></figcaption>
+      <div class="scale">
+        <section class="sheet classic">
+          <img class="photo" src="../../../../src/app/login/assets/login-hero.jpg" alt="" />
+          <div class="stripe"></div>
+          <div class="wedge"></div>
+          <div class="plate"><div class="logo"><span class="mark">D FORCE</span><span class="sub">CAR AUDIO</span></div></div>
+          <div class="titlebox"><h2>Catálogo: Repuestos</h2><div class="bar"></div></div>
+          <p class="workshop">Dforce Car Audio</p>
+          <p class="covertext">Precios vigentes a octubre de 2026</p>
+        </section>
+      </div>
+    </figure>
+
+    <figure>
+      <figcaption>(b) Portada completa — con foto<span>Foto a página completa, degradado, logo sin placa.</span></figcaption>
+      <div class="scale">
+        <section class="sheet full">
+          <div class="base"></div>
+          <img class="photo" src="../../../../src/app/login/assets/login-hero.jpg" alt="" />
+          <div class="overlay"></div>
+          <div class="logo"><span class="mark">D FORCE</span><span class="sub">CAR AUDIO</span></div>
+          <div class="bar"></div>
+          <h2>Catálogo: Repuestos</h2>
+          <p class="workshop">Dforce Car Audio</p>
+          <p class="covertext">Precios vigentes a octubre de 2026</p>
+        </section>
+      </div>
+    </figure>
+
+    <figure>
+      <figcaption>(c) Portada completa — sin foto<span>Sin imagen cargada: fondo oscuro liso.</span></figcaption>
+      <div class="scale">
+        <section class="sheet full">
+          <div class="base"></div>
+          <div class="logo"><span class="mark">D FORCE</span><span class="sub">CAR AUDIO</span></div>
+          <div class="bar"></div>
+          <h2>Catálogo: Repuestos</h2>
+          <p class="workshop">Dforce Car Audio</p>
+          <p class="covertext">Precios vigentes a octubre de 2026</p>
+        </section>
+      </div>
+    </figure>
+  </div>
+</body>
+</html>

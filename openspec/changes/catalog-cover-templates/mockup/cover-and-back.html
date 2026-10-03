@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Portada completa y contraportada</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@400;600;800&family=Saira:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --red: #d42027;
+    --ink: #ffffff;
+    --ink-soft: rgba(255, 255, 255, 0.78);
+    --ink-faint: #9c9c9c;
+    --night: #0b0b0b;
+    --display: "Saira Condensed", "Arial Narrow", sans-serif;
+    --text: "Saira", Arial, sans-serif;
+  }
+  body { margin: 0; padding: 32px; background: #d9d9d9; font-family: Arial, sans-serif; color: #111; }
+  h1.page-title { margin: 0 0 6px; font-size: 20px; }
+  .lede { margin: 0 0 28px; color: #444; font-size: 14px; }
+  .row { display: flex; gap: 40px; align-items: flex-start; }
+  figure { margin: 0; }
+  figcaption { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
+  figcaption span { display: block; font-weight: 400; font-size: 13px; color: #555; margin-top: 2px; }
+  .scale { width: 408px; height: 528px; overflow: hidden; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+  .sheet { position: relative; width: 816px; height: 1056px; overflow: hidden; transform: scale(.5); transform-origin: 0 0; background: var(--night); color: var(--ink); font-family: var(--text); }
+
+  /* ---------- Cover ---------- */
+  .cover .photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .cover .overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.9) 0%, rgba(0,0,0,.6) 32%, rgba(0,0,0,.08) 58%, rgba(0,0,0,.92) 80%, #000 100%); }
+  .cover .logo { position: absolute; top: 48px; left: 48px; width: 300px; mix-blend-mode: screen; }
+  .cover .block { position: absolute; left: 64px; right: 64px; bottom: 72px; }
+  .cover .rule { width: 64px; height: 6px; background: var(--red); margin-bottom: 28px; }
+  .cover h2 { margin: 0; font-family: var(--display); text-transform: uppercase; line-height: .9; letter-spacing: -0.01em; }
+  .cover h2 .lead { display: block; font-weight: 400; font-size: 54px; color: var(--ink-soft); letter-spacing: 0.01em; }
+  .cover h2 .main { display: block; font-weight: 800; font-size: 118px; text-wrap: balance; }
+  .cover .meta { display: flex; justify-content: space-between; align-items: baseline; margin-top: 30px; padding-top: 18px; border-top: 1px solid rgba(255,255,255,.22); }
+  .cover .meta .name { font-family: var(--display); font-weight: 600; font-size: 22px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .cover .meta .note { font-size: 15px; color: var(--ink-soft); }
+
+  /* ---------- Back ---------- */
+  .back .strip { position: absolute; left: 0; right: 0; top: 0; height: 470px; overflow: hidden; }
+  .back .strip img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 70%; }
+  .back .strip::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,.25) 0%, rgba(11,11,11,.55) 30%, rgba(11,11,11,.96) 62%, var(--night) 100%); }
+  .back .logo { position: absolute; top: 250px; left: 50%; width: 340px; transform: translateX(-50%); mix-blend-mode: screen; }
+  .back .content { position: absolute; left: 72px; right: 72px; top: 470px; }
+  .back h2 { margin: 0 0 34px; font-family: var(--display); font-weight: 800; font-size: 64px; line-height: 1; text-transform: uppercase; letter-spacing: -0.005em; }
+  .back h2::after { content: ""; display: block; width: 64px; height: 6px; background: var(--red); margin-top: 18px; }
+  .back dl { margin: 0; display: grid; grid-template-columns: 1fr 1fr; column-gap: 48px; row-gap: 26px; }
+  .back .item { display: grid; grid-template-columns: 40px 1fr; column-gap: 16px; align-items: start; }
+  .back .item.wide { grid-column: 1 / -1; }
+  .back svg { width: 26px; height: 26px; stroke: var(--red); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; margin-top: 4px; }
+  .back dt { font-family: var(--display); font-weight: 600; font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
+  .back dd { margin: 4px 0 0; font-size: 22px; font-weight: 500; line-height: 1.3; }
+  .back .social { position: absolute; left: 72px; right: 72px; bottom: 96px; display: flex; gap: 40px; padding-top: 22px; border-top: 1px solid rgba(255,255,255,.18); }
+  .back .social span { font-size: 19px; font-weight: 500; }
+  .back .social b { font-family: var(--display); font-weight: 600; font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); margin-right: 10px; }
+  .back .footer { position: absolute; left: 0; right: 0; bottom: 0; height: 52px; background: var(--red); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 500; letter-spacing: 0.02em; }
+</style>
+</head>
+<body>
+  <h1 class="page-title">Portada completa — tipografía nueva y hoja final</h1>
+  <p class="lede">Hoja Carta mostrada a la mitad. Datos reales del taller. Foto provisoria: la del login (736 × 981).</p>
+  <div class="row">
+    <figure>
+      <figcaption>Portada<span>Saira Condensed para el título, Saira para el texto.</span></figcaption>
+      <div class="scale">
+        <section class="sheet cover">
+          <img class="photo" src="../../../../src/app/login/assets/login-hero.jpg" alt="" />
+          <div class="overlay"></div>
+          <img class="logo" src="LOGO_SRC" alt="DForce Car Audio" />
+          <div class="block">
+            <div class="rule"></div>
+            <h2><span class="lead">Catálogo:</span><span class="main">Repuestos</span></h2>
+            <div class="meta"><span class="name">DForce Car Audio</span><span class="note">Catálogo de productos</span></div>
+          </div>
+        </section>
+      </div>
+    </figure>
+
+    <figure>
+      <figcaption>Hoja final (contacto)<span>Misma foto arriba, logo centrado, datos con íconos.</span></figcaption>
+      <div class="scale">
+        <section class="sheet back">
+          <div class="strip"><img src="../../../../src/app/login/assets/login-hero.jpg" alt="" /></div>
+          <img class="logo" src="LOGO_SRC" alt="DForce Car Audio" />
+          <div class="content">
+            <h2>Contacto</h2>
+            <dl>
+              <div class="item">
+                <svg viewBox="0 0 24 24"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/></svg>
+                <div><dt>Teléfono</dt><dd>203-7212</dd></div>
+              </div>
+              <div class="item">
+                <svg viewBox="0 0 24 24"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/></svg>
+                <div><dt>WhatsApp</dt><dd>6591-8064</dd></div>
+              </div>
+              <div class="item wide">
+                <svg viewBox="0 0 24 24"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+                <div><dt>Correo</dt><dd>dforcecar@gmail.com</dd></div>
+              </div>
+              <div class="item wide">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                <div><dt>Horario</dt><dd>Lunes a Sábado 8:00 A.M - 5:00 P.M</dd></div>
+              </div>
+              <div class="item wide">
+                <svg viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+                <div><dt>Dirección</dt><dd>Rio Abajo, Calle 14.</dd></div>
+              </div>
+            </dl>
+          </div>
+          <div class="social">
+            <span><b>Instagram</b>@dforcecar</span>
+            <span><b>Facebook</b>D Force Car</span>
+          </div>
+          <div class="footer">Precios sujetos a cambio sin previo aviso</div>
+        </section>
+      </div>
+    </figure>
+  </div>
+</body>
+</html>
