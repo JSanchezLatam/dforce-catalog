@@ -59,9 +59,16 @@ import { deactivateCliente, reactivateCliente } from "@/modules/customers/servic
 import { ImportAlreadyRunningError, runCustomerImport } from "@/modules/customer-import/job";
 import { countOrdenesServicio, listOrdenesByVehiculo, listOrdenesServicio } from "@/modules/service-orders/queries";
 import { registerPdfGenerateWorker } from "@/modules/pdf-generation/worker";
+import {
+  enqueueCatalogPdf,
+  MAX_QUEUE_DEPTH,
+  PDF_GENERATE_JOB,
+  QueueFullError,
+  type PdfGeneratePayload,
+} from "@/modules/pdf-generation/enqueue";
 import { proxy } from "@/proxy";
 import { db } from "@/shared/db/client";
-import { cliente, customerImportRuns, ordenServicio, users, vehiculo } from "@/shared/db/schema";
+import { catalogs, cliente, customerImportRuns, ordenServicio, users, vehiculo } from "@/shared/db/schema";
 import { getBoss } from "@/shared/jobs/boss";
 
 import { POST as loginPOST } from "../app/api/login/route";
@@ -1805,6 +1812,14 @@ describe("full catalog-generation flow (E2E)", () => {
     const { jobId } = await generateRes.json();
     expect(jobId).toBeTruthy();
 
+    // The row is born at enqueue, not after the render: an operator who opens
+    // /catalogs the instant Generar returns must already see it. Read straight
+    // after the response — Chromium has not finished a render by now, so
+    // anything but `pending` here means the row came from somewhere else.
+    const job = await (await getBoss()).getJobById<PdfGeneratePayload>(PDF_GENERATE_JOB, jobId);
+    const [atEnqueue] = await db.select().from(catalogs).where(eq(catalogs.id, job!.data.catalogId));
+    expect(atEnqueue?.uploadStatus).toBe("pending");
+
     // Real pg-boss processing (render worker + upload worker) — poll instead
     // of a fixed sleep since job pickup timing isn't deterministic.
     let catalog;
@@ -1829,5 +1844,68 @@ describe("full catalog-generation flow (E2E)", () => {
       params: Promise.resolve({ id: catalog!.id }),
     });
     expect(denied.status).toBe(404);
+  });
+  /**
+   * The injected-seam limit, closed for the row's lifecycle: every unit test
+   * of `handlePdfGenerate` fakes the UPDATE, so only this proves the real
+   * `WHERE id = …` hits the row enqueue.ts really inserted. A payload with no
+   * `products` array is what makes the real render throw — the route's own
+   * validation would never let one through, which is why this enqueues
+   * directly.
+   */
+  it("marks the row failed once the render's final attempt fails", async () => {
+    const catalogId = crypto.randomUUID();
+    await enqueueCatalogPdf({
+      catalogId,
+      userId: adminUser.id,
+      title: "Catálogo que no renderiza",
+      branding: null,
+      sections: [],
+      products: null as unknown as PdfGeneratePayload["products"],
+      productsPerPage: 10,
+    });
+
+    // One retry, ten seconds apart (PDF_GENERATE_RETRY), plus pickup latency.
+    let status: string | undefined;
+    const deadline = Date.now() + 50_000;
+    while (Date.now() < deadline) {
+      const [row] = await db.select().from(catalogs).where(eq(catalogs.id, catalogId));
+      status = row?.uploadStatus;
+      if (status === "failed") break;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    expect(status).toBe("failed");
+  }, 60_000);
+
+  it("a full queue refuses the request and inserts no catalogs row", async () => {
+    const boss = await getBoss();
+    // Occupying jobs the worker will not pick up for an hour: state `created`
+    // counts toward the depth exactly like a waiting catalog does.
+    const startAfter = new Date(Date.now() + 3_600_000);
+    const blockers: string[] = [];
+    for (let i = 0; i < MAX_QUEUE_DEPTH; i++) {
+      const id = await boss.send(PDF_GENERATE_JOB, { blocker: i }, { startAfter });
+      blockers.push(id!);
+    }
+
+    try {
+      const catalogId = crypto.randomUUID();
+      await expect(
+        enqueueCatalogPdf({
+          catalogId,
+          userId: adminUser.id,
+          title: "Catálogo rechazado",
+          branding: null,
+          sections: [],
+          products: [],
+          productsPerPage: 10,
+        }),
+      ).rejects.toBeInstanceOf(QueueFullError);
+
+      const rows = await db.select().from(catalogs).where(eq(catalogs.id, catalogId));
+      expect(rows).toEqual([]);
+    } finally {
+      await boss.deleteJob(PDF_GENERATE_JOB, blockers);
+    }
   });
 });

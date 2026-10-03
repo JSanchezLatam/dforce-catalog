@@ -188,15 +188,15 @@ export type TemplateCoverImage = typeof templateCoverImage.$inferSelect;
 /**
  * `catalogs` — R7 (list/preview/download) + R11 (R2 upload, retention).
  *
- * `id` is minted by pdf-generation/enqueue.ts (`crypto.randomUUID()`) purely
- * as a job/queue correlation id (PR7) — this row is inserted by
- * pdf-generation/worker.ts right after render+handoff, BEFORE the
- * `pdf-upload` job is even sent, with `uploadStatus: "pending"` (Risk-1,
- * design.md's "New Risks Flagged" #1: makes a crash mid-upload-retry visible
- * as a queryable row instead of a silently orphaned local temp file, rather
- * than fully solving durability). `uploadStatus` then walks
- * pending -> uploading -> uploaded|failed, driven by
- * catalog-storage/upload-status.ts.
+ * `id` is minted by the generate route (api/catalog-builder/generate/
+ * route.ts, `crypto.randomUUID()` — server-side, so the LAN's insecure
+ * context does not apply) and doubles as the job correlation id. This row is
+ * inserted `pending` by pdf-generation/enqueue.ts, in the same advisory-locked
+ * transaction that sends the `pdf-generate` job (Risk-1, design.md's "New
+ * Risks Flagged" #1), so it is visible on /catalogs from the moment Generar
+ * returns. `uploadStatus` then walks pending -> uploading -> uploaded|failed:
+ * pdf-generation/worker.ts sets `failed` when the render's final attempt
+ * fails, catalog-storage/upload-status.ts drives the rest.
  *
  * `categories` is a denormalized snapshot (categoryL1/categoryL2 pairs) of
  * the selection at generation time — sufficient for R7.1's "name, date,

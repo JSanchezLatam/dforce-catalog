@@ -51,7 +51,7 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     expect(cat.items.map((i) => i.label)).not.toContain("Inventario");
   });
 
-  it("admin sees Configuración with three children: Config. del CRM + Config. de catálogos (with nested Configuración de template) + Gestión de usuarios", () => {
+  it("admin sees Configuración with three children: Config. del CRM + Config. de catálogos (with nested Configuración de plantillas) + Gestión de usuarios", () => {
     const groups = getNavGroups(admin);
     const cfg = groups.find((g) => g.label === "Configuración")!;
     expect(cfg.items).toHaveLength(3);
@@ -61,7 +61,7 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     if (parent.kind === "parent") {
       expect(parent.label).toBe("Config. de catálogos");
       expect(parent.children).toHaveLength(1);
-      expect(parent.children[0].label).toBe("Configuración de template");
+      expect(parent.children[0].label).toBe("Configuración de plantillas");
     }
     expect(cfg.items[2]).toEqual({ kind: "link", href: "/users", label: "Gestión de usuarios", icon: "users", action: "users.manage" });
   });

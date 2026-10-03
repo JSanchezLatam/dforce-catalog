@@ -26,6 +26,7 @@ vi.mock("@/modules/service-orders/queries", () => ({ getOrdenServicioById }));
 vi.mock("@/modules/customers/queries", () => ({ getClienteById }));
 vi.mock("@/modules/reminders/queries", () => ({ listRemindersForOrder }));
 
+import { can } from "@/modules/auth/policy";
 import type { Role } from "@/modules/auth/roles";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import type { OrdenServicio, Reminder } from "@/shared/db/schema";
@@ -269,5 +270,19 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
 
     expect(screen.getByRole("link", { name: "Imprimir" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: EDIT_LABEL })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * AGENTS.md: "Tests assert the Spanish string. Those are what catch an
+ * untranslated screen." Same wording as every other gated page.
+ */
+describe("ServiceOrderDetailPage — read gate", () => {
+  it("refuses a session without service-orders.read in Spanish", async () => {
+    vi.mocked(can).mockReturnValueOnce(false);
+
+    render(await renderPage());
+
+    expect(screen.getByText("No tenés permiso para ver esta página.")).toBeInTheDocument();
   });
 });

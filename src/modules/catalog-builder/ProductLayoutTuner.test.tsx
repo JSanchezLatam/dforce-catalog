@@ -56,8 +56,10 @@ describe("ProductLayoutTuner — which badge a row shows", () => {
   it("shows the classified type when no override is set", () => {
     renderTuner();
 
-    expect(within(rowFor("Woofer 12")).getByText("Transparente")).toBeInTheDocument();
-    expect(within(rowFor("Tweeter")).getByText("Baja res.")).toBeInTheDocument();
+    // Scoped to the badge: the selector's trigger now carries the same label.
+    const badge = { selector: '[data-slot="badge"]' };
+    expect(within(rowFor("Woofer 12")).getByText("Transparente", badge)).toBeInTheDocument();
+    expect(within(rowFor("Tweeter")).getByText("Baja res.", badge)).toBeInTheDocument();
   });
 
   // The classified badge must give way, not sit beside the override — showing
@@ -139,5 +141,28 @@ describe("ProductLayoutTuner — the per-product selector", () => {
     await user.click(await screen.findByRole("option", { name: "Auto" }));
 
     expect(onOverride).toHaveBeenCalledWith("p1", null);
+  });
+});
+
+/**
+ * Base UI's bare `<SelectValue />` prints the selected VALUE, not the item's
+ * text — Chrome showed `opaque` in the trigger while the list read "Opaca".
+ * The trigger must carry the same Spanish label the option does.
+ */
+describe("ProductLayoutTuner — the selector's trigger shows the Spanish label", () => {
+  it.each([
+    ["transparent", "Transparente"],
+    ["opaque", "Opaca"],
+    ["low_res", "Baja res."],
+  ] as const)("shows %s as %s", (value, label) => {
+    renderTuner({ overrides: { p1: value } });
+
+    expect(within(rowFor("Woofer 12")).getByRole("combobox").querySelector('[data-slot="select-value"]')).toHaveTextContent(new RegExp(`^${label}$`));
+  });
+
+  it("shows Auto — not the __auto__ sentinel — for an unclassified product", () => {
+    renderTuner({ products: [{ ...TRANSPARENT, imageType: null }] });
+
+    expect(within(rowFor("Woofer 12")).getByRole("combobox").querySelector('[data-slot="select-value"]')).toHaveTextContent(/^Auto$/);
   });
 });

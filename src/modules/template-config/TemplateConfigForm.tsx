@@ -18,6 +18,13 @@ type FormState = {
   selectedTemplateId: string;
 };
 
+// `items` for the image-handling select: a bare `<SelectValue />` prints the
+// raw value (`strict`) instead of the option's label.
+const IMAGE_HANDLING_LABELS: Record<FormState["defaultImageHandling"], string> = {
+  strict: "Estricto (todos los productos enmarcados)",
+  adaptive: "Adaptativo (diseño según cada imagen)",
+};
+
 function toFormState(config: TemplateConfig | null): FormState {
   return {
     defaultImageHandling: config?.defaultImageHandling === "adaptive" ? "adaptive" : "strict",
@@ -166,6 +173,7 @@ export function TemplateConfigForm({
             <div className="grid gap-2">
               <Label htmlFor="defaultImageHandling">Manejo de imágenes</Label>
               <Select
+                items={IMAGE_HANDLING_LABELS}
                 value={form.defaultImageHandling}
                 onValueChange={(v) => update("defaultImageHandling", v as "strict" | "adaptive")}
               >
@@ -173,8 +181,8 @@ export function TemplateConfigForm({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="strict">Estricto (todos los productos enmarcados)</SelectItem>
-                  <SelectItem value="adaptive">Adaptativo (diseño según cada imagen)</SelectItem>
+                  <SelectItem value="strict">{IMAGE_HANDLING_LABELS.strict}</SelectItem>
+                  <SelectItem value="adaptive">{IMAGE_HANDLING_LABELS.adaptive}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
