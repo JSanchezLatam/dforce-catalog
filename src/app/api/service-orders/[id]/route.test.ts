@@ -42,6 +42,9 @@ function ordenWith(status: OrderStatus): OrdenServicio {
     hallazgos: null,
     recomendaciones: null,
     observaciones: null,
+    kilometraje: null,
+    nivelCombustible: null,
+    bateriaPct: null,
     createdBy: null,
     createdAt: new Date("2026-05-01T14:00:00Z"),
     updatedAt: new Date("2026-05-01T14:00:00Z"),
@@ -480,5 +483,57 @@ describe("PATCH /api/service-orders/[id] — the edit gate (D11)", () => {
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "not_found" });
     expect(setSpy).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * service-order-reception — intake fields on the edit path. The D11 gate is
+ * unchanged: it runs before the intake keys are even read.
+ */
+describe("PATCH /api/service-orders/[id] — intake fields", () => {
+  const patchWith = (body: unknown, role: Role = "administrador", status: OrderStatus = "open") => {
+    const setSpy = vi.fn(() => ({ where: () => ({ returning: async () => [ordenWith(status)] }) }));
+    const response = handleUpdateOrdenServicio(requestWith(body, role), "o1", {
+      getById: async () => detailWith(status),
+      db: { update: () => ({ set: setSpy }) } as never,
+    });
+    return { response, setSpy };
+  };
+
+  it("persists valid intake values, and an intake-only patch is not 'no changes'", async () => {
+    const { response, setSpy } = patchWith({ kilometraje: 85000, nivelCombustible: 2, bateriaPct: 100 });
+
+    expect((await response).status).toBe(200);
+    expect(setSpy).toHaveBeenCalledWith({ kilometraje: 85000, nivelCombustible: 2, bateriaPct: 100 });
+  });
+
+  it("clears a field sent as null, and leaves an omitted one out of the SET", async () => {
+    const { response, setSpy } = patchWith({ kilometraje: null });
+
+    expect((await response).status).toBe(200);
+    expect(setSpy).toHaveBeenCalledWith({ kilometraje: null });
+  });
+
+  it.each([
+    [{ kilometraje: 1.5 }, "kilometraje"],
+    [{ nivelCombustible: 5 }, "nivelCombustible"],
+    [{ bateriaPct: 101 }, "bateriaPct"],
+  ])("rejects %j with 400 and never reaches the update", async (intake, key) => {
+    const { response, setSpy } = patchWith({ description: "x", ...intake });
+    const res = await response;
+
+    expect(res.status).toBe(400);
+    expect(Object.keys((await res.json()).errors)).toEqual([key]);
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
+  it("keeps the edit gate: a tecnico on an OPEN order is refused 403, a DONE order 409", async () => {
+    const open = patchWith({ kilometraje: 100 }, "tecnico", "open");
+    expect((await open.response).status).toBe(403);
+    expect(open.setSpy).not.toHaveBeenCalled();
+
+    const done = patchWith({ kilometraje: 100 }, "administrador", "done");
+    expect((await done.response).status).toBe(409);
+    expect(done.setSpy).not.toHaveBeenCalled();
   });
 });

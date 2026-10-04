@@ -385,3 +385,63 @@ describe("POST /api/service-orders — the form's payload, round-tripped through
     expect(Array.isArray(inserts[0])).toBe(false);
   });
 });
+
+/**
+ * service-order-reception — vehicle intake rides on the create wire. The
+ * route is the trust boundary: a numeric string or an out-of-range number is a
+ * 400 with Spanish copy and the transaction is never opened.
+ */
+describe("POST /api/service-orders — intake fields", () => {
+  function capturingDb() {
+    const captured: { values: Record<string, unknown> | null } = { values: null };
+    const database = {
+      transaction: vi.fn(async (cb: (tx: unknown) => unknown) =>
+        cb({
+          insert: () => ({
+            values: (values: Record<string, unknown>) => {
+              captured.values = values;
+              return { returning: async () => [{ id: "o1", status: "open", ...values }] };
+            },
+          }),
+        }),
+      ),
+    };
+    return { captured, database };
+  }
+  const base = { clienteId: "cli-1", vehiculoId: "v1", categoria: "revisado" };
+  const depsFor = (database: unknown) => ({ getClienteById: async () => clienteDetail as never, db: database as never });
+
+  it("persists valid kilometraje, nivelCombustible and bateriaPct", async () => {
+    const { captured, database } = capturingDb();
+    const response = await handleCreateOrdenServicio(
+      requestWith({ ...base, kilometraje: 85000, nivelCombustible: 2, bateriaPct: 100 }),
+      depsFor(database),
+    );
+
+    expect(response.status).toBe(201);
+    expect(captured.values).toMatchObject({ kilometraje: 85000, nivelCombustible: 2, bateriaPct: 100 });
+  });
+
+  it("stores null for each when none is given", async () => {
+    const { captured, database } = capturingDb();
+    const response = await handleCreateOrdenServicio(requestWith(base), depsFor(database));
+
+    expect(response.status).toBe(201);
+    expect(captured.values).toMatchObject({ kilometraje: null, nivelCombustible: null, bateriaPct: null });
+  });
+
+  it.each([
+    [{ kilometraje: -1 }, "kilometraje", "El kilometraje tiene que ser un número entero entre 0 y 2.000.000"],
+    [{ kilometraje: "abc" }, "kilometraje", "El kilometraje tiene que ser un número entero entre 0 y 2.000.000"],
+    [{ nivelCombustible: 5 }, "nivelCombustible", "El nivel de combustible tiene que ser un valor entre 0 y 4"],
+    [{ bateriaPct: 101 }, "bateriaPct", "La batería tiene que ser un número entero entre 0 y 100"],
+  ])("rejects %j with 400 under errors.%s and persists nothing", async (intake, key, message) => {
+    const { captured, database } = capturingDb();
+    const response = await handleCreateOrdenServicio(requestWith({ ...base, ...intake }), depsFor(database));
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).errors).toEqual({ [key]: message });
+    expect(database.transaction).not.toHaveBeenCalled();
+    expect(captured.values).toBeNull();
+  });
+});

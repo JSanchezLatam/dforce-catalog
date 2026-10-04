@@ -32,6 +32,7 @@ import { ClienteDeactivatedError } from "@/modules/customers/service";
 import { cancelRemindersForOrder, scheduleReminder } from "@/modules/reminders/job";
 import { planReminders, type ReminderType } from "@/modules/reminders/schedule";
 import { isServiceCategory, type ServiceCategory } from "./categories";
+import type { IntakeValues } from "./intake";
 import { getOrdenServicioById } from "./queries";
 import { assertTransition, type OrderStatus } from "./transitions";
 
@@ -123,7 +124,7 @@ export type CreateOrdenServicioInput = {
   observaciones?: string | null;
   appointmentAt?: Date | null;
   createdBy?: string | null;
-};
+} & IntakeValues;
 
 export type CreateOrdenServicioDeps = ReminderWiringDeps;
 
@@ -190,6 +191,9 @@ export async function createOrder(
         description: input.description ?? null,
         observaciones: input.observaciones ?? null,
         appointmentAt: input.appointmentAt ?? null,
+        kilometraje: input.kilometraje ?? null,
+        nivelCombustible: input.nivelCombustible ?? null,
+        bateriaPct: input.bateriaPct ?? null,
         createdBy: input.createdBy ?? null,
       })
       .returning();
@@ -211,7 +215,7 @@ export type UpdateOrdenServicioPatch = {
   hallazgos?: string | null;
   recomendaciones?: string | null;
   observaciones?: string | null;
-};
+} & IntakeValues;
 
 export type UpdateOrdenServicioDeps = {
   getById?: typeof getOrdenServicioById;
