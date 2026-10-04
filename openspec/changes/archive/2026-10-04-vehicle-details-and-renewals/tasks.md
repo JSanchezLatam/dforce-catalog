@@ -82,5 +82,5 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## Spec archive notes
 
-- [ ] 6.1 At archive, merge the three delta specs; `vehicle-renewals` is a new capability, the other two add requirements and one MODIFIED requirement each (not renames).
-- [ ] 6.2 Follow-ups, not in scope: poll for cross-machine badge staleness; email sending.
+- [x] 6.1 At archive, merge the three delta specs; `vehicle-renewals` is a new capability, the other two add requirements and one MODIFIED requirement each (not renames).
+- [x] 6.2 Follow-ups, not in scope: poll for cross-machine badge staleness; email sending. Explicit follow-ups noted: contact mark race on `markContactado` yields 500 instead of 404; email sending (disabled button placeholder); listContacts full scan (current; no index); workshop config access unguarded on renewals page; CustomerPicker create mode lacks "Uso interno" visibility control.
