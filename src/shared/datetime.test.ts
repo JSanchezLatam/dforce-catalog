@@ -10,7 +10,7 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 
-import { formatDateTime, formatDate } from "./datetime";
+import { formatDateTime, formatDate, toWorkshopDateKey } from "./datetime";
 
 const REAL_TZ = process.env.TZ;
 afterEach(() => {
@@ -61,5 +61,20 @@ describe("formatDate", () => {
     // Zero-padded and es-PA-ordered: en-US would render "3/9/2026", so this
     // pins the locale as well as the day.
     expect(formatDate(new Date("2026-03-10T02:00:00Z"))).toBe("03/09/2026");
+  });
+});
+
+describe("toWorkshopDateKey", () => {
+  it("is still 30 September in Panama at 03:00Z on 1 October, whatever the host zone", () => {
+    for (const hostZone of ["UTC", "Asia/Tokyo", "America/Panama"]) {
+      process.env.TZ = hostZone;
+      expect(toWorkshopDateKey(new Date("2026-10-01T03:00:00Z"))).toBe("2026-09-30");
+    }
+  });
+
+  it("is a zero-padded YYYY-MM-DD key once Panama has crossed midnight", () => {
+    process.env.TZ = "UTC";
+    expect(toWorkshopDateKey(new Date("2026-10-01T05:00:00Z"))).toBe("2026-10-01");
+    expect(toWorkshopDateKey(new Date("2027-03-05T12:00:00Z"))).toBe("2027-03-05");
   });
 });
