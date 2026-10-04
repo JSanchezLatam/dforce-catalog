@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="es-PA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vencimientos — mockup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+<script>
+  // Tokens copied from src/app/globals.css (:root, light). Nothing invented.
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          background: "var(--background)", foreground: "var(--foreground)",
+          card: "var(--card)", "card-foreground": "var(--card-foreground)",
+          primary: "var(--primary)", "primary-foreground": "var(--primary-foreground)",
+          muted: "var(--muted)", "muted-foreground": "var(--muted-foreground)",
+          accent: "var(--accent)", destructive: "var(--destructive)",
+          "destructive-foreground": "var(--destructive-foreground)",
+          warning: "var(--warning)", "warning-foreground": "var(--warning-foreground)",
+          success: "var(--success)", "success-foreground": "var(--success-foreground)",
+          border: "var(--border)", input: "var(--input)", ring: "var(--ring)",
+          sidebar: "var(--sidebar)", "sidebar-foreground": "var(--sidebar-foreground)",
+          "sidebar-primary": "var(--sidebar-primary)", "sidebar-primary-foreground": "var(--sidebar-primary-foreground)",
+          "sidebar-accent": "var(--sidebar-accent)", "sidebar-accent-foreground": "var(--sidebar-accent-foreground)",
+          "sidebar-border": "var(--sidebar-border)",
+        },
+        borderRadius: { lg: "0.5rem", md: "0.4rem", xl: "0.7rem" },
+      },
+    },
+  };
+</script>
+<style>
+  :root {
+    --background: hsl(0 0% 100%); --foreground: hsl(240 10% 3.9%);
+    --card: hsl(0 0% 100%); --card-foreground: hsl(240 10% 3.9%);
+    --primary: hsl(240 5.9% 10%); --primary-foreground: hsl(0 0% 98%);
+    --muted: hsl(240 4.8% 95.9%); --muted-foreground: hsl(240 3.8% 46.1%);
+    --accent: hsl(240 4.8% 95.9%);
+    --destructive: hsl(0 84.2% 60.2%); --destructive-foreground: hsl(0 0% 98%);
+    --warning: hsl(32 95% 44%); --warning-foreground: hsl(0 0% 100%);
+    --success: hsl(142 71% 45%); --success-foreground: hsl(0 0% 100%);
+    --border: hsl(240 5.9% 90%); --input: hsl(240 5.9% 90%); --ring: hsl(240 5.9% 10%);
+    --sidebar: hsl(0 0% 98%); --sidebar-foreground: hsl(240 5.3% 26.1%);
+    --sidebar-primary: hsl(240 5.9% 10%); --sidebar-primary-foreground: hsl(0 0% 98%);
+    --sidebar-accent: hsl(240 4.8% 95.9%); --sidebar-accent-foreground: hsl(240 5.9% 10%);
+    --sidebar-border: hsl(220 13% 91%);
+  }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  [data-lucide] { width: 16px; height: 16px; flex-shrink: 0; }
+  .input { height: 2rem; width: 100%; border-radius: .5rem; border: 1px solid var(--input); background: transparent; padding: 0 .625rem; font-size: .875rem; }
+  select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2371717a' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .5rem center; padding-right: 2rem; }
+  .label { font-size: .875rem; font-weight: 500; line-height: 1; }
+  .plate { display:inline-flex; align-items:center; border-radius:.4rem; border:2px solid hsl(240 10% 3.9% / .6); background:var(--muted); padding:.25rem .5rem; font-family:ui-monospace,monospace; font-size:.875rem; font-weight:700; letter-spacing:.05em; }
+  .plate-sm { font-size:.75rem; padding:.125rem .375rem; border-width:1.5px; }
+  .chip { display:inline-flex; align-items:center; gap:.25rem; border-radius:9999px; padding:.125rem .5rem; font-size:.75rem; font-weight:500; white-space:nowrap; }
+  .note { border-left: 3px solid var(--border); padding-left: .75rem; }
+</style>
+</head>
+<body class="bg-muted text-foreground">
+<div class="mx-auto max-w-[1240px] px-4 py-8 flex flex-col gap-12">
+
+  <header class="flex flex-col gap-1">
+    <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Mockup estático — vehicle-details-and-renewals</p>
+    <h1 class="text-2xl font-bold">Datos del vehículo y vencimientos</h1>
+    <p class="text-sm text-muted-foreground">Para aprobar antes de escribir código. Datos de ejemplo; “hoy” es 04/10/2026.</p>
+  </header>
+
+  <!-- ============ PANEL 1 ============ -->
+  <section class="flex flex-col gap-4">
+    <h2 class="text-lg font-semibold">1 · Formulario de cliente — tarjeta de vehículo</h2>
+    <div class="grid gap-6 lg:grid-cols-[1fr_380px] items-start">
+
+      <!-- Admin view -->
+      <div class="flex flex-col gap-2">
+        <p class="text-sm font-medium text-muted-foreground">Como lo ve el administrador</p>
+        <div class="rounded-xl border bg-background p-6 shadow-sm max-w-[560px]">
+          <h3 class="mb-3 text-lg font-semibold">Vehículos</h3>
+          <div role="group" aria-label="Vehículo 1" class="rounded-xl border bg-card p-4 flex flex-col gap-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <span class="plate">AB1234</span>
+              <button class="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg px-2.5 text-sm font-medium hover:bg-muted"><i data-lucide="x"></i>Quitar</button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div class="grid gap-2"><label class="label">Placa</label><input class="input" value="AB1234"></div>
+              <div class="grid gap-2"><label class="label">Marca</label><input class="input" value="Toyota"></div>
+              <div class="grid gap-2"><label class="label">Modelo</label><input class="input" value="Hilux"></div>
+              <div class="grid gap-2"><label class="label">Año</label><input class="input" value="2021"></div>
+              <div class="grid gap-2 col-span-2"><label class="label">Chasis</label><input class="input font-mono" value="MR0HA3CD100512345"></div>
+              <div class="grid gap-2"><label class="label">Color primario</label><input class="input" value="Blanco"></div>
+              <div class="grid gap-2"><label class="label">Color secundario</label><input class="input" placeholder="Opcional"></div>
+              <div class="grid gap-2"><label class="label">Estilo</label>
+                <select class="input"><option>Sedán</option><option>Hatchback</option><option>SUV</option><option selected>Pick-up</option><option>Van/Panel</option><option>Coupé</option><option>Moto</option><option>Otro</option></select>
+              </div>
+              <div class="grid gap-2"><label class="label">Motor</label>
+                <select class="input"><option selected>Combustión</option><option>Eléctrico</option><option>Híbrido</option></select>
+              </div>
+              <div class="grid gap-2"><label class="label">Nº de unidad <span class="font-normal text-muted-foreground">(opcional)</span></label><input class="input" value="U-07"></div>
+            </div>
+
+            <!-- Internal subsection -->
+            <div class="mt-1 flex flex-col gap-3 rounded-lg border border-dashed bg-muted/60 p-3">
+              <div class="flex items-center gap-2">
+                <i data-lucide="lock" class="text-muted-foreground"></i>
+                <span class="text-sm font-semibold">Uso interno</span>
+              </div>
+              <p class="text-xs text-muted-foreground -mt-2">Solo lo ve el administrador (y más adelante el jefe de taller). No sale en la orden ni en la hoja impresa.</p>
+              <div class="grid grid-cols-2 gap-3">
+                <div class="grid gap-2"><label class="label">Mes de renovación de placa</label>
+                  <select class="input bg-background"><option>—</option><option>Enero</option><option>Febrero</option><option>Marzo</option><option>Abril</option><option>Mayo</option><option>Junio</option><option>Julio</option><option>Agosto</option><option>Septiembre</option><option selected>Octubre</option><option>Noviembre</option><option>Diciembre</option></select>
+                </div>
+                <div class="grid gap-2"><label class="label">Vencimiento del seguro</label><input type="date" class="input bg-background" value="2026-10-28"></div>
+              </div>
+            </div>
+          </div>
+          <button class="mt-3 inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg border bg-background px-2.5 text-sm font-medium"><i data-lucide="plus"></i>Agregar vehículo</button>
+        </div>
+      </div>
+
+      <!-- Técnico view -->
+      <div class="flex flex-col gap-2">
+        <p class="text-sm font-medium text-muted-foreground">Como lo ve un técnico (sin “Uso interno”)</p>
+        <div class="rounded-xl border bg-background p-4 shadow-sm">
+          <div class="rounded-xl border bg-card p-3 flex flex-col gap-2.5 text-[13px]">
+            <div class="flex items-center justify-between"><span class="plate plate-sm">8K5521</span><span class="text-xs text-muted-foreground">Quitar</span></div>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="grid gap-1"><span class="text-xs font-medium">Placa</span><div class="input flex items-center h-7 text-xs">8K5521</div></div>
+              <div class="grid gap-1"><span class="text-xs font-medium">Marca</span><div class="input flex items-center h-7 text-xs">Kia</div></div>
+              <div class="grid gap-1"><span class="text-xs font-medium">Modelo</span><div class="input flex items-center h-7 text-xs">Picanto</div></div>
+              <div class="grid gap-1"><span class="text-xs font-medium">Año</span><div class="input flex items-center h-7 text-xs">2019</div></div>
+              <div class="grid gap-1 col-span-2"><span class="text-xs font-medium">Chasis</span><div class="input flex items-center h-7 text-xs font-mono">KNABE511AKT634218</div></div>
+              <div class="grid gap-1"><span class="text-xs font-medium">Color primario</span><div class="input flex items-center h-7 text-xs">Rojo</div></div>
+              <div class="grid gap-1"><span class="text-xs font-medium">Color secundario</span><div class="input flex items-center h-7 text-xs text-muted-foreground">Opcional</div></div>
+              <div class="grid gap-1"><span class="text-xs font-medium">Estilo</span><div class="input flex items-center h-7 text-xs">Hatchback</div></div>
+              <div class="grid gap-1"><span class="text-xs font-medium">Motor</span><div class="input flex items-center h-7 text-xs">Combustión</div></div>
+              <div class="grid gap-1 col-span-2"><span class="text-xs font-medium">Nº de unidad (opcional)</span><div class="input flex items-center h-7 text-xs"></div></div>
+            </div>
+          </div>
+          <p class="mt-3 text-xs text-muted-foreground note">Al guardar, un técnico no borra el mes de placa ni el vencimiento del seguro: esos valores quedan como estaban.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PANEL 2 ============ -->
+  <section class="flex flex-col gap-4">
+    <h2 class="text-lg font-semibold">2 · “Vencimientos próximos” — escritorio</h2>
+    <div class="overflow-x-auto rounded-xl border shadow-sm">
+    <div class="relative flex min-w-[1100px] bg-background" style="height: 640px;">
+      <!-- Sidebar -->
+      <aside class="flex w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground text-sm">
+        <div class="p-2">
+          <div class="flex h-12 items-center gap-2 rounded-lg px-2">
+            <div class="flex size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground"><i data-lucide="gallery-vertical-end"></i></div>
+            <span class="font-semibold">Dforce</span>
+          </div>
+        </div>
+        <div class="flex-1 p-2 flex flex-col">
+          <div class="flex h-8 items-center justify-between px-2 text-xs font-medium text-sidebar-foreground/70"><span>CRM</span><i data-lucide="chevron-down"></i></div>
+          <a class="flex h-8 items-center gap-2 rounded-md px-2"><i data-lucide="users"></i>Clientes</a>
+          <a class="flex h-8 items-center gap-2 rounded-md px-2"><i data-lucide="wrench"></i>Órdenes de servicio</a>
+          <a class="flex h-8 items-center gap-2 rounded-md bg-sidebar-accent px-2 font-medium text-sidebar-accent-foreground"><i data-lucide="calendar-clock"></i>Vencimientos
+            <span class="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-sidebar-primary px-1 text-xs font-medium tabular-nums text-sidebar-primary-foreground" aria-label="5 vencimientos">5</span></a>
+          <a class="flex h-8 items-center gap-2 rounded-md px-2"><i data-lucide="package"></i>Inventario</a>
+          <div class="mx-2 my-2 h-px bg-sidebar-border"></div>
+          <div class="flex h-8 items-center justify-between px-2 text-xs font-medium text-sidebar-foreground/70"><span>Catálogo</span><i data-lucide="chevron-down"></i></div>
+          <a class="flex h-8 items-center gap-2 rounded-md px-2"><i data-lucide="file-spreadsheet"></i>Generar Catálogos</a>
+          <a class="flex h-8 items-center gap-2 rounded-md px-2"><i data-lucide="book-open"></i>Catálogos Generados</a>
+          <div class="mt-auto">
+            <div class="mx-2 my-2 h-px bg-sidebar-border"></div>
+            <div class="flex h-8 items-center justify-between px-2 text-xs font-medium text-sidebar-foreground/70"><span>Configuración</span><i data-lucide="chevron-down"></i></div>
+          </div>
+        </div>
+        <div class="border-t border-sidebar-border p-2">
+          <div class="flex h-12 items-center gap-2 rounded-lg px-2">
+            <div class="flex size-8 items-center justify-center rounded-lg bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground">J</div>
+            <div class="grid leading-tight"><span class="font-semibold">Jorge</span><span class="text-xs text-muted-foreground">Administrador</span></div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Page -->
+      <main class="flex-1 overflow-hidden p-8">
+        <h1 class="mb-1 text-[32px] font-bold">Vencimientos próximos</h1>
+        <p class="mb-6 text-sm text-muted-foreground">Placas que se renuevan este mes o el próximo y seguros que vencen en los próximos 30 días. Los vencidos quedan hasta marcarlos como contactados.</p>
+
+        <div class="rounded-xl border">
+          <table class="w-full text-sm">
+            <thead><tr class="border-b text-left">
+              <th class="h-10 px-3 font-medium">Cliente</th>
+              <th class="h-10 px-3 font-medium">Vehículo</th>
+              <th class="h-10 px-3 font-medium">Vence</th>
+              <th class="h-10 px-3 font-medium">Estado</th>
+              <th class="h-10 px-3 font-medium w-40">Acciones</th>
+            </tr></thead>
+            <tbody>
+              <tr class="border-b">
+                <td class="px-3 py-2"><div class="font-medium">María Fernanda Quintero</div><div class="text-xs text-muted-foreground">6612-4589</div></td>
+                <td class="px-3 py-2"><div class="flex items-center gap-2 whitespace-nowrap"><span class="plate plate-sm">AB1234</span>Toyota Hilux</div></td>
+                <td class="px-3 py-2">Seguro — venció 28/09/2026</td>
+                <td class="px-3 py-2"><span class="chip bg-destructive text-destructive-foreground">Vencido</span></td>
+                <td class="px-3 py-2"><button class="inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium hover:bg-muted"><i data-lucide="phone"></i>Contactar</button></td>
+              </tr>
+              <tr class="border-b">
+                <td class="px-3 py-2"><div class="font-medium">Ricardo Batista</div><div class="text-xs text-muted-foreground">6745-1102</div></td>
+                <td class="px-3 py-2"><div class="flex items-center gap-2 whitespace-nowrap"><span class="plate plate-sm">CJ7781</span>Kia Picanto</div></td>
+                <td class="px-3 py-2">Placa — septiembre</td>
+                <td class="px-3 py-2"><span class="chip bg-destructive text-destructive-foreground">Vencido</span></td>
+                <td class="px-3 py-2"><button class="inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium"><i data-lucide="phone"></i>Contactar</button></td>
+              </tr>
+              <tr class="border-b">
+                <td class="px-3 py-2"><div class="font-medium">Transportes Chiriquí S.A.</div><div class="text-xs text-muted-foreground">6230-8874</div></td>
+                <td class="px-3 py-2"><div class="flex items-center gap-2 whitespace-nowrap"><span class="plate plate-sm">BF0921</span>Nissan Frontier <span class="text-xs text-muted-foreground">· U-12</span></div></td>
+                <td class="px-3 py-2">Placa — octubre</td>
+                <td class="px-3 py-2"><span class="chip bg-warning text-warning-foreground">Este mes</span></td>
+                <td class="px-3 py-2"><button class="inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium"><i data-lucide="phone"></i>Contactar</button></td>
+              </tr>
+              <tr class="border-b">
+                <td class="px-3 py-2"><div class="font-medium">Ana Lucía Pinzón</div><div class="text-xs text-muted-foreground">6981-3307</div></td>
+                <td class="px-3 py-2"><div class="flex items-center gap-2 whitespace-nowrap"><span class="plate plate-sm">8K5521</span>Hyundai Tucson</div></td>
+                <td class="px-3 py-2">Seguro — vence 16/10/2026</td>
+                <td class="px-3 py-2"><span class="chip bg-warning text-warning-foreground">En 12 días</span></td>
+                <td class="px-3 py-2"><button class="inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium"><i data-lucide="phone"></i>Contactar</button></td>
+              </tr>
+              <tr>
+                <td class="px-3 py-2"><div class="font-medium">Luis Carlos Rodríguez</div><div class="text-xs text-muted-foreground">6503-9216</div></td>
+                <td class="px-3 py-2"><div class="flex items-center gap-2 whitespace-nowrap"><span class="plate plate-sm">DA4410</span>Toyota Corolla</div></td>
+                <td class="px-3 py-2">Placa — noviembre</td>
+                <td class="px-3 py-2"><span class="chip bg-muted text-muted-foreground border">Próximo mes</span></td>
+                <td class="px-3 py-2"><button class="inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium"><i data-lucide="phone"></i>Contactar</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </main>
+
+      <!-- Toast, as ToastProvider places it: bottom-right -->
+      <div class="absolute bottom-4 right-4 flex items-center gap-2 rounded-lg bg-success px-4 py-3 text-sm text-success-foreground shadow-md">
+        <i data-lucide="circle-check"></i>Vencimiento marcado como contactado<i data-lucide="x" class="ml-2 opacity-80"></i>
+      </div>
+    </div>
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <p class="text-sm font-medium text-muted-foreground">Estado vacío (misma página, sin nada por vencer)</p>
+      <div class="rounded-xl border bg-background">
+        <div class="flex flex-col items-center gap-2 py-12 text-center">
+          <i data-lucide="calendar-check" style="width:40px;height:40px" class="text-muted-foreground"></i>
+          <h2 class="text-base font-semibold">Nada por vencer</h2>
+          <p class="text-sm text-muted-foreground">No hay placas ni seguros por vencer en los próximos 30 días.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PANEL 3 ============ -->
+  <section class="flex flex-col gap-4">
+    <h2 class="text-lg font-semibold">3 · La misma página en el teléfono (390 px) — tarjetas en vez de tabla</h2>
+    <div class="relative mx-auto w-[390px] max-w-full overflow-hidden rounded-[2rem] border-8 border-foreground/80 bg-background shadow-sm">
+      <div class="flex h-12 items-center gap-2 border-b px-2">
+        <button class="inline-flex size-11 items-center justify-center rounded-lg" aria-label="Abrir menú"><i data-lucide="panel-left"></i></button>
+        <span class="text-sm font-semibold">Vencimientos</span>
+        <span class="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-primary px-1 text-xs font-medium text-primary-foreground">5</span>
+      </div>
+      <div class="p-4 pb-20 flex flex-col gap-3">
+        <h1 class="text-2xl font-bold">Vencimientos próximos</h1>
+
+        <div class="rounded-xl border bg-card p-4 flex flex-col gap-3">
+          <div class="flex items-start justify-between gap-2">
+            <div><div class="font-medium">María Fernanda Quintero</div><div class="text-xs text-muted-foreground">6612-4589</div></div>
+            <span class="chip bg-destructive text-destructive-foreground">Vencido</span>
+          </div>
+          <div class="flex items-center gap-2 text-sm"><span class="plate plate-sm">AB1234</span>Toyota Hilux</div>
+          <div class="text-sm">Seguro — venció 28/09/2026</div>
+          <button class="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium"><i data-lucide="phone"></i>Contactar</button>
+        </div>
+
+        <div class="rounded-xl border bg-card p-4 flex flex-col gap-3">
+          <div class="flex items-start justify-between gap-2">
+            <div><div class="font-medium">Ricardo Batista</div><div class="text-xs text-muted-foreground">6745-1102</div></div>
+            <span class="chip bg-destructive text-destructive-foreground">Vencido</span>
+          </div>
+          <div class="flex items-center gap-2 text-sm"><span class="plate plate-sm">CJ7781</span>Kia Picanto</div>
+          <div class="text-sm">Placa — septiembre</div>
+          <button class="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium"><i data-lucide="phone"></i>Contactar</button>
+        </div>
+
+        <div class="rounded-xl border bg-card p-4 flex flex-col gap-3">
+          <div class="flex items-start justify-between gap-2">
+            <div><div class="font-medium">Transportes Chiriquí S.A.</div><div class="text-xs text-muted-foreground">6230-8874</div></div>
+            <span class="chip bg-warning text-warning-foreground">Este mes</span>
+          </div>
+          <div class="flex items-center gap-2 text-sm"><span class="plate plate-sm">BF0921</span>Nissan Frontier <span class="text-xs text-muted-foreground">· U-12</span></div>
+          <div class="text-sm">Placa — octubre</div>
+          <button class="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium"><i data-lucide="phone"></i>Contactar</button>
+        </div>
+
+        <div class="rounded-xl border bg-card p-4 flex flex-col gap-3 opacity-60">
+          <div class="flex items-start justify-between gap-2">
+            <div><div class="font-medium">Ana Lucía Pinzón</div><div class="text-xs text-muted-foreground">6981-3307</div></div>
+            <span class="chip bg-warning text-warning-foreground">En 12 días</span>
+          </div>
+          <div class="text-xs text-muted-foreground">… y una más</div>
+        </div>
+      </div>
+      <div class="absolute bottom-4 left-4 right-4 flex items-center gap-2 rounded-lg bg-success px-4 py-3 text-sm text-success-foreground shadow-md">
+        <i data-lucide="circle-check"></i>Vencimiento marcado como contactado
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PANEL 4 ============ -->
+  <section class="flex flex-col gap-4">
+    <h2 class="text-lg font-semibold">4 · Ventana de contacto</h2>
+    <p class="text-sm text-muted-foreground -mt-2">Se abre con “Contactar” en la fila de Transportes Chiriquí S.A. (Nissan Frontier BF0921, Placa — octubre). Mismo Dialog que el resto de la app (overlay negro 80 %, superficie redondeada, cerrar arriba a la derecha).</p>
+    <div class="grid gap-6 lg:grid-cols-[1fr_400px] items-start">
+
+      <!-- Main variant -->
+      <div class="flex flex-col gap-2">
+        <p class="text-sm font-medium text-muted-foreground">Cliente con WhatsApp permitido</p>
+        <div class="flex items-center justify-center rounded-xl bg-black/80 p-8">
+          <div role="dialog" aria-labelledby="dlg-title" class="relative flex w-full max-w-lg flex-col gap-5 rounded-xl bg-background p-6 shadow-2xl">
+            <button class="absolute top-3 right-3 inline-flex size-7 items-center justify-center rounded-lg hover:bg-muted" aria-label="Cerrar"><i data-lucide="x"></i></button>
+            <div class="flex flex-col gap-1.5 pr-6">
+              <h3 id="dlg-title" class="text-lg font-semibold">Contactar a Transportes Chiriquí S.A.</h3>
+              <p class="text-sm text-muted-foreground">Placa — octubre · Nissan Frontier (BF0921)</p>
+            </div>
+            <div class="grid gap-2">
+              <label class="label" for="precio">Precio (opcional)</label>
+              <div class="flex h-8 items-center rounded-lg border border-input text-sm">
+                <span class="flex h-full items-center border-r bg-muted px-2.5 text-muted-foreground">B/.</span>
+                <input id="precio" class="h-full w-full bg-transparent px-2.5 tabular-nums outline-none" value="45.00">
+              </div>
+            </div>
+            <div class="grid gap-2">
+              <span class="label">Mensaje</span>
+              <div class="rounded-lg border bg-muted/60 p-3 text-sm leading-relaxed" aria-readonly="true">Hola Transportes Chiriquí S.A., le saludamos de DForce Car Audio. La renovación de la placa de su Nissan Frontier (BF0921) corresponde en octubre. Le ofrecemos el servicio de renovación por B/. 45.00. Si le interesa, responda este mensaje o llámenos al 203-7212. Horario: Lunes a Sábado 8:00 A.M - 5:00 P.M. Dirección: Rio Abajo, Calle 14.</div>
+            </div>
+            <div class="flex flex-col gap-2">
+              <div class="flex flex-wrap gap-2">
+                <button class="inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground"><i data-lucide="message-circle"></i>WhatsApp</button>
+                <button disabled class="inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium opacity-50 cursor-not-allowed"><i data-lucide="mail"></i>Correo<span class="chip bg-muted text-muted-foreground border px-1.5 py-0 text-[10px]">Próximamente</span></button>
+                <button class="inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium hover:bg-muted"><i data-lucide="check"></i>Marcar como contactado</button>
+              </div>
+              <p class="text-xs text-muted-foreground">Abrir WhatsApp no marca el vencimiento como contactado.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Opted-out variant -->
+      <div class="flex flex-col gap-2">
+        <p class="text-sm font-medium text-muted-foreground">Cliente que pidió no recibir WhatsApp (variante)</p>
+        <div class="flex items-center justify-center rounded-xl bg-black/80 p-4">
+          <div role="dialog" class="relative flex w-full flex-col gap-4 rounded-xl bg-background p-5 shadow-2xl text-[13px]">
+            <button class="absolute top-2 right-2 inline-flex size-7 items-center justify-center rounded-lg" aria-label="Cerrar"><i data-lucide="x"></i></button>
+            <div class="flex flex-col gap-1 pr-6">
+              <h3 class="text-base font-semibold">Contactar a Transportes Chiriquí S.A.</h3>
+              <p class="text-xs text-muted-foreground">Placa — octubre · Nissan Frontier (BF0921)</p>
+            </div>
+            <div class="grid gap-1.5">
+              <span class="text-xs font-medium">Precio (opcional)</span>
+              <div class="flex h-8 items-center rounded-lg border border-input text-sm"><span class="flex h-full items-center border-r bg-muted px-2.5 text-muted-foreground">B/.</span><span class="px-2.5 tabular-nums">45.00</span></div>
+            </div>
+            <div class="grid gap-1.5">
+              <span class="text-xs font-medium">Mensaje</span>
+              <div class="rounded-lg border bg-muted/60 p-2.5 text-xs leading-relaxed text-muted-foreground"><span class="line-clamp-3">Hola Transportes Chiriquí S.A., le saludamos de DForce Car Audio. La renovación de la placa de su Nissan Frontier (BF0921) corresponde en octubre…</span></div>
+            </div>
+            <div class="flex flex-col gap-2">
+              <div class="flex flex-wrap gap-2">
+                <button disabled class="inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground opacity-50 cursor-not-allowed"><i data-lucide="message-circle"></i>WhatsApp</button>
+                <button disabled class="inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium opacity-50 cursor-not-allowed"><i data-lucide="mail"></i>Correo<span class="chip bg-muted text-muted-foreground border px-1.5 py-0 text-[10px]">Próximamente</span></button>
+                <button class="inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium"><i data-lucide="check"></i>Marcar como contactado</button>
+              </div>
+              <p class="text-xs text-muted-foreground">El cliente pidió no recibir WhatsApp.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phone variant -->
+    <div class="flex flex-col gap-2">
+      <p class="text-sm font-medium text-muted-foreground">En el teléfono (390 px): ancho completo, pegada abajo</p>
+      <div class="relative mx-auto flex w-[390px] max-w-full flex-col justify-end pt-24 overflow-hidden rounded-[2rem] border-8 border-foreground/80 bg-black/80 shadow-sm">
+        <div role="dialog" class="relative flex w-full flex-col gap-4 rounded-t-xl bg-background p-4 pb-6 shadow-2xl">
+          <button class="absolute top-2 right-2 inline-flex size-11 items-center justify-center rounded-lg" aria-label="Cerrar"><i data-lucide="x"></i></button>
+          <div class="flex flex-col gap-1 pr-10">
+            <h3 class="text-lg font-semibold leading-snug">Contactar a Transportes Chiriquí S.A.</h3>
+            <p class="text-sm text-muted-foreground">Placa — octubre · Nissan Frontier (BF0921)</p>
+          </div>
+          <div class="grid gap-2">
+            <span class="label">Precio (opcional)</span>
+            <div class="flex h-11 items-center rounded-lg border border-input text-sm"><span class="flex h-full items-center border-r bg-muted px-3 text-muted-foreground">B/.</span><span class="px-3 tabular-nums">45.00</span></div>
+          </div>
+          <div class="grid gap-2">
+            <span class="label">Mensaje</span>
+            <div class="rounded-lg border bg-muted/60 p-3 text-sm leading-relaxed">Hola Transportes Chiriquí S.A., le saludamos de DForce Car Audio. La renovación de la placa de su Nissan Frontier (BF0921) corresponde en octubre. Le ofrecemos el servicio de renovación por B/. 45.00. Si le interesa, responda este mensaje o llámenos al 203-7212. Horario: Lunes a Sábado 8:00 A.M - 5:00 P.M. Dirección: Rio Abajo, Calle 14.</div>
+          </div>
+          <div class="flex flex-col gap-2">
+            <button class="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground"><i data-lucide="message-circle"></i>WhatsApp</button>
+            <button disabled class="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium opacity-50"><i data-lucide="mail"></i>Correo<span class="chip bg-muted text-muted-foreground border px-1.5 py-0 text-[10px]">Próximamente</span></button>
+            <button class="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border bg-background px-3 text-sm font-medium"><i data-lucide="check"></i>Marcar como contactado</button>
+            <p class="text-center text-xs text-muted-foreground">Abrir WhatsApp no marca el vencimiento como contactado.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PRINT SHEET ============ -->
+  <section class="flex flex-col gap-4">
+    <h2 class="text-lg font-semibold">Extra · Hoja impresa de la orden — bloque del vehículo</h2>
+    <p class="text-sm text-muted-foreground -mt-2">Sin campos internos. “Nº de unidad” solo aparece cuando está cargado. Colores primario y secundario en un solo renglón “Color”.</p>
+    <div class="grid gap-6 md:grid-cols-2">
+      <div class="bg-white p-6 text-black shadow-sm border">
+        <p class="mb-2 text-xs text-black/60">Con Nº de unidad</p>
+        <dl class="grid grid-cols-2 gap-x-8 text-sm">
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Cliente</dt><dd>Transportes Chiriquí S.A.</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Teléfono</dt><dd>6230-8874</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Placa</dt><dd>BF0921</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Marca</dt><dd>Nissan</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Modelo</dt><dd>Frontier</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Año</dt><dd>2020</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Chasis</dt><dd class="font-mono">3N6AD33A0LK812345</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Color</dt><dd>Gris / Negro</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Estilo</dt><dd>Pick-up</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Motor</dt><dd>Combustión</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Nº de unidad</dt><dd>U-12</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Categoría</dt><dd>Mantenimiento</dd></div>
+        </dl>
+      </div>
+      <div class="bg-white p-6 text-black shadow-sm border">
+        <p class="mb-2 text-xs text-black/60">Sin Nº de unidad (el renglón no aparece)</p>
+        <dl class="grid grid-cols-2 gap-x-8 text-sm">
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Cliente</dt><dd>Ricardo Batista</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Teléfono</dt><dd>6745-1102</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Placa</dt><dd>CJ7781</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Marca</dt><dd>Kia</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Modelo</dt><dd>Picanto</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Año</dt><dd>2019</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Chasis</dt><dd class="font-mono">KNABE511AKT634218</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Color</dt><dd>Rojo</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Estilo</dt><dd>Hatchback</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Motor</dt><dd>Combustión</dd></div>
+          <div class="border-b border-black/40 py-1"><dt class="text-[10px] uppercase tracking-wide text-red-700">Categoría</dt><dd>Diagnóstico</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>
