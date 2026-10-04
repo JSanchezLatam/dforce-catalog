@@ -109,6 +109,34 @@ The list view MUST additionally let staff order results by clicking a whiteliste
 - GIVEN an active search term matching several customers WHEN staff clicks the `name` header THEN the system MUST sort only the matching rows, MUST reset to page 1, and MUST leave the search term and status filter unchanged
 - GIVEN a `status=inactive` filter active WHEN staff sorts by `phone` THEN the sort MUST apply only to the deactivated customers already matching that filter, never mixing in active customers
 
+### Requirement: Vehicle Descriptive Fields
+
+A vehicle MAY carry chasis, primary color, secondary color (free text), estilo (one of: Sedán, Hatchback, SUV, Pick-up, Van/Panel, Coupé, Moto, Otro), motor (`combustion`, `electrico`, `hibrido`) and unit number. All are optional and MUST NOT change R17's plate rule.
+
+#### Scenarios
+
+- GIVEN staff on the customer form WHEN they save a vehicle with chasis, colors, estilo "SUV", motor `hibrido` and unit "12" THEN reopening the form MUST show those values
+- GIVEN a save payload with estilo "Cohete" or motor "diesel" WHEN submitted THEN the system MUST reject it with a validation error
+
+### Requirement: Internal Fields Are Preserved and Gated on Save
+
+Saving a vehicle through any write path MUST NOT overwrite the stored plate renewal month or insurance expiry unless the caller sent them and holds `vencimientos.read`. A caller without it that sends either field MUST be refused with 403 before any database work.
+
+#### Scenarios
+
+- GIVEN a vehicle with renewal month 3 and insurance expiry 2026-11-15 WHEN a tecnico edits its color and saves without those keys THEN both stored values MUST be unchanged
+- GIVEN a tecnico session WHEN a vehicle save includes `placa_renovacion_mes` or `seguro_vence` THEN the system MUST respond 403 and persist nothing
+- GIVEN an administrador saving a vehicle without the insurance key WHEN saved THEN the stored insurance expiry MUST be unchanged
+- GIVEN an administrador sending insurance expiry as null WHEN saved THEN the stored value MUST become null
+
+### Requirement: Vehicles GET Route Public Shape
+
+`GET /api/customers/[id]/vehicles` MUST return an explicit public shape that never includes the renewal month or insurance expiry, for every role.
+
+#### Scenarios
+
+- GIVEN a vehicle with sentinel values in both internal fields WHEN an administrador calls the route THEN the response body MUST contain neither field nor the sentinel values
+
 ### Requirement: Vehicle Collection Persistence, Soft Delete, and Permanent Deletion
 
 When staff create or update a `cliente`, the system MUST persist any changes to that `cliente`'s vehicle collection (added, edited, soft-deleted, or permanently deleted vehicles) together with any `cliente` field changes in a single database transaction — both succeed or both roll back. A vehicle omitted from an update's vehicle payload MUST be left completely untouched. Editing one vehicle MUST NOT alter any of its sibling vehicles on the same customer.
@@ -134,7 +162,8 @@ The schema migration that introduces `vehiculo` MUST preserve existing data: for
 
 ### Requirement: Vehicle Detail Screen with Service History
 
-The system MUST provide a vehicle detail screen at `/customers/[id]/vehicles/[vehicleId]`, reachable by clicking a vehicle card on the customer detail view. The screen MUST show that vehicle's identity fields (plate, make, model, year) and a list of its own `orden_servicio` history, ordered most-recent-first. Each history row MUST offer a detail affordance that navigates to the existing `/service-orders/[id]` page rather than duplicating that page's content. A vehicle with zero service orders MUST show an explicit empty-state message instead of an empty table.
+The system MUST provide a vehicle detail screen at `/customers/[id]/vehicles/[vehicleId]`, reachable by clicking a vehicle card on the customer detail view. The screen MUST show that vehicle's identity fields (plate, make, model, year, plus any set chasis, colors, estilo, motor and unit number) and a list of its own `orden_servicio` history, ordered most-recent-first. The renewal month and insurance expiry MUST appear only for a session with `vencimientos.read`. Each history row MUST offer a detail affordance that navigates to the existing `/service-orders/[id]` page rather than duplicating that page's content. A vehicle with zero service orders MUST show an explicit empty-state message instead of an empty table.
+(Previously: identity fields were plate, make, model, year only.)
 
 #### Scenarios
 
@@ -143,6 +172,7 @@ The system MUST provide a vehicle detail screen at `/customers/[id]/vehicles/[ve
 - GIVEN a vehicle detail screen with at least one history row WHEN staff clicks that row's detail affordance THEN the system MUST navigate to `/service-orders/[id]` for that exact order
 - GIVEN a vehicle with zero `orden_servicio` rows WHEN staff opens its detail screen THEN the system MUST show an empty-state message instead of an empty table
 - GIVEN a soft-deleted (deactivated) vehicle that has service-order history WHEN staff navigates directly to its detail screen (e.g. via an order's vehicle link) THEN the system MUST still render the vehicle's identity and its full history
+- GIVEN a vehicle with internal values set WHEN a tecnico opens its detail screen THEN neither internal field MUST be rendered; an administrador MUST see both
 
 ### Requirement: Customer Deactivation and Reactivation (R20)
 

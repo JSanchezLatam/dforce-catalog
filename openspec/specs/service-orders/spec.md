@@ -78,13 +78,16 @@ The system MUST allow staff to patch an existing order's `categoria`, `hallazgos
 
 ### Requirement: Service Order Detail Displays Vehicle, Category, and Notes
 
-The order detail view MUST display the order's vehicle (identified at minimum by plate) as a link to that vehicle's detail screen, its `categoria`, and its `hallazgos`/`recomendaciones`/`observaciones` fields. A field not yet set MUST render an explicit empty-state placeholder, never a blank row. An order whose vehicle has been deactivated (soft-deleted) MUST still render its vehicle identity and link, exactly as for an active vehicle.
+The order detail view MUST display the order's vehicle (identified at minimum by plate) as a link to that vehicle's detail screen, with any set chasis, colors, estilo, motor and unit number, its `categoria`, and its `hallazgos`/`recomendaciones`/`observaciones` fields. The unit number MUST render only when filled. The plate renewal month and insurance expiry MUST NEVER render, for any role. A field not yet set MUST render an explicit empty-state placeholder, never a blank row. An order whose vehicle has been deactivated (soft-deleted) MUST still render its vehicle identity and link, exactly as for an active vehicle.
+(Previously: the vehicle was identified by plate only; no descriptive fields, no internal-field exclusion.)
 
 #### Scenarios
 
 - GIVEN an order with a vehicle and a `categoria` WHEN staff opens its detail view THEN the system MUST show the vehicle's plate as a link to `/customers/[id]/vehicles/[vehicleId]` and the `categoria` as text
 - GIVEN an order that has not yet been completed WHEN staff opens its detail view THEN the system MUST show a placeholder for each unset note field
 - GIVEN an order whose vehicle has since been deactivated WHEN staff opens the order's detail view THEN the system MUST still show that vehicle's identity and link
+- GIVEN a vehicle with chasis, colors, estilo and motor set and no unit number WHEN staff opens the order's detail view THEN those fields MUST show and no unit number label MUST appear; with a unit number set it MUST appear
+- GIVEN a vehicle whose internal fields hold sentinel values WHEN an administrador opens the order's detail view THEN the rendered output MUST contain neither the renewal month nor the insurance expiry sentinel
 
 ### Requirement: Status Lifecycle Transitions (R21)
 
@@ -199,7 +202,8 @@ The order-creation `CustomerPicker` MUST clear its search term, result list, and
 
 ### Requirement: Printable Work Order
 
-The system MUST provide a print view for an existing `orden_servicio`, reachable via an "Imprimir" action on that order's detail page, gated by `service-orders.read`. The view MUST NOT auto-open on order creation. Printing it (`@media print` + `window.print()`) MUST produce one page carrying: cliente (nombre, teléfono), vehículo (placa, marca, modelo, año), categoría, fecha y hora de inicio, descripción, and observaciones. The page MUST also reserve blank ruled space under a "Trabajo realizado / Hallazgos" heading, with a signature line — layout only, with no backing database column.
+The system MUST provide a print view for an existing `orden_servicio`, reachable via an "Imprimir" action on that order's detail page, gated by `service-orders.read`. The view MUST NOT auto-open on order creation. Printing it (`@media print` + `window.print()`) MUST produce one page carrying: cliente (nombre, teléfono), vehículo (placa, marca, modelo, año, plus any set chasis, colores, estilo and motor, and the unit number only when filled), categoría, fecha y hora de inicio, descripción, and observaciones. The sheet MUST NEVER carry the plate renewal month or insurance expiry. The page MUST also reserve blank ruled space under a "Trabajo realizado / Hallazgos" heading, with a signature line — layout only, with no backing database column.
+(Previously: vehículo carried placa, marca, modelo, año only.)
 
 *(Amended 2026-09-09 by `fix/printed-order-polish` — five owner-reported
 defects on one surface, judged too small for a change folder. Recorded here
@@ -250,6 +254,16 @@ Printing MUST produce a light sheet regardless of the app's theme. The `(app)` s
 - GIVEN a session without `service-orders.read`
 - WHEN it requests an order's print view
 - THEN the system MUST refuse it exactly as any other order-read route
+
+#### Scenario: New vehicle fields on the sheet
+- GIVEN a vehicle with chasis, colors, estilo, motor and a unit number
+- WHEN the print view renders
+- THEN the vehículo block MUST show them beside placa, marca, modelo and año; without a unit number, no unit label MUST appear
+
+#### Scenario: Internal fields absent from the sheet
+- GIVEN a vehicle whose internal fields hold sentinel values
+- WHEN the print view renders for an administrador
+- THEN the output MUST contain neither sentinel
 
 
 ### Requirement: Order Editing Is Gated by Role and Current Status
