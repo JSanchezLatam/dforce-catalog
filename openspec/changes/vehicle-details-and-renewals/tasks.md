@@ -68,7 +68,7 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 - [x] 4.2 RED page tests: tecnico refused; list shows customer, plate, kind, month or date, overdue; plain "Marcar como contactado" button (44x44) calls the contact route, toast above `router.refresh()`, both below the `try/catch`; copy "Vencimiento marcado como contactado" (the approved mockup's string; singular by construction, one mark per click). GREEN `(app)/vencimientos/page.tsx`.
 - [x] 4.3 RED badge: layout count equals the page's rows; hidden at 0; technician gets none; collapsed rail shows the aria-hidden dot and tooltip `Vencimientos próximos (n)`; sr-only count in the link. GREEN `app-sidebar.tsx`, `layout.tsx`.
 - [x] 4.4 Mutation-verify 4.1-4.3 (count from a different source, drop the gate).
-- [ ] 4.5 Browser at the LAN IP: phone width, collapsed rail, RSC boundary, console clean; the page needs enough rows to expose volume bugs.
+- [x] 4.5 Browser at the LAN IP: phone width, collapsed rail, RSC boundary, console clean; the page needs enough rows to expose volume bugs.
 
 ## WU5: Message builder and Contactar dialog (PR 5)
 

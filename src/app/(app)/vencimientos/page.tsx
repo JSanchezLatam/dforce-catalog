@@ -132,5 +132,5 @@ function Vehicle({ item }: { item: Pick<Item, "plate" | "vehicle" | "unit"> }) {
 
 /** The `StatusBadge` colours without its icon: a chip here is a word, not a job state. */
 function Chip({ item }: { item: Pick<Item, "chipLabel" | "chipStatus"> }) {
-  return <span className={statusBadgeClassName(item.chipStatus)}>{item.chipLabel}</span>;
+  return <span className={`${statusBadgeClassName(item.chipStatus)} shrink-0 whitespace-nowrap`}>{item.chipLabel}</span>;
 }
