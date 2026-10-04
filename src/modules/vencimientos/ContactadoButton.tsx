@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { useToast } from "@/shared/ui/ToastProvider";
 
+import type { VencimientoKind } from "./due";
+
 /**
- * Plain row action of /vencimientos: records the "Contactado" mark. PR 5
- * replaces it with the "Contactar" dialog, so the props stay at the item's
- * identity — nothing the server only needs for display crosses the boundary.
+ * "Marcar como contactado": records the "Contactado" mark. It lives inside the
+ * "Contactar" dialog (`ContactDialog`); its props are the item's identity and
+ * nothing else.
  *
  * Same shape as `OrderStatusControls`: the toast goes above `router.refresh()`
  * and both sit below the `try/catch`, so a refresh that throws neither retracts
@@ -22,7 +24,7 @@ export function ContactadoButton({
   periodKey,
 }: {
   vehiculoId: string;
-  kind: "placa" | "seguro";
+  kind: VencimientoKind;
   periodKey: string;
 }) {
   const router = useRouter();

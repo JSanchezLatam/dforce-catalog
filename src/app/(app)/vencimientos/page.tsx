@@ -7,18 +7,46 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { toWorkshopDateKey } from "@/shared/datetime";
 import { statusBadgeClassName } from "@/shared/ui/StatusBadge";
 import { PAGE_HEADING } from "@/shared/ui/styles";
-import { ContactadoButton } from "@/modules/vencimientos/ContactadoButton";
+import { toE164 } from "@/modules/reminders/providers/whatsapp";
+import { ContactDialog } from "@/modules/vencimientos/ContactDialog";
 import { describeDue } from "@/modules/vencimientos/display";
 import { getDueVencimientos, type DueVencimiento } from "@/modules/vencimientos/service";
+import { getWorkshopConfig } from "@/modules/workshop-config/service";
 
-function toItem(row: DueVencimiento, todayKey: string) {
+/**
+ * The opt-out and the phone are resolved HERE, on the server: `toE164` imports
+ * the Kapso SDK and `env`, and the client must get only the `wa.me` digits or a
+ * reason. Opt-out is checked first — it is a consent, the phone shape is not.
+ */
+function whatsappFor(row: DueVencimiento): { waPhone: string | null; waBlockedReason: string | null } {
+  if (row.whatsappOptOut) return { waPhone: null, waBlockedReason: "El cliente pidió no recibir WhatsApp" };
+  const e164 = toE164(row.customerPhone);
+  if (!e164.ok) return { waPhone: null, waBlockedReason: "El teléfono del cliente no es un celular" };
+  return { waPhone: e164.value.replace("+", ""), waBlockedReason: null };
+}
+
+type Workshop = { name: string | null; phone: string | null; hours: string | null; address: string | null };
+
+function toItem(row: DueVencimiento, todayKey: string, workshop: Workshop) {
+  const vehicle = [row.make, row.model].filter(Boolean).join(" ");
   return {
     key: `${row.vehiculoId}:${row.kind}:${row.periodKey}`,
-    action: { vehiculoId: row.vehiculoId, kind: row.kind, periodKey: row.periodKey },
+    // The explicit allowlist of design.md "Dialog props" — never the row.
+    contact: {
+      vehiculoId: row.vehiculoId,
+      kind: row.kind,
+      periodKey: row.periodKey,
+      overdue: row.state === "overdue",
+      customerName: row.customerName,
+      placa: row.plate,
+      vehicleLabel: vehicle || null,
+      ...whatsappFor(row),
+      workshop,
+    },
     customerName: row.customerName,
     customerPhone: row.customerPhone,
     plate: row.plate,
-    vehicle: [row.make, row.model].filter(Boolean).join(" "),
+    vehicle,
     unit: row.numeroUnidad ? `· ${row.numeroUnidad}` : null,
     ...describeDue(row, todayKey),
   };
@@ -31,8 +59,9 @@ type Item = ReturnType<typeof toItem>;
  * badge uses, so the count and the rows cannot disagree.
  *
  * `DueVencimiento` carries server-only fields (`whatsappOptOut`, `clienteId`,
- * the raw phone). The rows are mapped to the explicit `Item` below and the
- * client button gets only `{vehiculoId, kind, periodKey}` — never the row.
+ * the raw phone) and `workshop_config` more (logo key, handles). The rows are
+ * mapped to the explicit `Item` below and the client dialog gets only
+ * `item.contact` — never a row or the config.
  */
 export default async function VencimientosPage() {
   const user = await requireSessionFromHeaders();
@@ -43,7 +72,14 @@ export default async function VencimientosPage() {
   const now = new Date();
   const todayKey = toWorkshopDateKey(now);
   const { rows } = await getDueVencimientos(now);
-  const items = rows.map((row) => toItem(row, todayKey));
+  const config = await getWorkshopConfig();
+  const workshop = {
+    name: config?.name ?? null,
+    phone: config?.phone ?? null,
+    hours: config?.hours ?? null,
+    address: config?.address ?? null,
+  };
+  const items = rows.map((row) => toItem(row, todayKey, workshop));
 
   return (
     <div className="p-8">
@@ -84,7 +120,7 @@ export default async function VencimientosPage() {
                       <TableCell><Vehicle item={item} /></TableCell>
                       <TableCell>{item.when}</TableCell>
                       <TableCell><Chip item={item} /></TableCell>
-                      <TableCell><ContactadoButton {...item.action} /></TableCell>
+                      <TableCell><ContactDialog {...item.contact} /></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -101,7 +137,7 @@ export default async function VencimientosPage() {
                 </div>
                 <Vehicle item={item} />
                 <div className="text-sm">{item.when}</div>
-                <ContactadoButton {...item.action} />
+                <ContactDialog {...item.contact} />
               </li>
             ))}
           </ul>
