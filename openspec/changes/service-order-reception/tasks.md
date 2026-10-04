@@ -53,7 +53,7 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 - [x] 2.6 RED detail page tests: `85000` shown; null km shows "Sin kilometraje"; fuel 0..4 shows Vacío..Lleno; `bateria_pct = 80` and fuel 3 show "80%" and "3/4". GREEN `[id]/page.tsx`.
 - [x] 2.7 RED e2e `src/e2e/order-intake.e2e.test.ts` (`dforce_e2e`): CHECKs reject 5, 101, -1 on direct insert; intake round-trips; null stays null. GREEN: fix real-SQL defects.
 - [x] 2.8 Mutation-verify 2.2-2.7 by name (send hidden fields, navigate on failure, drop a CHECK).
-- [ ] 2.9 Browser at the LAN IP as both roles: create lands on detail; motor-aware inputs for all four vehicle kinds; 44x44 on new action controls (inputs at `h-8` are the field exception); console clean.
+- [x] 2.9 Browser at the LAN IP as both roles: create lands on detail; motor-aware inputs for all four vehicle kinds; 44x44 on new action controls (inputs at `h-8` are the field exception); console clean.
 
 ## WU3a: Photo table, R2, service (PR 3a)
 
