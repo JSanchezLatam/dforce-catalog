@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SIDEBAR_COOKIE_NAME, SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
+import { getNavBadges } from "@/modules/layout/nav-badges";
 import { getNavGroups } from "@/modules/layout/nav-items";
 import { decodeNavCollapseState, NAV_COLLAPSE_COOKIE_NAME } from "@/modules/layout/nav-collapse-state";
 import { getUserProfile } from "@/modules/account/queries";
@@ -10,7 +11,9 @@ import { getWorkshopConfig } from "@/modules/workshop-config/service";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireSessionFromHeaders();
-  const navGroups = getNavGroups(user);
+  // Same `getDueVencimientos` call the page renders its rows from, so the badge
+  // equals the row count. Empty for a viewer without `vencimientos.read`.
+  const navGroups = getNavGroups(user, await getNavBadges(user));
   const profile = await getUserProfile(user.id);
   const config = await getWorkshopConfig();
 

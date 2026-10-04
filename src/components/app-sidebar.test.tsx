@@ -166,3 +166,59 @@ describe("AppSidebar — collapsible nav groups", () => {
     expect(within(catalogoGroup).getByRole("link", { name: "Generar Catálogos" })).toBeInTheDocument();
   });
 });
+
+/**
+ * The Vencimientos badge. `SidebarMenuBadge` is `group-data-[collapsible=icon]:hidden`,
+ * so in the collapsed rail the count would vanish: the link carries an
+ * aria-hidden dot and the tooltip names the count instead.
+ */
+describe("AppSidebar — Vencimientos badge", () => {
+  function groupsWith(badge?: number): NavGroup[] {
+    return [
+      {
+        id: "crm",
+        label: "CRM",
+        items: [{ kind: "link", href: "/vencimientos", label: "Vencimientos", icon: "vencimientos", ...(badge ? { badge } : {}) }],
+      },
+    ];
+  }
+
+  function renderWith(badge: number | undefined, open = true) {
+    return render(
+      <SidebarProvider defaultOpen={open}>
+        <AppSidebar
+          navGroups={groupsWith(badge)}
+          user={{ id: "u1", role: "administrador", name: "Jorge" }}
+          workshopName="Taller Demo"
+          logoR2Key={null}
+          initialCollapseState={DEFAULT_NAV_COLLAPSE_STATE}
+        />
+      </SidebarProvider>,
+    );
+  }
+
+  it("shows the count visibly and gives the link an sr-only count", () => {
+    renderWith(5);
+
+    expect(screen.getByRole("link", { name: "Vencimientos, 5 próximos" })).toBeInTheDocument();
+    // Beside the link, and aria-hidden: the sr-only text inside it already says it.
+    expect(screen.getByText("5")).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("shows nothing but the label when there is no badge", () => {
+    renderWith(undefined);
+
+    expect(screen.getByRole("link", { name: "Vencimientos" })).toBeInTheDocument();
+    expect(screen.queryByTestId("vencimientos-dot")).not.toBeInTheDocument();
+    expect(screen.queryByText("0")).not.toBeInTheDocument();
+  });
+
+  it("in the collapsed rail keeps an aria-hidden dot and names the count in the tooltip", async () => {
+    const user = userEvent.setup();
+    renderWith(5, false);
+
+    expect(screen.getByTestId("vencimientos-dot")).toHaveAttribute("aria-hidden", "true");
+    await user.hover(screen.getByRole("link", { name: "Vencimientos, 5 próximos" }));
+    expect(await screen.findByText("Vencimientos próximos (5)")).toBeInTheDocument();
+  });
+});

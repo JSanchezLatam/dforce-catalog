@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { FileSpreadsheet, Package, BookOpen, Settings, GalleryVerticalEnd, ChevronDown, ChevronRight, Users, Wrench, User, UserCog } from "lucide-react"
+import { FileSpreadsheet, Package, BookOpen, Settings, GalleryVerticalEnd, ChevronDown, ChevronRight, Users, Wrench, User, UserCog, CalendarClock } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -11,6 +11,7 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
@@ -54,6 +55,7 @@ const ICON_MAP: Record<string, typeof Package> = {
   "template-config": Settings,
   customers: Users,
   "service-orders": Wrench,
+  vencimientos: CalendarClock,
   users: UserCog,
 }
 
@@ -64,10 +66,27 @@ function NavLinkItem({ item }: { item: NavLink }) {
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton render={<Link href={item.href} />} isActive={isActive} tooltip={item.label}>
+      {/* The badge is hidden in the collapsed icon rail, so the tooltip carries
+          the count there. Only /vencimientos has one today: "próximos" is its word. */}
+      <SidebarMenuButton
+        render={<Link href={item.href} />}
+        isActive={isActive}
+        tooltip={item.badge ? `${item.label} próximos (${item.badge})` : item.label}
+      >
         <Icon />
         <span>{item.label}</span>
+        {item.badge ? <span className="sr-only">{`, ${item.badge} próximos`}</span> : null}
       </SidebarMenuButton>
+      {item.badge ? (
+        <>
+          <SidebarMenuBadge aria-hidden="true">{item.badge}</SidebarMenuBadge>
+          <span
+            data-testid="vencimientos-dot"
+            aria-hidden="true"
+            className="pointer-events-none absolute top-1 right-1 hidden size-2 rounded-full bg-destructive group-data-[collapsible=icon]:block"
+          />
+        </>
+      ) : null}
     </SidebarMenuItem>
   )
 }
