@@ -53,4 +53,32 @@ describe("getNavBadges()", () => {
   it("is zero, not missing, when nothing is due (getNavGroups hides a zero)", async () => {
     expect(await getNavBadges(admin, NOW, dueWith([], []))).toEqual({ "/vencimientos": 0 });
   });
+
+  // A badge is decoration on every page of the shell: a failing due query must
+  // not take the whole `(app)` layout down with it.
+  it("degrades to no badge, and reports the failure, when the due list throws", async () => {
+    const boom = new Error("connection terminated");
+    const report = vi.fn();
+
+    const badges = await getNavBadges(admin, NOW, vi.fn().mockRejectedValue(boom), report);
+
+    expect(badges).toEqual({});
+    expect(report).toHaveBeenCalledWith(boom, { tags: { area: "nav-badges" } });
+  });
+
+  it("still returns no badge, without throwing, when the reporter itself throws", async () => {
+    const report = vi.fn(() => {
+      throw new Error("sentry unreachable");
+    });
+
+    expect(await getNavBadges(admin, NOW, vi.fn().mockRejectedValue(new Error("db")), report)).toEqual({});
+  });
+
+  it("does not report anything when the due list loads", async () => {
+    const report = vi.fn();
+
+    await getNavBadges(admin, NOW, dueWith(candidates, contacts), report);
+
+    expect(report).not.toHaveBeenCalled();
+  });
 });
