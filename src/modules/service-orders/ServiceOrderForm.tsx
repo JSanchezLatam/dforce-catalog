@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 import type { PublicVehiculo } from "@/modules/customers/vehicles";
+import type { VehiculoMotor } from "@/modules/customers/vehicle-options";
 import type { OrdenServicio } from "@/shared/db/schema";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +22,7 @@ import type { ClienteListItem } from "@/modules/customers/queries";
 import { VehicleQuickForm } from "@/modules/customers/VehicleQuickForm";
 import { CATEGORIA_LABEL, type ServiceCategory } from "./categories";
 import { CustomerPicker } from "./CustomerPicker";
+import { FUEL_LABEL, intakeInputsFor } from "./intake";
 import { FIELD_ERROR } from "@/shared/ui/styles";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
 
@@ -75,7 +77,7 @@ function toDatetimeLocal(value?: Date | string | null): string {
  * its only writer.
  */
 /** Error keys this form has a place to show. Anything else routes to `form`. */
-const RENDERED_ERROR_FIELDS = new Set(["clienteId", "vehiculoId", "form"]);
+const RENDERED_ERROR_FIELDS = new Set(["clienteId", "vehiculoId", "kilometraje", "nivelCombustible", "bateriaPct", "form"]);
 
 const VEHICLES_EMPTY_HINT_ID = "orden-vehiculo-empty-hint";
 
@@ -84,6 +86,7 @@ export function ServiceOrderForm({
   selectedCustomer,
   canCreateCustomer,
   triggerLabel,
+  motor,
   onSaved,
 }: {
   /** Provided => edit mode (PATCH); omitted => create mode (POST). */
@@ -97,6 +100,11 @@ export function ServiceOrderForm({
   selectedCustomer?: ServiceOrderCustomerOption | null;
   canCreateCustomer: boolean;
   triggerLabel?: ReactNode;
+  /**
+   * Edit mode only: the order's vehicle's motor, which decides whether fuel
+   * and battery show. Create mode reads it from the vehicle being picked.
+   */
+  motor?: VehiculoMotor | null;
   onSaved?: (orden: OrdenServicio) => void;
 }) {
   const isEdit = Boolean(order);
@@ -117,6 +125,9 @@ export function ServiceOrderForm({
   /** The value the field starts at — the whole omission contract hangs on it. */
   const originalAppointmentAt = toDatetimeLocal(order?.appointmentAt);
   const [appointmentAt, setAppointmentAt] = useState(originalAppointmentAt);
+  const [kilometraje, setKilometraje] = useState(order?.kilometraje?.toString() ?? "");
+  const [nivelCombustible, setNivelCombustible] = useState<number | null>(order?.nivelCombustible ?? null);
+  const [bateriaPct, setBateriaPct] = useState(order?.bateriaPct?.toString() ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -180,6 +191,8 @@ export function ServiceOrderForm({
   const vehicles = vehiclesSettled ? fetchedVehicles.vehicles : [];
   const vehiclesError = vehiclesSettled && fetchedVehicles.failed;
   const vehiclesLoading = !isEdit && Boolean(clienteId) && !vehiclesSettled;
+  const effectiveMotor = isEdit ? (motor ?? null) : (vehicles.find((v) => v.id === vehiculoId)?.motor ?? null);
+  const intakeInputs = intakeInputsFor(effectiveMotor);
   const showVehiclesEmptyHint = Boolean(clienteId) && !vehiclesLoading && !vehiclesError && vehicles.length === 0;
 
   function handleCustomerSelect(customer: ServiceOrderCustomerOption) {
@@ -213,7 +226,28 @@ export function ServiceOrderForm({
     setObservaciones(order?.observaciones ?? "");
     setDescription(order?.description ?? "");
     setAppointmentAt(originalAppointmentAt);
+    setKilometraje(order?.kilometraje?.toString() ?? "");
+    setNivelCombustible(order?.nivelCombustible ?? null);
+    setBateriaPct(order?.bateriaPct?.toString() ?? "");
     setErrors({});
+  }
+
+  /**
+   * Only the inputs on screen go on the wire — a hidden one is OMITTED, so
+   * editing an electric vehicle's order can never wipe a fuel level, and a
+   * stale value typed before the vehicle changed is not sent. A blank visible
+   * field is `null` on edit (clear it); on create there is nothing to clear,
+   * so it is left off like the other optional fields.
+   */
+  function intakePayload(): Record<string, number | null | undefined> {
+    const numberOrNull = (text: string) => (text.trim() === "" ? null : Number(text));
+    const payload: Record<string, number | null | undefined> = { kilometraje: numberOrNull(kilometraje) };
+    if (intakeInputs.fuel) payload.nivelCombustible = nivelCombustible;
+    if (intakeInputs.battery) payload.bateriaPct = numberOrNull(bateriaPct);
+    if (!isEdit) {
+      for (const key of Object.keys(payload)) if (payload[key] === null) payload[key] = undefined;
+    }
+    return payload;
   }
 
   function handleOpenChange(next: boolean) {
@@ -246,6 +280,7 @@ export function ServiceOrderForm({
               hallazgos: hallazgos.trim() || null,
               recomendaciones: recomendaciones.trim() || null,
               observaciones: observaciones.trim() || null,
+              ...intakePayload(),
             }),
           })
         : await fetch("/api/service-orders", {
@@ -260,6 +295,7 @@ export function ServiceOrderForm({
               // `recomendaciones` are findings and stay off the create wire.
               observaciones: observaciones.trim() || undefined,
               appointmentAt: appointmentAt ? new Date(appointmentAt).toISOString() : undefined,
+              ...intakePayload(),
             }),
           });
 
@@ -482,6 +518,83 @@ export function ServiceOrderForm({
                 onChange={(e) => setAppointmentAt(e.target.value)}
               />
             </div>
+
+            <fieldset className="grid gap-3 border-0 p-0">
+              <legend className="mb-1 text-sm font-semibold">Recepción</legend>
+              <div className="grid gap-2">
+                <Label htmlFor="orden-kilometraje">
+                  Kilometraje <span className="font-normal text-muted-foreground">(opcional)</span>
+                </Label>
+                <Input
+                  id="orden-kilometraje"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  step={1}
+                  placeholder="Ej. 84320"
+                  className="min-h-11"
+                  value={kilometraje}
+                  onChange={(e) => setKilometraje(e.target.value)}
+                />
+                {errors.kilometraje && (
+                  <p role="alert" className={FIELD_ERROR}>
+                    {errors.kilometraje}
+                  </p>
+                )}
+              </div>
+              {intakeInputs.fuel && (
+                <div className="grid gap-2">
+                  <span className="text-sm font-medium">Combustible</span>
+                  {/* Five steps, each at least 44px tall (AGENTS.md's floor).
+                      Pressing the pressed one clears it: the level is optional,
+                      and a radio group cannot be unset. */}
+                  <div
+                    role="group"
+                    aria-label="Combustible"
+                    className="grid grid-cols-5 overflow-hidden rounded-lg border border-input"
+                  >
+                    {FUEL_LABEL.map((label, level) => (
+                      <button
+                        key={label}
+                        type="button"
+                        aria-pressed={nivelCombustible === level}
+                        onClick={() => setNivelCombustible(nivelCombustible === level ? null : level)}
+                        className="min-h-11 border-l border-input px-1 text-sm font-medium text-muted-foreground first:border-l-0 aria-pressed:bg-primary aria-pressed:text-primary-foreground"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {errors.nivelCombustible && (
+                    <p role="alert" className={FIELD_ERROR}>
+                      {errors.nivelCombustible}
+                    </p>
+                  )}
+                </div>
+              )}
+              {intakeInputs.battery && (
+                <div className="grid gap-2">
+                  <Label htmlFor="orden-bateria">Batería (%)</Label>
+                  <Input
+                    id="orden-bateria"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={100}
+                    step={1}
+                    placeholder="Ej. 65"
+                    className="min-h-11"
+                    value={bateriaPct}
+                    onChange={(e) => setBateriaPct(e.target.value)}
+                  />
+                  {errors.bateriaPct && (
+                    <p role="alert" className={FIELD_ERROR}>
+                      {errors.bateriaPct}
+                    </p>
+                  )}
+                </div>
+              )}
+            </fieldset>
 
             {/*
              * C4 — technician findings, only meaningful once the vehicle has

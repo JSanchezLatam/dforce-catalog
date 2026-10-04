@@ -21,7 +21,8 @@ import { ToastProvider } from "@/shared/ui/ToastProvider";
 import { ServiceOrderFormTrigger } from "./ServiceOrderFormTrigger";
 
 const refresh = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push }) }));
 
 const CUSTOMER: ClienteListItem = {
   id: "c-a",
@@ -55,6 +56,7 @@ const VEHICLE: Vehiculo = {
 afterEach(() => {
   vi.unstubAllGlobals();
   refresh.mockReset();
+  push.mockReset();
 });
 
 /**
@@ -128,6 +130,14 @@ async function save() {
   await flush();
 }
 
+async function createOrder() {
+  fireEvent.click(screen.getByRole("button", { name: /nueva orden de servicio/i }));
+  await flush(); // the vehicle picker's fetch, so the select has its option
+  fireEvent.change(screen.getByLabelText(/vehículo/i), { target: { value: "v-a" } });
+  fireEvent.change(screen.getByLabelText(/categoría/i), { target: { value: "revisado" } });
+  await save();
+}
+
 describe("ServiceOrderFormTrigger — a save that only refreshes the page is a save that says nothing", () => {
   it("announces a created order after the POST lands", async () => {
     mockApi();
@@ -141,7 +151,11 @@ describe("ServiceOrderFormTrigger — a save that only refreshes the page is a s
 
     expect(await screen.findByText("Orden creada")).toBeInTheDocument();
     expect(screen.queryByText("Orden actualizada")).not.toBeInTheDocument();
-    expect(refresh).toHaveBeenCalledTimes(1);
+    // service-order-reception: a created order lands on its own detail page,
+    // which is server-rendered fresh, so no refresh is needed beside it.
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(push).toHaveBeenCalledWith("/service-orders/o1");
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   /**
@@ -160,12 +174,47 @@ describe("ServiceOrderFormTrigger — a save that only refreshes the page is a s
 
     expect(await screen.findByText("Orden actualizada")).toBeInTheDocument();
     expect(screen.queryByText("Orden creada")).not.toBeInTheDocument();
+    // An edit stays where it is and repaints; it never navigates.
     expect(refresh).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("hands the vehicle's motor to the edit form, so only the matching intake inputs show", async () => {
+    mockApi();
+    render(
+      <ToastProvider>
+        <ServiceOrderFormTrigger order={EXISTING_ORDER} canCreateCustomer={false} motor="electrico" />
+      </ToastProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /editar orden/i }));
+
+    expect(screen.getByLabelText(/batería/i)).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Combustible" })).not.toBeInTheDocument();
+  });
+
+  it("does not navigate, refresh or toast when the create is refused", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          return { ok: false, status: 500, json: async () => ({}) } as Response;
+        }
+        return { ok: true, status: 200, json: async () => ({ vehicles: [VEHICLE] }) } as Response;
+      }),
+    );
+    renderTrigger();
+
+    await createOrder();
+
+    expect(screen.queryByText("Orden creada")).not.toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   /**
    * The ordering `OrderStatusControls` records, applied to the success path:
-   * the notice goes out BEFORE `router.refresh()`, so a refresh that throws
+   * the notice goes out BEFORE `router.push()`, so a navigation that throws
    * cannot swallow the one piece of evidence that the order was saved. With
    * the two lines swapped this test is the only one here that goes red.
    *
@@ -174,10 +223,10 @@ describe("ServiceOrderFormTrigger — a save that only refreshes the page is a s
    * here rather than left for the runner (`OrderStatusControls.test.tsx`
    * records why).
    */
-  it("still announces the save when the refresh that follows it throws", async () => {
+  it("still announces the save when the navigation that follows it throws", async () => {
     mockApi();
     const boom = new Error("refresh blew up");
-    refresh.mockImplementationOnce(() => {
+    push.mockImplementationOnce(() => {
       throw boom;
     });
 

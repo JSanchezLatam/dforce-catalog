@@ -766,6 +766,186 @@ describe("ServiceOrderForm", () => {
     });
   });
 
+  /**
+   * service-order-reception — vehicle intake. Which inputs show follows the
+   * vehicle's motor, and only a VISIBLE input ever reaches the wire: a hidden
+   * one is omitted, so editing an electric car can never wipe a fuel level.
+   */
+  describe("reception intake (service-order-reception)", () => {
+    const KM = /kilometraje/i;
+
+    function stubFetch(motor: Vehiculo["motor"]) {
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (url.includes("/vehicles")) return Promise.resolve(jsonResponse({ vehicles: [vehiculoRow({ motor })] }));
+        return Promise.resolve(jsonResponse({ orden: { id: "o1" } }));
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      return fetchMock;
+    }
+
+    async function openCreateFor(motor: Vehiculo["motor"]) {
+      const fetchMock = stubFetch(motor);
+      render(<ServiceOrderForm selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      openDialog();
+      await flush();
+      fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+      fireEvent.change(categorySelect(), { target: { value: "revisado" } });
+      return fetchMock;
+    }
+
+    async function submitAndBody(fetchMock: ReturnType<typeof vi.fn>, url: string) {
+      fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+      await flush();
+      const [, init] = fetchMock.mock.calls.find(([u]) => u === url)!;
+      return JSON.parse((init as RequestInit).body as string);
+    }
+
+    const fuelGroup = () => screen.queryByRole("group", { name: "Combustible" });
+    const battery = () => screen.queryByLabelText(/batería/i);
+
+    it.each([
+      ["combustion", true, false],
+      ["electrico", false, true],
+      ["hibrido", true, true],
+      [null, true, true],
+    ] as const)("create with a %s vehicle: fuel %s, battery %s", async (motor, showsFuel, showsBattery) => {
+      await openCreateFor(motor);
+
+      expect(screen.getByLabelText(KM)).toBeInTheDocument();
+      expect(Boolean(fuelGroup())).toBe(showsFuel);
+      expect(Boolean(battery())).toBe(showsBattery);
+    });
+
+    it("offers the five fuel steps as pressable segments, none pressed by default", async () => {
+      await openCreateFor("combustion");
+
+      const segments = Array.from(fuelGroup()!.querySelectorAll("button"));
+      expect(segments.map((b) => b.textContent)).toEqual(["Vacío", "1/4", "1/2", "3/4", "Lleno"]);
+      expect(segments.map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "false", "false", "false", "false"]);
+    });
+
+    it("create sends km and fuel as numbers, and omits the hidden battery", async () => {
+      const fetchMock = await openCreateFor("combustion");
+      fireEvent.change(screen.getByLabelText(KM), { target: { value: "84320" } });
+      fireEvent.click(screen.getByRole("button", { name: "1/2" }));
+
+      const body = await submitAndBody(fetchMock, "/api/service-orders");
+      expect(body.kilometraje).toBe(84320);
+      expect(body.nivelCombustible).toBe(2);
+      expect(body).not.toHaveProperty("bateriaPct");
+    });
+
+    it("create sends battery and omits the hidden fuel for an electric vehicle", async () => {
+      const fetchMock = await openCreateFor("electrico");
+      fireEvent.change(battery()!, { target: { value: "72" } });
+
+      const body = await submitAndBody(fetchMock, "/api/service-orders");
+      expect(body.bateriaPct).toBe(72);
+      expect(body).not.toHaveProperty("nivelCombustible");
+      expect(body).not.toHaveProperty("kilometraje");
+    });
+
+    it("a battery typed for one vehicle is not sent after switching to a combustion one", async () => {
+      const fetchMock = vi.fn().mockImplementation((url: string) => {
+        if (url.includes("/vehicles")) {
+          return Promise.resolve(
+            jsonResponse({
+              vehicles: [vehiculoRow({ id: "v-e", motor: "electrico" }), vehiculoRow({ id: "v-c", motor: "combustion" })],
+            }),
+          );
+        }
+        return Promise.resolve(jsonResponse({ orden: { id: "o1" } }));
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      render(<ServiceOrderForm selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+      openDialog();
+      await flush();
+      fireEvent.change(categorySelect(), { target: { value: "revisado" } });
+      fireEvent.change(vehicleSelect(), { target: { value: "v-e" } });
+      fireEvent.change(battery()!, { target: { value: "72" } });
+      fireEvent.change(vehicleSelect(), { target: { value: "v-c" } });
+
+      expect(battery()).toBeNull();
+      expect(await submitAndBody(fetchMock, "/api/service-orders")).not.toHaveProperty("bateriaPct");
+    });
+
+    it("pressing the pressed segment again clears the fuel level", async () => {
+      await openCreateFor("combustion");
+
+      fireEvent.click(screen.getByRole("button", { name: "3/4" }));
+      expect(screen.getByRole("button", { name: "3/4" })).toHaveAttribute("aria-pressed", "true");
+      fireEvent.click(screen.getByRole("button", { name: "3/4" }));
+      expect(screen.getByRole("button", { name: "3/4" })).toHaveAttribute("aria-pressed", "false");
+    });
+
+    it("create with nothing typed sends none of the three keys", async () => {
+      const fetchMock = await openCreateFor("hibrido");
+
+      const body = await submitAndBody(fetchMock, "/api/service-orders");
+      expect(body).not.toHaveProperty("kilometraje");
+      expect(body).not.toHaveProperty("nivelCombustible");
+      expect(body).not.toHaveProperty("bateriaPct");
+    });
+
+    function renderEdit(motor: Vehiculo["motor"], order: Record<string, unknown>) {
+      const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ orden: { id: "o1" } }));
+      vi.stubGlobal("fetch", fetchMock);
+      render(
+        <ServiceOrderForm
+          canCreateCustomer={false}
+          motor={motor}
+          order={{ id: "o1", clienteId: "c-a", categoria: "instalacion", ...order } as never}
+        />,
+      );
+      openEditDialog();
+      return fetchMock;
+    }
+
+    it("edit pre-fills the stored values", () => {
+      renderEdit("hibrido", { kilometraje: 85000, nivelCombustible: 2, bateriaPct: 40 });
+
+      expect(screen.getByLabelText(KM)).toHaveValue(85000);
+      expect(screen.getByRole("button", { name: "1/2" })).toHaveAttribute("aria-pressed", "true");
+      expect(battery()).toHaveValue(40);
+    });
+
+    it("edit sends null for a blank visible field and omits the hidden one", async () => {
+      // Electric: fuel is hidden, so the stored fuel level 3 must NOT be sent.
+      const fetchMock = renderEdit("electrico", { kilometraje: 85000, nivelCombustible: 3, bateriaPct: 40 });
+      fireEvent.change(screen.getByLabelText(KM), { target: { value: "" } });
+      fireEvent.change(battery()!, { target: { value: "" } });
+
+      const body = await submitAndBody(fetchMock, "/api/service-orders/o1");
+      expect(body.kilometraje).toBeNull();
+      expect(body.bateriaPct).toBeNull();
+      expect(body).not.toHaveProperty("nivelCombustible");
+    });
+
+    it("edit sends null when the pressed fuel segment is cleared", async () => {
+      const fetchMock = renderEdit("combustion", { nivelCombustible: 3 });
+      fireEvent.click(screen.getByRole("button", { name: "3/4" }));
+
+      const body = await submitAndBody(fetchMock, "/api/service-orders/o1");
+      expect(body.nivelCombustible).toBeNull();
+      expect(body).not.toHaveProperty("bateriaPct");
+    });
+
+    it("shows a server intake error under its field instead of dropping it", async () => {
+      const fetchMock = renderEdit("combustion", {});
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ errors: { kilometraje: "El kilometraje tiene que ser un número entero entre 0 y 2.000.000" } }),
+      } as Response);
+      fireEvent.change(screen.getByLabelText(KM), { target: { value: "2000001" } });
+      fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+
+      // Once, not twice: the field shows it and the form-level slot does not repeat it.
+      await screen.findByText("El kilometraje tiene que ser un número entero entre 0 y 2.000.000");
+      expect(screen.getAllByText("El kilometraje tiene que ser un número entero entre 0 y 2.000.000")).toHaveLength(1);
+    });
+  });
+
   describe("appointmentAt round-trip (task 2.10)", () => {
     const REAL_TZ = process.env.TZ;
     beforeEach(() => {
