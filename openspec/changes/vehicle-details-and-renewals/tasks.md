@@ -42,14 +42,14 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 - [x] 1.10 RED page tests: `customers/[id]/page.tsx` passes `toPublicVehiculo` rows to the trigger for a viewer without `vencimientos.read`; vehicle detail page shows internal fields for admin only. GREEN both pages and the `ServiceOrderForm.tsx` type.
 - [x] 1.11 44x44 on new form controls (`min-h-11`); no test asserts it, so measure in 1.13. (PR 1b adds no new action control: the new fields are native selects and inputs at the form's existing `h-8` field height, which is the standing field exception. Confirm in 1.13.)
 - [x] 1.12 Mutation-verify 1.1-1.10 by name (1.1-1.8 done in PR 1a; 1.9-1.10 done in PR 1b) (restore `?? null`, drop the 403, return the whole row).
-- [ ] 1.13 Browser at `http://<LAN-ip>:3000` as admin and as tecnico: the customer page crosses a Server→Client boundary (`CustomerFormTrigger`); read the console for RSC and hydration errors; measure targets.
+- [x] 1.13 Browser at `http://<LAN-ip>:3000` as admin and as tecnico: the customer page crosses a Server→Client boundary (`CustomerFormTrigger`); read the console for RSC and hydration errors; measure targets.
 
 ## WU2: Order detail and print sheet (PR 2)
 
-- [ ] 2.1 RED order detail test: chasis, colors, estilo, motor show; unit label absent when empty, present when set; poisoned vehicle with sentinel renewal month and insurance expiry renders neither. GREEN order detail page (named-field allowlist).
-- [ ] 2.2 RED print page test: same fields beside placa, marca, modelo, año; sentinels absent. GREEN print page.
-- [ ] 2.3 Mutation-verify 2.1-2.2 (render the whole vehicle row, sentinel test goes red).
-- [ ] 2.4 Print PREVIEW at the LAN IP, not the page: with the extra rows the signature must stay on page 1.
+- [x] 2.1 RED order detail test: chasis, colors, estilo, motor show; unit label absent when empty, present when set; poisoned vehicle with sentinel renewal month and insurance expiry renders neither. GREEN order detail page (named-field allowlist).
+- [x] 2.2 RED print page test: same fields beside placa, marca, modelo, año; sentinels absent. GREEN print page.
+- [x] 2.3 Mutation-verify 2.1-2.2 (render the whole vehicle row, sentinel test goes red).
+- [x] 2.4 Print PREVIEW at the LAN IP, not the page: with the extra rows the signature must stay on page 1.
 
 ## WU3: Due module and contact mark (PR 3)
 

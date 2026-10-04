@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -6,6 +7,7 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getClienteById } from "@/modules/customers/queries";
 import { getWorkshopConfig } from "@/modules/workshop-config/service";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
+import { vehicleDescriptiveRows } from "@/modules/service-orders/vehicle-rows";
 import { PrintButton } from "@/modules/service-orders/PrintButton";
 import { getOrdenServicioById } from "@/modules/service-orders/queries";
 import { formatDateTime } from "@/shared/datetime";
@@ -135,13 +137,22 @@ export default async function ServiceOrderPrintPage({
         </div>
       </div>
 
-      <dl className="mb-6 grid grid-cols-2 gap-x-8">
+      {/* Four columns, not two: the vehicle details added five rows, and at two
+          columns they cost ~200 characters of Hallazgos before the signature
+          jumped to page 2. Four keeps the block at its old four-row height —
+          measured in the print preview, 2026-10-04 (900 chars still fit). */}
+      <dl className="mb-6 grid grid-cols-4 gap-x-5">
         {field("Cliente", clienteDetail?.cliente.name ?? orden.clienteId)}
         {field("Teléfono", clienteDetail?.cliente.phone)}
         {field("Placa", vehiculo?.plate ?? orden.vehiculoId)}
         {field("Marca", vehiculo?.make)}
         {field("Modelo", vehiculo?.model)}
         {field("Año", vehiculo?.year)}
+        {/* Same grid, same always-render rule as the rows above: an unset
+            field prints "—". Only the unit number is conditional. */}
+        {vehiculo && vehicleDescriptiveRows(vehiculo).map((r) => (
+          <Fragment key={r.label}>{field(r.label, r.value)}</Fragment>
+        ))}
         {field("Categoría", CATEGORIA_LABEL[orden.categoria])}
         {field("Fecha y hora de inicio", formatDateTime(orden.appointmentAt))}
       </dl>
