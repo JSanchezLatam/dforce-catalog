@@ -1,8 +1,9 @@
 /**
  * /vencimientos. A page test invokes the page as a plain function, so it cannot
  * see an RSC serialisation problem — that is the browser check. What it CAN pin
- * is the allowlist: `DueVencimiento` carries server-only fields, and the client
- * button must receive the item's identity and nothing else.
+ * is the allowlist: `DueVencimiento` carries server-only fields and
+ * `workshop_config` carries a logo key, a cover text and social handles, and the
+ * client dialog must receive only design.md "Dialog props".
  */
 import { render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,9 +17,12 @@ vi.mock("@/modules/auth/policy", () => ({ can }));
 const getDueVencimientos = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/vencimientos/service", () => ({ getDueVencimientos }));
 
+const getWorkshopConfig = vi.hoisted(() => vi.fn());
+vi.mock("@/modules/workshop-config/service", () => ({ getWorkshopConfig }));
+
 // Echoes its props verbatim, so a test can assert exactly what crossed the boundary.
-vi.mock("@/modules/vencimientos/ContactadoButton", () => ({
-  ContactadoButton: (props: Record<string, unknown>) => <div data-testid="contactado" data-props={JSON.stringify(props)} />,
+vi.mock("@/modules/vencimientos/ContactDialog", () => ({
+  ContactDialog: (props: Record<string, unknown>) => <div data-testid="contact" data-props={JSON.stringify(props)} />,
 }));
 
 import VencimientosPage from "./page";
@@ -43,10 +47,29 @@ function due(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** The `workshop_config` wire shape: the four fields the message reads plus columns that must stay on the server. */
+const WORKSHOP_ROW = {
+  id: "singleton",
+  name: "DForce Car Audio",
+  phone: "203-7212",
+  hours: "Lunes a Sábado 8:00 A.M - 5:00 P.M",
+  address: "Rio Abajo, Calle 14",
+  whatsapp: "SENTINEL-WHATSAPP",
+  email: "SENTINEL-EMAIL",
+  website: "SENTINEL-WEBSITE",
+  logoR2Key: "SENTINEL-LOGO-KEY",
+  logoContentType: "image/png",
+  coverText: "SENTINEL-COVER",
+  coverImageR2Key: "SENTINEL-COVER-KEY",
+  socialHandles: { instagram: "SENTINEL-HANDLE" },
+  updatedAt: new Date("2026-10-01T00:00:00Z"),
+};
+
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-10-04T15:00:00Z"));
   can.mockReturnValue(true);
+  getWorkshopConfig.mockResolvedValue(WORKSHOP_ROW);
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -111,16 +134,70 @@ describe("/vencimientos — list", () => {
   });
 });
 
-describe("/vencimientos — what crosses into the client", () => {
-  it("passes the button only the item's identity, never the opt-out flag, the client id or the phone", async () => {
-    await renderPage([due({ whatsappOptOut: true, clienteId: "SENTINEL-CLIENTE-ID", customerPhone: "SENTINEL-PHONE" })]);
+/** What the mocked dialog of each row received, parsed back from the DOM. */
+function dialogProps(): Record<string, unknown>[] {
+  const rendered = screen.getAllByTestId("contact");
+  expect(rendered.length).toBeGreaterThan(0);
+  return rendered.map((el) => JSON.parse(el.getAttribute("data-props") ?? ""));
+}
 
-    const rendered = screen.getAllByTestId("contactado");
-    expect(rendered.length).toBeGreaterThan(0);
-    for (const el of rendered) {
-      expect(JSON.parse(el.getAttribute("data-props") ?? "")).toEqual({ vehiculoId: "v1", kind: "placa", periodKey: "2026-10" });
+describe("/vencimientos — what crosses into the client", () => {
+  const WORKSHOP = { name: "DForce Car Audio", phone: "203-7212", hours: "Lunes a Sábado 8:00 A.M - 5:00 P.M", address: "Rio Abajo, Calle 14" };
+
+  it("passes the dialog exactly the allowlist: no opt-out flag, client id, raw phone or workshop_config column", async () => {
+    await renderPage([due({ whatsappOptOut: true, clienteId: "SENTINEL-CLIENTE-ID", customerPhone: "6230-8874" })]);
+
+    for (const props of dialogProps()) {
+      expect(props).toEqual({
+        vehiculoId: "v1",
+        kind: "placa",
+        periodKey: "2026-10",
+        overdue: false,
+        customerName: "Transportes Chiriquí S.A.",
+        placa: "BF0921",
+        vehicleLabel: "Nissan Frontier",
+        waPhone: null,
+        waBlockedReason: "El cliente pidió no recibir WhatsApp",
+        workshop: WORKSHOP,
+      });
     }
-    expect(document.body.innerHTML).not.toContain("SENTINEL-CLIENTE-ID");
-    expect(document.body.innerHTML).not.toContain("whatsappOptOut");
+    const crossed = screen.getAllByTestId("contact").map((el) => el.getAttribute("data-props")).join("");
+    for (const leaked of ["SENTINEL", "whatsappOptOut", "emailOptOut", "6230-8874", "clienteId", "logoR2Key"]) {
+      expect(crossed).not.toContain(leaked);
+    }
+  });
+
+  it("resolves a Panamá mobile to wa.me digits on the server, without the plus", async () => {
+    await renderPage([due({ customerPhone: "6230-8874" })]);
+
+    for (const props of dialogProps()) {
+      expect(props).toMatchObject({ waPhone: "50762308874", waBlockedReason: null });
+    }
+  });
+
+  it("blocks a landline with its own reason, and the opt-out reason wins over a valid mobile", async () => {
+    await renderPage([
+      due({ customerPhone: "269-1234" }),
+      due({ vehiculoId: "v2", customerPhone: "6230-8874", whatsappOptOut: true }),
+    ]);
+
+    const [landline, optedOut] = dialogProps();
+    expect(landline).toMatchObject({ vehiculoId: "v1", waPhone: null, waBlockedReason: "El teléfono del cliente no es un celular" });
+    expect(optedOut).toMatchObject({ vehiculoId: "v2", waPhone: null, waBlockedReason: "El cliente pidió no recibir WhatsApp" });
+  });
+
+  it("maps an overdue item, a vehicle with no make and model, and a missing workshop row", async () => {
+    getWorkshopConfig.mockResolvedValue(null);
+    await renderPage([due({ kind: "seguro", periodKey: "2026-09-28", state: "overdue", daysLeft: -6, make: null, model: null })]);
+
+    for (const props of dialogProps()) {
+      expect(props).toMatchObject({
+        kind: "seguro",
+        periodKey: "2026-09-28",
+        overdue: true,
+        vehicleLabel: null,
+        workshop: { name: null, phone: null, hours: null, address: null },
+      });
+    }
   });
 });
