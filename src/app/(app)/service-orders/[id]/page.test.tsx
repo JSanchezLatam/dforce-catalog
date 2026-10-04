@@ -431,6 +431,12 @@ describe("ServiceOrderDetailPage — Recepción card", () => {
     expect(valueOf("Batería")).toHaveTextContent("55%");
   });
 
+  it("still shows a recorded fuel level on an electric vehicle", async () => {
+    render(await renderWith({ nivelCombustible: 3 }, "electrico"));
+
+    expect(valueOf("Combustible")).toHaveTextContent("3/4");
+  });
+
   it("hands the vehicle's motor to the edit form", async () => {
     requireSessionFromHeaders.mockResolvedValue({ id: "u1", role: "administrador" });
     render(await renderWith({}, "electrico"));
