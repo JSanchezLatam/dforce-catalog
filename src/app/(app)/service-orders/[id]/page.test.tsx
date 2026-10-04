@@ -29,7 +29,7 @@ vi.mock("@/modules/reminders/queries", () => ({ listRemindersForOrder }));
 import { can } from "@/modules/auth/policy";
 import type { Role } from "@/modules/auth/roles";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
-import type { OrdenServicio, Reminder } from "@/shared/db/schema";
+import type { OrdenServicio, Reminder, Vehiculo } from "@/shared/db/schema";
 import { ToastProvider } from "@/shared/ui/ToastProvider";
 import ServiceOrderDetailPage from "./page";
 
@@ -44,11 +44,21 @@ const ORDEN: OrdenServicio = {
   createdBy: null,
 };
 
-function detailWith(deactivatedAt: Date | null) {
+// Every `vehiculo` column (the `vehiculo` table in schema.ts): the wire shape
+// `getClienteById` returns, internal columns included, so a poisoned override
+// below is something the real query could actually hand this page.
+const VEHICULO: Vehiculo = {
+  id: "v1", clienteId: "c1", plate: "ABC123", make: "Toyota", model: "Corolla", year: 2020,
+  chasis: null, colorPrimario: null, colorSecundario: null, estilo: null, motor: null,
+  numeroUnidad: null, placaRenovacionMes: null, seguroVence: null,
+  deactivatedAt: null, createdAt: new Date("2026-01-01"),
+};
+
+function detailWith(deactivatedAt: Date | null, vehicle: Partial<Vehiculo> = {}) {
   return {
     cliente: { id: "c1", name: "Ana Gómez" },
     orders: [],
-    vehicles: [{ id: "v1", clienteId: "c1", plate: "ABC123", make: "Toyota", model: "Corolla", year: 2020, deactivatedAt, createdAt: new Date("2026-01-01") }],
+    vehicles: [{ ...VEHICULO, ...vehicle, deactivatedAt }],
   };
 }
 
@@ -182,6 +192,75 @@ describe("ServiceOrderDetailPage", () => {
  * the gate decides correctly; they are NOT evidence that the control mounts in
  * a browser. Task 4.12 is.
  */
+describe("ServiceOrderDetailPage — vehicle descriptive fields", () => {
+  beforeEach(() => {
+    requireSessionFromHeaders.mockResolvedValue({ id: "u1", role: "administrador" });
+    getOrdenServicioById.mockResolvedValue({ orden: ORDEN, items: [] });
+    listRemindersForOrder.mockResolvedValue([]);
+  });
+
+  /** The `<dd>` beside a `<dt>`; fails by name when the label is absent. */
+  function valueFor(label: string): string {
+    const term = screen.getAllByRole("term").find((dt) => dt.textContent === label);
+    expect(term, `no <dt> labelled "${label}"`).toBeDefined();
+    return term!.nextElementSibling!.textContent!;
+  }
+
+  it("shows chasis, both colors on one line, estilo, motor in Spanish and the unit number when set", async () => {
+    getClienteById.mockResolvedValue(
+      detailWith(null, {
+        chasis: "3N6AD33A0LK812345", colorPrimario: "Gris", colorSecundario: "Negro",
+        estilo: "Pick-up", motor: "hibrido", numeroUnidad: "U-12",
+      }),
+    );
+
+    render(await renderPage());
+
+    expect(valueFor("Chasis")).toBe("3N6AD33A0LK812345");
+    expect(valueFor("Color")).toBe("Gris / Negro");
+    expect(valueFor("Estilo")).toBe("Pick-up");
+    expect(valueFor("Motor")).toBe("Híbrido");
+    expect(valueFor("Nº de unidad")).toBe("U-12");
+  });
+
+  it("shows only the primary color when there is no secondary, and omits the unit label when empty", async () => {
+    getClienteById.mockResolvedValue(detailWith(null, { colorPrimario: "Rojo", motor: "combustion" }));
+
+    render(await renderPage());
+
+    expect(valueFor("Color")).toBe("Rojo");
+    expect(valueFor("Motor")).toBe("Combustión");
+    expect(screen.queryByText("Nº de unidad")).not.toBeInTheDocument();
+  });
+
+  it("renders a placeholder, never a blank row, for an unset descriptive field", async () => {
+    getClienteById.mockResolvedValue(detailWith(null));
+
+    render(await renderPage());
+
+    for (const label of ["Chasis", "Color", "Estilo", "Motor"]) {
+      expect(valueFor(label), label).toBe("—");
+    }
+  });
+
+  it("never renders the plate renewal month or the insurance expiry, even when the row carries them", async () => {
+    getClienteById.mockResolvedValue(
+      detailWith(null, { chasis: "CH1", placaRenovacionMes: 11, seguroVence: "2031-12-24" }),
+    );
+
+    const { container } = render(await renderPage());
+
+    const text = container.textContent!;
+    expect(text).not.toContain("2031-12-24");
+    expect(text).not.toContain("24/12/2031");
+    expect(text).not.toContain("noviembre");
+    expect(screen.getAllByRole("definition").map((dd) => dd.textContent)).not.toContain("11");
+    // The poisoned row still rendered its allowed fields: the absence above
+    // comes from the allowlist, not from the row never reaching the page.
+    expect(valueFor("Chasis")).toBe("CH1");
+  });
+});
+
 describe("ServiceOrderDetailPage — the edit control (D11)", () => {
   beforeEach(() => {
     getClienteById.mockResolvedValue(detailWith(null));

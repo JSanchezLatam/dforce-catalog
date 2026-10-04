@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BellRing } from "lucide-react";
@@ -22,6 +23,7 @@ import { listRemindersForOrder } from "@/modules/reminders/queries";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
 import { canEditOrderFields } from "@/modules/service-orders/edit-policy";
 import { OrderStatusControls } from "@/modules/service-orders/OrderStatusControls";
+import { vehicleDescriptiveRows } from "@/modules/service-orders/vehicle-rows";
 import { ServiceOrderFormTrigger } from "@/modules/service-orders/ServiceOrderFormTrigger";
 import { getOrdenServicioById } from "@/modules/service-orders/queries";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
@@ -174,6 +176,12 @@ export default async function ServiceOrderDetailPage({
                 )}
               </dd>
             </div>
+            {/* Placeholder, not omission: the spec wants an unset field to read
+                as "nothing recorded". The unit number is the one row the
+                helper omits when empty. */}
+            {vehiculo && vehicleDescriptiveRows(vehiculo).map((r) => (
+              <Fragment key={r.label}>{field(r.label, r.value ?? "—")}</Fragment>
+            ))}
             {field("Categoría", CATEGORIA_LABEL[orden.categoria])}
             {field("Descripción", orden.description)}
             {/* Mirrors the form's field, so it carries the form's label. The

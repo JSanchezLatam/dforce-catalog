@@ -127,6 +127,57 @@ beforeEach(() => {
   getWorkshopConfig.mockResolvedValue(null);
 });
 
+describe("ServiceOrderPrintPage — vehicle descriptive fields", () => {
+  it("prints chasis, both colors on one line, estilo, motor in Spanish and the unit number beside placa/marca/modelo/año", async () => {
+    getClienteById.mockResolvedValue({
+      cliente: CLIENTE, orders: [],
+      vehicles: [{
+        ...VEHICULO, chasis: "3N6AD33A0LK812345", colorPrimario: "Gris", colorSecundario: "Negro",
+        estilo: "Pick-up", motor: "electrico", numeroUnidad: "U-12",
+      }],
+    });
+
+    render(await renderPage());
+
+    expect(valueFor("Placa")).toBe("ABC123");
+    expect(valueFor("Chasis")).toBe("3N6AD33A0LK812345");
+    expect(valueFor("Color")).toBe("Gris / Negro");
+    expect(valueFor("Estilo")).toBe("Pick-up");
+    expect(valueFor("Motor")).toBe("Eléctrico");
+    expect(valueFor("Nº de unidad")).toBe("U-12");
+  });
+
+  it("prints only the primary color, a dash for unset fields, and no unit label when it is empty", async () => {
+    getClienteById.mockResolvedValue({
+      cliente: CLIENTE, orders: [], vehicles: [{ ...VEHICULO, colorPrimario: "Rojo" }],
+    });
+
+    render(await renderPage());
+
+    expect(valueFor("Color")).toBe("Rojo");
+    for (const label of ["Chasis", "Estilo", "Motor"]) {
+      expect(valueFor(label), label).toBe("—");
+    }
+    expect(screen.queryByText("Nº de unidad")).not.toBeInTheDocument();
+  });
+
+  it("never prints the plate renewal month or the insurance expiry, even when the row carries them", async () => {
+    getClienteById.mockResolvedValue({
+      cliente: CLIENTE, orders: [],
+      vehicles: [{ ...VEHICULO, chasis: "CH1", placaRenovacionMes: 11, seguroVence: "2031-12-24" }],
+    });
+
+    const { container } = render(await renderPage());
+
+    const text = container.textContent!;
+    expect(text).not.toContain("2031-12-24");
+    expect(text).not.toContain("24/12/2031");
+    expect(text).not.toContain("noviembre");
+    expect(screen.getAllByRole("definition").map((dd) => dd.textContent)).not.toContain("11");
+    expect(valueFor("Chasis")).toBe("CH1");
+  });
+});
+
 describe("ServiceOrderPrintPage", () => {
 
   /** Spec Scenario "Printed page carries the order's data". */
