@@ -6,7 +6,8 @@
  * here in PR8 (catalog-storage) — see design.md → "Database Schema Outline".
  * Each table is added alongside the code that first needs it.
  */
-import { boolean, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, check, date, index, integer, jsonb, pgEnum, pgTable, real, smallint, text, timestamp } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /** R9.6 / NFR-8 — single `role` column, extensible without an RBAC library. */
 export const roleEnum = pgEnum("role", ["tecnico", "administrador"]);
@@ -386,6 +387,8 @@ export type Cliente = typeof cliente.$inferSelect;
  * `isNull(...)` filters, `deactivateUser`/`reactivateUser`). NULL = active.
  * Sole owner of reads/writes: `src/modules/customers/vehicles.ts` (slice 2).
  */
+export const vehiculoMotorEnum = pgEnum("vehiculo_motor", ["combustion", "electrico", "hibrido"]);
+
 export const vehiculo = pgTable(
   "vehiculo",
   {
@@ -400,6 +403,17 @@ export const vehiculo = pgTable(
     year: integer("year"),
     /** Required per vehicle (R17) — a vehicle without a plate has no reason to exist. */
     plate: text("plate").notNull(),
+    chasis: text("chasis"),
+    colorPrimario: text("color_primario"),
+    colorSecundario: text("color_secundario"),
+    /** Validated against `ESTILO_OPTIONS` in code, not a pgEnum: the list is curated and may change. */
+    estilo: text("estilo"),
+    motor: vehiculoMotorEnum("motor"),
+    numeroUnidad: text("numero_unidad"),
+    /** INTERNAL (needs `vencimientos.read`): month 1..12 the plate renews. Never on an order, a sheet, or a public route. */
+    placaRenovacionMes: smallint("placa_renovacion_mes"),
+    /** INTERNAL: insurance expiry as a `YYYY-MM-DD` string (string mode: no `Date`, no timezone shift). */
+    seguroVence: date("seguro_vence", { mode: "string" }),
     /** NULL = active; stamped on soft delete. See table doc comment above. */
     deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -412,7 +426,10 @@ export const vehiculo = pgTable(
    * btree on the raw column cannot serve. Add an exact-plate index when an
    * exact-plate lookup actually appears.
    */
-  (table) => [index("vehiculo_cliente_idx").on(table.clienteId)],
+  (table) => [
+    index("vehiculo_cliente_idx").on(table.clienteId),
+    check("vehiculo_placa_renovacion_mes_range", sql`${table.placaRenovacionMes} between 1 and 12`),
+  ],
 );
 
 export type Vehiculo = typeof vehiculo.$inferSelect;
