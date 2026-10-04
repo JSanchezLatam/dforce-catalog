@@ -16,6 +16,14 @@ function fakeVehiculo(overrides: Partial<Vehiculo> = {}): Vehiculo {
     model: "Corolla",
     year: 2020,
     plate: "ABC111",
+    chasis: null,
+    colorPrimario: null,
+    colorSecundario: null,
+    estilo: null,
+    motor: null,
+    numeroUnidad: null,
+    placaRenovacionMes: null,
+    seguroVence: null,
     deactivatedAt: null,
     createdAt: new Date("2026-01-01"),
     ...overrides,
@@ -47,6 +55,55 @@ describe("GET /api/customers/[id]/vehicles (C4, task 1.11 — the gap D2 found)"
     expect(listVehiculosByCliente).toHaveBeenCalledWith("c1");
     const body = await response.json();
     expect(body.vehicles).toEqual([expect.objectContaining({ id: "v1", plate: "ABC111" })]);
+  });
+});
+
+// Sentinels that cannot occur by accident, so a leak is unmistakable.
+const POISONED = fakeVehiculo({ placaRenovacionMes: 11, seguroVence: "2031-07-23" });
+
+describe("vehicles routes never carry the internal renewal fields", () => {
+  it("GET omits both internal keys and their values, even for an administrador", async () => {
+    const listVehiculosByCliente = vi.fn().mockResolvedValue([POISONED]);
+    const response = await handleListVehiculosByCliente(
+      requestFor("c1", { "x-user-id": "u1", "x-user-role": "administrador" }),
+      "c1",
+      { listVehiculosByCliente },
+    );
+    const text = await response.text();
+    expect(text).not.toContain("placaRenovacionMes");
+    expect(text).not.toContain("seguroVence");
+    expect(text).not.toContain("2031-07-23");
+    expect(JSON.parse(text).vehicles[0]).toMatchObject({ id: "v1", plate: "ABC111", make: "Toyota" });
+  });
+
+  it("POST omits both internal keys from the 201 body", async () => {
+    const deps = {
+      getClienteById: vi.fn().mockResolvedValue({ cliente: clienteRow(), vehicles: [] }),
+      createVehiculo: vi.fn().mockResolvedValue(POISONED),
+    };
+    const response = await handleCreateVehiculo(postRequest("c1", { plate: "NEW111" }), "c1", deps);
+    const text = await response.text();
+    expect(response.status).toBe(201);
+    expect(text).not.toContain("placaRenovacionMes");
+    expect(text).not.toContain("seguroVence");
+  });
+
+  it.each(["placaRenovacionMes", "seguroVence"])("POST answers 400 for everyone that sends %s, null included", async (key) => {
+    for (const role of ["tecnico", "administrador"]) {
+      const deps = {
+        getClienteById: vi.fn().mockResolvedValue({ cliente: clienteRow(), vehicles: [] }),
+        createVehiculo: vi.fn(),
+      };
+      for (const value of [null, 3]) {
+        const response = await handleCreateVehiculo(
+          postRequest("c1", { plate: "NEW111", [key]: value }, { "x-user-id": "u1", "x-user-role": role }),
+          "c1",
+          deps,
+        );
+        expect(response.status).toBe(400);
+      }
+      expect(deps.createVehiculo).not.toHaveBeenCalled();
+    }
   });
 });
 

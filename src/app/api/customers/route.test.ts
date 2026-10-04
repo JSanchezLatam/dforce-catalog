@@ -15,6 +15,47 @@ function requestWith(body: unknown) {
   });
 }
 
+describe("POST /api/customers — internal renewal fields are administrador-only", () => {
+  const transaction = vi.fn();
+  const database = {
+    transaction: async <T>(fn: unknown): Promise<T> => {
+      transaction(fn);
+      return { id: "c1" } as T;
+    },
+  };
+  const create = (vehicle: Record<string, unknown>, role: string) =>
+    handleCreateCliente(
+      new NextRequest("http://localhost/api/customers", {
+        method: "POST",
+        headers: { "x-user-id": "user-1", "x-user-role": role, "Content-Type": "application/json" },
+        body: JSON.stringify({ ...validInput, vehicles: [{ plate: "ABC123", ...vehicle }] }),
+      }),
+      { findByPhone: async () => null, database },
+    );
+
+  it.each([{ placaRenovacionMes: 3 }, { seguroVence: "2026-11-15" }, { placaRenovacionMes: null }, { seguroVence: null }])(
+    "refuses a tecnico sending %j with 403 and persists nothing",
+    async (vehicle) => {
+      transaction.mockClear();
+      const response = await create(vehicle, "tecnico");
+      expect(response.status).toBe(403);
+      expect(transaction).not.toHaveBeenCalled();
+    },
+  );
+
+  it("lets a tecnico create a customer whose vehicle has no internal key", async () => {
+    transaction.mockClear();
+    expect((await create({ colorPrimario: "Rojo" }, "tecnico")).status).toBe(201);
+    expect(transaction).toHaveBeenCalled();
+  });
+
+  it("lets an administrador send them", async () => {
+    transaction.mockClear();
+    expect((await create({ placaRenovacionMes: 3, seguroVence: "2026-11-15" }, "administrador")).status).toBe(201);
+    expect(transaction).toHaveBeenCalled();
+  });
+});
+
 describe("POST /api/customers (R16)", () => {
   it("throws when called without session headers (proxy.ts did not validate)", async () => {
     const request = new NextRequest("http://localhost/api/customers", {

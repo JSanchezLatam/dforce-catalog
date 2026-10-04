@@ -6,6 +6,7 @@ import { countClientes as countClientesQuery, listClientes as listClientesQuery,
 import { relaxSearchTerm } from "@/modules/customers/near-match";
 import { createCliente, DuplicatePhoneError, type CreateClienteDeps } from "@/modules/customers/service";
 import { ClienteValidationError } from "@/modules/customers/validation";
+import { sendsInternalVehiculoFields } from "@/modules/customers/vehicles";
 import { computePageWindow, parsePageSize } from "@/modules/inventory-view/queries";
 
 export type ListClientesDeps = {
@@ -92,6 +93,11 @@ export async function handleCreateCliente(
   }
 
   const body = await request.json();
+  // Before validation and before any database work: without `vencimientos.read`
+  // the renewal fields are refused, not stripped (a `null` would clear a value).
+  if (sendsInternalVehiculoFields(body) && !can(user, "vencimientos.read")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
   try {
     const cliente = await createCliente(body, deps);
     return NextResponse.json({ cliente }, { status: 201 });

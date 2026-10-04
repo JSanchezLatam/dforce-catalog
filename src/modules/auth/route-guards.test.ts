@@ -30,10 +30,12 @@ export const ROUTE_GUARDS: Record<
   "/change-password": { GET: "session-only" },
   "/api/login": { POST: "session-only" },
   "/api/logout": { POST: "session-only" },
-  "/api/customers": { GET: "customers.read", POST: "customers.write" },
+  // POST also evaluates `vencimientos.read`: a body whose vehicles carry the
+  // internal renewal fields is refused with 403 when the caller lacks it.
+  "/api/customers": { GET: "customers.read", POST: ["customers.write", "vencimientos.read"] },
   // R21 — manual Interfuerza customer import trigger (customer-import).
   "/api/customer-import": { POST: "customers.write" },
-  "/api/customers/[id]": { PATCH: ["customers.write", "customers.deleteVehicle"] },
+  "/api/customers/[id]": { PATCH: ["customers.write", "customers.deleteVehicle", "vencimientos.read"] },
   // C4 — the vehicle picker's data source (design.md D2's gap). POST is the
   // single-vehicle insert (service-order-intake-and-print D3): a reversible
   // write, so `customers.write`, the same Action `PATCH /api/customers/[id]`
