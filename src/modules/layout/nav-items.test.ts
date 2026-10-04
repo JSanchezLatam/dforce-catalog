@@ -33,10 +33,10 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     expect(configGroup.pinBottom).toBe(true);
   });
 
-  it("admin sees all CRM items, including Inventario per binding decision #2 (Clientes, Órdenes de servicio, Inventario)", () => {
+  it("admin sees all CRM items, Vencimientos right after Órdenes de servicio (Clientes, Órdenes de servicio, Vencimientos, Inventario)", () => {
     const groups = getNavGroups(admin);
     const crm = groups.find((g) => g.label === "CRM")!;
-    expect(crm.items.map((i) => i.label)).toEqual(["Clientes", "Órdenes de servicio", "Inventario"]);
+    expect(crm.items.map((i) => i.label)).toEqual(["Clientes", "Órdenes de servicio", "Vencimientos", "Inventario"]);
   });
 
   it("admin sees Catálogo items WITHOUT Inventario (Generar Catálogos, Catálogos Generados only)", () => {
@@ -102,10 +102,10 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     expect(totalItems).toBe(4);
   });
 
-  it("admin sees 8 total items across 3 groups", () => {
+  it("admin sees 9 total items across 3 groups", () => {
     const groups = getNavGroups(admin);
     const totalItems = groups.reduce((s, g) => s + g.items.length, 0);
-    expect(totalItems).toBe(8);
+    expect(totalItems).toBe(9);
   });
 
   // Stable ids decouple sidebar-group-collapse cookie state from display
@@ -128,5 +128,26 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     if (parent.kind === "parent") {
       expect(parent.id).toBe("config-catalogos");
     }
+  });
+});
+
+describe("getNavGroups() — Vencimientos item and its badge", () => {
+  const find = (groups: NavGroup[]) =>
+    groups.flatMap((g) => g.items).find((i) => i.kind === "link" && i.href === "/vencimientos");
+
+  it("shows /vencimientos to an admin, and to a técnico it shows neither the item nor a badge", () => {
+    expect(find(getNavGroups(admin))).toMatchObject({ label: "Vencimientos", href: "/vencimientos" });
+    expect(find(getNavGroups(tecnico, { "/vencimientos": 5 }))).toBeUndefined();
+  });
+
+  it("sets the badge from the counts map, and only when the count is above zero", () => {
+    expect(find(getNavGroups(admin, { "/vencimientos": 3 }))).toMatchObject({ badge: 3 });
+    expect(find(getNavGroups(admin, { "/vencimientos": 0 }))).not.toHaveProperty("badge");
+    expect(find(getNavGroups(admin))).not.toHaveProperty("badge");
+  });
+
+  it("does not put the badge on any other link", () => {
+    const links = getNavGroups(admin, { "/vencimientos": 3 }).flatMap((g) => g.items).filter((i) => i.kind === "link");
+    expect(links.filter((l) => "badge" in l).map((l) => l.href)).toEqual(["/vencimientos"]);
   });
 });

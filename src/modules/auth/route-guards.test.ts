@@ -75,6 +75,8 @@ export const ROUTE_GUARDS: Record<
   // gate as the detail page it is reached from — it renders a subset of the
   // same two queries' output and adds no SQL of its own.
   "/service-orders/[id]/print": { GET: "service-orders.read" },
+  // "Vencimientos próximos" (vehicle-details-and-renewals): the due list.
+  "/vencimientos": { GET: "vencimientos.read" },
   "/inventory": { GET: "inventory.read" },
   "/inventory/[id]": { GET: "inventory.read" },
   "/catalogs": { GET: "catalogs.read" },

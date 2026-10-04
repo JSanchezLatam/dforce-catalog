@@ -1,9 +1,9 @@
 import { can, type Action } from "@/modules/auth/policy";
 import type { SessionUser } from "@/modules/auth/session";
 
-export type NavIconKey = "inventory" | "builder" | "catalogs" | "template-config" | "customers" | "service-orders" | "users";
+export type NavIconKey = "inventory" | "builder" | "catalogs" | "template-config" | "customers" | "service-orders" | "vencimientos" | "users";
 
-export type NavLink = { kind: "link"; href: string; label: string; icon: NavIconKey; action?: Action };
+export type NavLink = { kind: "link"; href: string; label: string; icon: NavIconKey; action?: Action; badge?: number };
 
 export type NavParent = { kind: "parent"; id: string; label: string; icon: NavIconKey; children: NavLink[]; action?: Action };
 
@@ -17,6 +17,7 @@ export type NavGroup = {
 const CRM_ITEMS: (NavLink | NavParent)[] = [
   { kind: "link", href: "/customers", label: "Clientes", icon: "customers", action: "customers.read" },
   { kind: "link", href: "/service-orders", label: "Órdenes de servicio", icon: "service-orders", action: "service-orders.read" },
+  { kind: "link", href: "/vencimientos", label: "Vencimientos", icon: "vencimientos", action: "vencimientos.read" },
   { kind: "link", href: "/inventory", label: "Inventario", icon: "inventory", action: "inventory.read" },
 ];
 
@@ -65,10 +66,18 @@ function filterItem(user: SessionUser, item: NavLink | NavParent): NavLink | Nav
   return item;
 }
 
-export function getNavGroups(user: SessionUser): NavGroup[] {
+/**
+ * `badges` maps an href to its count. A link gets `badge` only above zero, so
+ * "hidden at 0" is decided here once. A link the viewer cannot see is filtered
+ * out first, so a count passed for it never reaches a technician.
+ */
+export function getNavGroups(user: SessionUser, badges: Record<string, number> = {}): NavGroup[] {
   const result: NavGroup[] = [];
   for (const group of GROUPS) {
-    const items = group.items.map((item) => filterItem(user, item)).filter((i): i is NavLink | NavParent => i !== null);
+    const items = group.items
+      .map((item) => filterItem(user, item))
+      .filter((i): i is NavLink | NavParent => i !== null)
+      .map((item) => (item.kind === "link" && (badges[item.href] ?? 0) > 0 ? { ...item, badge: badges[item.href] } : item));
     if (items.length > 0) result.push({ ...group, items });
   }
   return result;
