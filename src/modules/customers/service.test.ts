@@ -350,6 +350,50 @@ describe("updateCliente (R16, R18)", () => {
  * nothing. These pin both halves: the timestamp, and the promise that no
  * vehicle or service order is touched on the way.
  */
+describe("documentoIdentidad (Cédula / RUC)", () => {
+  const current = {
+    cliente: { id: "c1", name: "Juan", phone: "+525512345678", documentoIdentidad: "8-999" } as unknown as Cliente,
+    orders: [],
+    vehicles: [],
+  };
+  const run = async (patch: Parameters<typeof updateCliente>[1]) => {
+    const update = vi.fn().mockResolvedValue(current.cliente);
+    await updateCliente("c1", patch, { getById: async () => current, update });
+    return update;
+  };
+
+  // The trap: `persistedPatch` is the RAW patch, so without an explicit
+  // normalize an untrimmed value would reach `db.update(...).set(...)`.
+  it("update persists the TRIMMED value, not the raw patch", async () => {
+    expect(await run({ documentoIdentidad: "  8-1  " })).toHaveBeenCalledWith("c1", { documentoIdentidad: "8-1" });
+  });
+
+  it("update clears to null on an empty string, and on null", async () => {
+    expect(await run({ documentoIdentidad: "" })).toHaveBeenCalledWith("c1", { documentoIdentidad: null });
+    expect(await run({ documentoIdentidad: null })).toHaveBeenCalledWith("c1", { documentoIdentidad: null });
+  });
+
+  it("update leaves the column alone when the key is omitted", async () => {
+    expect(await run({ name: "Juan P." })).toHaveBeenCalledWith("c1", { name: "Juan P." });
+  });
+
+  it("update rejects 31 characters before writing anything", async () => {
+    const update = vi.fn();
+    await expect(
+      updateCliente("c1", { documentoIdentidad: "a".repeat(31) }, { getById: async () => current, update }),
+    ).rejects.toBeInstanceOf(ClienteValidationError);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("create inserts the trimmed value, and null when blank", async () => {
+    const insert = vi.fn().mockResolvedValue({ id: "c2" });
+    await createCliente({ ...validInput, documentoIdentidad: "  8-1  " }, { findByPhone: async () => null, insert });
+    expect(insert).toHaveBeenLastCalledWith(expect.objectContaining({ documentoIdentidad: "8-1" }));
+    await createCliente({ ...validInput, documentoIdentidad: " " }, { findByPhone: async () => null, insert });
+    expect(insert).toHaveBeenLastCalledWith(expect.objectContaining({ documentoIdentidad: null }));
+  });
+});
+
 describe("deactivateCliente / reactivateCliente (R20)", () => {
   type SetDeactivatedAt = (id: string, at: Date | null) => Promise<Cliente | undefined>;
   const CLIENTE = { id: "c1", name: "Juan", phone: "+525512345678" } as unknown as Cliente;

@@ -333,6 +333,13 @@ export const cliente = pgTable(
     phone: text("phone").notNull(),
     email: text("email"),
     /**
+     * Cédula / RUC, free text (service-order-reception). Optional, capped at 30
+     * characters in `customers/validation.ts` only — NOT a CHECK, NOT UNIQUE,
+     * same stance as `phone`: cédulas, RUCs and passports vary in shape and
+     * relatives share documents. The customer import never writes it.
+     */
+    documentoIdentidad: text("documento_identidad"),
+    /**
      * Interfuerza's `Cliente` value (customer-import D2) — nullable because
      * every customer created through the app has none, and that stays the
      * normal case going forward; this column marks provenance, not a

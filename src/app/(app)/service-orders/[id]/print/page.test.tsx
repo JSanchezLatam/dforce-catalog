@@ -66,7 +66,7 @@ const ORDEN: OrdenServicio = {
 // Every `cliente` column (schema.ts:294-352).
 const CLIENTE: Cliente = {
   id: "c1", name: "Ana Gómez", phone: "61234567", email: "ana@example.com",
-  externalId: null, whatsappOptOut: false, emailOptOut: false,
+  documentoIdentidad: null, externalId: null, whatsappOptOut: false, emailOptOut: false,
   deactivatedAt: null,
   createdAt: new Date("2026-01-01T00:00:00Z"), updatedAt: new Date("2026-01-01T00:00:00Z"),
 };

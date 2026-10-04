@@ -85,6 +85,7 @@ type CustomerFormState = {
   name: string;
   phone: string;
   email: string;
+  documentoIdentidad: string;
   vehicles: VehiculoRow[];
   whatsappOptOut: boolean;
   emailOptOut: boolean;
@@ -139,6 +140,7 @@ function toFormState(cliente?: Cliente | null, allVehicles?: CustomerFormVehicul
     name: cliente?.name ?? "",
     phone: cliente?.phone ?? "",
     email: cliente?.email ?? "",
+    documentoIdentidad: cliente?.documentoIdentidad ?? "",
     vehicles: (vehicles ?? []).map((v) => ({
       key: v.id,
       id: v.id,
@@ -183,6 +185,9 @@ function buildPayload(form: CustomerFormState, canEditInternal: boolean) {
     name: form.name,
     phone: form.phone,
     email: form.email.trim() || undefined,
+    // `null`, never `undefined`: an omitted key means "leave it alone" on the
+    // server, so only an explicit null can clear a saved value.
+    documentoIdentidad: form.documentoIdentidad.trim() || null,
     // Two routes reach `plan.deactivate`, and this form uses the first:
     // deactivated rows are OMITTED, so the server infers "deactivate" from a
     // previously-active vehicle's id being absent from this array (design.md
@@ -575,6 +580,25 @@ export function CustomerForm({
                     </Button>
                   </div>
                 </Alert>
+              )}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="cliente-documento">
+                Cédula / RUC <span className="font-normal text-muted-foreground">(opcional)</span>
+              </Label>
+              <Input
+                id="cliente-documento"
+                value={form.documentoIdentidad}
+                onChange={(e) => update("documentoIdentidad", e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Texto libre: cédula (8-123-456), RUC con DV, pasaporte.
+              </p>
+              {errors.documentoIdentidad && (
+                <p role="alert" className={FIELD_ERROR}>
+                  {errors.documentoIdentidad}
+                </p>
               )}
             </div>
 
