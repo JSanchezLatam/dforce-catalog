@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
-import { Info, Pencil, Plus, RotateCcw, Save, Trash2, TriangleAlert, X } from "lucide-react";
+import { Info, Lock, Pencil, Plus, RotateCcw, Save, Trash2, TriangleAlert, X } from "lucide-react";
 
 import type { Cliente, Vehiculo } from "@/shared/db/schema";
 import { Alert } from "@/components/ui/alert";
@@ -30,6 +30,21 @@ import {
   SECTION_HEADING,
 } from "@/shared/ui/styles";
 import { VehicleMakeModelFields } from "./VehicleMakeModelFields";
+import { ESTILO_OPTIONS, MONTH_NAMES, MOTOR_LABEL, MOTOR_VALUES } from "./vehicle-options";
+import type { PublicVehiculo } from "./vehicles";
+
+/**
+ * A vehicle as this form receives it. The two internal columns are optional
+ * because a caller without `vencimientos.read` is handed `toPublicVehiculo`
+ * rows, which do not carry them (a full `Vehiculo` is assignable too).
+ */
+export type CustomerFormVehiculo = PublicVehiculo & Partial<Pick<Vehiculo, "placaRenovacionMes" | "seguroVence">>;
+
+/** Same focus-ring pairing as `ServiceOrderForm`'s native selects: `outline-none` needs its ring back. */
+const NATIVE_FIELD =
+  "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm";
+
+const MONTH_LABELS = MONTH_NAMES.map((m) => m[0].toUpperCase() + m.slice(1));
 
 /**
  * One vehicle row in the form. `key` is a stable, client-only React key
@@ -52,6 +67,16 @@ type VehiculoRow = {
   make: string;
   model: string;
   year: string;
+  chasis: string;
+  colorPrimario: string;
+  colorSecundario: string;
+  estilo: string;
+  motor: string;
+  numeroUnidad: string;
+  /** "" = none, else "1".."12". Only ever sent when `canEditInternal`. */
+  placaRenovacionMes: string;
+  /** "" = none, else `YYYY-MM-DD`. Only ever sent when `canEditInternal`. */
+  seguroVence: string;
   deactivated: boolean;
   deleted: boolean;
 };
@@ -81,7 +106,23 @@ type CustomerFormState = {
 let nextVehicleRowKey = 0;
 
 function emptyVehicleRow(): VehiculoRow {
-  return { key: `new-${nextVehicleRowKey++}`, plate: "", make: "", model: "", year: "", deactivated: false, deleted: false };
+  return {
+    key: `new-${nextVehicleRowKey++}`,
+    plate: "",
+    make: "",
+    model: "",
+    year: "",
+    chasis: "",
+    colorPrimario: "",
+    colorSecundario: "",
+    estilo: "",
+    motor: "",
+    numeroUnidad: "",
+    placaRenovacionMes: "",
+    seguroVence: "",
+    deactivated: false,
+    deleted: false,
+  };
 }
 
 /**
@@ -92,7 +133,7 @@ function emptyVehicleRow(): VehiculoRow {
  * ownership. No caller does that today — which is exactly why the guard is one
  * line now instead of a bug report later.
  */
-function toFormState(cliente?: Cliente | null, allVehicles?: Vehiculo[] | null): CustomerFormState {
+function toFormState(cliente?: Cliente | null, allVehicles?: CustomerFormVehiculo[] | null): CustomerFormState {
   const vehicles = cliente ? allVehicles : null;
   return {
     name: cliente?.name ?? "",
@@ -105,6 +146,14 @@ function toFormState(cliente?: Cliente | null, allVehicles?: Vehiculo[] | null):
       make: v.make ?? "",
       model: v.model ?? "",
       year: v.year != null ? String(v.year) : "",
+      chasis: v.chasis ?? "",
+      colorPrimario: v.colorPrimario ?? "",
+      colorSecundario: v.colorSecundario ?? "",
+      estilo: v.estilo ?? "",
+      motor: v.motor ?? "",
+      numeroUnidad: v.numeroUnidad ?? "",
+      placaRenovacionMes: v.placaRenovacionMes != null ? String(v.placaRenovacionMes) : "",
+      seguroVence: v.seguroVence ?? "",
       deactivated: v.deactivatedAt !== null,
       deleted: false,
     })),
@@ -129,7 +178,7 @@ function deletedVehicles(vehicles: VehiculoRow[]) {
 }
 
 /** Sends `undefined` (omitted) for blank optional fields — matches validation.ts's `trimmedOrUndefined`. */
-function buildPayload(form: CustomerFormState) {
+function buildPayload(form: CustomerFormState, canEditInternal: boolean) {
   return {
     name: form.name,
     phone: form.phone,
@@ -158,6 +207,23 @@ function buildPayload(form: CustomerFormState) {
         make: v.make.trim() || undefined,
         model: v.model.trim() || undefined,
         year: v.year.trim() ? Number(v.year) : undefined,
+        // The six descriptive fields ride on EVERY save: `descriptiveColumns`
+        // (vehicles.ts) writes `?? null`, so omitting one wipes it.
+        chasis: v.chasis.trim() || undefined,
+        colorPrimario: v.colorPrimario.trim() || undefined,
+        colorSecundario: v.colorSecundario.trim() || undefined,
+        estilo: v.estilo || undefined,
+        motor: v.motor || undefined,
+        numeroUnidad: v.numeroUnidad.trim() || undefined,
+        // INTERNAL, tri-state on the server: without `vencimientos.read` the
+        // keys are ABSENT (the route answers 403 to a bare `null`); with it, an
+        // empty field is an explicit `null` clear.
+        ...(canEditInternal
+          ? {
+              placaRenovacionMes: v.placaRenovacionMes ? Number(v.placaRenovacionMes) : null,
+              seguroVence: v.seguroVence || null,
+            }
+          : {}),
       })),
       // A delete addresses the row by id; no other column survives it.
       ...deletedVehicles(form.vehicles).map((v) => ({ id: v.id!, deleted: true })),
@@ -187,13 +253,21 @@ export function CustomerForm({
   cliente,
   vehicles,
   canDeleteVehicle = false,
+  canEditInternal = false,
   triggerLabel,
   onSaved,
 }: {
   /** Provided => edit mode (PATCH); omitted => create mode (POST). */
   cliente?: Cliente | null;
   /** The customer's whole vehicle collection (active + inactive) — ignored in create mode. */
-  vehicles?: Vehiculo[] | null;
+  vehicles?: CustomerFormVehiculo[] | null;
+  /**
+   * `vencimientos.read` — shows "Uso interno" and sends its two fields. Defaults
+   * to DENY like `canDeleteVehicle`; the API answers 403 to a caller without
+   * the grant regardless, so this only keeps a section that would always be
+   * refused off the screen.
+   */
+  canEditInternal?: boolean;
   /**
    * `customers.deleteVehicle` — administrador-only. Deactivation stays
    * available to everyone who can edit a customer; destroying the row does
@@ -335,7 +409,7 @@ export function CustomerForm({
     let saved: Cliente;
 
     try {
-      const payload = buildPayload(form);
+      const payload = buildPayload(form, canEditInternal);
       const response = await fetch(isEdit ? `/api/customers/${cliente!.id}` : "/api/customers", {
         method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -584,7 +658,10 @@ export function CustomerForm({
                   );
                 }
 
-                const plateError = sentIndex >= 0 ? errors[`vehicles.${sentIndex}.plate`] : undefined;
+                const rowErrors =
+                  sentIndex >= 0
+                    ? ROW_ERROR_FIELDS.map((field) => errors[`vehicles.${sentIndex}.${field}`]).filter(Boolean)
+                    : [];
                 return (
                   <div key={row.key} role="group" aria-label={`Vehículo ${index}`} className={CARD + " flex flex-col gap-3"}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -646,13 +723,122 @@ export function CustomerForm({
                           onChange={(e) => updateVehicle(row.key, { year: e.target.value })}
                         />
                       </div>
+                      <div className="col-span-2 grid gap-2">
+                        <Label htmlFor={`${row.key}-chasis`}>Chasis</Label>
+                        <Input
+                          id={`${row.key}-chasis`}
+                          className="font-mono"
+                          value={row.chasis}
+                          onChange={(e) => updateVehicle(row.key, { chasis: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor={`${row.key}-color-primario`}>Color primario</Label>
+                        <Input
+                          id={`${row.key}-color-primario`}
+                          value={row.colorPrimario}
+                          onChange={(e) => updateVehicle(row.key, { colorPrimario: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor={`${row.key}-color-secundario`}>Color secundario</Label>
+                        <Input
+                          id={`${row.key}-color-secundario`}
+                          placeholder="Opcional"
+                          value={row.colorSecundario}
+                          onChange={(e) => updateVehicle(row.key, { colorSecundario: e.target.value })}
+                        />
+                      </div>
+                      {/* Native selects, as in `ServiceOrderForm`: a short closed list, and the OS picker is the better control on a tablet. */}
+                      <div className="grid gap-2">
+                        <Label htmlFor={`${row.key}-estilo`}>Estilo</Label>
+                        <select
+                          id={`${row.key}-estilo`}
+                          className={NATIVE_FIELD}
+                          value={row.estilo}
+                          onChange={(e) => updateVehicle(row.key, { estilo: e.target.value })}
+                        >
+                          <option value="">—</option>
+                          {ESTILO_OPTIONS.map((estilo) => (
+                            <option key={estilo} value={estilo}>
+                              {estilo}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor={`${row.key}-motor`}>Motor</Label>
+                        <select
+                          id={`${row.key}-motor`}
+                          className={NATIVE_FIELD}
+                          value={row.motor}
+                          onChange={(e) => updateVehicle(row.key, { motor: e.target.value })}
+                        >
+                          <option value="">—</option>
+                          {MOTOR_VALUES.map((motor) => (
+                            <option key={motor} value={motor}>
+                              {MOTOR_LABEL[motor]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor={`${row.key}-unidad`}>
+                          Nº de unidad <span className="font-normal text-muted-foreground">(opcional)</span>
+                        </Label>
+                        <Input
+                          id={`${row.key}-unidad`}
+                          value={row.numeroUnidad}
+                          onChange={(e) => updateVehicle(row.key, { numeroUnidad: e.target.value })}
+                        />
+                      </div>
                     </div>
 
-                    {plateError && (
-                      <p role="alert" className={FIELD_ERROR}>
-                        {plateError}
-                      </p>
+                    {canEditInternal && (
+                      <div className="mt-1 flex flex-col gap-3 rounded-lg border border-dashed bg-muted/60 p-3">
+                        <div className="flex items-center gap-2">
+                          <Lock aria-hidden="true" className="size-4 text-muted-foreground" />
+                          <span className="text-sm font-semibold">Uso interno</span>
+                        </div>
+                        <p className="-mt-2 text-xs text-muted-foreground">
+                          Solo lo ve el administrador (y más adelante el jefe de taller). No sale en la orden ni en la
+                          hoja impresa.
+                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="grid gap-2">
+                            <Label htmlFor={`${row.key}-mes`}>Mes de renovación de placa</Label>
+                            <select
+                              id={`${row.key}-mes`}
+                              className={NATIVE_FIELD}
+                              value={row.placaRenovacionMes}
+                              onChange={(e) => updateVehicle(row.key, { placaRenovacionMes: e.target.value })}
+                            >
+                              <option value="">—</option>
+                              {MONTH_LABELS.map((label, i) => (
+                                <option key={label} value={String(i + 1)}>
+                                  {label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="grid gap-2">
+                            <Label htmlFor={`${row.key}-seguro`}>Vencimiento del seguro</Label>
+                            <Input
+                              id={`${row.key}-seguro`}
+                              type="date"
+                              value={row.seguroVence}
+                              onChange={(e) => updateVehicle(row.key, { seguroVence: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                      </div>
                     )}
+
+                    {rowErrors.map((message) => (
+                      <p key={message} role="alert" className={FIELD_ERROR}>
+                        {message}
+                      </p>
+                    ))}
                   </div>
                 );
               })}
@@ -768,6 +954,9 @@ export function CustomerForm({
     </Dialog>
   );
 }
+
+/** The `vehicles.<i>.<field>` keys this form has a card to show under; `validateVehiculoInput` can name any of them. */
+const ROW_ERROR_FIELDS = ["plate", "estilo", "motor", "placaRenovacionMes", "seguroVence"] as const;
 
 /** Pairs EVERY row with its 1-based display index and its index within the ACTIVE-only array the server sees (-1 for a deactivated row, which has no server-side error slot). Filtering is `activeVehicles`' job. */
 function indexedVehicleRows(vehicles: VehiculoRow[]) {

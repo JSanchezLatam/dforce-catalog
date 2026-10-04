@@ -3,9 +3,9 @@
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
-import type { Cliente, Vehiculo } from "@/shared/db/schema";
+import type { Cliente } from "@/shared/db/schema";
 import { useToast } from "@/shared/ui/ToastProvider";
-import { CustomerForm } from "./CustomerForm";
+import { CustomerForm, type CustomerFormVehiculo } from "./CustomerForm";
 
 /**
  * Thin client wrapper around `CustomerForm` for use from server-component
@@ -19,13 +19,16 @@ export function CustomerFormTrigger({
   cliente,
   vehicles,
   canDeleteVehicle,
+  canEditInternal,
   triggerLabel,
 }: {
   cliente?: Cliente | null;
   /** The customer's whole vehicle collection (active + inactive) — omitted in create mode. */
-  vehicles?: Vehiculo[] | null;
+  vehicles?: CustomerFormVehiculo[] | null;
   /** `customers.deleteVehicle`, resolved on the server — see `CustomerForm`. */
   canDeleteVehicle?: boolean;
+  /** `vencimientos.read`, resolved on the server — see `CustomerForm`. */
+  canEditInternal?: boolean;
   triggerLabel?: ReactNode;
 }) {
   const router = useRouter();
@@ -35,6 +38,7 @@ export function CustomerFormTrigger({
       cliente={cliente}
       vehicles={vehicles}
       canDeleteVehicle={canDeleteVehicle}
+      canEditInternal={canEditInternal}
       triggerLabel={triggerLabel}
       onSaved={() => {
         // `cliente` is what tells edit from create — the same flag

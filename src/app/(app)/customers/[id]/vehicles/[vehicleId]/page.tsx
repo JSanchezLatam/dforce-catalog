@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getClienteById } from "@/modules/customers/queries";
+import { MONTH_NAMES, MOTOR_LABEL } from "@/modules/customers/vehicle-options";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import { listOrdenesByVehiculo } from "@/modules/service-orders/queries";
@@ -24,6 +25,20 @@ import { StatusBadge } from "@/shared/ui/StatusBadge";
 import { CHIP, PLATE_BADGE, PLATE_BADGE_MUTED } from "@/shared/ui/styles";
 
 export const dynamic = "force-dynamic";
+
+function field(label: string, value: string | null | undefined) {
+  if (!value) return null;
+  return (
+    <div className="grid grid-cols-3 gap-2 py-2 border-b border-border last:border-0">
+      <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
+      <dd className="col-span-2 text-sm text-foreground">{value}</dd>
+    </div>
+  );
+}
+
+function capitalize(value: string) {
+  return value[0].toUpperCase() + value.slice(1);
+}
 
 /**
  * C4/design.md D6 — nested under `customers/[id]` because `vehiculo` has no
@@ -51,6 +66,7 @@ export default async function VehicleDetailPage({
   if (!vehiculo) notFound();
 
   const orders = await listOrdenesByVehiculo(vehiculo.id);
+  const canSeeInternal = can(user, "vencimientos.read");
 
   return (
     <div className="p-8">
@@ -89,6 +105,26 @@ export default async function VehicleDetailPage({
             )}
           </CardTitle>
         </CardHeader>
+        <CardContent>
+          <dl>
+            {field("Chasis", vehiculo.chasis)}
+            {field("Color primario", vehiculo.colorPrimario)}
+            {field("Color secundario", vehiculo.colorSecundario)}
+            {field("Estilo", vehiculo.estilo)}
+            {field("Motor", vehiculo.motor && MOTOR_LABEL[vehiculo.motor])}
+            {field("Nº de unidad", vehiculo.numeroUnidad)}
+            {/* Internal: only with `vencimientos.read`. Named fields, so a
+                column added to `vehiculo` later stays hidden by default. */}
+            {canSeeInternal &&
+              field(
+                "Mes de renovación de placa",
+                vehiculo.placaRenovacionMes ? capitalize(MONTH_NAMES[vehiculo.placaRenovacionMes - 1]) : null,
+              )}
+            {/* Split from the stored `YYYY-MM-DD`, never parsed: a date-only
+                string read as a `Date` is off by a day in a western zone. */}
+            {canSeeInternal && field("Vencimiento del seguro", vehiculo.seguroVence?.split("-").reverse().join("/"))}
+          </dl>
+        </CardContent>
       </Card>
 
       <Card>

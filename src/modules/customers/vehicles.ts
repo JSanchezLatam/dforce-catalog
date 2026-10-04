@@ -318,18 +318,6 @@ export function planVehiculoReconcile(existing: Vehiculo[], incoming: VehiculoIn
   return { inserts, updates, deactivate, delete: deletions };
 }
 
-/**
- * D5 — executes a plan inside `tx`; the transaction stays a dumb executor of
- * the pure plan above.
- *
- * Every statement is scoped to `clienteId`, including the three that already
- * carry a primary key. `planVehiculoReconcile` rejects a foreign id, but that
- * is a caller-side invariant — it only holds when the caller handed it the
- * right `existing` set. Ownership is the trust boundary this module's D5
- * docstring names, and a trust boundary enforced only by its callers is not
- * one; the extra predicate costs nothing and turns a cross-customer write into
- * zero affected rows.
- */
 /** The public descriptive columns: `CustomerForm` round-trips them, so omitted means null. */
 function descriptiveColumns(v: VehiculoInput) {
   return {
@@ -342,6 +330,18 @@ function descriptiveColumns(v: VehiculoInput) {
   };
 }
 
+/**
+ * D5 — executes a plan inside `tx`; the transaction stays a dumb executor of
+ * the pure plan above.
+ *
+ * Every statement is scoped to `clienteId`, including the three that already
+ * carry a primary key. `planVehiculoReconcile` rejects a foreign id, but that
+ * is a caller-side invariant — it only holds when the caller handed it the
+ * right `existing` set. Ownership is the trust boundary this module's D5
+ * docstring names, and a trust boundary enforced only by its callers is not
+ * one; the extra predicate costs nothing and turns a cross-customer write into
+ * zero affected rows.
+ */
 export async function applyVehiculoPlan(tx: TxLike, clienteId: string, plan: VehiculoPlan): Promise<void> {
   if (plan.inserts.length > 0) {
     await tx.insert(vehiculo).values(

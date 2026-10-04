@@ -21,6 +21,7 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { CustomerActivationButton } from "@/modules/customers/CustomerActivationButton";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
 import { getClienteById } from "@/modules/customers/queries";
+import { toPublicVehiculo } from "@/modules/customers/vehicles";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import { formatDateTime } from "@/shared/datetime";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
@@ -63,6 +64,7 @@ export default async function CustomerDetailPage({
 
   const { cliente, orders, vehicles } = detail;
   const isActive = !cliente.deactivatedAt;
+  const canSeeInternal = can(user, "vencimientos.read");
 
   return (
     <div className="p-8">
@@ -91,7 +93,11 @@ export default async function CustomerDetailPage({
             {isActive && (
               <CustomerFormTrigger
                 cliente={cliente}
-                vehicles={vehicles}
+                // The trigger is a client component, so this prop is serialized
+                // into the browser's RSC payload: without the grant the full
+                // row would ship the renewal month and insurance expiry too.
+                vehicles={canSeeInternal ? vehicles : vehicles.map(toPublicVehiculo)}
+                canEditInternal={canSeeInternal}
                 canDeleteVehicle={can(user, "customers.deleteVehicle")}
                 triggerLabel="Editar"
               />
