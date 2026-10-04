@@ -54,7 +54,7 @@ export function buildContactMessage({ workshop, customerName, vehicle, item, pri
   const due =
     item.kind === "placa"
       ? `La renovación de la placa de su ${vehicleText} ${item.overdue ? "correspondía" : "corresponde"} en ${monthYear(item.periodKey)}.`
-      : `La renovación del seguro de su ${vehicleText} ${item.overdue ? "venció" : "vence"} el ${dateKey(item.periodKey)}.`;
+      : `El seguro de su ${vehicleText} ${item.overdue ? "venció" : "vence"} el ${dateKey(item.periodKey)}.`;
 
   return [
     sentence(workshop.name ? `Hola ${customerName}, le saludamos de ${workshop.name}` : `Hola ${customerName}`),

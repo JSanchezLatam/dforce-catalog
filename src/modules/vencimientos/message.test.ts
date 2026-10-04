@@ -49,9 +49,9 @@ describe("buildContactMessage()", () => {
 
   it("words insurance with the expiry date and 'venció' only when overdue", () => {
     const overdue = buildContactMessage(input({ item: { kind: "seguro", periodKey: "2026-09-01", overdue: true } }));
-    expect(overdue).toContain("el seguro de su Nissan Frontier (BF0921) venció el 01/09/2026");
+    expect(overdue).toContain("le saludamos de DForce Car Audio. El seguro de su Nissan Frontier (BF0921) venció el 01/09/2026");
     const due = buildContactMessage(input({ item: { kind: "seguro", periodKey: "2026-10-20", overdue: false } }));
-    expect(due).toContain("el seguro de su Nissan Frontier (BF0921) vence el 20/10/2026");
+    expect(due).toContain("le saludamos de DForce Car Audio. El seguro de su Nissan Frontier (BF0921) vence el 20/10/2026");
     expect(due).toContain("Le ofrecemos el servicio de renovación por B/. 45.00.");
   });
 
