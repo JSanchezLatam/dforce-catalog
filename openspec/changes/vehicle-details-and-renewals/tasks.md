@@ -49,7 +49,7 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 - [x] 2.1 RED order detail test: chasis, colors, estilo, motor show; unit label absent when empty, present when set; poisoned vehicle with sentinel renewal month and insurance expiry renders neither. GREEN order detail page (named-field allowlist).
 - [x] 2.2 RED print page test: same fields beside placa, marca, modelo, año; sentinels absent. GREEN print page.
 - [x] 2.3 Mutation-verify 2.1-2.2 (render the whole vehicle row, sentinel test goes red).
-- [ ] 2.4 Print PREVIEW at the LAN IP, not the page: with the extra rows the signature must stay on page 1.
+- [x] 2.4 Print PREVIEW at the LAN IP, not the page: with the extra rows the signature must stay on page 1.
 
 ## WU3: Due module and contact mark (PR 3)
 

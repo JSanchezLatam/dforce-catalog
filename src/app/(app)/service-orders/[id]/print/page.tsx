@@ -137,7 +137,11 @@ export default async function ServiceOrderPrintPage({
         </div>
       </div>
 
-      <dl className="mb-6 grid grid-cols-2 gap-x-8">
+      {/* Four columns, not two: the vehicle details added five rows, and at two
+          columns they cost ~200 characters of Hallazgos before the signature
+          jumped to page 2. Four keeps the block at its old four-row height —
+          measured in the print preview, 2026-10-04 (900 chars still fit). */}
+      <dl className="mb-6 grid grid-cols-4 gap-x-5">
         {field("Cliente", clienteDetail?.cliente.name ?? orden.clienteId)}
         {field("Teléfono", clienteDetail?.cliente.phone)}
         {field("Placa", vehiculo?.plate ?? orden.vehiculoId)}
