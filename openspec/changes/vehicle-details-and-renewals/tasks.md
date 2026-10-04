@@ -38,10 +38,10 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 - [x] 1.6 RED `toPublicVehiculo`: sentinel internal values absent from the allowlist object. GREEN `vehicles.ts`, used by GET and POST `/vehicles`.
 - [x] 1.7 RED route tests: tecnico sending either key (including `null`) on POST/PATCH `customers` gets 403 and nothing persists; `/vehicles` POST answers 400 for everyone (`COLLECTION_ONLY_FIELDS`). GREEN `sendsInternalVehiculoFields` before validation.
 - [x] 1.8 RED e2e `src/e2e/vehicle-details.e2e.test.ts` (throwaway DB, never the dev DB): tecnico PATCH keeps stored values, admin `null` clears, `seguro_vence` round-trips as a string, CHECK rejects 13. GREEN: fix any real-SQL defect.
-- [ ] 1.9 RED `CustomerForm` tests: tecnico sees no internal section and sends no internal keys; admin sees both and they round-trip; toast convention unchanged. GREEN `CustomerForm.tsx`, `CustomerFormTrigger.tsx` (`canEditInternal`).
-- [ ] 1.10 RED page tests: `customers/[id]/page.tsx` passes `toPublicVehiculo` rows to the trigger for a viewer without `vencimientos.read`; vehicle detail page shows internal fields for admin only. GREEN both pages and the `ServiceOrderForm.tsx` type.
-- [ ] 1.11 44x44 on new form controls (`min-h-11`); no test asserts it, so measure in 1.13.
-- [~] 1.12 Mutation-verify 1.1-1.10 by name (1.1-1.8 done in PR 1a; 1.9-1.10 remain for PR 1b) (restore `?? null`, drop the 403, return the whole row).
+- [x] 1.9 RED `CustomerForm` tests: tecnico sees no internal section and sends no internal keys; admin sees both and they round-trip; toast convention unchanged. GREEN `CustomerForm.tsx`, `CustomerFormTrigger.tsx` (`canEditInternal`).
+- [x] 1.10 RED page tests: `customers/[id]/page.tsx` passes `toPublicVehiculo` rows to the trigger for a viewer without `vencimientos.read`; vehicle detail page shows internal fields for admin only. GREEN both pages and the `ServiceOrderForm.tsx` type.
+- [x] 1.11 44x44 on new form controls (`min-h-11`); no test asserts it, so measure in 1.13. (PR 1b adds no new action control: the new fields are native selects and inputs at the form's existing `h-8` field height, which is the standing field exception. Confirm in 1.13.)
+- [x] 1.12 Mutation-verify 1.1-1.10 by name (1.1-1.8 done in PR 1a; 1.9-1.10 done in PR 1b) (restore `?? null`, drop the 403, return the whole row).
 - [ ] 1.13 Browser at `http://<LAN-ip>:3000` as admin and as tecnico: the customer page crosses a Server→Client boundary (`CustomerFormTrigger`); read the console for RSC and hydration errors; measure targets.
 
 ## WU2: Order detail and print sheet (PR 2)

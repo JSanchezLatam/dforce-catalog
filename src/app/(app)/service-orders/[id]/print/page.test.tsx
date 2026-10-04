@@ -71,7 +71,7 @@ const CLIENTE: Cliente = {
   createdAt: new Date("2026-01-01T00:00:00Z"), updatedAt: new Date("2026-01-01T00:00:00Z"),
 };
 
-// Every `vehiculo` column (schema.ts:373-400).
+// Every `vehiculo` column (the `vehiculo` table in schema.ts).
 const VEHICULO: Vehiculo = {
   id: "v1", clienteId: "c1", make: "Toyota", model: "Corolla", year: 2020,
   plate: "ABC123", deactivatedAt: null,

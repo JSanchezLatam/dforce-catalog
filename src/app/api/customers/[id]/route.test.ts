@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 
-import type { Cliente } from "@/shared/db/schema";
+import type { Cliente, Vehiculo } from "@/shared/db/schema";
 import { ClienteNotFoundError } from "@/modules/customers/service";
 import { handleUpdateCliente, PATCH } from "./route";
 
@@ -11,6 +11,29 @@ function requestWith(body: unknown, role = "tecnico") {
     headers: { "x-user-id": "user-1", "x-user-role": role, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+/** A stored `vehiculo` row with EVERY column, so a fixture never hides behind a cast. */
+function storedVehiculo(overrides: Partial<Vehiculo> = {}): Vehiculo {
+  return {
+    id: "v1",
+    clienteId: "c1",
+    plate: "ABC123",
+    make: null,
+    model: null,
+    year: null,
+    chasis: null,
+    colorPrimario: null,
+    colorSecundario: null,
+    estilo: null,
+    motor: null,
+    numeroUnidad: null,
+    placaRenovacionMes: null,
+    seguroVence: null,
+    deactivatedAt: null,
+    createdAt: new Date(),
+    ...overrides,
+  };
 }
 
 const current = {
@@ -28,12 +51,7 @@ const current = {
 
 describe("permanent vehicle deletion is administrador-only", () => {
   /** The customer must actually OWN v1, or the reconcile rejects it as foreign (400) before any gate is observable. */
-  const owningV1 = {
-    ...current,
-    vehicles: [
-      { id: "v1", clienteId: "c1", plate: "ABC123", make: null, model: null, year: null, deactivatedAt: null, createdAt: new Date() },
-    ],
-  } as typeof current;
+  const owningV1 = { ...current, vehicles: [storedVehiculo()] };
 
   /**
    * `updateCliente` reaches `deps.update` ONLY when the patch carries no
@@ -363,12 +381,7 @@ describe("PATCH /api/customers/[id] — a malformed `active` (R20)", () => {
 });
 
 describe("internal renewal fields are administrador-only on PATCH", () => {
-  const owningV1 = {
-    ...current,
-    vehicles: [
-      { id: "v1", clienteId: "c1", plate: "ABC123", make: null, model: null, year: null, deactivatedAt: null, createdAt: new Date() },
-    ],
-  } as typeof current;
+  const owningV1 = { ...current, vehicles: [storedVehiculo()] };
   const transaction = vi.fn();
   const database = {
     transaction: async <T>(fn: unknown): Promise<T> => {
