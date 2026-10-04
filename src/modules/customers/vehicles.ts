@@ -17,6 +17,7 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/shared/db/client";
 import { cliente, ordenServicio, vehiculo, type Vehiculo } from "@/shared/db/schema";
 import { ClienteValidationError } from "./validation";
+import type { VehiculoMotor } from "./vehicle-options";
 
 /**
  * `deactivated` is the activation state the CALLER asks for, and it is
@@ -41,6 +42,21 @@ export type VehiculoInput = {
   make?: string;
   model?: string;
   year?: number;
+  chasis?: string;
+  colorPrimario?: string;
+  colorSecundario?: string;
+  estilo?: string;
+  motor?: VehiculoMotor;
+  numeroUnidad?: string;
+  /**
+   * INTERNAL fields (need `vencimientos.read`), TRI-STATE on purpose, unlike
+   * every field above: `undefined` = the caller did not send it, so the stored
+   * value is left alone; `null` = clear it; a value = set it. The public
+   * columns round-trip through `CustomerForm` and keep `?? null`; these two are
+   * never in a technician's form, so omitting one must never wipe it.
+   */
+  placaRenovacionMes?: number | null;
+  seguroVence?: string | null;
   deactivated?: boolean;
   deleted?: boolean;
 };
@@ -59,6 +75,68 @@ export type VehiculoPlan = {
  * hand-written SQL (D5).
  */
 export type TxLike = Pick<typeof db, "insert" | "update" | "delete" | "select">;
+
+/**
+ * The vehicle as every caller WITHOUT `vencimientos.read` may see it: an
+ * ALLOWLIST, so a column added to `vehiculo` later is hidden until someone
+ * names it here. `Omit` would do the opposite. The renewal month and insurance
+ * expiry are deliberately absent.
+ */
+export type PublicVehiculo = Pick<
+  Vehiculo,
+  | "id"
+  | "clienteId"
+  | "make"
+  | "model"
+  | "year"
+  | "plate"
+  | "chasis"
+  | "colorPrimario"
+  | "colorSecundario"
+  | "estilo"
+  | "motor"
+  | "numeroUnidad"
+  | "deactivatedAt"
+  | "createdAt"
+>;
+
+export function toPublicVehiculo(v: Vehiculo): PublicVehiculo {
+  return {
+    id: v.id,
+    clienteId: v.clienteId,
+    make: v.make,
+    model: v.model,
+    year: v.year,
+    plate: v.plate,
+    chasis: v.chasis,
+    colorPrimario: v.colorPrimario,
+    colorSecundario: v.colorSecundario,
+    estilo: v.estilo,
+    motor: v.motor,
+    numeroUnidad: v.numeroUnidad,
+    deactivatedAt: v.deactivatedAt,
+    createdAt: v.createdAt,
+  };
+}
+
+/**
+ * True when any vehicle in a RAW request body carries an internal renewal key.
+ * `!== undefined`, so `null` counts: a `null` is an instruction to clear the
+ * stored value, and a caller without `vencimientos.read` must not be able to
+ * give it. Reads the raw body, before validation, the same way the route's
+ * `asksForVehicleDeletion` does: the grant decides whether the request is
+ * considered at all.
+ */
+export function sendsInternalVehiculoFields(body: unknown): boolean {
+  const vehicles = (body as { vehicles?: unknown } | null)?.vehicles;
+  return (
+    Array.isArray(vehicles) &&
+    vehicles.some((v) => {
+      const item = v as { placaRenovacionMes?: unknown; seguroVence?: unknown } | null;
+      return item?.placaRenovacionMes !== undefined || item?.seguroVence !== undefined;
+    })
+  );
+}
 
 /** D3 — the one active-vehicle filter every read path must apply. */
 export function activeVehiculoFilter(): SQL {
@@ -252,6 +330,18 @@ export function planVehiculoReconcile(existing: Vehiculo[], incoming: VehiculoIn
  * one; the extra predicate costs nothing and turns a cross-customer write into
  * zero affected rows.
  */
+/** The public descriptive columns: `CustomerForm` round-trips them, so omitted means null. */
+function descriptiveColumns(v: VehiculoInput) {
+  return {
+    chasis: v.chasis ?? null,
+    colorPrimario: v.colorPrimario ?? null,
+    colorSecundario: v.colorSecundario ?? null,
+    estilo: v.estilo ?? null,
+    motor: v.motor ?? null,
+    numeroUnidad: v.numeroUnidad ?? null,
+  };
+}
+
 export async function applyVehiculoPlan(tx: TxLike, clienteId: string, plan: VehiculoPlan): Promise<void> {
   if (plan.inserts.length > 0) {
     await tx.insert(vehiculo).values(
@@ -261,6 +351,9 @@ export async function applyVehiculoPlan(tx: TxLike, clienteId: string, plan: Veh
         make: v.make ?? null,
         model: v.model ?? null,
         year: v.year ?? null,
+        ...descriptiveColumns(v),
+        placaRenovacionMes: v.placaRenovacionMes ?? null,
+        seguroVence: v.seguroVence ?? null,
       })),
     );
   }
@@ -278,6 +371,11 @@ export async function applyVehiculoPlan(tx: TxLike, clienteId: string, plan: Veh
         make: v.make ?? null,
         model: v.model ?? null,
         year: v.year ?? null,
+        ...descriptiveColumns(v),
+        // Tri-state: only a key the caller sent reaches the SET, so omitting
+        // one can never wipe the stored value (`null` is the explicit clear).
+        ...(v.placaRenovacionMes !== undefined ? { placaRenovacionMes: v.placaRenovacionMes } : {}),
+        ...(v.seguroVence !== undefined ? { seguroVence: v.seguroVence } : {}),
         ...(v.deactivated === false ? { deactivatedAt: null } : {}),
       })
       .where(and(eq(vehiculo.clienteId, clienteId), eq(vehiculo.id, v.id!)));

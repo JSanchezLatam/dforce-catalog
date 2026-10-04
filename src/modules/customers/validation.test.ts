@@ -207,3 +207,77 @@ describe("validateVehiculoInput — permanent delete", () => {
     expect(() => validateVehiculoInput({ id: "v1", deleted: false })).toThrow(ClienteValidationError);
   });
 });
+
+describe("validateVehiculoInput — descriptive and internal vehicle fields", () => {
+  const errorsOf = (input: unknown) => {
+    try {
+      validateVehiculoInput(input);
+    } catch (err) {
+      if (err instanceof ClienteValidationError) return err.errors;
+      throw err;
+    }
+    return {};
+  };
+
+  it("round-trips chasis, colors, estilo, motor and unit number, trimmed", () => {
+    expect(
+      validateVehiculoInput({
+        plate: "ABC-123",
+        chasis: " 1HGCM82633A004352 ",
+        colorPrimario: "Rojo",
+        colorSecundario: "Negro",
+        estilo: "SUV",
+        motor: "hibrido",
+        numeroUnidad: "12",
+      }),
+    ).toEqual({
+      plate: "ABC-123",
+      chasis: "1HGCM82633A004352",
+      colorPrimario: "Rojo",
+      colorSecundario: "Negro",
+      estilo: "SUV",
+      motor: "hibrido",
+      numeroUnidad: "12",
+    });
+  });
+
+  it("rejects an estilo outside the approved list", () => {
+    expect(errorsOf({ plate: "A", estilo: "Cohete" })).toEqual({ estilo: "El estilo no es válido" });
+  });
+
+  it("rejects a motor outside combustion, electrico, hibrido", () => {
+    expect(errorsOf({ plate: "A", motor: "diesel" })).toEqual({ motor: "El motor no es válido" });
+  });
+
+  it("treats a blank estilo or motor as not chosen", () => {
+    const out = validateVehiculoInput({ plate: "A", estilo: "", motor: "" });
+    expect(out).not.toHaveProperty("estilo");
+    expect(out).not.toHaveProperty("motor");
+  });
+
+  it.each([0, 13, 1.5, "3"])("rejects renewal month %j with a Spanish error", (month) => {
+    expect(errorsOf({ plate: "A", placaRenovacionMes: month })).toEqual({
+      placaRenovacionMes: "El mes de renovación tiene que ser un número entre 1 y 12",
+    });
+  });
+
+  it.each([1, 12])("accepts renewal month %i", (month) => {
+    expect(validateVehiculoInput({ plate: "A", placaRenovacionMes: month }).placaRenovacionMes).toBe(month);
+  });
+
+  it("keeps the internal fields tri-state: omitted stays absent, null stays null", () => {
+    const omitted = validateVehiculoInput({ plate: "A" });
+    expect(omitted).not.toHaveProperty("placaRenovacionMes");
+    expect(omitted).not.toHaveProperty("seguroVence");
+    const cleared = validateVehiculoInput({ plate: "A", placaRenovacionMes: null, seguroVence: null });
+    expect(cleared.placaRenovacionMes).toBeNull();
+    expect(cleared.seguroVence).toBeNull();
+  });
+
+  it("accepts a real insurance date and rejects an impossible or malformed one", () => {
+    expect(validateVehiculoInput({ plate: "A", seguroVence: "2026-11-15" }).seguroVence).toBe("2026-11-15");
+    for (const bad of ["2026-02-30", "15/11/2026", "2026-13-01", 20261115]) {
+      expect(errorsOf({ plate: "A", seguroVence: bad })).toEqual({ seguroVence: "La fecha de vencimiento del seguro no es válida" });
+    }
+  });
+});

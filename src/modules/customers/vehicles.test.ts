@@ -10,6 +10,8 @@ import {
   listVehiculosByCliente,
   planVehiculoReconcile,
   platesSubquery,
+  sendsInternalVehiculoFields,
+  toPublicVehiculo,
   type TxLike,
   type VehiculoInput,
 } from "./vehicles";
@@ -22,6 +24,14 @@ function vehiculo(overrides: Partial<Vehiculo> = {}): Vehiculo {
     model: null,
     year: null,
     plate: "ABC111",
+    chasis: null,
+    colorPrimario: null,
+    colorSecundario: null,
+    estilo: null,
+    motor: null,
+    numeroUnidad: null,
+    placaRenovacionMes: null,
+    seguroVence: null,
     deactivatedAt: null,
     createdAt: new Date("2026-01-01"),
     ...overrides,
@@ -247,6 +257,64 @@ describe("applyVehiculoPlan (D5)", () => {
   });
 });
 
+describe("applyVehiculoPlan — internal fields are tri-state, public columns keep ?? null", () => {
+  const update = (v: VehiculoInput) => ({ inserts: [], updates: [v], deactivate: [], delete: [] });
+
+  it("leaves both internal columns out of SET when the plan does not carry them", async () => {
+    const { tx, sets } = recordingTx();
+    await applyVehiculoPlan(tx, "c1", update({ id: "v1", plate: "ABC222", colorPrimario: "Rojo" }));
+    expect(sets[0]).not.toHaveProperty("placaRenovacionMes");
+    expect(sets[0]).not.toHaveProperty("seguroVence");
+  });
+
+  it("clears an internal column when the plan carries null", async () => {
+    const { tx, sets } = recordingTx();
+    await applyVehiculoPlan(tx, "c1", update({ id: "v1", plate: "ABC222", placaRenovacionMes: null, seguroVence: null }));
+    expect(sets[0]).toMatchObject({ placaRenovacionMes: null, seguroVence: null });
+  });
+
+  it("sets an internal column when the plan carries a value, and only that one", async () => {
+    const { tx, sets } = recordingTx();
+    await applyVehiculoPlan(tx, "c1", update({ id: "v1", plate: "ABC222", seguroVence: "2026-11-15" }));
+    expect(sets[0]).toMatchObject({ seguroVence: "2026-11-15" });
+    expect(sets[0]).not.toHaveProperty("placaRenovacionMes");
+  });
+
+  it("writes the public descriptive columns as null when omitted, because the form round-trips them", async () => {
+    const { tx, sets } = recordingTx();
+    await applyVehiculoPlan(tx, "c1", update({ id: "v1", plate: "ABC222" }));
+    expect(sets[0]).toMatchObject({
+      chasis: null,
+      colorPrimario: null,
+      colorSecundario: null,
+      estilo: null,
+      motor: null,
+      numeroUnidad: null,
+    });
+    const { tx: tx2, sets: sets2 } = recordingTx();
+    await applyVehiculoPlan(tx2, "c1", update({ id: "v1", plate: "ABC222", chasis: "XYZ", motor: "electrico" }));
+    expect(sets2[0]).toMatchObject({ chasis: "XYZ", motor: "electrico" });
+  });
+
+  it("inserts the new columns, with null for any the caller did not send", async () => {
+    const inserted: Record<string, unknown>[][] = [];
+    const tx = {
+      insert: () => ({
+        values: async (rows: Record<string, unknown>[]) => {
+          inserted.push(rows);
+        },
+      }),
+    } as unknown as TxLike;
+    await applyVehiculoPlan(tx, "c1", {
+      inserts: [{ plate: "NEW1", estilo: "SUV", seguroVence: "2026-11-15" }],
+      updates: [],
+      deactivate: [],
+      delete: [],
+    });
+    expect(inserted[0][0]).toMatchObject({ estilo: "SUV", seguroVence: "2026-11-15", chasis: null, placaRenovacionMes: null });
+  });
+});
+
 describe("listVehiculosByCliente (R16, restore)", () => {
   it("defaults to active-only", async () => {
     const queryFn = vi.fn().mockResolvedValue([]);
@@ -432,5 +500,63 @@ describe("createVehiculo (D1/D2 — single insert, never the reconcile)", () => 
     const inserted = vehiculo({ id: "v-new", plate: "NEW111" });
     const { tx } = countingTx(threeActive, inserted);
     await expect(createVehiculo("c1", { plate: "NEW111" }, { tx })).resolves.toBe(inserted);
+  });
+});
+
+describe("toPublicVehiculo — allowlist", () => {
+  const row = vehiculo({
+    id: "v9",
+    make: "Kia",
+    chasis: "CH-1",
+    colorPrimario: "Rojo",
+    estilo: "SUV",
+    motor: "hibrido",
+    numeroUnidad: "12",
+    placaRenovacionMes: 11,
+    seguroVence: "2031-07-23",
+  });
+
+  it("keeps the identity and descriptive fields", () => {
+    expect(toPublicVehiculo(row)).toMatchObject({
+      id: "v9",
+      clienteId: "c1",
+      make: "Kia",
+      plate: "ABC111",
+      chasis: "CH-1",
+      colorPrimario: "Rojo",
+      estilo: "SUV",
+      motor: "hibrido",
+      numeroUnidad: "12",
+    });
+  });
+
+  it("drops the internal fields and their values", () => {
+    const out = toPublicVehiculo(row);
+    expect(out).not.toHaveProperty("placaRenovacionMes");
+    expect(out).not.toHaveProperty("seguroVence");
+    expect(JSON.stringify(out)).not.toContain("2031-07-23");
+  });
+
+  it("drops a column it was never told about, so a later column stays hidden by default", () => {
+    const out = toPublicVehiculo({ ...row, futureSecret: "boom" } as typeof row);
+    expect(out).not.toHaveProperty("futureSecret");
+  });
+});
+
+describe("sendsInternalVehiculoFields — reads the RAW body", () => {
+  it("is true when any vehicle carries either key, null included", () => {
+    expect(sendsInternalVehiculoFields({ vehicles: [{ plate: "A" }, { plate: "B", placaRenovacionMes: 3 }] })).toBe(true);
+    expect(sendsInternalVehiculoFields({ vehicles: [{ seguroVence: "2026-11-15" }] })).toBe(true);
+    expect(sendsInternalVehiculoFields({ vehicles: [{ placaRenovacionMes: null }] })).toBe(true);
+    expect(sendsInternalVehiculoFields({ vehicles: [{ seguroVence: null }] })).toBe(true);
+  });
+
+  it("is false when no vehicle carries a key, or the body is not shaped like one", () => {
+    expect(sendsInternalVehiculoFields({ vehicles: [{ plate: "A", colorPrimario: "Rojo" }] })).toBe(false);
+    expect(sendsInternalVehiculoFields({ vehicles: [{ placaRenovacionMes: undefined }] })).toBe(false);
+    expect(sendsInternalVehiculoFields({ name: "x" })).toBe(false);
+    expect(sendsInternalVehiculoFields({ vehicles: "nope" })).toBe(false);
+    expect(sendsInternalVehiculoFields({ vehicles: [null, 3] })).toBe(false);
+    expect(sendsInternalVehiculoFields(null)).toBe(false);
   });
 });

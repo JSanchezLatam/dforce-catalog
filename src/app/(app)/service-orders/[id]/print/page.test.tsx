@@ -74,7 +74,9 @@ const CLIENTE: Cliente = {
 // Every `vehiculo` column (schema.ts:373-400).
 const VEHICULO: Vehiculo = {
   id: "v1", clienteId: "c1", make: "Toyota", model: "Corolla", year: 2020,
-  plate: "ABC123", deactivatedAt: null, createdAt: new Date("2026-01-01T00:00:00Z"),
+  plate: "ABC123", deactivatedAt: null,
+  chasis: null, colorPrimario: null, colorSecundario: null, estilo: null, motor: null,
+  numeroUnidad: null, placaRenovacionMes: null, seguroVence: null, createdAt: new Date("2026-01-01T00:00:00Z"),
 };
 
 function renderPage() {

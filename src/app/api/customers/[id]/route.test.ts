@@ -361,3 +361,57 @@ describe("PATCH /api/customers/[id] — a malformed `active` (R20)", () => {
     expect(response.status).toBe(200);
   });
 });
+
+describe("internal renewal fields are administrador-only on PATCH", () => {
+  const owningV1 = {
+    ...current,
+    vehicles: [
+      { id: "v1", clienteId: "c1", plate: "ABC123", make: null, model: null, year: null, deactivatedAt: null, createdAt: new Date() },
+    ],
+  } as typeof current;
+  const transaction = vi.fn();
+  const database = {
+    transaction: async <T>(fn: unknown): Promise<T> => {
+      transaction(fn);
+      return current.cliente as T;
+    },
+  };
+  const patch = (vehicle: Record<string, unknown>, role = "tecnico") =>
+    handleUpdateCliente(requestWith({ vehicles: [{ id: "v1", plate: "ABC123", ...vehicle }] }, role), "c1", {
+      getById: async () => owningV1,
+      database,
+    });
+
+  it.each([
+    ["a month", { placaRenovacionMes: 3 }],
+    ["an insurance date", { seguroVence: "2026-11-15" }],
+    ["a null month (would clear the stored value)", { placaRenovacionMes: null }],
+    ["a null insurance date (would clear the stored value)", { seguroVence: null }],
+  ])("refuses a tecnico sending %s with 403 and persists nothing", async (_label, vehicle) => {
+    transaction.mockClear();
+    const response = await patch(vehicle);
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "Forbidden" });
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it("refuses before validation: a tecnico's malformed month is still a 403, not a 400", async () => {
+    transaction.mockClear();
+    const response = await patch({ placaRenovacionMes: 99 });
+    expect(response.status).toBe(403);
+  });
+
+  it("lets a tecnico save a vehicle that carries no internal key", async () => {
+    transaction.mockClear();
+    const response = await patch({ colorPrimario: "Rojo" });
+    expect(response.status).toBe(200);
+    expect(transaction).toHaveBeenCalled();
+  });
+
+  it("lets an administrador send them, null included", async () => {
+    transaction.mockClear();
+    const response = await patch({ placaRenovacionMes: null, seguroVence: "2026-11-15" }, "administrador");
+    expect(response.status).toBe(200);
+    expect(transaction).toHaveBeenCalled();
+  });
+});

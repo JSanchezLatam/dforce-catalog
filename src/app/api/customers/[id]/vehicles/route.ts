@@ -7,6 +7,7 @@ import { ClienteValidationError, validateVehiculoInput } from "@/modules/custome
 import {
   createVehiculo as createVehiculoService,
   listVehiculosByCliente as listVehiculosByClienteQuery,
+  toPublicVehiculo,
 } from "@/modules/customers/vehicles";
 
 export type ListVehiculosByClienteDeps = {
@@ -24,11 +25,12 @@ export type CreateVehiculoRouteDeps = {
  * `deactivated`, and it permits `plate: ""` when `deleted === true` — the
  * plate-less row migration 0013's pre-flight guard aborts on. A single-insert
  * endpoint has no meaning for any of the three, so they are REFUSED rather
- * than dropped, matching `api/customers/[id]/route.ts`'s refusal of a
- * non-boolean `active`: this repo answers a body it does not understand
+ * than dropped (the two renewal fields included: this route has no gate for
+ * them, and a `null` must not read as "clear" to anyone), matching
+ * `api/customers/[id]/route.ts`'s refusal of a non-boolean `active`: this repo answers a body it does not understand
  * instead of quietly writing something else.
  */
-const COLLECTION_ONLY_FIELDS = ["id", "deleted", "deactivated"] as const;
+const COLLECTION_ONLY_FIELDS = ["id", "deleted", "deactivated", "placaRenovacionMes", "seguroVence"] as const;
 
 /**
  * C4/design.md D2 — the gap explore.md and the proposal missed: the vehicle
@@ -49,7 +51,8 @@ export async function handleListVehiculosByCliente(
 
   const list = deps.listVehiculosByCliente ?? listVehiculosByClienteQuery;
   const vehicles = await list(id);
-  return NextResponse.json({ vehicles });
+  // Public shape for every role: the renewal fields are never served here.
+  return NextResponse.json({ vehicles: vehicles.map(toPublicVehiculo) });
 }
 
 export async function GET(
@@ -146,7 +149,7 @@ export async function handleCreateVehiculo(
     ...(input.model !== undefined ? { model: input.model } : {}),
     ...(input.year !== undefined ? { year: input.year } : {}),
   });
-  return NextResponse.json({ vehiculo }, { status: 201 });
+  return NextResponse.json({ vehiculo: toPublicVehiculo(vehiculo) }, { status: 201 });
 }
 
 export async function POST(

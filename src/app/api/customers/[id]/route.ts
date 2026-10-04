@@ -14,6 +14,7 @@ import {
   type UpdateClienteDeps,
 } from "@/modules/customers/service";
 import { ClienteValidationError } from "@/modules/customers/validation";
+import { sendsInternalVehiculoFields } from "@/modules/customers/vehicles";
 
 /** R20 — the route's own seam, extending the service's with the two activation calls. */
 export type ClienteRouteDeps = UpdateClienteDeps & {
@@ -56,6 +57,12 @@ export async function handleUpdateCliente(
   // gains `customers.deleteVehicle`, this ordering stops mattering for it —
   // the mutual-exclusion check still runs, just next.
   if (asksForVehicleDeletion(body) && !can(user, "customers.deleteVehicle")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Same shape of gate for the renewal month and insurance expiry: refused, not
+  // stripped, because a `null` is an instruction to clear a stored value.
+  if (sendsInternalVehiculoFields(body) && !can(user, "vencimientos.read")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
