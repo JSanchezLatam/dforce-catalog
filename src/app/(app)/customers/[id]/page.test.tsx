@@ -25,8 +25,14 @@ vi.mock("next/navigation", () => ({ notFound, useRouter: () => ({ refresh }) }))
 vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders: vi.fn(async () => ({ id: "u1", role: "tecnico" })) }));
 const can = vi.hoisted(() => vi.fn<(user: unknown, action: string) => boolean>(() => true));
 vi.mock("@/modules/auth/policy", () => ({ can }));
+// Records the props the server hands across the RSC boundary: what is passed
+// here is what lands in the browser's payload.
+const triggerProps = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/customers/CustomerFormTrigger", () => ({
-  CustomerFormTrigger: ({ triggerLabel }: { triggerLabel?: React.ReactNode }) => <button>{triggerLabel}</button>,
+  CustomerFormTrigger: (props: { triggerLabel?: React.ReactNode }) => {
+    triggerProps(props);
+    return <button>{props.triggerLabel}</button>;
+  },
 }));
 
 const getClienteById = vi.hoisted(() => vi.fn());
@@ -35,7 +41,12 @@ vi.mock("@/modules/customers/queries", () => ({ getClienteById }));
 import CustomerDetailPage from "./page";
 
 function vehiculo(id: string, plate: string, deactivatedAt: Date | null) {
-  return { id, clienteId: "c1", plate, make: "Toyota", model: "Corolla", year: 2020, deactivatedAt, createdAt: new Date("2026-01-01") };
+  return {
+    id, clienteId: "c1", plate, make: "Toyota", model: "Corolla", year: 2020,
+    chasis: null, colorPrimario: null, colorSecundario: null, estilo: null, motor: null, numeroUnidad: null,
+    placaRenovacionMes: null, seguroVence: null,
+    deactivatedAt, createdAt: new Date("2026-01-01"),
+  };
 }
 
 function renderPage() {
@@ -199,5 +210,48 @@ describe("CustomerDetailPage — read gate", () => {
     render(await renderPage());
 
     expect(screen.getByText("No tenés permiso para ver esta página.")).toBeInTheDocument();
+  });
+});
+
+/**
+ * `CustomerFormTrigger` is a client component: whatever this page passes it is
+ * serialized into the RSC payload a technician's browser receives. The full row
+ * would carry the two internal columns there even though the form never shows
+ * them, so the page has to hand a viewer without `vencimientos.read` the public
+ * shape. The sentinels are values no legitimate field would hold.
+ */
+describe("CustomerDetailPage — internal vehicle fields and the RSC payload", () => {
+  const POISONED = { ...vehiculo("v1", "ABC123", null), placaRenovacionMes: 7, seguroVence: "2031-12-24" };
+
+  beforeEach(() => {
+    triggerProps.mockClear();
+    getClienteById.mockResolvedValue({
+      cliente: { id: "c1", name: "Ana Gómez", phone: "50761111111", email: null, createdAt: new Date("2026-01-01") },
+      orders: [],
+      vehicles: [POISONED],
+    });
+  });
+
+  it("hands a viewer without vencimientos.read rows that carry neither internal field", async () => {
+    can.mockImplementation((_user, action) => action !== "vencimientos.read");
+    render(await renderPage());
+
+    const props = triggerProps.mock.calls[0][0];
+    expect(props.canEditInternal).toBe(false);
+    expect(props.vehicles).toHaveLength(1);
+    expect(props.vehicles[0]).not.toHaveProperty("placaRenovacionMes");
+    expect(props.vehicles[0]).not.toHaveProperty("seguroVence");
+    expect(JSON.stringify(props)).not.toContain("2031-12-24");
+    // The public columns still arrive: the form round-trips them.
+    expect(props.vehicles[0]).toMatchObject({ id: "v1", plate: "ABC123", make: "Toyota" });
+  });
+
+  it("hands a viewer WITH vencimientos.read the full rows and canEditInternal", async () => {
+    can.mockReturnValue(true);
+    render(await renderPage());
+
+    const props = triggerProps.mock.calls[0][0];
+    expect(props.canEditInternal).toBe(true);
+    expect(props.vehicles[0]).toMatchObject({ placaRenovacionMes: 7, seguroVence: "2031-12-24" });
   });
 });
