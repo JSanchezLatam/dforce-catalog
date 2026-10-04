@@ -314,6 +314,20 @@ describe("normalizeDocumento — Cédula / RUC is free text, trimmed, capped at 
   it("counts the trimmed length, not the raw one", () => {
     expect(normalizeDocumento(` ${"a".repeat(30)} `)).toBe("a".repeat(30));
   });
+
+  // A PATCH of `12345678` used to read as "blank" and silently clear a stored
+  // value. Only a string, null or undefined is a legitimate wire value.
+  it.each([12345678, true, {}, ["8-1"]])("rejects the non-string %j instead of clearing the value", (raw) => {
+    try {
+      normalizeDocumento(raw);
+      throw new Error("expected normalizeDocumento to throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ClienteValidationError);
+      expect((err as ClienteValidationError).errors).toEqual({
+        documentoIdentidad: "La cédula / RUC tiene que ser texto",
+      });
+    }
+  });
 });
 
 describe("validateClienteInput — documentoIdentidad", () => {

@@ -345,11 +345,6 @@ describe("updateCliente (R16, R18)", () => {
   });
 });
 
-/**
- * R20 (customer-deactivation) — deactivation is REVERSIBLE and destroys
- * nothing. These pin both halves: the timestamp, and the promise that no
- * vehicle or service order is touched on the way.
- */
 describe("documentoIdentidad (Cédula / RUC)", () => {
   const current = {
     cliente: { id: "c1", name: "Juan", phone: "+525512345678", documentoIdentidad: "8-999" } as unknown as Cliente,
@@ -394,6 +389,11 @@ describe("documentoIdentidad (Cédula / RUC)", () => {
   });
 });
 
+/**
+ * R20 (customer-deactivation) — deactivation is REVERSIBLE and destroys
+ * nothing. These pin both halves: the timestamp, and the promise that no
+ * vehicle or service order is touched on the way.
+ */
 describe("deactivateCliente / reactivateCliente (R20)", () => {
   type SetDeactivatedAt = (id: string, at: Date | null) => Promise<Cliente | undefined>;
   const CLIENTE = { id: "c1", name: "Juan", phone: "+525512345678" } as unknown as Cliente;
