@@ -78,7 +78,7 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 - [x] 5.4 44x44 on dialog buttons and the price input; success toast on mark.
 - [x] 5.5 Mutation-verify 5.1-5.3 (drop the opt-out check, mark on open, concatenate without encoding).
 - [x] 5.7 Carry-over from PR 4 review: a failing badge query degrades the `(app)` layout to no badge and is reported to Sentry (`nav-badges.ts`).
-- [ ] 5.6 Browser from another machine over HTTP: the link opens `wa.me` with the message intact; dialog is a portal, so read the console for hydration errors.
+- [x] 5.6 Browser from another machine over HTTP: the link opens `wa.me` with the message intact; dialog is a portal, so read the console for hydration errors.
 
 ## Spec archive notes
 
