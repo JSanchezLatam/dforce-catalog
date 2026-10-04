@@ -43,6 +43,8 @@ export const ROUTE_GUARDS: Record<
   // listed — this route cannot delete, and it refuses a `deleted` field
   // outright.
   "/api/customers/[id]/vehicles": { GET: "customers.read", POST: "customers.write" },
+  // "Contactado" mark on a due renewal (vehicle-details-and-renewals).
+  "/api/vencimientos/contact": { POST: "vencimientos.contact" },
   "/api/service-orders": { POST: "service-orders.write" },
   "/api/service-orders/[id]": { PATCH: "service-orders.write" },
   "/api/inventory-sync/manual": { GET: "sync.manual", POST: "sync.manual" },

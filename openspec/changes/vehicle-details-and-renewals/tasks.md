@@ -53,14 +53,14 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU3: Due module and contact mark (PR 3)
 
-- [ ] 3.1 RED `shared/datetime.test.ts`: `toWorkshopDateKey(2026-10-01T03:00:00Z)` is `2026-09-30`. GREEN `toWorkshopDateKey` (`en-CA`, `America/Panama`).
-- [ ] 3.2 RED `due.test.ts`: Oct gives 10 and 11 due, 9 and 8 overdue, 12 and 7 not (month 3 waits for 2027-03); Jan 2027 gives 11 and 12 overdue as 2026 periods, 10 not; Dec gives 12 and 1; Nov→Dec; insurance 2026-11-03 due, 2026-11-04 not, 2026-09-01 overdue; contacted key hides; new expiry or next year resurfaces; no month never due. GREEN `vencimientos/due.ts` (string comparison, injected `todayKey`).
-- [ ] 3.3 `schema.ts`: `vehiculo_contacto` with pgEnum `vencimiento_kind`, composite PK, cascade, `contacted_by` set null. `drizzle-kit generate --name vehiculo_contacto` (0022).
-- [ ] 3.4 RED `vencimientos.contact` in `policy.ts` and a guard row for `POST /api/vencimientos/contact`. GREEN.
-- [ ] 3.5 RED service tests (injected seam): insert uses `onConflictDoNothing`; `getDueVencimientos(now)` returns the badge count equal to its rows. GREEN `queries.ts`, `service.ts`. Amend the `vehicles.ts` header.
-- [ ] 3.6 RED route tests: no `vencimientos.contact` 403; bad `periodKey` for its kind 400; missing vehicle 404; duplicate 200. GREEN `src/app/api/vencimientos/contact/route.ts`.
-- [ ] 3.7 RED e2e `src/e2e/vencimientos.e2e.test.ts`: candidates exclude deactivated vehicles and customers; a double insert leaves one row; a contacted item drops out. GREEN: fix real-SQL defects.
-- [ ] 3.8 Mutation-verify 3.1-3.7 (drop `onConflictDoNothing`, shift the Dec wrap, parse a `Date`).
+- [x] 3.1 RED `shared/datetime.test.ts`: `toWorkshopDateKey(2026-10-01T03:00:00Z)` is `2026-09-30`. GREEN `toWorkshopDateKey` (`en-CA`, `America/Panama`).
+- [x] 3.2 RED `due.test.ts`: Oct gives 10 and 11 due, 9 and 8 overdue, 12 and 7 not (month 3 waits for 2027-03); Jan 2027 gives 11 and 12 overdue as 2026 periods, 10 not; Dec gives 12 and 1; Nov→Dec; insurance 2026-11-03 due, 2026-11-04 not, 2026-09-01 overdue; contacted key hides; new expiry or next year resurfaces; no month never due. GREEN `vencimientos/due.ts` (string comparison, injected `todayKey`).
+- [x] 3.3 `schema.ts`: `vehiculo_contacto` with pgEnum `vencimiento_kind`, composite PK, cascade, `contacted_by` set null. `drizzle-kit generate --name vehiculo_contacto` (0022).
+- [x] 3.4 RED `vencimientos.contact` in `policy.ts` and a guard row for `POST /api/vencimientos/contact`. GREEN.
+- [x] 3.5 RED service tests (injected seam): insert uses `onConflictDoNothing`; `getDueVencimientos(now)` returns the badge count equal to its rows. GREEN `queries.ts`, `service.ts`. Amend the `vehicles.ts` header.
+- [x] 3.6 RED route tests: no `vencimientos.contact` 403; bad `periodKey` for its kind 400; missing vehicle 404; duplicate 200. GREEN `src/app/api/vencimientos/contact/route.ts`.
+- [x] 3.7 RED e2e `src/e2e/vencimientos.e2e.test.ts`: candidates exclude deactivated vehicles and customers; a double insert leaves one row; a contacted item drops out. GREEN: fix real-SQL defects.
+- [x] 3.8 Mutation-verify 3.1-3.7 (drop `onConflictDoNothing`, shift the Dec wrap, parse a `Date`).
 
 ## WU4: Page, nav item, badge (PR 4)
 

@@ -10,6 +10,11 @@
  * `vehiculo`, joined one-to-one there rather than correlated through this
  * module — see the comment on `vehiculoPlateExists` for why that path does
  * not call it.
+ *
+ * `vehicle-details-and-renewals` adds a THIRD read-only import site:
+ * `vencimientos/queries.ts` reads `vehiculo` joined to `cliente` and
+ * `vehiculo_contacto` for the due list. It never writes the table; every
+ * `vehiculo` write still goes through here.
  */
 import { and, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
