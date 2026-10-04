@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="es-PA" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recepción de la orden — mockup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+<script>
+  // Tokens copied from src/app/globals.css (.dark). Nothing invented.
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          background: "var(--background)", foreground: "var(--foreground)",
+          card: "var(--card)", "card-foreground": "var(--card-foreground)",
+          primary: "var(--primary)", "primary-foreground": "var(--primary-foreground)",
+          muted: "var(--muted)", "muted-foreground": "var(--muted-foreground)",
+          accent: "var(--accent)", destructive: "var(--destructive)",
+          "destructive-foreground": "var(--destructive-foreground)",
+          warning: "var(--warning)", "warning-foreground": "var(--warning-foreground)",
+          success: "var(--success)", border: "var(--border)", input: "var(--input)", ring: "var(--ring)",
+        },
+        borderRadius: { lg: "0.5rem", md: "0.4rem", xl: "0.7rem" },
+      },
+    },
+  };
+</script>
+<style>
+  :root {
+    --background: hsl(240 10% 3.9%); --foreground: hsl(0 0% 98%);
+    --card: hsl(240 10% 5.9%); --card-foreground: hsl(0 0% 98%);
+    --primary: hsl(0 0% 98%); --primary-foreground: hsl(240 5.9% 10%);
+    --muted: hsl(240 3.7% 15.9%); --muted-foreground: hsl(240 5% 64.9%);
+    --accent: hsl(240 3.7% 15.9%);
+    --destructive: hsl(0 62.8% 30.6%); --destructive-foreground: hsl(0 0% 98%);
+    --warning: hsl(32 95% 44%); --warning-foreground: hsl(0 0% 100%);
+    --success: hsl(142 71% 45%);
+    --border: hsl(240 3.7% 15.9%); --input: hsl(240 3.7% 15.9%); --ring: hsl(240 4.9% 83.9%);
+  }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  [data-lucide] { width: 16px; height: 16px; flex-shrink: 0; }
+  .input { height: 2rem; width: 100%; border-radius: .5rem; border: 1px solid var(--input); background: hsl(240 3.7% 15.9% / .3); padding: 0 .625rem; font-size: .875rem; color: var(--foreground); }
+  .input::placeholder { color: var(--muted-foreground); }
+  .input-44 { height: 2.75rem; }
+  select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23a1a1aa' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .5rem center; padding-right: 2rem; }
+  textarea.input { height: 4rem; padding: .375rem .625rem; }
+  .label { font-size: .875rem; font-weight: 500; line-height: 1; }
+  .note { border-left: 3px solid var(--border); padding-left: .75rem; }
+  .new { box-shadow: 0 0 0 2px hsl(220 70% 50% / .55); border-radius: .6rem; }
+  .new-tag { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: hsl(220 70% 65%); }
+  /* Segmented control */
+  .seg { display: grid; border: 1px solid var(--input); border-radius: .5rem; overflow: hidden; }
+  .seg button { min-height: 2.75rem; font-size: .875rem; font-weight: 500; color: var(--muted-foreground); border-left: 1px solid var(--input); }
+  .seg button:first-child { border-left: 0; }
+  .seg button[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); }
+  .thumb { position: relative; aspect-ratio: 4/3; border-radius: .5rem; background: hsl(240 4% 22%); display: flex; align-items: center; justify-content: center; color: hsl(240 5% 50%); }
+  .thumb [data-lucide] { width: 28px; height: 28px; }
+  .thumb .del { position: absolute; top: 4px; right: 4px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
+  .thumb .del span { width: 28px; height: 28px; border-radius: 9999px; background: hsl(0 0% 0% / .65); display: flex; align-items: center; justify-content: center; color: #fff; }
+  .thumb .del [data-lucide] { width: 15px; height: 15px; }
+  /* Paper */
+  .paper { width: 680px; height: 880px; background: #fff; color: #000; padding: 38px; box-shadow: 0 10px 30px rgb(0 0 0 / .5); font-family: ui-sans-serif, system-ui, sans-serif; position: relative; }
+  .pf { border-bottom: 1px solid rgb(0 0 0 / .4); padding: 3px 0; }
+  .pf dt { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: #b91c1c; }
+  .pf dd { font-size: 12px; }
+  .pthumb { background: #d4d4d8; display: flex; align-items: center; justify-content: center; color: #71717a; }
+  .pthumb [data-lucide] { width: 40px; height: 40px; }
+</style>
+</head>
+<body class="bg-background text-foreground">
+<div class="mx-auto max-w-[1240px] px-4 py-8 flex flex-col gap-14">
+
+  <header class="flex flex-col gap-1">
+    <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Mockup estático — service-order-reception</p>
+    <h1 class="text-2xl font-bold">Recepción del vehículo en la orden</h1>
+    <p class="text-sm text-muted-foreground">Para aprobar antes de escribir código. Tema oscuro (el que usa el taller); la hoja impresa va en blanco porque es papel. Lo nuevo está marcado con <span class="new px-1">borde azul</span>.</p>
+  </header>
+
+  <!-- ============ PANEL 1 ============ -->
+  <section class="flex flex-col gap-4">
+    <h2 class="text-lg font-semibold">1 · Nueva orden — sección “Recepción”</h2>
+    <div class="grid gap-6 lg:grid-cols-[520px_1fr] items-start">
+
+      <div class="rounded-xl border bg-card p-5 shadow-lg ring-1 ring-white/5 flex flex-col gap-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-base font-medium">Nueva orden de servicio</h3>
+          <i data-lucide="x" class="text-muted-foreground"></i>
+        </div>
+        <div class="grid gap-2"><span class="label">Cliente</span>
+          <div class="flex items-center justify-between rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+            <span>Transportes Chiriquí S.A. <span class="text-muted-foreground">· 6230-8874</span></span>
+            <span class="text-xs text-muted-foreground">Cambiar</span>
+          </div>
+        </div>
+        <div class="grid gap-2"><span class="label">Vehículo</span><select class="input"><option>BF0921 — Nissan Frontier</option></select></div>
+        <div class="grid gap-2"><span class="label">Categoría</span><select class="input"><option>Mantenimiento preventivo</option></select></div>
+        <div class="grid gap-2"><span class="label">Descripción</span><textarea class="input">Servicio de los 85.000 km. Cliente reporta ruido en el tren delantero.</textarea></div>
+        <div class="grid gap-2"><span class="label">Fecha y hora de inicio</span><input class="input" value="04/10/2026, 08:30 a. m."></div>
+
+        <!-- NEW -->
+        <div class="new p-3 -mx-1 flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <h4 class="text-sm font-semibold flex items-center gap-2"><i data-lucide="clipboard-check" class="text-muted-foreground"></i>Recepción</h4>
+            <span class="new-tag">Nuevo</span>
+          </div>
+          <div class="grid gap-2">
+            <label class="label">Kilometraje <span class="font-normal text-muted-foreground">(opcional)</span></label>
+            <input class="input input-44" type="number" placeholder="Ej. 84320" value="84320">
+          </div>
+          <div class="grid gap-2">
+            <span class="label">Combustible</span>
+            <div class="seg grid-cols-5" role="group" aria-label="Combustible">
+              <button aria-pressed="false">Vacío</button><button aria-pressed="false">1/4</button><button aria-pressed="true">1/2</button><button aria-pressed="false">3/4</button><button aria-pressed="false">Lleno</button>
+            </div>
+            <p class="text-xs text-muted-foreground">Se muestra porque el motor del vehículo es <b>Combustión</b>.</p>
+          </div>
+        </div>
+
+        <div class="grid gap-2"><span class="label">Observaciones</span><textarea class="input" placeholder=""></textarea></div>
+        <div class="-mx-5 -mb-5 mt-1 flex justify-end gap-2 rounded-b-xl border-t bg-muted/30 px-5 py-3">
+          <button class="h-8 rounded-lg border px-3 text-sm font-medium">Cancelar</button>
+          <button class="h-8 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground">Guardar</button>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-6">
+        <p class="text-sm font-medium text-muted-foreground">Variantes según el motor del vehículo elegido</p>
+
+        <div class="rounded-xl border bg-card p-4 flex flex-col gap-3 max-w-[480px]">
+          <div class="flex items-center justify-between"><h4 class="text-sm font-semibold">Recepción</h4><span class="text-xs text-muted-foreground">Motor: Eléctrico</span></div>
+          <div class="grid gap-2"><label class="label">Kilometraje <span class="font-normal text-muted-foreground">(opcional)</span></label><input class="input input-44" placeholder="Ej. 84320"></div>
+          <div class="grid gap-2"><label class="label">Batería (%)</label><input class="input input-44" type="number" placeholder="Ej. 65" value="72"></div>
+        </div>
+
+        <div class="rounded-xl border bg-card p-4 flex flex-col gap-3 max-w-[480px]">
+          <div class="flex items-center justify-between"><h4 class="text-sm font-semibold">Recepción</h4><span class="text-xs text-muted-foreground">Motor: Híbrido</span></div>
+          <div class="grid gap-2"><label class="label">Kilometraje <span class="font-normal text-muted-foreground">(opcional)</span></label><input class="input input-44" placeholder="Ej. 84320"></div>
+          <div class="grid gap-2"><span class="label">Combustible</span>
+            <div class="seg grid-cols-5"><button aria-pressed="false">Vacío</button><button aria-pressed="false">1/4</button><button aria-pressed="false">1/2</button><button aria-pressed="true">3/4</button><button aria-pressed="false">Lleno</button></div>
+          </div>
+          <div class="grid gap-2"><label class="label">Batería (%)</label><input class="input input-44" type="number" placeholder="Ej. 65" value="40"></div>
+        </div>
+
+        <ul class="note text-sm text-muted-foreground flex flex-col gap-1 max-w-[480px]">
+          <li>Kilometraje, combustible y batería son opcionales: la orden se guarda igual sin ellos.</li>
+          <li>Si el vehículo no tiene motor cargado, se muestran combustible y batería (como Híbrido).</li>
+          <li>Todos los controles miden al menos 44 px de alto (uso en tablet).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PANEL 2 ============ -->
+  <section class="flex flex-col gap-4">
+    <h2 class="text-lg font-semibold">2 · Formulario de cliente — “Cédula / RUC”</h2>
+    <div class="rounded-xl border bg-card p-5 shadow-lg flex flex-col gap-4 max-w-[520px]">
+      <div class="flex items-center justify-between"><h3 class="text-base font-medium">Editar cliente</h3><i data-lucide="x" class="text-muted-foreground"></i></div>
+      <div class="grid gap-2"><span class="label">Nombre</span><input class="input" value="Transportes Chiriquí S.A."></div>
+      <div class="grid gap-2"><span class="label">Teléfono</span><input class="input" value="6230-8874"></div>
+      <div class="new p-2 -mx-1 grid gap-2">
+        <div class="flex items-center justify-between"><label class="label">Cédula / RUC <span class="font-normal text-muted-foreground">(opcional)</span></label><span class="new-tag">Nuevo</span></div>
+        <input class="input" value="155612345-2-2019 DV 45">
+        <p class="text-xs text-muted-foreground">Texto libre: cédula (8-123-456), RUC con DV, pasaporte.</p>
+      </div>
+      <div class="grid gap-2"><span class="label">Email</span><input class="input" value="flota@transchiriqui.com.pa"></div>
+      <h3 class="text-sm font-semibold text-muted-foreground">Vehículos <span class="font-normal">· (sin cambios)</span></h3>
+    </div>
+  </section>
+
+  <!-- ============ PANEL 3 ============ -->
+  <section class="flex flex-col gap-4">
+    <h2 class="text-lg font-semibold">3 · Detalle de la orden, después de crearla</h2>
+    <div class="rounded-xl border bg-background p-6 flex flex-col gap-6">
+      <p class="text-sm text-muted-foreground">Órdenes de servicio <span class="mx-1">›</span> <span class="text-foreground">4b7e2c90-1f3a-4d8e-9c21-6a5b0e7d3f12</span></p>
+
+      <div class="rounded-xl border bg-card">
+        <div class="flex flex-wrap items-center justify-between gap-3 p-5">
+          <h3 class="flex flex-wrap items-center gap-3 font-semibold break-all">Orden 4b7e2c90-1f3a-4d8e-9c21-6a5b0e7d3f12
+            <span class="rounded-full bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-300">Pendiente</span></h3>
+          <div class="flex flex-wrap gap-2">
+            <button class="min-h-11 rounded-lg border px-3 text-sm font-medium">Editar orden</button>
+            <button class="min-h-11 rounded-lg border px-3 text-sm font-medium">Imprimir</button>
+            <button class="min-h-11 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground">Iniciar</button>
+          </div>
+        </div>
+        <dl class="px-5 pb-4 text-sm">
+          <div class="grid grid-cols-3 gap-2 border-b py-2"><dt class="text-muted-foreground font-medium">Cliente</dt><dd class="col-span-2">Transportes Chiriquí S.A.</dd></div>
+          <div class="grid grid-cols-3 gap-2 border-b py-2"><dt class="text-muted-foreground font-medium">Vehículo</dt><dd class="col-span-2">BF0921</dd></div>
+          <div class="grid grid-cols-3 gap-2 border-b py-2"><dt class="text-muted-foreground font-medium">Estilo</dt><dd class="col-span-2">Pick-up</dd></div>
+          <div class="grid grid-cols-3 gap-2 border-b py-2"><dt class="text-muted-foreground font-medium">Motor</dt><dd class="col-span-2">Combustión</dd></div>
+          <div class="grid grid-cols-3 gap-2 border-b py-2"><dt class="text-muted-foreground font-medium">Categoría</dt><dd class="col-span-2">Mantenimiento preventivo</dd></div>
+          <div class="grid grid-cols-3 gap-2 py-2"><dt class="text-muted-foreground font-medium">Fecha y hora de inicio</dt><dd class="col-span-2">04/10/2026 08:30</dd></div>
+        </dl>
+        <p class="px-5 pb-4 text-xs text-muted-foreground">(resto de la tarjeta sin cambios)</p>
+      </div>
+
+      <div class="grid gap-6 lg:grid-cols-2 items-start">
+        <div class="new">
+          <div class="rounded-xl border bg-card p-5 flex flex-col gap-3">
+            <div class="flex items-center justify-between"><h3 class="font-semibold">Recepción</h3><span class="new-tag">Nuevo</span></div>
+            <dl class="text-sm">
+              <div class="grid grid-cols-3 gap-2 border-b py-2"><dt class="text-muted-foreground font-medium">Kilometraje</dt><dd class="col-span-2">84.320 km</dd></div>
+              <div class="grid grid-cols-3 gap-2 py-2"><dt class="text-muted-foreground font-medium">Combustible</dt><dd class="col-span-2">1/2</dd></div>
+            </dl>
+          </div>
+        </div>
+        <div class="flex flex-col gap-2">
+          <p class="text-sm font-medium text-muted-foreground">Variante: se creó sin kilometraje</p>
+          <div class="rounded-xl border bg-card p-5 flex flex-col gap-3">
+            <h3 class="font-semibold">Recepción</h3>
+            <dl class="text-sm">
+              <div class="grid grid-cols-3 gap-2 border-b py-2"><dt class="text-muted-foreground font-medium">Kilometraje</dt>
+                <dd class="col-span-2"><span class="inline-flex items-center gap-1.5 rounded-md border border-warning/50 bg-warning/15 px-2 py-0.5 font-medium text-amber-300"><i data-lucide="triangle-alert"></i>Sin kilometraje</span></dd></div>
+              <div class="grid grid-cols-3 gap-2 py-2"><dt class="text-muted-foreground font-medium">Combustible</dt><dd class="col-span-2">—</dd></div>
+            </dl>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid gap-6 lg:grid-cols-2 items-start">
+        <div class="flex flex-col gap-2">
+          <p class="text-sm font-medium text-muted-foreground">Como lo ve el administrador</p>
+          <div class="new"><div class="rounded-xl border bg-card p-5 flex flex-col gap-4">
+            <div class="flex items-center justify-between gap-3">
+              <div><h3 class="font-semibold">Fotos de recepción</h3><p class="text-xs text-muted-foreground">5 de 12</p></div>
+              <button class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"><i data-lucide="camera"></i>Agregar fotos</button>
+            </div>
+            <div class="flex items-center gap-3 rounded-lg border bg-muted/40 px-3 py-2">
+              <i data-lucide="loader-circle" class="animate-spin text-muted-foreground"></i>
+              <div class="flex-1"><p class="text-sm">Comprimiendo y subiendo 2 fotos…</p>
+                <div class="mt-1.5 h-1.5 rounded-full bg-muted"><div class="h-1.5 w-[45%] rounded-full bg-primary"></div></div></div>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <div class="thumb"><i data-lucide="car"></i><button class="del" aria-label="Borrar foto 1"><span><i data-lucide="trash-2"></i></span></button></div>
+              <div class="thumb"><i data-lucide="car"></i><button class="del" aria-label="Borrar foto 2"><span><i data-lucide="trash-2"></i></span></button></div>
+              <div class="thumb"><i data-lucide="car"></i><button class="del" aria-label="Borrar foto 3"><span><i data-lucide="trash-2"></i></span></button></div>
+              <div class="thumb"><i data-lucide="car"></i><button class="del" aria-label="Borrar foto 4"><span><i data-lucide="trash-2"></i></span></button></div>
+              <div class="thumb"><i data-lucide="car"></i><button class="del" aria-label="Borrar foto 5"><span><i data-lucide="trash-2"></i></span></button></div>
+              <div class="thumb opacity-50 border border-dashed border-white/20"><i data-lucide="image-up"></i></div>
+            </div>
+          </div></div>
+        </div>
+        <div class="flex flex-col gap-2">
+          <p class="text-sm font-medium text-muted-foreground">Como lo ve el técnico (puede agregar, no borrar)</p>
+          <div class="rounded-xl border bg-card p-5 flex flex-col gap-4">
+            <div class="flex items-center justify-between gap-3">
+              <div><h3 class="font-semibold">Fotos de recepción</h3><p class="text-xs text-muted-foreground">5 de 12</p></div>
+              <button class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"><i data-lucide="camera"></i>Agregar fotos</button>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <div class="thumb"><i data-lucide="car"></i></div><div class="thumb"><i data-lucide="car"></i></div><div class="thumb"><i data-lucide="car"></i></div>
+              <div class="thumb"><i data-lucide="car"></i></div><div class="thumb"><i data-lucide="car"></i></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note text-sm text-muted-foreground">Las fotos no se pueden agregar ni borrar cuando la orden está terminada o cancelada. Tocar una miniatura la abre en grande.</p>
+    </div>
+  </section>
+
+  <!-- ============ PANEL 4 ============ -->
+  <section class="flex flex-col gap-4">
+    <h2 class="text-lg font-semibold">4 · Teléfono (390 px) — “Fotos de recepción”</h2>
+    <div class="w-[390px] max-w-full rounded-[2rem] border-4 border-zinc-800 bg-background p-4">
+      <div class="rounded-xl border bg-card p-4 flex flex-col gap-4">
+        <div><h3 class="font-semibold">Fotos de recepción</h3><p class="text-xs text-muted-foreground">5 de 12</p></div>
+        <button class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"><i data-lucide="camera"></i>Agregar fotos</button>
+        <div class="flex items-center gap-3 rounded-lg border bg-muted/40 px-3 py-2">
+          <i data-lucide="loader-circle" class="animate-spin text-muted-foreground"></i>
+          <div class="flex-1"><p class="text-sm">Comprimiendo y subiendo 2 fotos…</p><div class="mt-1.5 h-1.5 rounded-full bg-muted"><div class="h-1.5 w-[45%] rounded-full bg-primary"></div></div></div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="thumb"><i data-lucide="car"></i></div><div class="thumb"><i data-lucide="car"></i></div>
+          <div class="thumb"><i data-lucide="car"></i></div><div class="thumb"><i data-lucide="car"></i></div>
+          <div class="thumb"><i data-lucide="car"></i></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PANEL 5 ============ -->
+  <section class="flex flex-col gap-4">
+    <h2 class="text-lg font-semibold">5 · Hoja impresa — página 1</h2>
+    <div class="flex flex-wrap items-start gap-6">
+      <div class="max-w-full overflow-x-auto"><div class="paper flex flex-col">
+        <div class="mb-5 flex items-start justify-between gap-4 border-b-2 border-black pb-3">
+          <div class="flex items-center gap-3">
+            <div class="h-11 w-11 rounded bg-zinc-200 flex items-center justify-center text-[9px] text-zinc-500">LOGO</div>
+            <div>
+              <p class="text-[12px] font-semibold">DForce Car Audio</p>
+              <h1 class="text-lg font-bold leading-tight">Orden de servicio</h1>
+              <p class="text-[10px] text-black/60">N.º 4b7e2c90-1f3a-4d8e-9c21-6a5b0e7d3f12</p>
+            </div>
+          </div>
+          <div id="qr" class="h-[79px] w-[79px] shrink-0 border-2 border-dashed border-sky-500"></div>
+        </div>
+
+        <dl class="mb-5 grid grid-cols-4 gap-x-4">
+          <div class="pf"><dt>Cliente</dt><dd>Transportes Chiriquí S.A.</dd></div>
+          <div class="pf"><dt>Teléfono</dt><dd>6230-8874</dd></div>
+          <div class="pf new" style="border-radius:2px"><dt>Cédula / RUC</dt><dd>155612345-2-2019 DV 45</dd></div>
+          <div class="pf"><dt>Placa</dt><dd>BF0921</dd></div>
+          <div class="pf"><dt>Marca</dt><dd>Nissan</dd></div>
+          <div class="pf"><dt>Modelo</dt><dd>Frontier</dd></div>
+          <div class="pf"><dt>Año</dt><dd>2019</dd></div>
+          <div class="pf"><dt>Chasis</dt><dd>3N6AD33A5KK812340</dd></div>
+          <div class="pf"><dt>Color</dt><dd>Blanco</dd></div>
+          <div class="pf"><dt>Estilo</dt><dd>Pick-up</dd></div>
+          <div class="pf"><dt>Motor</dt><dd>Combustión</dd></div>
+          <div class="pf"><dt>Categoría</dt><dd>Mantenimiento preventivo</dd></div>
+          <div class="pf"><dt>Fecha y hora de inicio</dt><dd>04/10/2026 08:30</dd></div>
+          <div class="pf new" style="border-radius:2px"><dt>Kilometraje</dt><dd>84.320 km</dd></div>
+          <div class="pf new" style="border-radius:2px"><dt>Combustible</dt><dd>1/2</dd></div>
+        </dl>
+
+        <dl class="mb-5">
+          <div class="pf"><dt>Descripción</dt><dd>Servicio de los 85.000 km. Cliente reporta ruido en el tren delantero.</dd></div>
+          <div class="pf"><dt>Observaciones</dt><dd>—</dd></div>
+        </dl>
+
+        <section class="border border-black p-3">
+          <h2 class="mb-2 text-[12px] font-bold uppercase tracking-wide">Trabajo realizado / Hallazgos</h2>
+          <div>
+            <div class="h-6 border-b border-black/30"></div><div class="h-6 border-b border-black/30"></div>
+            <div class="h-6 border-b border-black/30"></div><div class="h-6 border-b border-black/30"></div>
+            <div class="h-6 border-b border-black/30"></div><div class="h-6 border-b border-black/30"></div>
+            <div class="h-6 border-b border-black/30"></div><div class="h-6 border-b border-black/30"></div>
+          </div>
+        </section>
+
+        <div class="mt-auto flex justify-end pb-2">
+          <div class="w-64 border-t border-black pt-1 text-center text-[11px]">Firma del técnico</div>
+        </div>
+        <p class="absolute bottom-3 right-5 text-[9px] text-black/50">Página 1 de 3</p>
+      </div></div>
+
+      <ul class="note mt-2 max-w-[340px] text-sm text-muted-foreground flex flex-col gap-3">
+        <li><span class="inline-block h-3 w-3 border-2 border-dashed border-sky-500 align-middle mr-1"></span><b class="text-foreground">Reservado para QR (en blanco al imprimir).</b> ~25 mm, arriba a la derecha. El contorno punteado es solo de este mockup; en papel no se imprime nada ahí todavía.</li>
+        <li>“Cédula / RUC” entra en la fila del cliente; “Kilometraje” y “Combustible” cierran la grilla de 4 columnas. Si el motor es eléctrico la celda dice “Batería” (ej. 72 %); si falta el dato, “—”.</li>
+        <li>La grilla pasa de 3 a 4 filas (15 celdas en 16 lugares), ~40 px más: la firma tiene que seguir en la página 1 (se mide en la vista previa de impresión).</li>
+        <li>Los botones Volver / Imprimir no salen en papel (igual que hoy).</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ PANEL 6 ============ -->
+  <section class="flex flex-col gap-4">
+    <h2 class="text-lg font-semibold">6 · Hoja impresa — página 2 (fotos)</h2>
+    <div class="flex flex-wrap items-start gap-6">
+      <div class="max-w-full overflow-x-auto"><div class="paper new flex flex-col">
+        <div class="mb-5 border-b-2 border-black pb-3">
+          <h1 class="text-lg font-bold">Fotos de recepción — Orden N.º 4b7e2c90-1f3a-4d8e-9c21-6a5b0e7d3f12</h1>
+          <p class="text-[11px] text-black/60">Transportes Chiriquí S.A. · BF0921 · 04/10/2026</p>
+        </div>
+        <div class="grid flex-1 grid-cols-2 grid-rows-2 gap-4">
+          <figure class="flex flex-col gap-1"><div class="pthumb flex-1"><i data-lucide="car"></i></div><figcaption class="text-[10px]">Foto 1</figcaption></figure>
+          <figure class="flex flex-col gap-1"><div class="pthumb flex-1"><i data-lucide="car"></i></div><figcaption class="text-[10px]">Foto 2</figcaption></figure>
+          <figure class="flex flex-col gap-1"><div class="pthumb flex-1"><i data-lucide="car"></i></div><figcaption class="text-[10px]">Foto 3</figcaption></figure>
+          <figure class="flex flex-col gap-1"><div class="pthumb flex-1"><i data-lucide="car"></i></div><figcaption class="text-[10px]">Foto 4</figcaption></figure>
+        </div>
+        <p class="absolute bottom-3 right-5 text-[9px] text-black/50">Página 2 de 3</p>
+      </div></div>
+      <ul class="note mt-2 max-w-[340px] text-sm text-muted-foreground flex flex-col gap-3">
+        <li>4 fotos por página en grilla 2×2. Con 5 fotos sale una página 3 con la Foto 5 sola.</li>
+        <li>Sin fotos, la hoja tiene una sola página (como hoy).</li>
+      </ul>
+    </div>
+  </section>
+
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>
