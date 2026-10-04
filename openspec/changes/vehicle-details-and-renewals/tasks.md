@@ -72,11 +72,12 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU5: Message builder and Contactar dialog (PR 5)
 
-- [ ] 5.1 RED `message.test.ts`: price 45 gives "corresponde en noviembre de 2026" and "por B/. 45.00."; empty or `NaN` price has no "B/."; overdue plate "correspondía en"; insurance "venció el 01/09/2026" vs "vence el 20/10/2026"; null workshop fields drop their fragments, no "null"; no make or model reads "su vehículo (ABC123)"; `waMeUrl` encodes spaces, accents, `/`, `.`. GREEN `vencimientos/message.ts`.
-- [ ] 5.2 RED dialog tests: preview updates as the price is typed; WhatsApp `href` is `https://wa.me/50761111111?text=…` with `target="_blank"`; clicking sends no request and no toast; opt-out disables it with "El cliente pidió no recibir WhatsApp" and "Marcar como contactado" still works; refused phone shows "El teléfono del cliente no es un celular"; "Correo" disabled "Próximamente". GREEN `ContactDialog.tsx` replacing the plain button.
-- [ ] 5.3 RED page wiring: row props contain only the design's allowlist; opt-out flags, raw phone and `workshop_config` columns absent (poisoned fixture). GREEN page: `toE164` server-side, `getWorkshopConfig`.
-- [ ] 5.4 44x44 on dialog buttons and the price input; success toast on mark.
-- [ ] 5.5 Mutation-verify 5.1-5.3 (drop the opt-out check, mark on open, concatenate without encoding).
+- [x] 5.1 RED `message.test.ts`: price 45 gives "corresponde en noviembre de 2026" and "por B/. 45.00."; empty or `NaN` price has no "B/."; overdue plate "correspondía en"; insurance "venció el 01/09/2026" vs "vence el 20/10/2026"; null workshop fields drop their fragments, no "null"; no make or model reads "su vehículo (ABC123)"; `waMeUrl` encodes spaces, accents, `/`, `.`. GREEN `vencimientos/message.ts`.
+- [x] 5.2 RED dialog tests: preview updates as the price is typed; WhatsApp `href` is `https://wa.me/50761111111?text=…` with `target="_blank"`; clicking sends no request and no toast; opt-out disables it with "El cliente pidió no recibir WhatsApp" and "Marcar como contactado" still works; refused phone shows "El teléfono del cliente no es un celular"; "Correo" disabled "Próximamente". GREEN `ContactDialog.tsx` replacing the plain button.
+- [x] 5.3 RED page wiring: row props contain only the design's allowlist; opt-out flags, raw phone and `workshop_config` columns absent (poisoned fixture). GREEN page: `toE164` server-side, `getWorkshopConfig`.
+- [x] 5.4 44x44 on dialog buttons and the price input; success toast on mark.
+- [x] 5.5 Mutation-verify 5.1-5.3 (drop the opt-out check, mark on open, concatenate without encoding).
+- [x] 5.7 Carry-over from PR 4 review: a failing badge query degrades the `(app)` layout to no badge and is reported to Sentry (`nav-badges.ts`).
 - [ ] 5.6 Browser from another machine over HTTP: the link opens `wa.me` with the message intact; dialog is a portal, so read the console for hydration errors.
 
 ## Spec archive notes
