@@ -33,14 +33,14 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU1: Cédula / RUC (PR 1)
 
-- [ ] 1.1 RED `customers/validation.test.ts`: `normalizeDocumento` trims `"  8-123-456  "` to `"8-123-456"`, `""`/whitespace to `null`, 30 chars passes, 31 rejects "La cédula / RUC no puede superar 30 caracteres". GREEN `validation.ts`.
-- [ ] 1.2 `schema.ts`: `cliente.documento_identidad text` nullable, no unique, no CHECK. `drizzle-kit generate --name cliente_documento` (0023).
-- [ ] 1.3 RED `service.test.ts` trap: `updateCliente` with `"  8-1  "` persists `"8-1"` (`persistedPatch.documentoIdentidad` set from `normalizeDocumento`, as `phone`); `""` clears to null; omitted key leaves it. GREEN `service.ts` (create and update).
-- [ ] 1.4 RED import test: the customer import update leaves `documento_identidad` unchanged. GREEN only if it fails (import must not write it).
-- [ ] 1.5 RED `CustomerForm` tests: "Cédula / RUC" input sends `trim() || null`; clearing sends `null`, never `undefined`; toast convention unchanged. GREEN `CustomerForm.tsx`.
-- [ ] 1.6 RED customer detail test: shows the value when set, nothing when null. GREEN detail display.
-- [ ] 1.7 RED e2e `src/e2e/customer-documento.e2e.test.ts`: round-trip, duplicate value on two customers accepted, clearing via PATCH stores null. GREEN: fix real-SQL defects.
-- [ ] 1.8 Mutation-verify 1.1-1.7 by name (drop the explicit normalize in `updateCliente`, send `undefined`, write it in import).
+- [x] 1.1 RED `customers/validation.test.ts`: `normalizeDocumento` trims `"  8-123-456  "` to `"8-123-456"`, `""`/whitespace to `null`, 30 chars passes, 31 rejects "La cédula / RUC no puede superar 30 caracteres". GREEN `validation.ts`.
+- [x] 1.2 `schema.ts`: `cliente.documento_identidad text` nullable, no unique, no CHECK. `drizzle-kit generate --name cliente_documento` (0023).
+- [x] 1.3 RED `service.test.ts` trap: `updateCliente` with `"  8-1  "` persists `"8-1"` (`persistedPatch.documentoIdentidad` set from `normalizeDocumento`, as `phone`); `""` clears to null; omitted key leaves it. GREEN `service.ts` (create and update).
+- [x] 1.4 RED import test: the customer import update leaves `documento_identidad` unchanged. GREEN only if it fails (import must not write it).
+- [x] 1.5 RED `CustomerForm` tests: "Cédula / RUC" input sends `trim() || null`; clearing sends `null`, never `undefined`; toast convention unchanged. GREEN `CustomerForm.tsx`.
+- [x] 1.6 RED customer detail test: shows the value when set, nothing when null. GREEN detail display.
+- [x] 1.7 RED e2e `src/e2e/customer-documento.e2e.test.ts`: round-trip, duplicate value on two customers accepted, clearing via PATCH stores null. GREEN: fix real-SQL defects.
+- [x] 1.8 Mutation-verify 1.1-1.7 by name (drop the explicit normalize in `updateCliente`, send `undefined`, write it in import).
 - [ ] 1.9 Browser at the LAN IP as administrador and técnico: customer form crosses a Server→Client boundary; console clean.
 
 ## WU2: Intake fields, navigation (PR 2)
