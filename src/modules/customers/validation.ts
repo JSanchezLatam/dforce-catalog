@@ -11,6 +11,7 @@
  * input or throws `ClienteValidationError` with ALL field errors collected
  * (not just the first).
  */
+import { ESTILO_OPTIONS, MOTOR_VALUES, type VehiculoMotor } from "./vehicle-options";
 import type { VehiculoInput } from "./vehicles";
 
 export type ClienteInput = {
@@ -99,6 +100,14 @@ export function validateClienteInput(input: unknown): ClienteInput {
   };
 }
 
+/** `YYYY-MM-DD` that is a real calendar day. Checked as strings and UTC parts: a local-time `Date` shifts a date-only string by a day. */
+function isRealIsoDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(y, m - 1, d));
+  return parsed.getUTCFullYear() === y && parsed.getUTCMonth() === m - 1 && parsed.getUTCDate() === d;
+}
+
 /**
  * D6 — R17 relocated: `plate` is required per vehicle; make/model/year stay
  * optional.
@@ -124,6 +133,32 @@ export function validateVehiculoInput(input: unknown): VehiculoInput {
   const make = trimmedOrUndefined(value.make);
   const model = trimmedOrUndefined(value.model);
   const year = typeof value.year === "number" && Number.isFinite(value.year) ? value.year : undefined;
+  const chasis = trimmedOrUndefined(value.chasis);
+  const colorPrimario = trimmedOrUndefined(value.colorPrimario);
+  const colorSecundario = trimmedOrUndefined(value.colorSecundario);
+  const numeroUnidad = trimmedOrUndefined(value.numeroUnidad);
+
+  const estilo = trimmedOrUndefined(value.estilo);
+  if (estilo !== undefined && !(ESTILO_OPTIONS as readonly string[]).includes(estilo)) {
+    errors.estilo = "El estilo no es válido";
+  }
+  const motor = trimmedOrUndefined(value.motor);
+  if (motor !== undefined && !(MOTOR_VALUES as readonly string[]).includes(motor)) {
+    errors.motor = "El motor no es válido";
+  }
+
+  // Internal fields stay tri-state (see `VehiculoInput`): `undefined` is
+  // "not sent", `null` is an explicit clear. Anything else that is not a valid
+  // value is rejected, never coerced to one of those two.
+  const rawMes = value.placaRenovacionMes;
+  if (rawMes !== undefined && rawMes !== null && !(Number.isInteger(rawMes) && (rawMes as number) >= 1 && (rawMes as number) <= 12)) {
+    errors.placaRenovacionMes = "El mes de renovación tiene que ser un número entre 1 y 12";
+  }
+  const rawSeguro = value.seguroVence;
+  if (rawSeguro !== undefined && rawSeguro !== null && !isRealIsoDate(rawSeguro)) {
+    errors.seguroVence = "La fecha de vencimiento del seguro no es válida";
+  }
+
   // Never defaulted: an absent `deactivated` means "leave this vehicle's
   // activation state alone", which is what makes resending an unchanged
   // collection a no-op instead of a mass restore (see `VehiculoInput`).
@@ -139,6 +174,14 @@ export function validateVehiculoInput(input: unknown): VehiculoInput {
     ...(make !== undefined ? { make } : {}),
     ...(model !== undefined ? { model } : {}),
     ...(year !== undefined ? { year } : {}),
+    ...(chasis !== undefined ? { chasis } : {}),
+    ...(colorPrimario !== undefined ? { colorPrimario } : {}),
+    ...(colorSecundario !== undefined ? { colorSecundario } : {}),
+    ...(estilo !== undefined ? { estilo } : {}),
+    ...(motor !== undefined ? { motor: motor as VehiculoMotor } : {}),
+    ...(numeroUnidad !== undefined ? { numeroUnidad } : {}),
+    ...(rawMes !== undefined ? { placaRenovacionMes: rawMes as number | null } : {}),
+    ...(rawSeguro !== undefined ? { seguroVence: rawSeguro as string | null } : {}),
     ...(deactivated !== undefined ? { deactivated } : {}),
     ...(deleted !== undefined ? { deleted } : {}),
   };
