@@ -54,3 +54,13 @@ export function formatDateTime(value: Date | null | undefined): string {
 export function formatDate(value: Date): string {
   return value.toLocaleDateString(WORKSHOP_LOCALE, { timeZone: WORKSHOP_TIME_ZONE });
 }
+
+/**
+ * Today (or any instant) as the workshop's calendar day, `YYYY-MM-DD`. A STRING
+ * on purpose: the due rules compare date keys lexically and never build a
+ * `Date` from a date-only string, which is the off-by-a-day this module exists
+ * to prevent. `en-CA` is the locale whose short date is already year-month-day.
+ */
+export function toWorkshopDateKey(value: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: WORKSHOP_TIME_ZONE }).format(value);
+}

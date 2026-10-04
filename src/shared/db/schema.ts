@@ -6,7 +6,7 @@
  * here in PR8 (catalog-storage) — see design.md → "Database Schema Outline".
  * Each table is added alongside the code that first needs it.
  */
-import { boolean, check, date, index, integer, jsonb, pgEnum, pgTable, real, smallint, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, check, date, index, integer, jsonb, pgEnum, pgTable, primaryKey, real, smallint, text, timestamp } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 /** R9.6 / NFR-8 — single `role` column, extensible without an RBAC library. */
@@ -433,6 +433,32 @@ export const vehiculo = pgTable(
 );
 
 export type Vehiculo = typeof vehiculo.$inferSelect;
+
+export const vencimientoKindEnum = pgEnum("vencimiento_kind", ["placa", "seguro"]);
+
+/**
+ * `vehiculo_contacto` — one row per "Contactado" mark (vehicle-details-and-renewals).
+ * The composite PK IS the uniqueness rule: a mark is per vehicle, kind and
+ * period (`YYYY-MM` for a plate, the expiry date for insurance), so a mark for
+ * one period never hides a later one and a double insert is a no-op
+ * (`onConflictDoNothing`). Cascades with the vehicle; `contacted_by` survives
+ * the user's deletion as NULL.
+ */
+export const vehiculoContacto = pgTable(
+  "vehiculo_contacto",
+  {
+    vehiculoId: text("vehiculo_id")
+      .notNull()
+      .references(() => vehiculo.id, { onDelete: "cascade" }),
+    kind: vencimientoKindEnum("kind").notNull(),
+    periodKey: text("period_key").notNull(),
+    contactedAt: timestamp("contacted_at", { withTimezone: true }).notNull().defaultNow(),
+    contactedBy: text("contacted_by").references(() => users.id, { onDelete: "set null" }),
+  },
+  (table) => [primaryKey({ columns: [table.vehiculoId, table.kind, table.periodKey] })],
+);
+
+export type VehiculoContacto = typeof vehiculoContacto.$inferSelect;
 
 /**
  * `orden_servicio` — service order. `vehiculoId`/`categoria`/the three note
