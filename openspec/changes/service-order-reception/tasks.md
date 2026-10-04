@@ -41,7 +41,7 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 - [x] 1.6 RED customer detail test: shows the value when set, nothing when null. GREEN detail display.
 - [x] 1.7 RED e2e `src/e2e/customer-documento.e2e.test.ts`: round-trip, duplicate value on two customers accepted, clearing via PATCH stores null. GREEN: fix real-SQL defects.
 - [x] 1.8 Mutation-verify 1.1-1.7 by name (drop the explicit normalize in `updateCliente`, send `undefined`, write it in import).
-- [ ] 1.9 Browser at the LAN IP as administrador and técnico: customer form crosses a Server→Client boundary; console clean.
+- [x] 1.9 Browser at the LAN IP as administrador and técnico: customer form crosses a Server→Client boundary; console clean.
 
 ## WU2: Intake fields, navigation (PR 2)
 
