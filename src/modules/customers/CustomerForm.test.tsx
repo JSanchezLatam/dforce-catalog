@@ -890,3 +890,166 @@ describe("CustomerForm — a deactivated customer's 409", () => {
     expect(screen.queryByRole("button", { name: "Guardar igual" })).not.toBeInTheDocument();
   });
 });
+
+/**
+ * `descriptiveColumns` (vehicles.ts) writes `?? null`, so a form that omits a
+ * descriptive field WIPES it on every save. The form is the round-trip.
+ */
+const DESCRIBED = {
+  chasis: "MR0HA3CD100512345",
+  colorPrimario: "Blanco",
+  colorSecundario: "Negro",
+  estilo: "Pick-up",
+  motor: "hibrido" as const,
+  numeroUnidad: "U-07",
+};
+
+describe("CustomerForm — vehicle descriptive fields", () => {
+  it("sends all six descriptive fields back unchanged when an edit touches nothing else", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ ...DESCRIBED })]} />);
+
+    await open(user, "Editar");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    const sent = bodyOf(fetchMock).vehicles[0];
+    expect(sent).toMatchObject(DESCRIBED);
+  });
+
+  it("shows the stored values in their labelled fields", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ ...DESCRIBED })]} />);
+    await open(user, "Editar");
+
+    const group = vehicleGroup(1);
+    expect(within(group).getByLabelText("Chasis")).toHaveValue("MR0HA3CD100512345");
+    expect(within(group).getByLabelText("Color primario")).toHaveValue("Blanco");
+    expect(within(group).getByLabelText("Color secundario")).toHaveValue("Negro");
+    expect(within(group).getByLabelText("Estilo")).toHaveValue("Pick-up");
+    expect(within(group).getByLabelText("Motor")).toHaveValue("hibrido");
+    expect(within(group).getByLabelText("Nº de unidad (opcional)")).toHaveValue("U-07");
+  });
+
+  it("sends an edited value, and omits a blank one instead of sending an empty string", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ ...DESCRIBED })]} />);
+    await open(user, "Editar");
+
+    const group = vehicleGroup(1);
+    await user.selectOptions(within(group).getByLabelText("Estilo"), "SUV");
+    await user.selectOptions(within(group).getByLabelText("Motor"), "electrico");
+    await user.clear(within(group).getByLabelText("Color secundario"));
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    const sent = bodyOf(fetchMock).vehicles[0];
+    expect(sent).toMatchObject({ estilo: "SUV", motor: "electrico", chasis: DESCRIBED.chasis });
+    expect(sent).not.toHaveProperty("colorSecundario");
+  });
+
+  it("offers exactly the curated estilo list and the three motors", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo()]} />);
+    await open(user, "Editar");
+
+    const group = vehicleGroup(1);
+    const options = (label: string) =>
+      within(within(group).getByLabelText(label)).getAllByRole("option").map((o) => o.textContent);
+    expect(options("Estilo")).toEqual(["—", "Sedán", "Hatchback", "SUV", "Pick-up", "Van/Panel", "Coupé", "Moto", "Otro"]);
+    expect(options("Motor")).toEqual(["—", "Combustión", "Eléctrico", "Híbrido"]);
+  });
+
+  it("paints a server error for estilo under the card it belongs to", async () => {
+    const user = userEvent.setup();
+    mockFetch({ status: 400, body: { errors: { "vehicles.0.estilo": "El estilo no es válido" } } });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo()]} />);
+    await open(user, "Editar");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(await screen.findByText("El estilo no es válido")).toBeInTheDocument();
+  });
+});
+
+const INTERNAL = { placaRenovacionMes: 10, seguroVence: "2026-10-28" };
+
+describe("CustomerForm — Uso interno (vencimientos.read)", () => {
+  it("a tecnico sees no internal section and sends no internal keys, even when the row carries them", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ ...DESCRIBED, ...INTERNAL })]} />);
+    await open(user, "Editar");
+
+    expect(screen.queryByText("Uso interno")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Mes de renovación de placa")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Vencimiento del seguro")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    const sent = bodyOf(fetchMock).vehicles[0];
+    expect(sent).not.toHaveProperty("placaRenovacionMes");
+    expect(sent).not.toHaveProperty("seguroVence");
+  });
+
+  it("a tecnico adding a new vehicle sends no internal keys either", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 201, body: { cliente: { id: "c1" } } });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[]} />);
+    await open(user, "Editar");
+    await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+    await user.type(within(vehicleGroup(1)).getByLabelText("Placa"), "NEW111");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    const sent = bodyOf(fetchMock).vehicles[0];
+    expect(sent.plate).toBe("NEW111");
+    expect(sent).not.toHaveProperty("placaRenovacionMes");
+    expect(sent).not.toHaveProperty("seguroVence");
+  });
+
+  it("an administrador sees the section with the stored values", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ ...INTERNAL })]} canEditInternal />);
+    await open(user, "Editar");
+
+    const group = vehicleGroup(1);
+    expect(within(group).getByText("Uso interno")).toBeInTheDocument();
+    expect(within(group).getByLabelText("Mes de renovación de placa")).toHaveValue("10");
+    expect(within(group).getByLabelText("Vencimiento del seguro")).toHaveValue("2026-10-28");
+  });
+
+  it("an administrador round-trips both values unchanged on save", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ ...INTERNAL })]} canEditInternal />);
+    await open(user, "Editar");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(bodyOf(fetchMock).vehicles[0]).toMatchObject({ placaRenovacionMes: 10, seguroVence: "2026-10-28" });
+  });
+
+  it("an administrador changing the month and clearing the date sends a number and an explicit null", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ ...INTERNAL })]} canEditInternal />);
+    await open(user, "Editar");
+
+    const group = vehicleGroup(1);
+    await user.selectOptions(within(group).getByLabelText("Mes de renovación de placa"), "3");
+    await user.clear(within(group).getByLabelText("Vencimiento del seguro"));
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    const sent = bodyOf(fetchMock).vehicles[0];
+    expect(sent.placaRenovacionMes).toBe(3);
+    expect(sent.seguroVence).toBeNull();
+  });
+
+  it("an administrador leaving the month on the dash clears it with null", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ ...INTERNAL })]} canEditInternal />);
+    await open(user, "Editar");
+    await user.selectOptions(within(vehicleGroup(1)).getByLabelText("Mes de renovación de placa"), "—");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(bodyOf(fetchMock).vehicles[0].placaRenovacionMes).toBeNull();
+  });
+});

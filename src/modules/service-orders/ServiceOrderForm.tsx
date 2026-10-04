@@ -2,7 +2,8 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
-import type { OrdenServicio, Vehiculo } from "@/shared/db/schema";
+import type { PublicVehiculo } from "@/modules/customers/vehicles";
+import type { OrdenServicio } from "@/shared/db/schema";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -103,7 +104,7 @@ export function ServiceOrderForm({
   const [clienteId, setClienteId] = useState(order?.clienteId ?? selectedCustomer?.id ?? "");
   const [vehiculoId, setVehiculoId] = useState("");
   const [vehiclesRetry, setVehiclesRetry] = useState(0);
-  const [fetchedVehicles, setFetchedVehicles] = useState<{ key: string; vehicles: Vehiculo[]; failed: boolean }>({
+  const [fetchedVehicles, setFetchedVehicles] = useState<{ key: string; vehicles: PublicVehiculo[]; failed: boolean }>({
     key: "",
     vehicles: [],
     failed: false,
@@ -159,7 +160,7 @@ export function ServiceOrderForm({
         if (!response.ok) throw new Error(`vehicles fetch failed: ${response.status}`);
         return response.json();
       })
-      .then((body: { vehicles: Vehiculo[] }) => {
+      .then((body: { vehicles: PublicVehiculo[] }) => {
         if (!cancelled) setFetchedVehicles({ key, vehicles: body.vehicles, failed: false });
       })
       .catch(() => {

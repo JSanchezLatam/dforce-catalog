@@ -91,3 +91,29 @@ describe("CustomerFormTrigger — a save the operator can see", () => {
     expect(screen.queryByText("Cliente creado")).not.toBeInTheDocument();
   });
 });
+
+describe("CustomerFormTrigger — canEditInternal reaches the form", () => {
+  async function openEditWith(canEditInternal: boolean | undefined) {
+    const user = userEvent.setup();
+    mockFetch();
+    renderTrigger(
+      <CustomerFormTrigger cliente={CLIENTE} vehicles={[VEHICULO]} canEditInternal={canEditInternal} />,
+    );
+    await user.click(screen.getByRole("button", { name: "Editar" }));
+  }
+
+  it("shows Uso interno when granted", async () => {
+    await openEditWith(true);
+    expect(screen.getByText("Uso interno")).toBeInTheDocument();
+  });
+
+  it("hides it when not granted, and when the prop is left out", async () => {
+    await openEditWith(false);
+    expect(screen.queryByText("Uso interno")).not.toBeInTheDocument();
+  });
+
+  it("hides it when the caller forgets the prop", async () => {
+    await openEditWith(undefined);
+    expect(screen.queryByText("Uso interno")).not.toBeInTheDocument();
+  });
+});
