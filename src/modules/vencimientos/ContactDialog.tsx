@@ -141,7 +141,7 @@ export function ContactDialog(props: ContactDialogProps) {
             </DialogBody>
 
             <DialogClose
-              render={<Button type="button" variant="ghost" size="icon" className="absolute top-3 right-3 max-sm:size-11" />}
+              render={<Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 min-h-11 min-w-11" />}
             >
               <XIcon aria-hidden="true" />
               <span className="sr-only">Cerrar</span>
