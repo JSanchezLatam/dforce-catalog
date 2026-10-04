@@ -75,4 +75,4 @@ Revert slices in reverse order. Slices 3–5 drop cleanly (the table only holds 
 
 ## Proposal question round
 
-Owner questions were answered 2026-10-03 (`exploration.md`). The mockup was approved by the owner 2026-10-04, settling the former assumptions: estilo list Sedán, Hatchback, SUV, Pick-up, Van/Panel, Coupé, Moto, Otro; colors are free text; the badge counts due-and-not-contacted items (a vehicle due on plate and insurance counts 2). The "Contactar" dialog is an owner decision of the same date. Two dialog copy details remain open in `design.md`.
+Owner questions were answered 2026-10-03 (`exploration.md`). The mockup was approved by the owner 2026-10-04, settling the former assumptions: estilo list Sedán, Hatchback, SUV, Pick-up, Van/Panel, Coupé, Moto, Otro; colors are free text; the badge counts due-and-not-contacted items (a vehicle due on plate and insurance counts 2). The "Contactar" dialog is an owner decision of the same date, and its two copy details were approved the same day (see `design.md` Open Questions).

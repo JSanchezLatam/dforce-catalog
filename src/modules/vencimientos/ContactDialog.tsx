@@ -89,7 +89,7 @@ export function ContactDialog(props: ContactDialogProps) {
                 <label htmlFor={priceId} className="text-sm font-medium">
                   Precio (opcional)
                 </label>
-                <div className="flex min-h-11 items-center rounded-lg border border-input text-sm">
+                <div className="flex min-h-11 items-center rounded-lg border border-input text-sm focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
                   <span className="flex h-full items-center self-stretch border-r bg-muted px-3 text-muted-foreground">B/.</span>
                   <input
                     id={priceId}

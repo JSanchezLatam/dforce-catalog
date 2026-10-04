@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { useToast } from "@/shared/ui/ToastProvider";
 
+import type { VencimientoKind } from "./due";
+
 /**
  * "Marcar como contactado": records the "Contactado" mark. It lives inside the
  * "Contactar" dialog (`ContactDialog`); its props are the item's identity and
@@ -22,7 +24,7 @@ export function ContactadoButton({
   periodKey,
 }: {
   vehiculoId: string;
-  kind: "placa" | "seguro";
+  kind: VencimientoKind;
   periodKey: string;
 }) {
   const router = useRouter();

@@ -87,6 +87,14 @@ describe("ContactDialog — price and preview", () => {
     expect(preview()).not.toHaveTextContent("B/.");
   });
 
+  it("gives the price field a focus ring, since its input's outline-none kills the global one", async () => {
+    const { dialog } = await openDialog();
+    const input = dialog.getByLabelText("Precio (opcional)");
+
+    expect(input.className).toContain("outline-none");
+    expect(input.parentElement!.className).toContain("focus-within:ring-3");
+  });
+
   it("treats a non-numeric price as no price", async () => {
     const { user, dialog } = await openDialog();
 

@@ -29,16 +29,24 @@ const CLIENTE = {
   updatedAt: new Date("2026-01-01"),
 } as unknown as Cliente;
 
-const VEHICULO = {
+const VEHICULO: Vehiculo = {
   id: "v1",
   clienteId: "c1",
   make: null,
   model: null,
   year: null,
   plate: "ABC111",
+  chasis: null,
+  colorPrimario: null,
+  colorSecundario: null,
+  estilo: null,
+  motor: null,
+  numeroUnidad: null,
+  placaRenovacionMes: null,
+  seguroVence: null,
   deactivatedAt: null,
   createdAt: new Date("2026-01-01"),
-} as unknown as Vehiculo;
+};
 
 function mockFetch() {
   vi.stubGlobal(
