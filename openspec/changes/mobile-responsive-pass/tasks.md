@@ -132,6 +132,20 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 - [x] 10.3 Mutation-verify 10.1-10.2 by name (restore 768, restore `md:`).
 - [x] 10.4 (Checked 2026-10-05 at http://192.168.0.25:3000 on /service-orders: 768 and 1023 touch — "Abrir menú" visible, desktop sidebar hidden, the menu opens with the nav links; 1024 and 1280 — no top bar, desktop sidebar visible; no overflow at any width; console clean, no hydration warning.) Matrix at 768, 1024 and 1280: tablets get the menu button; desktop sidebar unchanged at 1280; hydration console clean.
 
+## WU11: Final-audit leftovers (PR 11) — audit-final N1–N6, #12, #14
+
+Owner decision 2026-10-05 for N1: tablets in portrait (768–1023) keep the TABLE (bulk selection stays available) with secondary columns hidden below `lg` so the whole row, including "⋯", fits; from 1024 nothing changes.
+
+- [ ] 11a.1 RED list tests: below `lg` hide Inventario "Categoría 2", Clientes "Email", and the Órdenes column(s) needed to fit 768 (`hidden lg:table-cell` on header and cells, same columns). GREEN the three list pages.
+- [ ] 11a.2 RED: native `<select>`s in `CustomerForm` (Marca/Modelo/Año…) and `ServiceOrderForm` reach 44px on touch (`pointer-coarse:h-11`). GREEN.
+- [ ] 11a.3 RED: `/users` "Mostrar inactivos" checkbox hit area ≥44 on touch. GREEN `UsersTable.tsx`.
+- [ ] 11a.4 RED: `/catalogs` no card nested in a page card (#12). GREEN `catalogs/page.tsx`.
+- [ ] 11a.5 RED: inventory filters collapse behind a "Filtros" toggle below `md` (#14), expanded at `md`+. GREEN `InventoryFilters.tsx`.
+- [ ] 11a.6 RED: light-theme contrast for sidebar group labels (N4) and the muted-on-muted texts (N5: deactivated vehicle card, login footer) ≥4.5:1. GREEN.
+- [ ] 11a.7 RED: order detail customer/vehicle links ≥44px tall on touch (N6). GREEN.
+- [ ] 11a.8 Mutation-verify by name.
+- [ ] 11a.9 Matrix: 768 portrait lists show every column header and "⋯" inside the viewport; 390 audit items above; 1280 unchanged.
+
 ## Final gate and archive notes
 
 - [ ] 11.1 Re-run the audit at 390 in all four role/theme combinations: 0 findings, no `scrollWidth` over the viewport, all action controls >= 44x44 on touch, 1280 list pages unchanged.
