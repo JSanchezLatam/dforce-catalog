@@ -176,6 +176,13 @@
       "when": 1791145243770,
       "tag": "0024_orden_intake",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1791201648533,
+      "tag": "0025_orden_servicio_foto",
+      "breakpoints": true
     }
   ]
 }
