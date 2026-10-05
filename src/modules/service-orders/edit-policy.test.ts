@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { ROLES, type Role } from "@/modules/auth/roles";
 import { orderStatusEnum } from "@/shared/db/schema";
-import { canEditOrderFields } from "./edit-policy";
+import { canChangeOrderPhotos, canEditOrderFields } from "./edit-policy";
 import type { OrderStatus } from "./transitions";
 
 /**
@@ -39,6 +39,28 @@ describe("canEditOrderFields (D11)", () => {
       for (const status of orderStatusEnum.enumValues) {
         expect(TRUTH_TABLE.some(([r, s]) => r === role && s === status)).toBe(true);
       }
+    }
+  });
+});
+
+/**
+ * Photos are a separate gate from `canEditOrderFields`: a técnico must be able
+ * to photograph an `open` order (D11 forbids them its field edits), so this
+ * takes no role. One row per status so a flipped cell fails by name.
+ */
+describe("canChangeOrderPhotos", () => {
+  it.each<[OrderStatus, boolean]>([
+    ["open", true],
+    ["in_progress", true],
+    ["done", false],
+    ["cancelled", false],
+  ])("a %s order -> %s", (status, expected) => {
+    expect(canChangeOrderPhotos(status)).toBe(expected);
+  });
+
+  it("covers every status the schema defines", () => {
+    for (const status of orderStatusEnum.enumValues) {
+      expect(typeof canChangeOrderPhotos(status)).toBe("boolean");
     }
   });
 });

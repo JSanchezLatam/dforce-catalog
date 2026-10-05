@@ -6,7 +6,7 @@
  * here in PR8 (catalog-storage) — see design.md → "Database Schema Outline".
  * Each table is added alongside the code that first needs it.
  */
-import { boolean, check, date, index, integer, jsonb, pgEnum, pgTable, primaryKey, real, smallint, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, check, date, index, integer, jsonb, pgEnum, pgTable, primaryKey, real, smallint, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 /** R9.6 / NFR-8 — single `role` column, extensible without an RBAC library. */
@@ -523,6 +523,30 @@ export const ordenServicio = pgTable(
 );
 
 export type OrdenServicio = typeof ordenServicio.$inferSelect;
+
+/**
+ * `orden_servicio_foto` — reception photos (service-order-reception). The id is
+ * set by `service-orders/photos.ts` (a server-side `crypto.randomUUID()`, never
+ * the client's) and is also the R2 object name, so there is no `content_type`
+ * column: only JPEG is accepted. `position` is assigned under a row lock on the
+ * parent order; the unique index backs that lock up and orders the list.
+ */
+export const ordenServicioFoto = pgTable(
+  "orden_servicio_foto",
+  {
+    id: text("id").primaryKey(),
+    ordenId: text("orden_id")
+      .notNull()
+      .references(() => ordenServicio.id, { onDelete: "cascade" }), // photos die with the order
+    r2Key: text("r2_key").notNull(),
+    position: smallint("position").notNull(),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("orden_servicio_foto_orden_position_idx").on(table.ordenId, table.position)],
+);
+
+export type OrdenServicioFoto = typeof ordenServicioFoto.$inferSelect;
 
 /**
  * `orden_servicio_item` — parts used on a service order (ADR-7). `productName`

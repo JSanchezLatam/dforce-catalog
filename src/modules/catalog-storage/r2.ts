@@ -23,6 +23,11 @@ const client = new S3Client({
     accessKeyId: env.R2_ACCESS_KEY_ID ?? "",
     secretAccessKey: env.R2_SECRET_ACCESS_KEY ?? "",
   },
+  // SDK v3 defaults to a CRC32 on every request and validation on every
+  // response, which R2 does not accept on a PUT. Same opt-out as
+  // `scripts/upload-backup.mjs`.
+  requestChecksumCalculation: "WHEN_REQUIRED",
+  responseChecksumValidation: "WHEN_REQUIRED",
 });
 
 /** R11.1 — uploads the PDF buffer; returns a display-only URL (see env.ts's `R2_PUBLIC_URL` note — never used to serve downloads directly). */

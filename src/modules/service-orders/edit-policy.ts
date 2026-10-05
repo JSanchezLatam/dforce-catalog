@@ -47,3 +47,21 @@ export function canEditOrderFields(role: Role, status: OrderStatus): boolean {
   // a fact. An unrecognised one must refuse, never throw a 500 at the route.
   return EDITABLE[role]?.[status] ?? false;
 }
+
+/**
+ * Reception photos follow the ORDER's status only, never the role: a técnico
+ * must photograph an `open` order even though D11 refuses them its field edits.
+ * Who may DELETE is a role question and lives in `policy.ts`
+ * (`service-orders.deletePhoto`). Exhaustive, so a new status is a tsc error here.
+ */
+const PHOTOS_CHANGEABLE: Record<OrderStatus, boolean> = {
+  open: true,
+  in_progress: true,
+  done: false,
+  cancelled: false,
+};
+
+/** True while the order is still open for work; photos are frozen once it closes. */
+export function canChangeOrderPhotos(status: OrderStatus): boolean {
+  return PHOTOS_CHANGEABLE[status] ?? false;
+}

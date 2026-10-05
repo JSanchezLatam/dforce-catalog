@@ -57,15 +57,15 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU3a: Photo table, R2, service (PR 3a)
 
-- [ ] 3.1 RED `catalog-storage/r2.test.ts`: the client is built with `requestChecksumCalculation` and `responseChecksumValidation` both `"WHEN_REQUIRED"`. GREEN `r2.ts`.
-- [ ] 3.2 `schema.ts`: `orden_servicio_foto(id text PK, orden_id FK cascade, r2_key, position smallint, created_by FK set null, created_at)` + `uniqueIndex(orden_id, position)`. `drizzle-kit generate --name orden_servicio_foto` (0025).
-- [ ] 3.3 RED `edit-policy.test.ts`: `canChangeOrderPhotos` true for open/in_progress, false for done/cancelled. GREEN over an exhaustive `Record<OrderStatus, boolean>`.
-- [ ] 3.4 RED `policy.test.ts`: `service-orders.deletePhoto` administrador true, tecnico false. GREEN `policy.ts`.
-- [ ] 3.5 RED `photos.test.ts` (injected seam): `isJpeg` rejects PNG and text labelled jpeg; `MAX_PHOTO_BYTES` 3 MB; throwing put leaves no row; commit failure after put calls `deleteObject`; 13th throws `PhotoLimitError`; closed order throws; delete runs gate then `DELETE … RETURNING r2_key`, then object delete (failure swallowed). GREEN `service-orders/photos.ts` (`FOR UPDATE`, count, `coalesce(max+1,0)`, insert, put; server `crypto.randomUUID()`).
-- [ ] 3.6 RED e2e `src/e2e/order-photos.e2e.test.ts` (`dforce_e2e`, put injected): 13 concurrent `addOrderPhoto` yield exactly 12 rows and one `PhotoLimitError`; positions ascend after a delete; throwing put rolls back to 0 rows; add on a `done` order refused; delete on `done` refused; cascade removes rows with the order. GREEN: fix real-SQL defects.
-- [ ] 3.7 Retention check: RED test that a retention run deletes nothing under `service-orders/`. GREEN only if it fails.
-- [ ] 3.8 Mutation-verify 3.1-3.7 by name (remove `.for("update")` so the 13-concurrent test goes red, drop the gate, put before insert, drop the checksum options).
-- [ ] 3.9 One real R2 PUT and GET with the new client options, plus an existing catalog PDF download, after the `r2.ts` change.
+- [x] 3.1 RED `catalog-storage/r2.test.ts`: the client is built with `requestChecksumCalculation` and `responseChecksumValidation` both `"WHEN_REQUIRED"`. GREEN `r2.ts`.
+- [x] 3.2 `schema.ts`: `orden_servicio_foto(id text PK, orden_id FK cascade, r2_key, position smallint, created_by FK set null, created_at)` + `uniqueIndex(orden_id, position)`. `drizzle-kit generate --name orden_servicio_foto` (0025).
+- [x] 3.3 RED `edit-policy.test.ts`: `canChangeOrderPhotos` true for open/in_progress, false for done/cancelled. GREEN over an exhaustive `Record<OrderStatus, boolean>`.
+- [x] 3.4 RED `policy.test.ts`: `service-orders.deletePhoto` administrador true, tecnico false. GREEN `policy.ts`.
+- [x] 3.5 RED `photos.test.ts` (injected seam): `isJpeg` rejects PNG and text labelled jpeg; `MAX_PHOTO_BYTES` 3 MB; throwing put leaves no row; commit failure after put calls `deleteObject`; 13th throws `PhotoLimitError`; closed order throws; delete runs gate then `DELETE … RETURNING r2_key`, then object delete (failure swallowed). GREEN `service-orders/photos.ts` (`FOR UPDATE`, count, `coalesce(max+1,0)`, insert, put; server `crypto.randomUUID()`).
+- [x] 3.6 RED e2e `src/e2e/order-photos.e2e.test.ts` (`dforce_e2e`, put injected): 13 concurrent `addOrderPhoto` yield exactly 12 rows and one `PhotoLimitError`; positions ascend after a delete; throwing put rolls back to 0 rows; add on a `done` order refused; delete on `done` refused; cascade removes rows with the order. GREEN: fix real-SQL defects.
+- [x] 3.7 Retention check: RED test that a retention run deletes nothing under `service-orders/`. GREEN only if it fails.
+- [x] 3.8 Mutation-verify 3.1-3.7 by name (remove `.for("update")` so the 13-concurrent test goes red, drop the gate, put before insert, drop the checksum options).
+- [x] 3.9 One real R2 PUT and GET with the new client options, plus an existing catalog PDF download, after the `r2.ts` change.
 
 ## WU3b: Photo routes (PR 3b)
 
