@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mobile Responsive Mockup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          background: "var(--background)", foreground: "var(--foreground)",
+          card: "var(--card)", "card-foreground": "var(--card-foreground)",
+          primary: "var(--primary)", "primary-foreground": "var(--primary-foreground)",
+          muted: "var(--muted)", "muted-foreground": "var(--muted-foreground)",
+          border: "var(--border)", input: "var(--input)",
+          destructive: "var(--destructive)", success: "var(--success)", warning: "var(--warning)",
+        },
+      },
+    },
+  };
+</script>
+<style>
+  /* Tokens copied verbatim from src/app/globals.css (:root and .dark). */
+  .theme-light {
+    --background: hsl(0 0% 100%); --foreground: hsl(240 10% 3.9%);
+    --card: hsl(0 0% 100%); --card-foreground: hsl(240 10% 3.9%);
+    --primary: hsl(240 5.9% 10%); --primary-foreground: hsl(0 0% 98%);
+    --muted: hsl(240 4.8% 95.9%); --muted-foreground: hsl(240 3.8% 46.1%);
+    --destructive: hsl(0 84.2% 60.2%); --warning: hsl(32 95% 44%); --success: hsl(142 71% 45%);
+    --border: hsl(240 5.9% 90%); --input: hsl(240 5.9% 90%);
+  }
+  .theme-dark {
+    --background: hsl(240 10% 3.9%); --foreground: hsl(0 0% 98%);
+    --card: hsl(240 10% 5.9%); --card-foreground: hsl(0 0% 98%);
+    --primary: hsl(0 0% 98%); --primary-foreground: hsl(240 5.9% 10%);
+    --muted: hsl(240 3.7% 15.9%); --muted-foreground: hsl(240 5% 64.9%);
+    --destructive: hsl(0 62.8% 30.6%); --warning: hsl(32 95% 44%); --success: hsl(142 71% 45%);
+    --border: hsl(240 3.7% 15.9%); --input: hsl(240 3.7% 15.9%);
+  }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .phone { width: 390px; }
+  .cr-tag { font: 600 11px/1 ui-monospace, Menlo, monospace; }
+  body.only-dark .col-light, body.only-light .col-dark { display: none; }
+  body.only-dark, body.only-light { width: max-content; }
+</style>
+</head>
+<body class="bg-zinc-200 text-zinc-900">
+<main id="root" class="mx-auto w-max px-8 py-8"></main>
+
+<script>
+const I = {
+  menu: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>',
+  chev: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+  chevDown: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-60"><path d="m6 9 6 6 6-6"/></svg>',
+  refresh: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>',
+  plus: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>',
+  clock: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',
+  loader: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg>',
+  check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg>',
+  ban: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>',
+  calendar: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>',
+  lock: '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+  x: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
+  trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>',
+  tick: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+  home: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+};
+
+/* NEW status chip colours: dark ink on a tint (light), light ink on a tint (dark).
+   Same pattern as badge.tsx:16-33 (text-red-700 dark:text-red-400). */
+const CHIP = {
+  open:        { label: "Abierta",     icon: I.clock,  cls: "bg-zinc-100 text-zinc-700 dark:bg-zinc-400/15 dark:text-zinc-300" },
+  in_progress: { label: "En progreso", icon: I.loader, cls: "bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300" },
+  done:        { label: "Completada",  icon: I.check,  cls: "bg-green-100 text-green-800 dark:bg-green-400/15 dark:text-green-300" },
+  cancelled:   { label: "Cancelada",   icon: I.ban,    cls: "bg-zinc-100 text-zinc-700 dark:bg-zinc-400/15 dark:text-zinc-300 line-through decoration-1" },
+};
+const chip = (s, extra = "") =>
+  `<span data-cr class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${CHIP[s].cls} ${extra}">${CHIP[s].icon}${CHIP[s].label}</span>`;
+
+const topBar = () => `
+  <header class="flex items-center gap-2 border-b border-border px-2 py-1">
+    <button aria-label="Abrir menú" class="flex h-11 w-11 items-center justify-center rounded-md">${I.menu}</button>
+    <span class="truncate font-medium">DForce Car Audio</span>
+  </header>`;
+
+/* Shared page header: title one line at text-2xl on phones (sm:text-[32px]),
+   actions wrap below, 44px tall. */
+const pageHeader = (title, actions = "", sub = "") => `
+  <div class="mb-4 flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+    <div class="min-w-0">
+      <h1 class="text-2xl font-bold leading-tight text-foreground">${title}</h1>
+      ${sub ? `<p class="mt-1 text-sm text-muted-foreground">${sub}</p>` : ""}
+    </div>
+    ${actions ? `<div class="flex flex-wrap gap-2">${actions}</div>` : ""}
+  </div>`;
+const btnOutline = (icon, label) =>
+  `<button class="inline-flex h-11 items-center gap-1.5 rounded-lg border border-border bg-background px-3.5 text-sm font-medium dark:border-input dark:bg-input/30">${icon}${label}</button>`;
+const btnPrimary = (icon, label) =>
+  `<button class="inline-flex h-11 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-sm font-medium text-primary-foreground">${icon}${label}</button>`;
+
+const field = (label, value, placeholder = false) => `
+  <label class="flex min-w-0 flex-1 flex-col gap-1.5">
+    <span class="text-sm font-medium">${label}</span>
+    <span class="flex h-11 items-center justify-between rounded-lg border border-input px-3 text-sm ${placeholder ? "text-muted-foreground" : ""} dark:bg-input/30">${value}${placeholder ? "" : I.chevDown}</span>
+  </label>`;
+const filterBlock = (estado) => `
+  <div class="mb-4 flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+    ${field("Filtro", "Buscar por nombre, placa o teléfono", true)}
+    <div class="flex gap-3">${field("Estado", estado)}<div class="w-28">${field("Filas", "10")}</div></div>
+  </div>`;
+
+const pagination = (pages) => `
+  <nav class="mt-4 flex flex-wrap items-center justify-between gap-2">
+    <div class="flex items-center gap-1">
+      <span class="flex h-11 min-w-11 items-center justify-center rounded-lg bg-primary text-sm font-medium text-primary-foreground">1</span>
+      <span class="flex h-11 min-w-11 items-center justify-center rounded-lg text-sm">2</span>
+      <span class="flex h-11 min-w-11 items-center justify-center rounded-lg text-sm">3</span>
+      <span class="flex h-11 min-w-8 items-center justify-center text-sm text-muted-foreground">…</span>
+      <span class="flex h-11 min-w-11 items-center justify-center rounded-lg text-sm">${pages}</span>
+    </div>
+    <span class="flex h-11 items-center rounded-lg px-3 text-sm font-medium">Siguiente ${I.chev}</span>
+    <span class="w-full text-center text-xs text-muted-foreground">Página 1 de ${pages}</span>
+  </nav>`;
+
+/* Whole card is the link (an <a>), chevron at right — copies /vencimientos' li. */
+const card = (body, opts = {}) => `
+  <li class="list-none">
+    <a class="flex items-center gap-3 rounded-xl border border-border bg-card p-4 ${opts.selected ? "ring-2 ring-primary" : ""}">
+      ${opts.checkbox !== undefined ? checkbox(opts.checkbox) : ""}
+      <div class="flex min-w-0 flex-1 flex-col gap-1.5">${body}</div>
+      <span class="shrink-0 text-muted-foreground">${I.chev}</span>
+    </a>
+  </li>`;
+const checkbox = (on) => `
+  <span class="flex h-11 w-11 shrink-0 items-center justify-center -ml-2 -my-2">
+    <span class="flex h-5 w-5 items-center justify-center rounded-[4px] border ${on ? "border-primary bg-primary text-primary-foreground" : "border-zinc-500 dark:bg-input/30"}">${on ? I.tick : ""}</span>
+  </span>`;
+
+const orders = [
+  ["4d7262a8", "JUANA CONTRERAS", "446422", "Hyundai Tucson", "in_progress", "06/10/2026 09:30"],
+  ["db897480", "EMPRESAS MELO S,A.", "DA2160", "MG MG3", "open", "07/10/2026 14:00"],
+  ["6a67a359", "JUSTO ALBERTO MARIN", "AA000", "Hyundai Accent", "done", "02/10/2026 08:00"],
+  ["2adc07ff", "Rosa Martínez", "XYZ-999", "Toyota Hilux", "cancelled", "29/09/2026 10:15"],
+];
+const orderCard = ([id, name, plate, veh, st, cita], opts) => card(`
+  <div class="flex items-start justify-between gap-2">
+    <div class="min-w-0">
+      <div class="truncate font-medium">${name}</div>
+      <div class="font-mono text-xs text-muted-foreground">#${id}</div>
+    </div>
+    ${chip(st)}
+  </div>
+  <div class="flex items-center gap-2 text-sm"><span class="font-mono font-medium">${plate}</span><span class="truncate">${veh}</span></div>
+  <div class="flex items-center gap-1.5 text-sm text-muted-foreground">${I.calendar}Cita ${cita}</div>`, opts);
+
+const statusPill = (active) => active
+  ? `<span data-cr class="inline-flex shrink-0 items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-400/15 dark:text-green-300">Activo</span>`
+  : `<span data-cr class="inline-flex shrink-0 items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-400/15 dark:text-red-300">Desactivado</span>`;
+const customers = [
+  ["JUANA CONTRERAS", "6651-8556", ["446422"], true],
+  ["EMPRESAS MELO S,A.", "6989-2546", ["DA2160", "DB4410", "EM0021"], true],
+  ["JUSTO ALBERTO MARIN", "6002-8397", ["AA000"], true],
+  ["YAMILETH CUBILLA", "6948-1203", [], false],
+];
+const customerCard = ([name, phone, plates, active]) => card(`
+  <div class="flex items-start justify-between gap-2">
+    <div class="min-w-0"><div class="truncate font-medium">${name}</div><div class="text-xs text-muted-foreground">${phone}</div></div>
+    ${statusPill(active)}
+  </div>
+  <div class="flex flex-wrap items-center gap-1.5 text-sm">
+    ${plates.length ? `<span class="text-muted-foreground">${plates.length} ${plates.length === 1 ? "vehículo" : "vehículos"}:</span>` + plates.map((p) => `<span class="rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-xs font-medium">${p}</span>`).join("") : `<span class="text-muted-foreground">Sin vehículos</span>`}
+  </div>`);
+
+const products = [
+  ["PS0000570", "3.8 SUPER TWEETER FERRITE 300W", "$12.50", 24],
+  ["PS0000086", "ACEITE 0W20 VALVOLINE FULL SINTÉTICO 1/4", "$9.75", 48],
+  ["PS0000466", "ABANICO HYU ACCENT 17-20", "$85.00", 2],
+  ["PS0000045", "ACEITE 15W40 DIESEL (GALÓN)", "$32.00", 0],
+];
+const productCard = ([code, name, price, stock]) => card(`
+  <div class="line-clamp-2 font-medium leading-snug">${name}</div>
+  <div class="flex items-center justify-between gap-2 text-sm">
+    <span class="font-mono text-xs text-muted-foreground">${code}</span>
+    <span class="flex items-center gap-3"><span class="font-medium tabular-nums">${price}</span>
+    ${stock > 0 ? `<span class="tabular-nums text-muted-foreground">Stock ${stock}</span>` : `<span data-cr class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 dark:bg-red-400/15 dark:text-red-300">Sin stock</span>`}</span>
+  </div>`);
+
+const shell = (inner, h = "") => `${topBar()}<div class="p-4 ${h}">${inner}</div>`;
+
+/* ---------------- panels ---------------- */
+const PANELS = [
+  {
+    n: 1, title: "Órdenes de servicio — tarjetas",
+    cap: "Encabezado compartido: título en una línea (24px en celular, 32px desde sm), acciones de 44px que bajan abajo del título. Toda la tarjeta abre la orden; la flecha lo indica. Estado y Cita vuelven a verse. Paginación de 44px.",
+    phone: () => shell(
+      pageHeader("Órdenes de servicio", btnOutline(I.refresh, "Actualizar") + btnPrimary(I.plus, "Nueva orden")) +
+      filterBlock("Todos") +
+      `<ul class="flex flex-col gap-3">${orders.map((o) => orderCard(o)).join("")}</ul>` + pagination(12)),
+  },
+  {
+    n: 2, title: "Clientes — tarjetas",
+    cap: "Nombre, teléfono, cantidad de vehículos con sus placas y el estado. El email queda en la ficha del cliente.",
+    phone: () => shell(
+      pageHeader("Clientes", btnPrimary(I.plus, "Nuevo cliente"), "Los clientes del taller y sus vehículos.") +
+      filterBlock("Activos") +
+      `<ul class="flex flex-col gap-3">${customers.map(customerCard).join("")}</ul>` + pagination(39)),
+  },
+  {
+    n: 3, title: "Inventario — tarjetas",
+    cap: "Nombre, código, precio y stock. Ojo: la tabla de escritorio hoy NO muestra precio ni stock (se traen pero no tienen columna); en la tarjeta se agregan — confirmar. Elegir productos para un catálogo sigue siendo en tablet/escritorio.",
+    phone: () => shell(
+      pageHeader("Inventario", "", "712 productos sincronizados desde Interfuerza") +
+      `<div class="mb-4 flex flex-col gap-3 rounded-xl border border-border bg-card p-4">${field("Nombre", "Filtrar por nombre…", true)}<div class="flex gap-3">${field("Categoría 1", "Todos")}${field("Stock", "Todos")}</div></div>` +
+      `<ul class="flex flex-col gap-3">${products.map(productCard).join("")}</ul>` + pagination(72)),
+  },
+  {
+    n: 4, title: "Selección en lote — dos opciones",
+    cap: "Opción 1 (recomendada): en celular no hay casillas; las acciones en lote quedan en tablet/escritorio. Opción 2: una casilla de 44px en cada tarjeta y la barra de acciones fija abajo.",
+    compare: true,
+  },
+  {
+    n: 5, title: "Técnico — pantalla “sin permiso” compartida",
+    cap: "Una sola pantalla para las 16 páginas: mismo título de la página, ícono, explicación y botón de 44px para volver.",
+    phone: () => shell(
+      pageHeader("Vencimientos próximos") + `
+      <div class="flex flex-col items-center gap-3 rounded-xl border border-border bg-card px-6 py-12 text-center">
+        <span class="flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground">${I.lock}</span>
+        <h2 class="text-base font-semibold">No tenés permiso para ver esta página</h2>
+        <p class="text-sm text-muted-foreground">Pedile acceso a un administrador.</p>
+        <span class="mt-2 inline-flex h-11 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground">${I.home}Volver al inicio</span>
+      </div>`, "min-h-[560px]"),
+  },
+  {
+    n: 6, title: "Arreglos de color — Antes / Después",
+    cap: "Cada fila muestra el valor de contraste medido en la página (mínimo legible 4.5:1).",
+    colors: true,
+  },
+];
+
+/* Bulk option comparison (two mini phones per theme column). */
+function bulkCompare() {
+  const opt1 = `${topBar()}<div class="p-4">
+      <div class="mb-3 text-sm font-semibold">Opción 1 (recomendada): sin casillas en celular</div>
+      <ul class="flex flex-col gap-3">${orders.slice(0, 3).map((o) => orderCard(o)).join("")}</ul>
+      <p class="mt-3 text-xs text-muted-foreground">Para marcar varias órdenes a la vez, usar la tablet o la computadora.</p></div>`;
+  const opt2 = `${topBar()}<div class="relative p-4 pb-24">
+      <div class="mb-3 text-sm font-semibold">Opción 2: casilla en cada tarjeta</div>
+      <ul class="flex flex-col gap-3">${orders.slice(0, 3).map((o, i) => orderCard(o, { checkbox: i < 2, selected: i < 2 })).join("")}</ul>
+      <div class="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 border-t border-border bg-card px-4 py-2 shadow-lg">
+        <span class="whitespace-nowrap text-sm font-medium">2 seleccionadas</span>
+        <div class="flex gap-2">
+          <span aria-label="Quitar selección" class="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-border dark:border-input">${I.x}</span>
+          <span class="inline-flex h-11 items-center gap-1 whitespace-nowrap rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground">Marcar como… ${I.chevDown}</span>
+        </div>
+      </div></div>`;
+  return [opt1, opt2];
+}
+
+/* Colour strip. Before = today's classes resolved from the tokens. */
+function colorRows() {
+  const row = (name, before, after) => `
+    <div class="border-b border-border px-4 py-3 last:border-0">
+      <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">${name}</div>
+      <div class="flex flex-col gap-2">
+        <div class="flex items-center gap-3"><span class="w-14 shrink-0 text-[11px] font-medium text-muted-foreground">Antes</span><span class="whitespace-nowrap">${before}</span><span class="cr-tag ml-auto"></span></div>
+        <div class="flex items-center gap-3"><span class="w-14 shrink-0 text-[11px] font-medium text-muted-foreground">Después</span><span class="whitespace-nowrap">${after}</span><span class="cr-tag ml-auto"></span></div>
+      </div>
+    </div>`;
+  const oldChip = `<span data-cr class="inline-flex items-center gap-1 rounded-full bg-success px-2 py-0.5 text-xs font-medium text-white">${I.check}Completada</span>`;
+  const oldDestr = `<span data-cr class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-destructive/20 px-2.5 text-sm font-medium text-destructive">${I.trash}Eliminar definitivamente</span>`;
+  const newDestr = `<span data-cr class="inline-flex h-11 items-center gap-1.5 rounded-lg bg-red-500/10 px-3 text-sm font-medium text-red-700 dark:bg-red-500/20 dark:text-red-300">${I.trash}Eliminar definitivamente</span>`;
+  const oldToast = `<span data-cr class="inline-flex items-center gap-2 rounded-lg bg-success px-3 py-2 text-sm font-medium text-white">${I.check}Cliente actualizado</span>`;
+  const newToast = `<span data-cr class="inline-flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-3 py-2 text-sm font-medium text-green-800 dark:border-green-400/30 dark:bg-green-950 dark:text-green-300">${I.check}Cliente actualizado</span>`;
+  const oldCb = `<span class="flex items-center gap-2 text-sm"><span data-cb class="h-4 w-4 rounded-[4px] border border-input dark:bg-input/30"></span>JUANA CONTRERAS</span>`;
+  const newCb = `<span class="flex items-center gap-2 text-sm"><span class="flex h-11 w-11 items-center justify-center -mx-3.5 -my-2"><span data-cb class="h-5 w-5 rounded-[4px] border border-zinc-500 dark:bg-input/30"></span></span>JUANA CONTRERAS</span>`;
+  const oldAv = `<span data-cr class="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">A</span>`;
+  const newAv = `<span data-cr class="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">A</span>`;
+  return `<div class="rounded-xl border border-border bg-card">
+    ${row("Etiqueta de estado (#6)", oldChip, chip("done"))}
+    ${row("Eliminar definitivamente (#7) — peor en oscuro", oldDestr, newDestr)}
+    ${row("Aviso “Cliente actualizado” (#6) — se veía mal en claro", oldToast, newToast)}
+    ${row("Casilla de tabla (#20) — casi invisible en claro", oldCb, newCb)}
+    ${row("Inicial del usuario en Inventario (#19) — invisible en oscuro", oldAv, newAv)}
+  </div>`;
+}
+
+const frame = (theme, html, label) => `
+  <div class="flex flex-col gap-2 col-${theme}">
+    <div class="text-xs font-semibold uppercase tracking-wider text-zinc-600">${label ?? (theme === "dark" ? "Oscuro" : "Claro")} · 390px</div>
+    <div class="phone theme-${theme} ${theme === "dark" ? "dark" : ""} overflow-hidden rounded-[28px] border-[6px] border-zinc-800 bg-background text-foreground shadow-xl">${html}</div>
+  </div>`;
+
+function render() {
+  const out = [`<header class="mb-8 max-w-[820px]">
+      <div class="text-xs font-semibold uppercase tracking-wider text-zinc-500">Maqueta para aprobar · mobile-responsive-pass</div>
+      <h1 class="mt-1 text-3xl font-bold">Celular a 390px: listas en tarjetas, encabezado, “sin permiso” y colores</h1>
+      <p class="mt-2 text-sm text-zinc-600">Cada panel en modo oscuro y claro. Datos de ejemplo. El escritorio (tabla) no cambia.</p>
+    </header>`];
+  for (const p of PANELS) {
+    let cols;
+    if (p.compare) {
+      const [a, b] = bulkCompare();
+      cols = ["dark", "light"].map((t) => `<div class="flex gap-4 col-${t}">${frame(t, a, (t === "dark" ? "Oscuro" : "Claro") + " · opción 1")}${frame(t, b, (t === "dark" ? "Oscuro" : "Claro") + " · opción 2")}</div>`).join("");
+    } else if (p.colors) {
+      cols = ["dark", "light"].map((t) => frame(t, `<div class="p-4">${colorRows()}</div>`)).join("");
+    } else {
+      cols = ["dark", "light"].map((t) => frame(t, p.phone())).join("");
+    }
+    out.push(`<section class="mb-12">
+      <h2 class="text-xl font-bold">${p.n}. ${p.title}</h2>
+      <p class="mb-4 mt-1 max-w-[820px] text-sm text-zinc-600">${p.cap}</p>
+      <div class="flex items-start gap-8">${cols}</div>
+    </section>`);
+  }
+  document.getElementById("root").innerHTML = out.join("");
+}
+
+/* Contrast: blend each colour over the first opaque ancestor background. */
+const ctx = document.createElement("canvas").getContext("2d");
+function rgba(c) {
+  ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = "#000"; ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1);
+  const d = ctx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255];
+}
+function bgOf(el) {
+  const layers = [];
+  for (let e = el; e; e = e.parentElement) {
+    const c = rgba(getComputedStyle(e).backgroundColor);
+    if (getComputedStyle(e).backgroundColor !== "rgba(0, 0, 0, 0)" && c[3] > 0) { layers.push(c); if (c[3] >= 1) break; }
+  }
+  let base = [255, 255, 255];
+  for (const [r, g, b, a] of layers.reverse()) base = [r * a + base[0] * (1 - a), g * a + base[1] * (1 - a), b * a + base[2] * (1 - a)];
+  return base;
+}
+const lum = (c) => { const [r, g, b] = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+function measure() {
+  document.querySelectorAll(".cr-tag").forEach((tag) => {
+    const target = tag.parentElement.querySelector("[data-cr],[data-cb]");
+    if (!target) return;
+    const bg = bgOf(target.parentElement);
+    let r;
+    if (target.hasAttribute("data-cb")) {
+      const [cr, cg, cb] = rgba(getComputedStyle(target).borderTopColor);
+      r = ratio([cr, cg, cb], bg); tag.textContent = `borde ${r.toFixed(1)}:1`;
+      tag.className = "cr-tag " + (r >= 3 ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300");
+      return;
+    }
+    const own = bgOf(target);
+    const [fr, fg, fb, fa] = rgba(getComputedStyle(target).color);
+    const fgc = [fr * fa + own[0] * (1 - fa), fg * fa + own[1] * (1 - fa), fb * fa + own[2] * (1 - fa)];
+    r = ratio(fgc, own);
+    tag.textContent = `${r.toFixed(1)}:1`;
+    tag.className = "cr-tag " + (r >= 4.5 ? "text-green-700 dark:text-green-300" : "text-red-700 dark:text-red-300");
+  });
+  /* Also verify every new chip in the cards meets 4.5:1; mark failures loudly. */
+  document.querySelectorAll("ul [data-cr]").forEach((el) => {
+    const own = bgOf(el); const [r, g, b] = rgba(getComputedStyle(el).color);
+    if (ratio([r, g, b], own) < 4.5) el.style.outline = "2px dashed red";
+  });
+}
+
+const only = new URLSearchParams(location.search).get("only");
+if (only) document.body.classList.add("only-" + only);
+render();
+window.addEventListener("load", () => setTimeout(() => { measure(); document.body.dataset.ready = "1"; }, 300));
+</script>
+</body>
+</html>
