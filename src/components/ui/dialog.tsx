@@ -83,7 +83,7 @@ function DialogContent({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className="absolute top-3 right-3"
+                  className="absolute top-3 right-3 pointer-coarse:min-h-11 pointer-coarse:min-w-11"
                 />
               }
             >
@@ -153,7 +153,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("font-heading text-lg font-semibold text-foreground", className)}
+      className={cn("font-heading text-lg font-semibold text-foreground pointer-coarse:pr-10", className)}
       {...props}
     />
   )
