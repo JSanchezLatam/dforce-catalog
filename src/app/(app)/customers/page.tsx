@@ -282,7 +282,7 @@ export default async function CustomersPage({
                           // NOT `CHIP`: that class marks neutral metadata
                           // (make, model, year), so a retired customer would
                           // read with the same weight as "Toyota".
-                          <span className="ml-2 rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+                          <span className="ml-2 rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
                             Desactivado
                           </span>
                         )}

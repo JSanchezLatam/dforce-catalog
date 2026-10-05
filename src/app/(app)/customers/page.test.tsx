@@ -187,6 +187,15 @@ describe("CustomersPage — deactivated customers (R20)", () => {
     expect(screen.getByText("Desactivado")).toBeInTheDocument();
   });
 
+  // Dark's `--destructive` is a background maroon: as text it measured 1.80:1.
+  it("words the Desactivado chip in the theme-paired red, never text-destructive", async () => {
+    render(await renderPage({ status: "all" }));
+    const chip = screen.getByText("Desactivado");
+    expect(chip.className).toContain("text-red-700");
+    expect(chip.className).toContain("dark:text-red-400");
+    expect(chip.className).not.toMatch(/(^|\s)text-destructive(\s|$)/);
+  });
+
   // Migration `0016` made `phone` NOT NULL, so "no phone on record" became
   // `""` — and the cell used `??`, which is NULLISH. The phone column rendered
   // blank while every other column showed an em dash. `design.md` D4 audited

@@ -6,10 +6,11 @@ import { cn } from "@/lib/utils"
 /**
  * A block-level message box: an icon in the gutter, the message beside it.
  *
- * `destructive` deliberately reuses the exact triple the "Desactivado" chip on
- * the customer list already renders (`border-destructive/40 bg-destructive/10
- * text-destructive`) rather than inventing a second red. One red vocabulary in
- * the app means a bordered red box always reads as the same severity.
+ * `destructive` shares its red with the "Desactivado" chip on the customer
+ * list and the destructive Badge/Button: a `--destructive` tinted ground with
+ * `text-red-700 dark:text-red-400` text. One red vocabulary in the app means a
+ * bordered red box always reads as the same severity. The text is NOT
+ * `text-destructive`: dark's token is a background maroon (1.80:1 as text).
  *
  * FORM- and BLOCK-level only. A validation message under one input stays plain
  * red text (`FIELD_ERROR`): boxing every field error makes a six-field form
