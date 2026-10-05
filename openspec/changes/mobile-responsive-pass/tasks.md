@@ -43,7 +43,7 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 
 - [x] 1.1 RED `StatusBadge.test`: every chip class carries a `dark:` twin from the mockup `CHIP` map. GREEN `StatusBadge.tsx`.
 - [x] 1.2 RED `Toast` test: success and warning maps carry paired classes. GREEN `Toast.tsx`.
-- [x] 1.3 RED `button` / `alert` tests: `destructive` contains `text-red-700 dark:text-red-400`. GREEN `button.tsx`, `alert.tsx`; same fix in `LogoutButton` and `InventoryCatalogHandoff` (`text-destructive` as text).
+- [x] 1.3 RED `button` / `alert` tests: `destructive` contains `text-red-700 dark:text-red-400`. GREEN `button.tsx`, `alert.tsx`; same fix in `LogoutButton` and `InventoryCatalogHandoff` (`text-destructive` as text). (Button deviates on purpose: it uses the approved mockup's "Eliminar definitivamente" pair `bg-red-500/10 text-red-700 dark:bg-red-500/20 dark:text-red-300`, measured 8.32 dark / 5.54 light; Alert, FIELD_ERROR and the chips keep the shared `text-red-700 dark:text-red-400`.)
 - [x] 1.4 RED `checkbox` test: border is `border-muted-foreground`, not `border-input`. GREEN `checkbox.tsx`.
 - [x] 1.5 RED `InventoryStatsHeader` test: avatar uses `text-primary-foreground`, no `text-white`. GREEN.
 - [x] 1.6 RED `styles.test`: `SUCCESS_TEXT` and `FIELD_ERROR` each carry a `dark:` pair. GREEN `styles.ts`; replace the 5 `text-green-600` copies (`PasswordForm:105`, `ProfileForm:71`, `WorkshopConfigForm:321`, `TemplateConfigForm:252`, `CatalogBuilderForm:965-966`).
