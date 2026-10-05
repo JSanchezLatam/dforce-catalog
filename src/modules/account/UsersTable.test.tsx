@@ -1012,3 +1012,17 @@ describe("UsersTable — phone cards (WU8)", () => {
     expect(bar.parentElement).toHaveClass("hidden", "md:block");
   });
 });
+
+describe("UsersTable — 'Mostrar inactivos' hit area on touch (mobile-responsive-pass N3)", () => {
+  // The native checkbox is 16x16; the label beside it is the real target and
+  // only widened it, never made it taller. jsdom matches no media query, so
+  // this reads the class that carries the floor.
+  it("the label that toggles the checkbox is 44px tall on a touch screen", () => {
+    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+
+    const label = screen.getByText("Mostrar inactivos");
+    expect(label.tagName).toBe("LABEL");
+    expect(label).toHaveAttribute("for", screen.getByLabelText("Mostrar inactivos").id);
+    expect(label).toHaveClass("pointer-coarse:min-h-11");
+  });
+});

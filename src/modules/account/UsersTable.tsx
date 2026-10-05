@@ -207,9 +207,9 @@ export function UsersTable({ users }: { users: UserRow[] }) {
           type="checkbox"
           checked={showInactive}
           onChange={(e) => setShowInactive(e.target.checked)}
-          className="h-4 w-4 rounded border-input"
+          className="h-4 w-4 rounded border-input pointer-coarse:size-6"
         />
-        <Label htmlFor="show-inactive">Mostrar inactivos</Label>
+        <Label htmlFor="show-inactive" className="pointer-coarse:min-h-11">Mostrar inactivos</Label>
       </div>
 
       {error && (
