@@ -361,7 +361,9 @@ describe("ServiceOrderPrintPage", () => {
     expect(can).toHaveBeenCalledWith({ id: "u1", role: "tecnico" }, "service-orders.read");
     // AGENTS.md: "Tests assert the Spanish string. Those are what catch an
     // untranslated screen." Every gated page uses this exact wording.
-    expect(screen.getByText("No tenés permiso para ver esta página.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Orden de servicio" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "No tenés permiso para ver esta página" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Volver al inicio" })).toHaveAttribute("href", "/");
     // Not "the data happens to be absent" — the page must not have queried.
     expect(getOrdenServicioById).not.toHaveBeenCalled();
     expect(screen.queryByText("Ana Gómez")).not.toBeInTheDocument();

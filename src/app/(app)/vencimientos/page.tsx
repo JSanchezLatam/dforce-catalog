@@ -1,4 +1,5 @@
 import { CalendarCheck } from "lucide-react";
+import { PermissionDenied } from "@/shared/ui/PermissionDenied";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -66,7 +67,7 @@ type Item = ReturnType<typeof toItem>;
 export default async function VencimientosPage() {
   const user = await requireSessionFromHeaders();
   if (!can(user, "vencimientos.read")) {
-    return <div className="p-4 sm:p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
+    return <PermissionDenied title="Vencimientos próximos" />;
   }
 
   const now = new Date();

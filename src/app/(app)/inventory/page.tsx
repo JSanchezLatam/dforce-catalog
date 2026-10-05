@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PermissionDenied } from "@/shared/ui/PermissionDenied";
 import { ArrowDown, ArrowUp, Eye, PackageSearch } from "lucide-react";
 
 import { can } from "@/modules/auth/policy";
@@ -54,7 +55,7 @@ export default async function InventoryPage({
   const sort = parseInventorySort(params);
   const user = await requireSessionFromHeaders();
   if (!can(user, "inventory.read")) {
-    return <div className="p-4 sm:p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
+    return <PermissionDenied title="Inventario" />;
   }
   const canTriggerSync = can(user, "sync.manual"); // R2 — admin-only manual sync trigger
   /**

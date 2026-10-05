@@ -50,3 +50,25 @@ describe("responsive guards — page padding", () => {
     },
   );
 });
+
+/**
+ * Audit #18: fifteen pages carried their own copy of the refusal sentence, so
+ * none could be given a title, an icon or a way out without 15 edits. The
+ * sentence now lives in `PermissionDenied` alone. Unlike padding, the print
+ * page is scanned too: its refusal is a screen, not a sheet of paper.
+ */
+const REFUSAL = "No tenés permiso para ver esta página";
+const ALL_PAGES = pageFiles(APP_ROOT);
+
+describe("responsive guards — refusal screen", () => {
+  it("scans the print page as well", () => {
+    expect(ALL_PAGES.some((file) => file.includes(`${path.sep}print${path.sep}`))).toBe(true);
+  });
+
+  it.each(ALL_PAGES.map((file) => [path.relative(process.cwd(), file), file]))(
+    "%s renders <PermissionDenied>, not its own copy of the sentence",
+    (_name, file) => {
+      expect(fs.readFileSync(file, "utf8")).not.toContain(REFUSAL);
+    },
+  );
+});

@@ -1,4 +1,5 @@
 import { CatalogBuilderForm } from "@/modules/catalog-builder/CatalogBuilderForm";
+import { PermissionDenied } from "@/shared/ui/PermissionDenied";
 import { listCategoryPairs } from "@/modules/catalog-builder/queries";
 import { parseSeedProductIds } from "@/modules/catalog-builder/selection";
 import { countUploadedCatalogsForUser } from "@/modules/catalog-storage/queries";
@@ -43,7 +44,7 @@ export default async function CatalogBuilderPage({
   const seedProductIds = parseSeedProductIds(params.products);
   const user = await requireSessionFromHeaders();
   if (!can(user, "catalogs.generate")) {
-    return <div className="p-4 sm:p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
+    return <PermissionDenied title="Generar catálogo" />;
   }
 
   const [categoryL1Options, categoryPairs] = await Promise.all([

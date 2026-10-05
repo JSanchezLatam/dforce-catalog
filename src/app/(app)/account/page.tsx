@@ -1,4 +1,5 @@
 import { can } from "@/modules/auth/policy";
+import { PermissionDenied } from "@/shared/ui/PermissionDenied";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getUserProfile } from "@/modules/account/queries";
 import { ProfileForm } from "@/modules/account/ProfileForm";
@@ -11,10 +12,7 @@ export default async function AccountPage() {
 
   if (!can(user, "account.self")) {
     return (
-      <div className="p-4 sm:p-8">
-        <PageHeader title="Mi cuenta" />
-        <p className="text-sm text-foreground">No tenés permiso para ver esta página.</p>
-      </div>
+      <PermissionDenied title="Mi cuenta" />
     );
   }
 

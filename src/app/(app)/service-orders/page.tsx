@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PermissionDenied } from "@/shared/ui/PermissionDenied";
 import { ArrowDown, ArrowUp, Eye, Wrench } from "lucide-react";
 
 import { can } from "@/modules/auth/policy";
@@ -76,7 +77,7 @@ export default async function ServiceOrdersPage({
 
   const user = await requireSessionFromHeaders();
   if (!can(user, "service-orders.read")) {
-    return <div className="p-4 sm:p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
+    return <PermissionDenied title="Órdenes de servicio" />;
   }
 
   // `listInventory({}, { offset: 0, limit: 1000 })` used to be a third leg of

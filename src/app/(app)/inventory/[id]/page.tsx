@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PermissionDenied } from "@/shared/ui/PermissionDenied";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
@@ -41,7 +42,7 @@ export default async function ProductDetailPage({
   const { id } = await params;
   const user = await requireSessionFromHeaders();
   if (!can(user, "inventory.read")) {
-    return <div className="p-4 sm:p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
+    return <PermissionDenied title="Producto" />;
   }
 
   const product = await getProductById(id);

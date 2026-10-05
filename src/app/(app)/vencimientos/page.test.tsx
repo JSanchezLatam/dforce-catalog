@@ -86,7 +86,9 @@ describe("/vencimientos — access", () => {
     can.mockImplementation((_u, action) => action !== "vencimientos.read");
     render(await VencimientosPage());
 
-    expect(screen.getByText("No tenés permiso para ver esta página.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Vencimientos próximos" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "No tenés permiso para ver esta página" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Volver al inicio" })).toHaveAttribute("href", "/");
     expect(getDueVencimientos).not.toHaveBeenCalled();
   });
 });

@@ -857,6 +857,8 @@ describe("CustomersPage — read gate", () => {
 
     render(await CustomersPage({ searchParams: Promise.resolve({}) }));
 
-    expect(screen.getByText("No tenés permiso para ver esta página.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Clientes" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "No tenés permiso para ver esta página" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Volver al inicio" })).toHaveAttribute("href", "/");
   });
 });

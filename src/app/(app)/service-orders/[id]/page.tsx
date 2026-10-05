@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from "react";
+import { PermissionDenied } from "@/shared/ui/PermissionDenied";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BellRing, TriangleAlert } from "lucide-react";
@@ -88,7 +89,7 @@ export default async function ServiceOrderDetailPage({
   const { id } = await params;
   const user = await requireSessionFromHeaders();
   if (!can(user, "service-orders.read")) {
-    return <div className="p-4 sm:p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
+    return <PermissionDenied title="Orden de servicio" />;
   }
 
   const detail = await getOrdenServicioById(id);
