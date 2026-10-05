@@ -42,7 +42,7 @@ export type CustomerFormVehiculo = PublicVehiculo & Partial<Pick<Vehiculo, "plac
 
 /** Same focus-ring pairing as `ServiceOrderForm`'s native selects: `outline-none` needs its ring back. */
 const NATIVE_FIELD =
-  "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm";
+  "h-8 pointer-coarse:h-11 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm";
 
 const MONTH_LABELS = MONTH_NAMES.map((m) => m[0].toUpperCase() + m.slice(1));
 

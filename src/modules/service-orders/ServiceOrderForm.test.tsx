@@ -1155,3 +1155,23 @@ describe("ServiceOrderForm — a network failure has to say so", () => {
   // assertion was written, run, and passed against the unfixed component.
   // Deleted rather than kept as a placebo.
 });
+
+describe("ServiceOrderForm — native selects on touch (mobile-responsive-pass N2)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ vehicles: [] })));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("the Vehículo and Categoría selects reach 44px on a touch screen", () => {
+    render(<ServiceOrderForm selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+    openDialog();
+
+    for (const select of [vehicleSelect(), categorySelect()]) {
+      expect(select.tagName).toBe("SELECT");
+      expect(select).toHaveClass("pointer-coarse:h-11");
+    }
+  });
+});
