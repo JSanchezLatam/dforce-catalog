@@ -34,10 +34,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         initialCollapseState={initialCollapseState}
       />
       <SidebarInset>
-        {/* Below `md` the sidebar is an off-canvas Sheet with no other way to open
+        {/* Below `lg` the sidebar is an off-canvas Sheet with no other way to open
             it, so phones get this bar. `aria-label` replaces shadcn's English
             sr-only "Toggle Sidebar"; `min-h-11 min-w-11` is the 44x44 rule. */}
-        <header className="flex items-center gap-2 border-b px-2 py-1 md:hidden print:hidden">
+        <header className="flex items-center gap-2 border-b px-2 py-1 lg:hidden print:hidden">
           <SidebarTrigger aria-label="Abrir menú" className="min-h-11 min-w-11" />
           {config?.name && <span className="truncate font-medium">{config.name}</span>}
         </header>
