@@ -13,7 +13,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/shared/db/client";
 import { catalogs, cliente, ordenServicio, ordenServicioFoto, users, vehiculo } from "@/shared/db/schema";
 import { runRetentionForUser } from "../modules/catalog-storage/retention";
-import { addOrderPhoto, deleteOrderPhoto, MAX_PHOTOS, OrderClosedError, PhotoLimitError, type PhotoDeps } from "../modules/service-orders/photos";
+import { addOrderPhoto, deleteOrderPhoto, findOrderPhoto, MAX_PHOTOS, OrderClosedError, PhotoLimitError, type PhotoDeps } from "../modules/service-orders/photos";
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -204,5 +204,14 @@ describe("orden_servicio_foto (E2E)", () => {
     } finally {
       await db.delete(catalogs).where(eq(catalogs.userId, userId));
     }
+  });
+
+  it("findOrderPhoto resolves by (photoId, ordenId): the same id under another order is not found", async () => {
+    const ordenId = await newOrder();
+    const otherId = await newOrder();
+    const { id, r2Key } = await addOrderPhoto({ ordenId, bytes: JPEG }, deps());
+
+    expect(await findOrderPhoto({ ordenId, photoId: id })).toEqual({ r2Key });
+    expect(await findOrderPhoto({ ordenId: otherId, photoId: id })).toBeNull();
   });
 });

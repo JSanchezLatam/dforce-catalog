@@ -1,0 +1,84 @@
+import { NextResponse, type NextRequest } from "next/server";
+
+import { can } from "@/modules/auth/policy";
+import { requireSession } from "@/modules/auth/session";
+import { getObject } from "@/modules/catalog-storage/r2";
+import {
+  deleteOrderPhoto,
+  findOrderPhoto,
+  OrderClosedError,
+  PhotoNotFoundError,
+} from "@/modules/service-orders/photos";
+import { OrdenServicioNotFoundError } from "@/modules/service-orders/service";
+
+type Ids = { ordenId: string; photoId: string };
+type Context = { params: Promise<{ id: string; photoId: string }> };
+
+export type GetPhotoDeps = { findPhoto?: typeof findOrderPhoto; getObject?: typeof getObject };
+export type DeletePhotoDeps = { deletePhoto?: typeof deleteOrderPhoto };
+
+export async function handleGetPhoto(
+  request: NextRequest,
+  ids: Ids,
+  deps: GetPhotoDeps = {},
+): Promise<NextResponse> {
+  const user = requireSession(request);
+  if (!can(user, "service-orders.read")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Both ids: a photo id taken from another order must not resolve here.
+  const photo = await (deps.findPhoto ?? findOrderPhoto)(ids);
+  if (!photo) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const buffer = await (deps.getObject ?? getObject)(photo.r2Key);
+  if (!buffer) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  return new NextResponse(new Uint8Array(buffer), {
+    status: 200,
+    headers: {
+      "Content-Type": "image/jpeg",
+      "Content-Disposition": "inline",
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+      "X-Content-Type-Options": "nosniff",
+      // The bytes behind a photo id never change, and the print page re-requests up to 12 of them.
+      "Cache-Control": "private, max-age=86400, immutable",
+      ETag: ids.photoId,
+    },
+  });
+}
+
+export async function handleDeletePhoto(
+  request: NextRequest,
+  ids: Ids,
+  deps: DeletePhotoDeps = {},
+): Promise<NextResponse> {
+  const user = requireSession(request);
+  // 403 before any lookup, so a técnico cannot probe which photo ids exist.
+  if (!can(user, "service-orders.deletePhoto")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    await (deps.deletePhoto ?? deleteOrderPhoto)(ids);
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    if (err instanceof PhotoNotFoundError || err instanceof OrdenServicioNotFoundError) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+    if (err instanceof OrderClosedError) {
+      return NextResponse.json({ error: "order_closed", message: err.message }, { status: 409 });
+    }
+    throw err;
+  }
+}
+
+export async function GET(request: NextRequest, { params }: Context): Promise<NextResponse> {
+  const { id, photoId } = await params;
+  return handleGetPhoto(request, { ordenId: id, photoId });
+}
+
+export async function DELETE(request: NextRequest, { params }: Context): Promise<NextResponse> {
+  const { id, photoId } = await params;
+  return handleDeletePhoto(request, { ordenId: id, photoId });
+}
