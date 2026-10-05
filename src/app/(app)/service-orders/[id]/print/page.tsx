@@ -8,9 +8,13 @@ import { getClienteById } from "@/modules/customers/queries";
 import { getWorkshopConfig } from "@/modules/workshop-config/service";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
 import { vehicleDescriptiveRows } from "@/modules/service-orders/vehicle-rows";
+import { FUEL_LABEL, formatKilometraje } from "@/modules/service-orders/intake";
+import { listOrderPhotos } from "@/modules/service-orders/photos";
 import { PrintButton } from "@/modules/service-orders/PrintButton";
 import { getOrdenServicioById } from "@/modules/service-orders/queries";
 import { formatDateTime } from "@/shared/datetime";
+
+const PHOTOS_PER_PAGE = 4;
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +96,12 @@ export default async function ServiceOrderPrintPage({
   const workshop = await getWorkshopConfig();
   // Either column counts: one filled and one empty still means the order was
   // worked, and the block below prints both rows rather than half a form.
+  const photos = await listOrderPhotos(orden.id);
+  // Explicit chunks of 4, one sheet each: a single CSS grid fragments
+  // unpredictably across pages in Chrome.
+  const photoPages = Array.from({ length: Math.ceil(photos.length / PHOTOS_PER_PAGE) }, (_, i) =>
+    photos.slice(i * PHOTOS_PER_PAGE, (i + 1) * PHOTOS_PER_PAGE),
+  );
   const recorded = hasText(orden.hallazgos) || hasText(orden.recomendaciones);
 
   // `bg-white`/`text-black` below are unconditional rather than `print:`-scoped,
@@ -134,6 +144,9 @@ export default async function ServiceOrderPrintPage({
             Volver
           </Link>
           <PrintButton />
+          {/* Reserved for a future QR code: blank, no border, no text. In flow
+              on paper only (~25 mm); the buttons above stay screen-only. */}
+          <div aria-hidden="true" className="hidden print:block size-[25mm]" />
         </div>
       </div>
 
@@ -144,6 +157,7 @@ export default async function ServiceOrderPrintPage({
       <dl className="mb-6 grid grid-cols-4 gap-x-5">
         {field("Cliente", clienteDetail?.cliente.name ?? orden.clienteId)}
         {field("Teléfono", clienteDetail?.cliente.phone)}
+        {hasText(clienteDetail?.cliente.documentoIdentidad) && field("Cédula / RUC", clienteDetail?.cliente.documentoIdentidad)}
         {field("Placa", vehiculo?.plate ?? orden.vehiculoId)}
         {field("Marca", vehiculo?.make)}
         {field("Modelo", vehiculo?.model)}
@@ -155,6 +169,9 @@ export default async function ServiceOrderPrintPage({
         ))}
         {field("Categoría", CATEGORIA_LABEL[orden.categoria])}
         {field("Fecha y hora de inicio", formatDateTime(orden.appointmentAt))}
+        {field("Kilometraje", orden.kilometraje == null ? null : formatKilometraje(orden.kilometraje))}
+        {orden.nivelCombustible != null && field("Combustible", FUEL_LABEL[orden.nivelCombustible])}
+        {orden.bateriaPct != null && field("Batería", `${orden.bateriaPct} %`)}
       </dl>
 
       <dl className="mb-6">
@@ -210,6 +227,35 @@ export default async function ServiceOrderPrintPage({
       <div className="mt-12 flex justify-end">
         <div className="w-72 border-t border-black pt-1 text-center text-xs">Firma del técnico</div>
       </div>
+
+      {/* Page 2+: after the signature, so page 1 is untouched. Each chunk is its
+          own sheet; `h-[105mm]` x 2 rows plus the heading fits Letter at 12mm
+          margins (print preview owns the real measurement). `object-contain`
+          lets a portrait and a landscape photo both fit the same cell. */}
+      {photoPages.map((page, pageIndex) => (
+        <section key={pageIndex} className="break-before-page">
+          <h2 className="mb-4 border-b-2 border-black pb-2 text-lg font-bold">
+            Fotos de recepción — Orden N.º {orden.id}
+          </h2>
+          <div className="grid grid-cols-2 gap-4">
+            {page.map((photo, i) => {
+              const number = pageIndex * PHOTOS_PER_PAGE + i + 1;
+              return (
+                <figure key={photo.id} className="flex flex-col gap-1">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/api/service-orders/${orden.id}/photos/${photo.id}`}
+                    alt={`Foto de recepción ${number}`}
+                    loading="eager"
+                    className="h-[105mm] w-full object-contain"
+                  />
+                  <figcaption className="text-[10px]">Foto {number}</figcaption>
+                </figure>
+              );
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }

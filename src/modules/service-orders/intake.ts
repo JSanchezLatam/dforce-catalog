@@ -7,6 +7,11 @@ import type { VehiculoMotor } from "@/modules/customers/vehicle-options";
 /** Index = `nivel_combustible` (0..4). */
 export const FUEL_LABEL = ["Vacío", "1/4", "1/2", "3/4", "Lleno"] as const;
 
+/** 85000 -> "85.000 km". Fixed separator: `toLocaleString` depends on the runtime's ICU data. */
+export function formatKilometraje(km: number): string {
+  return `${String(km).replace(/\B(?=(\d{3})+(?!\d))/g, ".")} km`;
+}
+
 export const KILOMETRAJE_MAX = 2_000_000;
 
 export type IntakeValues = {
