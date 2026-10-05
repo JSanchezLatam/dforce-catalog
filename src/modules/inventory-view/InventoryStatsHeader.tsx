@@ -26,7 +26,8 @@ export function InventoryStatsHeader({
 
   return (
     <div className="mb-6">
-      <div className="mb-6 flex items-center justify-between">
+      {/* Desktop only: on a phone it pushed the title off the first screen. */}
+      <div className="mb-6 hidden items-center justify-between md:flex">
         <div>
           <p className="text-xl font-bold text-foreground">Hola, {roleLabel}</p>
           <p className="text-sm text-muted-foreground">Bienvenido de nuevo a tu panel</p>
@@ -38,9 +39,11 @@ export function InventoryStatsHeader({
           {roleLabel.charAt(0)}
         </div>
       </div>
-      <Card size="sm">
+      {/* Without an action to host, a phone gets the page's one-line subtitle
+          instead of this card (see `inventory/page.tsx`). */}
+      <Card size="sm" className={syncButton ? undefined : "hidden md:block"}>
         <CardContent>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total de productos</p>
               <p className="text-3xl font-bold text-foreground">{total}</p>

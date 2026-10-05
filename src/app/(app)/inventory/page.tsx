@@ -26,7 +26,7 @@ import { RowActions } from "@/shared/ui/selection/RowActions";
 import { RowCheckbox, SelectAllCheckbox } from "@/shared/ui/selection/RowCheckbox";
 import { SelectionBar } from "@/shared/ui/selection/SelectionBar";
 import { SelectionProvider } from "@/shared/ui/selection/SelectionProvider";
-import { PAGE_HEADING } from "@/shared/ui/styles";
+import { PageHeader } from "@/shared/ui/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -54,7 +54,7 @@ export default async function InventoryPage({
   const sort = parseInventorySort(params);
   const user = await requireSessionFromHeaders();
   if (!can(user, "inventory.read")) {
-    return <div className="p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
+    return <div className="p-4 sm:p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
   }
   const canTriggerSync = can(user, "sync.manual"); // R2 — admin-only manual sync trigger
   /**
@@ -82,15 +82,26 @@ export default async function InventoryPage({
   const dbEmpty = total === 0 && !(await hasAnyProducts());
 
   const syncButton = canTriggerSync ? <ManualSyncButton /> : undefined;
+  // On a phone the stats card stays only where it holds an action (the
+  // administrador's sync). Anyone else gets this one line instead, and from `md`
+  // the card is back for everybody, so the line goes (it would say it twice).
+  const phoneSubtitle =
+    syncButton ? undefined : (
+      <span className="md:hidden">
+        {grandTotal === 1
+          ? "1 producto sincronizado desde Interfuerza"
+          : `${grandTotal} productos sincronizados desde Interfuerza`}
+      </span>
+    );
 
   const pageIds = items.map((item) => item.id);
   const labels = Object.fromEntries(items.map((item) => [item.id, item.name]));
 
   if (dbEmpty) {
     return (
-      <div className="p-8">
+      <div className="p-4 sm:p-8">
+        <PageHeader title="Inventario" />
         <InventoryStatsHeader user={user} total={grandTotal} syncButton={syncButton} />
-        <h1 className={PAGE_HEADING}>Inventario</h1>
         <Card size="sm">
           <CardContent>
             <p className="text-sm text-muted-foreground">
@@ -103,9 +114,9 @@ export default async function InventoryPage({
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
+      <PageHeader title="Inventario" description={phoneSubtitle} />
       <InventoryStatsHeader user={user} total={grandTotal} syncButton={syncButton} />
-      <h1 className={PAGE_HEADING}>Inventario</h1>
       <Card size="sm" className="mb-4">
         <CardContent>
           <InventoryFilters

@@ -103,7 +103,7 @@ export function ManualSyncButton() {
   }
 
   return (
-    <div className="mb-4 flex items-center gap-3">
+    <div className="mb-4 flex items-center gap-3 max-sm:mb-0">
       <Button type="button" onClick={handleClick} disabled={running}>
         {running ? "Sincronizando…" : "Sincronizar inventario"}
       </Button>

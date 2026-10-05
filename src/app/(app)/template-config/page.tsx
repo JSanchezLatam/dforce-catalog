@@ -3,7 +3,7 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { TemplateConfigForm } from "@/modules/template-config/TemplateConfigForm";
 import { getTemplateConfig, listTemplateCoverImages } from "@/modules/template-config/service";
 import { getWorkshopConfig } from "@/modules/workshop-config/service";
-import { PAGE_HEADING } from "@/shared/ui/styles";
+import { PageHeader } from "@/shared/ui/PageHeader";
 
 /**
  * R8 — Administrador-only template config, with a scaled preview of the
@@ -24,8 +24,8 @@ export default async function TemplateConfigPage() {
 
   if (!can(user, "template.edit")) {
     return (
-      <div className="p-8">
-        <h1 className={PAGE_HEADING}>Configuración de plantillas</h1>
+      <div className="p-4 sm:p-8">
+        <PageHeader title="Configuración de plantillas" />
         <p className="text-sm text-foreground">No tenés permiso para ver esta página.</p>
       </div>
     );
@@ -40,8 +40,8 @@ export default async function TemplateConfigPage() {
   const coverImageKeys = Object.fromEntries(coverImages.map((row) => [row.templateId, row.r2Key]));
 
   return (
-    <div className="p-8">
-      <h1 className={PAGE_HEADING}>Configuración de plantillas</h1>
+    <div className="p-4 sm:p-8">
+      <PageHeader title="Configuración de plantillas" />
       <TemplateConfigForm initialConfig={config} workshopConfig={workshopConfig} coverImageKeys={coverImageKeys} />
     </div>
   );

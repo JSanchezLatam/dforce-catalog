@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { FIELD_ERROR, SUCCESS_TEXT } from "./styles";
+import { FIELD_ERROR, PAGE_HEADING, SUCCESS_TEXT } from "./styles";
 
 /**
  * Audit #21: "Configuración guardada." and the other four saved messages were
@@ -40,5 +40,16 @@ describe("styles — theme-paired text colours (audit #7, #21)", () => {
 
     expect(source).toContain("SUCCESS_TEXT");
     expect(source).not.toContain("text-green-600");
+  });
+});
+
+/**
+ * Audit #1/#11: a fixed 32px title wrapped "Órdenes de servicio" onto two lines
+ * at 390px. 24px on phones, 32px from `sm`. The bottom margin moved to
+ * `PageHeader`, which owns the spacing under the whole header.
+ */
+describe("styles — PAGE_HEADING (audit #1, #11)", () => {
+  it("is 24px on phones and 32px from sm, tight leading, no margin of its own", () => {
+    expect(PAGE_HEADING).toBe("text-2xl sm:text-[32px] font-bold leading-tight text-foreground");
   });
 });

@@ -55,7 +55,7 @@ export default async function CustomerDetailPage({
   const { id } = await params;
   const user = await requireSessionFromHeaders();
   if (!can(user, "customers.read")) {
-    return <div className="p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
+    return <div className="p-4 sm:p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
   }
 
   const detail = await getClienteById(id);
@@ -67,7 +67,7 @@ export default async function CustomerDetailPage({
   const canSeeInternal = can(user, "vencimientos.read");
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <Breadcrumb className="mb-6">
         <BreadcrumbList>
           <BreadcrumbItem>

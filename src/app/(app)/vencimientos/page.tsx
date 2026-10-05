@@ -6,7 +6,7 @@ import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { toWorkshopDateKey } from "@/shared/datetime";
 import { statusBadgeClassName } from "@/shared/ui/StatusBadge";
-import { PAGE_HEADING } from "@/shared/ui/styles";
+import { PageHeader } from "@/shared/ui/PageHeader";
 import { toE164 } from "@/modules/reminders/providers/whatsapp";
 import { ContactDialog } from "@/modules/vencimientos/ContactDialog";
 import { describeDue } from "@/modules/vencimientos/display";
@@ -66,7 +66,7 @@ type Item = ReturnType<typeof toItem>;
 export default async function VencimientosPage() {
   const user = await requireSessionFromHeaders();
   if (!can(user, "vencimientos.read")) {
-    return <div className="p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
+    return <div className="p-4 sm:p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
   }
 
   const now = new Date();
@@ -82,12 +82,11 @@ export default async function VencimientosPage() {
   const items = rows.map((row) => toItem(row, todayKey, workshop));
 
   return (
-    <div className="p-8">
-      <h1 className={PAGE_HEADING}>Vencimientos próximos</h1>
-      <p className="mb-6 text-sm text-muted-foreground">
-        Placas que se renuevan este mes o el próximo y seguros que vencen en los próximos 30 días. Los vencidos quedan
-        hasta marcarlos como contactados.
-      </p>
+    <div className="p-4 sm:p-8">
+      <PageHeader
+        title="Vencimientos próximos"
+        description="Placas que se renuevan este mes o el próximo y seguros que vencen en los próximos 30 días. Los vencidos quedan hasta marcarlos como contactados."
+      />
 
       {items.length === 0 ? (
         <Card size="sm">

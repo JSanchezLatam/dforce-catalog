@@ -3,7 +3,7 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { listUsers } from "@/modules/account/queries";
 import { UserFormTrigger } from "@/modules/account/UserFormTrigger";
 import { UsersTable } from "@/modules/account/UsersTable";
-import { PAGE_HEADING } from "@/shared/ui/styles";
+import { PageHeader } from "@/shared/ui/PageHeader";
 
 /**
  * Thin RSC wrapper (mirrors `customers/page.tsx`): fetch, authorize, hand
@@ -18,8 +18,8 @@ export default async function UsersPage() {
 
   if (!can(user, "users.manage")) {
     return (
-      <div className="p-8">
-        <h1 className={PAGE_HEADING}>Gestión de usuarios</h1>
+      <div className="p-4 sm:p-8">
+        <PageHeader title="Gestión de usuarios" />
         <p className="text-sm text-foreground">No tenés permiso para ver esta página.</p>
       </div>
     );
@@ -28,11 +28,8 @@ export default async function UsersPage() {
   const users = await listUsers({ includeInactive: true });
 
   return (
-    <div className="flex flex-col gap-6 p-8">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className={PAGE_HEADING}>Gestión de usuarios</h1>
-        <UserFormTrigger />
-      </div>
+    <div className="flex flex-col gap-6 p-4 sm:p-8">
+      <PageHeader title="Gestión de usuarios" actions={<UserFormTrigger />} />
       <UsersTable
         // Dates do not survive the RSC boundary as Date instances — serialise
         // here so the client component's prop type is honest about what it gets.

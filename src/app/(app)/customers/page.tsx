@@ -22,7 +22,7 @@ import { RowActions } from "@/shared/ui/selection/RowActions";
 import { RowCheckbox, SelectAllCheckbox } from "@/shared/ui/selection/RowCheckbox";
 import { SelectionBar } from "@/shared/ui/selection/SelectionBar";
 import { SelectionProvider } from "@/shared/ui/selection/SelectionProvider";
-import { PAGE_HEADING } from "@/shared/ui/styles";
+import { PageHeader } from "@/shared/ui/PageHeader";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -64,7 +64,7 @@ export default async function CustomersPage({
 
   const user = await requireSessionFromHeaders();
   if (!can(user, "customers.read")) {
-    return <div className="p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
+    return <div className="p-4 sm:p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
   }
 
   // `totalClientes` is deliberately unfiltered: the card answers "how many
@@ -129,17 +129,12 @@ export default async function CustomersPage({
   const labels = Object.fromEntries(items.map((item) => [item.id, item.name]));
 
   return (
-    <div className="p-8">
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className={`${PAGE_HEADING} mb-1`}>Clientes</h1>
-          <p className="text-sm text-muted-foreground">
-            Los clientes del taller y sus vehículos. Se sincronizan desde Interfuerza y podés
-            editarlos acá.
-          </p>
-        </div>
-        <CustomerFormTrigger triggerLabel="Nuevo cliente" />
-      </div>
+    <div className="p-4 sm:p-8">
+      <PageHeader
+        title="Clientes"
+        description="Los clientes del taller y sus vehículos. Se sincronizan desde Interfuerza y podés editarlos acá."
+        actions={<CustomerFormTrigger triggerLabel="Nuevo cliente" />}
+      />
 
       {/* The card ALWAYS renders; only the import trigger inside it is gated on
           `customers.write` (R21, the same gate as the create form). The owner
