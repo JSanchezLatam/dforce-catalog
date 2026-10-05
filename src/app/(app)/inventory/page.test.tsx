@@ -72,9 +72,9 @@ describe("InventoryPage — column sorting", () => {
       expect(url.searchParams.get("dir")).toBe("asc");
     }
 
-    // The negative half: `stock`/`price` have no rendered header at all, so
-    // there is nothing to assert a link against — Acciones is the only
-    // remaining non-sortable header.
+    // The negative half: Precio, Stock and Acciones are the non-sortable
+    // headers. Precio and Stock are pinned (no sort link) in the WU7 block
+    // below; Acciones is checked here.
     expect(screen.getByRole("columnheader", { name: "Acciones" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Acciones" })).not.toBeInTheDocument();
   });
