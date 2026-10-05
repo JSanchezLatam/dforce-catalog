@@ -101,7 +101,7 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 - [x] 7.1 RED `table-sorting` delta: inventory `price` and `stock` headers render as plain text, no sort control; sortable set stays `id`, `name`, `categoryL1`, `categoryL2`. GREEN `inventory/page.tsx`; update the `queries.ts:82` comment.
 - [x] 7.2 RED inventory tests (scoped): cards show name, code, `$x.toFixed(2)` price, stock ("Sin stock" with `failed` chip at 0, Activo `completed`); card links `/inventory/<id>`; same count in both; no checkbox. GREEN.
 - [x] 7.3 Mutation-verify 7.1-7.2 by name (make `price` sortable, show `0` instead of "Sin stock").
-- [ ] 7.4 Matrix; at 1280 the Precio/Stock columns show and nothing else moved; técnico (no row checkboxes) fits.
+- [x] 7.4 (Checked 2026-10-05 at http://192.168.0.25:3000, 390 touch, administrador and técnico × dark and light: 10 product cards ("3.8 SUPER TWEETER… PS0000570 $25.00 Sin stock"), scrollWidth = 390, 0 visible checkboxes; console clean. At 1280 the table headers read ID, Nombre, Categoría 1, Categoría 2, Precio, Stock, Acciones with no horizontal overflow.) Matrix; at 1280 the Precio/Stock columns show and nothing else moved; técnico (no row checkboxes) fits.
 
 ## WU8: Users cards (PR 8) — #2
 
@@ -111,6 +111,7 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 
 ## WU9: Per-screen fixes (PR 9) — #3 #8 #13 #15 #16 #17b
 
+- [ ] 9.w Observed in WU7 check (pre-existing, owner to confirm): opening /inventory as administrador re-shows the last sync's success toast ("Sincronización completada… 9/28/2026") on every visit.
 - [ ] 9.z Carried from WU6 review: scope the vehicle page's `getByRole("link", { name: /ver/i })` to `history-table` (a description like "Revisar frenos" would match a card too).
 - [ ] 9.y Carried from WU3 review: /inventory desktop técnico gets an empty description `<p className="mt-1">` (only a `md:hidden` span) — drop the description when it can't show; `PAGE_HEADING` now adds `leading-tight` at desktop too — confirm desktop heading spacing unchanged.
 - [ ] 9.x Carried from 2.8: breadcrumb links ≥44px tall on touch; /builder category combobox trigger (36px) to the touch floor; error toast `text-destructive-foreground` is not a registered utility (from WU1).
