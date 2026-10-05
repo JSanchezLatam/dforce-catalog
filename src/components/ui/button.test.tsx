@@ -31,3 +31,25 @@ describe("Button — destructive variant contrast (audit #7)", () => {
     expect(screen.getByRole("button").className).not.toContain("red-");
   });
 });
+
+/**
+ * Audit #5: `default` is h-8 (32px) and `sm` h-7 (28px), under the 44x44 floor on
+ * a tablet. `pointer-coarse:` lifts them on touch only, so a mouse desktop is
+ * pixel-unchanged. jsdom matches no media query: the classes are what is pinned.
+ */
+describe("Button — touch floor (audit #5)", () => {
+  it.each(["default", "sm"] as const)("%s rises to 44x44 on a coarse pointer", (size) => {
+    render(<Button size={size}>Guardar</Button>);
+
+    expect(screen.getByRole("button")).toHaveClass(
+      "pointer-coarse:min-h-11",
+      "pointer-coarse:min-w-11",
+    );
+  });
+
+  it("does not change the fine-pointer height", () => {
+    render(<Button>Guardar</Button>);
+
+    expect(screen.getByRole("button")).toHaveClass("h-8");
+  });
+});
