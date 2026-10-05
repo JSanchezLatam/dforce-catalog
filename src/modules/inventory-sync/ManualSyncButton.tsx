@@ -43,6 +43,8 @@ export function ManualSyncButton() {
   // already-finished last run on load is not news, and used to re-announce the
   // previous sync on every visit to /inventory.
   const sawRunningRef = useRef(false);
+  // Set on unmount: a poll still in flight must not restart the interval.
+  const unmountedRef = useRef(false);
   const { addToast } = useToast();
 
   function stopPolling() {
@@ -83,7 +85,9 @@ export function ManualSyncButton() {
 
   async function pollStatus() {
     const res = await fetch("/api/inventory-sync/manual");
-    if (res.ok) applyStatus(await res.json());
+    if (!res.ok) return;
+    const body = await res.json();
+    if (!unmountedRef.current) applyStatus(body);
   }
 
   useEffect(() => {
@@ -95,6 +99,7 @@ export function ManualSyncButton() {
       });
     return () => {
       cancelled = true;
+      unmountedRef.current = true;
       stopPolling();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

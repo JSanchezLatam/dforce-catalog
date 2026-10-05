@@ -140,4 +140,29 @@ describe("ManualSyncButton — the completion toast (mobile-responsive-pass 9.w)
     expect(await screen.findByText(/Sincronización completada: 699 productos/, undefined, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getAllByText(/Sincronización completada/)).toHaveLength(1);
   });
+
+  // A poll in flight when the operator leaves /inventory used to land after
+  // unmount, see `running: true`, and restart the 2s interval — polling forever
+  // from a page nobody is on.
+  it("does not restart polling when a poll lands after the page unmounted", async () => {
+    const running = { running: true, lastRun: null };
+    let release: (() => void) | undefined;
+    const fetchMock = vi.fn(async () => {
+      if (fetchMock.mock.calls.length === 2) await new Promise<void>((r) => (release = r));
+      return { ok: true, status: 200, json: async () => running };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { unmount } = render(
+      <ToastProvider>
+        <ManualSyncButton />
+      </ToastProvider>,
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2), { timeout: 3000 });
+    unmount();
+    release!();
+    await new Promise((r) => setTimeout(r, 2500));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  }, 10_000);
 });
