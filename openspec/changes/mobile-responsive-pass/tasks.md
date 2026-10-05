@@ -71,7 +71,7 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 - [x] 3.5 RED inventory page tests: title renders above the greeting; greeting is `hidden md:flex`; administrador keeps the stats card with "Sincronizar inventario" (fits on a phone); técnico sees the mockup layout (subtitle only). GREEN `inventory/page.tsx`, `InventoryStatsHeader.tsx`. (Subtitle `N productos sincronizados desde Interfuerza` is `md:hidden` and only for a user without the sync action; the stats card is `hidden md:block` for them. `ManualSyncButton` gained `max-sm:mb-0` so its desktop `mb-4` does not leave dead space in the stacked phone card.)
 - [x] 3.6 Update existing heading assertions broken by the sweep; never loosen them to match both strings. (No existing assertion broke: the sweep kept every title, description and action string.)
 - [x] 3.7 Mutation-verify 3.1-3.5 by name (reintroduce one `p-8`, move the greeting above the title).
-- [ ] 3.8 Matrix; "Órdenes de servicio" is one line and "Nueva orden de servicio" is fully visible at 44px at 390; no horizontal overflow.
+- [x] 3.8 (Measured 2026-10-05 at http://192.168.0.25:3000, 390 touch, administrador and técnico × dark and light, 10 pages incl. both detail pages: innerWidth stays 390 on every page (was 462 on /service-orders), every h1 on one line; "Nueva orden de servicio" 179x44 fully visible (right edge 313); administrador's inventory stats card with "Sincronizar inventario" fits.) Matrix; "Órdenes de servicio" is one line and "Nueva orden de servicio" is fully visible at 44px at 390; no horizontal overflow.
 
 ## WU4: PermissionDenied (PR 4) — #18
 
