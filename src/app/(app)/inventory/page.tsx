@@ -28,6 +28,8 @@ import { RowCheckbox, SelectAllCheckbox } from "@/shared/ui/selection/RowCheckbo
 import { SelectionBar } from "@/shared/ui/selection/SelectionBar";
 import { SelectionProvider } from "@/shared/ui/selection/SelectionProvider";
 import { PageHeader } from "@/shared/ui/PageHeader";
+import { RecordCard, RecordCardList } from "@/shared/ui/RecordCard";
+import { StatusBadge } from "@/shared/ui/StatusBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -135,9 +137,13 @@ export default async function InventoryPage({
           notice with it, in exactly the case the notice explains. Same
           placement as `customers/page.tsx`. */}
       <SelectionProvider pageIds={pageIds} labels={labels} filterKey={buildFilterKey(filters)}>
-        <SelectionBar>
-          <InventoryCatalogHandoff />
-        </SelectionBar>
+        {/* Selection is tablet-plus only: the cards below md carry no checkbox,
+            so a bar there could only show a count the operator cannot change. */}
+        <div className="hidden md:block">
+          <SelectionBar>
+            <InventoryCatalogHandoff />
+          </SelectionBar>
+        </div>
         {items.length === 0 ? (
         <Card size="sm">
           <CardContent>
@@ -155,7 +161,7 @@ export default async function InventoryPage({
         </Card>
       ) : (
         <>
-          <Card size="sm" className="mb-4">
+          <Card size="sm" className="mb-4 hidden md:block" data-testid="inventory-table">
             <CardContent>
               <Table>
                 <TableHeader>
@@ -192,6 +198,8 @@ export default async function InventoryPage({
                       <TableCell>{item.name}</TableCell>
                       <TableCell>{item.categoryL1 ?? "—"}</TableCell>
                       <TableCell>{item.categoryL2 ?? "—"}</TableCell>
+                      <TableCell className="tabular-nums">{formatPrice(item.price)}</TableCell>
+                      <TableCell className="tabular-nums">{item.stock ?? "—"}</TableCell>
                       <TableCell>
                         {/* The `h-7` (28px) hand-copied link that used to live
                             here is deleted, not restyled — it sat under
@@ -226,6 +234,24 @@ export default async function InventoryPage({
               </Table>
             </CardContent>
           </Card>
+          <RecordCardList testId="inventory-cards">
+            {items.map((item) => (
+              <RecordCard key={item.id} href={`/inventory/${item.id}`}>
+                <div className="line-clamp-2 font-medium leading-snug">{item.name}</div>
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span className="font-mono text-xs text-muted-foreground">{item.id}</span>
+                  <span className="flex items-center gap-3">
+                    <span className="font-medium tabular-nums">{formatPrice(item.price)}</span>
+                    {item.stock === 0 ? (
+                      <StatusBadge status="failed" label="Sin stock" className="shrink-0" />
+                    ) : (
+                      <span className="tabular-nums text-muted-foreground">Stock {item.stock ?? "—"}</span>
+                    )}
+                  </span>
+                </div>
+              </RecordCard>
+            ))}
+          </RecordCardList>
           {pageCount > 1 && (
             <Card size="sm">
               <CardContent>
@@ -296,16 +322,22 @@ function buildPagePattern(params: SearchParams, sort: InventorySort | undefined)
  * `<TableCell>`. `sort` is typed against the whitelist, so a column can still
  * only claim to be sortable if the query agrees.
  *
- * `stock`/`price` have no entry at all — they are fetched and filterable but
- * have no header column on screen (spec: Per-Table Sortable Column
- * Whitelist), so there is nothing to make sortable or non-sortable here.
+ * `Precio`/`Stock` are plain columns with no `sort` (spec: Per-Table Sortable
+ * Column Whitelist) — they are not in `INVENTORY_SORT`, so they cannot claim one.
  */
 const COLUMNS: readonly { label: string; sort?: keyof typeof INVENTORY_SORT }[] = [
   { label: "ID", sort: "id" },
   { label: "Nombre", sort: "name" },
   { label: "Categoría 1", sort: "categoryL1" },
   { label: "Categoría 2", sort: "categoryL2" },
+  { label: "Precio" },
+  { label: "Stock" },
 ];
+
+/** Same format as `inventory/[id]/page.tsx`: dollars, two decimals, a dash when the ERP sent none. */
+function formatPrice(price: number | null): string {
+  return price != null ? `$${price.toFixed(2)}` : "—";
+}
 
 /**
  * table-column-sorting D1 — a real `<a>`/`<Link>` built by this Server

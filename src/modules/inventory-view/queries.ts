@@ -78,9 +78,10 @@ export function computePageWindow(
 /**
  * table-column-sorting WU2 — the sortable-column whitelist, mirroring
  * `CLIENTE_SORT` (`customers/queries.ts`). Sortable columns are the RENDERED
- * ones: `id`/`name`/`categoryL1`/`categoryL2` (`inventory/page.tsx:118-121`).
- * `stock`/`price` are fetched and filterable but have no header, so they are
- * NOT here even though they are on `InventoryListItem`.
+ * ones that sort: `id`/`name`/`categoryL1`/`categoryL2` (`COLUMNS` in
+ * `inventory/page.tsx`). `stock`/`price` are rendered as plain columns but are
+ * deliberately NOT sortable, so they are not here even though they are on
+ * `InventoryListItem`.
  *
  * `name` is wrapped in `lower(unaccent(...))` — measured against the app's
  * own database (`:5433`, 699 products): 20 rows have lowercase characters and

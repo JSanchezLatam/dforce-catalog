@@ -98,9 +98,9 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 
 ## WU7: Inventory cards + desktop columns (PR 7) — #2
 
-- [ ] 7.1 RED `table-sorting` delta: inventory `price` and `stock` headers render as plain text, no sort control; sortable set stays `id`, `name`, `categoryL1`, `categoryL2`. GREEN `inventory/page.tsx`; update the `queries.ts:82` comment.
-- [ ] 7.2 RED inventory tests (scoped): cards show name, code, `$x.toFixed(2)` price, stock ("Sin stock" with `failed` chip at 0, Activo `completed`); card links `/inventory/<id>`; same count in both; no checkbox. GREEN.
-- [ ] 7.3 Mutation-verify 7.1-7.2 by name (make `price` sortable, show `0` instead of "Sin stock").
+- [x] 7.1 RED `table-sorting` delta: inventory `price` and `stock` headers render as plain text, no sort control; sortable set stays `id`, `name`, `categoryL1`, `categoryL2`. GREEN `inventory/page.tsx`; update the `queries.ts:82` comment.
+- [x] 7.2 RED inventory tests (scoped): cards show name, code, `$x.toFixed(2)` price, stock ("Sin stock" with `failed` chip at 0, Activo `completed`); card links `/inventory/<id>`; same count in both; no checkbox. GREEN.
+- [x] 7.3 Mutation-verify 7.1-7.2 by name (make `price` sortable, show `0` instead of "Sin stock").
 - [ ] 7.4 Matrix; at 1280 the Precio/Stock columns show and nothing else moved; técnico (no row checkboxes) fits.
 
 ## WU8: Users cards (PR 8) — #2
