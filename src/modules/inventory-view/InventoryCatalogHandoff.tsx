@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { MAX_TOTAL_PRODUCTS, maxTotalProductsMessage } from "@/modules/catalog-builder/selection";
 import { useSelection } from "@/shared/ui/selection/SelectionProvider";
+import { FIELD_ERROR } from "@/shared/ui/styles";
 
 /**
  * The action slot `SelectionBar` leaves open, filled for `/inventory`
@@ -54,7 +55,7 @@ export function InventoryCatalogHandoff() {
           back down to a legal selection has to take the refusal with it, or
           the bar keeps quoting a count that is no longer selected. */}
       {refusedAt !== null && overCap && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className={FIELD_ERROR}>
           {maxTotalProductsMessage(refusedAt)}
         </p>
       )}

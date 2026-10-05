@@ -41,14 +41,14 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 
 ## WU1: Colour (PR 1) — #6 #7 #19 #20 #21 #22
 
-- [ ] 1.1 RED `StatusBadge.test`: every chip class carries a `dark:` twin from the mockup `CHIP` map. GREEN `StatusBadge.tsx`.
-- [ ] 1.2 RED `Toast` test: success and warning maps carry paired classes. GREEN `Toast.tsx`.
-- [ ] 1.3 RED `button` / `alert` tests: `destructive` contains `text-red-700 dark:text-red-400`. GREEN `button.tsx`, `alert.tsx`; same fix in `LogoutButton` and `InventoryCatalogHandoff` (`text-destructive` as text).
-- [ ] 1.4 RED `checkbox` test: border is `border-muted-foreground`, not `border-input`. GREEN `checkbox.tsx`.
-- [ ] 1.5 RED `InventoryStatsHeader` test: avatar uses `text-primary-foreground`, no `text-white`. GREEN.
-- [ ] 1.6 RED `styles.test`: `SUCCESS_TEXT` and `FIELD_ERROR` each carry a `dark:` pair. GREEN `styles.ts`; replace the 5 `text-green-600` copies (`PasswordForm:105`, `ProfileForm:71`, `WorkshopConfigForm:321`, `TemplateConfigForm:252`, `CatalogBuilderForm:965-966`).
-- [ ] 1.7 RED `ConfirmGenerateDialog` test: warning box has a `dark:` counterpart (no bare `bg-amber-50`). GREEN.
-- [ ] 1.8 Mutation-verify 1.1-1.7 by name (drop one `dark:` twin, restore `text-white`, restore `border-input`).
+- [x] 1.1 RED `StatusBadge.test`: every chip class carries a `dark:` twin from the mockup `CHIP` map. GREEN `StatusBadge.tsx`.
+- [x] 1.2 RED `Toast` test: success and warning maps carry paired classes. GREEN `Toast.tsx`.
+- [x] 1.3 RED `button` / `alert` tests: `destructive` contains `text-red-700 dark:text-red-400`. GREEN `button.tsx`, `alert.tsx`; same fix in `LogoutButton` and `InventoryCatalogHandoff` (`text-destructive` as text).
+- [x] 1.4 RED `checkbox` test: border is `border-muted-foreground`, not `border-input`. GREEN `checkbox.tsx`.
+- [x] 1.5 RED `InventoryStatsHeader` test: avatar uses `text-primary-foreground`, no `text-white`. GREEN.
+- [x] 1.6 RED `styles.test`: `SUCCESS_TEXT` and `FIELD_ERROR` each carry a `dark:` pair. GREEN `styles.ts`; replace the 5 `text-green-600` copies (`PasswordForm:105`, `ProfileForm:71`, `WorkshopConfigForm:321`, `TemplateConfigForm:252`, `CatalogBuilderForm:965-966`).
+- [x] 1.7 RED `ConfirmGenerateDialog` test: warning box has a `dark:` counterpart (no bare `bg-amber-50`). GREEN.
+- [x] 1.8 Mutation-verify 1.1-1.7 by name (drop one `dark:` twin, restore `text-white`, restore `border-input`).
 - [ ] 1.9 Matrix; measure every listed element against its target (text >= 4.5:1, checkbox border >= 3:1, against the blended ground); write each value beside its class.
 
 ## WU2: Touch floor, Pagination (PR 2) — #5 #9 #10

@@ -32,7 +32,7 @@ export function InventoryStatsHeader({
           <p className="text-sm text-muted-foreground">Bienvenido de nuevo a tu panel</p>
         </div>
         <div
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-bold text-white"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground"
           aria-hidden="true"
         >
           {roleLabel.charAt(0)}

@@ -29,8 +29,8 @@ describe("StatusBadge — className passthrough (H2)", () => {
     render(<StatusBadge status="completed" label="Completada" className="min-h-7" />);
     const badge = screen.getByText("Completada");
 
-    expect(badge).toHaveClass("bg-success");
-    expect(badge).toHaveClass("text-success-foreground");
+    expect(badge).toHaveClass("bg-green-100", "text-green-800");
+    expect(badge).toHaveClass("dark:bg-green-400/15", "dark:text-green-300");
   });
 
   it("renders unchanged when no class is passed, so the other six sites do not move", () => {

@@ -26,7 +26,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
-import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
+import { FIELD_ERROR, SECTION_HEADING, SUCCESS_TEXT } from "@/shared/ui/styles";
 import { Pagination } from "@/shared/ui/Pagination";
 import { RETENTION_LIMIT } from "@/modules/catalog-storage/retention-policy";
 import { MAX_QUEUE_DEPTH } from "@/modules/pdf-generation/queue-limits";
@@ -962,8 +962,8 @@ export function CatalogBuilderForm({
 
       <Dialog open={showSuccessAlert} onOpenChange={(o) => { if (!o) setShowSuccessAlert(false); }}>
         <DialogContent showCloseButton={false} className="max-w-sm items-center gap-4 text-center">
-          <div className="flex size-12 items-center justify-center rounded-full bg-green-100">
-            <CheckIcon className="size-6 text-green-600" />
+          <div className="flex size-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-400/15">
+            <CheckIcon className={`size-6 ${SUCCESS_TEXT}`} />
           </div>
           <DialogHeader className="items-center text-center">
             <DialogTitle>Catálogo en proceso</DialogTitle>
