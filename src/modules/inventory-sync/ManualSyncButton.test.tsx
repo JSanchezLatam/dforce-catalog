@@ -13,6 +13,7 @@
  * looking at `/inventory` can say the pair now reads as one row.
  */
 import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ToastProvider } from "@/shared/ui/ToastProvider";
@@ -92,5 +93,51 @@ describe("ManualSyncButton — the status chip beside the action", () => {
     expect(chip).not.toHaveClass("truncate");
     expect(chip).not.toHaveClass("overflow-hidden");
     expect(chip).not.toHaveClass("whitespace-nowrap");
+  });
+});
+
+/**
+ * 9.w: the completion toast used to fire on the FIRST status read, so every
+ * visit to /inventory re-announced the last sync, hours or days old. It now
+ * fires only on a transition this page instance saw or caused.
+ */
+describe("ManualSyncButton — the completion toast (mobile-responsive-pass 9.w)", () => {
+  it("shows no toast when the page loads with an already-completed last sync", async () => {
+    renderButton(idleWithLastRun);
+
+    // The chip proves the status was read and applied; the toast would have
+    // been fired in that same step.
+    await screen.findByText("Completada");
+    expect(screen.queryByText(/Sincronización completada/)).not.toBeInTheDocument();
+  });
+
+  it("shows no failure toast either when the page loads with an old failed sync", async () => {
+    renderButton({ running: false, lastRun: { status: "failed", productCount: null, finishedAt: "2026-09-10T14:00:00.000Z" } });
+
+    await screen.findByText("Fallida");
+    expect(screen.queryByText(/La sincronización falló/)).not.toBeInTheDocument();
+  });
+
+  it("shows exactly one toast when a sync started here goes from running to completed", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(async (_url: string, init?: { method?: string }) => ({
+      ok: true,
+      status: init?.method === "POST" ? 202 : 200,
+      json: async () => (init?.method === "POST" ? {} : idleWithLastRun),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <ToastProvider>
+        <ManualSyncButton />
+      </ToastProvider>,
+    );
+    await screen.findByText("Completada");
+    expect(screen.queryByText(/Sincronización completada/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Sincronizar inventario" }));
+
+    // The poll runs every 2s; the first one reports the finished run.
+    expect(await screen.findByText(/Sincronización completada: 699 productos/, undefined, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getAllByText(/Sincronización completada/)).toHaveLength(1);
   });
 });
