@@ -95,5 +95,5 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## Spec archive notes
 
-- [ ] 6.1 At archive, merge the two delta specs: `customer-management` MODIFIES R17; `service-orders` ADDS two requirements plus Reception Photos and MODIFIES two (not renames). Check for duplicates after the mechanical apply.
-- [ ] 6.2 Follow-ups, not in scope: QR code and customer portal (step 4); técnico/`jefe_taller` changes (step 3); orphan R2 sweeper; photo annotation; Cédula/RUC import.
+- [x] 6.1 At archive, merge the two delta specs: `customer-management` MODIFIES R17; `service-orders` ADDS three requirements (Vehicle Intake Fields, Navigate to Order Detail After Creation, Reception Photos) and MODIFIES two (Service Order Detail Displays Vehicle, Category, and Notes; Printable Work Order). Checked for duplicates after the mechanical apply.
+- [x] 6.2 Follow-ups, not in scope: QR code and customer portal (step 4); técnico/`jefe_taller` changes (step 3); orphan R2 sweeper; photo annotation; Cédula/RUC import.

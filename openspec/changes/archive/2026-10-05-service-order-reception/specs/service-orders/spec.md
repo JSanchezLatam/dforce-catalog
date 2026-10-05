@@ -114,7 +114,7 @@ The order detail view MUST display the order's vehicle (identified at minimum by
 - GIVEN an order whose vehicle has since been deactivated WHEN staff opens the order's detail view THEN the system MUST still show that vehicle's identity and link
 - GIVEN a vehicle with chasis, colors, estilo and motor set and no unit number WHEN staff opens the order's detail view THEN those fields MUST show and no unit number label MUST appear; with a unit number set it MUST appear
 - GIVEN a vehicle whose internal fields hold sentinel values WHEN an administrador opens the order's detail view THEN the rendered output MUST contain neither the renewal month nor the insurance expiry sentinel
-- GIVEN an order with `kilometraje = 85000` WHEN staff opens its detail view THEN it MUST show 85000
+- GIVEN an order with `kilometraje = 85000` WHEN staff opens its detail view THEN it MUST show "85.000 km"
 - GIVEN an order with null `kilometraje` WHEN staff opens its detail view THEN it MUST show "Sin kilometraje"
 - GIVEN an order with `bateria_pct = 80` and `nivel_combustible = 3` WHEN staff opens its detail view THEN it MUST show 80% and 3/4
 
