@@ -49,7 +49,7 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 - [x] 1.6 RED `styles.test`: `SUCCESS_TEXT` and `FIELD_ERROR` each carry a `dark:` pair. GREEN `styles.ts`; replace the 5 `text-green-600` copies (`PasswordForm:105`, `ProfileForm:71`, `WorkshopConfigForm:321`, `TemplateConfigForm:252`, `CatalogBuilderForm:965-966`).
 - [x] 1.7 RED `ConfirmGenerateDialog` test: warning box has a `dark:` counterpart (no bare `bg-amber-50`). GREEN.
 - [x] 1.8 Mutation-verify 1.1-1.7 by name (drop one `dark:` twin, restore `text-white`, restore `border-input`).
-- [ ] 1.9 Matrix; measure every listed element against its target (text >= 4.5:1, checkbox border >= 3:1, against the blended ground); write each value beside its class.
+- [x] 1.9 (Measured 2026-10-05 at http://192.168.0.25:3000 on a card ground, dark / light: chips open 10.48/9.50, in_progress 10.05/6.36, done 10.63/6.48, failed 8.35/6.85; toast success 10.67/6.81; button destructive 8.32/5.54; FIELD_ERROR 6.67/6.42; SUCCESS_TEXT 10.83/4.95; catalog warning 10.37/19.19; checkbox border 7.52/4.83 (3:1 target).) Matrix; measure every listed element against its target (text >= 4.5:1, checkbox border >= 3:1, against the blended ground); write each value beside its class.
 
 ## WU2: Touch floor, Pagination (PR 2) — #5 #9 #10
 
