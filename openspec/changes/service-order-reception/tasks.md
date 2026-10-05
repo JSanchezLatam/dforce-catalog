@@ -65,7 +65,7 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 - [x] 3.6 RED e2e `src/e2e/order-photos.e2e.test.ts` (`dforce_e2e`, put injected): 13 concurrent `addOrderPhoto` yield exactly 12 rows and one `PhotoLimitError`; positions ascend after a delete; throwing put rolls back to 0 rows; add on a `done` order refused; delete on `done` refused; cascade removes rows with the order. GREEN: fix real-SQL defects.
 - [x] 3.7 Retention check: RED test that a retention run deletes nothing under `service-orders/`. GREEN only if it fails.
 - [x] 3.8 Mutation-verify 3.1-3.7 by name (remove `.for("update")` so the 13-concurrent test goes red, drop the gate, put before insert, drop the checksum options).
-- [ ] 3.9 One real R2 PUT and GET with the new client options, plus an existing catalog PDF download, after the `r2.ts` change.
+- [x] 3.9 One real R2 PUT and GET with the new client options, plus an existing catalog PDF download, after the `r2.ts` change.
 
 ## WU3b: Photo routes (PR 3b)
 
