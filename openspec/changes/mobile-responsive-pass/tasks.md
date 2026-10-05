@@ -94,7 +94,7 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 - [x] 6.1 RED customers page tests (scoped): `customers-table` / `customers-cards`, card links `/customers/<id>`, no checkbox in any card, same count in both. GREEN `customers/page.tsx`.
 - [x] 6.2 RED customer detail and vehicle detail tests: order-history table plus `RecordCardList` of the same orders, "Ver" reachable on the card, same count in both. GREEN both pages.
 - [x] 6.3 (Mutated 2026-10-05, each red BY NAME: bar wrapper `hidden md:block`, card href, singular, `slice(1)` count, table `hidden`, Desactivado red, plate `font-mono`, green Activo, email in card, checkbox in card; detail pages: href, count, table `hidden`, category line.) Mutation-verify 6.1-6.2 by name.
-- [ ] 6.4 Matrix; history "Ver" no longer off-screen; selection bar reachable only from `md`.
+- [x] 6.4 (Checked 2026-10-05 at http://192.168.0.25:3000, 390 touch, administrador and técnico × dark and light: /customers 10 cards with the green "Activo" chip, customer and vehicle history as cards, scrollWidth = 390, 0 visible checkboxes, 0 links or buttons past the right edge (the old off-screen "Ver" is gone); console clean.) Matrix; history "Ver" no longer off-screen; selection bar reachable only from `md`.
 
 ## WU7: Inventory cards + desktop columns (PR 7) — #2
 
