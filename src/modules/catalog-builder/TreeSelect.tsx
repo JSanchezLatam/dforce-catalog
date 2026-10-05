@@ -137,7 +137,7 @@ export function TreeSelect({
         type="button"
         onClick={() => (open ? close() : setOpen(true))}
         className={cn(
-          "flex h-9 w-full items-center justify-between rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-xs",
+          "flex h-9 pointer-coarse:h-11 w-full items-center justify-between rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-xs",
           "focus-visible:outline-hidden focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-ring",
           "disabled:cursor-not-allowed disabled:opacity-50",
           open && "border-ring ring-[3px] ring-ring/50",

@@ -21,3 +21,22 @@ describe("TreeSelect — empty search", () => {
     expect(screen.getByText("No se encontraron categorías")).toBeInTheDocument();
   });
 });
+
+describe("TreeSelect — touch floor (mobile-responsive-pass 9.x)", () => {
+  // The trigger was `h-9` (36px) with no touch variant; every other control got
+  // the 44px floor behind `pointer-coarse:` in WU2. jsdom matches no media
+  // query: class strings only, the 768 touch measurement is the evidence.
+  it("grows to 44px on touch and keeps its 36px on a mouse", () => {
+    render(<TreeSelect items={[{ value: "A", label: "A" }]} selected={[]} onSelectionChange={vi.fn()} />);
+    const trigger = screen.getByRole("button", { name: "Seleccioná categorías..." });
+
+    expect(trigger).toHaveClass("h-9", "pointer-coarse:h-11");
+  });
+
+  it("keeps the touch floor once categories are chosen and the label changes", () => {
+    render(<TreeSelect items={[{ value: "A", label: "A" }]} selected={["A"]} onSelectionChange={vi.fn()} />);
+    const trigger = screen.getByRole("button", { name: "1 categoría seleccionada" });
+
+    expect(trigger).toHaveClass("pointer-coarse:h-11");
+  });
+});
