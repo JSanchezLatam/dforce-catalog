@@ -7,10 +7,11 @@ import { cn } from "@/lib/utils"
  * A block-level message box: an icon in the gutter, the message beside it.
  *
  * `destructive` shares its red with the "Desactivado" chip on the customer
- * list and the destructive Badge/Button: a `--destructive` tinted ground with
- * `text-red-700 dark:text-red-400` text. One red vocabulary in the app means a
- * bordered red box always reads as the same severity. The text is NOT
- * `text-destructive`: dark's token is a background maroon (1.80:1 as text).
+ * list and the destructive Badge: a `--destructive` tinted ground with
+ * `text-red-700 dark:text-red-400` text, so a bordered red box always reads as
+ * the same severity. Button is the one exception: it uses the approved
+ * mockup's `red-500` ground with `dark:text-red-300` (tasks.md 1.3). The text
+ * is NOT `text-destructive`: dark's token is a background maroon (1.80:1).
  *
  * FORM- and BLOCK-level only. A validation message under one input stays plain
  * red text (`FIELD_ERROR`): boxing every field error makes a six-field form
