@@ -73,6 +73,7 @@ const PREVIEW_TITLE = "Catálogo: Productos";
  */
 const PREVIEW_ZOOM = 0.6;
 
+
 /**
  * catalog-templates-and-workshop-info WU3 (task 3.12, migration `0009`) —
  * the logo/colour/font/cover-text inputs that used to live here are gone:
@@ -260,7 +261,8 @@ export function TemplateConfigForm({
           <section aria-label="Vista previa">
             <h2 className={SECTION_HEADING}>Vista previa</h2>
             <div className={`${CARD} max-h-[70vh] overflow-auto`}>
-              <div data-preview-scale style={{ zoom: PREVIEW_ZOOM }}>
+              {/* `max-lg`: below `lg` the sidebar is still fixed, so the column at 768 is 390px: 816 * 0.45 = 367px fits where 490px was cut off. A literal class so Tailwind sees it; `!` because the inline zoom outranks a class. */}
+              <div data-preview-scale className="max-lg:[zoom:0.45]!" style={{ zoom: PREVIEW_ZOOM }}>
                 <CatalogTemplate
                   title={PREVIEW_TITLE}
                   // No selection exists on this screen, so the index has no
