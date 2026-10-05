@@ -75,11 +75,11 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 
 ## WU4: PermissionDenied (PR 4) — #18
 
-- [ ] 4.1 RED `PermissionDenied.test`: page title via `PageHeader`; "No tenés permiso para ver esta página"; "Pedile acceso a un administrador."; "Volver al inicio" links to `/` with `min-h-11`; lock icon. GREEN `src/shared/ui/PermissionDenied.tsx`.
-- [ ] 4.2 RED `responsive-guards.test.ts`: the refusal literal outside `PermissionDenied` fails (red until the sweep).
-- [ ] 4.3 Sweep every page.tsx holding the literal (grep finds 15, design says 16: locate the missing one) and pass each its page title; print and builder pages included.
-- [ ] 4.4 Update the 7 page tests asserting the old sentence: `template-config`, `print`, `vencimientos`, `customers`, `service-orders/[id]`, `customers/[id]`, `service-orders`.
-- [ ] 4.5 Mutation-verify 4.1-4.4 by name (change a string, keep one inline copy).
+- [x] 4.1 RED `PermissionDenied.test`: page title via `PageHeader`; "No tenés permiso para ver esta página"; "Pedile acceso a un administrador."; "Volver al inicio" links to `/` with `min-h-11`; lock icon. GREEN `src/shared/ui/PermissionDenied.tsx`. (Server component, `House`/`Lock` from lucide-react like the other pages. The `min-h-11` assertion is a whole-class check: `buttonVariants` already carries `pointer-coarse:min-h-11`, so a substring match survived the mutation.)
+- [x] 4.2 RED `responsive-guards.test.ts`: the refusal literal outside `PermissionDenied` fails (red until the sweep). (Scans every page.tsx including print, unlike the padding guard.)
+- [x] 4.3 Sweep every page.tsx holding the literal (grep finds 15, design says 16: locate the missing one) and pass each its page title; print and builder pages included. (15 pages swept, not 16: the grep was exhaustive, `rg "ver esta página" src` and a wider `permiso|forbidden|sin acceso` over every page.tsx find no other copy, no route handler renders it. The design's 16 was a miscount. Titles: the 10 PageHeader titles reused; detail pages got `Orden de servicio` (detail and print), `Cliente`, `Vehículo`, `Producto`. Every `can(user, ...)` call and early return is where it was.)
+- [x] 4.4 Update the 7 page tests asserting the old sentence: `template-config`, `print`, `vencimientos`, `customers`, `service-orders/[id]`, `customers/[id]`, `service-orders`. (Each of the 7 now asserts the page h1, the h2 sentence and the `Volver al inicio` link to `/`; template-config already had the h1 line.)
+- [x] 4.5 Mutation-verify 4.1-4.4 by name (change a string, keep one inline copy). (Red by name: Pedile string, href, Lock icon, sentence, PageHeader title, `min-h-11`, a page's title in vencimientos, one inline copy in users and in print.)
 - [ ] 4.6 Matrix as técnico on `/vencimientos`, `/users`, `/workshop-config`, `/builder`, `/template-config` (390, both themes): identical look, differing only in title.
 
 ## WU5: RecordCard + service orders (PR 5) — #2
