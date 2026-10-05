@@ -47,6 +47,10 @@ export const ROUTE_GUARDS: Record<
   "/api/vencimientos/contact": { POST: "vencimientos.contact" },
   "/api/service-orders": { POST: "service-orders.write" },
   "/api/service-orders/[id]": { PATCH: "service-orders.write" },
+  // Reception photos (service-order-reception WU3b). POST is `write` (both roles
+  // photograph an open order); GET is `read`; DELETE is admin-only.
+  "/api/service-orders/[id]/photos": { POST: "service-orders.write" },
+  "/api/service-orders/[id]/photos/[photoId]": { GET: "service-orders.read", DELETE: "service-orders.deletePhoto" },
   "/api/inventory-sync/manual": { GET: "sync.manual", POST: "sync.manual" },
   "/api/template-config": { GET: "template.edit", POST: "template.edit" },
   // Per-template cover image (catalog-cover-templates WU3a): template config,
@@ -170,12 +174,7 @@ describe("ROUTE_GUARDS completeness", () => {
     // `users.manage` came off this list once /api/users landed — it now has a
     // real route and must stay reachable. `catalogs.listAll` has no dedicated
     // route of its own by design.
-    //
-    // `service-orders.deletePhoto` is exempt ONLY while its route is the next
-    // PR in the chain (service-order-reception WU3a adds the Action, WU3b adds
-    // `/api/service-orders/[id]/photos/[photoId]`). WU3b task 3.10 deletes this
-    // entry, and the guard row it adds then makes this test prove it is used.
-    const exempt: readonly Action[] = ["catalogs.listAll", "service-orders.deletePhoto"];
+    const exempt: readonly Action[] = ["catalogs.listAll"];
 
     for (const action of ACTIONS) {
       if ((exempt as readonly string[]).includes(action)) continue;

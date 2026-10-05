@@ -115,6 +115,18 @@ export async function addOrderPhoto(
   }
 }
 
+/** Scoped by BOTH ids: a photo id from another order is "not found", never a cross-order read. */
+export async function findOrderPhoto(
+  input: { ordenId: string; photoId: string },
+  deps: Pick<PhotoDeps, "db"> = {},
+): Promise<{ r2Key: string } | null> {
+  const [row] = await (deps.db ?? db)
+    .select({ r2Key: ordenServicioFoto.r2Key })
+    .from(ordenServicioFoto)
+    .where(and(eq(ordenServicioFoto.id, input.photoId), eq(ordenServicioFoto.ordenId, input.ordenId)));
+  return row ?? null;
+}
+
 export async function deleteOrderPhoto(
   input: { ordenId: string; photoId: string },
   deps: PhotoDeps = {},
