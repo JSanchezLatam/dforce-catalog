@@ -21,11 +21,13 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getClienteById } from "@/modules/customers/queries";
 import { listRemindersForOrder } from "@/modules/reminders/queries";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
-import { canEditOrderFields } from "@/modules/service-orders/edit-policy";
+import { canChangeOrderPhotos, canEditOrderFields } from "@/modules/service-orders/edit-policy";
 import { FUEL_LABEL, intakeInputsFor } from "@/modules/service-orders/intake";
+import { OrderPhotos } from "@/modules/service-orders/OrderPhotos";
 import { OrderStatusControls } from "@/modules/service-orders/OrderStatusControls";
 import { vehicleDescriptiveRows } from "@/modules/service-orders/vehicle-rows";
 import { ServiceOrderFormTrigger } from "@/modules/service-orders/ServiceOrderFormTrigger";
+import { listOrderPhotos } from "@/modules/service-orders/photos";
 import { getOrdenServicioById } from "@/modules/service-orders/queries";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import { formatDateTime } from "@/shared/datetime";
@@ -55,9 +57,9 @@ const REMINDER_STATUS_LABEL: Record<string, string> = {
 function field(label: string, value: unknown) {
   if (value == null || value === "") return null;
   return (
-    <div className="grid grid-cols-3 gap-2 py-2 border-b border-border last:border-0">
+    <div className="grid grid-cols-1 gap-1 py-2 border-b border-border last:border-0 sm:grid-cols-3 sm:gap-2">
       <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
-      <dd className="col-span-2 text-sm text-foreground">{String(value)}</dd>
+      <dd className="text-sm text-foreground sm:col-span-2">{String(value)}</dd>
     </div>
   );
 }
@@ -69,9 +71,9 @@ function formatKilometraje(km: number): string {
 
 function receptionRow(label: string, value: ReactNode, last = false) {
   return (
-    <div className={cn("grid grid-cols-3 gap-2 py-2 border-b border-border", last && "border-0")}>
+    <div className={cn("grid grid-cols-1 gap-1 py-2 border-b border-border sm:grid-cols-3 sm:gap-2", last && "border-0")}>
       <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
-      <dd className="col-span-2 text-sm text-foreground">{value}</dd>
+      <dd className="text-sm text-foreground sm:col-span-2">{value}</dd>
     </div>
   );
 }
@@ -98,10 +100,16 @@ export default async function ServiceOrderDetailPage({
   if (!detail) notFound();
 
   const { orden, items } = detail;
-  const [clienteDetail, reminders] = await Promise.all([
+  const [clienteDetail, reminders, photos] = await Promise.all([
     getClienteById(orden.clienteId),
     listRemindersForOrder(orden.id),
+    listOrderPhotos(orden.id),
   ]);
+  // The same predicates the photo routes enforce (status gate + role), resolved
+  // here so only booleans cross to the client card.
+  const photosOpen = canChangeOrderPhotos(orden.status);
+  const canAddPhotos = photosOpen && can(user, "service-orders.write");
+  const canDeletePhotos = photosOpen && can(user, "service-orders.deletePhoto");
   // C4 — `includeInactive: true` (getClienteById's own vehicles read) means a
   // deactivated vehicle is still found here, so its identity+link render
   // exactly as for an active one (spec §"Service Order Detail Displays
@@ -128,12 +136,12 @@ export default async function ServiceOrderDetailPage({
       </Breadcrumb>
 
       <Card className="mb-6">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="flex items-center gap-3">
-            Orden {orden.id}
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
+          <CardTitle className="flex items-center gap-3 sm:flex-1">
+            <span className="min-w-0 break-all sm:break-normal">Orden {orden.id}</span>
             <StatusBadge status={orden.status} label={ORDER_STATUS_LABEL[orden.status]} />
           </CardTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* D11 — the same predicate the PATCH route enforces, so the
                 control and the write cannot drift. Only its BOOLEAN result
                 crosses to the client trigger; no function is serialized. */}
@@ -246,6 +254,20 @@ export default async function ServiceOrderDetailPage({
               )}
             {showBattery && receptionRow("Batería", orden.bateriaPct == null ? "—" : `${orden.bateriaPct}%`, true)}
           </dl>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Fotos de recepción</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <OrderPhotos orderId={orden.id} photos={photos} canAdd={canAddPhotos} canDelete={canDeletePhotos} />
+          {!photosOpen && (
+            <p className="text-sm text-muted-foreground">
+              Las fotos no se pueden agregar ni borrar cuando la orden está terminada o cancelada.
+            </p>
+          )}
         </CardContent>
       </Card>
 

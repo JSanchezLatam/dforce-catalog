@@ -13,7 +13,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/shared/db/client";
 import { catalogs, cliente, ordenServicio, ordenServicioFoto, users, vehiculo } from "@/shared/db/schema";
 import { runRetentionForUser } from "../modules/catalog-storage/retention";
-import { addOrderPhoto, deleteOrderPhoto, findOrderPhoto, MAX_PHOTOS, OrderClosedError, PhotoLimitError, type PhotoDeps } from "../modules/service-orders/photos";
+import { addOrderPhoto, deleteOrderPhoto, findOrderPhoto, listOrderPhotos, MAX_PHOTOS, OrderClosedError, PhotoLimitError, type PhotoDeps } from "../modules/service-orders/photos";
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -213,5 +213,20 @@ describe("orden_servicio_foto (E2E)", () => {
 
     expect(await findOrderPhoto({ ordenId, photoId: id })).toEqual({ r2Key });
     expect(await findOrderPhoto({ ordenId: otherId, photoId: id })).toBeNull();
+  });
+
+  it("listOrderPhotos orders by position, not by insertion, and only returns this order's photos", async () => {
+    const ordenId = await newOrder();
+    const otherId = await newOrder();
+    // Inserted out of position order, so only a real ORDER BY can produce [p0, p1, p2].
+    await db.insert(ordenServicioFoto).values([
+      { id: "list-p2", ordenId, r2Key: `service-orders/${ordenId}/list-p2.jpg`, position: 2 },
+      { id: "list-p0", ordenId, r2Key: `service-orders/${ordenId}/list-p0.jpg`, position: 0 },
+      { id: "list-p1", ordenId, r2Key: `service-orders/${ordenId}/list-p1.jpg`, position: 1 },
+      { id: "list-other", ordenId: otherId, r2Key: `service-orders/${otherId}/list-other.jpg`, position: 0 },
+    ]);
+
+    expect(await listOrderPhotos(ordenId)).toEqual([{ id: "list-p0" }, { id: "list-p1" }, { id: "list-p2" }]);
+    expect(await listOrderPhotos("no-such-order")).toEqual([]);
   });
 });

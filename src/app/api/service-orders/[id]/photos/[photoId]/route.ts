@@ -43,7 +43,8 @@ export async function handleGetPhoto(
       "X-Content-Type-Options": "nosniff",
       // The bytes behind a photo id never change, and the print page re-requests up to 12 of them.
       "Cache-Control": "private, max-age=86400, immutable",
-      ETag: ids.photoId,
+      // A strong validator is a quoted string (RFC 9110 8.8.3).
+      ETag: `"${ids.photoId}"`,
     },
   });
 }

@@ -4,7 +4,7 @@
  * hand the element to RTL, mock only the request-scoped and data edges.
  */
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const notFound = vi.hoisted(() => vi.fn(() => { throw new Error("NEXT_NOT_FOUND"); }));
 // `useRouter` is here for `ServiceOrderFormTrigger`, which this file mounts for
@@ -25,6 +25,9 @@ const listRemindersForOrder = vi.hoisted(() => vi.fn<() => Promise<Reminder[]>>(
 vi.mock("@/modules/service-orders/queries", () => ({ getOrdenServicioById }));
 vi.mock("@/modules/customers/queries", () => ({ getClienteById }));
 vi.mock("@/modules/reminders/queries", () => ({ listRemindersForOrder }));
+// `photos.ts` imports the database and R2; the card itself (OrderPhotos) is rendered for real.
+const listOrderPhotos = vi.hoisted(() => vi.fn<(ordenId: string) => Promise<{ id: string }[]>>(async () => []));
+vi.mock("@/modules/service-orders/photos", () => ({ listOrderPhotos }));
 
 import { can } from "@/modules/auth/policy";
 import type { Role } from "@/modules/auth/roles";
@@ -78,6 +81,7 @@ describe("ServiceOrderDetailPage", () => {
     getOrdenServicioById.mockResolvedValue({ orden: ORDEN, items: [] });
     getClienteById.mockResolvedValue(detailWith(null));
     listRemindersForOrder.mockResolvedValue([]);
+    listOrderPhotos.mockResolvedValue([]);
   });
 
   /**
@@ -88,7 +92,7 @@ describe("ServiceOrderDetailPage", () => {
     const fullId = "87cceecc-1111-2222-3333-444455556666";
     getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, id: fullId }, items: [] });
 
-    render(await ServiceOrderDetailPage({ params: Promise.resolve({ id: fullId }) }));
+    render(<ToastProvider>{await ServiceOrderDetailPage({ params: Promise.resolve({ id: fullId }) })}</ToastProvider>);
 
     expect(screen.getAllByText(fullId).length).toBeGreaterThan(0);
   });
@@ -342,6 +346,24 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
     expect(link.className).toContain("min-w-11");
   });
 
+  /**
+   * Owner report from a 390px phone: the header row never wrapped, so the
+   * action buttons were pushed past the right edge and clipped, and a long
+   * label ("Recomendaciones") overlapped its value in the 1/3 label column.
+   * jsdom has no Tailwind, so this pins the mechanism (the action row may wrap,
+   * a field row stacks below `sm`); the LAN browser check measures the pixels.
+   */
+  it("lets the header actions wrap and stacks field rows below sm", async () => {
+    render(await renderAs("administrador", "open"));
+
+    const actions = screen.getByRole("link", { name: "Imprimir" }).parentElement!;
+    expect(actions.className).toContain("flex-wrap");
+
+    const row = screen.getByText("Recomendaciones").parentElement!;
+    expect(row.className).toContain("grid-cols-1");
+    expect(row.className).toContain("sm:grid-cols-3");
+  });
+
   // A closed order still prints — the sheet is a record, not an action, and the
   // edit gate above refuses `done` for both roles. Rendering both assertions
   // off the SAME render is what says the two controls are independent.
@@ -459,5 +481,93 @@ describe("ServiceOrderDetailPage — read gate", () => {
     render(await renderPage());
 
     expect(screen.getByText("No tenés permiso para ver esta página.")).toBeInTheDocument();
+  });
+});
+
+/**
+ * Reception photos card. Both booleans are resolved HERE, on the server, from
+ * the same predicates the routes enforce: `canChangeOrderPhotos` (status) plus
+ * `service-orders.write` / `service-orders.deletePhoto` (role).
+ */
+describe("ServiceOrderDetailPage — reception photos card", () => {
+  const roleCan = (allowed: string[]) =>
+    vi.mocked(can).mockImplementation(((_user: unknown, action: string) => allowed.includes(action)) as typeof can);
+  // The main describe's beforeEach is scoped to it: without this, the order status set by
+  // `asOrder("cancelled")` below leaked into every later test and made them pass trivially.
+  beforeEach(() => {
+    requireSessionFromHeaders.mockResolvedValue({ id: "u1", role: "tecnico" });
+    getOrdenServicioById.mockResolvedValue({ orden: ORDEN, items: [] });
+    getClienteById.mockResolvedValue(detailWith(null));
+    listRemindersForOrder.mockResolvedValue([]);
+    listOrderPhotos.mockResolvedValue([]);
+  });
+  afterEach(() => vi.mocked(can).mockImplementation(() => true));
+
+  const asOrder = (status: OrderStatus) => getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status }, items: [] });
+  const card = () => screen.getByText("Fotos de recepción").closest("[data-slot='card']") as HTMLElement;
+
+  it("lists this order's photos, in the order the query returns them (by position)", async () => {
+    listOrderPhotos.mockResolvedValue([{ id: "p9" }, { id: "p2" }, { id: "p5" }]);
+
+    render(await renderPage());
+
+    expect(listOrderPhotos).toHaveBeenCalledWith("o1");
+    expect(within(card()).getAllByRole("img").map((i) => i.getAttribute("src"))).toEqual([
+      "/api/service-orders/o1/photos/p9",
+      "/api/service-orders/o1/photos/p2",
+      "/api/service-orders/o1/photos/p5",
+    ]);
+    expect(within(card()).getByText("3 de 12")).toBeInTheDocument();
+  });
+
+  it("lets a técnico add but not delete on an open order", async () => {
+    roleCan(["service-orders.read", "service-orders.write"]);
+    listOrderPhotos.mockResolvedValue([{ id: "p1" }]);
+
+    render(await renderPage());
+
+    expect(within(card()).getByLabelText("Agregar fotos")).toBeInTheDocument();
+    expect(within(card()).queryByRole("button", { name: /Borrar foto/ })).not.toBeInTheDocument();
+  });
+
+  it("lets an administrador add and delete on an in_progress order", async () => {
+    roleCan(["service-orders.read", "service-orders.write", "service-orders.deletePhoto"]);
+    asOrder("in_progress");
+    listOrderPhotos.mockResolvedValue([{ id: "p1" }]);
+
+    render(await renderPage());
+
+    expect(within(card()).getByLabelText("Agregar fotos")).toBeInTheDocument();
+    expect(within(card()).getByRole("button", { name: "Borrar foto 1" })).toBeInTheDocument();
+  });
+
+  it.each(["done", "cancelled"] as const)("offers neither add nor delete on a %s order, even to an administrador", async (status) => {
+    roleCan(["service-orders.read", "service-orders.write", "service-orders.deletePhoto"]);
+    asOrder(status);
+    listOrderPhotos.mockResolvedValue([{ id: "p1" }]);
+
+    render(await renderPage());
+
+    expect(within(card()).getAllByRole("img")).toHaveLength(1);
+    expect(within(card()).queryByLabelText("Agregar fotos")).not.toBeInTheDocument();
+    expect(within(card()).queryByRole("button", { name: /Borrar foto/ })).not.toBeInTheDocument();
+  });
+
+  it("offers no add control to a role without service-orders.write", async () => {
+    roleCan(["service-orders.read"]);
+
+    render(await renderPage());
+
+    expect(within(card()).queryByLabelText("Agregar fotos")).not.toBeInTheDocument();
+  });
+
+  it("explains that a finished or cancelled order's photos are frozen", async () => {
+    asOrder("done");
+
+    render(await renderPage());
+
+    expect(
+      within(card()).getByText("Las fotos no se pueden agregar ni borrar cuando la orden está terminada o cancelada."),
+    ).toBeInTheDocument();
   });
 });

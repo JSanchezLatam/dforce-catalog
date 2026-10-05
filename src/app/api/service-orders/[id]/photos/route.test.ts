@@ -11,7 +11,11 @@ const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 function req(
   body: BodyInit | undefined,
-  { role = "tecnico", contentLength }: { role?: Role; contentLength?: string } = {},
+  {
+    role = "tecnico",
+    contentLength = "1000",
+    contentType,
+  }: { role?: Role; contentLength?: string | null; contentType?: string } = {},
 ) {
   return new NextRequest("http://localhost/api/service-orders/o1/photos", {
     method: "POST",
@@ -19,7 +23,9 @@ function req(
     headers: {
       "x-user-id": "user-1",
       "x-user-role": role,
-      ...(contentLength ? { "content-length": contentLength } : {}),
+      // A browser always sends the length of a FormData body; null models a chunked request.
+      ...(contentLength === null ? {} : { "content-length": contentLength }),
+      ...(contentType ? { "content-type": contentType } : {}),
     },
   });
 }
@@ -88,6 +94,35 @@ describe("POST /api/service-orders/[id]/photos", () => {
     const res = await handleAddPhoto(req(form(big), { contentLength: "100" }), "o1", { addPhoto });
 
     expect(res.status).toBe(413);
+    expect(addPhoto).not.toHaveBeenCalled();
+  });
+
+  it("400 'No se pudo leer la foto' when the multipart body is malformed, not a 500", async () => {
+    const addPhoto = vi.fn();
+    const res = await handleAddPhoto(
+      req("this is not multipart", { contentType: "multipart/form-data; boundary=xyz" }),
+      "o1",
+      { addPhoto },
+    );
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "No se pudo leer la foto" });
+    expect(addPhoto).not.toHaveBeenCalled();
+  });
+
+  it("411 when there is no Content-Length (chunked), so an unbounded body is never buffered", async () => {
+    const addPhoto = vi.fn();
+    const res = await handleAddPhoto(req(form(JPEG), { contentLength: null }), "o1", { addPhoto });
+
+    expect(res.status).toBe(411);
+    expect(addPhoto).not.toHaveBeenCalled();
+  });
+
+  it("411 when Content-Length is not a number", async () => {
+    const addPhoto = vi.fn();
+    const res = await handleAddPhoto(req(form(JPEG), { contentLength: "abc" }), "o1", { addPhoto });
+
+    expect(res.status).toBe(411);
     expect(addPhoto).not.toHaveBeenCalled();
   });
 

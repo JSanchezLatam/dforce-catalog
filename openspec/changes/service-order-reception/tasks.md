@@ -77,12 +77,12 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU4: Compression and uploader card (PR 4)
 
-- [ ] 4.1 RED `compress-photo.test.ts`: pure `fitWithin(w, h, 1600)` for landscape, portrait, already-small (no upscale); `toBlob` returning `null` throws. GREEN `compress-photo.ts` (`createImageBitmap` with `imageOrientation: "from-image"`, `HTMLImageElement` + `URL.createObjectURL` fallback; no secure-context API).
-- [ ] 4.2 RED `OrderPhotos` tests: uploads sequentially with "Subiendo 2 de 5…" in `aria-live`; a failed file gets its own error toast; success toast reports the APPLIED count ("1 foto agregada" / "3 fotos agregadas"), above `router.refresh()`, both below the `try/catch`; input has no `capture`; add control hidden when `canAdd` false; delete hidden for técnico; delete confirm then "Foto eliminada". GREEN `OrderPhotos.tsx` (props `{orderId, photos:{id}[], canAdd, canDelete}`, label with `buttonVariants` + `min-h-11 min-w-11`).
-- [ ] 4.3 RED detail page tests: card "Fotos de recepción" gets `canAdd` from `canChangeOrderPhotos` and `service-orders.write`, `canDelete` from `can(..., "service-orders.deletePhoto")` and status; photos listed by position. GREEN `[id]/page.tsx`.
-- [ ] 4.4 Mutation-verify 4.1-4.3 by name (count `files.length` instead of applied, upload in parallel, show delete to técnico).
-- [ ] 4.5 Browser at the LAN IP as administrador and técnico (RSC boundary, confirm dialog is a portal: console clean); target sizes measured.
-- [ ] 4.6 Real phone over HTTP: gallery and camera both offered, multi-select works, compression runs with no secure context, photos arrive at ~300-600 KB. Confirms dropping `capture` with the owner.
+- [x] 4.1 RED `compress-photo.test.ts`: pure `fitWithin(w, h, 1600)` for landscape, portrait, already-small (no upscale); `toBlob` returning `null` throws. GREEN `compress-photo.ts` (`createImageBitmap` with `imageOrientation: "from-image"`, `HTMLImageElement` + `URL.createObjectURL` fallback; no secure-context API).
+- [x] 4.2 RED `OrderPhotos` tests: uploads sequentially with "Subiendo 2 de 5…" in `aria-live`; a failed file gets its own error toast; success toast reports the APPLIED count ("1 foto agregada" / "3 fotos agregadas"), above `router.refresh()`, both below the `try/catch`; input has no `capture`; add control hidden when `canAdd` false; delete hidden for técnico; delete confirm then "Foto eliminada". GREEN `OrderPhotos.tsx` (props `{orderId, photos:{id}[], canAdd, canDelete}`, label with `buttonVariants` + `min-h-11 min-w-11`).
+- [x] 4.3 RED detail page tests: card "Fotos de recepción" gets `canAdd` from `canChangeOrderPhotos` and `service-orders.write`, `canDelete` from `can(..., "service-orders.deletePhoto")` and status; photos listed by position. GREEN `[id]/page.tsx`.
+- [x] 4.4 Mutation-verify 4.1-4.3 by name (count `files.length` instead of applied, upload in parallel, show delete to técnico).
+- [x] 4.5 Browser at the LAN IP as administrador and técnico (RSC boundary, confirm dialog is a portal: console clean); target sizes measured.
+- [x] 4.6 Real phone over HTTP: gallery and camera both offered, multi-select works, compression runs with no secure context, photos arrive at ~300-600 KB. Confirms dropping `capture` with the owner.
 
 ## WU5: Print (PR 5)
 

@@ -27,12 +27,21 @@ export async function handleAddPhoto(
   }
 
   const tooLarge = () => NextResponse.json({ error: "La foto es demasiado grande" }, { status: 413 });
-  // Refuse before buffering the body. Content-Length is a claim, so the byte count is checked again below.
-  if (Number(request.headers.get("content-length") ?? "0") > MAX_PHOTO_BYTES + MULTIPART_SLACK_BYTES) {
-    return tooLarge();
+  // Refuse before buffering the body. A request with no usable length (chunked) could stream
+  // without bound into formData(), and browsers always send one for a FormData body.
+  const declared = Number(request.headers.get("content-length"));
+  if (!request.headers.get("content-length") || !Number.isFinite(declared)) {
+    return NextResponse.json({ error: "Falta la longitud de la foto" }, { status: 411 });
   }
+  // Content-Length is a claim, so the byte count is checked again below.
+  if (declared > MAX_PHOTO_BYTES + MULTIPART_SLACK_BYTES) return tooLarge();
 
-  const file = (await request.formData()).get("file");
+  let file: FormDataEntryValue | null;
+  try {
+    file = (await request.formData()).get("file");
+  } catch {
+    return NextResponse.json({ error: "No se pudo leer la foto" }, { status: 400 });
+  }
   if (!file || !(file instanceof Blob)) {
     return NextResponse.json({ error: "Falta la foto" }, { status: 400 });
   }
