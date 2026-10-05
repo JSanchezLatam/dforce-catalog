@@ -592,3 +592,27 @@ describe("ServiceOrderDetailPage — reception photos card", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("ServiceOrderDetailPage — the customer and vehicle links on touch (audit-final N6)", () => {
+  beforeEach(() => {
+    requireSessionFromHeaders.mockResolvedValue({ id: "u1", role: "tecnico" });
+    getOrdenServicioById.mockResolvedValue({ orden: ORDEN, items: [] });
+    getClienteById.mockResolvedValue(detailWith(null));
+    listRemindersForOrder.mockResolvedValue([]);
+    listOrderPhotos.mockResolvedValue([]);
+  });
+
+  // They are the only path from an order to its customer and its vehicle and
+  // measured 18px tall. jsdom has no Tailwind: this reads the class that
+  // carries the floor, as the breadcrumb link's test does.
+  it.each([
+    ["Ana Gómez", "/customers/c1"],
+    ["ABC123", "/customers/c1/vehicles/v1"],
+  ])("%s is a 44px-tall link on a touch screen", async (name, href) => {
+    render(await renderPage());
+
+    const link = screen.getByRole("link", { name });
+    expect(link).toHaveAttribute("href", href);
+    expect(link).toHaveClass("pointer-coarse:inline-flex", "pointer-coarse:min-h-11", "pointer-coarse:items-center");
+  });
+});

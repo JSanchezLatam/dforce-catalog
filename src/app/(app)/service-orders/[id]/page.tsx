@@ -182,7 +182,7 @@ export default async function ServiceOrderDetailPage({
               <dt className="text-sm font-medium text-muted-foreground">Cliente</dt>
               <dd className="col-span-2 text-sm text-foreground">
                 {clienteDetail ? (
-                  <Link href={`/customers/${clienteDetail.cliente.id}`} className="text-primary hover:underline">
+                  <Link href={`/customers/${clienteDetail.cliente.id}`} className="text-primary hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center">
                     {clienteDetail.cliente.name}
                   </Link>
                 ) : (
@@ -196,7 +196,7 @@ export default async function ServiceOrderDetailPage({
                 {vehiculo ? (
                   <Link
                     href={`/customers/${orden.clienteId}/vehicles/${vehiculo.id}`}
-                    className="text-primary hover:underline"
+                    className="text-primary hover:underline pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
                   >
                     {vehiculo.plate}
                   </Link>
