@@ -1125,3 +1125,23 @@ describe("CustomerForm — Cédula / RUC", () => {
     expect(await screen.findByText("La cédula / RUC no puede superar 30 caracteres")).toBeInTheDocument();
   });
 });
+
+describe("CustomerForm — vehicle card at phone width (mobile-responsive-pass #3)", () => {
+  // jsdom applies no Tailwind, so this reads the class the layout depends on:
+  // a grid item with `min-width: auto` is as wide as its widest content, which
+  // is how the Marca select pushed the card 30px past its column at 390.
+  it("every field cell of the two-column vehicle grid can shrink below its content (min-w-0)", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm />);
+    await open(user, "Nuevo cliente");
+    await user.click(screen.getByRole("button", { name: "Agregar vehículo" }));
+
+    const group = vehicleGroup(1);
+    const labels = ["Placa", "Marca", "Modelo", "Año", "Chasis", "Color primario", "Color secundario", "Estilo", "Motor"];
+    for (const label of labels) {
+      const cell = within(group).getByLabelText(label).closest("div.grid");
+      expect(cell, label).not.toBeNull();
+      expect(cell!.classList.contains("min-w-0"), `${label} cell`).toBe(true);
+    }
+  });
+});

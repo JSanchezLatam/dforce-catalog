@@ -48,6 +48,16 @@ async function chooseModel(user: ReturnType<typeof userEvent.setup>, label: stri
 }
 
 describe("VehicleMakeModelFields", () => {
+  it("lets the Marca and Modelo selects shrink with their column (min-w-0 on cell and trigger)", () => {
+    render(<VehicleMakeModelFields idPrefix="v1" make="Toyota" model="" onChange={vi.fn()} />);
+
+    for (const label of ["Marca", "Modelo"]) {
+      const trigger = screen.getByLabelText(label);
+      expect(trigger.classList.contains("min-w-0"), `${label} trigger`).toBe(true);
+      expect(trigger.closest("div.grid")!.classList.contains("min-w-0"), `${label} cell`).toBe(true);
+    }
+  });
+
   it("the Marca select offers every catalog make plus Otro", async () => {
     const user = userEvent.setup();
     render(<VehicleMakeModelFields idPrefix="v1" make="" model="" onChange={vi.fn()} />);

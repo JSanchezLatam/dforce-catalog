@@ -724,7 +724,7 @@ export function CustomerForm({
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="grid gap-2">
+                      <div className="grid min-w-0 gap-2">
                         <Label htmlFor={`${row.key}-plate`}>Placa</Label>
                         <Input
                           id={`${row.key}-plate`}
@@ -738,7 +738,7 @@ export function CustomerForm({
                         model={row.model}
                         onChange={(next) => updateVehicle(row.key, next)}
                       />
-                      <div className="grid gap-2">
+                      <div className="grid min-w-0 gap-2">
                         <Label htmlFor={`${row.key}-year`}>Año</Label>
                         <Input
                           id={`${row.key}-year`}
@@ -747,7 +747,7 @@ export function CustomerForm({
                           onChange={(e) => updateVehicle(row.key, { year: e.target.value })}
                         />
                       </div>
-                      <div className="col-span-2 grid gap-2">
+                      <div className="col-span-2 grid min-w-0 gap-2">
                         <Label htmlFor={`${row.key}-chasis`}>Chasis</Label>
                         <Input
                           id={`${row.key}-chasis`}
@@ -756,7 +756,7 @@ export function CustomerForm({
                           onChange={(e) => updateVehicle(row.key, { chasis: e.target.value })}
                         />
                       </div>
-                      <div className="grid gap-2">
+                      <div className="grid min-w-0 gap-2">
                         <Label htmlFor={`${row.key}-color-primario`}>Color primario</Label>
                         <Input
                           id={`${row.key}-color-primario`}
@@ -764,7 +764,7 @@ export function CustomerForm({
                           onChange={(e) => updateVehicle(row.key, { colorPrimario: e.target.value })}
                         />
                       </div>
-                      <div className="grid gap-2">
+                      <div className="grid min-w-0 gap-2">
                         <Label htmlFor={`${row.key}-color-secundario`}>Color secundario</Label>
                         <Input
                           id={`${row.key}-color-secundario`}
@@ -774,7 +774,7 @@ export function CustomerForm({
                         />
                       </div>
                       {/* Native selects, as in `ServiceOrderForm`: a short closed list, and the OS picker is the better control on a tablet. */}
-                      <div className="grid gap-2">
+                      <div className="grid min-w-0 gap-2">
                         <Label htmlFor={`${row.key}-estilo`}>Estilo</Label>
                         <select
                           id={`${row.key}-estilo`}
@@ -790,7 +790,7 @@ export function CustomerForm({
                           ))}
                         </select>
                       </div>
-                      <div className="grid gap-2">
+                      <div className="grid min-w-0 gap-2">
                         <Label htmlFor={`${row.key}-motor`}>Motor</Label>
                         <select
                           id={`${row.key}-motor`}
@@ -806,7 +806,7 @@ export function CustomerForm({
                           ))}
                         </select>
                       </div>
-                      <div className="grid gap-2">
+                      <div className="grid min-w-0 gap-2">
                         <Label htmlFor={`${row.key}-unidad`}>
                           Nº de unidad <span className="font-normal text-muted-foreground">(opcional)</span>
                         </Label>
@@ -829,7 +829,7 @@ export function CustomerForm({
                           hoja impresa.
                         </p>
                         <div className="grid grid-cols-2 gap-3">
-                          <div className="grid gap-2">
+                          <div className="grid min-w-0 gap-2">
                             <Label htmlFor={`${row.key}-mes`}>Mes de renovación de placa</Label>
                             <select
                               id={`${row.key}-mes`}
@@ -845,7 +845,7 @@ export function CustomerForm({
                               ))}
                             </select>
                           </div>
-                          <div className="grid gap-2">
+                          <div className="grid min-w-0 gap-2">
                             <Label htmlFor={`${row.key}-seguro`}>Vencimiento del seguro</Label>
                             <Input
                               id={`${row.key}-seguro`}
