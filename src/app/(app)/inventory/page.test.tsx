@@ -363,11 +363,15 @@ describe("InventoryPage — price/stock columns and phone cards (WU7)", () => {
       row({ id: "PS0000002", name: "Sin datos", price: null, stock: null }),
     ]);
 
-    const [, full, empty] = table.getAllByRole("row");
-    expect(within(full).getByText("$12.50")).toBeInTheDocument();
-    expect(within(full).getByText("24")).toBeInTheDocument();
-    expect(within(empty).queryByText(/\$/)).not.toBeInTheDocument();
-    expect(within(empty).getAllByText("—").length).toBeGreaterThanOrEqual(2);
+    const [header, full, empty] = table.getAllByRole("row");
+    const headers = within(header).getAllByRole("columnheader").map((h) => h.textContent?.trim());
+    const cell = (r: HTMLElement, name: string) => within(r).getAllByRole("cell")[headers.indexOf(name)];
+    expect(cell(full, "Precio")).toHaveTextContent("$12.50");
+    expect(cell(full, "Stock")).toHaveTextContent("24");
+    // Read by column, not by counting dashes: Categoría 2 is null in the
+    // fixture too, so a dash count cannot tell a missing stock dash apart.
+    expect(cell(empty, "Precio")).toHaveTextContent(/^—$/);
+    expect(cell(empty, "Stock")).toHaveTextContent(/^—$/);
   });
 
   it("hides the table below md and the card list from md up", async () => {
