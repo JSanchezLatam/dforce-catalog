@@ -25,7 +25,7 @@ describe("GET /api/service-orders/[id]/photos/[photoId]", () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("image/jpeg");
-    expect(res.headers.get("ETag")).toBe("p1");
+    expect(res.headers.get("ETag")).toBe('"p1"');
     expect(res.headers.get("Cache-Control")).toBe("private, max-age=86400, immutable");
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(res.headers.get("Content-Security-Policy")).toBe("default-src 'none'; style-src 'unsafe-inline'; sandbox");
