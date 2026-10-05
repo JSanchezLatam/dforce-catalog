@@ -170,7 +170,12 @@ describe("ROUTE_GUARDS completeness", () => {
     // `users.manage` came off this list once /api/users landed — it now has a
     // real route and must stay reachable. `catalogs.listAll` has no dedicated
     // route of its own by design.
-    const exempt: readonly Action[] = ["catalogs.listAll"];
+    //
+    // `service-orders.deletePhoto` is exempt ONLY while its route is the next
+    // PR in the chain (service-order-reception WU3a adds the Action, WU3b adds
+    // `/api/service-orders/[id]/photos/[photoId]`). WU3b task 3.10 deletes this
+    // entry, and the guard row it adds then makes this test prove it is used.
+    const exempt: readonly Action[] = ["catalogs.listAll", "service-orders.deletePhoto"];
 
     for (const action of ACTIONS) {
       if ((exempt as readonly string[]).includes(action)) continue;
