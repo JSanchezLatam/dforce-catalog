@@ -49,8 +49,13 @@ describe("styles — theme-paired text colours (audit #7, #21)", () => {
  * `PageHeader`, which owns the spacing under the whole header.
  */
 describe("styles — PAGE_HEADING (audit #1, #11)", () => {
-  it("is 24px on phones and 32px from sm, tight leading, no margin of its own", () => {
-    expect(PAGE_HEADING).toBe("text-2xl sm:text-[32px] font-bold leading-tight text-foreground");
+  // Tight leading is for a phone, where the 24px title can wrap to two lines.
+  // From `sm` it returns to `leading-normal` (1.5, what Tailwind's preflight
+  // gave the old `text-[32px]` title), so a one-line desktop title keeps the
+  // 48px box it always had. `leading-tight` at 32px would be 40px: 8px of
+  // vertical drift on every page, which no screenshot would have flagged.
+  it("is 24px on phones and 32px from sm, tight leading on phones only, no margin of its own", () => {
+    expect(PAGE_HEADING).toBe("text-2xl sm:text-[32px] font-bold leading-tight sm:leading-normal text-foreground");
   });
 });
 

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { cn } from "@/lib/utils";
 import { PAGE_HEADING } from "@/shared/ui/styles";
 
 /**
@@ -12,17 +13,20 @@ import { PAGE_HEADING } from "@/shared/ui/styles";
 export function PageHeader({
   title,
   description,
+  descriptionClassName,
   actions,
 }: {
   title: string;
   description?: ReactNode;
+  /** Classes for the subtitle `<p>` itself, e.g. `md:hidden` for a phone-only line: hiding a child would leave this box and its margin behind. */
+  descriptionClassName?: string;
   actions?: ReactNode;
 }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
       <div className="min-w-0">
         <h1 className={PAGE_HEADING}>{title}</h1>
-        {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
+        {description ? <p className={cn("mt-1 text-sm text-muted-foreground", descriptionClassName)}>{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>

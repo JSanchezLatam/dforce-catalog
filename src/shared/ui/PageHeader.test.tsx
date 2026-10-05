@@ -52,6 +52,14 @@ describe("PageHeader", () => {
     expect(screen.getByText("Los clientes del taller.")).toBeInTheDocument();
   });
 
+  it("lets the caller class the subtitle paragraph itself, so a hidden one leaves no box behind", () => {
+    render(<PageHeader title="Inventario" description="7 productos" descriptionClassName="md:hidden" />);
+
+    const subtitle = screen.getByText("7 productos");
+    expect(subtitle.tagName).toBe("P");
+    expect(subtitle).toHaveClass("mt-1", "text-sm", "md:hidden");
+  });
+
   it("renders no actions container when there are no actions", () => {
     const { container } = render(<PageHeader title="Clientes" />);
 
