@@ -85,16 +85,32 @@ describe("ServiceOrderDetailPage", () => {
   });
 
   /**
-   * service-orders spec Scenario "Detail page still shows the full id" —
-   * the list truncates to 8 characters (task 2.19), this page must not.
+   * Audit #15 supersedes the main spec's "Detail page still shows the full id"
+   * (service-orders spec, to be corrected at archive): the 36-character uuid
+   * broke the title and the breadcrumb across lines on a phone. Both now show
+   * the list's 8-character form; the full id stays one hover (or long-press)
+   * away in a `title`, so nothing is lost for someone who needs to quote it.
    */
-  it("shows the full, untruncated id, unlike the list's 8-character truncation", async () => {
+  it("shows the 8-character id in the title and the breadcrumb, never the full uuid as text", async () => {
     const fullId = "87cceecc-1111-2222-3333-444455556666";
     getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, id: fullId }, items: [] });
 
     render(<ToastProvider>{await ServiceOrderDetailPage({ params: Promise.resolve({ id: fullId }) })}</ToastProvider>);
 
-    expect(screen.getAllByText(fullId).length).toBeGreaterThan(0);
+    expect(screen.getByText("Orden 87cceecc")).toBeInTheDocument();
+    expect(screen.getByText("87cceecc", { selector: '[data-slot="breadcrumb-page"]' })).toBeInTheDocument();
+    expect(screen.queryByText(fullId)).not.toBeInTheDocument();
+    expect(screen.queryByText(`Orden ${fullId}`)).not.toBeInTheDocument();
+  });
+
+  it("keeps the full id available as the title of both short ids", async () => {
+    const fullId = "87cceecc-1111-2222-3333-444455556666";
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, id: fullId }, items: [] });
+
+    render(<ToastProvider>{await ServiceOrderDetailPage({ params: Promise.resolve({ id: fullId }) })}</ToastProvider>);
+
+    expect(screen.getByText("Orden 87cceecc")).toHaveAttribute("title", fullId);
+    expect(screen.getByText("87cceecc", { selector: '[data-slot="breadcrumb-page"]' })).toHaveAttribute("title", fullId);
   });
 
   it("shows the vehicle as a link to its history, and the category in Spanish", async () => {
