@@ -87,7 +87,7 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 - [x] 5.1 RED `RecordCard.test`: `RecordCardList` is a `ul` with `md:hidden` and the given `data-testid`; `RecordCard` with `href` is one link, `action` slot renders outside the link, no checkbox. GREEN `src/shared/ui/RecordCard.tsx`.
 - [x] 5.2 RED service-orders page tests (scoped `within`): table in `hidden md:block` card `service-orders-table`; cards in `service-orders-cards`; each card is one link to `/service-orders/<id>`; shows customer, `id.slice(0,8)`, plate, vehicle, status chip (`statusBadgeClassName`), Cita; same row count in both. GREEN `service-orders/page.tsx`.
 - [x] 5.3 Mutation-verify 5.1-5.2 by name (drop `md:hidden`, render one fewer card, link only the title).
-- [ ] 5.4 Matrix; no `scrollWidth` above the viewport; the whole card opens the order; bulk bar unreachable below `md`.
+- [x] 5.4 (Checked 2026-10-05 at http://192.168.0.25:3000, 390 touch, administrador and técnico × dark and light: 9 cards, each ≥96px tall, scrollWidth = 390, table hidden, 0 visible checkboxes; tapping the bottom-right corner of a card opens that order; console clean. At 1280: cards hidden, table and its 10 checkboxes visible.) Matrix; no `scrollWidth` above the viewport; the whole card opens the order; bulk bar unreachable below `md`.
 
 ## WU6: Customers + history (PR 6) — #2 #4
 
