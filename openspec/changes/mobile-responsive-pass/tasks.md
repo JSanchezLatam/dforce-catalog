@@ -105,8 +105,8 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 
 ## WU8: Users cards (PR 8) — #2
 
-- [ ] 8.1 RED `UsersTable` tests (scoped): `users-table` / `users-cards`; card has no `href` and holds the existing `RowActions` kebab (Editar, Desactivar) in `action`; same count in both, also with "Mostrar inactivos". GREEN `UsersTable.tsx`.
-- [ ] 8.2 Mutation-verify 8.1 by name (link the card, drop the action slot).
+- [x] 8.1 RED `UsersTable` tests (scoped): `users-table` / `users-cards`; card has no `href` and holds the existing `RowActions` kebab (Editar, Desactivar) in `action`; same count in both, also with "Mostrar inactivos". GREEN `UsersTable.tsx`.
+- [x] 8.2 (Mutated 2026-10-05, each red BY NAME: card href, action slot dropped, bar wrapper `hidden md:block`, table `hidden`, cards `slice(1)`, cards ignoring "Mostrar inactivos", Desactivado shown as Activo, email in card, raw role key, checkbox in card. Existing table tests re-scoped to `users-table` because the kebab name and username now appear in both lists.) Mutation-verify 8.1 by name (link the card, drop the action slot).
 - [ ] 8.3 Matrix as administrador; the kebab is 44px and reachable on a phone.
 
 ## WU9: Per-screen fixes (PR 9) — #3 #8 #13 #15 #16 #17b
