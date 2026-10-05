@@ -12,17 +12,18 @@ const ICON_MAP = {
  * Audit #6: success was white on `bg-success`, under 4.5:1 in both themes. It is
  * now the approved mockup's toast: ink on a pale tint with a border in light,
  * light ink on a deep tint in dark. Measured in the browser, not taken from the
- * palette. `error` is untouched (not in the audit's scope).
+ * palette. `error` takes the same recipe in red (its old `text-destructive-foreground` is not
+ * a registered utility, so it emitted no colour at all).
  */
 const BG_MAP = {
   success: "border border-green-300 bg-green-50 dark:border-green-400/30 dark:bg-green-950",
-  error: "bg-destructive",
+  error: "border border-red-300 bg-red-50 dark:border-red-400/30 dark:bg-red-950",
   info: "bg-muted",
 };
 
 const FG_MAP = {
   success: "text-green-800 dark:text-green-300",
-  error: "text-destructive-foreground",
+  error: "text-red-800 dark:text-red-300",
   info: "text-muted-foreground",
 };
 
