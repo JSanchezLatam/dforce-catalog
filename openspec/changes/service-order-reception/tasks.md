@@ -86,12 +86,12 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU5: Print (PR 5)
 
-- [ ] 5.1 RED print page tests: Cédula / RUC beside nombre and teléfono when set, absent when null; Kilometraje row; fuel and battery rows only when set; sentinel renewal month and insurance expiry absent. GREEN `print/page.tsx` (named-field allowlist).
-- [ ] 5.2 RED QR slot test: `aria-hidden` element of `size-[25mm]` in the header with no text and no border classes. GREEN `print/page.tsx`.
-- [ ] 5.3 RED photo chunk tests: 0 photos renders no photo block; 4 → 1 chunk; 5 → 2; 9 → 3 (4/4/1) in position order; each chunk `break-before-page`, `loading="eager"`, `src` the authenticated route. GREEN chunking.
-- [ ] 5.4 RED `PrintButton` test: click awaits `decode()` for every incomplete image before `window.print()`; a rejected decode still prints. GREEN `PrintButton.tsx`.
-- [ ] 5.5 Mutation-verify 5.1-5.4 by name (render all photos in one grid, print before decode resolves, render the whole vehicle row).
-- [ ] 5.6 Print PREVIEW at the LAN IP (not the page): photo-less order is exactly 1 page; 9 photos is 4 pages (4/4/1 from page 2); measure the signature stays on page 1 with photos absent AND present; light sheet in dark theme; QR slot blank.
+- [x] 5.1 RED print page tests: Cédula / RUC beside nombre and teléfono when set, absent when null; Kilometraje row; fuel and battery rows only when set; sentinel renewal month and insurance expiry absent. GREEN `print/page.tsx` (named-field allowlist).
+- [x] 5.2 RED QR slot test: `aria-hidden` element of `size-[25mm]` in the header with no text and no border classes. GREEN `print/page.tsx`.
+- [x] 5.3 RED photo chunk tests: 0 photos renders no photo block; 4 → 1 chunk; 5 → 2; 9 → 3 (4/4/1) in position order; each chunk `break-before-page`, `loading="eager"`, `src` the authenticated route. GREEN chunking.
+- [x] 5.4 RED `PrintButton` test: click awaits `decode()` for every incomplete image before `window.print()`; a rejected decode still prints. GREEN `PrintButton.tsx`.
+- [x] 5.5 Mutation-verify 5.1-5.4 by name (render all photos in one grid, print before decode resolves, render the whole vehicle row).
+- [x] 5.6 Print PREVIEW at the LAN IP (not the page): photo-less order is exactly 1 page; 9 photos is 4 pages (4/4/1 from page 2); measure the signature stays on page 1 with photos absent AND present; light sheet in dark theme; QR slot blank.
 
 ## Spec archive notes
 

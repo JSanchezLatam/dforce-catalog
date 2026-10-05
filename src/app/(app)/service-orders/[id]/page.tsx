@@ -22,7 +22,7 @@ import { getClienteById } from "@/modules/customers/queries";
 import { listRemindersForOrder } from "@/modules/reminders/queries";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
 import { canChangeOrderPhotos, canEditOrderFields } from "@/modules/service-orders/edit-policy";
-import { FUEL_LABEL, intakeInputsFor } from "@/modules/service-orders/intake";
+import { FUEL_LABEL, formatKilometraje, intakeInputsFor } from "@/modules/service-orders/intake";
 import { OrderPhotos } from "@/modules/service-orders/OrderPhotos";
 import { OrderStatusControls } from "@/modules/service-orders/OrderStatusControls";
 import { vehicleDescriptiveRows } from "@/modules/service-orders/vehicle-rows";
@@ -62,11 +62,6 @@ function field(label: string, value: unknown) {
       <dd className="text-sm text-foreground sm:col-span-2">{String(value)}</dd>
     </div>
   );
-}
-
-/** 85000 -> "85.000". Fixed separator: `toLocaleString` depends on the runtime's ICU data. */
-function formatKilometraje(km: number): string {
-  return `${String(km).replace(/\B(?=(\d{3})+(?!\d))/g, ".")} km`;
 }
 
 function receptionRow(label: string, value: ReactNode, last = false) {

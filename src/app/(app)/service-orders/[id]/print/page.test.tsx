@@ -43,6 +43,9 @@ vi.mock("@/modules/customers/queries", () => ({ getClienteById }));
 const getWorkshopConfig = vi.hoisted(() => vi.fn<() => Promise<WorkshopConfig | null>>(async () => null));
 vi.mock("@/modules/workshop-config/service", () => ({ getWorkshopConfig }));
 
+const listOrderPhotos = vi.hoisted(() => vi.fn<(id: string) => Promise<{ id: string }[]>>(async () => []));
+vi.mock("@/modules/service-orders/photos", () => ({ listOrderPhotos }));
+
 import type { Role } from "@/modules/auth/roles";
 import type { Cliente, OrdenServicio, Vehiculo, WorkshopConfig } from "@/shared/db/schema";
 import { formatDateTime } from "@/shared/datetime";
@@ -128,6 +131,7 @@ beforeEach(() => {
   getOrdenServicioById.mockResolvedValue({ orden: ORDEN, items: [] });
   getClienteById.mockResolvedValue({ cliente: CLIENTE, orders: [], vehicles: [VEHICULO] });
   getWorkshopConfig.mockResolvedValue(null);
+  listOrderPhotos.mockResolvedValue([]);
 });
 
 describe("ServiceOrderPrintPage — vehicle descriptive fields", () => {
@@ -508,5 +512,140 @@ describe("ServiceOrderPrintPage — the sheet a técnico is handed", () => {
     // `text-red-50` — a near-invisible label on a white sheet, which is the
     // exact defect this requirement exists to prevent.
     expect(label!.className).toContain("text-red-700");
+  });
+});
+
+describe("ServiceOrderPrintPage — reception rows", () => {
+  const terms = () => screen.getAllByRole("term").map((dt) => dt.textContent);
+
+  it("prints Cédula / RUC right after Teléfono when the customer has one", async () => {
+    getClienteById.mockResolvedValue({
+      cliente: { ...CLIENTE, documentoIdentidad: "8-123-456" }, orders: [], vehicles: [VEHICULO],
+    });
+
+    render(await renderPage());
+
+    expect(valueFor("Cédula / RUC")).toBe("8-123-456");
+    const t = terms();
+    expect(t.indexOf("Cédula / RUC")).toBe(t.indexOf("Teléfono") + 1);
+  });
+
+  it("omits the Cédula / RUC row when it is null or blank", async () => {
+    render(await renderPage());
+    expect(terms()).not.toContain("Cédula / RUC");
+
+    getClienteById.mockResolvedValue({
+      cliente: { ...CLIENTE, documentoIdentidad: "  " }, orders: [], vehicles: [VEHICULO],
+    });
+    document.body.innerHTML = "";
+    render(await renderPage());
+    expect(terms()).not.toContain("Cédula / RUC");
+  });
+
+  it("prints Kilometraje with the thousands separator, and a dash when none was recorded", async () => {
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, kilometraje: 84320 }, items: [] });
+    render(await renderPage());
+    expect(valueFor("Kilometraje")).toBe("84.320 km");
+
+    document.body.innerHTML = "";
+    getOrdenServicioById.mockResolvedValue({ orden: ORDEN, items: [] });
+    render(await renderPage());
+    expect(valueFor("Kilometraje")).toBe("—");
+  });
+
+  it("prints Combustible as its label and Batería as a percentage, each only when recorded", async () => {
+    getOrdenServicioById.mockResolvedValue({
+      orden: { ...ORDEN, nivelCombustible: 2, bateriaPct: 72 }, items: [],
+    });
+    render(await renderPage());
+    expect(valueFor("Combustible")).toBe("1/2");
+    expect(valueFor("Batería")).toBe("72 %");
+
+    document.body.innerHTML = "";
+    getOrdenServicioById.mockResolvedValue({ orden: ORDEN, items: [] });
+    render(await renderPage());
+    expect(terms()).not.toContain("Combustible");
+    expect(terms()).not.toContain("Batería");
+  });
+
+  it("prints fuel 0 (Vacío): a recorded zero is not an absent value", async () => {
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, nivelCombustible: 0 }, items: [] });
+    render(await renderPage());
+    expect(valueFor("Combustible")).toBe("Vacío");
+  });
+
+  it("never prints the renewal month or insurance expiry (named-field allowlist)", async () => {
+    getClienteById.mockResolvedValue({
+      cliente: CLIENTE, orders: [],
+      vehicles: [{ ...VEHICULO, placaRenovacionMes: 11, seguroVence: "2031-12-24" }],
+    });
+    const { container } = render(await renderPage());
+    expect(container.textContent).not.toContain("2031");
+    expect(terms()).not.toContain("Renovación de placa");
+    expect(terms()).not.toContain("Seguro vence");
+  });
+});
+
+describe("ServiceOrderPrintPage — QR slot", () => {
+  it("reserves a 25 mm aria-hidden square in the header with no text and no border", async () => {
+    const { container } = render(await renderPage());
+
+    const slot = container.querySelector<HTMLElement>('[aria-hidden="true"][class*="size-[25mm]"]');
+    expect(slot).not.toBeNull();
+    expect(slot!.textContent).toBe("");
+    expect(slot!.children).toHaveLength(0);
+    expect(slot!.className).not.toMatch(/border/);
+    expect(slot!.closest("div.border-b-2")).not.toBeNull();
+  });
+});
+
+describe("ServiceOrderPrintPage — reception photos", () => {
+  const ids = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}` }));
+  const chunks = (c: HTMLElement) => Array.from(c.querySelectorAll("section.break-before-page"));
+
+  it("renders no photo block for an order without photos", async () => {
+    const { container } = render(await renderPage());
+
+    expect(chunks(container)).toHaveLength(0);
+    expect(screen.queryByText(/Fotos de recepción/)).not.toBeInTheDocument();
+    expect(listOrderPhotos).toHaveBeenCalledWith("o1");
+  });
+
+  it.each([[4, [4]], [5, [4, 1]], [9, [4, 4, 1]]])("%i photos make chunks %j, one page each", async (n, sizes) => {
+    listOrderPhotos.mockResolvedValue(ids(n));
+    const { container } = render(await renderPage());
+
+    expect(chunks(container).map((c) => c.querySelectorAll("img").length)).toEqual(sizes);
+  });
+
+  it("keeps position order across chunks, numbers captions globally, and serves each image eagerly from the authenticated route", async () => {
+    listOrderPhotos.mockResolvedValue(ids(5));
+    const { container } = render(await renderPage());
+
+    const imgs = Array.from(container.querySelectorAll<HTMLImageElement>("section.break-before-page img"));
+    expect(imgs.map((i) => i.getAttribute("src"))).toEqual(
+      ["p1", "p2", "p3", "p4", "p5"].map((p) => `/api/service-orders/o1/photos/${p}`),
+    );
+    imgs.forEach((i) => expect(i).toHaveAttribute("loading", "eager"));
+    expect(Array.from(container.querySelectorAll("figcaption")).map((c) => c.textContent)).toEqual(
+      ["Foto 1", "Foto 2", "Foto 3", "Foto 4", "Foto 5"],
+    );
+  });
+
+  it("heads every photo page with the order number", async () => {
+    listOrderPhotos.mockResolvedValue(ids(5));
+    render(await renderPage());
+
+    expect(screen.getAllByRole("heading", { name: "Fotos de recepción — Orden N.º o1" })).toHaveLength(2);
+  });
+
+  it("keeps the signature on page 1, before any photo page", async () => {
+    listOrderPhotos.mockResolvedValue(ids(1));
+    const { container } = render(await renderPage());
+
+    const signature = screen.getByText("Firma del técnico");
+    const firstChunk = container.querySelector("section.break-before-page")!;
+    expect(signature.compareDocumentPosition(firstChunk) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(firstChunk.contains(signature)).toBe(false);
   });
 });

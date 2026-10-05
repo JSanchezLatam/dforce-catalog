@@ -27,7 +27,14 @@ export function PrintButton() {
   return (
     <button
       type="button"
-      onClick={() => window.print()}
+      onClick={async () => {
+        // Photos print from <img> tags that may still be fetching: the dialog
+        // would snapshot blanks. A failed decode must not block the sheet.
+        await Promise.all(
+          [...document.images].map((img) => (img.complete ? undefined : img.decode().catch(() => {}))),
+        );
+        window.print();
+      }}
       className={cn(buttonVariants({ variant: "outline", size: "default" }), "min-h-11 min-w-11 print:hidden")}
     >
       Imprimir
