@@ -17,7 +17,7 @@ import { RowCheckbox, SelectAllCheckbox } from "@/shared/ui/selection/RowCheckbo
 import { SelectionBar } from "@/shared/ui/selection/SelectionBar";
 import { SelectionProvider } from "@/shared/ui/selection/SelectionProvider";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
-import { FIELD_ERROR } from "@/shared/ui/styles";
+import { DEACTIVATED_CHIP, FIELD_ERROR } from "@/shared/ui/styles";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { useToast } from "@/shared/ui/ToastProvider";
 import { REFUSAL_MESSAGES } from "./refusals";
@@ -97,13 +97,6 @@ const COLUMNS: readonly { label: string; key: SortKey }[] = [
   { label: "Rol", key: "role" },
   { label: "Estado", key: "estado" },
 ];
-
-/**
- * Same classes as the customers page's Desactivado chip (a page file cannot
- * export it), so a retired user and a retired customer read alike on a phone.
- */
-const DEACTIVATED_CHIP =
-  "rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400";
 
 export function UsersTable({ users }: { users: UserRow[] }) {
   const [showInactive, setShowInactive] = useState(false);
@@ -298,7 +291,7 @@ export function UsersTable({ users }: { users: UserRow[] }) {
                             closed 14-member union for one column is a migration this
                             change does not own. */}
                         <Badge variant={inactive ? "outline" : "secondary"}>
-                          {inactive ? "Inactivo" : "Activo"}
+                          {inactive ? "Desactivado" : "Activo"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">

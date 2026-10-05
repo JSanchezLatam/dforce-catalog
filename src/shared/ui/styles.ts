@@ -48,3 +48,11 @@ export const PLATE_BADGE_MUTED =
 /** A small pill for a single vehicle attribute (year, make, model) — reads better than a label/value grid at this field count. */
 export const CHIP =
   "inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground";
+/**
+ * The "Desactivado" chip on a retired customer or user, table row and phone
+ * card alike. NOT `CHIP`: that marks neutral metadata (make, model, year), so a
+ * retired record would read with the same weight as "Toyota". Same red pair as
+ * the destructive badge (6.47:1 dark / 5.62:1 light, tasks.md 1.9).
+ */
+export const DEACTIVATED_CHIP =
+  "rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400";

@@ -163,13 +163,13 @@ describe("UsersTable — which rows are visible", () => {
   // WU3 (design D8) makes it a real `components/ui/badge.tsx` rather than the
   // bare text it used to be, so the assertion names the element and not only
   // the string — bare text would satisfy `getByText` forever.
-  it("marks a deactivated row with a visible Inactivo badge", async () => {
+  it("marks a deactivated row with a visible Desactivado badge", async () => {
     const user = userEvent.setup();
     render(<UsersTable users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
-    expect(within(rowFor("beto")).getByText("Inactivo")).toHaveAttribute("data-slot", "badge");
-    expect(within(rowFor("ana")).queryByText("Inactivo")).not.toBeInTheDocument();
+    expect(within(rowFor("beto")).getByText("Desactivado")).toHaveAttribute("data-slot", "badge");
+    expect(within(rowFor("ana")).queryByText("Desactivado")).not.toBeInTheDocument();
     // The active row is badged too — the column is an enum, not a marker that
     // only appears when something is wrong.
     expect(within(rowFor("ana")).getByText("Activo")).toHaveAttribute("data-slot", "badge");
@@ -645,7 +645,7 @@ describe("UsersTable — column sorting", () => {
 
   // The one non-string comparator: `estado` is derived from `deactivatedAt`,
   // and ascending has to mean Activo first — the reverse reads as backwards
-  // against the "Activo"/"Inactivo" labels the column actually shows.
+  // against the "Activo"/"Desactivado" labels the column actually shows.
   it("sorts the Estado column with the active rows first", async () => {
     const user = userEvent.setup();
     render(<UsersTable users={[INACTIVE, ACTIVE]} />);
@@ -655,7 +655,7 @@ describe("UsersTable — column sorting", () => {
     await user.click(screen.getByRole("button", { name: "Estado" }));
 
     expect(usernamesInOrder()).toEqual(["ana", "beto"]);
-    expect(columnInOrder(4)).toEqual(["Activo", "Inactivo"]);
+    expect(columnInOrder(4)).toEqual(["Activo", "Desactivado"]);
   });
 
   it("offers no sort control on Acciones", () => {

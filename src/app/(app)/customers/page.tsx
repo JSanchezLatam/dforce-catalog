@@ -20,6 +20,7 @@ import { computePageWindow, parsePageSize } from "@/modules/inventory-view/queri
 import { Pagination } from "@/shared/ui/Pagination";
 import { RecordCard, RecordCardList } from "@/shared/ui/RecordCard";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
+import { DEACTIVATED_CHIP } from "@/shared/ui/styles";
 import { BulkResultPanel } from "@/shared/ui/selection/BulkResultPanel";
 import { RowActions } from "@/shared/ui/selection/RowActions";
 import { RowCheckbox, SelectAllCheckbox } from "@/shared/ui/selection/RowCheckbox";
@@ -396,14 +397,6 @@ export default async function CustomersPage({
     </div>
   );
 }
-
-/**
- * NOT `CHIP`: that class marks neutral metadata (make, model, year), so a
- * retired customer would read with the same weight as "Toyota". Shared by the
- * table row and the phone card so the two cannot drift.
- */
-const DEACTIVATED_CHIP =
-  "rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400";
 
 /**
  * The bulk panel's refusal vocabulary — injected, never owned by the panel
