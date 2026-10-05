@@ -8,7 +8,7 @@
  * the toast reports, and call order is not observable through the DOM because
  * React batches both state updates into one commit.
  */
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -262,6 +262,39 @@ describe("OrderPhotos — uploading", () => {
     expect(addToast).not.toHaveBeenCalledWith("success", expect.anything());
     expect(refresh).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByLabelText("Agregar fotos")).toBeEnabled());
+  });
+
+  // A stalled LAN connection never rejects on its own: without a deadline the
+  // card sits on "Subiendo…" forever. The abort turns it into the same
+  // rejection a dropped connection produces.
+  it("aborts an upload that stalls for 60 s, says the connection failed, and stops the batch", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const fetchMock = vi.fn(
+        (_url: string, init: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+          }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+      renderCard();
+
+      fireEvent.change(screen.getByLabelText("Agregar fotos"), { target: { files: [jpeg("a.jpg"), jpeg("b.jpg")] } });
+      await vi.advanceTimersByTimeAsync(59_999);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(addToast).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+
+      expect(addToast).toHaveBeenCalledWith("error", "No se pudo conectar. Revisa tu conexión e intenta de nuevo.");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(addToast).not.toHaveBeenCalledWith("success", expect.anything());
+      expect(screen.getByLabelText("Agregar fotos")).toBeEnabled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("uploads only up to the remaining slots and tells the operator how many were skipped", async () => {

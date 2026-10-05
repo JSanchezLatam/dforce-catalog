@@ -13,6 +13,8 @@ import { useToast } from "@/shared/ui/ToastProvider";
 import { compressPhoto } from "./compress-photo";
 import { MAX_PHOTOS } from "./photo-limits";
 
+/** Per photo (<=3 MB after compression); a healthy LAN takes a fraction of this. */
+const UPLOAD_TIMEOUT_MS = 60_000;
 const photoUrl = (orderId: string, photoId: string) => `/api/service-orders/${orderId}/photos/${photoId}`;
 const plural = (n: number, one: string, many: string) => (n === 1 ? `1 ${one}` : `${n} ${many}`);
 
@@ -79,12 +81,23 @@ export function OrderPhotos({
       const form = new FormData();
       form.append("file", body, "foto.jpg");
       let response: Response;
+      // A stalled LAN connection never rejects by itself; the abort makes it
+      // the same failure a dropped one is. Plain AbortController + setTimeout:
+      // no secure-context API.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
       try {
         // No Content-Type header: the browser adds the multipart boundary itself.
-        response = await fetch(`/api/service-orders/${orderId}/photos`, { method: "POST", body: form });
+        response = await fetch(`/api/service-orders/${orderId}/photos`, {
+          method: "POST",
+          body: form,
+          signal: controller.signal,
+        });
       } catch {
         addToast("error", CONNECTION_ERROR);
         break;
+      } finally {
+        clearTimeout(timer);
       }
 
       if (response.ok) {
