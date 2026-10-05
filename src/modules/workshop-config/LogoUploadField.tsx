@@ -86,6 +86,11 @@ export function LogoUploadField({
       )}
 
       <div className="flex items-center gap-2">
+        {/* The native control renders "Choose File / No file chosen" in the
+            browser's language, not ours. It stays in the DOM (labelled, so a
+            label click and a test upload still reach it) but is visually
+            hidden and out of the tab order; the button below is what a
+            person sees, and it opens the same picker. */}
         <Input
           id={`image-upload-${endpoint}`}
           ref={inputRef}
@@ -93,8 +98,18 @@ export function LogoUploadField({
           accept={allowSvg ? "image/png,image/jpeg,image/webp,image/svg+xml" : "image/png,image/jpeg,image/webp"}
           onChange={handleFile}
           disabled={uploading}
-          className="min-h-11 max-w-64"
+          tabIndex={-1}
+          className="sr-only"
         />
+        <Button
+          type="button"
+          variant="outline"
+          className="min-h-11 min-w-11"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+        >
+          {preview ? "Cambiar imagen" : "Elegir imagen"}
+        </Button>
 
         {preview && (
           <Button type="button" variant="outline" size="sm" className="min-h-11 min-w-11" onClick={handleDelete} disabled={uploading}>

@@ -283,3 +283,67 @@ describe("WorkshopConfigForm — contact fields", () => {
     expect(bodyOf(fetchMock).socialHandles).toEqual({ facebook: "@b" });
   });
 });
+
+// Audit #16. jsdom paints nothing, so "no native Choose File text" is pinned
+// the only way it can be: the native input is visually hidden and a button we
+// wrote, in Spanish, is what a person sees and presses.
+describe("WorkshopConfigForm — phone layout (audit #16)", () => {
+  const withHandle: WorkshopConfig = {
+    id: "singleton",
+    name: "Mi Taller",
+    logoR2Key: null,
+    logoContentType: null,
+    coverImageR2Key: null,
+    coverImageContentType: null,
+    phone: null,
+    whatsapp: null,
+    email: null,
+    address: null,
+    hours: null,
+    website: null,
+    coverText: null,
+    socialHandles: { "D Force Car": "@dforcecarpanama" },
+    updatedAt: new Date(),
+  };
+
+  it("stacks each social row on a phone and lines it up from sm", () => {
+    render(<WorkshopConfigForm initialConfig={withHandle} />);
+
+    const row = screen.getByLabelText("Plataforma").closest("div.grid")!.parentElement!;
+    expect(screen.getByLabelText("Usuario o enlace")).toHaveValue("@dforcecarpanama");
+    expect(row).toHaveClass("flex-col", "sm:flex-row", "sm:items-end");
+    expect(row).not.toHaveClass("items-end");
+    // The delete button belongs to the same row, so the stack really holds it.
+    expect(row).toContainElement(screen.getByRole("button", { name: "Eliminar" }));
+  });
+
+  it("replaces the native file control with a Spanish-labelled button", async () => {
+    const user = userEvent.setup();
+    render(<WorkshopConfigForm initialConfig={null} />);
+
+    const input = screen.getByLabelText("Logo del taller") as HTMLInputElement;
+    expect(input).toHaveAttribute("type", "file");
+    expect(input).toHaveClass("sr-only");
+    expect(input).toHaveAttribute("tabindex", "-1");
+
+    const clickSpy = vi.spyOn(input, "click");
+    const button = screen.getByRole("button", { name: /Elegir imagen/ });
+    await user.click(button);
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers Cambiar imagen instead once a logo is set, and still uploads through the input", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { key: "k2" } });
+    render(<WorkshopConfigForm initialConfig={{ ...withHandle, logoR2Key: "k1", logoContentType: "image/png" }} />);
+
+    expect(screen.getByRole("button", { name: /Cambiar imagen/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Elegir imagen/ })).not.toBeInTheDocument();
+
+    await user.upload(
+      screen.getByLabelText("Logo del taller"),
+      new File(["x"], "logo.png", { type: "image/png" }),
+    );
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/workshop-config/logo", expect.objectContaining({ method: "POST" })));
+  });
+});
