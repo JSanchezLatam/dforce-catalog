@@ -4,7 +4,7 @@
  * active and deactivated are told apart by WEIGHT rather than a caption — so
  * the deactivated one has to stay reachable, not just styled differently.
  */
-import { render as rtlRender, screen } from "@testing-library/react";
+import { render as rtlRender, screen, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -282,5 +282,52 @@ describe("CustomerDetailPage — internal vehicle fields and the RSC payload", (
     const props = triggerProps.mock.calls[0][0];
     expect(props.canEditInternal).toBe(true);
     expect(props.vehicles[0]).toMatchObject({ placaRenovacionMes: 7, seguroVence: "2031-12-24" });
+  });
+});
+
+/**
+ * mobile-responsive-pass WU6 (#4) — the history table's "Ver" sits in the last
+ * column, off-screen on a phone. Below md the same orders render as cards that
+ * are themselves the link.
+ */
+describe("CustomerDetailPage — order history cards (WU6)", () => {
+  const order = (id: string, status: string) => ({
+    id, status, description: "Cambio de correa", appointmentAt: null, createdAt: new Date("2026-05-01T14:00:00Z"),
+  });
+
+  async function renderHistory(orders: unknown[]) {
+    getClienteById.mockResolvedValue({
+      cliente: { id: "c1", name: "Ana Gómez", phone: "50761111111", email: null, createdAt: new Date("2026-01-01") },
+      orders,
+      vehicles: [],
+    });
+    render(await renderPage());
+    return {
+      table: within(screen.getByTestId("history-table")),
+      cards: within(screen.getByTestId("history-cards")),
+    };
+  }
+
+  it("hides the table below md and the card list from md up", async () => {
+    await renderHistory([order("o1", "open")]);
+
+    expect(screen.getByTestId("history-table")).toHaveClass("hidden", "md:block");
+    expect(screen.getByTestId("history-cards")).toHaveClass("md:hidden");
+  });
+
+  it("makes each card a link to its order, with status and description inside", async () => {
+    const { cards } = await renderHistory([order("o1", "open")]);
+
+    const link = cards.getByRole("link");
+    expect(link).toHaveAttribute("href", "/service-orders/o1");
+    expect(within(link).getByText("Abierta")).toBeInTheDocument();
+    expect(link).toHaveTextContent("Cambio de correa");
+  });
+
+  it("renders as many cards as table rows", async () => {
+    const { table, cards } = await renderHistory([order("o1", "open"), order("o2", "done")]);
+
+    expect(cards.getAllByRole("listitem")).toHaveLength(2);
+    expect(table.getAllByRole("row")).toHaveLength(1 + 2);
   });
 });
