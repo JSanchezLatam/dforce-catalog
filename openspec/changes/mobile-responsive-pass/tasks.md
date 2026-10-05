@@ -130,7 +130,7 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 - [x] 10.1 RED `use-mobile` test: breakpoint is 1024. GREEN `use-mobile.ts`.
 - [x] 10.2 RED `sidebar` tests: off-canvas classes use `lg:` not `md:`; top bar is `lg:hidden`; `SidebarRail` stays desktop-only. GREEN `sidebar.tsx` and the top bar.
 - [x] 10.3 Mutation-verify 10.1-10.2 by name (restore 768, restore `md:`).
-- [ ] 10.4 Matrix at 768, 1024 and 1280: tablets get the menu button; desktop sidebar unchanged at 1280; hydration console clean.
+- [x] 10.4 (Checked 2026-10-05 at http://192.168.0.25:3000 on /service-orders: 768 and 1023 touch — "Abrir menú" visible, desktop sidebar hidden, the menu opens with the nav links; 1024 and 1280 — no top bar, desktop sidebar visible; no overflow at any width; console clean, no hydration warning.) Matrix at 768, 1024 and 1280: tablets get the menu button; desktop sidebar unchanged at 1280; hydration console clean.
 
 ## Final gate and archive notes
 
