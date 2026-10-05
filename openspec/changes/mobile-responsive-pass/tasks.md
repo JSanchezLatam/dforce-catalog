@@ -111,6 +111,7 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 
 ## WU9: Per-screen fixes (PR 9) — #3 #8 #13 #15 #16 #17b
 
+- [ ] 9.y Carried from WU3 review: /inventory desktop técnico gets an empty description `<p className="mt-1">` (only a `md:hidden` span) — drop the description when it can't show; `PAGE_HEADING` now adds `leading-tight` at desktop too — confirm desktop heading spacing unchanged.
 - [ ] 9.x Carried from 2.8: breadcrumb links ≥44px tall on touch; /builder category combobox trigger (36px) to the touch floor; error toast `text-destructive-foreground` is not a registered utility (from WU1).
 - [ ] 9.1 RED `CustomerForm` test: vehicle grid children carry `min-w-0` (Marca select no wider than its column). GREEN `CustomerForm.tsx:726`, `VehicleMakeModelFields.tsx`.
 - [ ] 9.2 RED `InventoryStatsHeader` test: sync notice wraps (no truncation classes). GREEN.
