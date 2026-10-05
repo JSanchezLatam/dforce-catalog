@@ -175,9 +175,12 @@ export default async function InventoryPage({
                           label={column.label}
                           href={buildSortHref(params, column.sort, sort)}
                           dir={sort?.key === column.sort ? sort.dir : undefined}
+                          className={column.hideBelowLg ? HIDE_BELOW_LG : undefined}
                         />
                       ) : (
-                        <TableHead key={column.label}>{column.label}</TableHead>
+                        <TableHead key={column.label} className={column.hideBelowLg ? HIDE_BELOW_LG : undefined}>
+                          {column.label}
+                        </TableHead>
                       ),
                     )}
                     <TableHead className="w-24">Acciones</TableHead>
@@ -194,7 +197,7 @@ export default async function InventoryPage({
                       <TableCell className="font-mono text-xs">{item.id}</TableCell>
                       <TableCell>{item.name}</TableCell>
                       <TableCell>{item.categoryL1 ?? "—"}</TableCell>
-                      <TableCell>{item.categoryL2 ?? "—"}</TableCell>
+                      <TableCell className={HIDE_BELOW_LG}>{item.categoryL2 ?? "—"}</TableCell>
                       <TableCell className="tabular-nums">{formatPrice(item.price)}</TableCell>
                       <TableCell className="tabular-nums">{item.stock ?? "—"}</TableCell>
                       <TableCell>
@@ -313,6 +316,13 @@ function buildPagePattern(params: SearchParams, sort: InventorySort | undefined)
 }
 
 /**
+ * Secondary columns drop out below `lg`: a portrait tablet (768-1023) keeps the
+ * table for bulk selection, and without this the row plus its "⋯" overflows the
+ * ~736px content box. Header and cells must share the class or the grid skews.
+ */
+const HIDE_BELOW_LG = "hidden lg:table-cell";
+
+/**
  * The header row, declared HERE rather than derived from `INVENTORY_SORT` —
  * same reasoning as `customers/page.tsx`'s `COLUMNS`: deriving it would let a
  * query-layer whitelist change silently reshape the table with no matching
@@ -322,11 +332,11 @@ function buildPagePattern(params: SearchParams, sort: InventorySort | undefined)
  * `Precio`/`Stock` are plain columns with no `sort` (spec: Per-Table Sortable
  * Column Whitelist) — they are not in `INVENTORY_SORT`, so they cannot claim one.
  */
-const COLUMNS: readonly { label: string; sort?: keyof typeof INVENTORY_SORT }[] = [
+const COLUMNS: readonly { label: string; hideBelowLg?: boolean; sort?: keyof typeof INVENTORY_SORT }[] = [
   { label: "ID", sort: "id" },
   { label: "Nombre", sort: "name" },
   { label: "Categoría 1", sort: "categoryL1" },
-  { label: "Categoría 2", sort: "categoryL2" },
+  { label: "Categoría 2", sort: "categoryL2", hideBelowLg: true },
   { label: "Precio" },
   { label: "Stock" },
 ];
@@ -348,13 +358,18 @@ function SortableHeader({
   label,
   href,
   dir,
+  className,
 }: {
   label: string;
   href: string;
   dir?: "asc" | "desc";
+  className?: string;
 }) {
   return (
-    <TableHead aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}>
+    <TableHead
+      className={className}
+      aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}
+    >
       <Link href={href} className="-mx-2 inline-flex min-h-11 min-w-11 items-center gap-1 px-2 hover:text-foreground">
         {label}
         {dir === "asc" && <ArrowUp className="h-3 w-3" aria-hidden="true" />}

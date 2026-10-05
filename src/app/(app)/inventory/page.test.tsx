@@ -481,3 +481,38 @@ describe("InventoryPage — the phone-only subtitle (mobile-responsive-pass 9.y)
     expect(screen.queryByText(/sincronizados? desde Interfuerza/)).not.toBeInTheDocument();
   });
 });
+
+describe("InventoryPage — secondary columns below lg (mobile-responsive-pass N1)", () => {
+  // Owner decision 2026-10-05: portrait tablets (768-1023) keep the table, so
+  // the row (incl. the "⋯" menu) has to fit a ~736px box without the second category level.
+  // jsdom applies no Tailwind: this reads the class pair that hides a column.
+  // The header and its cells must hide TOGETHER or the grid misaligns.
+  it("hides Categoría 2 on both the header and every row, and keeps the rest", async () => {
+    listInventory.mockResolvedValue({ items: [row({ id: "PS0000001", categoryL2: "Aceites" }), row({ id: "PS0000002", categoryL2: null })], total: 2 });
+    can.mockImplementation(() => true);
+    render(await InventoryPage({ searchParams: Promise.resolve({}) }));
+    const table = within(screen.getByTestId("inventory-table"));
+    const [header, ...rows] = table.getAllByRole("row");
+    const heads = within(header).getAllByRole("columnheader");
+    const labels = heads.map((h) => h.textContent?.trim());
+    expect(rows).toHaveLength(2);
+
+    const hidden = ["Categoría 2"];
+    for (const label of hidden) {
+      const i = labels.indexOf(label);
+      expect(i, label).toBeGreaterThan(-1);
+      expect(heads[i], `${label} header`).toHaveClass("hidden", "lg:table-cell");
+      for (const r of rows) {
+        expect(within(r).getAllByRole("cell")[i], `${label} cell`).toHaveClass("hidden", "lg:table-cell");
+      }
+    }
+    // The columns that stay must NOT carry the pair, or the row loses its identity at 768.
+    for (const [i, label] of labels.entries()) {
+      if (hidden.includes(label) || label === "") continue;
+      expect(heads[i], `${label} header`).not.toHaveClass("hidden");
+      for (const r of rows) {
+        expect(within(r).getAllByRole("cell")[i], `${label} cell`).not.toHaveClass("hidden");
+      }
+    }
+  });
+});

@@ -723,3 +723,38 @@ describe("ServiceOrdersPage — header (audit #1)", () => {
     expect(refresh.parentElement!.parentElement).toBe(title.parentElement!.parentElement);
   });
 });
+
+describe("ServiceOrdersPage — secondary columns below lg (mobile-responsive-pass N1)", () => {
+  // Owner decision 2026-10-05: portrait tablets (768-1023) keep the table, so
+  // the row (incl. the "⋯" menu) has to fit a ~736px box without the short id and the vehicle.
+  // jsdom applies no Tailwind: this reads the class pair that hides a column.
+  // The header and its cells must hide TOGETHER or the grid misaligns.
+  it("hides ID and Vehículo on both the header and every row, and keeps the rest", async () => {
+    listOrdenesServicio.mockResolvedValue([orden({ id: "4d7262a8-1111" }), orden({ id: "9f00aa11-2222", vehiculoMake: null, vehiculoModel: null })]);
+    countOrdenesServicio.mockResolvedValue(2);
+    render(<ToastProvider>{await ServiceOrdersPage({ searchParams: Promise.resolve({}) })}</ToastProvider>);
+    const table = within(screen.getByTestId("service-orders-table"));
+    const [header, ...rows] = table.getAllByRole("row");
+    const heads = within(header).getAllByRole("columnheader");
+    const labels = heads.map((h) => h.textContent?.trim());
+    expect(rows).toHaveLength(2);
+
+    const hidden = ["ID", "Vehículo"];
+    for (const label of hidden) {
+      const i = labels.indexOf(label);
+      expect(i, label).toBeGreaterThan(-1);
+      expect(heads[i], `${label} header`).toHaveClass("hidden", "lg:table-cell");
+      for (const r of rows) {
+        expect(within(r).getAllByRole("cell")[i], `${label} cell`).toHaveClass("hidden", "lg:table-cell");
+      }
+    }
+    // The columns that stay must NOT carry the pair, or the row loses its identity at 768.
+    for (const [i, label] of labels.entries()) {
+      if (hidden.includes(label) || label === "") continue;
+      expect(heads[i], `${label} header`).not.toHaveClass("hidden");
+      for (const r of rows) {
+        expect(within(r).getAllByRole("cell")[i], `${label} cell`).not.toHaveClass("hidden");
+      }
+    }
+  });
+});
