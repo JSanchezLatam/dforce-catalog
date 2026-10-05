@@ -127,9 +127,9 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 
 ## WU10: Sidebar breakpoint (PR 10, alone) — #17a
 
-- [ ] 10.1 RED `use-mobile` test: breakpoint is 1024. GREEN `use-mobile.ts`.
-- [ ] 10.2 RED `sidebar` tests: off-canvas classes use `lg:` not `md:`; top bar is `lg:hidden`; `SidebarRail` stays desktop-only. GREEN `sidebar.tsx` and the top bar.
-- [ ] 10.3 Mutation-verify 10.1-10.2 by name (restore 768, restore `md:`).
+- [x] 10.1 RED `use-mobile` test: breakpoint is 1024. GREEN `use-mobile.ts`.
+- [x] 10.2 RED `sidebar` tests: off-canvas classes use `lg:` not `md:`; top bar is `lg:hidden`; `SidebarRail` stays desktop-only. GREEN `sidebar.tsx` and the top bar.
+- [x] 10.3 Mutation-verify 10.1-10.2 by name (restore 768, restore `md:`).
 - [ ] 10.4 Matrix at 768, 1024 and 1280: tablets get the menu button; desktop sidebar unchanged at 1280; hydration console clean.
 
 ## Final gate and archive notes
