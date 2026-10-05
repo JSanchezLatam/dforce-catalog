@@ -107,11 +107,12 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 
 - [x] 8.1 RED `UsersTable` tests (scoped): `users-table` / `users-cards`; card has no `href` and holds the existing `RowActions` kebab (Editar, Desactivar) in `action`; same count in both, also with "Mostrar inactivos". GREEN `UsersTable.tsx`.
 - [x] 8.2 (Mutated 2026-10-05, each red BY NAME: card href, action slot dropped, bar wrapper `hidden md:block`, table `hidden`, cards `slice(1)`, cards ignoring "Mostrar inactivos", Desactivado shown as Activo, email in card, raw role key, checkbox in card. Existing table tests re-scoped to `users-table` because the kebab name and username now appear in both lists.) Mutation-verify 8.1 by name (link the card, drop the action slot).
-- [ ] 8.3 Matrix as administrador; the kebab is 44px and reachable on a phone.
+- [x] 8.3 (Checked 2026-10-05 at http://192.168.0.25:3000 as administrador, 390 touch, dark and light: 2 user cards, no links on cards, kebab 44x44 inside the viewport (right edge 357), menu shows Editar / Desactivar (closed with Escape, nothing applied); no overflow; console clean.) Matrix as administrador; the kebab is 44px and reachable on a phone.
 
 ## WU9: Per-screen fixes (PR 9) — #3 #8 #13 #15 #16 #17b
 
 - [ ] 9.w Observed in WU7 check (pre-existing, owner to confirm): opening /inventory as administrador re-shows the last sync's success toast ("Sincronización completada… 9/28/2026") on every visit.
+- [ ] 9.v Carried from WU8: move the Desactivado chip classes to `shared/ui/styles` (copied into `UsersTable.tsx`); users table says "Inactivo" while cards say "Desactivado" — pick one word; at archive, correct `table-bulk-actions` spec lines that say the users card links to `/users/<id>` (no detail page; design overrides).
 - [ ] 9.z Carried from WU6 review: scope the vehicle page's `getByRole("link", { name: /ver/i })` to `history-table` (a description like "Revisar frenos" would match a card too).
 - [ ] 9.y Carried from WU3 review: /inventory desktop técnico gets an empty description `<p className="mt-1">` (only a `md:hidden` span) — drop the description when it can't show; `PAGE_HEADING` now adds `leading-tight` at desktop too — confirm desktop heading spacing unchanged.
 - [ ] 9.x Carried from 2.8: breadcrumb links ≥44px tall on touch; /builder category combobox trigger (36px) to the touch floor; error toast `text-destructive-foreground` is not a registered utility (from WU1).
