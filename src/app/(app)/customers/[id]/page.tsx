@@ -83,7 +83,7 @@ export default async function CustomerDetailPage({
       </Breadcrumb>
 
       <Card className="mb-6">
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{cliente.name}</CardTitle>
           {/* R20/D5 — "Editar" is not merely disabled for a deactivated
               customer, it is absent. The server refuses the edit with a 409

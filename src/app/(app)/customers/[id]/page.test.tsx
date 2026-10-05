@@ -71,6 +71,20 @@ describe("CustomerDetailPage", () => {
     // renders as a dead end is the failure this asserts against.
     expect(screen.getByRole("link", { name: /XYZ789/ })).toHaveAttribute("href", "/customers/c1/vehicles/v2");
   });
+
+  // Audit #13: a fixed `flex-row` squeezed the name against Editar/Desactivar
+  // at 390 ("Rosa / Martínez"). Stacked on a phone, a row from `sm` up. Class
+  // string only: jsdom has no layout, the LAN matrix is the evidence.
+  it("stacks the name above Editar and Desactivar on a phone, a row from sm up", async () => {
+    const { container } = render(await renderPage());
+
+    const header = container.querySelector('[data-slot="card-header"]')!;
+    expect(header).toHaveTextContent("Ana Gómez");
+    expect(header).toHaveClass("flex-col", "sm:flex-row");
+    expect(header).not.toHaveClass("flex-row");
+    // The actions belong to the same header, so the stack really holds them.
+    expect(within(header as HTMLElement).getByRole("button", { name: "Editar" })).toBeInTheDocument();
+  });
 });
 
 describe("CustomerDetailPage — Cédula / RUC", () => {
