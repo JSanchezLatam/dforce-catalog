@@ -73,7 +73,6 @@ const PREVIEW_TITLE = "Catálogo: Productos";
  */
 const PREVIEW_ZOOM = 0.6;
 
-
 /**
  * catalog-templates-and-workshop-info WU3 (task 3.12, migration `0009`) —
  * the logo/colour/font/cover-text inputs that used to live here are gone:

@@ -336,7 +336,7 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
     const wrapper = Array.from(container.querySelectorAll("div")).find((el) =>
       el.className.includes("[&>button]:min-h-11"),
     );
-    expect(wrapper).not.toBeNull();
+    expect(wrapper).toBeDefined();
     expect(wrapper!.className).toContain("[&>button]:min-w-11");
     expect(wrapper!.firstElementChild).toBe(screen.getByRole("button", { name: EDIT_LABEL }));
   });

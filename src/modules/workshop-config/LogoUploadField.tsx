@@ -106,6 +106,7 @@ export function LogoUploadField({
           className="min-h-11 min-w-11"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
+          aria-label={`${preview ? "Cambiar" : "Elegir"} imagen: ${label}`}
         >
           {preview ? "Cambiar imagen" : "Elegir imagen"}
         </Button>

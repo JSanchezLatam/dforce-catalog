@@ -331,7 +331,8 @@ describe("WorkshopConfigForm — phone layout (audit #16)", () => {
     expect(input).toHaveAttribute("tabindex", "-1");
 
     const clickSpy = vi.spyOn(input, "click");
-    const button = screen.getByRole("button", { name: /Elegir imagen/ });
+    // Named after its field: /template-config shows two of these side by side.
+    const button = screen.getByRole("button", { name: "Elegir imagen: Logo del taller" });
     await user.click(button);
     expect(clickSpy).toHaveBeenCalledTimes(1);
   });

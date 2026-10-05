@@ -91,6 +91,8 @@ export function ManualSyncButton() {
   }
 
   useEffect(() => {
+    // Strict Mode (next dev) mounts, cleans up and mounts again with refs kept.
+    unmountedRef.current = false;
     let cancelled = false;
     fetch("/api/inventory-sync/manual") // reflects a sync another admin may already have started
       .then((res) => (res.ok ? res.json() : null))

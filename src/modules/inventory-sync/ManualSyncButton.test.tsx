@@ -12,6 +12,7 @@
  * and the 32px are Tailwind's, read off `min-h-7` and `h-8`, and only a human
  * looking at `/inventory` can say the pair now reads as one row.
  */
+import { StrictMode } from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -140,6 +141,31 @@ describe("ManualSyncButton — the completion toast (mobile-responsive-pass 9.w)
     expect(await screen.findByText(/Sincronización completada: 699 productos/, undefined, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getAllByText(/Sincronización completada/)).toHaveLength(1);
   });
+
+  // `next dev` runs the App Router in Strict Mode: mount, cleanup, mount again,
+  // with refs surviving. An unmount flag that is never reset stays true for the
+  // whole page life and every later poll gets thrown away.
+  it("still announces a finished sync under Strict Mode's double mount", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(async (_url: string, init?: { method?: string }) => ({
+      ok: true,
+      status: init?.method === "POST" ? 202 : 200,
+      json: async () => (init?.method === "POST" ? {} : idleWithLastRun),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <StrictMode>
+        <ToastProvider>
+          <ManualSyncButton />
+        </ToastProvider>
+      </StrictMode>,
+    );
+    await screen.findByText("Completada");
+
+    await user.click(screen.getByRole("button", { name: "Sincronizar inventario" }));
+
+    expect(await screen.findByText(/Sincronización completada: 699 productos/, undefined, { timeout: 5000 })).toBeInTheDocument();
+  }, 10_000);
 
   // A poll in flight when the operator leaves /inventory used to land after
   // unmount, see `running: true`, and restart the 2s interval — polling forever
