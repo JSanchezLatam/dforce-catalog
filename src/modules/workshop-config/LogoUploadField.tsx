@@ -3,7 +3,6 @@
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FIELD_ERROR } from "@/shared/ui/styles";
 
@@ -91,7 +90,7 @@ export function LogoUploadField({
             label click and a test upload still reach it) but is visually
             hidden and out of the tab order; the button below is what a
             person sees, and it opens the same picker. */}
-        <Input
+        <input
           id={`image-upload-${endpoint}`}
           ref={inputRef}
           type="file"

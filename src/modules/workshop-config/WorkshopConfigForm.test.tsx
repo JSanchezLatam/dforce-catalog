@@ -324,6 +324,10 @@ describe("WorkshopConfigForm — phone layout (audit #16)", () => {
     const input = screen.getByLabelText("Logo del taller") as HTMLInputElement;
     expect(input).toHaveAttribute("type", "file");
     expect(input).toHaveClass("sr-only");
+    // Measured at 390px: through `<Input>` the hidden control kept `w-full`
+    // (and its padding), so the 1px sr-only box became the full column width
+    // and pushed the page 31px wide. The native input carries ONLY sr-only.
+    expect(input.className.trim()).toBe("sr-only");
     expect(input).toHaveAttribute("tabindex", "-1");
 
     const clickSpy = vi.spyOn(input, "click");
