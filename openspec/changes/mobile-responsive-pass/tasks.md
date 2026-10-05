@@ -53,13 +53,13 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 
 ## WU2: Touch floor, Pagination (PR 2) — #5 #9 #10
 
-- [ ] 2.1 RED `button` test: `default` and `sm` include `pointer-coarse:min-h-11 pointer-coarse:min-w-11`. GREEN `button.tsx` (existing unconditional `min-h-11` call sites untouched).
-- [ ] 2.2 RED `input` / `select` tests: `pointer-coarse:h-11` on Input and SelectTrigger (filter-strip fields and buttons rise together on touch, "Limpiar" included). GREEN.
-- [ ] 2.3 RED `sidebar` tests: menu, sub-menu and group-label buttons carry `pointer-coarse:h-11`. GREEN `sidebar.tsx`.
-- [ ] 2.4 RED `checkbox` test: hit area `after:-inset-3.5`. RED `dialog` test: close X carries the coarse minimum and does not overlap the title. GREEN both.
-- [ ] 2.5 RED `Pagination.test`: `nav` has `flex-wrap`; items carry `pointer-coarse:h-11`; "Página X de Y" is `basis-full` below `sm`. GREEN `Pagination.tsx`.
-- [ ] 2.6 `AGENTS.md`: remove the "`shared/ui/Pagination.tsx`, still 28px" exception from the 44x44 paragraph and reword the filter-strip exception to fine pointers only.
-- [ ] 2.7 Mutation-verify 2.1-2.5 by name (remove one `pointer-coarse:` class, drop `flex-wrap`).
+- [x] 2.1 RED `button` test: `default` and `sm` include `pointer-coarse:min-h-11 pointer-coarse:min-w-11`. GREEN `button.tsx` (existing unconditional `min-h-11` call sites untouched).
+- [x] 2.2 RED `input` / `select` tests: `pointer-coarse:h-11` on Input and SelectTrigger (filter-strip fields and buttons rise together on touch, "Limpiar" included). GREEN.
+- [x] 2.3 RED `sidebar` tests: menu, sub-menu and group-label buttons carry `pointer-coarse:h-11`. GREEN `sidebar.tsx`.
+- [x] 2.4 RED `checkbox` test: hit area `after:-inset-3.5`. RED `dialog` test: close X carries the coarse minimum and does not overlap the title. GREEN both.
+- [x] 2.5 RED `Pagination.test`: `nav` has `flex-wrap`; items carry `pointer-coarse:h-11`; "Página X de Y" is `basis-full` below `sm`. GREEN `Pagination.tsx`.
+- [x] 2.6 `AGENTS.md`: remove the "`shared/ui/Pagination.tsx`, still 28px" exception from the 44x44 paragraph and reword the filter-strip exception to fine pointers only.
+- [x] 2.7 Mutation-verify 2.1-2.5 by name (remove one `pointer-coarse:` class, drop `flex-wrap`).
 - [ ] 2.8 Matrix; confirm 1280 with a mouse is pixel-unchanged; at 768 touch check `/builder` and every dialog (close X vs title); measure buttons, sidebar items, page numbers, close X, checkboxes >= 44x44.
 
 ## WU3: PageHeader, padding, inventory header (PR 3) — #1 #11 #12 #14
