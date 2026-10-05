@@ -21,11 +21,13 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getClienteById } from "@/modules/customers/queries";
 import { listRemindersForOrder } from "@/modules/reminders/queries";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
-import { canEditOrderFields } from "@/modules/service-orders/edit-policy";
+import { canChangeOrderPhotos, canEditOrderFields } from "@/modules/service-orders/edit-policy";
 import { FUEL_LABEL, intakeInputsFor } from "@/modules/service-orders/intake";
+import { OrderPhotos } from "@/modules/service-orders/OrderPhotos";
 import { OrderStatusControls } from "@/modules/service-orders/OrderStatusControls";
 import { vehicleDescriptiveRows } from "@/modules/service-orders/vehicle-rows";
 import { ServiceOrderFormTrigger } from "@/modules/service-orders/ServiceOrderFormTrigger";
+import { listOrderPhotos } from "@/modules/service-orders/photos";
 import { getOrdenServicioById } from "@/modules/service-orders/queries";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import { formatDateTime } from "@/shared/datetime";
@@ -98,10 +100,16 @@ export default async function ServiceOrderDetailPage({
   if (!detail) notFound();
 
   const { orden, items } = detail;
-  const [clienteDetail, reminders] = await Promise.all([
+  const [clienteDetail, reminders, photos] = await Promise.all([
     getClienteById(orden.clienteId),
     listRemindersForOrder(orden.id),
+    listOrderPhotos(orden.id),
   ]);
+  // The same predicates the photo routes enforce (status gate + role), resolved
+  // here so only booleans cross to the client card.
+  const photosOpen = canChangeOrderPhotos(orden.status);
+  const canAddPhotos = photosOpen && can(user, "service-orders.write");
+  const canDeletePhotos = photosOpen && can(user, "service-orders.deletePhoto");
   // C4 — `includeInactive: true` (getClienteById's own vehicles read) means a
   // deactivated vehicle is still found here, so its identity+link render
   // exactly as for an active one (spec §"Service Order Detail Displays
@@ -246,6 +254,20 @@ export default async function ServiceOrderDetailPage({
               )}
             {showBattery && receptionRow("Batería", orden.bateriaPct == null ? "—" : `${orden.bateriaPct}%`, true)}
           </dl>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Fotos de recepción</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <OrderPhotos orderId={orden.id} photos={photos} canAdd={canAddPhotos} canDelete={canDeletePhotos} />
+          {!photosOpen && (
+            <p className="text-sm text-muted-foreground">
+              Las fotos no se pueden agregar ni borrar cuando la orden está terminada o cancelada.
+            </p>
+          )}
         </CardContent>
       </Card>
 

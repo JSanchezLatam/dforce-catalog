@@ -21,7 +21,7 @@
  * Callers own the byte check (`isJpeg`, `MAX_PHOTO_BYTES`) and the role check
  * (`service-orders.deletePhoto`); this module owns the order-scoped invariants.
  */
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, asc, count, eq, sql } from "drizzle-orm";
 
 import { deleteObject, putObject } from "@/modules/catalog-storage/r2";
 import { db } from "@/shared/db/client";
@@ -114,6 +114,18 @@ export async function addOrderPhoto(
     if (stored) await remove(r2Key).catch(() => {});
     throw err;
   }
+}
+
+/** The order's photos in display order (position ascends; gaps after a delete are fine). */
+export async function listOrderPhotos(
+  ordenId: string,
+  deps: Pick<PhotoDeps, "db"> = {},
+): Promise<{ id: string }[]> {
+  return (deps.db ?? db)
+    .select({ id: ordenServicioFoto.id })
+    .from(ordenServicioFoto)
+    .where(eq(ordenServicioFoto.ordenId, ordenId))
+    .orderBy(asc(ordenServicioFoto.position));
 }
 
 /** Scoped by BOTH ids: a photo id from another order is "not found", never a cross-order read. */
