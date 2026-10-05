@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import { ClienteDeactivatedError } from "@/modules/customers/service";
+import { parseIntake } from "@/modules/service-orders/intake";
 import {
   createOrder,
   type CreateOrdenServicioDeps,
@@ -66,6 +67,11 @@ export async function handleCreateOrdenServicio(
     appointmentAt = parsed;
   }
 
+  const intake = parseIntake(body);
+  if (!intake.ok) {
+    return NextResponse.json({ errors: intake.errors }, { status: 400 });
+  }
+
   try {
     // Named fields, not `...body`. Two reasons, both already paid for here:
     // `createdBy` comes from the SESSION and the body's claim about identity
@@ -81,6 +87,7 @@ export async function handleCreateOrdenServicio(
         description: body.description,
         observaciones: body.observaciones,
         appointmentAt,
+        ...intake.value,
         createdBy: user.id,
       },
       deps,

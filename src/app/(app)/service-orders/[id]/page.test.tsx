@@ -3,7 +3,7 @@
  * coverage. Same technique as the vehicle page — await the server component,
  * hand the element to RTL, mock only the request-scoped and data edges.
  */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const notFound = vi.hoisted(() => vi.fn(() => { throw new Error("NEXT_NOT_FOUND"); }));
@@ -40,6 +40,7 @@ const ORDEN: OrdenServicio = {
   id: "o1", clienteId: "c1", vehiculoId: "v1", status: "open", categoria: "revisado",
   description: null, appointmentAt: null, completedAt: null,
   hallazgos: null, recomendaciones: null, observaciones: null,
+  kilometraje: null, nivelCombustible: null, bateriaPct: null,
   createdAt: new Date("2026-05-01T14:00:00Z"), updatedAt: new Date("2026-05-01T14:00:00Z"),
   createdBy: null,
 };
@@ -349,6 +350,101 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
 
     expect(screen.getByRole("link", { name: "Imprimir" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: EDIT_LABEL })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * service-order-reception — the "Recepción" card. The intake is optional, so
+ * an unset kilometraje reads as a warning chip rather than a silent blank: the
+ * technician must be able to tell "nobody recorded it" from "there is no such
+ * field".
+ */
+describe("ServiceOrderDetailPage — Recepción card", () => {
+  function renderWith(intake: Partial<OrdenServicio>, motor: Vehiculo["motor"] = null) {
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, ...intake }, items: [] });
+    getClienteById.mockResolvedValue(detailWith(null, { motor }));
+    return renderPage();
+  }
+
+  /** The `<dd>` next to a `<dt>` term inside the Recepción card. */
+  function valueOf(term: string): HTMLElement {
+    const card = screen.getByText("Recepción").closest("[data-slot='card']") as HTMLElement;
+    const dt = within(card).getByText(term, { selector: "dt" });
+    return dt.nextElementSibling as HTMLElement;
+  }
+
+  it("shows the kilometraje with a thousands separator and the unit", async () => {
+    render(await renderWith({ kilometraje: 85000 }));
+
+    expect(valueOf("Kilometraje")).toHaveTextContent("85.000 km");
+  });
+
+  it("shows 'Sin kilometraje' when it is null, and a 0 as a real reading", async () => {
+    const { unmount } = render(await renderWith({ kilometraje: null }));
+    expect(valueOf("Kilometraje")).toHaveTextContent("Sin kilometraje");
+    unmount();
+
+    render(await renderWith({ kilometraje: 0 }));
+    expect(valueOf("Kilometraje")).toHaveTextContent("0 km");
+    expect(screen.queryByText("Sin kilometraje")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [0, "Vacío"],
+    [1, "1/4"],
+    [2, "1/2"],
+    [3, "3/4"],
+    [4, "Lleno"],
+  ])("shows fuel level %i as %s", async (level, label) => {
+    render(await renderWith({ nivelCombustible: level }, "combustion"));
+
+    expect(valueOf("Combustible")).toHaveTextContent(new RegExp(`^${label}$`));
+  });
+
+  it("shows the battery percentage and the fuel level together", async () => {
+    render(await renderWith({ bateriaPct: 80, nivelCombustible: 3 }, "hibrido"));
+
+    expect(valueOf("Batería")).toHaveTextContent("80%");
+    expect(valueOf("Combustible")).toHaveTextContent("3/4");
+  });
+
+  it("shows 0% as a real reading, not as a missing one", async () => {
+    render(await renderWith({ bateriaPct: 0 }, "electrico"));
+
+    expect(valueOf("Batería")).toHaveTextContent("0%");
+  });
+
+  it.each([
+    ["combustion", "Combustible", "Batería"],
+    ["electrico", "Batería", "Combustible"],
+  ] as const)("a %s vehicle with nothing recorded shows %s as '—' and no %s row", async (motor, shown, hidden) => {
+    render(await renderWith({}, motor));
+
+    expect(valueOf(shown)).toHaveTextContent("—");
+    const card = screen.getByText("Recepción").closest("[data-slot='card']") as HTMLElement;
+    expect(within(card).queryByText(hidden, { selector: "dt" })).not.toBeInTheDocument();
+  });
+
+  it("still shows a recorded value the motor says is not applicable", async () => {
+    render(await renderWith({ bateriaPct: 55 }, "combustion"));
+
+    expect(valueOf("Batería")).toHaveTextContent("55%");
+  });
+
+  it("still shows a recorded fuel level on an electric vehicle", async () => {
+    render(await renderWith({ nivelCombustible: 3 }, "electrico"));
+
+    expect(valueOf("Combustible")).toHaveTextContent("3/4");
+  });
+
+  it("hands the vehicle's motor to the edit form", async () => {
+    requireSessionFromHeaders.mockResolvedValue({ id: "u1", role: "administrador" });
+    render(await renderWith({}, "electrico"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Editar orden" }));
+
+    expect(screen.getByLabelText(/batería/i)).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Combustible" })).not.toBeInTheDocument();
   });
 });
 

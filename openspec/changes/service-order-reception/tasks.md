@@ -45,15 +45,15 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU2: Intake fields, navigation (PR 2)
 
-- [ ] 2.1 `schema.ts`: `kilometraje` integer CHECK 0..2000000, `nivel_combustible` smallint CHECK 0..4, `bateria_pct` smallint CHECK 0..100, nullable. `drizzle-kit generate --name orden_intake` (0024); confirm three CHECKs in SQL.
-- [ ] 2.2 RED `intake.test.ts`: `parseIntake` rejects -1, 1.5, "abc", fuel 5, battery 101 with Spanish errors per key; accepts null/omitted. `intakeInputsFor` for combustion, electrico, hibrido, null. `FUEL_LABEL` 0..4. GREEN client-safe `service-orders/intake.ts`.
-- [ ] 2.3 RED route tests (POST and PATCH `/api/service-orders`): valid values persist; invalid 400 and nothing persists; none given stores null; edit gate unchanged. GREEN both routes and `service.ts` types/values.
-- [ ] 2.4 RED `ServiceOrderForm` tests: inputs follow motor (fuel only, battery only, both, both); only VISIBLE fields are sent; edit sends `null` for a blank visible field and OMITS a hidden one. GREEN `ServiceOrderForm.tsx` plus new `motor` prop (create: from selected vehicle).
-- [ ] 2.5 RED `ServiceOrderFormTrigger` tests: create success calls `router.push("/service-orders/<id>")` after the toast; edit calls `router.refresh()`; failure never navigates. GREEN trigger (`onSaved(saved)`); detail page passes `vehiculo?.motor ?? null`.
-- [ ] 2.6 RED detail page tests: `85000` shown; null km shows "Sin kilometraje"; fuel 0..4 shows Vacío..Lleno; `bateria_pct = 80` and fuel 3 show "80%" and "3/4". GREEN `[id]/page.tsx`.
-- [ ] 2.7 RED e2e `src/e2e/order-intake.e2e.test.ts` (`dforce_e2e`): CHECKs reject 5, 101, -1 on direct insert; intake round-trips; null stays null. GREEN: fix real-SQL defects.
-- [ ] 2.8 Mutation-verify 2.2-2.7 by name (send hidden fields, navigate on failure, drop a CHECK).
-- [ ] 2.9 Browser at the LAN IP as both roles: create lands on detail; motor-aware inputs for all four vehicle kinds; 44x44 on new action controls (inputs at `h-8` are the field exception); console clean.
+- [x] 2.1 `schema.ts`: `kilometraje` integer CHECK 0..2000000, `nivel_combustible` smallint CHECK 0..4, `bateria_pct` smallint CHECK 0..100, nullable. `drizzle-kit generate --name orden_intake` (0024); confirm three CHECKs in SQL.
+- [x] 2.2 RED `intake.test.ts`: `parseIntake` rejects -1, 1.5, "abc", fuel 5, battery 101 with Spanish errors per key; accepts null/omitted. `intakeInputsFor` for combustion, electrico, hibrido, null. `FUEL_LABEL` 0..4. GREEN client-safe `service-orders/intake.ts`.
+- [x] 2.3 RED route tests (POST and PATCH `/api/service-orders`): valid values persist; invalid 400 and nothing persists; none given stores null; edit gate unchanged. GREEN both routes and `service.ts` types/values.
+- [x] 2.4 RED `ServiceOrderForm` tests: inputs follow motor (fuel only, battery only, both, both); only VISIBLE fields are sent; edit sends `null` for a blank visible field and OMITS a hidden one. GREEN `ServiceOrderForm.tsx` plus new `motor` prop (create: from selected vehicle).
+- [x] 2.5 RED `ServiceOrderFormTrigger` tests: create success calls `router.push("/service-orders/<id>")` after the toast; edit calls `router.refresh()`; failure never navigates. GREEN trigger (`onSaved(saved)`); detail page passes `vehiculo?.motor ?? null`.
+- [x] 2.6 RED detail page tests: `85000` shown; null km shows "Sin kilometraje"; fuel 0..4 shows Vacío..Lleno; `bateria_pct = 80` and fuel 3 show "80%" and "3/4". GREEN `[id]/page.tsx`.
+- [x] 2.7 RED e2e `src/e2e/order-intake.e2e.test.ts` (`dforce_e2e`): CHECKs reject 5, 101, -1 on direct insert; intake round-trips; null stays null. GREEN: fix real-SQL defects.
+- [x] 2.8 Mutation-verify 2.2-2.7 by name (send hidden fields, navigate on failure, drop a CHECK).
+- [x] 2.9 Browser at the LAN IP as both roles: create lands on detail; motor-aware inputs for all four vehicle kinds; 44x44 on new action controls (inputs at `h-8` are the field exception); console clean.
 
 ## WU3a: Photo table, R2, service (PR 3a)
 

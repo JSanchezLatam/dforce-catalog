@@ -169,6 +169,13 @@
       "when": 1791144651755,
       "tag": "0023_cliente_documento",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791145243770,
+      "tag": "0024_orden_intake",
+      "breakpoints": true
     }
   ]
 }

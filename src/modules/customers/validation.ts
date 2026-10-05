@@ -66,6 +66,9 @@ export function normalizePhone(raw: string): string {
  * and passports vary and relatives share documents.
  */
 export function normalizeDocumento(raw: unknown): string | null {
+  if (raw !== null && raw !== undefined && typeof raw !== "string") {
+    throw new ClienteValidationError({ documentoIdentidad: "La cédula / RUC tiene que ser texto" });
+  }
   const str = typeof raw === "string" ? raw.trim() : "";
   if (str.length > DOCUMENTO_MAX_LENGTH) {
     throw new ClienteValidationError({

@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import type { OrdenServicio } from "@/shared/db/schema";
 import { useToast } from "@/shared/ui/ToastProvider";
+import type { VehiculoMotor } from "@/modules/customers/vehicle-options";
 import { ServiceOrderForm, type ServiceOrderCustomerOption } from "./ServiceOrderForm";
 
 /**
@@ -17,11 +18,14 @@ export function ServiceOrderFormTrigger({
   selectedCustomer,
   canCreateCustomer,
   triggerLabel,
+  motor,
 }: {
   order?: OrdenServicio | null;
   selectedCustomer?: ServiceOrderCustomerOption | null;
   canCreateCustomer: boolean;
   triggerLabel?: ReactNode;
+  /** The order's vehicle's motor (edit mode); decides which intake inputs show. */
+  motor?: VehiculoMotor | null;
 }) {
   const router = useRouter();
   const { addToast } = useToast();
@@ -36,13 +40,18 @@ export function ServiceOrderFormTrigger({
       selectedCustomer={selectedCustomer}
       canCreateCustomer={canCreateCustomer}
       triggerLabel={triggerLabel}
-      onSaved={() => {
-        // ABOVE `router.refresh()`, the ordering `OrderStatusControls` records
-        // for the mirror-image case: a refresh that throws must not take the
-        // only evidence the save happened with it. The dialog has already
-        // closed by here, so the toast is all the operator gets.
+      motor={motor}
+      onSaved={(saved) => {
+        // ABOVE the navigation, the ordering `OrderStatusControls` records
+        // for the mirror-image case: a refresh or push that throws must not
+        // take the only evidence the save happened with it. The dialog has
+        // already closed by here, so the toast is all the operator gets.
         addToast("success", isEdit ? "Orden actualizada" : "Orden creada");
-        router.refresh();
+        // A created order lands on its own detail page (server-rendered, so
+        // fresh); an edit stays put and repaints. A failed save never reaches
+        // here — `ServiceOrderForm` only calls `onSaved` after the server said ok.
+        if (isEdit) router.refresh();
+        else router.push(`/service-orders/${saved.id}`);
       }}
     />
   );

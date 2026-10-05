@@ -1,7 +1,7 @@
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BellRing } from "lucide-react";
+import { BellRing, TriangleAlert } from "lucide-react";
 
 import {
   Breadcrumb,
@@ -22,6 +22,7 @@ import { getClienteById } from "@/modules/customers/queries";
 import { listRemindersForOrder } from "@/modules/reminders/queries";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
 import { canEditOrderFields } from "@/modules/service-orders/edit-policy";
+import { FUEL_LABEL, intakeInputsFor } from "@/modules/service-orders/intake";
 import { OrderStatusControls } from "@/modules/service-orders/OrderStatusControls";
 import { vehicleDescriptiveRows } from "@/modules/service-orders/vehicle-rows";
 import { ServiceOrderFormTrigger } from "@/modules/service-orders/ServiceOrderFormTrigger";
@@ -61,6 +62,20 @@ function field(label: string, value: unknown) {
   );
 }
 
+/** 85000 -> "85.000". Fixed separator: `toLocaleString` depends on the runtime's ICU data. */
+function formatKilometraje(km: number): string {
+  return `${String(km).replace(/\B(?=(\d{3})+(?!\d))/g, ".")} km`;
+}
+
+function receptionRow(label: string, value: ReactNode, last = false) {
+  return (
+    <div className={cn("grid grid-cols-3 gap-2 py-2 border-b border-border", last && "border-0")}>
+      <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
+      <dd className="col-span-2 text-sm text-foreground">{value}</dd>
+    </div>
+  );
+}
+
 /**
  * R20/R21/R24/R25/R26 — order header + status-transition controls (calling
  * Phase 5's PATCH route), line-items table, and this order's scheduled/sent
@@ -92,6 +107,11 @@ export default async function ServiceOrderDetailPage({
   // exactly as for an active one (spec §"Service Order Detail Displays
   // Vehicle, Category, and Notes").
   const vehiculo = clienteDetail?.vehicles.find((v) => v.id === orden.vehiculoId);
+  // A row shows when the motor applies OR a value was recorded anyway (the
+  // vehicle's motor can change after the order), so a stored reading never hides.
+  const inputs = intakeInputsFor(vehiculo?.motor);
+  const showFuel = inputs.fuel || orden.nivelCombustible != null;
+  const showBattery = inputs.battery || orden.bateriaPct != null;
 
   return (
     <div className="p-8">
@@ -130,6 +150,7 @@ export default async function ServiceOrderDetailPage({
                   /* Edit mode never renders `CustomerPicker` (the order's
                      customer is fixed), so this value is unreachable. */
                   canCreateCustomer={false}
+                  motor={vehiculo?.motor ?? null}
                 />
               </div>
             )}
@@ -195,6 +216,35 @@ export default async function ServiceOrderDetailPage({
             {field("Hallazgos", orden.hallazgos || "—")}
             {field("Recomendaciones", orden.recomendaciones || "—")}
             {field("Observaciones", orden.observaciones || "—")}
+          </dl>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Recepción</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <dl>
+            {receptionRow(
+              "Kilometraje",
+              orden.kilometraje == null ? (
+                <span className="inline-flex items-center gap-1.5 rounded-md border border-warning/50 bg-warning/15 px-2 py-0.5 font-medium text-amber-700 dark:text-amber-300">
+                  <TriangleAlert className="size-3.5" aria-hidden="true" />
+                  Sin kilometraje
+                </span>
+              ) : (
+                formatKilometraje(orden.kilometraje)
+              ),
+              !showFuel && !showBattery,
+            )}
+            {showFuel &&
+              receptionRow(
+                "Combustible",
+                orden.nivelCombustible == null ? "—" : FUEL_LABEL[orden.nivelCombustible],
+                !showBattery,
+              )}
+            {showBattery && receptionRow("Batería", orden.bateriaPct == null ? "—" : `${orden.bateriaPct}%`, true)}
           </dl>
         </CardContent>
       </Card>

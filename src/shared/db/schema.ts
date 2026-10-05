@@ -499,11 +499,20 @@ export const ordenServicio = pgTable(
     hallazgos: text("hallazgos"),
     recomendaciones: text("recomendaciones"),
     observaciones: text("observaciones"),
+    // service-order-reception — vehicle intake, all optional. `nivel_combustible`
+    // is a quarter-tank step (0 = Vacío … 4 = Lleno); the ranges are enforced
+    // here as well as in `service-orders/intake.ts`.
+    kilometraje: integer("kilometraje"),
+    nivelCombustible: smallint("nivel_combustible"),
+    bateriaPct: smallint("bateria_pct"),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    check("orden_kilometraje_range", sql`${table.kilometraje} between 0 and 2000000`),
+    check("orden_nivel_combustible_range", sql`${table.nivelCombustible} between 0 and 4`),
+    check("orden_bateria_pct_range", sql`${table.bateriaPct} between 0 and 100`),
     // per-customer history, mirrors catalogs_user_created_idx
     index("orden_cliente_created_idx").on(table.clienteId, table.createdAt),
     index("orden_status_idx").on(table.status),

@@ -4,6 +4,7 @@ import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import { isServiceCategory } from "@/modules/service-orders/categories";
 import { canEditOrderFields } from "@/modules/service-orders/edit-policy";
+import { parseIntake } from "@/modules/service-orders/intake";
 import { getOrdenServicioById } from "@/modules/service-orders/queries";
 import {
   OrdenServicioNotFoundError,
@@ -116,6 +117,12 @@ export async function handleUpdateOrdenServicio(
       }
       patch.categoria = body.categoria;
     }
+
+    const intake = parseIntake(body);
+    if (!intake.ok) {
+      return NextResponse.json({ errors: intake.errors }, { status: 400 });
+    }
+    Object.assign(patch, intake.value);
 
     // A body of nothing but unrecognised fields whitelists down to `{}`, and
     // `.set({})` is either a driver error or a SET-less UPDATE — a 500 either

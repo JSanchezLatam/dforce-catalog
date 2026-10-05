@@ -91,6 +91,15 @@ describe("cliente.documento_identidad (E2E)", () => {
     expect((await stored(id)).documentoIdentidad).toBe("8-1-1");
   });
 
+  it("PATCH rejects a non-string with a 400 and leaves the stored value alone", async () => {
+    const id = await create({ name: "E2E Doc G", phone: "50769991007", documentoIdentidad: "8-1-1" });
+
+    const response = await patch(id, { documentoIdentidad: 12345678 });
+    expect(response.status).toBe(400);
+    expect((await response.json()).errors.documentoIdentidad).toBe("La cédula / RUC tiene que ser texto");
+    expect((await stored(id)).documentoIdentidad).toBe("8-1-1");
+  });
+
   it("a customer-import UPDATE leaves documento_identidad unchanged", async () => {
     const externalId = `e2e-doc-${Date.now()}`;
     const [row] = await db

@@ -59,6 +59,9 @@ const ORDEN: OrdenServicio = {
   description: "Ruido en el tren delantero", appointmentAt: APPOINTMENT_AT, completedAt: null,
   hallazgos: "Bujías gastadas", recomendaciones: "Cambiar la correa de distribución",
   observaciones: "El cliente espera en el taller",
+  kilometraje: null,
+  nivelCombustible: null,
+  bateriaPct: null,
   createdAt: new Date("2026-05-01T14:00:00Z"), updatedAt: new Date("2026-05-01T14:00:00Z"),
   createdBy: null,
 };
