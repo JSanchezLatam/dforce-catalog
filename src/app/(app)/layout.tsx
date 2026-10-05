@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 
 import { AppSidebar } from "@/components/app-sidebar";
-import { SIDEBAR_COOKIE_NAME, SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { SIDEBAR_COOKIE_NAME, SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getNavBadges } from "@/modules/layout/nav-badges";
 import { getNavGroups } from "@/modules/layout/nav-items";
@@ -34,6 +34,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         initialCollapseState={initialCollapseState}
       />
       <SidebarInset>
+        {/* Below `md` the sidebar is an off-canvas Sheet with no other way to open
+            it, so phones get this bar. `aria-label` replaces shadcn's English
+            sr-only "Toggle Sidebar"; `min-h-11 min-w-11` is the 44x44 rule. */}
+        <header className="flex items-center gap-2 border-b px-2 py-1 md:hidden print:hidden">
+          <SidebarTrigger aria-label="Abrir menú" className="min-h-11 min-w-11" />
+          {config?.name && <span className="truncate font-medium">{config.name}</span>}
+        </header>
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             {/* `print:py-0 print:gap-0` — this wrapper is outside the print page's own
