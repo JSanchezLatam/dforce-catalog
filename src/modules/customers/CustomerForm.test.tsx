@@ -17,11 +17,14 @@ const CLIENTE: Cliente = {
   name: "Juan Pérez",
   phone: "+525512345678",
   email: null,
+  documentoIdentidad: null,
+  externalId: null,
   whatsappOptOut: false,
   emailOptOut: false,
+  deactivatedAt: null,
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
-} as unknown as Cliente;
+};
 
 function vehiculo(overrides: Partial<Vehiculo> = {}): Vehiculo {
   return {
@@ -1051,5 +1054,74 @@ describe("CustomerForm — Uso interno (vencimientos.read)", () => {
     await user.click(screen.getByRole("button", { name: "Guardar" }));
 
     expect(bodyOf(fetchMock).vehicles[0].placaRenovacionMes).toBeNull();
+  });
+});
+
+describe("CustomerForm — Cédula / RUC", () => {
+  it("shows the optional field with its free-text hint", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm />);
+    await open(user, "Nuevo cliente");
+
+    expect(await screen.findByLabelText(/Cédula \/ RUC/)).toBeInTheDocument();
+    expect(screen.getByText("Texto libre: cédula (8-123-456), RUC con DV, pasaporte.")).toBeInTheDocument();
+  });
+
+  it("sends the trimmed value on create", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 201, body: { cliente: { id: "c9" } } });
+    render(<CustomerForm />);
+    await open(user, "Nuevo cliente");
+
+    await user.type(await screen.findByLabelText("Nombre"), "Ana Prueba");
+    await user.type(screen.getByLabelText("Teléfono"), "6000-0000");
+    await user.type(screen.getByLabelText(/Cédula \/ RUC/), "  8-123-456  ");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(bodyOf(fetchMock).documentoIdentidad).toBe("8-123-456");
+  });
+
+  it("sends null, never undefined, when left blank on create", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 201, body: { cliente: { id: "c9" } } });
+    render(<CustomerForm />);
+    await open(user, "Nuevo cliente");
+
+    await user.type(await screen.findByLabelText("Nombre"), "Ana Prueba");
+    await user.type(screen.getByLabelText("Teléfono"), "6000-0000");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    // `toHaveProperty` — a JSON body drops `undefined`, so `=== null` alone would not tell the key was absent.
+    expect(bodyOf(fetchMock)).toHaveProperty("documentoIdentidad", null);
+  });
+
+  it("prefills on edit, and clearing it sends null so the server can clear the column", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    render(<CustomerForm cliente={{ ...CLIENTE, documentoIdentidad: "8-123-456" }} vehicles={[]} />);
+    await open(user, "Editar");
+
+    const field = screen.getByLabelText(/Cédula \/ RUC/);
+    expect(field).toHaveValue("8-123-456");
+    await user.clear(field);
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(bodyOf(fetchMock)).toHaveProperty("documentoIdentidad", null);
+  });
+
+  it("shows the server's 400 for the field next to it", async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      status: 400,
+      body: { errors: { documentoIdentidad: "La cédula / RUC no puede superar 30 caracteres" } },
+    });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[]} />);
+    await open(user, "Editar");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(await screen.findByText("La cédula / RUC no puede superar 30 caracteres")).toBeInTheDocument();
   });
 });

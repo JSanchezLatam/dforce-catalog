@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   ClienteValidationError,
   isValidPhoneFormat,
+  normalizeDocumento,
   normalizePhone,
   validateClienteInput,
   validateVehiculoInput,
@@ -279,5 +280,56 @@ describe("validateVehiculoInput — descriptive and internal vehicle fields", ()
     for (const bad of ["2026-02-30", "15/11/2026", "2026-13-01", 20261115]) {
       expect(errorsOf({ plate: "A", seguroVence: bad })).toEqual({ seguroVence: "La fecha de vencimiento del seguro no es válida" });
     }
+  });
+});
+
+describe("normalizeDocumento — Cédula / RUC is free text, trimmed, capped at 30", () => {
+  it("trims surrounding whitespace", () => {
+    expect(normalizeDocumento("  8-123-456  ")).toBe("8-123-456");
+  });
+
+  it("maps empty and whitespace-only to null", () => {
+    expect(normalizeDocumento("")).toBeNull();
+    expect(normalizeDocumento("   ")).toBeNull();
+  });
+
+  it("maps null and undefined to null", () => {
+    expect(normalizeDocumento(null)).toBeNull();
+    expect(normalizeDocumento(undefined)).toBeNull();
+  });
+
+  it("accepts exactly 30 characters and rejects 31 with the Spanish message", () => {
+    expect(normalizeDocumento("a".repeat(30))).toBe("a".repeat(30));
+    try {
+      normalizeDocumento("a".repeat(31));
+      throw new Error("expected normalizeDocumento to throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(ClienteValidationError);
+      expect((err as ClienteValidationError).errors).toEqual({
+        documentoIdentidad: "La cédula / RUC no puede superar 30 caracteres",
+      });
+    }
+  });
+
+  it("counts the trimmed length, not the raw one", () => {
+    expect(normalizeDocumento(` ${"a".repeat(30)} `)).toBe("a".repeat(30));
+  });
+});
+
+describe("validateClienteInput — documentoIdentidad", () => {
+  it("keeps a trimmed value", () => {
+    expect(validateClienteInput({ ...validInput, documentoIdentidad: "  8-123-456 " }).documentoIdentidad).toBe("8-123-456");
+  });
+
+  it("stores null when blank and leaves the key out when omitted", () => {
+    expect(validateClienteInput({ ...validInput, documentoIdentidad: "  " }).documentoIdentidad).toBeNull();
+    expect(validateClienteInput(validInput)).not.toHaveProperty("documentoIdentidad");
+  });
+
+  it("collects the 31-character error beside the other field errors", () => {
+    expect(clienteErrors({ name: "", phone: validInput.phone, documentoIdentidad: "a".repeat(31) })).toEqual({
+      name: "El nombre es obligatorio",
+      documentoIdentidad: "La cédula / RUC no puede superar 30 caracteres",
+    });
   });
 });

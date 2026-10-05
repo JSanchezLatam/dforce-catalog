@@ -129,6 +129,7 @@ export default async function CustomerDetailPage({
           )}
           <dl>
             {field("Teléfono", cliente.phone)}
+            {field("Cédula / RUC", cliente.documentoIdentidad)}
             {field("Email", cliente.email)}
             {field("Recordatorios WhatsApp", cliente.whatsappOptOut ? "Desactivados" : "Activos")}
             {field("Recordatorios email", cliente.emailOptOut ? "Desactivados" : "Activos")}

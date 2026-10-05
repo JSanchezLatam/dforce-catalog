@@ -18,16 +18,19 @@ import { CustomerFormTrigger } from "./CustomerFormTrigger";
 const refresh = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 
-const CLIENTE = {
+const CLIENTE: Cliente = {
   id: "c1",
   name: "Juan Pérez",
   phone: "+525512345678",
   email: null,
+  documentoIdentidad: null,
+  externalId: null,
   whatsappOptOut: false,
   emailOptOut: false,
+  deactivatedAt: null,
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
-} as unknown as Cliente;
+};
 
 const VEHICULO: Vehiculo = {
   id: "v1",

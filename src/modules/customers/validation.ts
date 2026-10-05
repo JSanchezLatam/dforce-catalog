@@ -20,6 +20,8 @@ export type ClienteInput = {
   email?: string;
   whatsappOptOut?: boolean;
   emailOptOut?: boolean;
+  /** Cédula / RUC — free text. `undefined` = not sent (leave alone), `null` = cleared. */
+  documentoIdentidad?: string | null;
 };
 
 const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -27,6 +29,7 @@ const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_ALLOWED_CHARS = /^\+?[0-9\s\-()]+$/;
 const PHONE_MIN_DIGITS = 7;
 const PHONE_MAX_DIGITS = 15;
+const DOCUMENTO_MAX_LENGTH = 30;
 
 export class ClienteValidationError extends Error {
   constructor(public readonly errors: Record<string, string>) {
@@ -57,6 +60,21 @@ export function normalizePhone(raw: string): string {
   return hasPlus ? `+${digits}` : digits;
 }
 
+/**
+ * Cédula / RUC: free text, trimmed, `""` becomes `null`, capped at
+ * `DOCUMENTO_MAX_LENGTH`. No format check and no uniqueness — cédulas, RUCs
+ * and passports vary and relatives share documents.
+ */
+export function normalizeDocumento(raw: unknown): string | null {
+  const str = typeof raw === "string" ? raw.trim() : "";
+  if (str.length > DOCUMENTO_MAX_LENGTH) {
+    throw new ClienteValidationError({
+      documentoIdentidad: `La cédula / RUC no puede superar ${DOCUMENTO_MAX_LENGTH} caracteres`,
+    });
+  }
+  return str.length > 0 ? str : null;
+}
+
 function trimmedOrUndefined(value: unknown): string | undefined {
   const str = typeof value === "string" ? value.trim() : "";
   return str.length > 0 ? str : undefined;
@@ -84,6 +102,16 @@ export function validateClienteInput(input: unknown): ClienteInput {
     errors.email = "El email no es válido";
   }
 
+  let documentoIdentidad: string | null | undefined;
+  if (value.documentoIdentidad !== undefined) {
+    try {
+      documentoIdentidad = normalizeDocumento(value.documentoIdentidad);
+    } catch (err) {
+      if (!(err instanceof ClienteValidationError)) throw err;
+      Object.assign(errors, err.errors);
+    }
+  }
+
   const whatsappOptOut = typeof value.whatsappOptOut === "boolean" ? value.whatsappOptOut : undefined;
   const emailOptOut = typeof value.emailOptOut === "boolean" ? value.emailOptOut : undefined;
 
@@ -95,6 +123,7 @@ export function validateClienteInput(input: unknown): ClienteInput {
     name,
     phone: normalizePhone(rawPhone),
     ...(email !== undefined ? { email } : {}),
+    ...(documentoIdentidad !== undefined ? { documentoIdentidad } : {}),
     ...(whatsappOptOut !== undefined ? { whatsappOptOut } : {}),
     ...(emailOptOut !== undefined ? { emailOptOut } : {}),
   };

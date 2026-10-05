@@ -117,6 +117,24 @@ describe("runCustomerImport — insert, update and skip in one pass", () => {
     expect(Object.keys(updated[0].set as object).sort()).toEqual(["email", "name", "phone"]);
   });
 
+  it("never writes documentoIdentidad on an update (a re-import must not wipe the Cédula / RUC) nor on an insert", async () => {
+    async function* fetchCustomers() {
+      yield [
+        { Cliente: "1", Nombre: "Rosa", Telefono_1: "6111-1111" },
+        { Cliente: "2", Nombre: "Beto Nuevo", Telefono_1: "6222-9999" },
+      ];
+    }
+    const existing: LocalCustomer[] = [{ id: "local-2", externalId: "2" }];
+    const { deps, inserted, updated } = baseDeps({ fetchCustomers, listExisting: async () => existing });
+
+    await runCustomerImport(deps);
+
+    expect(inserted).toHaveLength(1);
+    expect(updated).toHaveLength(1);
+    expect(inserted[0]).not.toHaveProperty("documentoIdentidad");
+    expect(updated[0].set).not.toHaveProperty("documentoIdentidad");
+  });
+
   it("reports zero created/updated and every skip when every row is unrepresentable", async () => {
     async function* fetchCustomers() {
       yield [{ Nombre: "Sin Id" }, { Cliente: "9" }];

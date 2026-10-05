@@ -73,6 +73,33 @@ describe("CustomerDetailPage", () => {
   });
 });
 
+describe("CustomerDetailPage — Cédula / RUC", () => {
+  const withDocumento = (documentoIdentidad: string | null) =>
+    getClienteById.mockResolvedValue({
+      cliente: { id: "c1", name: "Ana Gómez", phone: "50761111111", email: null, documentoIdentidad, createdAt: new Date("2026-01-01") },
+      orders: [],
+      vehicles: [],
+    });
+
+  it("shows the value under its label when set", async () => {
+    can.mockReturnValue(true);
+    withDocumento("8-123-456");
+    render(await renderPage());
+
+    expect(screen.getByText("Cédula / RUC")).toBeInTheDocument();
+    expect(screen.getByText("8-123-456")).toBeInTheDocument();
+  });
+
+  it("shows no row at all when null", async () => {
+    can.mockReturnValue(true);
+    withDocumento(null);
+    render(await renderPage());
+
+    expect(screen.getByText("Teléfono")).toBeInTheDocument();
+    expect(screen.queryByText("Cédula / RUC")).not.toBeInTheDocument();
+  });
+});
+
 /**
  * R20/D5 — a deactivated customer is READ-ONLY until reactivated. The failure
  * these guard against is a detail view that looks ordinary: staff edit a

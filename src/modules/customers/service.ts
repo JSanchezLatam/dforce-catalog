@@ -22,6 +22,7 @@ import { cliente, type Cliente, type Vehiculo } from "@/shared/db/schema";
 import { findClienteByPhone, getClienteById } from "./queries";
 import {
   ClienteValidationError,
+  normalizeDocumento,
   normalizePhone,
   validateClienteInput,
   validateVehiculosInput,
@@ -220,6 +221,12 @@ export async function updateCliente(
   // `no-unused-vars` repo-wide for one line.
   void strippedVehicles;
   void strippedConfirmation;
+
+  // Same trap as `phone` below: `persistedPatch` is the RAW patch, so the
+  // trimmed / blank-to-null value has to be set here or it is never written.
+  if (patch.documentoIdentidad !== undefined) {
+    persistedPatch.documentoIdentidad = normalizeDocumento(patch.documentoIdentidad);
+  }
 
   if (patch.phone !== undefined) {
     const normalizedPhone = normalizePhone(patch.phone);
