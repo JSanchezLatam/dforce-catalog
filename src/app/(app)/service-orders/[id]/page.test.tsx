@@ -346,6 +346,24 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
     expect(link.className).toContain("min-w-11");
   });
 
+  /**
+   * Owner report from a 390px phone: the header row never wrapped, so the
+   * action buttons were pushed past the right edge and clipped, and a long
+   * label ("Recomendaciones") overlapped its value in the 1/3 label column.
+   * jsdom has no Tailwind, so this pins the mechanism (the action row may wrap,
+   * a field row stacks below `sm`); the LAN browser check measures the pixels.
+   */
+  it("lets the header actions wrap and stacks field rows below sm", async () => {
+    render(await renderAs("administrador", "open"));
+
+    const actions = screen.getByRole("link", { name: "Imprimir" }).parentElement!;
+    expect(actions.className).toContain("flex-wrap");
+
+    const row = screen.getByText("Recomendaciones").parentElement!;
+    expect(row.className).toContain("grid-cols-1");
+    expect(row.className).toContain("sm:grid-cols-3");
+  });
+
   // A closed order still prints — the sheet is a record, not an action, and the
   // edit gate above refuses `done` for both roles. Rendering both assertions
   // off the SAME render is what says the two controls are independent.

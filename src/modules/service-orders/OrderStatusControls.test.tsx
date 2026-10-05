@@ -144,3 +144,12 @@ it("keeps every status control at the 44x44 floor", () => {
     expect(button.className).toContain("min-w-11");
   }
 });
+
+// A phone fits one "Marcar como …" button per line, not two: the row must wrap.
+// Class, not pixels, for the same jsdom reason as above.
+it("lets the status controls wrap onto a second line", () => {
+  renderControls();
+
+  const [button] = screen.getAllByRole("button", { name: /Marcar como/ });
+  expect(button.parentElement!.className).toContain("flex-wrap");
+});

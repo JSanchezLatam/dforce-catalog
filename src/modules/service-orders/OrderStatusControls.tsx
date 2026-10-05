@@ -59,7 +59,7 @@ export function OrderStatusControls({ orderId, status }: { orderId: string; stat
   if (nextStates.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       {/* AGENTS.md's 44x44 floor. These were `size="sm"` — `h-7`, 28px — so they
           sat 16px shorter than `Editar orden` and `Imprimir` beside them, and
           the header read as three different button sizes. A detail page on a
