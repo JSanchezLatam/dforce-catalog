@@ -73,7 +73,7 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 - [x] 3.11 RED POST route tests (injected deps): 201, 400 non-JPEG, 413 oversize (Content-Length pre-check at cap + 64 KB), 404, 409 `photo_limit` and `order_closed`, Spanish messages, no session refused. GREEN `src/app/api/service-orders/[id]/photos/route.ts`.
 - [x] 3.12 RED GET/DELETE tests: GET returns `image/jpeg`, `ETag: photoId`, `Cache-Control: private, max-age=86400, immutable`, `nosniff`, sandbox CSP, looks up by `(photoId, ordenId)` (wrong order 404); técnico DELETE 403 and row kept; administrador DELETE removes row and object; closed order 409. GREEN `[photoId]/route.ts`.
 - [x] 3.13 Mutation-verify 3.10-3.12 by name (look up by `photoId` only, trust declared content type, drop the 403).
-- [ ] 3.14 curl at the LAN IP as both roles: unauthenticated GET refused, técnico DELETE 403.
+- [x] 3.14 curl at the LAN IP as both roles: unauthenticated GET refused, técnico DELETE 403.
 
 ## WU4: Compression and uploader card (PR 4)
 
