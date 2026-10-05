@@ -64,13 +64,13 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 
 ## WU3: PageHeader, padding, inventory header (PR 3) — #1 #11 #12 #14
 
-- [ ] 3.1 RED `PageHeader.test`: title is an `h1`; actions sit in a wrapping container; subtitle only when given. GREEN `src/shared/ui/PageHeader.tsx` (no `"use client"`).
-- [ ] 3.2 RED `styles.test`: `PAGE_HEADING` is `text-2xl sm:text-[32px] leading-tight`. GREEN `styles.ts`.
-- [ ] 3.3 RED `src/app/responsive-guards.test.ts`: scans `src/app/(app)/**/page.tsx` for a bare `p-8` (red until the sweep). Print page and `loading.tsx` keep their own padding and are excluded.
-- [ ] 3.4 Sweep: pages use `PageHeader` and `p-4 sm:p-8`, including the `catalogs/page.tsx:26` doubled margin. Split 3a/3b by route group if over budget.
-- [ ] 3.5 RED inventory page tests: title renders above the greeting; greeting is `hidden md:flex`; administrador keeps the stats card with "Sincronizar inventario" (fits on a phone); técnico sees the mockup layout (subtitle only). GREEN `inventory/page.tsx`, `InventoryStatsHeader.tsx`.
-- [ ] 3.6 Update existing heading assertions broken by the sweep; never loosen them to match both strings.
-- [ ] 3.7 Mutation-verify 3.1-3.5 by name (reintroduce one `p-8`, move the greeting above the title).
+- [x] 3.1 RED `PageHeader.test`: title is an `h1`; actions sit in a wrapping container; subtitle only when given. GREEN `src/shared/ui/PageHeader.tsx` (no `"use client"`).
+- [x] 3.2 RED `styles.test`: `PAGE_HEADING` is `text-2xl sm:text-[32px] leading-tight`. GREEN `styles.ts`.
+- [x] 3.3 RED `src/app/responsive-guards.test.ts`: scans `src/app/(app)/**/page.tsx` for a bare `p-8` (red until the sweep). Print page and `loading.tsx` keep their own padding and are excluded. (Guard recognises `p-8` as a whole class only; the 14 scanned pages are every `page.tsx` but print.)
+- [x] 3.4 Sweep: pages use `PageHeader` and `p-4 sm:p-8`, including the `catalogs/page.tsx:26` doubled margin. Split 3a/3b by route group if over budget. (14 pages: service-orders, customers, vencimientos, users, workshop-config, account, catalogs, builder, template-config, inventory, plus the 4 detail pages, which only take the padding. Refusal blocks got `p-4 sm:p-8` only; their sentence is WU4. Catalogs: the doubled margin was `CardContent className="p-6"`, dropped.)
+- [x] 3.5 RED inventory page tests: title renders above the greeting; greeting is `hidden md:flex`; administrador keeps the stats card with "Sincronizar inventario" (fits on a phone); técnico sees the mockup layout (subtitle only). GREEN `inventory/page.tsx`, `InventoryStatsHeader.tsx`. (Subtitle `N productos sincronizados desde Interfuerza` is `md:hidden` and only for a user without the sync action; the stats card is `hidden md:block` for them. `ManualSyncButton` gained `max-sm:mb-0` so its desktop `mb-4` does not leave dead space in the stacked phone card.)
+- [x] 3.6 Update existing heading assertions broken by the sweep; never loosen them to match both strings. (No existing assertion broke: the sweep kept every title, description and action string.)
+- [x] 3.7 Mutation-verify 3.1-3.5 by name (reintroduce one `p-8`, move the greeting above the title).
 - [ ] 3.8 Matrix; "Órdenes de servicio" is one line and "Nueva orden de servicio" is fully visible at 44px at 390; no horizontal overflow.
 
 ## WU4: PermissionDenied (PR 4) — #18
