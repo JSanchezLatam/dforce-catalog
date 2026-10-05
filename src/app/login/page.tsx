@@ -55,9 +55,9 @@ export default function LoginPage() {
             ~500px viewport — measured. `my-auto` on the card centres it while
             there is room and collapses when there is not, so these sit under
             the card instead of on top of it. */}
-        <div className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
+        <div className="mt-6 text-center text-xs leading-relaxed text-foreground/70 dark:text-muted-foreground">
           <p>Desarrollado por Jorge Sanchez</p>
-          <p className="opacity-75">Versión 1.0 · Septiembre 2026</p>
+          <p className="dark:opacity-75">Versión 1.0 · Septiembre 2026</p>
         </div>
       </section>
       <section className="relative hidden overflow-hidden lg:block" aria-hidden="true">
