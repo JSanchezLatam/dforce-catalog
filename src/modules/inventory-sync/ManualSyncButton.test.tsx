@@ -77,4 +77,20 @@ describe("ManualSyncButton — the status chip beside the action", () => {
     const row = (await screen.findByText("Completada")).parentElement!;
     expect(row).toHaveClass("mb-4", "max-sm:mb-0");
   });
+
+  /**
+   * Audit #8: the stats card is `overflow-hidden`, and at 390 the Button plus
+   * the chip do not fit side by side, so the green chip was clipped at the
+   * card's edge ("Co…"). The row wraps instead, and the chip itself carries
+   * nothing that truncates. Class string only: jsdom has no layout.
+   */
+  it("wraps the chip under the Button instead of clipping it, and never truncates it", async () => {
+    renderButton(idleWithLastRun);
+
+    const chip = await screen.findByText("Completada");
+    expect(chip.parentElement).toHaveClass("flex-wrap");
+    expect(chip).not.toHaveClass("truncate");
+    expect(chip).not.toHaveClass("overflow-hidden");
+    expect(chip).not.toHaveClass("whitespace-nowrap");
+  });
 });
