@@ -331,9 +331,12 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
   it("applies the 44x44 floor to the edit control from its mount", async () => {
     const { container } = render(await renderAs("administrador", "open"));
 
-    const wrapper = container.querySelector("[class*='min-h-11']");
+    // The wrapper's own utility, not any `min-h-11`: the breadcrumb link
+    // carries a `pointer-coarse:min-h-11` of its own and comes first in the DOM.
+    const wrapper = Array.from(container.querySelectorAll("div")).find((el) =>
+      el.className.includes("[&>button]:min-h-11"),
+    );
     expect(wrapper).not.toBeNull();
-    expect(wrapper!.className).toContain("[&>button]:min-h-11");
     expect(wrapper!.className).toContain("[&>button]:min-w-11");
     expect(wrapper!.firstElementChild).toBe(screen.getByRole("button", { name: EDIT_LABEL }));
   });
