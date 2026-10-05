@@ -49,3 +49,15 @@ describe("(app)/layout — sidebar badge wiring", () => {
     expect(link).not.toHaveProperty("badge");
   });
 });
+
+describe("(app)/layout — mobile navigation", () => {
+  // Below `md` the sidebar is an off-canvas Sheet; without this trigger a phone
+  // has no way to open the navigation at all.
+  it("renders an 'Abrir menú' trigger so a phone can open the sidebar", async () => {
+    getNavBadges.mockResolvedValue({});
+
+    render(await AppLayout({ children: null }));
+
+    expect(screen.getByRole("button", { name: "Abrir menú" })).toBeInTheDocument();
+  });
+});
