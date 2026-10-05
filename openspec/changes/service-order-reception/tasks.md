@@ -82,7 +82,7 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 - [x] 4.3 RED detail page tests: card "Fotos de recepción" gets `canAdd` from `canChangeOrderPhotos` and `service-orders.write`, `canDelete` from `can(..., "service-orders.deletePhoto")` and status; photos listed by position. GREEN `[id]/page.tsx`.
 - [x] 4.4 Mutation-verify 4.1-4.3 by name (count `files.length` instead of applied, upload in parallel, show delete to técnico).
 - [x] 4.5 Browser at the LAN IP as administrador and técnico (RSC boundary, confirm dialog is a portal: console clean); target sizes measured.
-- [ ] 4.6 Real phone over HTTP: gallery and camera both offered, multi-select works, compression runs with no secure context, photos arrive at ~300-600 KB. Confirms dropping `capture` with the owner.
+- [x] 4.6 Real phone over HTTP: gallery and camera both offered, multi-select works, compression runs with no secure context, photos arrive at ~300-600 KB. Confirms dropping `capture` with the owner.
 
 ## WU5: Print (PR 5)
 
