@@ -57,7 +57,7 @@ export default function LoginPage() {
             the card instead of on top of it. */}
         <div className="mt-6 text-center text-xs leading-relaxed text-foreground/70 dark:text-muted-foreground">
           <p>Desarrollado por Jorge Sanchez</p>
-          <p className="dark:opacity-75">Versión 1.0 · Septiembre 2026</p>
+          <p>Versión 1.0 · Septiembre 2026</p>
         </div>
       </section>
       <section className="relative hidden overflow-hidden lg:block" aria-hidden="true">
