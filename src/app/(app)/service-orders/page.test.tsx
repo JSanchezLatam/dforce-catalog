@@ -626,7 +626,9 @@ describe("ServiceOrdersPage — read gate", () => {
 
     render(await ServiceOrdersPage({ searchParams: Promise.resolve({}) }));
 
-    expect(screen.getByText("No tenés permiso para ver esta página.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Órdenes de servicio" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "No tenés permiso para ver esta página" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Volver al inicio" })).toHaveAttribute("href", "/");
   });
 });
 

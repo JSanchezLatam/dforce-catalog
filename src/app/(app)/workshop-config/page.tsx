@@ -1,4 +1,5 @@
 import { can } from "@/modules/auth/policy";
+import { PermissionDenied } from "@/shared/ui/PermissionDenied";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { WorkshopConfigForm } from "@/modules/workshop-config/WorkshopConfigForm";
 import { getWorkshopConfig } from "@/modules/workshop-config/service";
@@ -9,10 +10,7 @@ export default async function WorkshopConfigPage() {
 
   if (!can(user, "workshop.edit")) {
     return (
-      <div className="p-4 sm:p-8">
-        <PageHeader title="Configuración del CRM" />
-        <p className="text-sm text-foreground">No tenés permiso para ver esta página.</p>
-      </div>
+      <PermissionDenied title="Configuración del CRM" />
     );
   }
 

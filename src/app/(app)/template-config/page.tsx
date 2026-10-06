@@ -1,4 +1,5 @@
 import { can } from "@/modules/auth/policy";
+import { PermissionDenied } from "@/shared/ui/PermissionDenied";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { TemplateConfigForm } from "@/modules/template-config/TemplateConfigForm";
 import { getTemplateConfig, listTemplateCoverImages } from "@/modules/template-config/service";
@@ -24,10 +25,7 @@ export default async function TemplateConfigPage() {
 
   if (!can(user, "template.edit")) {
     return (
-      <div className="p-4 sm:p-8">
-        <PageHeader title="Configuración de plantillas" />
-        <p className="text-sm text-foreground">No tenés permiso para ver esta página.</p>
-      </div>
+      <PermissionDenied title="Configuración de plantillas" />
     );
   }
 

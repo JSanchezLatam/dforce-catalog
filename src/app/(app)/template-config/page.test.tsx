@@ -64,7 +64,8 @@ describe("TemplateConfigPage — branding for the preview (PR F1)", () => {
 
     expect(formProps).not.toHaveBeenCalled();
     expect(screen.getByRole("heading", { level: 1, name: "Configuración de plantillas" })).toBeInTheDocument();
-    expect(screen.getByText("No tenés permiso para ver esta página.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "No tenés permiso para ver esta página" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Volver al inicio" })).toHaveAttribute("href", "/");
   });
 
   /** Same name as the nav entry that leads here (`nav-items.ts`). */
