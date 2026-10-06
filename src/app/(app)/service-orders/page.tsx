@@ -27,7 +27,7 @@ import { RowCheckbox, SelectAllCheckbox } from "@/shared/ui/selection/RowCheckbo
 import { SelectionBar } from "@/shared/ui/selection/SelectionBar";
 import { SelectionProvider } from "@/shared/ui/selection/SelectionProvider";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
-import { PAGE_HEADING } from "@/shared/ui/styles";
+import { PageHeader } from "@/shared/ui/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -76,7 +76,7 @@ export default async function ServiceOrdersPage({
 
   const user = await requireSessionFromHeaders();
   if (!can(user, "service-orders.read")) {
-    return <div className="p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
+    return <div className="p-4 sm:p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
   }
 
   // `listInventory({}, { offset: 0, limit: 1000 })` used to be a third leg of
@@ -113,17 +113,19 @@ export default async function ServiceOrdersPage({
   const statuses = Object.fromEntries(items.map((orden) => [orden.id, orden.status]));
 
   return (
-    <div className="p-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className={PAGE_HEADING}>Órdenes de servicio</h1>
-        <div className="flex items-center gap-2">
-          <RefreshListButton />
-          <ServiceOrderFormTrigger
-            canCreateCustomer={can(user, "customers.write")}
-            triggerLabel="Nueva orden de servicio"
-          />
-        </div>
-      </div>
+    <div className="p-4 sm:p-8">
+      <PageHeader
+        title="Órdenes de servicio"
+        actions={
+          <>
+            <RefreshListButton />
+            <ServiceOrderFormTrigger
+              canCreateCustomer={can(user, "customers.write")}
+              triggerLabel="Nueva orden de servicio"
+            />
+          </>
+        }
+      />
 
       <Card size="sm" className="mb-4">
         <CardContent>

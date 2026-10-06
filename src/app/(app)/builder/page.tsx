@@ -5,7 +5,7 @@ import { countUploadedCatalogsForUser } from "@/modules/catalog-storage/queries"
 import { can } from "@/modules/auth/policy";
 import { listCategoryL1Options } from "@/modules/inventory-view/queries";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
-import { PAGE_HEADING } from "@/shared/ui/styles";
+import { PageHeader } from "@/shared/ui/PageHeader";
 
 /**
  * R5 — catalog builder: category/product selection. The live title/index
@@ -43,7 +43,7 @@ export default async function CatalogBuilderPage({
   const seedProductIds = parseSeedProductIds(params.products);
   const user = await requireSessionFromHeaders();
   if (!can(user, "catalogs.generate")) {
-    return <div className="p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
+    return <div className="p-4 sm:p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
   }
 
   const [categoryL1Options, categoryPairs] = await Promise.all([
@@ -54,8 +54,8 @@ export default async function CatalogBuilderPage({
   const catalogCount = await countUploadedCatalogsForUser(user.id);
 
   return (
-    <div className="p-8">
-      <h1 className={PAGE_HEADING}>Generar catálogo</h1>
+    <div className="p-4 sm:p-8">
+      <PageHeader title="Generar catálogo" />
       <CatalogBuilderForm
         categoryL1Options={categoryL1Options}
         categoryPairs={categoryPairs}

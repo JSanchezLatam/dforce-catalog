@@ -41,7 +41,7 @@ export default async function ProductDetailPage({
   const { id } = await params;
   const user = await requireSessionFromHeaders();
   if (!can(user, "inventory.read")) {
-    return <div className="p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
+    return <div className="p-4 sm:p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
   }
 
   const product = await getProductById(id);
@@ -65,7 +65,7 @@ export default async function ProductDetailPage({
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <Breadcrumb className="mb-6">
         <BreadcrumbList>
           <BreadcrumbItem>

@@ -6,7 +6,7 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { listAllCatalogs, listCatalogsForUser } from "@/modules/catalog-storage/queries";
 import { CatalogPollProvider } from "@/modules/catalog-storage/CatalogPollProvider";
 import { CatalogGrid } from "@/modules/catalog-storage/CatalogGrid";
-import { PAGE_HEADING } from "@/shared/ui/styles";
+import { PageHeader } from "@/shared/ui/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default async function CatalogsPage() {
@@ -14,7 +14,7 @@ export default async function CatalogsPage() {
 
   if (!can(user, "catalogs.read")) {
     return (
-      <div className="p-8">
+      <div className="p-4 sm:p-8">
         <p className="text-sm text-foreground">No tenés permiso para ver esta página.</p>
       </div>
     );
@@ -23,10 +23,10 @@ export default async function CatalogsPage() {
   const catalogs = can(user, "catalogs.listAll") ? await listAllCatalogs() : await listCatalogsForUser(user.id);
 
   return (
-    <div className="p-8">
-      <h1 className={PAGE_HEADING}>Mis catálogos</h1>
+    <div className="p-4 sm:p-8">
+      <PageHeader title="Mis catálogos" />
       <Card>
-        <CardContent className="p-6">
+        <CardContent>
         {catalogs.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-12 text-center">
             <FolderOpen className="size-10 text-muted-foreground" />

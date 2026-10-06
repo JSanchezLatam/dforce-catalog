@@ -629,3 +629,21 @@ describe("ServiceOrdersPage — read gate", () => {
     expect(screen.getByText("No tenés permiso para ver esta página.")).toBeInTheDocument();
   });
 });
+
+/**
+ * Audit #1: the title and "Actualizar" / "Nueva orden de servicio" shared one
+ * non-wrapping row, which pushed the primary action off a 390px screen. The
+ * actions now live in `PageHeader`'s wrapping container. (The trigger itself is
+ * mocked to null above; the refresh button is real and stands for the group.)
+ */
+describe("ServiceOrdersPage — header (audit #1)", () => {
+  it("titles the page with an h1 and puts the actions in the wrapping header container", async () => {
+    render(await renderPage({}));
+
+    const title = screen.getByRole("heading", { level: 1, name: "Órdenes de servicio" });
+    const refresh = screen.getByRole("button", { name: "Actualizar" });
+    expect(refresh.parentElement).toHaveClass("flex-wrap");
+    // Siblings of the title block, so the actions can drop BELOW a long title.
+    expect(refresh.parentElement!.parentElement).toBe(title.parentElement!.parentElement);
+  });
+});

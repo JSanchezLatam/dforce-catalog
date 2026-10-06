@@ -3,7 +3,7 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getUserProfile } from "@/modules/account/queries";
 import { ProfileForm } from "@/modules/account/ProfileForm";
 import { PasswordForm } from "@/modules/account/PasswordForm";
-import { PAGE_HEADING } from "@/shared/ui/styles";
+import { PageHeader } from "@/shared/ui/PageHeader";
 import { ROLE_LABELS } from "@/modules/auth/roles";
 
 export default async function AccountPage() {
@@ -11,8 +11,8 @@ export default async function AccountPage() {
 
   if (!can(user, "account.self")) {
     return (
-      <div className="p-8">
-        <h1 className={PAGE_HEADING}>Mi cuenta</h1>
+      <div className="p-4 sm:p-8">
+        <PageHeader title="Mi cuenta" />
         <p className="text-sm text-foreground">No tenés permiso para ver esta página.</p>
       </div>
     );
@@ -22,19 +22,16 @@ export default async function AccountPage() {
 
   if (!profile) {
     return (
-      <div className="p-8">
-        <h1 className={PAGE_HEADING}>Mi cuenta</h1>
+      <div className="p-4 sm:p-8">
+        <PageHeader title="Mi cuenta" />
         <p className="text-sm text-foreground">No se pudo cargar tu perfil.</p>
       </div>
     );
   }
 
   return (
-    <div className="p-8 flex flex-col gap-6">
-      <div>
-        <h1 className={PAGE_HEADING}>Mi cuenta</h1>
-        <p className="text-sm text-muted-foreground">{ROLE_LABELS[user.role] ?? user.role}</p>
-      </div>
+    <div className="p-4 sm:p-8 flex flex-col gap-6">
+      <PageHeader title="Mi cuenta" description={ROLE_LABELS[user.role] ?? user.role} />
       <ProfileForm username={profile.username} name={profile.name} email={profile.email} />
       <PasswordForm />
     </div>

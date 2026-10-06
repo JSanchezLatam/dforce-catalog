@@ -88,7 +88,7 @@ export default async function ServiceOrderDetailPage({
   const { id } = await params;
   const user = await requireSessionFromHeaders();
   if (!can(user, "service-orders.read")) {
-    return <div className="p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
+    return <div className="p-4 sm:p-8"><p className="text-sm text-foreground">No tenés permiso para ver esta página.</p></div>;
   }
 
   const detail = await getOrdenServicioById(id);
@@ -117,7 +117,7 @@ export default async function ServiceOrderDetailPage({
   const showBattery = inputs.battery || orden.bateriaPct != null;
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <Breadcrumb className="mb-6">
         <BreadcrumbList>
           <BreadcrumbItem>

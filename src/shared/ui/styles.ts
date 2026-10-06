@@ -3,7 +3,7 @@
  * covered by shadcn/ui components. All component-layer styles now use
  * shadcn/ui components directly (Card, Table, Input, Button, Label, etc.)
  */
-export const PAGE_HEADING = "mb-6 text-[32px] font-bold text-foreground";
+export const PAGE_HEADING = "text-2xl sm:text-[32px] font-bold leading-tight text-foreground";
 export const SECTION_HEADING = "mb-3 text-lg font-semibold text-foreground";
 export const CARD = "rounded-xl border bg-card p-4 text-card-foreground";
 /**

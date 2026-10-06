@@ -65,4 +65,16 @@ describe("ManualSyncButton — the status chip beside the action", () => {
 
     await waitFor(() => expect(screen.getByText("Sincronizando…", { selector: "span" })).toHaveClass("min-h-7"));
   });
+
+  /**
+   * `mb-4` is a desktop offset (the row sits in a centred flex row beside the
+   * stats text). Stacked in the phone card (`flex-col`) it is 16px of dead space
+   * under the button. Class string only: jsdom has no layout.
+   */
+  it("drops its bottom margin below sm, where the stats card stacks", async () => {
+    renderButton(idleWithLastRun);
+
+    const row = (await screen.findByText("Completada")).parentElement!;
+    expect(row).toHaveClass("mb-4", "max-sm:mb-0");
+  });
 });
