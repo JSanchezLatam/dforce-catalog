@@ -52,7 +52,7 @@ MUST NOT add, remove, or change what any existing single-row action does.
 
 ### Requirement: Cross-Page Checkbox Selection
 
-Each table MUST offer a checkbox column. Selecting a row MUST add its id to a
+Each table MUST offer a checkbox column at `md` and up. Selecting a row MUST add its id to a
 client-held selection set that survives changing page (or, on `/users`,
 toggling `Mostrar inactivos`). The selection bar MUST state the total
 selected count AND make the off-screen portion legible — at minimum,
@@ -151,6 +151,53 @@ any inventory column (no enum column exists there).
 - GIVEN the service-orders list
 - WHEN it renders
 - THEN its status column MUST keep rendering through `StatusBadge`, unchanged
+
+### Requirement: Phone Card Layout
+
+Below `md`, customers, service orders, inventory and users MUST render one card per record instead of the table; from `md` up the table MUST render unchanged. Both are in the DOM, toggled by CSS. A card MUST show key fields only, and the whole card MUST be one link to the record, except for users cards which MUST NOT be links and MUST hold the row's existing kebab menu in an action slot. Inventory cards MUST show name, code, price and stock ("Sin stock" when 0).
+
+#### Scenario: Cards below md, table at md+
+- GIVEN any of the four lists
+- WHEN viewed at 390px, then at 768px
+- THEN only cards are visible at 390px and only the table at 768px. **[LAN]**; both containers and their `md:hidden` / `hidden md:block` classes **[unit]**
+
+#### Scenario: Tapping a card opens the record
+- GIVEN a customer, service order, or inventory card
+- WHEN rendered
+- THEN it MUST be a single link to `/customers/<id>`, `/service-orders/<id>`, or `/inventory/<id>` respectively. **[unit]**
+
+#### Scenario: Users card does not link
+- GIVEN a user card
+- WHEN rendered
+- THEN it MUST NOT be a link to a detail page and MUST hold the row's kebab menu (Editar, Desactivar) in an action slot. **[unit]**
+
+#### Scenario: Order card shows what the table hid
+- GIVEN a service order
+- WHEN its card renders
+- THEN customer, short id, plate, vehicle, status chip and Cita MUST be present. **[unit]**
+
+### Requirement: Selection Is Tablet-Plus Only
+
+Phone cards MUST NOT render checkboxes, and the selection bar MUST NOT be reachable below `md`.
+
+#### Scenario: No selection on phones
+- GIVEN the customers list at 390px
+- WHEN it renders
+- THEN no card contains a checkbox and no selection bar is visible. **[unit]** for card markup; visibility **[LAN]**
+
+### Requirement: Responsive Column Hiding for Tablet Portrait
+
+From `md` to below `xl` (768–1279px, portrait tablets and desktop with sidebar), tables MUST hide secondary columns to fit the full row including "⋯" within the viewport. Long Nombre/Cliente/Vehículo cells MUST wrap rather than overflow. Hidden columns are: Inventario "Categoría 2", Clientes "Email", Órdenes "ID" and "Vehículo".
+
+#### Scenario: Secondary columns hidden at tablet width
+- GIVEN `/inventory`, `/customers`, or `/service-orders` at 768px
+- WHEN the table renders
+- THEN the listed secondary columns MUST NOT be visible but Cliente/Estado/Cita and "⋯" MUST fit, and long text MUST wrap. **[LAN]**
+
+#### Scenario: All columns visible at desktop width
+- GIVEN any of the three lists at 1280px
+- WHEN the table renders
+- THEN every column INCLUDING the secondary ones MUST be visible. **[LAN]**
 
 ## What Does NOT Change
 
