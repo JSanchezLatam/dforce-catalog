@@ -51,7 +51,7 @@ describe("(app)/layout — sidebar badge wiring", () => {
 });
 
 describe("(app)/layout — mobile navigation", () => {
-  // Below `md` the sidebar is an off-canvas Sheet; without this trigger a phone
+  // Below `lg` the sidebar is an off-canvas Sheet; without this trigger a phone
   // has no way to open the navigation at all.
   it("renders an 'Abrir menú' trigger so a phone can open the sidebar", async () => {
     getNavBadges.mockResolvedValue({});
@@ -59,5 +59,16 @@ describe("(app)/layout — mobile navigation", () => {
     render(await AppLayout({ children: null }));
 
     expect(screen.getByRole("button", { name: "Abrir menú" })).toBeInTheDocument();
+  });
+
+  // The bar must be visible exactly while the sidebar is off-canvas (< lg).
+  it("shows the top bar until lg, matching the sidebar breakpoint", async () => {
+    getNavBadges.mockResolvedValue({});
+
+    render(await AppLayout({ children: null }));
+
+    const header = screen.getByRole("button", { name: "Abrir menú" }).closest("header");
+    expect(header).toHaveClass("lg:hidden");
+    expect(header).not.toHaveClass("md:hidden");
   });
 });
