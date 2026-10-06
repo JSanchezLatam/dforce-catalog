@@ -108,7 +108,7 @@ describe("ServiceOrdersPage — column sorting", () => {
     countOrdenesServicio.mockResolvedValue(1);
     render(await ServiceOrdersPage({ searchParams: Promise.resolve({}) }));
 
-    const cell = screen.getByText("87cceecc");
+    const cell = within(screen.getByTestId("service-orders-table")).getByText("87cceecc");
     expect(cell).toHaveClass("font-mono");
     expect(cell).not.toHaveTextContent("87cceecc-1111-2222-3333-444455556666");
   });
@@ -121,8 +121,9 @@ describe("ServiceOrdersPage — column sorting", () => {
     countOrdenesServicio.mockResolvedValue(1);
     render(await ServiceOrdersPage({ searchParams: Promise.resolve({}) }));
 
-    expect(screen.getByText("Pérez")).toBeInTheDocument();
-    const row = screen.getByText("Pérez").closest("tr")!;
+    const table = within(screen.getByTestId("service-orders-table"));
+    expect(table.getByText("Pérez")).toBeInTheDocument();
+    const row = table.getByText("Pérez").closest("tr")!;
     expect(within(row).getByText("AB1234 Toyota Hilux")).toBeInTheDocument();
   });
 
@@ -139,7 +140,7 @@ describe("ServiceOrdersPage — column sorting", () => {
     countOrdenesServicio.mockResolvedValue(1);
     render(await ServiceOrdersPage({ searchParams: Promise.resolve({}) }));
 
-    const cell = screen.getByText("CD5678");
+    const cell = within(screen.getByTestId("service-orders-table")).getByText("CD5678");
     expect(cell).toHaveTextContent(/^CD5678$/);
   });
 
@@ -523,6 +524,79 @@ describe("ServiceOrdersPage — bulk status change (WU6)", () => {
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveTextContent("En progreso");
     expect(dialog).not.toHaveTextContent(/no se puede deshacer/i);
+  });
+});
+
+/**
+ * mobile-responsive-pass WU5 — below md the table is replaced by cards mapped
+ * from the SAME items array. jsdom computes no media query, so what is asserted
+ * is the class contract (`hidden md:block` / `md:hidden`) and the content of
+ * each container, always scoped with `within` because both are in the DOM.
+ */
+describe("ServiceOrdersPage — phone cards (WU5)", () => {
+  const ID = "4d7262a8-1111-2222-3333-444455556666";
+
+  async function renderCards(items: unknown[] = [orden({ id: ID, appointmentAt: new Date("2026-10-07T15:00:00Z") })]) {
+    listOrdenesServicio.mockResolvedValue(items);
+    countOrdenesServicio.mockResolvedValue(items.length);
+    render(<ToastProvider>{await ServiceOrdersPage({ searchParams: Promise.resolve({}) })}</ToastProvider>);
+    return {
+      table: within(screen.getByTestId("service-orders-table")),
+      cards: within(screen.getByTestId("service-orders-cards")),
+    };
+  }
+
+  it("hides the table below md and the card list from md up", async () => {
+    await renderCards();
+
+    expect(screen.getByTestId("service-orders-table")).toHaveClass("hidden", "md:block");
+    expect(screen.getByTestId("service-orders-cards")).toHaveClass("md:hidden");
+  });
+
+  it("makes each card ONE link to the order, named by customer and short id", async () => {
+    const { cards } = await renderCards();
+
+    const link = cards.getByRole("link");
+    expect(link).toHaveAttribute("href", `/service-orders/${ID}`);
+    expect(link).toHaveAccessibleName(/Pérez/);
+    expect(link).toHaveAccessibleName(/#4d7262a8/);
+  });
+
+  it("shows plate, vehicle, status chip and Cita inside the card link", async () => {
+    const { cards } = await renderCards();
+
+    const link = cards.getByRole("link");
+    expect(within(link).getByText("AB1234")).toHaveClass("font-mono");
+    expect(link).toHaveTextContent("Toyota Hilux");
+    const chip = within(link).getByText("Abierta");
+    expect(chip).toHaveClass("rounded-full", "bg-zinc-100");
+    expect(chip.querySelector("svg")).not.toBeNull();
+    expect(link).toHaveTextContent(/Cita/);
+  });
+
+  it("renders no checkbox in the cards", async () => {
+    const { cards } = await renderCards();
+
+    expect(cards.queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+
+  it("renders as many cards as table rows", async () => {
+    const items = [orden({ id: "a1111111-x" }), orden({ id: "b2222222-x" }), orden({ id: "c3333333-x" })];
+    const { table, cards } = await renderCards(items);
+
+    expect(cards.getAllByRole("listitem")).toHaveLength(3);
+    // header row + one per item
+    expect(table.getAllByRole("row")).toHaveLength(1 + 3);
+  });
+
+  it("keeps the bulk bar out of reach below md", async () => {
+    const user = userEvent.setup();
+    await renderCards();
+
+    await user.click(screen.getByRole("checkbox", { name: `Seleccionar orden ${ID}` }));
+
+    const bar = screen.getByText("1 seleccionado").closest("[role='status']") as HTMLElement;
+    expect(bar.parentElement).toHaveClass("hidden", "md:block");
   });
 });
 

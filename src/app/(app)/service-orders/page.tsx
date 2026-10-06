@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PermissionDenied } from "@/shared/ui/PermissionDenied";
-import { ArrowDown, ArrowUp, Eye, Wrench } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarDays, Eye, Wrench } from "lucide-react";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
@@ -22,6 +22,7 @@ import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import { formatDateTime } from "@/shared/datetime";
 import { Pagination } from "@/shared/ui/Pagination";
+import { RecordCard, RecordCardList } from "@/shared/ui/RecordCard";
 import { BulkResultPanel } from "@/shared/ui/selection/BulkResultPanel";
 import { RowActions } from "@/shared/ui/selection/RowActions";
 import { RowCheckbox, SelectAllCheckbox } from "@/shared/ui/selection/RowCheckbox";
@@ -140,9 +141,13 @@ export default async function ServiceOrdersPage({
           the selection AND the "se limpió la selección" notice with it, in
           precisely the case the notice exists to explain. */}
       <SelectionProvider pageIds={pageIds} labels={labels} filterKey={buildFilterKey(filters)}>
-        <SelectionBar>
-          <OrderBulkStatusActions statuses={statuses} />
-        </SelectionBar>
+        {/* Selection is tablet-plus only: the cards below md carry no checkbox,
+            so a bar there could only show a count the operator cannot change. */}
+        <div className="hidden md:block">
+          <SelectionBar>
+            <OrderBulkStatusActions statuses={statuses} />
+          </SelectionBar>
+        </div>
         <BulkResultPanel reasons={ORDER_REFUSAL_MESSAGES} />
         {items.length === 0 ? (
         <Card size="sm">
@@ -173,7 +178,7 @@ export default async function ServiceOrdersPage({
         </Card>
       ) : (
         <>
-          <Card size="sm" className="mb-4">
+          <Card size="sm" className="mb-4 hidden md:block" data-testid="service-orders-table">
             <CardContent>
               <Table>
                 <TableHeader>
@@ -250,8 +255,33 @@ export default async function ServiceOrdersPage({
               </Table>
             </CardContent>
           </Card>
+          <RecordCardList testId="service-orders-cards">
+            {items.map((orden) => (
+              <RecordCard key={orden.id} href={`/service-orders/${orden.id}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-medium">{orden.clienteName}</div>
+                    <div className="font-mono text-xs text-muted-foreground">#{orden.id.slice(0, 8)}</div>
+                  </div>
+                  <StatusBadge
+                    status={orden.status}
+                    label={ORDER_STATUS_LABEL[orden.status]}
+                    className="shrink-0 whitespace-nowrap"
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="font-mono font-medium">{orden.vehiculoPlate}</span>
+                  {[orden.vehiculoMake, orden.vehiculoModel].filter(Boolean).join(" ")}
+                </div>
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <CalendarDays className="h-4 w-4" aria-hidden="true" />
+                  <span>Cita</span> {formatDateTime(orden.appointmentAt)}
+                </div>
+              </RecordCard>
+            ))}
+          </RecordCardList>
           {pageCount > 1 && (
-            <Card size="sm">
+            <Card size="sm" className="mt-4">
               <CardContent>
                 <Pagination
                   currentPage={pageWindow.page}
