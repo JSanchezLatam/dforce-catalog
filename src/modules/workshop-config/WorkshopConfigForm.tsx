@@ -268,8 +268,8 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
           <h2 className={SECTION_HEADING}>Redes sociales</h2>
           <div className="flex flex-col gap-3">
             {socialRows.map((row) => (
-              <div key={row.id} className="flex items-end gap-2">
-                <div className="grid flex-1 gap-2">
+              <div key={row.id} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <div className="grid min-w-0 flex-1 gap-2">
                   <Label htmlFor={`social-platform-${row.id}`}>Plataforma</Label>
                   <Input
                     id={`social-platform-${row.id}`}
@@ -278,7 +278,7 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
                     onChange={(e) => updateSocialRow(row.id, "platform", e.target.value)}
                   />
                 </div>
-                <div className="grid flex-1 gap-2">
+                <div className="grid min-w-0 flex-1 gap-2">
                   <Label htmlFor={`social-handle-${row.id}`}>Usuario o enlace</Label>
                   <Input
                     id={`social-handle-${row.id}`}
@@ -287,7 +287,7 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
                     onChange={(e) => updateSocialRow(row.id, "handle", e.target.value)}
                   />
                 </div>
-                <Button type="button" variant="outline" size="sm" onClick={() => removeSocialRow(row.id)}>
+                <Button type="button" variant="outline" size="sm" className="self-start sm:self-auto" onClick={() => removeSocialRow(row.id)}>
                   Eliminar
                 </Button>
               </div>

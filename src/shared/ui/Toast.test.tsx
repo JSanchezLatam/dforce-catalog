@@ -35,3 +35,29 @@ describe("Toast — success is theme-paired (audit #6)", () => {
     expect(toast).not.toHaveClass("text-success-foreground");
   });
 });
+
+/**
+ * `text-destructive-foreground` is not a registered utility in this theme, so
+ * the error toast emitted no colour class at all: its ink was whatever it
+ * inherited, on `bg-destructive` (a near-maroon in dark). It takes the same
+ * pale-tint recipe as success, in red, measured in the browser (jsdom computes
+ * no colour).
+ */
+describe("Toast — error is theme-paired (mobile-responsive-pass 9.x)", () => {
+  it("uses a red pair with a border, like success", () => {
+    render(<Toast toast={{ type: "error", message: "No se pudo guardar" }} onDismiss={vi.fn()} />);
+    const toast = screen.getByRole("status");
+
+    expect(toast).toHaveTextContent("No se pudo guardar");
+    expect(toast).toHaveClass("border", "border-red-300", "bg-red-50", "text-red-800");
+    expect(toast).toHaveClass("dark:border-red-400/30", "dark:bg-red-950", "dark:text-red-300");
+  });
+
+  it("no longer names the unregistered foreground or the solid destructive fill", () => {
+    render(<Toast toast={{ type: "error", message: "No se pudo guardar" }} onDismiss={vi.fn()} />);
+    const toast = screen.getByRole("status");
+
+    expect(toast).not.toHaveClass("text-destructive-foreground");
+    expect(toast).not.toHaveClass("bg-destructive");
+  });
+});

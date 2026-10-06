@@ -91,14 +91,14 @@ export function VehicleMakeModelFields({
 
   return (
     <div className="contents">
-      <div className="grid gap-2">
+      <div className="grid min-w-0 gap-2">
         <Label htmlFor={makeId}>Marca</Label>
         <Select
           items={makeItems}
           value={makeIsOther ? OTHER : make || null}
           onValueChange={(value) => handleMakeSelect(value as string)}
         >
-          <SelectTrigger id={makeId} className="w-full">
+          <SelectTrigger id={makeId} className="w-full min-w-0">
             <SelectValue placeholder="Seleccioná una marca" />
           </SelectTrigger>
           <SelectContent>
@@ -111,14 +111,14 @@ export function VehicleMakeModelFields({
           </SelectContent>
         </Select>
         {makeIsOther && (
-          <div className="grid gap-2">
+          <div className="grid min-w-0 gap-2">
             <Label htmlFor={`${makeId}-other`}>Especificá la marca</Label>
             <Input id={`${makeId}-other`} value={make} onChange={(e) => handleMakeText(e.target.value)} />
           </div>
         )}
       </div>
 
-      <div className="grid gap-2">
+      <div className="grid min-w-0 gap-2">
         <Label htmlFor={modelId}>Modelo</Label>
         {/* `models.length === 0`, not `makeIsOther`. A free-text make always
             yields an empty list, so this subsumes that case — but it also
@@ -139,7 +139,7 @@ export function VehicleMakeModelFields({
               value={modelIsOther ? OTHER : model || null}
               onValueChange={(value) => handleModelSelect(value as string)}
             >
-              <SelectTrigger id={modelId} className="w-full">
+              <SelectTrigger id={modelId} className="w-full min-w-0">
                 <SelectValue placeholder="Seleccioná un modelo" />
               </SelectTrigger>
               <SelectContent>
@@ -152,7 +152,7 @@ export function VehicleMakeModelFields({
               </SelectContent>
             </Select>
             {modelIsOther && (
-              <div className="grid gap-2">
+              <div className="grid min-w-0 gap-2">
                 <Label htmlFor={`${modelId}-other`}>Especificá el modelo</Label>
                 <Input id={`${modelId}-other`} value={model} onChange={(e) => handleModelText(e.target.value)} />
               </div>

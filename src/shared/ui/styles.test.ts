@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { FIELD_ERROR, PAGE_HEADING, SUCCESS_TEXT } from "./styles";
+import { DEACTIVATED_CHIP, FIELD_ERROR, PAGE_HEADING, SUCCESS_TEXT } from "./styles";
 
 /**
  * Audit #21: "Configuración guardada." and the other four saved messages were
@@ -49,7 +49,35 @@ describe("styles — theme-paired text colours (audit #7, #21)", () => {
  * `PageHeader`, which owns the spacing under the whole header.
  */
 describe("styles — PAGE_HEADING (audit #1, #11)", () => {
-  it("is 24px on phones and 32px from sm, tight leading, no margin of its own", () => {
-    expect(PAGE_HEADING).toBe("text-2xl sm:text-[32px] font-bold leading-tight text-foreground");
+  // Tight leading is for a phone, where the 24px title can wrap to two lines.
+  // From `sm` it returns to `leading-normal` (1.5, what Tailwind's preflight
+  // gave the old `text-[32px]` title), so a one-line desktop title keeps the
+  // 48px box it always had. `leading-tight` at 32px would be 40px: 8px of
+  // vertical drift on every page, which no screenshot would have flagged.
+  it("is 24px on phones and 32px from sm, tight leading on phones only, no margin of its own", () => {
+    expect(PAGE_HEADING).toBe("text-2xl sm:text-[32px] font-bold leading-tight sm:leading-normal text-foreground");
   });
+});
+
+/**
+ * The Desactivado chip was copied into `customers/page.tsx` and
+ * `UsersTable.tsx` (a page file cannot export it). One constant now, so a
+ * retired customer and a retired user cannot drift apart.
+ */
+describe("styles — DEACTIVATED_CHIP (mobile-responsive-pass 9.v)", () => {
+  it("is the red pair, tinted, never `--destructive` as text", () => {
+    expect(DEACTIVATED_CHIP).toBe(
+      "rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400",
+    );
+    expect(DEACTIVATED_CHIP).not.toMatch(/(^|\s)text-destructive(\s|$)/);
+  });
+
+  it.each(["src/app/(app)/customers/page.tsx", "src/modules/account/UsersTable.tsx"])(
+    "%s imports it instead of keeping its own copy",
+    (file) => {
+      const source = readFileSync(join(process.cwd(), file), "utf8");
+      expect(source).toMatch(/import \{[^}]*\bDEACTIVATED_CHIP\b[^}]*\} from "@\/shared\/ui\/styles"/);
+      expect(source).not.toMatch(/const DEACTIVATED_CHIP\b/);
+    },
+  );
 });

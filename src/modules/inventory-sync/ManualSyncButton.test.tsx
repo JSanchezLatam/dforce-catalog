@@ -12,7 +12,9 @@
  * and the 32px are Tailwind's, read off `min-h-7` and `h-8`, and only a human
  * looking at `/inventory` can say the pair now reads as one row.
  */
+import { StrictMode } from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ToastProvider } from "@/shared/ui/ToastProvider";
@@ -77,4 +79,116 @@ describe("ManualSyncButton — the status chip beside the action", () => {
     const row = (await screen.findByText("Completada")).parentElement!;
     expect(row).toHaveClass("mb-4", "max-sm:mb-0");
   });
+
+  /**
+   * Audit #8: the stats card is `overflow-hidden`, and at 390 the Button plus
+   * the chip do not fit side by side, so the green chip was clipped at the
+   * card's edge ("Co…"). The row wraps instead, and the chip itself carries
+   * nothing that truncates. Class string only: jsdom has no layout.
+   */
+  it("wraps the chip under the Button instead of clipping it, and never truncates it", async () => {
+    renderButton(idleWithLastRun);
+
+    const chip = await screen.findByText("Completada");
+    expect(chip.parentElement).toHaveClass("flex-wrap");
+    expect(chip).not.toHaveClass("truncate");
+    expect(chip).not.toHaveClass("overflow-hidden");
+    expect(chip).not.toHaveClass("whitespace-nowrap");
+  });
+});
+
+/**
+ * 9.w: the completion toast used to fire on the FIRST status read, so every
+ * visit to /inventory re-announced the last sync, hours or days old. It now
+ * fires only on a transition this page instance saw or caused.
+ */
+describe("ManualSyncButton — the completion toast (mobile-responsive-pass 9.w)", () => {
+  it("shows no toast when the page loads with an already-completed last sync", async () => {
+    renderButton(idleWithLastRun);
+
+    // The chip proves the status was read and applied; the toast would have
+    // been fired in that same step.
+    await screen.findByText("Completada");
+    expect(screen.queryByText(/Sincronización completada/)).not.toBeInTheDocument();
+  });
+
+  it("shows no failure toast either when the page loads with an old failed sync", async () => {
+    renderButton({ running: false, lastRun: { status: "failed", productCount: null, finishedAt: "2026-09-10T14:00:00.000Z" } });
+
+    await screen.findByText("Fallida");
+    expect(screen.queryByText(/La sincronización falló/)).not.toBeInTheDocument();
+  });
+
+  it("shows exactly one toast when a sync started here goes from running to completed", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(async (_url: string, init?: { method?: string }) => ({
+      ok: true,
+      status: init?.method === "POST" ? 202 : 200,
+      json: async () => (init?.method === "POST" ? {} : idleWithLastRun),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <ToastProvider>
+        <ManualSyncButton />
+      </ToastProvider>,
+    );
+    await screen.findByText("Completada");
+    expect(screen.queryByText(/Sincronización completada/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Sincronizar inventario" }));
+
+    // The poll runs every 2s; the first one reports the finished run.
+    expect(await screen.findByText(/Sincronización completada: 699 productos/, undefined, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getAllByText(/Sincronización completada/)).toHaveLength(1);
+  });
+
+  // `next dev` runs the App Router in Strict Mode: mount, cleanup, mount again,
+  // with refs surviving. An unmount flag that is never reset stays true for the
+  // whole page life and every later poll gets thrown away.
+  it("still announces a finished sync under Strict Mode's double mount", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(async (_url: string, init?: { method?: string }) => ({
+      ok: true,
+      status: init?.method === "POST" ? 202 : 200,
+      json: async () => (init?.method === "POST" ? {} : idleWithLastRun),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <StrictMode>
+        <ToastProvider>
+          <ManualSyncButton />
+        </ToastProvider>
+      </StrictMode>,
+    );
+    await screen.findByText("Completada");
+
+    await user.click(screen.getByRole("button", { name: "Sincronizar inventario" }));
+
+    expect(await screen.findByText(/Sincronización completada: 699 productos/, undefined, { timeout: 5000 })).toBeInTheDocument();
+  }, 10_000);
+
+  // A poll in flight when the operator leaves /inventory used to land after
+  // unmount, see `running: true`, and restart the 2s interval — polling forever
+  // from a page nobody is on.
+  it("does not restart polling when a poll lands after the page unmounted", async () => {
+    const running = { running: true, lastRun: null };
+    let release: (() => void) | undefined;
+    const fetchMock = vi.fn(async () => {
+      if (fetchMock.mock.calls.length === 2) await new Promise<void>((r) => (release = r));
+      return { ok: true, status: 200, json: async () => running };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { unmount } = render(
+      <ToastProvider>
+        <ManualSyncButton />
+      </ToastProvider>,
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2), { timeout: 3000 });
+    unmount();
+    release!();
+    await new Promise((r) => setTimeout(r, 2500));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  }, 10_000);
 });

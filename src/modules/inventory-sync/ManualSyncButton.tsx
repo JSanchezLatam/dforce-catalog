@@ -38,6 +38,13 @@ export function ManualSyncButton() {
   const [running, setRunning] = useState(false);
   const [lastRun, setLastRun] = useState<SyncStatusResponse["lastRun"]>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // True once THIS page instance has seen a sync running (or started one). The
+  // completion/failure toast fires only when that flips to finished: reading an
+  // already-finished last run on load is not news, and used to re-announce the
+  // previous sync on every visit to /inventory.
+  const sawRunningRef = useRef(false);
+  // Set on unmount: a poll still in flight must not restart the interval.
+  const unmountedRef = useRef(false);
   const { addToast } = useToast();
 
   function stopPolling() {
@@ -54,24 +61,38 @@ export function ManualSyncButton() {
   function applyStatus(body: SyncStatusResponse) {
     setRunning(body.running);
     setLastRun(body.lastRun);
-    if (!body.running) {
-      stopPolling();
-      if (body.lastRun?.status === "completed") {
-        const when = body.lastRun.finishedAt ? new Date(body.lastRun.finishedAt).toLocaleString() : "una hora desconocida";
-        addToast("success", `Sincronización completada: ${body.lastRun.productCount ?? 0} productos sincronizados a las ${when}.`);
-      }
-      if (body.lastRun?.status === "failed") {
-        addToast("error", "La sincronización falló. Revisá los logs y volvé a intentar.");
-      }
+    if (body.running) {
+      sawRunningRef.current = true;
+      // A sync another admin started: follow it to its end.
+      startPolling();
+      return;
     }
+    stopPolling();
+    const transitioned = sawRunningRef.current;
+    sawRunningRef.current = false;
+    if (transitioned && body.lastRun?.status === "completed") {
+      const when = body.lastRun.finishedAt ? new Date(body.lastRun.finishedAt).toLocaleString() : "una hora desconocida";
+      addToast("success", `Sincronización completada: ${body.lastRun.productCount ?? 0} productos sincronizados a las ${when}.`);
+    }
+    if (transitioned && body.lastRun?.status === "failed") {
+      addToast("error", "La sincronización falló. Revisá los logs y volvé a intentar.");
+    }
+  }
+
+  function startPolling() {
+    if (!pollRef.current) pollRef.current = setInterval(pollStatus, 2000);
   }
 
   async function pollStatus() {
     const res = await fetch("/api/inventory-sync/manual");
-    if (res.ok) applyStatus(await res.json());
+    if (!res.ok) return;
+    const body = await res.json();
+    if (!unmountedRef.current) applyStatus(body);
   }
 
   useEffect(() => {
+    // Strict Mode (next dev) mounts, cleans up and mounts again with refs kept.
+    unmountedRef.current = false;
     let cancelled = false;
     fetch("/api/inventory-sync/manual") // reflects a sync another admin may already have started
       .then((res) => (res.ok ? res.json() : null))
@@ -80,6 +101,7 @@ export function ManualSyncButton() {
       });
     return () => {
       cancelled = true;
+      unmountedRef.current = true;
       stopPolling();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -97,13 +119,12 @@ export function ManualSyncButton() {
     }
 
     setRunning(true); // R2.2/2.3 — show progress, disable the trigger.
-    if (!pollRef.current) {
-      pollRef.current = setInterval(pollStatus, 2000);
-    }
+    sawRunningRef.current = true;
+    startPolling();
   }
 
   return (
-    <div className="mb-4 flex items-center gap-3 max-sm:mb-0">
+    <div className="mb-4 flex flex-wrap items-center gap-3 max-sm:mb-0">
       <Button type="button" onClick={handleClick} disabled={running}>
         {running ? "Sincronizando…" : "Sincronizar inventario"}
       </Button>

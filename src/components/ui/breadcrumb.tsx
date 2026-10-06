@@ -48,7 +48,8 @@ function BreadcrumbLink({
     defaultTagName: "a",
     props: mergeProps<"a">(
       {
-        className: cn("transition-colors hover:text-foreground", className),
+        // The 44px floor on touch only (AGENTS.md); a mouse keeps the 20px line.
+        className: cn("transition-colors hover:text-foreground pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center", className),
       },
       props
     ),

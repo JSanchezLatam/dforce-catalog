@@ -81,14 +81,20 @@ describe("VehicleDetailPage", () => {
   });
 
   it("links each history row to its own order", async () => {
+    // "Verificar frenos" starts with "ver": unscoped, /ver/i would match
+    // its phone card's link too. The query is scoped to the table, where the
+    // action is literally "Ver".
     listOrdenesByVehiculo.mockResolvedValue([
       { id: "o1", status: "open", categoria: "reparacion", description: "Cambio de correa",
         appointmentAt: null, createdAt: new Date("2026-05-01T14:00:00Z") } as OrdenServicio,
+      { id: "o2", status: "open", categoria: "reparacion", description: "Verificar frenos",
+        appointmentAt: null, createdAt: new Date("2026-05-02T14:00:00Z") } as OrdenServicio,
     ]);
 
     render(await renderPage());
 
-    expect(screen.getByRole("link", { name: /ver/i })).toHaveAttribute("href", "/service-orders/o1");
+    const links = within(screen.getByTestId("history-table")).getAllByRole("link", { name: /ver/i });
+    expect(links.map((link) => link.getAttribute("href"))).toEqual(["/service-orders/o1", "/service-orders/o2"]);
   });
 
   it("404s on a vehicle that belongs to a different customer", async () => {

@@ -441,3 +441,43 @@ describe("InventoryPage — price/stock columns and phone cards (WU7)", () => {
     expect(bar.parentElement).toHaveClass("hidden", "md:block");
   });
 });
+
+// Audit WU3 carry-over: the técnico's one-line subtitle was a `md:hidden` SPAN
+// inside an always-rendered `<p className="mt-1">`, so at desktop the `<p>`
+// stayed behind, empty, still taking its margin. The `<p>` itself now hides.
+describe("InventoryPage — the phone-only subtitle (mobile-responsive-pass 9.y)", () => {
+  beforeEach(() => {
+    listInventory.mockResolvedValue({ items: [row()], total: 1 });
+    can.mockImplementation((_user, action) => action !== "sync.manual");
+  });
+
+  async function subtitleFor(count: number) {
+    countAllProducts.mockResolvedValueOnce(count);
+    render(await InventoryPage({ searchParams: Promise.resolve({}) }));
+    return screen.getByText(/sincronizados? desde Interfuerza/);
+  }
+
+  it("hides the paragraph itself from md, so desktop keeps no empty margin box", async () => {
+    const subtitle = await subtitleFor(7);
+
+    expect(subtitle).toHaveTextContent("7 productos sincronizados desde Interfuerza");
+    expect(subtitle.tagName).toBe("P");
+    expect(subtitle).toHaveClass("md:hidden");
+  });
+
+  it("keeps the singular", async () => {
+    const subtitle = await subtitleFor(1);
+
+    expect(subtitle).toHaveTextContent("1 producto sincronizado desde Interfuerza");
+    expect(subtitle.tagName).toBe("P");
+    expect(subtitle).toHaveClass("md:hidden");
+  });
+
+  it("gives the administrador no subtitle: the stats card holds the sync button instead", async () => {
+    can.mockImplementation(() => true);
+    countAllProducts.mockResolvedValueOnce(7);
+    render(await InventoryPage({ searchParams: Promise.resolve({}) }));
+
+    expect(screen.queryByText(/sincronizados? desde Interfuerza/)).not.toBeInTheDocument();
+  });
+});

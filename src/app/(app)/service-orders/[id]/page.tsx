@@ -117,6 +117,10 @@ export default async function ServiceOrderDetailPage({
   const showFuel = inputs.fuel || orden.nivelCombustible != null;
   const showBattery = inputs.battery || orden.bateriaPct != null;
 
+  // The list's 8-character form (audit #15): a uuid broke across lines on a
+  // phone. The full id stays in each element's `title`.
+  const shortId = orden.id.slice(0, 8);
+
   return (
     <div className="p-4 sm:p-8">
       <Breadcrumb className="mb-6">
@@ -126,7 +130,7 @@ export default async function ServiceOrderDetailPage({
           </BreadcrumbItem>
           <BreadcrumbSeparator />
           <BreadcrumbItem>
-            <BreadcrumbPage>{orden.id}</BreadcrumbPage>
+            <BreadcrumbPage title={orden.id}>{shortId}</BreadcrumbPage>
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
@@ -134,7 +138,7 @@ export default async function ServiceOrderDetailPage({
       <Card className="mb-6">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
           <CardTitle className="flex items-center gap-3 sm:flex-1">
-            <span className="min-w-0 break-all sm:break-normal">Orden {orden.id}</span>
+            <span title={orden.id}>Orden {shortId}</span>
             <StatusBadge status={orden.status} label={ORDER_STATUS_LABEL[orden.status]} />
           </CardTitle>
           <div className="flex flex-wrap items-center gap-2">

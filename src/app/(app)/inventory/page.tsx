@@ -88,14 +88,11 @@ export default async function InventoryPage({
   // On a phone the stats card stays only where it holds an action (the
   // administrador's sync). Anyone else gets this one line instead, and from `md`
   // the card is back for everybody, so the line goes (it would say it twice).
-  const phoneSubtitle =
-    syncButton ? undefined : (
-      <span className="md:hidden">
-        {grandTotal === 1
-          ? "1 producto sincronizado desde Interfuerza"
-          : `${grandTotal} productos sincronizados desde Interfuerza`}
-      </span>
-    );
+  const phoneSubtitle = syncButton
+    ? undefined
+    : grandTotal === 1
+      ? "1 producto sincronizado desde Interfuerza"
+      : `${grandTotal} productos sincronizados desde Interfuerza`;
 
   const pageIds = items.map((item) => item.id);
   const labels = Object.fromEntries(items.map((item) => [item.id, item.name]));
@@ -118,7 +115,7 @@ export default async function InventoryPage({
 
   return (
     <div className="p-4 sm:p-8">
-      <PageHeader title="Inventario" description={phoneSubtitle} />
+      <PageHeader title="Inventario" description={phoneSubtitle} descriptionClassName="md:hidden" />
       <InventoryStatsHeader user={user} total={grandTotal} syncButton={syncButton} />
       <Card size="sm" className="mb-4">
         <CardContent>

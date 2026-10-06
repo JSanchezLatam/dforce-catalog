@@ -147,6 +147,26 @@ describe("TemplateConfigForm — the catalog preview (PR F1)", () => {
     expect(sheets()).toEqual(["cover", "index-1", "contact"]);
   });
 
+  /**
+   * Audit #17b: at 768 the sidebar is still fixed, so the content column is
+   * 768 - 256 (sidebar) - 64 (page p-8) - 24 (CardContent) - 34 (CARD padding
+   * and border) = 390px, and 816 * 0.6 = 490px hung off the right edge. Below
+   * `lg` the sheet takes a smaller factor that fits that column; the inline
+   * 0.6 stays for desktop, so 1280 does not move. jsdom paints nothing: the
+   * class value is checked against the arithmetic, the LAN check at 768 is
+   * the evidence.
+   */
+  it("uses a smaller factor below lg that fits the 768px content column", () => {
+    const { container } = render(<TemplateConfigForm initialConfig={null} workshopConfig={workshop()} coverImageKeys={{}} />);
+
+    const scaler = container.querySelector<HTMLElement>("[data-preview-scale]")!;
+    const match = scaler.className.match(/(?:^|\s)max-lg:\[zoom:([0-9.]+)\]!/);
+    expect(match, "a max-lg zoom override").not.toBeNull();
+    const narrow = Number(match![1]);
+    expect(narrow * 816).toBeLessThanOrEqual(390);
+    expect(narrow).toBeLessThan(Number(scaler.style.zoom));
+  });
+
   it("scales the sheet down by one uniform factor instead of printing it at 816px", () => {
     const { container } = render(<TemplateConfigForm initialConfig={null} workshopConfig={workshop()} coverImageKeys={{}} />);
 
@@ -303,12 +323,14 @@ describe("TemplateConfigForm — per-template cover image slots", () => {
     expect(screen.queryByText("Imagen de portada guardada")).not.toBeInTheDocument();
   });
 
-  it("the file input and Eliminar are tall enough to hit (44px rule)", () => {
+  it("the file button and Eliminar are tall enough to hit (44px rule)", () => {
     render(<TemplateConfigForm initialConfig={null} workshopConfig={null} coverImageKeys={{ "dforce-classic": "k" }} />);
 
     // jsdom has no layout, so the class is the only thing observable here; the
     // pixel measurement is a browser check (task 8.3).
-    expect(screen.getByLabelText(COVER_LABELS[0]).className).toMatch(/\bmin-h-11\b/);
+    // The native input is visually hidden (audit #16); the button that opens
+    // its picker is the control a finger meets.
+    expect(screen.getByRole("button", { name: /Cambiar imagen/ }).className).toMatch(/\bmin-h-11\b/);
     const remove = screen.getByRole("button", { name: "Eliminar" });
     expect(remove.className).toMatch(/\bmin-h-11\b/);
     expect(remove.className).toMatch(/\bmin-w-11\b/);
