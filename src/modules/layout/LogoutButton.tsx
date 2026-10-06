@@ -20,7 +20,7 @@ export function LogoutButton() {
   }
 
   return (
-    <DropdownMenuItem onClick={handleLogout} disabled={status === "submitting"} className="text-destructive">
+    <DropdownMenuItem onClick={handleLogout} disabled={status === "submitting"} className="text-red-700 dark:text-red-400">
       {status === "submitting" ? <Loader2 className="animate-spin" /> : <LogOut />}
       <span>Cerrar sesión</span>
     </DropdownMenuItem>

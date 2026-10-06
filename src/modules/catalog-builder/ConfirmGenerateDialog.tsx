@@ -41,7 +41,7 @@ export function ConfirmGenerateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent showCloseButton={false}>
         {hasWarning && (
-          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-400/30 dark:bg-amber-950 dark:text-amber-300">
             <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
             <p>
               Ya tienes {catalogCount} catálogos guardados. El más antiguo se eliminará

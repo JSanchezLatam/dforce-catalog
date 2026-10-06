@@ -27,10 +27,10 @@ const badgeVariants = cva(
          * repo's practice where a token does not reach — see
          * `service-orders/[id]/print/page.tsx:36`.
          *
-         * `Button`/`Alert`'s destructive variants and the hand-rolled
-         * "Desactivado" chip (`customers/page.tsx:285`) still carry the old
-         * triple and measure the same. That is the `--destructive` token, not
-         * this variant, and it is a follow-up rather than silent scope here.
+         * Alert's destructive variant and the "Desactivado" chip
+         * (`customers/page.tsx`) moved to this same pair in
+         * `mobile-responsive-pass` WU1. Button moved to the mockup's `red-500`
+         * ground with `dark:text-red-300` instead (tasks.md 1.3).
          */
         destructive:
           "bg-destructive/10 text-red-700 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:text-red-400 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20",

@@ -15,7 +15,18 @@ export const CARD = "rounded-xl border bg-card p-4 text-card-foreground";
  * vehicle that is out of service is a one-line row, not a card.
  */
 export const CARD_MUTED = "rounded-xl border bg-muted p-3 text-muted-foreground";
-export const FIELD_ERROR = "text-sm text-destructive";
+/**
+ * `text-destructive` as TEXT fails AA in both themes (3.60:1 on white, and in
+ * dark the token is a near-maroon background tone; see `badge.test.tsx`).
+ * `text-red-700` / `dark:text-red-400` are the pair measured there.
+ */
+export const FIELD_ERROR = "text-sm text-red-700 dark:text-red-400";
+/**
+ * "Saved" confirmations. Replaces five hand-copied `text-green-600`, which had
+ * no dark counterpart and sat near 3.3:1 on white (audit #21). Colour only: an
+ * icon (`CatalogBuilderForm`) takes it too, so it carries no `text-sm`.
+ */
+export const SUCCESS_TEXT = "text-green-700 dark:text-green-400";
 /**
  * A license plate rendered as a plate, not plain text — bordered, monospace,
  * visually distinct from surrounding copy. Used on the vehicle card/row

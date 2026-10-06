@@ -20,38 +20,37 @@ export type BadgeStatus =
   | "skipped"
   | "opted_out";
 
-const STATUS_BG: Record<BadgeStatus, string> = {
-  running: "bg-warning",
-  uploading: "bg-warning",
-  completed: "bg-success",
-  uploaded: "bg-success",
-  failed: "bg-destructive",
-  pending: "bg-muted",
-  open: "bg-muted",
-  in_progress: "bg-warning",
-  done: "bg-success",
-  cancelled: "bg-muted",
-  scheduled: "bg-muted",
-  sent: "bg-success",
-  skipped: "bg-muted",
-  opted_out: "bg-muted",
-};
+/**
+ * Audit #6: the old chips were white ink on `bg-success` / `bg-warning` (mid
+ * green and amber), under 4.5:1 in BOTH themes. Each family is the approved
+ * mockup's `CHIP` entry: dark ink on a pale tint in light, light ink on a
+ * translucent tint in dark, the pattern `badge.tsx`'s destructive variant set.
+ * `failed` has no mockup entry; it takes the same recipe in red. Ratios are
+ * measured in the browser (jsdom computes no colour), not taken from the palette.
+ */
+const TONE = {
+  neutral: "bg-zinc-100 text-zinc-700 dark:bg-zinc-400/15 dark:text-zinc-300",
+  warning: "bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300",
+  success: "bg-green-100 text-green-800 dark:bg-green-400/15 dark:text-green-300",
+  danger: "bg-red-100 text-red-800 dark:bg-red-400/15 dark:text-red-300",
+} as const;
 
-const STATUS_FG: Record<BadgeStatus, string> = {
-  running: "text-warning-foreground",
-  uploading: "text-warning-foreground",
-  completed: "text-success-foreground",
-  uploaded: "text-success-foreground",
-  failed: "text-destructive-foreground",
-  pending: "text-muted-foreground",
-  open: "text-muted-foreground",
-  in_progress: "text-warning-foreground",
-  done: "text-success-foreground",
-  cancelled: "text-muted-foreground",
-  scheduled: "text-muted-foreground",
-  sent: "text-success-foreground",
-  skipped: "text-muted-foreground",
-  opted_out: "text-muted-foreground",
+const STATUS_TONE: Record<BadgeStatus, string> = {
+  running: TONE.warning,
+  uploading: TONE.warning,
+  completed: TONE.success,
+  uploaded: TONE.success,
+  failed: TONE.danger,
+  pending: TONE.neutral,
+  open: TONE.neutral,
+  in_progress: TONE.warning,
+  done: TONE.success,
+  // Struck through, as in the mockup: neutral grey alone reads the same as "open".
+  cancelled: `${TONE.neutral} line-through decoration-1`,
+  scheduled: TONE.neutral,
+  sent: TONE.success,
+  skipped: TONE.neutral,
+  opted_out: TONE.neutral,
 };
 
 const STATUS_ICON: Record<BadgeStatus, LucideIcon> = {
@@ -76,7 +75,7 @@ function isAnimated(status: BadgeStatus): boolean {
 }
 
 export function statusBadgeClassName(status: BadgeStatus): string {
-  return `inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BG[status]} ${STATUS_FG[status]}${isAnimated(status) ? " animate-pulse" : ""}`;
+  return `inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_TONE[status]}${isAnimated(status) ? " animate-pulse" : ""}`;
 }
 
 /**

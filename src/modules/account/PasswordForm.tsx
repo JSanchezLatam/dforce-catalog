@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FIELD_ERROR } from "@/shared/ui/styles";
+import { FIELD_ERROR, SUCCESS_TEXT } from "@/shared/ui/styles";
 import { MIN_PASSWORD_LENGTH } from "./password-policy";
 
 export function PasswordForm() {
@@ -102,7 +102,7 @@ export function PasswordForm() {
           <Button type="submit" disabled={status === "saving"} className="self-start">
             {status === "saving" ? "Guardando…" : "Cambiar contraseña"}
           </Button>
-          {status === "saved" && <p className="text-sm text-green-600">Contraseña actualizada.</p>}
+          {status === "saved" && <p className={`text-sm ${SUCCESS_TEXT}`}>Contraseña actualizada.</p>}
         </form>
       </CardContent>
     </Card>

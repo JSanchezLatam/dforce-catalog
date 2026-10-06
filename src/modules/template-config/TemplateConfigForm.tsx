@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CARD, FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
+import { CARD, FIELD_ERROR, SECTION_HEADING, SUCCESS_TEXT } from "@/shared/ui/styles";
 import { useToast } from "@/shared/ui/ToastProvider";
 import { LogoUploadField } from "@/modules/workshop-config/LogoUploadField";
 import type { KNOWN_TEMPLATE_IDS } from "@/shared/template/template-ids";
@@ -249,7 +249,7 @@ export function TemplateConfigForm({
               {status === "saving" ? "Guardando…" : "Guardar"}
             </Button>
             {status === "saved" && (
-              <p className="text-sm text-green-600">Guardado. Los nuevos catálogos usarán esta plantilla.</p>
+              <p className={`text-sm ${SUCCESS_TEXT}`}>Guardado. Los nuevos catálogos usarán esta plantilla.</p>
             )}
           </form>
         </CardContent>

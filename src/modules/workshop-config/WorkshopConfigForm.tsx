@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { FIELD_ERROR, SECTION_HEADING } from "@/shared/ui/styles";
+import { FIELD_ERROR, SECTION_HEADING, SUCCESS_TEXT } from "@/shared/ui/styles";
 import { LogoUploadField } from "./LogoUploadField";
 import { MAX_CONTACT_FIELD_LENGTH, MAX_COVER_TEXT_LENGTH, MAX_HANDLE_ENTRIES, MAX_HANDLE_LENGTH, MAX_NAME_LENGTH } from "./limits";
 
@@ -318,7 +318,7 @@ export function WorkshopConfigForm({ initialConfig }: Props) {
           <Button type="submit" disabled={status === "saving"} className="self-start">
             {status === "saving" ? "Guardando…" : "Guardar"}
           </Button>
-          {status === "saved" && <p className="text-sm text-green-600">Configuración guardada.</p>}
+          {status === "saved" && <p className={`text-sm ${SUCCESS_TEXT}`}>Configuración guardada.</p>}
         </form>
       </CardContent>
     </Card>

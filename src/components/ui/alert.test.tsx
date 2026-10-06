@@ -24,4 +24,23 @@ describe("Alert", () => {
 
     expect(screen.getByRole("status")).toHaveTextContent("Cliente desactivado");
   });
+
+  /**
+   * Audit #7: `text-destructive` as text fails AA in both themes (3.30:1 light,
+   * 1.80:1 dark, measured in `badge.test.tsx`, same `bg-destructive/10` ground).
+   * `text-red-700` / `dark:text-red-400` are the pair measured there.
+   */
+  it("destructive text is a theme pair, not `--destructive`", () => {
+    render(<Alert variant="destructive">No se pudo guardar</Alert>);
+    const alert = screen.getByText("No se pudo guardar");
+
+    expect(alert).not.toHaveClass("text-destructive");
+    expect(alert).toHaveClass("text-red-700", "dark:text-red-400");
+  });
+
+  it("default variant carries no red", () => {
+    render(<Alert>Aviso</Alert>);
+
+    expect(screen.getByText("Aviso").className).not.toContain("red-");
+  });
 });
