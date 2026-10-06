@@ -11,10 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ROLE_LABELS } from "@/modules/auth/roles";
 import { BulkResultPanel } from "@/shared/ui/selection/BulkResultPanel";
+import { RecordCard, RecordCardList } from "@/shared/ui/RecordCard";
 import { RowActions } from "@/shared/ui/selection/RowActions";
 import { RowCheckbox, SelectAllCheckbox } from "@/shared/ui/selection/RowCheckbox";
 import { SelectionBar } from "@/shared/ui/selection/SelectionBar";
 import { SelectionProvider } from "@/shared/ui/selection/SelectionProvider";
+import { StatusBadge } from "@/shared/ui/StatusBadge";
 import { FIELD_ERROR } from "@/shared/ui/styles";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { useToast } from "@/shared/ui/ToastProvider";
@@ -96,6 +98,13 @@ const COLUMNS: readonly { label: string; key: SortKey }[] = [
   { label: "Estado", key: "estado" },
 ];
 
+/**
+ * Same classes as the customers page's Desactivado chip (a page file cannot
+ * export it), so a retired user and a retired customer read alike on a phone.
+ */
+const DEACTIVATED_CHIP =
+  "rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400";
+
 export function UsersTable({ users }: { users: UserRow[] }) {
   const [showInactive, setShowInactive] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -173,6 +182,30 @@ export function UsersTable({ users }: { users: UserRow[] }) {
     router.refresh();
   }
 
+  // One menu definition for the table row AND the phone card, so the two
+  // cannot offer different actions. Each call is its own `DropdownMenu`.
+  function rowActions(user: UserRow) {
+    const inactive = user.deactivatedAt !== null;
+    return (
+      <RowActions label={`Acciones de ${user.username}`}>
+        {/* Editing a deactivated user is not offered: reactivate
+            first, so the row's state stays unambiguous. */}
+        {!inactive && <DropdownMenuItem onClick={() => setEditing(user)}>Editar</DropdownMenuItem>}
+        {/* A plain item with `onClick`, NOT `render={<button/>}`.
+            Measured in jsdom against base-ui 1.6: with `render`,
+            ArrowDown+Enter activates the item 0 times out of 1 —
+            Enter reaches base-ui's own item handler, and
+            rendering a real `<button>` replaces it. That is the
+            REVERSE of unit 2's link item, where `render` was the
+            fix; what decides it is whether the thing has to stay
+            an anchor, not the `render` prop itself. */}
+        <DropdownMenuItem disabled={pendingId === user.id} onClick={() => toggleActive(user)}>
+          {inactive ? "Reactivar" : "Desactivar"}
+        </DropdownMenuItem>
+      </RowActions>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
@@ -193,9 +226,13 @@ export function UsersTable({ users }: { users: UserRow[] }) {
       )}
 
       <SelectionProvider pageIds={pageIds} labels={labels} filterKey={filterKey}>
-        <SelectionBar>
-          <UserBulkActions />
-        </SelectionBar>
+        {/* Selection is tablet-plus only: the cards below md carry no checkbox,
+            so a bar there could only show a count the operator cannot change. */}
+        <div className="hidden md:block">
+          <SelectionBar>
+            <UserBulkActions />
+          </SelectionBar>
+        </div>
         {/* The refusal map is INJECTED, not owned by the panel: `not_found` means
             a different thing on `/customers` than it does here, and one shared
             vocabulary would make every page carry the other three's copy. */}
@@ -204,7 +241,7 @@ export function UsersTable({ users }: { users: UserRow[] }) {
         {/* The Card wraps THE TABLE ONLY (D7) — the `Mostrar inactivos` toggle
             and the error above it stay outside, matching the other three list
             pages, where the filter strip is its own Card. */}
-        <Card size="sm">
+        <Card size="sm" className="hidden md:block" data-testid="users-table">
           <CardContent>
             <Table>
               <TableHeader>
@@ -266,22 +303,7 @@ export function UsersTable({ users }: { users: UserRow[] }) {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end">
-                          <RowActions label={`Acciones de ${user.username}`}>
-                            {/* Editing a deactivated user is not offered: reactivate
-                                first, so the row's state stays unambiguous. */}
-                            {!inactive && <DropdownMenuItem onClick={() => setEditing(user)}>Editar</DropdownMenuItem>}
-                            {/* A plain item with `onClick`, NOT `render={<button/>}`.
-                                Measured in jsdom against base-ui 1.6: with `render`,
-                                ArrowDown+Enter activates the item 0 times out of 1 —
-                                Enter reaches base-ui's own item handler, and
-                                rendering a real `<button>` replaces it. That is the
-                                REVERSE of unit 2's link item, where `render` was the
-                                fix; what decides it is whether the thing has to stay
-                                an anchor, not the `render` prop itself. */}
-                            <DropdownMenuItem disabled={pendingId === user.id} onClick={() => toggleActive(user)}>
-                              {inactive ? "Reactivar" : "Desactivar"}
-                            </DropdownMenuItem>
-                          </RowActions>
+                          {rowActions(user)}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -291,6 +313,27 @@ export function UsersTable({ users }: { users: UserRow[] }) {
             </Table>
           </CardContent>
         </Card>
+        {/* No `href`: `/users` has no detail page, so the card's one control is
+            the kebab, in the `action` slot outside any link. */}
+        <RecordCardList testId="users-cards">
+          {rows.map((user) => (
+            <RecordCard key={user.id} action={<div className="flex justify-end">{rowActions(user)}</div>}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="font-medium">{user.username}</div>
+                  {user.name && <div className="text-xs text-muted-foreground">{user.name}</div>}
+                </div>
+                {user.deactivatedAt !== null ? (
+                  <span className={`shrink-0 ${DEACTIVATED_CHIP}`}>Desactivado</span>
+                ) : (
+                  // `done` is the success tone (green on a tint); only the word differs.
+                  <StatusBadge status="done" label="Activo" className="shrink-0" />
+                )}
+              </div>
+              <div className="text-sm text-muted-foreground">{roleLabel(user.role)}</div>
+            </RecordCard>
+          ))}
+        </RecordCardList>
       </SelectionProvider>
 
       {visible.length === 0 && (

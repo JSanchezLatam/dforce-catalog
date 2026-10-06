@@ -88,7 +88,8 @@ type User = ReturnType<typeof userEvent.setup>;
  *   the button, and it is named per row so two rows never collide.
  */
 async function openRowMenu(user: User, username: string) {
-  await user.click(screen.getByRole("button", { name: `Acciones de ${username}` }));
+  // Scoped to the table: the phone card list carries a kebab of the same name.
+  await user.click(within(screen.getByTestId("users-table")).getByRole("button", { name: `Acciones de ${username}` }));
   // The popup mounts asynchronously; without this every subsequent query races it.
   await screen.findByRole("menu");
 }
@@ -131,8 +132,9 @@ describe("UsersTable — which rows are visible", () => {
   it("hides deactivated users until asked", () => {
     render(<UsersTable users={[ACTIVE, INACTIVE]} />);
 
-    expect(screen.getByText("ana")).toBeInTheDocument();
-    expect(screen.queryByText("beto")).not.toBeInTheDocument();
+    const table = within(screen.getByTestId("users-table"));
+    expect(table.getByText("ana")).toBeInTheDocument();
+    expect(table.queryByText("beto")).not.toBeInTheDocument();
   });
 
   it("reveals them when 'Mostrar inactivos' is switched on", async () => {
@@ -141,7 +143,7 @@ describe("UsersTable — which rows are visible", () => {
 
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
-    expect(screen.getByText("beto")).toBeInTheDocument();
+    expect(within(screen.getByTestId("users-table")).getByText("beto")).toBeInTheDocument();
   });
 
   it("hides them again when switched back off", async () => {
@@ -152,7 +154,7 @@ describe("UsersTable — which rows are visible", () => {
     await user.click(toggle);
     await user.click(toggle);
 
-    expect(screen.queryByText("beto")).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("users-table")).queryByText("beto")).not.toBeInTheDocument();
   });
 
   // A text badge, not colour alone: colour is not an accessible signal and a
@@ -901,5 +903,112 @@ describe("UsersTable — bulk activate/deactivate (WU5)", () => {
     ]);
     expect(resultPanel()).toHaveTextContent("Se aplicaron 2 filas");
     expect(within(resultPanel()).queryByRole("listitem")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * mobile-responsive-pass WU8 — the phone layout. One server render, both lists
+ * in the DOM (jsdom applies no CSS, so BOTH are always queryable): the table
+ * is `hidden md:block`, the cards `md:hidden`. Every query below is scoped to
+ * one of the two containers, because the same username and the same kebab
+ * name appear in each.
+ */
+describe("UsersTable — phone cards (WU8)", () => {
+  const table = () => within(screen.getByTestId("users-table"));
+  const cards = () => within(screen.getByTestId("users-cards"));
+
+  it("hides the table below md and the card list from md up", () => {
+    render(<UsersTable users={[ACTIVE]} />);
+
+    expect(screen.getByTestId("users-table")).toHaveClass("hidden", "md:block");
+    expect(screen.getByTestId("users-cards")).toHaveClass("md:hidden");
+  });
+
+  it("shows username, name, role label and an Activo chip on a card, and no email", () => {
+    render(<UsersTable users={[ACTIVE]} />);
+
+    const card = cards().getByRole("listitem");
+    expect(within(card).getByText("ana")).toBeInTheDocument();
+    expect(within(card).getByText("Ana Ruiz")).toBeInTheDocument();
+    expect(within(card).getByText("Administrador")).toBeInTheDocument();
+    expect(within(card).getByText("Activo")).toBeInTheDocument();
+    expect(card).not.toHaveTextContent("ana@taller.com");
+  });
+
+  it("marks a deactivated user's card Desactivado, not Activo", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    await user.click(screen.getByLabelText("Mostrar inactivos"));
+
+    const card = cards().getByText("beto").closest("li") as HTMLElement;
+    expect(within(card).getByText("Desactivado")).toBeInTheDocument();
+    expect(within(card).queryByText("Activo")).not.toBeInTheDocument();
+    expect(within(card).getByText("Técnico")).toBeInTheDocument();
+  });
+
+  // `/users` has no detail page, so the card is NOT a link: a link to a 404
+  // would be worse than no link. The row's only affordance is its kebab.
+  it("is not a link: /users has no detail page", () => {
+    render(<UsersTable users={[ACTIVE]} />);
+
+    expect(cards().queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("holds the existing kebab in the card, offering Editar and Desactivar", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[ACTIVE]} />);
+
+    await user.click(cards().getByRole("button", { name: "Acciones de ana" }));
+    await screen.findByRole("menu");
+
+    expect(screen.getByRole("menuitem", { name: "Editar" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Desactivar" })).toBeInTheDocument();
+  });
+
+  it("runs the same deactivate from the card's kebab as from the table's", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { success: true } });
+    render(<UsersTable users={[ACTIVE]} />);
+
+    await user.click(cards().getByRole("button", { name: "Acciones de ana" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Desactivar" }));
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/users/u-1", expect.objectContaining({ method: "PATCH" }));
+  });
+
+  it("carries no checkbox on a card: selection is tablet-plus only", () => {
+    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+
+    expect(cards().queryByRole("checkbox")).not.toBeInTheDocument();
+    // The positive half: the table does carry them, so the absence is the card's.
+    expect(table().getAllByRole("checkbox").length).toBeGreaterThan(0);
+  });
+
+  it("renders the same number of users in the table and in the cards", () => {
+    render(<UsersTable users={[ACTIVE, activeUser({ id: "u-3", username: "caro" })]} />);
+
+    // `slice(1)` drops the header row.
+    expect(table().getAllByRole("row").slice(1)).toHaveLength(2);
+    expect(cards().getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("keeps the two counts equal with 'Mostrar inactivos' on", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    expect(cards().getAllByRole("listitem")).toHaveLength(1);
+
+    await user.click(screen.getByLabelText("Mostrar inactivos"));
+
+    expect(table().getAllByRole("row").slice(1)).toHaveLength(2);
+    expect(cards().getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("wraps the selection bar so it shows from md only", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[ACTIVE]} />);
+    await user.click(table().getByRole("checkbox", { name: "Seleccionar ana" }));
+
+    const bar = screen.getByText("1 seleccionado").closest("[role='status']") as HTMLElement;
+    expect(bar.parentElement).toHaveClass("hidden", "md:block");
   });
 });
