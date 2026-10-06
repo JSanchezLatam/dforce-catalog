@@ -144,7 +144,7 @@ Owner decision 2026-10-05 for N1: tablets in portrait (768–1023) keep the TABL
 - [x] 11a.6 RED: light-theme contrast for sidebar group labels (N4) and the muted-on-muted texts (N5: deactivated vehicle card, login footer) ≥4.5:1. GREEN. (Done: sidebar group label `/80` light, `/70` dark (4.26 -> 5.59:1); `CARD_MUTED`, `PLATE_BADGE_MUTED` and the login footer `text-foreground/70 dark:text-muted-foreground` (4.40 -> 7.4:1); footer second line `dark:opacity-75` only. Ratios computed from the theme tokens; confirm in the browser.)
 - [x] 11a.7 RED: order detail customer/vehicle links ≥44px tall on touch (N6). GREEN. (Done: both links `pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center`.)
 - [x] 11a.8 Mutation-verify by name. (Done: 17 mutations, each red by name; catalogs (11a.4) was observed RED before the fix.)
-- [ ] 11a.9 Matrix: 768 portrait lists show every column header and "⋯" inside the viewport; 390 audit items above; 1280 unchanged.
+- [x] 11a.9 (Measured 2026-10-06 at the LAN IP: at 768 the first pass still overflowed /inventory, and at exactly 1024 — desktop sidebar back, content box ~736px again — all three lists overflowed; fixed by hiding the secondary columns below `xl` instead of `lg` and letting Nombre / Cliente / Vehículo wrap. After the fix /inventory, /customers and /service-orders fit with "⋯" inside the box at 768, 820, 1024, 1180, 1280 and 1440, no page overflow. At 390: "Filtros" toggle present, first inventory card at y=416 (was 766); /catalogs no nested card; "Mostrar inactivos" 114x44.) Matrix: 768 portrait lists show every column header and "⋯" inside the viewport; 390 audit items above; 1280 unchanged.
 
 ## Final gate and archive notes
 

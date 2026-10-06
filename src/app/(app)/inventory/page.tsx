@@ -175,10 +175,10 @@ export default async function InventoryPage({
                           label={column.label}
                           href={buildSortHref(params, column.sort, sort)}
                           dir={sort?.key === column.sort ? sort.dir : undefined}
-                          className={column.hideBelowLg ? HIDE_BELOW_LG : undefined}
+                          className={column.hideBelowXl ? HIDE_BELOW_XL : undefined}
                         />
                       ) : (
-                        <TableHead key={column.label} className={column.hideBelowLg ? HIDE_BELOW_LG : undefined}>
+                        <TableHead key={column.label} className={column.hideBelowXl ? HIDE_BELOW_XL : undefined}>
                           {column.label}
                         </TableHead>
                       ),
@@ -195,9 +195,9 @@ export default async function InventoryPage({
                         </TableCell>
                       )}
                       <TableCell className="font-mono text-xs">{item.id}</TableCell>
-                      <TableCell>{item.name}</TableCell>
+                      <TableCell className="min-w-48 whitespace-normal">{item.name}</TableCell>
                       <TableCell>{item.categoryL1 ?? "—"}</TableCell>
-                      <TableCell className={HIDE_BELOW_LG}>{item.categoryL2 ?? "—"}</TableCell>
+                      <TableCell className={HIDE_BELOW_XL}>{item.categoryL2 ?? "—"}</TableCell>
                       <TableCell className="tabular-nums">{formatPrice(item.price)}</TableCell>
                       <TableCell className="tabular-nums">{item.stock ?? "—"}</TableCell>
                       <TableCell>
@@ -316,11 +316,13 @@ function buildPagePattern(params: SearchParams, sort: InventorySort | undefined)
 }
 
 /**
- * Secondary columns drop out below `lg`: a portrait tablet (768-1023) keeps the
- * table for bulk selection, and without this the row plus its "⋯" overflows the
- * ~736px content box. Header and cells must share the class or the grid skews.
+ * Secondary columns drop out below `xl`: a portrait tablet (768-1023) keeps the
+ * table for bulk selection, and from 1024 the desktop sidebar takes 256px, so up
+ * to 1279 the content box is still ~736px — measured at the LAN IP, columns
+ * hidden only below `lg` overflowed again at exactly 1024. Header and cells must
+ * share the class or the grid skews.
  */
-const HIDE_BELOW_LG = "hidden lg:table-cell";
+const HIDE_BELOW_XL = "hidden xl:table-cell";
 
 /**
  * The header row, declared HERE rather than derived from `INVENTORY_SORT` —
@@ -332,11 +334,11 @@ const HIDE_BELOW_LG = "hidden lg:table-cell";
  * `Precio`/`Stock` are plain columns with no `sort` (spec: Per-Table Sortable
  * Column Whitelist) — they are not in `INVENTORY_SORT`, so they cannot claim one.
  */
-const COLUMNS: readonly { label: string; hideBelowLg?: boolean; sort?: keyof typeof INVENTORY_SORT }[] = [
+const COLUMNS: readonly { label: string; hideBelowXl?: boolean; sort?: keyof typeof INVENTORY_SORT }[] = [
   { label: "ID", sort: "id" },
   { label: "Nombre", sort: "name" },
   { label: "Categoría 1", sort: "categoryL1" },
-  { label: "Categoría 2", sort: "categoryL2", hideBelowLg: true },
+  { label: "Categoría 2", sort: "categoryL2", hideBelowXl: true },
   { label: "Precio" },
   { label: "Stock" },
 ];

@@ -739,13 +739,23 @@ describe("ServiceOrdersPage — secondary columns below lg (mobile-responsive-pa
     const labels = heads.map((h) => h.textContent?.trim());
     expect(rows).toHaveLength(2);
 
+    // Long free text wraps instead of widening the table past its ~736px box
+    // (768 tablet, and 1024 with the desktop sidebar).
+    for (const label of ['Cliente', 'Vehículo']) {
+      const i = labels.indexOf(label);
+      expect(i, label).toBeGreaterThan(-1);
+      for (const r of rows) {
+        expect(within(r).getAllByRole("cell")[i], `${label} cell wraps`).toHaveClass("whitespace-normal");
+      }
+    }
+
     const hidden = ["ID", "Vehículo"];
     for (const label of hidden) {
       const i = labels.indexOf(label);
       expect(i, label).toBeGreaterThan(-1);
-      expect(heads[i], `${label} header`).toHaveClass("hidden", "lg:table-cell");
+      expect(heads[i], `${label} header`).toHaveClass("hidden", "xl:table-cell");
       for (const r of rows) {
-        expect(within(r).getAllByRole("cell")[i], `${label} cell`).toHaveClass("hidden", "lg:table-cell");
+        expect(within(r).getAllByRole("cell")[i], `${label} cell`).toHaveClass("hidden", "xl:table-cell");
       }
     }
     // The columns that stay must NOT carry the pair, or the row loses its identity at 768.
