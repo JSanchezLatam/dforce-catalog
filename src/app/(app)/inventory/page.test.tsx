@@ -482,8 +482,9 @@ describe("InventoryPage — the phone-only subtitle (mobile-responsive-pass 9.y)
   });
 });
 
-describe("InventoryPage — secondary columns below lg (mobile-responsive-pass N1)", () => {
-  // Owner decision 2026-10-05: portrait tablets (768-1023) keep the table, so
+describe("InventoryPage — secondary columns below xl (mobile-responsive-pass N1)", () => {
+  // Owner decision 2026-10-05: tablets keep the table. From 768 to 1279 the
+  // content box is ~736px (portrait tablet, and 1024+ with the desktop sidebar), so
   // the row (incl. the "⋯" menu) has to fit a ~736px box without the second category level.
   // jsdom applies no Tailwind: this reads the class pair that hides a column.
   // The header and its cells must hide TOGETHER or the grid misaligns.
