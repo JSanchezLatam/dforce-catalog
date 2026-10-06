@@ -43,6 +43,25 @@ Every page refusing a role MUST render one shared screen: the page title, the he
 - WHEN rendered
 - THEN both MUST use the same component, differing only in title. **[unit]**; appearance **[LAN]**
 
+### Requirement: Inventory Filter Collapse Below Medium
+
+Below `md` (768px), the inventory list's filter panel MUST collapse behind a "Filtros" toggle button. When any filter is active on page load, the panel MUST start open; when no filters are active, it MUST start closed. The button label MUST show "Filtros (n)" when n > 0 filters are active.
+
+#### Scenario: Filters toggle below md
+- GIVEN `/inventory` at 390px
+- WHEN the page renders
+- THEN a "Filtros" button MUST be visible and the filter panel MUST be hidden by default unless a filter is already active
+
+#### Scenario: Active filters show count
+- GIVEN a filter already active when the page loads at 390px
+- WHEN the page renders
+- THEN the button MUST read "Filtros (1)" or higher, and the panel MUST be open
+
+#### Scenario: Filters visible at md+
+- GIVEN `/inventory` at 768px and above
+- WHEN the page renders
+- THEN the filter panel MUST be visible and the toggle button MUST NOT appear
+
 ### Requirement: 44x44 Touch Floor
 
 Every action control MUST measure at least 44x44 on touch (`pointer-coarse`), set once in the shared primitives (button, sidebar item, checkbox hit area, pagination, dialog close), not per call site. Desktop (1280) sizing MUST be unchanged.

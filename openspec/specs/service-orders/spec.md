@@ -515,10 +515,10 @@ detail page MUST continue to show the full UUID.
 - WHEN its row renders
 - THEN the `ID` cell MUST display exactly `87cceecc` in a monospace style
 
-#### Scenario: Detail page still shows the full id
+#### Scenario: Detail page shows short id with full id in title attribute
 - GIVEN an order whose list row shows a truncated id
 - WHEN staff opens that order's detail page
-- THEN the detail page MUST display the full, untruncated UUID
+- THEN the detail page MUST display the first 8 characters in the page title and breadcrumb, with the full, untruncated UUID available in a `title` attribute
 
 ### Requirement: Unsorted Default Order Is Appointment-First
 
