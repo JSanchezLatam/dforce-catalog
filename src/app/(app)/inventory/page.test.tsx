@@ -4,7 +4,7 @@
  * behavior incidentally, but scope stays to sorting (mirrors
  * `customers/page.test.tsx`'s "column sorting" describe block from WU1).
  */
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -72,9 +72,9 @@ describe("InventoryPage — column sorting", () => {
       expect(url.searchParams.get("dir")).toBe("asc");
     }
 
-    // The negative half: `stock`/`price` have no rendered header at all, so
-    // there is nothing to assert a link against — Acciones is the only
-    // remaining non-sortable header.
+    // The negative half: Precio, Stock and Acciones are the non-sortable
+    // headers. Precio and Stock are pinned (no sort link) in the WU7 block
+    // below; Acciones is checked here.
     expect(screen.getByRole("columnheader", { name: "Acciones" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Acciones" })).not.toBeInTheDocument();
   });
@@ -272,7 +272,7 @@ describe("InventoryPage — selection and the catalog handoff (WU7a)", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Enviar al generador" })).not.toBeInTheDocument();
     // Still a readable inventory, not a denied page.
-    expect(screen.getByText("Filtro de aceite")).toBeInTheDocument();
+    expect(within(screen.getByTestId("inventory-table")).getByText("Filtro de aceite")).toBeInTheDocument();
   });
 
   /** WU2's kebab is not regressed by the column that landed to its left. */
@@ -320,5 +320,124 @@ describe("InventoryPage — selection and the catalog handoff (WU7a)", () => {
     await settle();
 
     expect(screen.getByText("Se limpió la selección de 2 al cambiar el filtro")).toBeInTheDocument();
+  });
+});
+
+/**
+ * mobile-responsive-pass WU7 — Precio and Stock become plain desktop columns,
+ * and below md the table is replaced by cards mapped from the SAME items array.
+ * jsdom computes no media query, so what is asserted is the class contract and
+ * each container's content, scoped with `within` because both are in the DOM.
+ */
+describe("InventoryPage — price/stock columns and phone cards (WU7)", () => {
+  beforeEach(() => {
+    listInventory.mockClear();
+    can.mockImplementation(() => true);
+  });
+
+  async function renderItems(items: unknown[], params: Record<string, string> = {}) {
+    listInventory.mockResolvedValue({ items, total: items.length });
+    render(await InventoryPage({ searchParams: Promise.resolve(params) }));
+    return {
+      table: within(screen.getByTestId("inventory-table")),
+      cards: within(screen.getByTestId("inventory-cards")),
+    };
+  }
+
+  it("renders Precio and Stock as plain headers with no sort control, the sortable set unchanged", async () => {
+    const { table } = await renderItems([row()]);
+
+    expect(table.getByRole("columnheader", { name: "Precio" })).toBeInTheDocument();
+    expect(table.getByRole("columnheader", { name: "Stock" })).toBeInTheDocument();
+    expect(table.queryByRole("link", { name: "Precio" })).not.toBeInTheDocument();
+    expect(table.queryByRole("link", { name: "Stock" })).not.toBeInTheDocument();
+    expect(table.getByRole("columnheader", { name: "Precio" })).not.toHaveAttribute("aria-sort");
+    for (const name of ["ID", "Nombre", "Categoría 1", "Categoría 2"]) {
+      expect(table.getByRole("link", { name })).toBeInTheDocument();
+    }
+  });
+
+  it("shows price as $x.00 and the stock figure in the desktop row, and a dash for a missing value", async () => {
+    const { table } = await renderItems([
+      row({ id: "PS0000001", price: 12.5, stock: 24 }),
+      row({ id: "PS0000002", name: "Sin datos", price: null, stock: null }),
+    ]);
+
+    const [header, full, empty] = table.getAllByRole("row");
+    const headers = within(header).getAllByRole("columnheader").map((h) => h.textContent?.trim());
+    const cell = (r: HTMLElement, name: string) => within(r).getAllByRole("cell")[headers.indexOf(name)];
+    expect(cell(full, "Precio")).toHaveTextContent("$12.50");
+    expect(cell(full, "Stock")).toHaveTextContent("24");
+    // Read by column, not by counting dashes: Categoría 2 is null in the
+    // fixture too, so a dash count cannot tell a missing stock dash apart.
+    expect(cell(empty, "Precio")).toHaveTextContent(/^—$/);
+    expect(cell(empty, "Stock")).toHaveTextContent(/^—$/);
+  });
+
+  it("hides the table below md and the card list from md up", async () => {
+    await renderItems([row()]);
+
+    expect(screen.getByTestId("inventory-table")).toHaveClass("hidden", "md:block");
+    expect(screen.getByTestId("inventory-cards")).toHaveClass("md:hidden");
+  });
+
+  it("makes each card ONE link to the product, named by name and code", async () => {
+    const { cards } = await renderItems([row({ id: "PS0000570", name: "Super tweeter" })]);
+
+    const link = cards.getByRole("link");
+    expect(link).toHaveAttribute("href", "/inventory/PS0000570");
+    expect(link).toHaveAccessibleName(/Super tweeter/);
+    expect(link).toHaveAccessibleName(/PS0000570/);
+    expect(within(link).getByText("PS0000570")).toHaveClass("font-mono");
+  });
+
+  it("shows price and 'Stock N' on the card", async () => {
+    const { cards } = await renderItems([row({ price: 9.75, stock: 48 }), row({ id: "PS0000002", price: 85, stock: 2 })]);
+
+    const [first, second] = cards.getAllByRole("link");
+    expect(first).toHaveTextContent("$9.75");
+    expect(first).toHaveTextContent("Stock 48");
+    expect(second).toHaveTextContent("$85.00");
+    expect(second).toHaveTextContent("Stock 2");
+  });
+
+  it("shows a red 'Sin stock' chip at 0 and no 'Stock 0'", async () => {
+    const { cards } = await renderItems([row({ stock: 0 }), row({ id: "PS0000002", stock: 3 })]);
+
+    const [empty, stocked] = cards.getAllByRole("link");
+    expect(within(empty).getByText("Sin stock").className).toContain("text-red-800");
+    expect(empty).not.toHaveTextContent("Stock 0");
+    expect(stocked).not.toHaveTextContent("Sin stock");
+  });
+
+  it("renders a dash, not $null or Stock NaN, for a missing price or stock", async () => {
+    const { cards } = await renderItems([row({ price: null, stock: null })]);
+
+    const link = cards.getByRole("link");
+    expect(link).not.toHaveTextContent(/null|NaN|\$/);
+    expect(link).toHaveTextContent("Stock —");
+  });
+
+  it("renders no checkbox in the cards", async () => {
+    const { cards } = await renderItems([row()]);
+
+    expect(cards.queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+
+  it("renders as many cards as table rows", async () => {
+    const { table, cards } = await renderItems([row({ id: "a" }), row({ id: "b" }), row({ id: "c" })]);
+
+    expect(cards.getAllByRole("listitem")).toHaveLength(3);
+    expect(table.getAllByRole("row")).toHaveLength(1 + 3);
+  });
+
+  it("keeps the catalog handoff bar out of reach below md", async () => {
+    const user = userEvent.setup();
+    await renderItems([row()]);
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar Filtro de aceite" }));
+
+    const bar = screen.getByText("1 seleccionado").closest("[role='status']") as HTMLElement;
+    expect(bar.parentElement).toHaveClass("hidden", "md:block");
   });
 });
