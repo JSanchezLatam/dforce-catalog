@@ -18,6 +18,8 @@ import {
 } from "@/modules/customers/queries";
 import { computePageWindow, parsePageSize } from "@/modules/inventory-view/queries";
 import { Pagination } from "@/shared/ui/Pagination";
+import { RecordCard, RecordCardList } from "@/shared/ui/RecordCard";
+import { StatusBadge } from "@/shared/ui/StatusBadge";
 import { BulkResultPanel } from "@/shared/ui/selection/BulkResultPanel";
 import { RowActions } from "@/shared/ui/selection/RowActions";
 import { RowCheckbox, SelectAllCheckbox } from "@/shared/ui/selection/RowCheckbox";
@@ -163,9 +165,13 @@ export default async function CustomersPage({
           "se limpió la selección" notice with it, in precisely the case the
           notice exists to explain. */}
       <SelectionProvider pageIds={pageIds} labels={labels} filterKey={buildFilterKey(filters)}>
-        <SelectionBar>
-          <CustomerBulkActions />
-        </SelectionBar>
+        {/* Selection is tablet-plus only: the cards below md carry no checkbox,
+            so a bar there could only show a count the operator cannot change. */}
+        <div className="hidden md:block">
+          <SelectionBar>
+            <CustomerBulkActions />
+          </SelectionBar>
+        </div>
         <BulkResultPanel reasons={CUSTOMER_REFUSAL_MESSAGES} />
         {items.length === 0 ? (
         <Card size="sm">
@@ -239,7 +245,7 @@ export default async function CustomersPage({
         </Card>
       ) : (
         <>
-          <Card size="sm" className="mb-4">
+          <Card size="sm" className="mb-4 hidden md:block" data-testid="customers-table">
             <CardContent>
               <Table>
                 <TableHeader>
@@ -278,7 +284,7 @@ export default async function CustomersPage({
                           // NOT `CHIP`: that class marks neutral metadata
                           // (make, model, year), so a retired customer would
                           // read with the same weight as "Toyota".
-                          <span className="ml-2 rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400">
+                          <span className={`ml-2 ${DEACTIVATED_CHIP}`}>
                             Desactivado
                           </span>
                         )}
@@ -336,8 +342,45 @@ export default async function CustomersPage({
               </Table>
             </CardContent>
           </Card>
+          <RecordCardList testId="customers-cards">
+            {items.map((item) => (
+              <RecordCard key={item.id} href={`/customers/${item.id}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-medium">{item.name}</div>
+                    <div className="text-xs text-muted-foreground">{item.phone || "—"}</div>
+                  </div>
+                  {item.deactivatedAt ? (
+                    <span className={`shrink-0 ${DEACTIVATED_CHIP}`}>Desactivado</span>
+                  ) : (
+                    // `done` is the success tone (green on a tint); only the word differs.
+                    <StatusBadge status="done" label="Activo" className="shrink-0" />
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                  {item.plates.length > 0 ? (
+                    <>
+                      <span className="text-muted-foreground">
+                        {item.plates.length} {item.plates.length === 1 ? "vehículo" : "vehículos"}:
+                      </span>
+                      {item.plates.map((plate) => (
+                        <span
+                          key={plate}
+                          className="rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-xs font-medium"
+                        >
+                          {plate}
+                        </span>
+                      ))}
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">Sin vehículos</span>
+                  )}
+                </div>
+              </RecordCard>
+            ))}
+          </RecordCardList>
           {pageCount > 1 && (
-            <Card size="sm">
+            <Card size="sm" className="mt-4">
               <CardContent>
                 <Pagination
                   currentPage={pageWindow.page}
@@ -353,6 +396,14 @@ export default async function CustomersPage({
     </div>
   );
 }
+
+/**
+ * NOT `CHIP`: that class marks neutral metadata (make, model, year), so a
+ * retired customer would read with the same weight as "Toyota". Shared by the
+ * table row and the phone card so the two cannot drift.
+ */
+const DEACTIVATED_CHIP =
+  "rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-xs font-medium text-red-700 dark:text-red-400";
 
 /**
  * The bulk panel's refusal vocabulary — injected, never owned by the panel

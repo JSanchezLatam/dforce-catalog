@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PermissionDenied } from "@/shared/ui/PermissionDenied";
 import { notFound } from "next/navigation";
-import { ClipboardList, Eye, Info } from "lucide-react";
+import { CalendarDays, ClipboardList, Eye, Info } from "lucide-react";
 
 import {
   Breadcrumb,
@@ -25,6 +25,7 @@ import { getClienteById } from "@/modules/customers/queries";
 import { toPublicVehiculo } from "@/modules/customers/vehicles";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import { formatDateTime } from "@/shared/datetime";
+import { RecordCard, RecordCardList } from "@/shared/ui/RecordCard";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 import { CARD, CARD_MUTED, CHIP, PLATE_BADGE, PLATE_BADGE_MUTED } from "@/shared/ui/styles";
 
@@ -220,6 +221,8 @@ export default async function CustomerDetailPage({
               <p className="text-sm text-muted-foreground">Este cliente todavía no tiene órdenes registradas.</p>
             </div>
           ) : (
+            <>
+            <div className="hidden md:block" data-testid="history-table">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -255,6 +258,26 @@ export default async function CustomerDetailPage({
                 ))}
               </TableBody>
             </Table>
+            </div>
+          <RecordCardList testId="history-cards">
+            {orders.map((orden) => (
+              <RecordCard key={orden.id} href={`/service-orders/${orden.id}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 text-sm">{orden.description ?? "—"}</div>
+                  <StatusBadge
+                    status={orden.status}
+                    label={ORDER_STATUS_LABEL[orden.status]}
+                    className="shrink-0 whitespace-nowrap"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <CalendarDays className="h-4 w-4" aria-hidden="true" />
+                  <span>Cita</span> {formatDateTime(orden.appointmentAt)}
+                </div>
+              </RecordCard>
+            ))}
+          </RecordCardList>
+            </>
           )}
         </CardContent>
       </Card>

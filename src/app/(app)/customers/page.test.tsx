@@ -184,13 +184,13 @@ describe("CustomersPage — deactivated customers (R20)", () => {
 
   it("marks a listed deactivated customer instead of mixing it in silently", async () => {
     render(await renderPage({ status: "all" }));
-    expect(screen.getByText("Desactivado")).toBeInTheDocument();
+    expect(within(screen.getByTestId("customers-table")).getByText("Desactivado")).toBeInTheDocument();
   });
 
   // Dark's `--destructive` is a background maroon: as text it measured 1.80:1.
   it("words the Desactivado chip in the theme-paired red, never text-destructive", async () => {
     render(await renderPage({ status: "all" }));
-    const chip = screen.getByText("Desactivado");
+    const chip = within(screen.getByTestId("customers-table")).getByText("Desactivado");
     expect(chip.className).toContain("text-red-700");
     expect(chip.className).toContain("dark:text-red-400");
     expect(chip.className).not.toMatch(/(^|\s)text-destructive(\s|$)/);
@@ -860,5 +860,96 @@ describe("CustomersPage — read gate", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Clientes" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "No tenés permiso para ver esta página" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Volver al inicio" })).toHaveAttribute("href", "/");
+  });
+});
+
+/**
+ * mobile-responsive-pass WU6 — below md the table is replaced by cards mapped
+ * from the SAME items array. jsdom computes no media query, so what is asserted
+ * is the class contract and each container's content, scoped with `within`
+ * because both are in the DOM.
+ */
+describe("CustomersPage — phone cards (WU6)", () => {
+  async function renderCards(items: unknown[]) {
+    listClientes.mockResolvedValue(items);
+    countClientes.mockResolvedValue(items.length);
+    render(await CustomersPage({ searchParams: Promise.resolve({ status: "all" }) }));
+    return {
+      table: within(screen.getByTestId("customers-table")),
+      cards: within(screen.getByTestId("customers-cards")),
+    };
+  }
+
+  const ana = row({ id: "c1", name: "Ana Gómez", phone: "6651-8556", email: "ana@x.com", plates: ["DA2160", "DB4410"] });
+
+  it("hides the table below md and the card list from md up", async () => {
+    await renderCards([ana]);
+
+    expect(screen.getByTestId("customers-table")).toHaveClass("hidden", "md:block");
+    expect(screen.getByTestId("customers-cards")).toHaveClass("md:hidden");
+  });
+
+  it("makes each card ONE link to the customer, named by name and phone", async () => {
+    const { cards } = await renderCards([ana]);
+
+    const link = cards.getByRole("link");
+    expect(link).toHaveAttribute("href", "/customers/c1");
+    expect(link).toHaveAccessibleName(/Ana Gómez/);
+    expect(link).toHaveAccessibleName(/6651-8556/);
+  });
+
+  it("shows the vehicle count and each plate as a mono chip, and no email", async () => {
+    const { cards } = await renderCards([ana]);
+
+    const link = cards.getByRole("link");
+    expect(link).toHaveTextContent("2 vehículos");
+    expect(within(link).getByText("DA2160")).toHaveClass("font-mono");
+    expect(within(link).getByText("DB4410")).toHaveClass("font-mono");
+    expect(link).not.toHaveTextContent("ana@x.com");
+  });
+
+  it("uses the singular for one vehicle and says so when there are none", async () => {
+    const { cards } = await renderCards([
+      row({ id: "c1", name: "Uno", plates: ["AA000"] }),
+      row({ id: "c2", name: "Cero", plates: [] }),
+    ]);
+
+    expect(cards.getByText("1 vehículo:")).toBeInTheDocument();
+    expect(cards.getByText("Sin vehículos")).toBeInTheDocument();
+  });
+
+  it("shows a green Activo chip, and the red Desactivado chip for a retired customer", async () => {
+    const { cards } = await renderCards([
+      row({ id: "c1", name: "Activa" }),
+      row({ id: "c2", name: "Retirado", deactivatedAt: new Date("2026-09-01") }),
+    ]);
+
+    expect(cards.getByText("Activo").className).toContain("bg-green-100");
+    const retired = cards.getByText("Desactivado");
+    expect(retired.className).toContain("text-red-700");
+    expect(retired.className).toContain("dark:text-red-400");
+  });
+
+  it("renders no checkbox in the cards", async () => {
+    const { cards } = await renderCards([ana]);
+
+    expect(cards.queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+
+  it("renders as many cards as table rows", async () => {
+    const { table, cards } = await renderCards([row({ id: "a" }), row({ id: "b" }), row({ id: "c" })]);
+
+    expect(cards.getAllByRole("listitem")).toHaveLength(3);
+    expect(table.getAllByRole("row")).toHaveLength(1 + 3);
+  });
+
+  it("keeps the bulk bar out of reach below md", async () => {
+    const user = userEvent.setup();
+    await renderCards([ana]);
+
+    await user.click(screen.getByRole("checkbox", { name: /Ana Gómez/ }));
+
+    const bar = screen.getByText("1 seleccionado").closest("[role='status']") as HTMLElement;
+    expect(bar.parentElement).toHaveClass("hidden", "md:block");
   });
 });

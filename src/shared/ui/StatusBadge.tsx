@@ -79,11 +79,12 @@ export function statusBadgeClassName(status: BadgeStatus): string {
 }
 
 /**
- * `className` exists for ONE caller, `ManualSyncButton`, and the reason is in
- * `StatusBadge.test.tsx`: this chip is 20px (the same as shadcn's `Badge`
- * `h-5`), which is right in the five places it sits in a table cell, inline in
- * a heading, or in a grid card's footer (`CatalogGrid.tsx:60` is that last
- * one), and short only beside `ManualSyncButton`'s `h-8` Button. Growing the component
+ * `className` exists for callers that sit beside something taller or must not
+ * wrap: `ManualSyncButton` (reason in `StatusBadge.test.tsx`: this chip is 20px,
+ * the same as shadcn's `Badge` `h-5`, right in a table cell, a heading or a grid
+ * card's footer (`CatalogGrid.tsx:60`), and short only beside that toolbar's
+ * `h-8` Button) and the phone cards (service orders, customers, order history),
+ * which add `shrink-0` so the chip keeps its width. Growing the component
  * itself would add height to every service-order, reminder, customer and
  * vehicle row to fix one toolbar.
  */

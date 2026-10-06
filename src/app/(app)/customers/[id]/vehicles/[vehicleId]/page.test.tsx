@@ -9,7 +9,7 @@
  * returning JSX, so awaiting it and handing the element to RTL is the whole
  * technique. Only the request-scoped and data edges are mocked.
  */
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { OrdenServicio, Vehiculo } from "@/shared/db/schema";
@@ -151,5 +151,46 @@ describe("VehicleDetailPage — descriptive and internal fields", () => {
     expect(screen.queryByText("Vencimiento del seguro")).not.toBeInTheDocument();
     expect(container).not.toHaveTextContent("Octubre");
     expect(container).not.toHaveTextContent("28/10/2026");
+  });
+});
+
+/** mobile-responsive-pass WU6 (#4) — same contract as the customer detail history. */
+describe("VehicleDetailPage — order history cards (WU6)", () => {
+  const order = (id: string, status: string) =>
+    ({ id, status, categoria: "reparacion", description: "Cambio de correa",
+      appointmentAt: null, createdAt: new Date("2026-05-01T14:00:00Z") }) as OrdenServicio;
+
+  async function renderHistory(orders: OrdenServicio[]) {
+    getClienteById.mockResolvedValue({ cliente: { id: "c1", name: "Ana Gómez" }, orders: [], vehicles: [vehiculo()] });
+    listOrdenesByVehiculo.mockResolvedValue(orders);
+    render(await renderPage());
+    return {
+      table: within(screen.getByTestId("history-table")),
+      cards: within(screen.getByTestId("history-cards")),
+    };
+  }
+
+  it("hides the table below md and the card list from md up", async () => {
+    await renderHistory([order("o1", "open")]);
+
+    expect(screen.getByTestId("history-table")).toHaveClass("hidden", "md:block");
+    expect(screen.getByTestId("history-cards")).toHaveClass("md:hidden");
+  });
+
+  it("makes each card a link to its order, with status, category and description inside", async () => {
+    const { cards } = await renderHistory([order("o1", "open")]);
+
+    const link = cards.getByRole("link");
+    expect(link).toHaveAttribute("href", "/service-orders/o1");
+    expect(within(link).getByText("Abierta")).toBeInTheDocument();
+    expect(link).toHaveTextContent("Reparación");
+    expect(link).toHaveTextContent("Cambio de correa");
+  });
+
+  it("renders as many cards as table rows", async () => {
+    const { table, cards } = await renderHistory([order("o1", "open"), order("o2", "done")]);
+
+    expect(cards.getAllByRole("listitem")).toHaveLength(2);
+    expect(table.getAllByRole("row")).toHaveLength(1 + 2);
   });
 });
