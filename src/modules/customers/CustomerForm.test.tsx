@@ -1145,3 +1145,21 @@ describe("CustomerForm — vehicle card at phone width (mobile-responsive-pass #
     }
   });
 });
+
+describe("CustomerForm — native selects on touch (mobile-responsive-pass N2)", () => {
+  // jsdom matches no media query, so this reads the class that carries the
+  // 44px floor: the text inputs already have `pointer-coarse:h-11`, the native
+  // selects measured 32px beside them.
+  it("Estilo, Motor and Mes de renovación reach 44px on a touch screen", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ ...INTERNAL })]} canEditInternal />);
+    await open(user, "Editar");
+
+    const group = vehicleGroup(1);
+    for (const label of ["Estilo", "Motor", "Mes de renovación de placa"]) {
+      const select = within(group).getByLabelText(label);
+      expect(select.tagName, label).toBe("SELECT");
+      expect(select, label).toHaveClass("pointer-coarse:h-11");
+    }
+  });
+});

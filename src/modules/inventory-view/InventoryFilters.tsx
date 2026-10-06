@@ -1,5 +1,8 @@
 "use client";
 
+import { useId, useState } from "react";
+import { ListFilter } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -11,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { SearchFilterInput } from "@/shared/ui/filters/SearchFilterInput";
 import { useUrlFilters } from "@/shared/ui/filters/useUrlFilters";
+import { cn } from "@/lib/utils";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 // `items` for the stock select: a bare `<SelectValue />` prints the raw value
@@ -54,102 +58,124 @@ export function InventoryFilters({
     hasTypedText || selected.categoryL1 || selected.categoryL2 || selected.name || selected.id || selected.stockStatus,
   );
 
+  // Below `md` the five filters stacked into almost a screen of chrome (audit
+  // #14), so they sit behind a toggle. A filter that is ON must never be
+  // hidden: the panel starts open whenever one is, and the toggle counts them.
+  const activeCount = [selected.id, selected.name, selected.categoryL1, selected.categoryL2, selected.stockStatus].filter(
+    Boolean,
+  ).length;
+  const [open, setOpen] = useState(activeCount > 0);
+  const panelId = useId();
+
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <SearchFilterInput
-        id="filter-id"
-        label="ID"
-        placeholder="Filtrar por ID..."
-        value={text.id ?? ""}
-        onValueChange={(v) => setText("id", v)}
-        className="flex w-32 flex-col gap-1"
-      />
-      <SearchFilterInput
-        id="filter-name"
-        label="Nombre"
-        placeholder="Filtrar por nombre..."
-        value={text.name ?? ""}
-        onValueChange={(v) => setText("name", v)}
-        className="flex w-48 flex-col gap-1"
-      />
-      <div className="flex flex-col gap-1">
-        <Label>Categoría 1</Label>
-        <Select
-          value={selected.categoryL1 ?? ""}
-          onValueChange={(v) => applyFilter("categoryL1", v ?? "")}
-        >
-          <SelectTrigger className="w-44">
-            <SelectValue placeholder="Todos" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">Todos</SelectItem>
-            {categoryL1Options.map((option) => (
-              <SelectItem key={option} value={option}>
-                {option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="flex flex-col gap-1">
-        <Label>Categoría 2</Label>
-        <Select
-          value={selected.categoryL2 ?? ""}
-          onValueChange={(v) => applyFilter("categoryL2", v ?? "")}
-        >
-          <SelectTrigger className="w-44">
-            <SelectValue placeholder="Todos" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">Todos</SelectItem>
-            {categoryL2Options.map((option) => (
-              <SelectItem key={option} value={option}>
-                {option}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="flex flex-col gap-1">
-        <Label>Stock</Label>
-        <Select
-          items={STOCK_LABELS}
-          value={selected.stockStatus ?? ""}
-          onValueChange={(v) => applyFilter("stockStatus", v ?? "")}
-        >
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="Todos" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">Todos</SelectItem>
-            <SelectItem value="in-stock">{STOCK_LABELS["in-stock"]}</SelectItem>
-            <SelectItem value="out-of-stock">{STOCK_LABELS["out-of-stock"]}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+    <div className="flex flex-col gap-3">
       <Button
         type="button"
         variant="outline"
-        size="default"
-        onClick={clearAll}
-        disabled={!hasActiveFilters}
+        className="min-h-11 self-start md:hidden"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((v) => !v)}
       >
-        Limpiar
+        <ListFilter aria-hidden="true" />
+        {activeCount > 0 ? `Filtros (${activeCount})` : "Filtros"}
       </Button>
-      <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
-        <Label>Filas por página</Label>
-        <Select value={String(pageSize)} onValueChange={(v) => applyFilter("pageSize", v ?? "")}>
-          <SelectTrigger className="w-20">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PAGE_SIZE_OPTIONS.map((opt) => (
-              <SelectItem key={opt} value={String(opt)}>
-                {opt}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div id={panelId} className={cn("flex-wrap items-center gap-x-4 gap-y-2", open ? "flex" : "hidden md:flex")}>
+        <SearchFilterInput
+          id="filter-id"
+          label="ID"
+          placeholder="Filtrar por ID..."
+          value={text.id ?? ""}
+          onValueChange={(v) => setText("id", v)}
+          className="flex w-32 flex-col gap-1"
+        />
+        <SearchFilterInput
+          id="filter-name"
+          label="Nombre"
+          placeholder="Filtrar por nombre..."
+          value={text.name ?? ""}
+          onValueChange={(v) => setText("name", v)}
+          className="flex w-48 flex-col gap-1"
+        />
+        <div className="flex flex-col gap-1">
+          <Label>Categoría 1</Label>
+          <Select
+            value={selected.categoryL1 ?? ""}
+            onValueChange={(v) => applyFilter("categoryL1", v ?? "")}
+          >
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="Todos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Todos</SelectItem>
+              {categoryL1Options.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label>Categoría 2</Label>
+          <Select
+            value={selected.categoryL2 ?? ""}
+            onValueChange={(v) => applyFilter("categoryL2", v ?? "")}
+          >
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="Todos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Todos</SelectItem>
+              {categoryL2Options.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label>Stock</Label>
+          <Select
+            items={STOCK_LABELS}
+            value={selected.stockStatus ?? ""}
+            onValueChange={(v) => applyFilter("stockStatus", v ?? "")}
+          >
+            <SelectTrigger className="w-36">
+              <SelectValue placeholder="Todos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Todos</SelectItem>
+              <SelectItem value="in-stock">{STOCK_LABELS["in-stock"]}</SelectItem>
+              <SelectItem value="out-of-stock">{STOCK_LABELS["out-of-stock"]}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="default"
+          onClick={clearAll}
+          disabled={!hasActiveFilters}
+        >
+          Limpiar
+        </Button>
+        <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
+          <Label>Filas por página</Label>
+          <Select value={String(pageSize)} onValueChange={(v) => applyFilter("pageSize", v ?? "")}>
+            <SelectTrigger className="w-20">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAGE_SIZE_OPTIONS.map((opt) => (
+                <SelectItem key={opt} value={String(opt)}>
+                  {opt}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </div>
   );

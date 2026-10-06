@@ -953,3 +953,49 @@ describe("CustomersPage — phone cards (WU6)", () => {
     expect(bar.parentElement).toHaveClass("hidden", "md:block");
   });
 });
+
+describe("CustomersPage — secondary columns below xl (mobile-responsive-pass N1)", () => {
+  // Owner decision 2026-10-05: tablets keep the table. From 768 to 1279 the
+  // content box is ~736px (portrait tablet, and 1024+ with the desktop sidebar), so
+  // the row (incl. the "⋯" menu) has to fit a ~736px box without Email.
+  // jsdom applies no Tailwind: this reads the class pair that hides a column.
+  // The header and its cells must hide TOGETHER or the grid misaligns.
+  it("hides Email on both the header and every row, and keeps the rest", async () => {
+    listClientes.mockResolvedValue([row({ id: "c1", email: "a@x.com" }), row({ id: "c2", email: null })]);
+    countClientes.mockResolvedValue(2);
+    render(await CustomersPage({ searchParams: Promise.resolve({ status: "all" }) }));
+    const table = within(screen.getByTestId("customers-table"));
+    const [header, ...rows] = table.getAllByRole("row");
+    const heads = within(header).getAllByRole("columnheader");
+    const labels = heads.map((h) => h.textContent?.trim());
+    expect(rows).toHaveLength(2);
+
+    // Long free text wraps instead of widening the table past its ~736px box
+    // (768 tablet, and 1024 with the desktop sidebar).
+    for (const label of ['Nombre']) {
+      const i = labels.indexOf(label);
+      expect(i, label).toBeGreaterThan(-1);
+      for (const r of rows) {
+        expect(within(r).getAllByRole("cell")[i], `${label} cell wraps`).toHaveClass("whitespace-normal");
+      }
+    }
+
+    const hidden = ["Email"];
+    for (const label of hidden) {
+      const i = labels.indexOf(label);
+      expect(i, label).toBeGreaterThan(-1);
+      expect(heads[i], `${label} header`).toHaveClass("hidden", "xl:table-cell");
+      for (const r of rows) {
+        expect(within(r).getAllByRole("cell")[i], `${label} cell`).toHaveClass("hidden", "xl:table-cell");
+      }
+    }
+    // The columns that stay must NOT carry the pair, or the row loses its identity at 768.
+    for (const [i, label] of labels.entries()) {
+      if (hidden.includes(label) || label === "") continue;
+      expect(heads[i], `${label} header`).not.toHaveClass("hidden");
+      for (const r of rows) {
+        expect(within(r).getAllByRole("cell")[i], `${label} cell`).not.toHaveClass("hidden");
+      }
+    }
+  });
+});

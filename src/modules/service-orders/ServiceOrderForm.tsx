@@ -400,7 +400,7 @@ export function ServiceOrderForm({
                     no other reason to add the jsdom shims it needs. */}
                 <select
                   id="orden-vehiculo"
-                  className={`${NATIVE_FIELD} h-8 px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-50`}
+                  className={`${NATIVE_FIELD} h-8 pointer-coarse:h-11 px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-50`}
                   value={vehiculoId}
                   disabled={!clienteId || vehiclesLoading || vehicles.length === 0}
                   aria-describedby={showVehiclesEmptyHint ? VEHICLES_EMPTY_HINT_ID : undefined}
@@ -478,7 +478,7 @@ export function ServiceOrderForm({
               {/* Native <select>, same rationale as the vehicle picker above. */}
               <select
                 id="orden-categoria"
-                className={`${NATIVE_FIELD} h-8 px-2.5 py-1`}
+                className={`${NATIVE_FIELD} h-8 pointer-coarse:h-11 px-2.5 py-1`}
                 value={categoria}
                 onChange={(e) => setCategoria(e.target.value as ServiceCategory)}
               >

@@ -136,15 +136,15 @@ Gates per PR: `npx tsc --noEmit`, `npm test`, `npm run lint` (0 errors, 14 warni
 
 Owner decision 2026-10-05 for N1: tablets in portrait (768–1023) keep the TABLE (bulk selection stays available) with secondary columns hidden below `lg` so the whole row, including "⋯", fits; from 1024 nothing changes.
 
-- [ ] 11a.1 RED list tests: below `lg` hide Inventario "Categoría 2", Clientes "Email", and the Órdenes column(s) needed to fit 768 (`hidden lg:table-cell` on header and cells, same columns). GREEN the three list pages.
-- [ ] 11a.2 RED: native `<select>`s in `CustomerForm` (Marca/Modelo/Año…) and `ServiceOrderForm` reach 44px on touch (`pointer-coarse:h-11`). GREEN.
-- [ ] 11a.3 RED: `/users` "Mostrar inactivos" checkbox hit area ≥44 on touch. GREEN `UsersTable.tsx`.
-- [ ] 11a.4 RED: `/catalogs` no card nested in a page card (#12). GREEN `catalogs/page.tsx`.
-- [ ] 11a.5 RED: inventory filters collapse behind a "Filtros" toggle below `md` (#14), expanded at `md`+. GREEN `InventoryFilters.tsx`.
-- [ ] 11a.6 RED: light-theme contrast for sidebar group labels (N4) and the muted-on-muted texts (N5: deactivated vehicle card, login footer) ≥4.5:1. GREEN.
-- [ ] 11a.7 RED: order detail customer/vehicle links ≥44px tall on touch (N6). GREEN.
-- [ ] 11a.8 Mutation-verify by name.
-- [ ] 11a.9 Matrix: 768 portrait lists show every column header and "⋯" inside the viewport; 390 audit items above; 1280 unchanged.
+- [x] 11a.1 RED list tests: below `xl` (changed from `lg` after the 11a.9 measurement at 1024) hide Inventario "Categoría 2", Clientes "Email", and the Órdenes column(s) needed to fit a ~736px box (`hidden xl:table-cell` on header and cells, same columns; long Nombre/Cliente/Vehículo cells wrap). GREEN the three list pages. (Done: hidden below `lg` with `hidden lg:table-cell` on header and cells: Inventario "Categoría 2", Clientes "Email", Órdenes "ID" and "Vehículo" — Vehículo is the widest cell (plate + make + model) and the short id is the narrowest-value reference that Cliente/Estado/Cita and the detail page already cover; hiding both takes ~290px against the 252px overflow measured at 768 (988 vs 736). Cliente, Estado, Cita and "⋯" stay. Browser-measure in 11a.9.)
+- [x] 11a.2 RED: native `<select>`s in `CustomerForm` (Marca/Modelo/Año…) and `ServiceOrderForm` reach 44px on touch (`pointer-coarse:h-11`). GREEN. (Done: `pointer-coarse:h-11` on `NATIVE_FIELD` in `CustomerForm` and on the two `h-8` selects in `ServiceOrderForm`.)
+- [x] 11a.3 RED: `/users` "Mostrar inactivos" checkbox hit area ≥44 on touch. GREEN `UsersTable.tsx`. (Done: the label gets `pointer-coarse:min-h-11` and the checkbox `pointer-coarse:size-6`.)
+- [x] 11a.4 RED: `/catalogs` no card nested in a page card (#12). GREEN `catalogs/page.tsx`. (Done: the page `Card` is gone; empty state and grid sit directly under the header.)
+- [x] 11a.5 RED: inventory filters collapse behind a "Filtros" toggle below `md` (#14), expanded at `md`+. GREEN `InventoryFilters.tsx`. (Done: "Filtros" toggle `md:hidden`, `aria-expanded`/`aria-controls`; the panel is `hidden md:flex` collapsed, `flex` open; starts open when any filter is active and the label shows "Filtros (n)".)
+- [x] 11a.6 RED: light-theme contrast for sidebar group labels (N4) and the muted-on-muted texts (N5: deactivated vehicle card, login footer) ≥4.5:1. GREEN. (Done: sidebar group label `/80` light, `/70` dark (4.26 -> 5.59:1); `CARD_MUTED`, `PLATE_BADGE_MUTED` and the login footer `text-foreground/70 dark:text-muted-foreground` (4.40 -> 7.4:1); footer second line `dark:opacity-75` only. Ratios computed from the theme tokens; confirm in the browser.)
+- [x] 11a.7 RED: order detail customer/vehicle links ≥44px tall on touch (N6). GREEN. (Done: both links `pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center`.)
+- [x] 11a.8 Mutation-verify by name. (Done: 17 mutations, each red by name; catalogs (11a.4) was observed RED before the fix.)
+- [x] 11a.9 (Measured 2026-10-06 at the LAN IP: at 768 the first pass still overflowed /inventory, and at exactly 1024 — desktop sidebar back, content box ~736px again — all three lists overflowed; fixed by hiding the secondary columns below `xl` instead of `lg` and letting Nombre / Cliente / Vehículo wrap. After the fix /inventory, /customers and /service-orders fit with "⋯" inside the box at 768, 820, 1024, 1180, 1280 and 1440, no page overflow. At 390: "Filtros" toggle present, first inventory card at y=416 (was 766); /catalogs no nested card; "Mostrar inactivos" 114x44.) Matrix: 768 portrait lists show every column header and "⋯" inside the viewport; 390 audit items above; 1280 unchanged.
 
 ## Final gate and archive notes
 

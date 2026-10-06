@@ -60,6 +60,20 @@ describe("Sidebar — touch floor (audit #10)", () => {
 
     expect(screen.getByText("Taller")).toHaveClass("pointer-coarse:h-11");
   });
+
+  // Audit-final N4: /70 of the sidebar foreground on the light sidebar is
+  // 4.26:1 (min 4.5); /80 is 5.59:1. Dark keeps its measured /70 (8.41:1).
+  it("group labels are /80 in light and keep /70 in dark (contrast >= 4.5:1)", () => {
+    render(
+      <SidebarProvider>
+        <SidebarGroupLabel>Taller</SidebarGroupLabel>
+      </SidebarProvider>,
+    );
+
+    const label = screen.getByText("Taller");
+    expect(label).toHaveClass("text-sidebar-foreground/80", "dark:text-sidebar-foreground/70");
+    expect(label).not.toHaveClass("text-sidebar-foreground/70");
+  });
 });
 
 /** Audit #17a: the desktop sidebar and the off-canvas sheet swap at `lg` (1024), not `md`. */

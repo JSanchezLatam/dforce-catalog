@@ -197,9 +197,12 @@ export default async function ServiceOrdersPage({
                           label={column.label}
                           href={buildSortHref(params, column.sort, sort)}
                           dir={sort?.key === column.sort ? sort.dir : undefined}
+                          className={column.hideBelowXl ? HIDE_BELOW_XL : undefined}
                         />
                       ) : (
-                        <TableHead key={column.label}>{column.label}</TableHead>
+                        <TableHead key={column.label} className={column.hideBelowXl ? HIDE_BELOW_XL : undefined}>
+                          {column.label}
+                        </TableHead>
                       ),
                     )}
                     <TableHead className="w-24">Acciones</TableHead>
@@ -214,9 +217,9 @@ export default async function ServiceOrdersPage({
                       {/* DISPLAY-ONLY truncation (spec's "ID renders truncated") —
                           the stored `id` stays the full UUID; the detail page
                           keeps rendering it in full. */}
-                      <TableCell className="font-mono text-xs">{orden.id.slice(0, 8)}</TableCell>
-                      <TableCell>{orden.clienteName}</TableCell>
-                      <TableCell>{vehiculoLabel(orden)}</TableCell>
+                      <TableCell className={`font-mono text-xs ${HIDE_BELOW_XL}`}>{orden.id.slice(0, 8)}</TableCell>
+                      <TableCell className="min-w-40 whitespace-normal">{orden.clienteName}</TableCell>
+                      <TableCell className={`whitespace-normal ${HIDE_BELOW_XL}`}>{vehiculoLabel(orden)}</TableCell>
                       <TableCell>
                         <StatusBadge status={orden.status} label={ORDER_STATUS_LABEL[orden.status]} />
                       </TableCell>
@@ -338,6 +341,15 @@ function buildFilterKey(filters: OrdenServicioFilters): string {
 }
 
 /**
+ * Secondary columns drop out below `xl`: a portrait tablet (768-1023) keeps the
+ * table for bulk selection, and from 1024 the desktop sidebar takes 256px, so up
+ * to 1279 the content box is still ~736px — measured at the LAN IP, columns
+ * hidden only below `lg` overflowed again at exactly 1024. Header and cells must
+ * share the class or the grid skews.
+ */
+const HIDE_BELOW_XL = "hidden xl:table-cell";
+
+/**
  * The header row, declared HERE rather than derived from `ORDEN_SORT` — same
  * reasoning as `customers/page.tsx`'s `COLUMNS`: deriving it would let a
  * query-layer whitelist change silently reshape the table with no matching
@@ -348,10 +360,10 @@ function buildFilterKey(filters: OrdenServicioFilters): string {
  * `Descripción` is GONE (spec's "Order List Columns Show Customer and
  * Vehicle"); `Acciones` never sorts.
  */
-const COLUMNS: readonly { label: string; sort?: keyof typeof ORDEN_SORT }[] = [
-  { label: "ID", sort: "id" },
+const COLUMNS: readonly { label: string; hideBelowXl?: boolean; sort?: keyof typeof ORDEN_SORT }[] = [
+  { label: "ID", sort: "id", hideBelowXl: true },
   { label: "Cliente" },
-  { label: "Vehículo" },
+  { label: "Vehículo", hideBelowXl: true },
   { label: "Estado", sort: "status" },
   { label: "Cita", sort: "appointmentAt" },
 ];
@@ -381,13 +393,18 @@ function SortableHeader({
   label,
   href,
   dir,
+  className,
 }: {
   label: string;
   href: string;
   dir?: "asc" | "desc";
+  className?: string;
 }) {
   return (
-    <TableHead aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}>
+    <TableHead
+      className={className}
+      aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}
+    >
       <Link href={href} className="-mx-2 inline-flex min-h-11 min-w-11 items-center gap-1 px-2 hover:text-foreground">
         {label}
         {dir === "asc" && <ArrowUp className="h-3 w-3" aria-hidden="true" />}

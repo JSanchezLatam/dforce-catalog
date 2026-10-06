@@ -9,7 +9,7 @@
  * both as a side effect of the shared rewire.
  */
 import { StrictMode } from "react";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -71,7 +71,9 @@ afterEach(() => {
   window.history.replaceState({}, "", "/inventory");
 });
 
-function renderFilters(selected: { id?: string; name?: string } = {}) {
+function renderFilters(
+  selected: { id?: string; name?: string; categoryL1?: string; categoryL2?: string; stockStatus?: string } = {},
+) {
   return render(
     <InventoryFilters
       categoryL1Options={[]}
@@ -296,5 +298,50 @@ describe("InventoryFilters — the stock trigger shows the Spanish label", () =>
 
     const trigger = screen.getByText("Stock").parentElement!.querySelector("[role=combobox]")!;
     expect(trigger.querySelector('[data-slot="select-value"]')).toHaveTextContent(new RegExp(`^${label}$`));
+  });
+});
+
+describe("InventoryFilters — collapsed behind a Filtros toggle below md (audit #14)", () => {
+  // jsdom applies no Tailwind, so the collapsed/expanded state is read from the
+  // class pair that drives it: `hidden md:flex` is collapsed on a phone and
+  // always expanded from md up; plain `flex` is expanded everywhere.
+  function panelOf(toggle: HTMLElement) {
+    return document.getElementById(toggle.getAttribute("aria-controls")!)!;
+  }
+
+  it("starts collapsed on a phone with no active filter, and the toggle opens and closes it", async () => {
+    const user = userEvent.setup();
+    renderFilters();
+
+    const toggle = screen.getByRole("button", { name: "Filtros" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveClass("md:hidden", "min-h-11");
+    expect(panelOf(toggle)).toHaveClass("hidden", "md:flex");
+    // Every filter lives inside the panel the toggle controls.
+    expect(within(panelOf(toggle)).getByLabelText("Nombre")).toBeInTheDocument();
+    expect(within(panelOf(toggle)).getByRole("button", { name: "Limpiar" })).toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(panelOf(toggle)).toHaveClass("flex");
+    expect(panelOf(toggle)).not.toHaveClass("hidden");
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(panelOf(toggle)).toHaveClass("hidden", "md:flex");
+  });
+
+  it("never hides an active filter: starts expanded and says how many are on", () => {
+    renderFilters({ categoryL1: "Frenos" });
+
+    const toggle = screen.getByRole("button", { name: "Filtros (1)" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(panelOf(toggle)).not.toHaveClass("hidden");
+  });
+
+  it("counts every active filter, not only the first", () => {
+    renderFilters({ id: "ABC", name: "bateria", stockStatus: "in-stock" });
+
+    expect(screen.getByRole("button", { name: "Filtros (3)" })).toBeInTheDocument();
   });
 });

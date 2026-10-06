@@ -16,7 +16,7 @@ export const CARD = "rounded-xl border bg-card p-4 text-card-foreground";
  * leave which one wins up to Tailwind's output order. Tighter padding too: a
  * vehicle that is out of service is a one-line row, not a card.
  */
-export const CARD_MUTED = "rounded-xl border bg-muted p-3 text-muted-foreground";
+export const CARD_MUTED = "rounded-xl border bg-muted p-3 text-foreground/70 dark:text-muted-foreground";
 /**
  * `text-destructive` as TEXT fails AA in both themes (3.60:1 on white, and in
  * dark the token is a near-maroon background tone; see `badge.test.tsx`).
@@ -46,7 +46,7 @@ export const PLATE_BADGE =
  * caption next to an identical badge.
  */
 export const PLATE_BADGE_MUTED =
-  "inline-flex items-center rounded-md border border-border bg-muted px-2 py-1 font-mono text-sm font-medium tracking-wider text-muted-foreground";
+  "inline-flex items-center rounded-md border border-border bg-muted px-2 py-1 font-mono text-sm font-medium tracking-wider text-foreground/70 dark:text-muted-foreground";
 /** A small pill for a single vehicle attribute (year, make, model) — reads better than a label/value grid at this field count. */
 export const CHIP =
   "inline-flex items-center rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground";

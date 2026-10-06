@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { DEACTIVATED_CHIP, FIELD_ERROR, PAGE_HEADING, SUCCESS_TEXT } from "./styles";
+import { CARD_MUTED, PLATE_BADGE_MUTED, DEACTIVATED_CHIP, FIELD_ERROR, PAGE_HEADING, SUCCESS_TEXT } from "./styles";
 
 /**
  * Audit #21: "Configuración guardada." and the other four saved messages were
@@ -80,4 +80,28 @@ describe("styles — DEACTIVATED_CHIP (mobile-responsive-pass 9.v)", () => {
       expect(source).not.toMatch(/const DEACTIVATED_CHIP\b/);
     },
   );
+});
+
+/**
+ * Audit-final N5: `text-muted-foreground` on `bg-muted` is 4.40:1 in light
+ * (min 4.5), which is what the deactivated vehicle card's plate and "Vehículo
+ * desactivado" read at. `text-foreground/70` is 7.4:1 on the same surface; dark
+ * keeps the token it was already measured with.
+ */
+describe("styles — CARD_MUTED contrast (audit-final N5)", () => {
+  it("is a darker text in light and the muted token in dark", () => {
+    expect(CARD_MUTED.split(" ")).toEqual(
+      expect.arrayContaining(["bg-muted", "text-foreground/70", "dark:text-muted-foreground"]),
+    );
+    expect(CARD_MUTED.split(" ")).not.toContain("text-muted-foreground");
+  });
+
+  // The plate badge sits on the same `bg-muted` and set its own colour, so
+  // fixing the card alone left the plate at 4.40:1.
+  it("PLATE_BADGE_MUTED gets the same pair", () => {
+    expect(PLATE_BADGE_MUTED.split(" ")).toEqual(
+      expect.arrayContaining(["bg-muted", "text-foreground/70", "dark:text-muted-foreground"]),
+    );
+    expect(PLATE_BADGE_MUTED.split(" ")).not.toContain("text-muted-foreground");
+  });
 });

@@ -265,9 +265,12 @@ export default async function CustomersPage({
                           label={column.label}
                           href={buildSortHref(params, column.sort, sort)}
                           dir={sort?.key === column.sort ? sort.dir : undefined}
+                          className={column.hideBelowXl ? HIDE_BELOW_XL : undefined}
                         />
                       ) : (
-                        <TableHead key={column.label}>{column.label}</TableHead>
+                        <TableHead key={column.label} className={column.hideBelowXl ? HIDE_BELOW_XL : undefined}>
+                          {column.label}
+                        </TableHead>
                       ),
                     )}
                     <TableHead className="w-24">Acciones</TableHead>
@@ -279,7 +282,7 @@ export default async function CustomersPage({
                       <TableCell>
                         <RowCheckbox id={item.id} label={item.name} />
                       </TableCell>
-                      <TableCell className="font-medium">
+                      <TableCell className="min-w-40 whitespace-normal font-medium">
                         {item.name}
                         {item.deactivatedAt && (
                           // NOT `CHIP`: that class marks neutral metadata
@@ -297,7 +300,7 @@ export default async function CustomersPage({
                           other column showed an em dash. `email` is still
                           nullable and keeps `??`. */}
                       <TableCell>{item.phone || "—"}</TableCell>
-                      <TableCell>{item.email ?? "—"}</TableCell>
+                      <TableCell className={HIDE_BELOW_XL}>{item.email ?? "—"}</TableCell>
                       <TableCell>{item.plates.length > 0 ? item.plates.join(", ") : "—"}</TableCell>
                       <TableCell>
                         {/* A plain `Link` inside the item, NOT
@@ -437,6 +440,15 @@ function buildFilterKey(filters: ClienteFilters): string {
 }
 
 /**
+ * Secondary columns drop out below `xl`: a portrait tablet (768-1023) keeps the
+ * table for bulk selection, and from 1024 the desktop sidebar takes 256px, so up
+ * to 1279 the content box is still ~736px — measured at the LAN IP, columns
+ * hidden only below `lg` overflowed again at exactly 1024. Header and cells must
+ * share the class or the grid skews.
+ */
+const HIDE_BELOW_XL = "hidden xl:table-cell";
+
+/**
  * The header row, declared HERE rather than derived from `CLIENTE_SORT`.
  * Deriving it made a query-layer decision silently reshape the table: adding
  * a key grew the header by one with no matching `<TableCell>`, and removing
@@ -450,10 +462,10 @@ function buildFilterKey(filters: ClienteFilters): string {
  * em-dashes and bury the one real list on page 37. The spec gates it on
  * reading sensibly, and it does not.
  */
-const COLUMNS: readonly { label: string; sort?: keyof typeof CLIENTE_SORT }[] = [
+const COLUMNS: readonly { label: string; hideBelowXl?: boolean; sort?: keyof typeof CLIENTE_SORT }[] = [
   { label: "Nombre", sort: "name" },
   { label: "Teléfono", sort: "phone" },
-  { label: "Email", sort: "email" },
+  { label: "Email", sort: "email", hideBelowXl: true },
   { label: "Vehículos" },
 ];
 
@@ -473,13 +485,18 @@ function SortableHeader({
   label,
   href,
   dir,
+  className,
 }: {
   label: string;
   href: string;
   dir?: "asc" | "desc";
+  className?: string;
 }) {
   return (
-    <TableHead aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}>
+    <TableHead
+      className={className}
+      aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}
+    >
       <Link href={href} className="-mx-2 inline-flex min-h-11 min-w-11 items-center gap-1 px-2 hover:text-foreground">
         {label}
         {dir === "asc" && <ArrowUp className="h-3 w-3" aria-hidden="true" />}
