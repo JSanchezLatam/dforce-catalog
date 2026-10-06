@@ -93,11 +93,15 @@ evidence.
   only waiver there is conditional — the collapsed sidebar rail is
   "desktop-and-pointer-only and never a touch surface". Most surfaces are not:
   this is a workshop app used from tablets. `size="default"` on a `Button` is
-  `h-8` = 32px, so an action control needs `min-h-11 min-w-11` on top of it.
-  Two standing exceptions: a filter strip whose controls sit against `h-8`
-  inputs and read as one control, and `shared/ui/Pagination.tsx`, which is
-  still 28px and is its own change. **No test asserts a button height**, so a
-  green suite is not evidence here. The rule was invisible in an archived
+  `h-8` = 32px, so an action control needs `min-h-11 min-w-11` on top of it —
+  or nothing, for `Button` `default`/`sm`, `Input`, `SelectTrigger`, the
+  sidebar rows, the checkbox and `shared/ui/Pagination.tsx`, which carry
+  `pointer-coarse:` classes and rise to 44px on touch by themselves.
+  One standing exception, for fine pointers only: a filter strip whose controls
+  sit against `h-8` inputs and read as one control. On touch the inputs and
+  buttons rise to 44px together, so the strip is not an exception there.
+  **No test asserts a rendered height** (jsdom matches no media query; the
+  `pointer-coarse:` tests pin classes), so a green suite is not evidence here. The rule was invisible in an archived
   design doc and got repealed wholesale on `feat/customers-ui-polish` before
   GGA caught it; it is written here so the next reader finds it.
 

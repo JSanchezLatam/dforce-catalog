@@ -66,3 +66,38 @@ describe("Pagination — the copy staff reads", () => {
     expect(screen.getByRole("button", { name: "Anterior" })).toBeInTheDocument();
   });
 });
+
+/**
+ * Audit #5: page numbers and Anterior/Siguiente were ~28px, and the row could not
+ * wrap, so on a phone it overflowed. The row wraps, items rise to 44px on touch,
+ * and "Página X de Y" takes its own line below `sm`.
+ */
+describe("Pagination — touch floor (audit #5)", () => {
+  it("wraps the row", () => {
+    render(<Pagination currentPage={2} pageCount={5} hrefPattern="/x?page={page}" />);
+
+    expect(screen.getByRole("navigation")).toHaveClass("flex-wrap");
+  });
+
+  it("lifts the numbers and Anterior/Siguiente to 44px on a coarse pointer", () => {
+    render(<Pagination currentPage={2} pageCount={5} hrefPattern="/x?page={page}" />);
+
+    for (const name of ["1", "2", "Anterior", "Siguiente"]) {
+      expect(screen.getByRole("link", { name })).toHaveClass("pointer-coarse:h-11");
+    }
+  });
+
+  it("lifts the callback variant's buttons too", () => {
+    render(<Pagination currentPage={2} pageCount={5} onPageChange={() => {}} />);
+
+    for (const name of ["1", "Anterior"]) {
+      expect(screen.getByRole("button", { name })).toHaveClass("pointer-coarse:h-11");
+    }
+  });
+
+  it("puts the position on its own line below sm", () => {
+    render(<Pagination currentPage={2} pageCount={5} hrefPattern="/x?page={page}" />);
+
+    expect(screen.getByText("Página 2 de 5")).toHaveClass("basis-full", "sm:basis-auto");
+  });
+});

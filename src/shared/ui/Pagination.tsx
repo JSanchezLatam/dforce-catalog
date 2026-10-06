@@ -41,10 +41,10 @@ function buildWindow(current: number, total: number): (number | "ellipsis")[] {
  * and it is not fixable from inside that module. Splitting it would have
  * merged the customers PR with the reported defect still visible.
  */
-const navClassName = "rounded-lg px-3 py-1 text-primary hover:bg-muted transition-colors";
+const navClassName = "rounded-lg px-3 py-1 text-primary hover:bg-muted transition-colors pointer-coarse:h-11 pointer-coarse:inline-flex pointer-coarse:items-center";
 
 function pageClassName(isActive: boolean): string {
-  return `rounded-lg px-3 py-1 text-sm ${
+  return `rounded-lg px-3 py-1 text-sm pointer-coarse:h-11 pointer-coarse:min-w-11 pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:justify-center ${
     isActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
   }`;
 }
@@ -86,7 +86,7 @@ export function Pagination(props: PaginationProps) {
     );
 
   return (
-    <nav className="flex items-center gap-1 text-sm text-muted-foreground">
+    <nav className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
       {currentPage > 1 && renderNav(currentPage - 1, "Anterior")}
       {pages.map((p, idx) =>
         p === "ellipsis" ? (
@@ -98,7 +98,7 @@ export function Pagination(props: PaginationProps) {
         ),
       )}
       {currentPage < pageCount && renderNav(currentPage + 1, "Siguiente")}
-      <span className="ml-4 text-muted-foreground">
+      <span className="basis-full text-muted-foreground sm:ml-4 sm:basis-auto">
         Página {currentPage} de {pageCount}
       </span>
     </nav>

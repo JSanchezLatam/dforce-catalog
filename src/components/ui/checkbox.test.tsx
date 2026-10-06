@@ -26,3 +26,15 @@ describe("Checkbox — unchecked border contrast (audit #20)", () => {
     expect(screen.getByRole("checkbox")).toHaveClass("data-checked:border-primary");
   });
 });
+
+/**
+ * Audit #9: the box is 16px and its invisible hit area was 40x32. `-inset-3.5`
+ * (14px each side) makes it 44x44.
+ */
+describe("Checkbox — touch floor (audit #9)", () => {
+  it("extends the hit area 14px on every side (16 + 28 = 44)", () => {
+    render(<Checkbox aria-label="Seleccionar" />);
+
+    expect(screen.getByRole("checkbox")).toHaveClass("after:-inset-3.5");
+  });
+});
