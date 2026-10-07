@@ -30,6 +30,8 @@ const adminGrants: Grants = {
   "service-orders.create": true,
   "service-orders.assign": true,
   "technicians.manage": true,
+  "metrics.read": true,
+  "metrics.self": false,
 };
 
 // Every administrador grant except the four the owner keeps for himself, and
@@ -68,6 +70,8 @@ const tecnicoGrants: Grants = {
   "service-orders.create": false,
   "service-orders.assign": false,
   "technicians.manage": false,
+  "metrics.read": false,
+  "metrics.self": true,
 };
 
 // Exhaustive over Role: a new role is a tsc error here until it has a row.
