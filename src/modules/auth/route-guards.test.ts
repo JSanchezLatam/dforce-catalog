@@ -55,6 +55,13 @@ export const ROUTE_GUARDS: Record<
   "/api/service-orders/[id]": { PATCH: ["service-orders.write", "service-orders.correct", "service-orders.assign"] },
   // Assigning a technician: admin and jefe only; a closed order is never assignable, so no `correct`.
   "/api/service-orders/[id]/assignments": { POST: "service-orders.assign" },
+  // Work lines (order-work-lines): `write` is the coarse gate (técnico included), `assign` marks staff
+  // who may write any assigned technician's line, `correct` decides whether a password is verified.
+  "/api/service-orders/[id]/work-lines": { POST: ["service-orders.write", "service-orders.assign", "service-orders.correct"] },
+  "/api/service-orders/[id]/work-lines/[lineId]": {
+    PATCH: ["service-orders.write", "service-orders.assign", "service-orders.correct"],
+    DELETE: ["service-orders.write", "service-orders.assign", "service-orders.correct"],
+  },
   // Reception photos (service-order-reception WU3b). POST is `write` (both roles
   // photograph an open order); GET is `read`; DELETE is admin-only. Both writes
   // also evaluate `service-orders.correct`: it decides whether a password sent
