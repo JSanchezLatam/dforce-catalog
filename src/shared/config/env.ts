@@ -77,6 +77,14 @@ export const env = {
    * sensitive, since `NEXT_PUBLIC_*` ships in every client bundle already.
    */
   NEXT_PUBLIC_SENTRY_DSN: optional("NEXT_PUBLIC_SENTRY_DSN"),
+  /**
+   * Customer portal origin (customer-portal WU2), e.g. `http://192.168.0.3:3001`
+   * locally. The "Copia del cliente" QR encodes `<PORTAL_BASE_URL>/c#<token>`, so
+   * it is baked into every printed QR: fix the production domain BEFORE any QR
+   * is printed. Unset = no QR is ever printed. Read server-side only; NOT
+   * `NEXT_PUBLIC_*`, and not sensitive (it is printed on paper).
+   */
+  PORTAL_BASE_URL: optional("PORTAL_BASE_URL"),
 } as const;
 
 /** Keys that must never be included in logs, error messages, or responses. */
