@@ -109,10 +109,10 @@ The system MUST provide a second print of an order, titled "Copia del cliente", 
 
 The customer copy MUST show, at the first page's top-right 25 mm slot, a QR code that encodes `<PORTAL_BASE_URL>/c#<token>` (the token in the URL fragment, so it never reaches a server log), rendered as SVG on the server so the page needs no secure-context browser API. Below or beside it MUST be the notice "Este código da acceso a tu historial. No lo compartas.". The copy MUST carry the order's identifying data (N.º, cliente nombre, vehículo, categoría, fecha y hora de inicio, descripción) and MUST NOT carry the "Firma del cliente" line, the signature block, photos, or any field the sheet never carries (renewal month, insurance expiry).
 
-The QR MUST print ONLY when ALL hold: the customer holds a current consent, the customer holds a token, the customer is active, and `PORTAL_BASE_URL` is set. When any is false the QR and its notice MUST NOT render, the slot MUST stay blank, and the control to open the customer copy MUST NOT be offered. The page MUST render with no error when the QR is withheld. The token MUST NOT appear anywhere else in the HTML than as the encoded QR and MUST NOT be sent to a client component bundle.
+The QR MUST print ONLY when ALL hold: the customer holds a current consent, the customer holds a token, the customer is active, `PORTAL_BASE_URL` is set, and the sync is configured (`PORTAL_INGEST_URL` and `PORTAL_INGEST_SECRET` set — see portal-sync "Unconfigured Portal Is Inert"). When any is false the QR and its notice MUST NOT render, the slot MUST stay blank, and the control to open the customer copy MUST NOT be offered. The page MUST render with no error when the QR is withheld. The token MUST NOT appear anywhere else in the HTML than as the encoded QR and MUST NOT be sent to a client component bundle.
 
 #### Scenario: QR prints for a consented, active customer
-- GIVEN a customer with current consent, a token, and `PORTAL_BASE_URL` set
+- GIVEN a customer with current consent, a token, `PORTAL_BASE_URL` set and the sync configured
 - WHEN staff opens "Copia del cliente"
 - THEN the first page MUST show a QR in the top-right slot and the notice "Este código da acceso a tu historial. No lo compartas."
 

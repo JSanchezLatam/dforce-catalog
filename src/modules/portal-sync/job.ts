@@ -11,7 +11,7 @@
  */
 import * as Sentry from "@sentry/nextjs";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
-import type { Job, PgBoss } from "pg-boss";
+import type { Job } from "pg-boss";
 import type { IngestBody } from "@portal/contract";
 
 import { env } from "@/shared/config/env";
@@ -19,22 +19,9 @@ import { db } from "@/shared/db/client";
 import { cliente, clienteConsentimiento, ordenServicio, vehiculo } from "@/shared/db/schema";
 import { getBoss } from "@/shared/jobs/boss";
 import { withJobCapture } from "@/shared/jobs/capture";
+import { ensurePortalSyncQueue, PORTAL_SYNC_JOB } from "./enqueue";
 import { buildSnapshot, type SnapshotInput } from "./snapshot";
 import { PortalRejectedError, sendToPortal, type PortalConfig } from "./transport";
-
-export const PORTAL_SYNC_JOB = "portal-sync";
-export const PORTAL_SYNC_DLQ = "portal-sync-dlq";
-
-async function ensureQueue(boss: PgBoss): Promise<void> {
-  // The dead-letter queue must exist before a queue can reference it.
-  await boss.createQueue(PORTAL_SYNC_DLQ);
-  await boss.createQueue(PORTAL_SYNC_JOB, {
-    retryLimit: 5,
-    retryDelay: 60,
-    retryBackoff: true,
-    deadLetter: PORTAL_SYNC_DLQ,
-  });
-}
 
 export type SyncState = {
   deactivatedAt: Date | null;
@@ -121,7 +108,7 @@ async function readState(tx: Tx, clienteId: string): Promise<SyncState | null> {
 }
 
 /** `nextval` is a bigint and node-postgres hands it back as a string. */
-async function nextVersion(tx: Tx): Promise<number> {
+export async function nextVersion(tx: Pick<Tx, "execute">): Promise<number> {
   const result = await tx.execute(sql`SELECT nextval('portal_sync_version_seq') AS v`);
   const version = Number((result.rows[0] as { v: string }).v);
   if (!Number.isSafeInteger(version)) throw new Error("portal-sync: version sequence left the safe integer range");
@@ -169,10 +156,10 @@ export async function runPortalSync(clienteId: string, deps: RunPortalSyncDeps =
 
 export type RegisterPortalSyncWorkerDeps = { getBoss?: typeof getBoss; run?: typeof runPortalSync };
 
-/** Mirrors `registerReminderWorker`. Not yet registered at boot: WU5b wires it with the enqueue side. */
+/** Mirrors `registerReminderWorker`; registered at boot in `instrumentation-node.ts`. */
 export async function registerPortalSyncWorker(deps: RegisterPortalSyncWorkerDeps = {}): Promise<void> {
   const boss = await (deps.getBoss ?? getBoss)();
-  await ensureQueue(boss);
+  await ensurePortalSyncQueue(boss);
   await boss.work(
     PORTAL_SYNC_JOB,
     { localConcurrency: 1 },

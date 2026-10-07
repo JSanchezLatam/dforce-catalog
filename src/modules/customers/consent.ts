@@ -10,6 +10,7 @@ import { desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { cliente, clienteConsentimiento, users } from "@/shared/db/schema";
+import { enqueuePortalSync, type PortalSyncDeps } from "@/modules/portal-sync/enqueue";
 import { generatePortalToken, tokenAfterConsent } from "./portal-token";
 import { ClienteDeactivatedError, ClienteNotFoundError } from "./service";
 
@@ -95,6 +96,9 @@ export async function currentConsent(clienteId: string): Promise<ConsentState | 
  * UNIQUE collision) rolls the row back with it. `deps.generateToken` exists for
  * that e2e only.
  *
+ * The portal sync is enqueued AFTER the commit, and only when a row was appended:
+ * a rolled-back or repeated request changes nothing the portal holds.
+ *
  * `recorded_at` is `clock_timestamp()`, not the column default: `now()` is the
  * start of the transaction, so a request that began first but won the lock
  * second would be stamped OLDER than the row it follows and the current state
@@ -104,9 +108,9 @@ export async function recordConsent(
   clienteId: string,
   granted: boolean,
   userId: string,
-  deps: { generateToken?: () => string } = {},
+  deps: { generateToken?: () => string } & PortalSyncDeps = {},
 ): Promise<{ changed: boolean; consent: ConsentState | null }> {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [target] = await tx
       .select({ deactivatedAt: cliente.deactivatedAt, portalToken: cliente.portalToken })
       .from(cliente)
@@ -145,6 +149,8 @@ export async function recordConsent(
       .limit(1);
     return { changed: decision === "append", consent: row ?? null };
   });
+  if (result.changed) await (deps.enqueuePortalSync ?? enqueuePortalSync)(clienteId);
+  return result;
 }
 
 /**
@@ -152,9 +158,12 @@ export async function recordConsent(
  * printed with the old one stops working once the sync completes. One locked
  * transaction: the decision reads the LOCKED row and the latest consent, so a
  * revoke racing a rotate cannot leave a token behind a revoked consent.
- * `deps.generateToken` exists for tests only.
+ * `deps.generateToken` exists for tests only. The portal sync is enqueued after the commit.
  */
-export async function rotatePortalToken(clienteId: string, deps: { generateToken?: () => string } = {}): Promise<void> {
+export async function rotatePortalToken(
+  clienteId: string,
+  deps: { generateToken?: () => string } & PortalSyncDeps = {},
+): Promise<void> {
   await db.transaction(async (tx) => {
     const [target] = await tx
       .select({ deactivatedAt: cliente.deactivatedAt })
@@ -178,4 +187,5 @@ export async function rotatePortalToken(clienteId: string, deps: { generateToken
       .set({ portalToken: (deps.generateToken ?? generatePortalToken)() })
       .where(eq(cliente.id, clienteId));
   });
+  await (deps.enqueuePortalSync ?? enqueuePortalSync)(clienteId);
 }

@@ -108,7 +108,7 @@ describe("registerPortalSyncWorker", () => {
     const { createQueue } = await register(async () => {});
     expect(createQueue.mock.calls).toEqual([
       ["portal-sync-dlq"],
-      ["portal-sync", { retryLimit: 5, retryDelay: 60, retryBackoff: true, deadLetter: "portal-sync-dlq" }],
+      ["portal-sync", { retryLimit: 5, retryDelay: 60, retryBackoff: true, deadLetter: "portal-sync-dlq", policy: "short" }],
     ]);
   });
 
