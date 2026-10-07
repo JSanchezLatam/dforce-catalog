@@ -26,6 +26,7 @@ import { ORDER_STATUS_LABEL } from "./statuses";
 import {
   allowedTransitionsForAll,
   getAllowedTransitions,
+  isTransitionPermitted,
   type OrderStatus,
 } from "./transitions";
 
@@ -68,8 +69,11 @@ async function setStatus(id: string, status: OrderStatus): Promise<RowOutcome> {
  */
 export function OrderBulkStatusActions({
   statuses,
+  canAssign,
 }: {
   statuses: Record<string, OrderStatus | undefined>;
+  /** `can(user, "service-orders.assign")`: without it only starting work is offered; the route stays the gate. */
+  canAssign: boolean;
 }) {
   const { selected, setResult, clear } = useSelection();
   const router = useRouter();
@@ -94,7 +98,10 @@ export function OrderBulkStatusActions({
    * is legal" there would be a second unchecked claim, and computing over the
    * visible rows alone would be a claim about the rows nobody read.
    */
-  const targets = offPage > 0 ? [] : allowedTransitionsForAll(onPage);
+  const targets =
+    offPage > 0
+      ? []
+      : allowedTransitionsForAll(onPage).filter((next) => onPage.every((from) => isTransitionPermitted(canAssign, from, next)));
 
   /**
    * Terminal is DERIVED from the state machine, not a hardcoded

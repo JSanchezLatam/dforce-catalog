@@ -5,6 +5,7 @@ import {
   assertTransition,
   assertTransitionPermitted,
   getAllowedTransitions,
+  isTransitionPermitted,
   OrderTransitionError,
   TransitionForbiddenError,
   type OrderStatus,
@@ -179,4 +180,18 @@ describe("assertTransitionPermitted (R21, who may transition)", () => {
       expect(() => assertTransitionPermitted(false, from, to)).toThrow(TransitionForbiddenError);
     },
   );
+});
+
+describe("isTransitionPermitted (the boolean the controls filter by)", () => {
+  it("lets a holder of service-orders.assign pick any legal edge", () => {
+    expect(isTransitionPermitted(true, "in_progress", "done")).toBe(true);
+    expect(isTransitionPermitted(true, "ready_for_review", "in_progress")).toBe(true);
+  });
+
+  it("lets a caller without it start work and nothing else", () => {
+    expect(isTransitionPermitted(false, "open", "in_progress")).toBe(true);
+    expect(isTransitionPermitted(false, "open", "cancelled")).toBe(false);
+    expect(isTransitionPermitted(false, "in_progress", "done")).toBe(false);
+    expect(isTransitionPermitted(false, "ready_for_review", "in_progress")).toBe(false);
+  });
 });

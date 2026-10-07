@@ -336,7 +336,7 @@ describe("PATCH /api/service-orders/[id] — the edit gate (D11)", () => {
     // AGENTS.md binds this to the exact Spanish string — never loosened to
     // match both languages, that is what catches an untranslated screen.
     expect(await response.json()).toEqual({
-      errors: { form: "Solo un administrador puede editar una orden abierta." },
+      errors: { form: "No podés editar esta orden en su estado actual." },
     });
     expect(setSpy).not.toHaveBeenCalled();
   });
