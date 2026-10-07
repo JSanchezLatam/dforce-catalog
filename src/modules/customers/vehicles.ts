@@ -61,6 +61,8 @@ export type VehiculoInput = {
    * never in a technician's form, so omitting one must never wipe it.
    */
   placaRenovacionMes?: number | null;
+  /** Free text, at most 80 chars, trimmed by `validateVehiculoInput`; blank is stored as null. */
+  placaMunicipio?: string | null;
   seguroVence?: string | null;
   deactivated?: boolean;
   deleted?: boolean;
@@ -137,8 +139,8 @@ export function sendsInternalVehiculoFields(body: unknown): boolean {
   return (
     Array.isArray(vehicles) &&
     vehicles.some((v) => {
-      const item = v as { placaRenovacionMes?: unknown; seguroVence?: unknown } | null;
-      return item?.placaRenovacionMes !== undefined || item?.seguroVence !== undefined;
+      const item = v as { placaRenovacionMes?: unknown; placaMunicipio?: unknown; seguroVence?: unknown } | null;
+      return item?.placaRenovacionMes !== undefined || item?.placaMunicipio !== undefined || item?.seguroVence !== undefined;
     })
   );
 }
@@ -358,6 +360,7 @@ export async function applyVehiculoPlan(tx: TxLike, clienteId: string, plan: Veh
         year: v.year ?? null,
         ...descriptiveColumns(v),
         placaRenovacionMes: v.placaRenovacionMes ?? null,
+        placaMunicipio: v.placaMunicipio ?? null,
         seguroVence: v.seguroVence ?? null,
       })),
     );
@@ -380,6 +383,7 @@ export async function applyVehiculoPlan(tx: TxLike, clienteId: string, plan: Veh
         // Tri-state: only a key the caller sent reaches the SET, so omitting
         // one can never wipe the stored value (`null` is the explicit clear).
         ...(v.placaRenovacionMes !== undefined ? { placaRenovacionMes: v.placaRenovacionMes } : {}),
+        ...(v.placaMunicipio !== undefined ? { placaMunicipio: v.placaMunicipio } : {}),
         ...(v.seguroVence !== undefined ? { seguroVence: v.seguroVence } : {}),
         ...(v.deactivated === false ? { deactivatedAt: null } : {}),
       })

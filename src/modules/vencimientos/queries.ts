@@ -29,6 +29,7 @@ export type DueCandidate = {
   plate: string;
   numeroUnidad: string | null;
   placaRenovacionMes: number | null;
+  placaMunicipio: string | null;
   seguroVence: string | null;
 };
 
@@ -50,6 +51,7 @@ export async function listDueCandidates(): Promise<DueCandidate[]> {
       plate: vehiculo.plate,
       numeroUnidad: vehiculo.numeroUnidad,
       placaRenovacionMes: vehiculo.placaRenovacionMes,
+      placaMunicipio: vehiculo.placaMunicipio,
       seguroVence: vehiculo.seguroVence,
     })
     .from(vehiculo)

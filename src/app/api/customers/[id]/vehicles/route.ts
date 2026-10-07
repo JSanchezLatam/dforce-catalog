@@ -30,7 +30,7 @@ export type CreateVehiculoRouteDeps = {
  * `api/customers/[id]/route.ts`'s refusal of a non-boolean `active`: this repo answers a body it does not understand
  * instead of quietly writing something else.
  */
-const COLLECTION_ONLY_FIELDS = ["id", "deleted", "deactivated", "placaRenovacionMes", "seguroVence"] as const;
+const COLLECTION_ONLY_FIELDS = ["id", "deleted", "deactivated", "placaRenovacionMes", "placaMunicipio", "seguroVence"] as const;
 
 /**
  * C4/design.md D2 — the gap explore.md and the proposal missed: the vehicle

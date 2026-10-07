@@ -33,7 +33,7 @@ describe("POST /api/customers — internal renewal fields are administrador-only
       { findByPhone: async () => null, database },
     );
 
-  it.each([{ placaRenovacionMes: 3 }, { seguroVence: "2026-11-15" }, { placaRenovacionMes: null }, { seguroVence: null }])(
+  it.each([{ placaRenovacionMes: 3 }, { seguroVence: "2026-11-15" }, { placaRenovacionMes: null }, { seguroVence: null }, { placaMunicipio: "David" }, { placaMunicipio: null }])(
     "refuses a tecnico sending %j with 403 and persists nothing",
     async (vehicle) => {
       transaction.mockClear();

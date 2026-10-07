@@ -32,7 +32,7 @@ function vehiculo(overrides: Partial<Vehiculo> = {}): Vehiculo {
     id: "v1", clienteId: "c1", make: "Toyota", model: "Corolla", year: 2020,
     plate: "ABC123", deactivatedAt: null, createdAt: new Date("2026-01-01"),
     chasis: null, colorPrimario: null, colorSecundario: null, estilo: null, motor: null, numeroUnidad: null,
-    placaRenovacionMes: null, seguroVence: null,
+    placaRenovacionMes: null, placaMunicipio: null, seguroVence: null,
     ...overrides,
   } as Vehiculo;
 }

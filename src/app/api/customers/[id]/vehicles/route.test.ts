@@ -23,6 +23,7 @@ function fakeVehiculo(overrides: Partial<Vehiculo> = {}): Vehiculo {
     motor: null,
     numeroUnidad: null,
     placaRenovacionMes: null,
+    placaMunicipio: null,
     seguroVence: null,
     deactivatedAt: null,
     createdAt: new Date("2026-01-01"),
@@ -59,7 +60,7 @@ describe("GET /api/customers/[id]/vehicles (C4, task 1.11 — the gap D2 found)"
 });
 
 // Sentinels that cannot occur by accident, so a leak is unmistakable.
-const POISONED = fakeVehiculo({ placaRenovacionMes: 11, seguroVence: "2031-07-23" });
+const POISONED = fakeVehiculo({ placaRenovacionMes: 11, placaMunicipio: "SENTINEL-MUNICIPIO", seguroVence: "2031-07-23" });
 
 describe("vehicles routes never carry the internal renewal fields", () => {
   it("GET omits both internal keys and their values, even for an administrador", async () => {
@@ -73,6 +74,8 @@ describe("vehicles routes never carry the internal renewal fields", () => {
     expect(text).not.toContain("placaRenovacionMes");
     expect(text).not.toContain("seguroVence");
     expect(text).not.toContain("2031-07-23");
+    expect(text).not.toContain("placaMunicipio");
+    expect(text).not.toContain("SENTINEL-MUNICIPIO");
     expect(JSON.parse(text).vehicles[0]).toMatchObject({ id: "v1", plate: "ABC111", make: "Toyota" });
   });
 
@@ -86,9 +89,11 @@ describe("vehicles routes never carry the internal renewal fields", () => {
     expect(response.status).toBe(201);
     expect(text).not.toContain("placaRenovacionMes");
     expect(text).not.toContain("seguroVence");
+    expect(text).not.toContain("placaMunicipio");
+    expect(text).not.toContain("SENTINEL-MUNICIPIO");
   });
 
-  it.each(["placaRenovacionMes", "seguroVence"])("POST answers 400 for everyone that sends %s, null included", async (key) => {
+  it.each(["placaRenovacionMes", "seguroVence", "placaMunicipio"])("POST answers 400 for everyone that sends %s, null included", async (key) => {
     for (const role of ["tecnico", "administrador"]) {
       const deps = {
         getClienteById: vi.fn().mockResolvedValue({ cliente: clienteRow(), vehicles: [] }),

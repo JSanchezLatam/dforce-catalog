@@ -275,6 +275,29 @@ describe("validateVehiculoInput — descriptive and internal vehicle fields", ()
     expect(cleared.seguroVence).toBeNull();
   });
 
+  it("trims the plate municipio, turns blank into null, and leaves an absent one absent", () => {
+    expect(validateVehiculoInput({ plate: "A", placaMunicipio: "  San Miguelito " }).placaMunicipio).toBe("San Miguelito");
+    expect(validateVehiculoInput({ plate: "A", placaMunicipio: "" }).placaMunicipio).toBeNull();
+    expect(validateVehiculoInput({ plate: "A", placaMunicipio: "   " }).placaMunicipio).toBeNull();
+    expect(validateVehiculoInput({ plate: "A", placaMunicipio: null }).placaMunicipio).toBeNull();
+    expect(validateVehiculoInput({ plate: "A" })).not.toHaveProperty("placaMunicipio");
+  });
+
+  it("accepts an 80-character municipio and rejects 81 with a Spanish error", () => {
+    expect(validateVehiculoInput({ plate: "A", placaMunicipio: "x".repeat(80) }).placaMunicipio).toBe("x".repeat(80));
+    expect(errorsOf({ plate: "A", placaMunicipio: "x".repeat(81) })).toEqual({
+      placaMunicipio: "El municipio no puede superar 80 caracteres",
+    });
+  });
+
+  it("measures the 80 limit after trimming", () => {
+    expect(validateVehiculoInput({ plate: "A", placaMunicipio: ` ${"x".repeat(80)} ` }).placaMunicipio).toBe("x".repeat(80));
+  });
+
+  it.each([[5], [true], [{}], [[]]])("rejects a non-string municipio %j", (bad) => {
+    expect(errorsOf({ plate: "A", placaMunicipio: bad })).toEqual({ placaMunicipio: "El municipio no es válido" });
+  });
+
   it("accepts a real insurance date and rejects an impossible or malformed one", () => {
     expect(validateVehiculoInput({ plate: "A", seguroVence: "2026-11-15" }).seguroVence).toBe("2026-11-15");
     for (const bad of ["2026-02-30", "15/11/2026", "2026-13-01", 20261115]) {

@@ -22,6 +22,7 @@ function candidate(id: string, over: Partial<DueCandidate> = {}): DueCandidate {
     plate: `PL${id}`,
     numeroUnidad: null,
     placaRenovacionMes: 10,
+    placaMunicipio: null,
     seguroVence: null,
     ...over,
   };

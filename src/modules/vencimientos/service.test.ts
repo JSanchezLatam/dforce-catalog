@@ -17,6 +17,7 @@ function candidate(overrides: Partial<DueCandidate> = {}): DueCandidate {
     plate: "ABC123",
     numeroUnidad: "U-7",
     placaRenovacionMes: null,
+    placaMunicipio: null,
     seguroVence: null,
     ...overrides,
   };
@@ -50,6 +51,7 @@ describe("getDueVencimientos", () => {
         model: null,
         plate: "XYZ789",
         numeroUnidad: null,
+        placaMunicipio: null,
         kind: "seguro",
         periodKey: "2026-09-01",
         state: "overdue",
@@ -60,6 +62,17 @@ describe("getDueVencimientos", () => {
     ]);
     expect(result.count).toBe(3);
     expect(result.count).toBe(result.rows.length);
+  });
+
+  it("carries the vehicle's municipio onto every row it produces", async () => {
+    const result = await getDueVencimientos(
+      NOW,
+      seams([candidate({ placaRenovacionMes: 10, seguroVence: "2026-10-20", placaMunicipio: "San Miguelito" })]),
+    );
+    expect(result.rows.map((r) => [r.kind, r.placaMunicipio])).toEqual([
+      ["placa", "San Miguelito"],
+      ["seguro", "San Miguelito"],
+    ]);
   });
 
   it("a vehicle due on plate and insurance counts twice", async () => {
