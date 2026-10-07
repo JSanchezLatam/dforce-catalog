@@ -4,8 +4,8 @@ export const ACTIONS = [
   "customers.read",
   "customers.write",
   "customers.deleteVehicle",
-  // Ley 81 consent for the customer portal. `portalRotate` is administrador-only
-  // and has no route yet: its endpoint lands in customer-portal WU2.
+  // Ley 81 consent for the customer portal. `portalRotate` is administrador-only;
+  // it gates `POST /api/customers/[id]/portal-token/rotate`.
   "customers.consent",
   "customers.portalRotate",
   "vencimientos.read",
