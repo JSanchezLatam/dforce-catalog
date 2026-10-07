@@ -153,7 +153,7 @@ export async function handleUpdateOrdenServicio(
         : NextResponse.json({ errors: { form: "No se puede editar una orden completada o cancelada." } }, { status: 409 });
     }
     if (err instanceof OrderEditForbiddenError) {
-      return NextResponse.json({ errors: { form: "Solo un administrador puede editar una orden abierta." } }, { status: 403 });
+      return NextResponse.json({ errors: { form: "No podés editar esta orden en su estado actual." } }, { status: 403 });
     }
     if (err instanceof TransitionForbiddenError) {
       return NextResponse.json(

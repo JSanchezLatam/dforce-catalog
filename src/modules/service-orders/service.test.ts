@@ -941,6 +941,30 @@ describe("transitionOrder — who may transition, and the lock's scope (R21)", (
     expect(log.sets).toEqual([]);
   });
 
+  it("clears every part-ready mark when staff send a ready_for_review order back, in the same transaction", async () => {
+    const { database, log } = lockedDb(at("ready_for_review"));
+    await transitionOrder("o1", "in_progress", { db: database, scope: SYSTEM_SCOPE, canAssign: true });
+    expect(log.sets).toEqual([{ status: "in_progress" }, { parteListaAt: null }]);
+    expect(log.committed).toBe(true);
+  });
+
+  it.each([
+    ["open", "in_progress"],
+    ["in_progress", "cancelled"],
+    ["ready_for_review", "done"],
+    ["ready_for_review", "cancelled"],
+  ] as const)("leaves the marks alone on %s -> %s", async (from, to) => {
+    const { database, log } = lockedDb(at(from));
+    await transitionOrder("o1", to, {
+      db: database,
+      scope: SYSTEM_SCOPE,
+      canAssign: true,
+      getClienteById: async () => null,
+      cancelRemindersForOrder: async () => {},
+    });
+    expect(log.sets.some((patch) => "parteListaAt" in patch)).toBe(false);
+  });
+
   it.each([
     ["in_progress", "done"],
     ["ready_for_review", "done"],
