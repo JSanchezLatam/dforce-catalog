@@ -160,6 +160,25 @@ describe("UserForm — creating", () => {
     expect(body.role).toBe("administrador");
   });
 
+  // technicians-and-work-lines WU3: the selector lists all three roles and the
+  // new one travels as its enum value, not its label.
+  it("offers Jefe de taller in the role selector and sends it as jefe_taller", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 201, body: { user: { id: "u-9" } } });
+    render(<UserForm />);
+    await open(user, "Nuevo usuario");
+
+    await user.click(screen.getByLabelText("Rol"));
+    expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(["Técnico", "Jefe de taller", "Administrador"]);
+    await user.click(screen.getByRole("option", { name: "Jefe de taller" }));
+    await user.type(screen.getByLabelText("Usuario"), "jefa");
+    await user.type(screen.getByLabelText("Contraseña inicial"), "secreto123");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(bodyOf(fetchMock).role).toBe("jefe_taller");
+  });
+
   it("calls onSaved after a successful create", async () => {
     const user = userEvent.setup();
     mockFetch({ status: 201, body: { user: { id: "u-9" } } });

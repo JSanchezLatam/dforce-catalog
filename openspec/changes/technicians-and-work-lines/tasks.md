@@ -54,11 +54,11 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU3: Roster UI, user role option (PR 3)
 
-- [ ] 3.1 RED `TechnicianRoster` tests: `RecordCard` stack under `sm:`, table from `sm:`; create, rename, deactivate/reactivate toasts ("Técnico creado", "Técnico desactivado"); link control only for administrador; `min-h-11 min-w-11`. GREEN `TechnicianRoster.tsx`, `/technicians` page.
-- [ ] 3.2 RED users UI tests: role selector, badge and filter show "Jefe de taller"; admin-floor message unchanged. GREEN users components.
-- [ ] 3.3 RED `nav-items` test: "Técnicos" under Configuración for `technicians.manage`; jefe sees no Gestión de usuarios, workshop or template entries. GREEN `nav-items.ts`, `nav-badges.test.ts` fallout.
-- [ ] 3.4 Mutation-verify 3.1-3.3 by name.
-- [ ] 3.5 Playwright at `http://192.168.0.3:3000` as tecnico, jefe_taller, administrador at 390/768/desktop: console clean (RSC boundary, dialog portal), 44x44 measured.
+- [x] 3.1 RED `TechnicianRoster` tests: `RecordCard` stack under `sm:`, table from `sm:`; create, rename, deactivate/reactivate toasts ("Técnico creado", "Técnico desactivado"); link control only for administrador; `min-h-11 min-w-11`. GREEN `TechnicianRoster.tsx`, `/technicians` page.
+- [x] 3.2 RED users UI tests: role selector, badge and filter show "Jefe de taller"; admin-floor message unchanged. GREEN users components.
+- [x] 3.3 RED `nav-items` test: "Técnicos" under Configuración for `technicians.manage`; jefe sees no Gestión de usuarios, workshop or template entries. GREEN `nav-items.ts`, `nav-badges.test.ts` fallout.
+- [x] 3.4 Mutation-verify 3.1-3.3 by name.
+- [x] 3.5 Playwright at `http://192.168.0.3:3000` as tecnico, jefe_taller, administrador at 390/768/desktop: console clean (RSC boundary, dialog portal), 44x44 measured.
 
 ## WU4a: orderScope and read paths (PR 4a)
 

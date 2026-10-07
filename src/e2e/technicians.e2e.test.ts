@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/shared/db/client";
 import { tecnico, users } from "@/shared/db/schema";
 import { createUser, updateUser } from "../modules/account/service";
+import { listRoster, listTecnicoLogins } from "../modules/technicians/queries";
 import { createTecnico, TechnicianLinkError, updateTecnico } from "../modules/technicians/service";
 
 describe("technician roster (E2E)", () => {
@@ -121,5 +122,28 @@ describe("technician roster (E2E)", () => {
     const [manual] = await db.insert(tecnico).values({ nombre: "Manual", userId: linked }).returning();
     await updateUser(actorId, linked, { role: "tecnico" });
     expect((await rosterOf(linked)).map((r) => r.id)).toEqual([manual.id]);
+  });
+  // WU3 reads: the roster page's two server queries. Their value is a JOIN and a
+  // WHERE, which no injected-seam test executes.
+  it("listRoster joins the linked username and keeps deactivated rows; listTecnicoLogins offers only active técnico logins", async () => {
+    const linked = await insertUser("roster-linked", "tecnico");
+    const off = await insertUser("roster-off", "tecnico");
+    await db.update(users).set({ deactivatedAt: new Date() }).where(eq(users.id, off));
+    const admin = await insertUser("roster-admin", "administrador");
+    const [withLogin] = await db.insert(tecnico).values({ nombre: "Con login", userId: linked }).returning();
+    const [noLogin] = await db.insert(tecnico).values({ nombre: "Sin login", deactivatedAt: new Date() }).returning();
+
+    const roster = await listRoster();
+    const a = roster.find((r) => r.id === withLogin.id)!;
+    const b = roster.find((r) => r.id === noLogin.id)!;
+    expect(a).toMatchObject({ nombre: "Con login", userId: linked, username: `e2e-tech-roster-linked-${stamp}`, deactivatedAt: null });
+    expect(b).toMatchObject({ nombre: "Sin login", userId: null, username: null });
+    expect(b.deactivatedAt).toBeInstanceOf(Date);
+
+    const logins = (await listTecnicoLogins()).map((l) => l.id);
+    expect(logins).toContain(linked);
+    expect(logins).not.toContain(off);
+    expect(logins).not.toContain(admin);
+    await db.delete(tecnico).where(inArray(tecnico.id, [withLogin.id, noLogin.id]));
   });
 });
