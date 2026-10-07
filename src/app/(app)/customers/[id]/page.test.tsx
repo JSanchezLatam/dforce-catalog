@@ -40,7 +40,10 @@ vi.mock("@/modules/customers/CustomerFormTrigger", () => ({
 
 const getClienteById = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/customers/queries", () => ({ getClienteById }));
+const currentConsent = vi.hoisted(() => vi.fn());
+vi.mock("@/modules/customers/consent", () => ({ currentConsent }));
 
+import { formatDateTime } from "@/shared/datetime";
 import CustomerDetailPage from "./page";
 
 function vehiculo(id: string, plate: string, deactivatedAt: Date | null) {
@@ -59,6 +62,8 @@ function renderPage() {
 describe("CustomerDetailPage", () => {
   beforeEach(() => {
     can.mockReturnValue(true);
+    currentConsent.mockReset();
+    currentConsent.mockResolvedValue(null);
     getClienteById.mockResolvedValue({
       cliente: { id: "c1", name: "Ana Gómez", phone: "50761111111", email: null, createdAt: new Date("2026-01-01") },
       orders: [],
@@ -358,5 +363,54 @@ describe("CustomerDetailPage — order scope", () => {
 
     expect(orderScope).toHaveBeenCalledWith({ id: "u1", role: "tecnico" });
     expect(getClienteById.mock.calls[0][1]).toBe(SCOPE);
+  });
+});
+
+describe("CustomerDetailPage — Ley 81 consent (customer-portal WU1)", () => {
+  const recordedAt = new Date("2026-10-07T15:30:00Z");
+
+  beforeEach(() => {
+    can.mockReturnValue(true);
+    currentConsent.mockReset();
+    currentConsent.mockResolvedValue({ granted: true, recordedByName: "Ana Admin", recordedAt, clauseVersion: "v1" });
+    getClienteById.mockResolvedValue({
+      cliente: { id: "c1", name: "Ana Gómez", phone: "50761111111", email: null, deactivatedAt: null, createdAt: new Date("2026-01-01") },
+      orders: [],
+      vehicles: [],
+    });
+  });
+
+  it("reads the consent of THIS customer and shows who recorded it and when, in the workshop's format", async () => {
+    render(await renderPage());
+
+    expect(currentConsent).toHaveBeenCalledWith("c1");
+    // The locale puts a narrow no-break space before "a. m."; the DOM matcher
+    // collapses whitespace, so the expectation has to as well.
+    const when = formatDateTime(recordedAt).replace(/\s+/g, " ");
+    expect(screen.getByText(`Consentimiento otorgado por Ana Admin el ${when}`)).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Consentimiento de datos (Ley 81)" })).toBeChecked();
+  });
+
+  it("offers the controls only to a user holding customers.consent", async () => {
+    can.mockImplementation((_user, action) => action !== "customers.consent");
+    render(await renderPage());
+
+    expect(screen.getByText(/Consentimiento otorgado por Ana Admin/)).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Consentimiento de datos (Ley 81)" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Guardar consentimiento" })).not.toBeInTheDocument();
+  });
+
+  it("freezes the controls for a deactivated customer and says why", async () => {
+    getClienteById.mockResolvedValue({
+      cliente: { id: "c1", name: "Ana Gómez", phone: "50761111111", email: null, deactivatedAt: new Date("2026-02-01"), createdAt: new Date("2026-01-01") },
+      orders: [],
+      vehicles: [],
+    });
+    render(await renderPage());
+
+    expect(screen.queryByRole("checkbox", { name: "Consentimiento de datos (Ley 81)" })).not.toBeInTheDocument();
+    expect(
+      screen.getByText("El consentimiento no se puede cambiar mientras el cliente está desactivado."),
+    ).toBeInTheDocument();
   });
 });

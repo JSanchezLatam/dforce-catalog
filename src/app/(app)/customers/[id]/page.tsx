@@ -21,6 +21,8 @@ import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { orderScope } from "@/modules/service-orders/scope";
 import { CustomerActivationButton } from "@/modules/customers/CustomerActivationButton";
+import { CustomerConsentPanel } from "@/modules/customers/CustomerConsentPanel";
+import { currentConsent } from "@/modules/customers/consent";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
 import { getClienteById } from "@/modules/customers/queries";
 import { toPublicVehiculo } from "@/modules/customers/vehicles";
@@ -66,6 +68,7 @@ export default async function CustomerDetailPage({
   if (!detail) notFound();
 
   const { cliente, orders, vehicles } = detail;
+  const consent = await currentConsent(cliente.id);
   const isActive = !cliente.deactivatedAt;
   const canSeeInternal = can(user, "vencimientos.read");
 
@@ -139,6 +142,24 @@ export default async function CustomerDetailPage({
           </dl>
         </CardContent>
       </Card>
+
+      {/* Ley 81 consent for the customer portal. Visible to anyone who can read the
+          customer; the controls need `customers.consent` AND an active customer
+          (a deactivated customer's consent is frozen, like the rest of the record). */}
+      <CustomerConsentPanel
+        clienteId={cliente.id}
+        canRecord={isActive && can(user, "customers.consent")}
+        deactivated={!isActive}
+        consent={
+          consent
+            ? {
+                granted: consent.granted,
+                recordedByName: consent.recordedByName,
+                recordedAtLabel: formatDateTime(consent.recordedAt),
+              }
+            : null
+        }
+      />
 
       {/*
        * Master-detail (design direction): customer header above, vehicle
