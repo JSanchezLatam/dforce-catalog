@@ -57,9 +57,9 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU4: Correction interface (PR 4)
 
-- [ ] 4.1 RED `edit-policy.test.ts`: shared pure predicate reports "correction required" for administrador on done/cancelled and "refused" for técnico. GREEN `edit-policy.ts`.
-- [ ] 4.2 RED `CorrectionPasswordField` tests: `type="password"`, `autoComplete="current-password"`, label "Tu contraseña", cleared on close, required before submit. GREEN shared component.
-- [ ] 4.3 RED `ServiceOrderForm`/`ServiceOrderFormTrigger` tests: correction mode sends `password`; 403 shows "Contraseña incorrecta" inline with typed values kept; 429 shows "Demasiados intentos. Probá de nuevo en 15 minutos."; success toast "Orden corregida" ABOVE `router.refresh()`, both below the `try/catch`; password required again on every save. GREEN both files.
+- [x] 4.1 RED `edit-policy.test.ts`: shared pure predicate reports "correction required" for administrador on done/cancelled and "refused" for técnico. GREEN `edit-policy.ts`.
+- [x] 4.2 RED `CorrectionPasswordField` tests: `type="password"`, `autoComplete="current-password"`, label "Tu contraseña", cleared on close, required before submit. GREEN shared component.
+- [x] 4.3 RED `ServiceOrderForm`/`ServiceOrderFormTrigger` tests: correction mode sends `password`; 403 shows "Contraseña incorrecta" inline with typed values kept; 429 shows "Demasiados intentos. Probá de nuevo en 15 minutos."; success toast "Orden corregida" ABOVE `router.refresh()`, both below the `try/catch`; password required again on every save. GREEN both files.
 - [ ] 4.4 RED `OrderPhotos` tests: closed + admin shows add/delete with the password field in each confirm; técnico sees no controls on a closed order; success toast reports APPLIED count. GREEN `OrderPhotos.tsx`.
 - [ ] 4.5 RED detail page tests: admin on done/cancelled sees "Corregir" and no plain edit control; técnico sees neither; password dialog before editable form; "Corregir" carries `min-h-11 min-w-11`. GREEN `[id]/page.tsx`.
 - [ ] 4.6 Mutation-verify 4.1-4.5 by name (keep the password in state after close, toast below refresh, show Corregir to técnico, drop `min-h-11`).

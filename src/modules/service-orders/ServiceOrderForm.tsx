@@ -21,7 +21,9 @@ import { Label } from "@/components/ui/label";
 import type { ClienteListItem } from "@/modules/customers/queries";
 import { VehicleQuickForm } from "@/modules/customers/VehicleQuickForm";
 import { CATEGORIA_LABEL, type ServiceCategory } from "./categories";
+import { CorrectionPasswordField } from "./CorrectionPasswordField";
 import { CustomerPicker } from "./CustomerPicker";
+import { isClosedStatus } from "./edit-policy";
 import { FUEL_LABEL, intakeInputsFor } from "./intake";
 import { FIELD_ERROR } from "@/shared/ui/styles";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
@@ -108,6 +110,9 @@ export function ServiceOrderForm({
   onSaved?: (orden: OrdenServicio) => void;
 }) {
   const isEdit = Boolean(order);
+  // closed-order-lock: a done/cancelled order reaches this form only through an
+  // administrator's "Corregir", which re-authenticates with their password.
+  const isCorrection = Boolean(order && isClosedStatus(order.status));
   const [open, setOpen] = useState(false);
   const [clienteId, setClienteId] = useState(order?.clienteId ?? selectedCustomer?.id ?? "");
   const [vehiculoId, setVehiculoId] = useState("");
@@ -130,6 +135,9 @@ export function ServiceOrderForm({
   const [bateriaPct, setBateriaPct] = useState(order?.bateriaPct?.toString() ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Held only while the dialog is open and cleared after every attempt, so it is
+  // never kept and is typed again on every save.
+  const [password, setPassword] = useState("");
 
   /**
    * D2 — fetches the chosen customer's ACTIVE vehicles (never seeded alongside
@@ -230,6 +238,7 @@ export function ServiceOrderForm({
     setNivelCombustible(order?.nivelCombustible ?? null);
     setBateriaPct(order?.bateriaPct?.toString() ?? "");
     setErrors({});
+    setPassword("");
   }
 
   /**
@@ -253,6 +262,7 @@ export function ServiceOrderForm({
   function handleOpenChange(next: boolean) {
     setOpen(next);
     if (next) resetForm();
+    else setPassword("");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -281,6 +291,7 @@ export function ServiceOrderForm({
               recomendaciones: recomendaciones.trim() || null,
               observaciones: observaciones.trim() || null,
               ...intakePayload(),
+              ...(isCorrection ? { password } : {}),
             }),
           })
         : await fetch("/api/service-orders", {
@@ -313,6 +324,19 @@ export function ServiceOrderForm({
             ? { ...returned, form: unrendered.map(([, message]) => message).join(" ") }
             : returned,
         );
+        return;
+      }
+
+      // closed-order-lock — a refused correction: wrong password, throttled, or a
+      // role that may not correct. Every shape carries its Spanish text.
+      if (response.status === 403 || response.status === 429) {
+        const body = await response.json().catch(() => null);
+        const message: string | undefined = body?.message ?? body?.errors?.form;
+        if (message && (body?.error === "wrong_password" || body?.error === "throttled")) {
+          setErrors({ password: message });
+        } else {
+          setErrors({ form: message ?? "No se pudo guardar la orden de servicio." });
+        }
         return;
       }
 
@@ -356,6 +380,7 @@ export function ServiceOrderForm({
       return;
     } finally {
       setIsSubmitting(false);
+      setPassword("");
     }
 
     setOpen(false);
@@ -369,7 +394,7 @@ export function ServiceOrderForm({
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Editar orden de servicio" : "Nueva orden de servicio"}</DialogTitle>
+          <DialogTitle>{isCorrection ? "Corregir orden de servicio" : isEdit ? "Editar orden de servicio" : "Nueva orden de servicio"}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col gap-4">
@@ -639,6 +664,8 @@ export function ServiceOrderForm({
               />
             </div>
 
+            {isCorrection && <CorrectionPasswordField value={password} onChange={setPassword} error={errors.password} />}
+
             {errors.form && (
               <p role="alert" className={FIELD_ERROR}>
                 {errors.form}
@@ -650,7 +677,7 @@ export function ServiceOrderForm({
             <DialogClose render={<Button type="button" variant="outline" disabled={isSubmitting} />}>
               Cancelar
             </DialogClose>
-            <Button type="submit" disabled={isSubmitting || (!isEdit && (!vehiculoId || !categoria))}>
+            <Button type="submit" disabled={isSubmitting || (!isEdit && (!vehiculoId || !categoria)) || (isCorrection && password === "")}>
               {isSubmitting ? "Guardando…" : "Guardar"}
             </Button>
           </DialogFooter>

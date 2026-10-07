@@ -16,7 +16,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ClienteListItem } from "@/modules/customers/queries";
-import type { Vehiculo } from "@/shared/db/schema";
+import type { OrdenServicio, Vehiculo } from "@/shared/db/schema";
 import { ServiceOrderForm } from "./ServiceOrderForm";
 
 const CUSTOMER: ClienteListItem = {
@@ -1174,5 +1174,146 @@ describe("ServiceOrderForm — native selects on touch (mobile-responsive-pass N
       expect(select.tagName).toBe("SELECT");
       expect(select).toHaveClass("pointer-coarse:h-11");
     }
+  });
+});
+
+/**
+ * closed-order-lock WU4. An administrador correcting a `done`/`cancelled` order
+ * re-authenticates with their password, sent as `password` in the PATCH body.
+ * The response shapes below are the ones the PATCH route builds
+ * (`[id]/route.ts`): `{error, message}` for a wrong password and a throttle,
+ * `{errors:{form}}` for a refusal of the role.
+ */
+describe("ServiceOrderForm — correcting a closed order", () => {
+  const CLOSED_ORDER: OrdenServicio = {
+    id: "o1",
+    clienteId: "c-a",
+    vehiculoId: "v-a",
+    status: "done",
+    categoria: "mant_preventivo",
+    description: "Cambio de aceite",
+    appointmentAt: null,
+    completedAt: new Date("2026-09-02T10:00:00Z"),
+    hallazgos: null,
+    recomendaciones: null,
+    observaciones: null,
+    kilometraje: null,
+    nivelCombustible: null,
+    bateriaPct: null,
+    createdBy: "u1",
+    createdAt: new Date("2026-09-01T10:00:00Z"),
+    updatedAt: new Date("2026-09-02T10:00:00Z"),
+  };
+  const OPEN_ORDER: OrdenServicio = { ...CLOSED_ORDER, status: "open", completedAt: null };
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubPatch(status: number, body: unknown) {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: status < 300, status, json: async () => body }) as Response);
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  function patchBody(fetchMock: ReturnType<typeof stubPatch>) {
+    const call = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PATCH");
+    return JSON.parse((call![1] as RequestInit).body as string);
+  }
+
+  const passwordInput = () => screen.getByLabelText("Tu contraseña") as HTMLInputElement;
+  const guardar = () => screen.getByRole("button", { name: "Guardar" }) as HTMLButtonElement;
+
+  async function openAndSave(password = "secreta") {
+    render(<ServiceOrderForm order={CLOSED_ORDER} canCreateCustomer={false} triggerLabel="Corregir" />);
+    fireEvent.click(screen.getByRole("button", { name: "Corregir" }));
+    fireEvent.change(screen.getByLabelText(/descripción/i), { target: { value: "Cambio de aceite y filtro" } });
+    fireEvent.change(passwordInput(), { target: { value: password } });
+    fireEvent.click(guardar());
+    await flush();
+  }
+
+  it("asks for the password in a dialog titled as a correction", () => {
+    render(<ServiceOrderForm order={CLOSED_ORDER} canCreateCustomer={false} triggerLabel="Corregir" />);
+    fireEvent.click(screen.getByRole("button", { name: "Corregir" }));
+
+    expect(screen.getByRole("dialog", { name: "Corregir orden de servicio" })).toBeInTheDocument();
+    expect(passwordInput()).toHaveAttribute("type", "password");
+  });
+
+  it("asks for no password when the order is still open", () => {
+    render(<ServiceOrderForm order={OPEN_ORDER} canCreateCustomer={false} />);
+    openEditDialog();
+
+    expect(screen.queryByLabelText("Tu contraseña")).not.toBeInTheDocument();
+  });
+
+  it("keeps Guardar disabled until the password is typed", () => {
+    render(<ServiceOrderForm order={CLOSED_ORDER} canCreateCustomer={false} triggerLabel="Corregir" />);
+    fireEvent.click(screen.getByRole("button", { name: "Corregir" }));
+
+    expect(guardar()).toBeDisabled();
+    fireEvent.change(passwordInput(), { target: { value: "x" } });
+    expect(guardar()).toBeEnabled();
+  });
+
+  it("sends the password with the PATCH of a closed order", async () => {
+    const fetchMock = stubPatch(200, { orden: CLOSED_ORDER });
+    await openAndSave("secreta");
+
+    expect(patchBody(fetchMock)).toMatchObject({ password: "secreta", description: "Cambio de aceite y filtro" });
+  });
+
+  it("never sends a password for an open order", async () => {
+    const fetchMock = stubPatch(200, { orden: OPEN_ORDER });
+    render(<ServiceOrderForm order={OPEN_ORDER} canCreateCustomer={false} />);
+    openEditDialog();
+    fireEvent.click(guardar());
+    await flush();
+
+    expect(patchBody(fetchMock)).not.toHaveProperty("password");
+  });
+
+  it("shows 'Contraseña incorrecta' inline on a 403, keeping what was typed and asking for the password again", async () => {
+    stubPatch(403, { error: "wrong_password", message: "Contraseña incorrecta" });
+    await openAndSave();
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Contraseña incorrecta");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByLabelText(/descripción/i)).toHaveValue("Cambio de aceite y filtro");
+    // Required again on every save: the failed attempt does not stay in state.
+    expect(passwordInput()).toHaveValue("");
+    expect(guardar()).toBeDisabled();
+  });
+
+  it("tells the operator to wait on a 429", async () => {
+    stubPatch(429, { error: "throttled", message: "Demasiados intentos. Probá de nuevo en 15 minutos." });
+    await openAndSave();
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Demasiados intentos. Probá de nuevo en 15 minutos.");
+    expect(screen.getByLabelText(/descripción/i)).toHaveValue("Cambio de aceite y filtro");
+  });
+
+  it("shows the role refusal of a 403 that carries errors.form", async () => {
+    stubPatch(403, { errors: { form: "Solo un administrador puede corregir una orden cerrada." } });
+    await openAndSave();
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Solo un administrador puede corregir una orden cerrada.");
+  });
+
+  it("does not keep the password after the dialog is cancelled", () => {
+    render(<ServiceOrderForm order={CLOSED_ORDER} canCreateCustomer={false} triggerLabel="Corregir" />);
+    fireEvent.click(screen.getByRole("button", { name: "Corregir" }));
+    fireEvent.change(passwordInput(), { target: { value: "secreta" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Corregir" }));
+
+    expect(passwordInput()).toHaveValue("");
+  });
+
+  it("does not keep the password after a successful save", async () => {
+    stubPatch(200, { orden: CLOSED_ORDER });
+    await openAndSave();
+    fireEvent.click(screen.getByRole("button", { name: "Corregir" }));
+
+    expect(passwordInput()).toHaveValue("");
   });
 });
