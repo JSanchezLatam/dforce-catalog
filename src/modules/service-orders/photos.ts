@@ -64,7 +64,15 @@ export type PhotoDeps = {
 };
 
 export async function addOrderPhoto(
-  input: { ordenId: string; bytes: Buffer; scope: OrderScope; createdBy?: string | null; correction?: CorrectionGrant },
+  input: {
+    ordenId: string;
+    bytes: Buffer;
+    scope: OrderScope;
+    createdBy?: string | null;
+    /** `can(user, "service-orders.assign")`; absent means a técnico, who is refused in `ready_for_review`. */
+    canManageAll?: boolean;
+    correction?: CorrectionGrant;
+  },
   deps: PhotoDeps = {},
 ): Promise<{ id: string; position: number; r2Key: string }> {
   const database = deps.db ?? db;
@@ -79,7 +87,7 @@ export async function addOrderPhoto(
     return await database.transaction(async (tx) => {
       const { correcting } = await lockOrderForMutation(tx, input.ordenId, {
         scope: input.scope,
-        canWrite: canChangeOrderPhotos,
+        canWrite: (status) => canChangeOrderPhotos(status, input.canManageAll ?? false),
         correction: input.correction,
       });
 
@@ -153,7 +161,8 @@ export async function deleteOrderPhoto(
   const r2Key = await database.transaction(async (tx) => {
     const { correcting } = await lockOrderForMutation(tx, input.ordenId, {
       scope: input.scope,
-      canWrite: canChangeOrderPhotos,
+      // Deleting is administrador-only (the route's `deletePhoto` gate), and an administrador is staff.
+      canWrite: (status) => canChangeOrderPhotos(status, true),
       correction: input.correction,
     });
     const [row] = await tx

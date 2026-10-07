@@ -1317,3 +1317,90 @@ describe("ServiceOrderForm — correcting a closed order", () => {
     expect(passwordInput()).toHaveValue("");
   });
 });
+
+describe("ServiceOrderForm — assigning technicians at creation", () => {
+  const TECNICOS = [
+    { id: "t1", nombre: "Ana Mecánica" },
+    { id: "t2", nombre: "Beto Frenos" },
+  ];
+
+  function stubFetch() {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/vehicles")) return Promise.resolve(jsonResponse({ vehicles: [vehiculoRow()] }));
+      return Promise.resolve(jsonResponse({ orden: { id: "o1" } }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  async function fillCreate(tecnicos?: typeof TECNICOS) {
+    const fetchMock = stubFetch();
+    render(<ServiceOrderForm selectedCustomer={CUSTOMER} canCreateCustomer={false} tecnicos={tecnicos} />);
+    openDialog();
+    await flush();
+    fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+    fireEvent.change(categorySelect(), { target: { value: "revisado" } });
+    return fetchMock;
+  }
+
+  async function submitBody(fetchMock: ReturnType<typeof vi.fn>) {
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await flush();
+    const [, init] = fetchMock.mock.calls.find(([u]) => u === "/api/service-orders")!;
+    return JSON.parse((init as RequestInit).body as string);
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sends the ticked technicians as tecnicoIds", async () => {
+    const fetchMock = await fillCreate(TECNICOS);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Beto Frenos" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Ana Mecánica" }));
+
+    expect((await submitBody(fetchMock)).tecnicoIds).toEqual(["t2", "t1"]);
+  });
+
+  it("submits with nobody ticked, sending an empty list", async () => {
+    const fetchMock = await fillCreate(TECNICOS);
+
+    expect((await submitBody(fetchMock)).tecnicoIds).toEqual([]);
+  });
+
+  it("shows no picker, and sends no tecnicoIds, when the caller passed no roster", async () => {
+    const fetchMock = await fillCreate(undefined);
+
+    expect(screen.queryByRole("group", { name: "Técnicos" })).not.toBeInTheDocument();
+    expect(await submitBody(fetchMock)).not.toHaveProperty("tecnicoIds");
+  });
+
+  it("shows no picker when editing: assignment lives on the order's detail page", async () => {
+    stubFetch();
+    render(
+      <ServiceOrderForm
+        order={{ id: "o1", status: "open", clienteId: "c1", categoria: "revisado" } as OrdenServicio}
+        canCreateCustomer={false}
+        tecnicos={TECNICOS}
+      />,
+    );
+    openEditDialog();
+
+    expect(screen.queryByRole("group", { name: "Técnicos" })).not.toBeInTheDocument();
+  });
+
+  it("shows a refusal keyed on tecnicoIds in the form-level slot", async () => {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/vehicles")) return Promise.resolve(jsonResponse({ vehicles: [vehiculoRow()] }));
+      return Promise.resolve({ ok: false, status: 400, json: async () => ({ errors: { tecnicoIds: "Elegí técnicos activos" } }) } as Response);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ServiceOrderForm selectedCustomer={CUSTOMER} canCreateCustomer={false} tecnicos={TECNICOS} />);
+    openDialog();
+    await flush();
+    fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+    fireEvent.change(categorySelect(), { target: { value: "revisado" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await flush();
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Elegí técnicos activos");
+  });
+});

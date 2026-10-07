@@ -14,6 +14,7 @@ import { cliente, ordenServicio, ordenTecnico, tecnico, users, vehiculo } from "
 import { lockOrderForMutation, OrderClosedError } from "../modules/service-orders/order-lock";
 import { markParteLista, ParteListaForbiddenError, unmarkParteLista } from "../modules/service-orders/parte-lista";
 import { SYSTEM_SCOPE } from "../modules/service-orders/scope";
+import { transitionOrder } from "../modules/service-orders/service";
 
 describe("Mi parte lista and readiness (E2E)", () => {
   const stamp = Date.now();
@@ -137,6 +138,23 @@ describe("Mi parte lista and readiness (E2E)", () => {
     expect(await statusOf(ordenId)).toBe("in_progress");
     expect(await markOf(ordenId, a.tecnicoId)).toBeNull();
     expect((await markOf(ordenId, b.tecnicoId))?.toISOString()).toBe(markedAt.toISOString());
+  });
+
+  it("sending a ready order back clears every mark, and re-marking by all active assignees makes it ready again", async () => {
+    const a = await technician("back-a");
+    const b = await technician("back-b");
+    const ordenId = await newOrder("ready_for_review");
+    const markedAt = new Date("2026-10-06T10:00:00Z");
+    await assign(ordenId, a.tecnicoId, markedAt);
+    await assign(ordenId, b.tecnicoId, markedAt);
+
+    await transitionOrder(ordenId, "in_progress", { scope: SYSTEM_SCOPE, canAssign: true });
+
+    expect(await statusOf(ordenId)).toBe("in_progress");
+    expect(await markOf(ordenId, a.tecnicoId)).toBeNull();
+    expect(await markOf(ordenId, b.tecnicoId)).toBeNull();
+    await expect(mark(ordenId, a.userId)).resolves.toEqual({ status: "in_progress" });
+    await expect(mark(ordenId, b.userId)).resolves.toEqual({ status: "ready_for_review" });
   });
 
   it("a technician not assigned to the order cannot mark, and a closed order refuses the assigned one", async () => {
