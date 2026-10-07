@@ -551,6 +551,27 @@ export const ordenServicioFoto = pgTable(
 export type OrdenServicioFoto = typeof ordenServicioFoto.$inferSelect;
 
 /**
+ * `orden_servicio_correccion` — audit trail of administrator corrections to a
+ * closed order (closed-order-lock). One row per CHANGED field. Both FKs are
+ * `restrict` (ADR-6): deleting the order or the user must never erase its
+ * correction history, and no delete path exists for either table. Values are plain text: Date as ISO,
+ * number via `String()`, null as NULL; a photo add is `(null, photoId)`.
+ */
+export const ordenServicioCorreccion = pgTable("orden_servicio_correccion", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  ordenId: text("orden_id")
+    .notNull()
+    .references(() => ordenServicio.id, { onDelete: "restrict" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  field: text("field").notNull(),
+  oldValue: text("old_value"),
+  newValue: text("new_value"),
+});
+
+/**
  * `orden_servicio_item` — parts used on a service order (ADR-7). `productName`
  * and `unitPrice` are a snapshot at time of use so a later inventory sync
  * that renames/reprices a part does NOT rewrite historical orders (same

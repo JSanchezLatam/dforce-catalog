@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { ROLES, type Role } from "@/modules/auth/roles";
 import { orderStatusEnum } from "@/shared/db/schema";
-import { canChangeOrderPhotos, canEditOrderFields } from "./edit-policy";
+import { canChangeOrderPhotos, canEditOrderFields, isClosedStatus } from "./edit-policy";
 import type { OrderStatus } from "./transitions";
 
 /**
@@ -61,6 +61,23 @@ describe("canChangeOrderPhotos", () => {
   it("covers every status the schema defines", () => {
     for (const status of orderStatusEnum.enumValues) {
       expect(typeof canChangeOrderPhotos(status)).toBe("boolean");
+    }
+  });
+});
+
+describe("isClosedStatus", () => {
+  it.each<[OrderStatus, boolean]>([
+    ["open", false],
+    ["in_progress", false],
+    ["done", true],
+    ["cancelled", true],
+  ])("a %s order -> %s", (status, expected) => {
+    expect(isClosedStatus(status)).toBe(expected);
+  });
+
+  it("covers every status the schema defines", () => {
+    for (const status of orderStatusEnum.enumValues) {
+      expect(typeof isClosedStatus(status)).toBe("boolean");
     }
   });
 });

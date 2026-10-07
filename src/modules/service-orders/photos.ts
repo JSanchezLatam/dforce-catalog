@@ -27,10 +27,11 @@ import { deleteObject, putObject } from "@/modules/catalog-storage/r2";
 import { db } from "@/shared/db/client";
 import { ordenServicio, ordenServicioFoto } from "@/shared/db/schema";
 import { canChangeOrderPhotos } from "./edit-policy";
+import { OrderClosedError } from "./order-lock";
 import { MAX_PHOTOS } from "./photo-limits";
 import { OrdenServicioNotFoundError } from "./service";
 
-export { MAX_PHOTOS };
+export { MAX_PHOTOS, OrderClosedError };
 export const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
 
 /** Leading bytes of every JPEG: SOI marker `FF D8` followed by a marker `FF`. The declared content type is never trusted. */
@@ -41,12 +42,6 @@ export function isJpeg(bytes: Uint8Array): boolean {
 export class PhotoLimitError extends Error {
   constructor() {
     super(`La orden ya tiene ${MAX_PHOTOS} fotos`);
-  }
-}
-
-export class OrderClosedError extends Error {
-  constructor() {
-    super("La orden está cerrada; no se pueden cambiar sus fotos");
   }
 }
 

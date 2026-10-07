@@ -65,3 +65,15 @@ const PHOTOS_CHANGEABLE: Record<OrderStatus, boolean> = {
 export function canChangeOrderPhotos(status: OrderStatus): boolean {
   return PHOTOS_CHANGEABLE[status] ?? false;
 }
+
+/** Closed orders are locked: only an authenticated administrator correction (closed-order-lock) may change them. Exhaustive, so a new status is a tsc error here. */
+const CLOSED: Record<OrderStatus, boolean> = {
+  open: false,
+  in_progress: false,
+  done: true,
+  cancelled: true,
+};
+
+export function isClosedStatus(status: OrderStatus): boolean {
+  return CLOSED[status] ?? false;
+}
