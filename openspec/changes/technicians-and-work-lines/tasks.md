@@ -46,8 +46,8 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU2: Roster service and routes (PR 2)
 
-- [ ] 2.1 RED `technicians/service.test.ts`: create requires non-blank `nombre`; jefe supplying `userId` throws forbidden; admin link refused when the user is already linked (Spanish); deactivate/reactivate sets/clears `deactivatedAt`. GREEN `technicians/{service,queries}.ts`; no delete function.
-- [ ] 2.2 RED `account/service.test.ts`: `ensureRosterRow(tx,userId)` creates one linked row for new técnico; reuses an existing link; roster insert failure rolls back `createUser`; role change to `tecnico` in `updateUser` runs it; demotion or deactivation leaves the row untouched. GREEN.
+- [x] 2.1 RED `technicians/service.test.ts`: create requires non-blank `nombre`; jefe supplying `userId` throws forbidden; admin link refused when the user is already linked (Spanish); deactivate/reactivate sets/clears `deactivatedAt`. GREEN `technicians/{service,queries}.ts`; no delete function.
+- [x] 2.2 RED `account/service.test.ts`: `ensureRosterRow(tx,userId)` creates one linked row for new técnico; reuses an existing link; roster insert failure rolls back `createUser`; role change to `tecnico` in `updateUser` runs it; demotion or deactivation leaves the row untouched. GREEN.
 - [ ] 2.3 RED route tests `/api/technicians` POST and `[id]` PATCH: técnico 403, jefe with `user_id` 403, jefe create 201, admin link 200. GREEN routes; `route-guards.test.ts` rows (`["technicians.manage","users.manage"]` for link).
 - [ ] 2.4 RED e2e `src/e2e/technicians.e2e.test.ts`: duplicate link rejected by DB; atomic `createUser` rollback on forced roster failure; promotion reuses link. GREEN.
 - [ ] 2.5 Mutation-verify 2.1-2.4 by name. 2.6 curl at the LAN IP as técnico, jefe, administrador.
