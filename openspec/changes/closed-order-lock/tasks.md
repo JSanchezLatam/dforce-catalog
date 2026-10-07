@@ -63,7 +63,7 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 - [x] 4.4 RED `OrderPhotos` tests: closed + admin shows add/delete with the password field in each confirm; técnico sees no controls on a closed order; success toast reports APPLIED count. GREEN `OrderPhotos.tsx`.
 - [x] 4.5 RED detail page tests: admin on done/cancelled sees "Corregir" and no plain edit control; técnico sees neither; password dialog before editable form; "Corregir" carries `min-h-11 min-w-11`. GREEN `[id]/page.tsx`.
 - [x] 4.6 Mutation-verify 4.1-4.5 by name (keep the password in state after close, toast below refresh, show Corregir to técnico, drop `min-h-11`).
-- [ ] 4.7 Playwright at `http://192.168.0.3:3000` (LAN IP, not localhost) as administrador and técnico at 390, 768 and desktop widths: read the console (RSC boundary, dialog is a portal); measure Corregir, confirm and cancel at >=44x44 on touch; dialog full-width at 390; wrong password inline with data kept; success toast. jsdom proves none of this.
+- [x] 4.7 Playwright at `http://192.168.0.3:3000` (LAN IP, not localhost) as administrador and técnico at 390, 768 and desktop widths: read the console (RSC boundary, dialog is a portal); measure Corregir, confirm and cancel at >=44x44 on touch; dialog full-width at 390; wrong password inline with data kept; success toast. jsdom proves none of this.
 
 ## Spec archive notes
 
