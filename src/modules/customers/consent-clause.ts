@@ -7,6 +7,13 @@
  * text means a NEW `CONSENT_CLAUSE_VERSION` in `consent.ts`; existing rows keep
  * the version they were recorded under.
  */
+/**
+ * Provisional text hidden at the client's request (2026-10-07): the checkbox and
+ * the recorded consent stay, only the text is withheld. Set to true to show it
+ * again (staff panel and printed sheet) once the lawyer's text lands.
+ */
+export const SHOW_CONSENT_CLAUSE = false;
+
 export const CONSENT_CLAUSE_BANNER = "Texto provisorio — pendiente de revisión legal";
 
 export const CONSENT_CLAUSE_PARAGRAPHS: readonly string[] = [

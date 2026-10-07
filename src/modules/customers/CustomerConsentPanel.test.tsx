@@ -13,6 +13,18 @@ import { ToastProvider } from "@/shared/ui/ToastProvider";
 const refresh = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 
+// `undefined` = the real SHOW_CONSENT_CLAUSE, so the default-state test reads the shipped value.
+const clauseFlag = vi.hoisted(() => ({ show: undefined as boolean | undefined }));
+vi.mock("./consent-clause", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./consent-clause")>();
+  return {
+    ...actual,
+    get SHOW_CONSENT_CLAUSE() {
+      return clauseFlag.show ?? actual.SHOW_CONSENT_CLAUSE;
+    },
+  };
+});
+
 import { CustomerConsentPanel } from "./CustomerConsentPanel";
 
 const render = (ui: ReactElement) => rtlRender(ui, { wrapper: ToastProvider });
@@ -35,6 +47,7 @@ const revoked = { granted: false, recordedByName: "Beto Jefe", recordedAtLabel: 
 afterEach(() => {
   vi.unstubAllGlobals();
   refresh.mockReset();
+  clauseFlag.show = undefined;
 });
 
 const saveButton = () => screen.getByRole("button", { name: "Guardar consentimiento" });
@@ -67,12 +80,23 @@ describe("CustomerConsentPanel", () => {
     expect(screen.getByText("Consentimiento otorgado el 7/10/2026, 10:30:00")).toBeInTheDocument();
   });
 
-  it("starts the clause with the provisional-text banner", () => {
+  it("starts the clause with the provisional-text banner when SHOW_CONSENT_CLAUSE is on", () => {
+    clauseFlag.show = true;
     render(<CustomerConsentPanel clienteId="c1" canRecord consent={null} />);
 
     const clause = screen.getByTestId("consent-clause");
     expect(clause.textContent?.startsWith("Texto provisorio — pendiente de revisión legal")).toBe(true);
     expect(clause.textContent).toMatch(/fuera de Panamá/);
+  });
+
+  it("hides the provisional clause by default but keeps the status, checkbox and save button", () => {
+    render(<CustomerConsentPanel clienteId="c1" canRecord consent={granted} />);
+
+    expect(screen.queryByTestId("consent-clause")).not.toBeInTheDocument();
+    expect(screen.queryByText("Texto provisorio — pendiente de revisión legal")).not.toBeInTheDocument();
+    expect(screen.getByText("Consentimiento otorgado por Ana Admin el 7/10/2026, 10:30:00")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Consentimiento de datos (Ley 81)" })).toBeChecked();
+    expect(saveButton()).toBeInTheDocument();
   });
 
   it("offers no checkbox and no save button without the grant", () => {

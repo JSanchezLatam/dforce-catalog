@@ -4,6 +4,17 @@ const findByToken = vi.fn();
 const recordAcceptance = vi.fn();
 vi.mock("../../../src/portal/lookup", () => ({ findByToken: (t: string) => findByToken(t) }));
 vi.mock("../../../src/portal/accept", () => ({ recordAcceptance: (t: string) => recordAcceptance(t) }));
+// `undefined` = the real TERMS_GATE_ENABLED, so the gate-off tests read the shipped value.
+const gate = vi.hoisted(() => ({ on: undefined as boolean | undefined }));
+vi.mock("../../../src/terms", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/terms")>();
+  return {
+    ...actual,
+    get TERMS_GATE_ENABLED() {
+      return gate.on ?? actual.TERMS_GATE_ENABLED;
+    },
+  };
+});
 
 import { POST as accept } from "./accept/route";
 import { POST as open } from "./open/route";
@@ -27,6 +38,7 @@ let spies: ReturnType<typeof vi.spyOn>[];
 beforeEach(() => {
   findByToken.mockReset();
   recordAcceptance.mockReset();
+  gate.on = undefined;
   spies = (["log", "info", "warn", "error", "debug"] as const).map((m) =>
     vi.spyOn(console, m).mockImplementation(() => {}),
   );
@@ -92,7 +104,8 @@ describe.each(Object.entries(routes))("POST /api/c/%s", (_name, route) => {
 });
 
 describe("open", () => {
-  it("reports terms and accepted, without any snapshot", async () => {
+  it("reports terms and accepted, without any snapshot, when the terms gate is on", async () => {
+    gate.on = true;
     findByToken.mockResolvedValueOnce({ snapshot: SNAP, accepted: false });
     findByToken.mockResolvedValueOnce({ snapshot: SNAP, accepted: true });
     expect(await (await call(open, tok())).json()).toEqual({ state: "terms" });
@@ -101,7 +114,8 @@ describe("open", () => {
 });
 
 describe("snapshot", () => {
-  it("returns data only once accepted", async () => {
+  it("returns data only once accepted when the terms gate is on", async () => {
+    gate.on = true;
     findByToken.mockResolvedValueOnce({ snapshot: SNAP, accepted: false });
     findByToken.mockResolvedValueOnce({ snapshot: SNAP, accepted: true });
     expect(await (await call(snapshot, tok())).json()).toEqual({ state: "terms" });
@@ -110,7 +124,8 @@ describe("snapshot", () => {
 });
 
 describe("accept", () => {
-  it("records the acceptance before it returns the snapshot", async () => {
+  it("records the acceptance before it returns the snapshot when the terms gate is on", async () => {
+    gate.on = true;
     findByToken.mockResolvedValue({ snapshot: SNAP, accepted: false });
     const order: string[] = [];
     recordAcceptance.mockImplementation(async () => void order.push("insert"));
@@ -121,7 +136,8 @@ describe("accept", () => {
     expect(await res.json()).toEqual({ state: "accepted", snapshot: SNAP });
   });
 
-  it("never returns the snapshot when the acceptance could not be stored", async () => {
+  it("never returns the snapshot when the acceptance could not be stored when the terms gate is on", async () => {
+    gate.on = true;
     findByToken.mockResolvedValue({ snapshot: SNAP, accepted: false });
     recordAcceptance.mockRejectedValue(new Error("insert failed"));
     await expect(call(accept, tok())).rejects.toThrow("insert failed");
@@ -130,6 +146,38 @@ describe("accept", () => {
   it("does not record anything for an invalid token", async () => {
     findByToken.mockResolvedValue(null);
     await call(accept, tok());
+    expect(recordAcceptance).not.toHaveBeenCalled();
+  });
+});
+
+// The provisional terms are hidden at the client's request: TERMS_GATE_ENABLED ships false.
+describe("with the terms gate off (the default)", () => {
+  it("open lets an un-accepted valid token straight through to the history", async () => {
+    findByToken.mockResolvedValue({ snapshot: SNAP, accepted: false });
+    const res = await call(open, tok());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ state: "accepted" });
+  });
+
+  it("snapshot returns the data to an un-accepted valid token", async () => {
+    findByToken.mockResolvedValue({ snapshot: SNAP, accepted: false });
+    const res = await call(snapshot, tok());
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ state: "accepted", snapshot: SNAP });
+  });
+
+  it("accept writes no acceptance row for text the customer never saw", async () => {
+    findByToken.mockResolvedValue({ snapshot: SNAP, accepted: false });
+    const res = await call(accept, tok("abc"));
+    expect(recordAcceptance).not.toHaveBeenCalled();
+    expect(await res.json()).toEqual({ state: "accepted", snapshot: SNAP });
+  });
+
+  it.each(Object.entries(routes))("%s still answers an unknown token with the invalid 404", async (_name, route) => {
+    findByToken.mockResolvedValue(null);
+    const res = await call(route, tok("nope"));
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ state: "invalid" });
     expect(recordAcceptance).not.toHaveBeenCalled();
   });
 });
