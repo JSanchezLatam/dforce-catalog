@@ -135,6 +135,19 @@ describe("ServiceOrderDetailPage", () => {
     expect(screen.queryByText("revisado")).not.toBeInTheDocument();
   });
 
+  // customer-portal WU5b — these three fields reach the customer's portal page.
+  it("marks Descripción, Hallazgos and Recomendaciones as visible to the customer, and never Observaciones", async () => {
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, description: "Instalar parlantes" }, items: [] });
+    render(await renderPage());
+
+    const hinted = (label: string) => screen.getByText(label).closest("dt")?.textContent?.includes("Visible para el cliente");
+    expect(hinted("Descripción")).toBe(true);
+    expect(hinted("Hallazgos")).toBe(true);
+    expect(hinted("Recomendaciones")).toBe(true);
+    expect(hinted("Observaciones")).toBe(false);
+    expect(screen.getAllByText("Visible para el cliente")).toHaveLength(3);
+  });
+
   it("renders an unset note as a placeholder row, never as a missing one", async () => {
     render(await renderPage());
 

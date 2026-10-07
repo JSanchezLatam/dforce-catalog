@@ -10,6 +10,8 @@ import { desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { cliente, clienteConsentimiento, users } from "@/shared/db/schema";
+import { enqueuePortalSync, type PortalSyncDeps } from "@/modules/portal-sync/enqueue";
+import { generatePortalToken, tokenAfterConsent } from "./portal-token";
 import { ClienteDeactivatedError, ClienteNotFoundError } from "./service";
 
 /** Bump with every change to the clause text; rows keep the version they were recorded under. */
@@ -38,6 +40,25 @@ export function decideConsent(
   if (!target) return "not_found";
   if (target.deactivatedAt) return "deactivated";
   return (latest ?? false) === wanted ? "unchanged" : "append";
+}
+
+export class PortalConsentRequiredError extends Error {
+  constructor(public readonly clienteId: string) {
+    super(`Customer ${clienteId} has no current portal consent`);
+    this.name = "PortalConsentRequiredError";
+  }
+}
+
+export type RotationDecision = "not_found" | "deactivated" | "no_consent" | "rotate";
+
+/** A token exists only under current consent, so rotation needs an active customer whose latest row is a grant. */
+export function decideRotation(
+  target: { deactivatedAt: Date | null } | undefined,
+  latest: boolean | undefined,
+): RotationDecision {
+  if (!target) return "not_found";
+  if (target.deactivatedAt) return "deactivated";
+  return latest === true ? "rotate" : "no_consent";
 }
 
 const stateColumns = {
@@ -69,6 +90,15 @@ export async function currentConsent(clienteId: string): Promise<ConsentState | 
  * with another request for the same customer (two simultaneous grants append
  * one row), and the deactivated check reads the LOCKED row.
  *
+ * The portal token follows the consent in the SAME transaction (customer-portal
+ * WU2): a grant issues one when the customer has none, a revoke nulls it. It is
+ * written AFTER the consent row, so a failure on the token (the e2e forces a
+ * UNIQUE collision) rolls the row back with it. `deps.generateToken` exists for
+ * that e2e only.
+ *
+ * The portal sync is enqueued AFTER the commit, and only when a row was appended:
+ * a rolled-back or repeated request changes nothing the portal holds.
+ *
  * `recorded_at` is `clock_timestamp()`, not the column default: `now()` is the
  * start of the transaction, so a request that began first but won the lock
  * second would be stamped OLDER than the row it follows and the current state
@@ -78,10 +108,11 @@ export async function recordConsent(
   clienteId: string,
   granted: boolean,
   userId: string,
+  deps: { generateToken?: () => string } & PortalSyncDeps = {},
 ): Promise<{ changed: boolean; consent: ConsentState | null }> {
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [target] = await tx
-      .select({ deactivatedAt: cliente.deactivatedAt })
+      .select({ deactivatedAt: cliente.deactivatedAt, portalToken: cliente.portalToken })
       .from(cliente)
       .where(eq(cliente.id, clienteId))
       .for("update");
@@ -103,6 +134,10 @@ export async function recordConsent(
         recordedBy: userId,
         recordedAt: sql`clock_timestamp()`,
       });
+      await tx
+        .update(cliente)
+        .set({ portalToken: tokenAfterConsent(granted, target?.portalToken ?? null, deps.generateToken) })
+        .where(eq(cliente.id, clienteId));
     }
 
     const [row] = await tx
@@ -114,4 +149,43 @@ export async function recordConsent(
       .limit(1);
     return { changed: decision === "append", consent: row ?? null };
   });
+  if (result.changed) await (deps.enqueuePortalSync ?? enqueuePortalSync)(clienteId);
+  return result;
+}
+
+/**
+ * Replaces the customer's portal token ("Generar nuevo código"). Every QR
+ * printed with the old one stops working once the sync completes. One locked
+ * transaction: the decision reads the LOCKED row and the latest consent, so a
+ * revoke racing a rotate cannot leave a token behind a revoked consent.
+ * `deps.generateToken` exists for tests only. The portal sync is enqueued after the commit.
+ */
+export async function rotatePortalToken(
+  clienteId: string,
+  deps: { generateToken?: () => string } & PortalSyncDeps = {},
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [target] = await tx
+      .select({ deactivatedAt: cliente.deactivatedAt })
+      .from(cliente)
+      .where(eq(cliente.id, clienteId))
+      .for("update");
+    const [latest] = await tx
+      .select({ granted: clienteConsentimiento.granted })
+      .from(clienteConsentimiento)
+      .where(eq(clienteConsentimiento.clienteId, clienteId))
+      .orderBy(...newestFirst)
+      .limit(1);
+
+    const decision = decideRotation(target, latest?.granted);
+    if (decision === "not_found") throw new ClienteNotFoundError(clienteId);
+    if (decision === "deactivated") throw new ClienteDeactivatedError(clienteId);
+    if (decision === "no_consent") throw new PortalConsentRequiredError(clienteId);
+
+    await tx
+      .update(cliente)
+      .set({ portalToken: (deps.generateToken ?? generatePortalToken)() })
+      .where(eq(cliente.id, clienteId));
+  });
+  await (deps.enqueuePortalSync ?? enqueuePortalSync)(clienteId);
 }

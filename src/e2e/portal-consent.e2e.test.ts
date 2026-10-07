@@ -6,14 +6,17 @@
  * test") — never the dev one.
  */
 import { execSync } from "node:child_process";
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { CONSENT_CLAUSE_VERSION, currentConsent, recordConsent } from "@/modules/customers/consent";
+import { CONSENT_CLAUSE_VERSION, currentConsent, recordConsent, rotatePortalToken } from "@/modules/customers/consent";
+import { listClientes } from "@/modules/customers/queries";
+import { deactivateCliente, reactivateCliente } from "@/modules/customers/service";
 import { db } from "@/shared/db/client";
 import { cliente, clienteConsentimiento, users } from "@/shared/db/schema";
 import { POST } from "../app/api/customers/[id]/consent/route";
+import { POST as ROTATE } from "../app/api/customers/[id]/portal-token/rotate/route";
 
 const ADMIN = "e2e-consent-admin";
 const JEFE = "e2e-consent-jefe";
@@ -59,7 +62,6 @@ describe("cliente_consentimiento (E2E)", () => {
     // Customers first: the consent rows cascade, and the users are then free to go.
     if (created.length) await db.delete(cliente).where(inArray(cliente.id, created));
     await db.delete(users).where(inArray(users.id, [ADMIN, JEFE]));
-    await db.$client.end();
   });
 
   it("grant appends one granted row with who, when and the clause version", async () => {
@@ -195,4 +197,188 @@ describe("cliente_consentimiento (E2E)", () => {
     expect(stored).toHaveLength(1);
     expect(stored[0].recordedBy).toBeNull();
   });
+});
+
+describe("cliente.portal_token (E2E, customer-portal WU2)", () => {
+  const created: string[] = [];
+  const ADMIN2 = "e2e-token-admin";
+
+  const newCliente = async (extra: Partial<typeof cliente.$inferInsert> = {}) => {
+    const [row] = await db
+      .insert(cliente)
+      .values({ name: "E2E Token", phone: "50769993001", ...extra })
+      .returning();
+    created.push(row.id);
+    return row.id;
+  };
+  const tokenOf = async (id: string) =>
+    (await db.select({ t: cliente.portalToken }).from(cliente).where(eq(cliente.id, id)))[0].t;
+  const consentRows = (id: string) =>
+    db.select().from(clienteConsentimiento).where(eq(clienteConsentimiento.clienteId, id));
+  const rotate = (id: string, body: unknown, role = "administrador") =>
+    ROTATE(
+      new NextRequest(`http://localhost/api/customers/${id}/portal-token/rotate`, {
+        method: "POST",
+        headers: { "x-user-id": ADMIN2, "x-user-role": role, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+      { params: Promise.resolve({ id }) },
+    );
+
+  beforeAll(async () => {
+    await db.insert(users).values({ id: ADMIN2, username: ADMIN2, passwordHash: "x", role: "administrador" });
+  });
+
+  afterAll(async () => {
+    if (created.length) await db.delete(cliente).where(inArray(cliente.id, created));
+    await db.delete(users).where(eq(users.id, ADMIN2));
+  });
+
+  it("a grant stores a 256-bit base64url token with the consent row", async () => {
+    const id = await newCliente();
+    await recordConsent(id, true, ADMIN2);
+
+    expect(await tokenOf(id)).toMatch(/^[A-Za-z0-9_-]{43,}$/);
+    expect(await consentRows(id)).toHaveLength(1);
+  });
+
+  it("grant and token are ONE transaction: a failure on the token write leaves no consent row either", async () => {
+    const holder = await newCliente({ phone: "50769993002" });
+    await recordConsent(holder, true, ADMIN2);
+    const taken = (await tokenOf(holder))!;
+
+    const id = await newCliente({ phone: "50769993003" });
+    // The consent row is inserted BEFORE the token write, so a UNIQUE violation
+    // there can only roll the row back if both share one transaction.
+    await expect(recordConsent(id, true, ADMIN2, { generateToken: () => taken })).rejects.toThrow();
+
+    expect(await consentRows(id)).toHaveLength(0);
+    expect(await tokenOf(id)).toBeNull();
+  });
+
+  it("a revoke nulls the token, and a re-grant mints a NEW one", async () => {
+    const id = await newCliente({ phone: "50769993004" });
+    await recordConsent(id, true, ADMIN2);
+    const first = await tokenOf(id);
+
+    await recordConsent(id, false, ADMIN2);
+    expect(await tokenOf(id)).toBeNull();
+
+    await recordConsent(id, true, ADMIN2);
+    const second = await tokenOf(id);
+    expect(second).toMatch(/^[A-Za-z0-9_-]{43,}$/);
+    expect(second).not.toBe(first);
+  });
+
+  it("repeating a grant keeps the same token", async () => {
+    const id = await newCliente({ phone: "50769993005" });
+    await recordConsent(id, true, ADMIN2);
+    const first = await tokenOf(id);
+    await recordConsent(id, true, ADMIN2);
+
+    expect(await tokenOf(id)).toBe(first);
+  });
+
+  it("portal_token is UNIQUE", async () => {
+    const a = await newCliente({ phone: "50769993006" });
+    const b = await newCliente({ phone: "50769993007" });
+    await db.update(cliente).set({ portalToken: "dup-token" }).where(eq(cliente.id, a));
+
+    await expect(db.update(cliente).set({ portalToken: "dup-token" }).where(eq(cliente.id, b))).rejects.toThrow();
+  });
+
+  it("rotate replaces the token and the old value exists nowhere in cliente", async () => {
+    const id = await newCliente({ phone: "50769993008" });
+    await recordConsent(id, true, ADMIN2);
+    const old = (await tokenOf(id))!;
+
+    const response = await rotate(id, { confirm: true });
+
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    expect(text).not.toContain(old);
+    const now = (await tokenOf(id))!;
+    expect(now).not.toBe(old);
+    expect(now).toMatch(/^[A-Za-z0-9_-]{43,}$/);
+    const rows = await db.execute(
+      sql`select count(*)::int as n from cliente c where c::text like ${"%" + old + "%"}`,
+    );
+    expect(rows.rows[0].n).toBe(0);
+  });
+
+  it("rotate without the confirmation flag changes nothing", async () => {
+    const id = await newCliente({ phone: "50769993009" });
+    await recordConsent(id, true, ADMIN2);
+    const before = await tokenOf(id);
+
+    expect((await rotate(id, {})).status).toBe(400);
+    expect((await rotate(id, { confirm: "true" })).status).toBe(400);
+    expect(await tokenOf(id)).toBe(before);
+  });
+
+  it("rotate is refused for jefe_taller with 403, and for a customer without current consent with 409", async () => {
+    const id = await newCliente({ phone: "50769993010" });
+    await recordConsent(id, true, ADMIN2);
+    const before = await tokenOf(id);
+    expect((await rotate(id, { confirm: true }, "jefe_taller")).status).toBe(403);
+    expect(await tokenOf(id)).toBe(before);
+
+    const none = await newCliente({ phone: "50769993011" });
+    expect((await rotate(none, { confirm: true })).status).toBe(409);
+    expect(await tokenOf(none)).toBeNull();
+
+    await recordConsent(id, false, ADMIN2);
+    expect((await rotate(id, { confirm: true })).status).toBe(409);
+    expect(await tokenOf(id)).toBeNull();
+  });
+
+  it("rotate answers 404 for an unknown customer and 409 for a deactivated one", async () => {
+    expect((await rotate("does-not-exist", { confirm: true })).status).toBe(404);
+
+    const id = await newCliente({ phone: "50769993012" });
+    await recordConsent(id, true, ADMIN2);
+    await deactivateCliente(id);
+    expect((await rotate(id, { confirm: true })).status).toBe(409);
+  });
+
+  it("deactivating and reactivating keeps the consent rows and the token", async () => {
+    const id = await newCliente({ phone: "50769993013" });
+    await recordConsent(id, true, ADMIN2);
+    const token = await tokenOf(id);
+
+    await deactivateCliente(id);
+    expect(await tokenOf(id)).toBe(token);
+    expect(await consentRows(id)).toHaveLength(1);
+
+    await reactivateCliente(id);
+    expect(await tokenOf(id)).toBe(token);
+    expect((await currentConsent(id))?.granted).toBe(true);
+  });
+
+  it("the customer list carries no token field, against the real select", async () => {
+    const id = await newCliente({ name: "E2E Token List", phone: "50769993014" });
+    await recordConsent(id, true, ADMIN2);
+
+    const rows = await listClientes({ search: "E2E Token List" }, { offset: 0, limit: 10 });
+
+    expect(rows.map((r) => r.id)).toContain(id);
+    for (const row of rows) {
+      expect(row).not.toHaveProperty("portalToken");
+      expect(JSON.stringify(row)).not.toContain((await tokenOf(id))!);
+    }
+  });
+
+  it("rotatePortalToken itself refuses when the latest consent row is a revoke", async () => {
+    const id = await newCliente({ phone: "50769993015" });
+    await recordConsent(id, true, ADMIN2);
+    await recordConsent(id, false, ADMIN2);
+
+    await expect(rotatePortalToken(id)).rejects.toThrow();
+  });
+});
+
+// File scope, after every describe: the pool is shared and ending it inside one
+// describe's `afterAll` kills every describe that runs after it.
+afterAll(async () => {
+  await db.$client.end();
 });

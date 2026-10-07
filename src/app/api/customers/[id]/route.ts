@@ -13,6 +13,7 @@ import {
   updateCliente,
   type UpdateClienteDeps,
 } from "@/modules/customers/service";
+import { toPublicCliente } from "@/modules/customers/portal-token";
 import { ClienteValidationError } from "@/modules/customers/validation";
 import { sendsInternalVehiculoFields } from "@/modules/customers/vehicles";
 
@@ -118,7 +119,7 @@ export async function handleUpdateCliente(
           ? await deactivate(id)
           : await updateCliente(id, fields, deps);
 
-    return NextResponse.json({ cliente });
+    return NextResponse.json({ cliente: toPublicCliente(cliente) });
   } catch (err) {
     if (err instanceof ClienteValidationError) {
       return NextResponse.json({ errors: err.errors }, { status: 400 }); // R17

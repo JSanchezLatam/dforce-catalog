@@ -6,7 +6,7 @@
  * here in PR8 (catalog-storage) — see design.md → "Database Schema Outline".
  * Each table is added alongside the code that first needs it.
  */
-import { boolean, check, date, foreignKey, index, integer, jsonb, pgEnum, pgTable, primaryKey, real, smallint, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, check, date, foreignKey, index, integer, jsonb, pgEnum, pgSequence, pgTable, primaryKey, real, smallint, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 /** R9.6 / NFR-8 — single `role` column, extensible without an RBAC library. */
@@ -372,6 +372,15 @@ export const cliente = pgTable(
      * `reminders/job.ts` refuses to send to them at fire time.
      */
     deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
+    /**
+     * Customer-portal token (customer-portal WU2), stored PLAINTEXT on purpose:
+     * the workshop reprints it, and encrypting it would put the key beside the
+     * database it protects. NULL whenever the customer has no current consent;
+     * issued on grant, nulled on revoke, replaced on rotate. SERVER-ONLY: it
+     * must never reach a list, an API response or a client component — go
+     * through `toPublicCliente` before a row leaves the server.
+     */
+    portalToken: text("portal_token").unique(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -411,6 +420,14 @@ export const clienteConsentimiento = pgTable(
 );
 
 export type ClienteConsentimiento = typeof clienteConsentimiento.$inferSelect;
+
+/**
+ * Ordering of every push to the portal (customer-portal WU5a). A SEQUENCE, not
+ * a clock: the worker draws a value while holding the per-customer advisory
+ * lock, so a later read always carries a later number. `nextval` is a bigint,
+ * which node-postgres returns as a STRING — `portal-sync/job.ts` converts it.
+ */
+export const portalSyncVersionSeq = pgSequence("portal_sync_version_seq");
 
 /**
  * `vehiculo` — a `cliente`'s vehicle collection (vehicles-one-to-many, C3,
