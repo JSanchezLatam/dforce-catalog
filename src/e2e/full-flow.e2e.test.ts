@@ -1839,11 +1839,12 @@ describe("full catalog-generation flow (E2E)", () => {
     const bytes = Buffer.from(await fileRes.arrayBuffer());
     expect(bytes.subarray(0, 4).toString()).toBe("%PDF"); // real Chromium-rendered PDF, not a stub buffer
 
-    // R7 ownership check — a different, non-admin user must not see it (404, not 403 — no existence signal).
-    const denied = await filePOST(new NextRequest(`http://localhost/api/catalogs/${catalog!.id}/file`, { headers: headersFor(otherUser) }), {
+    // A catalog is a workshop asset (owner, 2026-09-15, commit 94e539b): a
+    // técnico who did not generate it still downloads it via `catalogs.listAll`.
+    const shared = await filePOST(new NextRequest(`http://localhost/api/catalogs/${catalog!.id}/file`, { headers: headersFor(otherUser) }), {
       params: Promise.resolve({ id: catalog!.id }),
     });
-    expect(denied.status).toBe(404);
+    expect(shared.status).toBe(200);
   });
   /**
    * The injected-seam limit, closed for the row's lifecycle: every unit test

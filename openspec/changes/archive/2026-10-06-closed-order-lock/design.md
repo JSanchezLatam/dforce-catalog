@@ -10,7 +10,7 @@ Move the status gate from the route (`[id]/route.ts:57-78`, unlocked read, separ
 |---|---|---|---|
 | Guard shape | `lockOrderForMutation(tx, id, { canWrite, correction? })`: each mutation passes its own predicate; the guard owns the lock and the closed/correction rule | One guard per mutation kind | Work lines (the technicians change) plug in by passing `canEditWorkLines` |
 | `transitionOrder` | Runs under the same lock with `canWrite: () => true`; `assertTransition` stays its gate | Leave it unlocked | The read-then-write race lets "cancel" overwrite a concurrent "done". Closed→X stays a 400 `invalid_transition`, unchanged |
-| Password verify placement | Route, outside the transaction | Inside the transaction | bcrypt cost 12 must not hold the row lock (same reason as `updateUser` hashing outside its transaction) |
+| Password verify placement | Route, outside the transaction, only on OrderClosedError | Inside the transaction | bcrypt cost 12 must not hold the row lock (same reason as `updateUser` hashing outside its transaction); route attempts the write first, and only calls `authorizeCorrection` and retries on OrderClosedError with password present and `service-orders.correct` held; a password sent with an open-order edit is never verified and never counts toward the throttle |
 | Authority for the role | `role`, `deactivatedAt` and `passwordHash` come from ONE `users` SELECT by session id; `can(user, "service-orders.correct")` gives the early 403 | Trust the `x-user-role` header alone | The header is a claim; the DB read costs nothing extra |
 | New Action | `service-orders.correct` (admin only), declared as an array entry in `ROUTE_GUARDS` next to the existing action | Reuse `deletePhoto` | Keeps the route-guard cross-reference test meaningful |
 | Throttle | Module-level `Map<userId, number[]>` of failure timestamps; at 5 failures inside 15 min, refuse until the oldest failure ages out; a success clears the entry; checked BEFORE bcrypt | DB table | Single-process deployment. `ponytail:` resets on restart; move to a table if the app ever runs more than one process |
@@ -22,10 +22,9 @@ Status codes: closed order without a password → 409 (unchanged). Wrong passwor
 
 ## Data Flow
 
-    PATCH/POST/DELETE ─→ can(write|deletePhoto, correct?) ─→ authorizeCorrection
-                         (throttle → users SELECT → bcrypt) ─→ grant
-    service: tx { lockOrderForMutation ─→ write ─→ insert correccion rows } ─→ commit
-             ─→ reminder replan (categoria/appointmentAt), after commit
+    PATCH/POST/DELETE ─→ can(write|deletePhoto) ─→ service: tx { lockOrderForMutation ─→ write ─→ insert correccion rows }
+                         ─→ on OrderClosedError, if password + correct? ─→ authorizeCorrection (throttle → users SELECT → bcrypt) ─→ grant ─→ service: tx { lockOrderForMutation ─→ write ─→ insert correccion rows }
+    ─→ commit ─→ reminder replan (categoria/appointmentAt), after commit
 
 ## File Changes
 
@@ -61,7 +60,7 @@ export function authorizeCorrection(userId: string, password: string, deps?):
 
 ## UI
 
-Admin on a closed order: a "Corregir" button (`min-h-11 min-w-11`) opens `ServiceOrderForm` in correction mode. The form adds a `type="password"` field with `autoComplete="current-password"` and the label "Tu contraseña". The password lives in component state and is cleared on close; it is required again on every save. For a closed order, the photo add and delete confirmations embed the same field. Errors stay inline ("Contraseña incorrecta", "Demasiados intentos. Probá de nuevo en 15 minutos."). Success: `addToast("success", "Orden corregida")` above `router.refresh()`, below the try/catch. The dialog is full-width on mobile and the inputs keep their `pointer-coarse:` 44px. No secure-context API is used: no crypto and no clipboard on the client.
+Admin on a closed order: a "Corregir" button (`min-h-11 min-w-11`) opens `ServiceOrderForm` in correction mode. The form embeds `CorrectionPasswordField` — a `type="password"` field with `autoComplete="current-password"` and the label "Tu contraseña". The password lives in component state and is cleared on close; it is required again on every save. For photo add and delete confirmations on a closed order, each confirmation embeds the same password field. Errors stay inline ("Contraseña incorrecta", "Demasiados intentos. Probá de nuevo en 15 minutos."). Success: `addToast("success", "Orden corregida")` above `router.refresh()`, below the try/catch. The dialog is full-width on mobile and the inputs keep their `pointer-coarse:` 44px. No secure-context API is used: no crypto and no clipboard on the client.
 
 ## Testing Strategy
 

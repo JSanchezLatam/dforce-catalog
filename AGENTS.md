@@ -236,9 +236,9 @@ waiting for the first employee to open the app from a second machine.
   Both numbers were measured, and the measurements live in `vitest.config.ts`
   next to the settings — read them there, not here.
 
-- **`npm run lint`**: 0 errors, **14** warnings (verified 2026-09-09; was 15
-  until `list-search-filters` WU1 replaced `InventoryFilters`' hand-styled
-  `<button>` with the shadcn `Button`, clearing one), all pre-existing.
+- **`npm run lint`**: 0 errors, **13** warnings (verified 2026-10-06; was 14
+  until `closed-order-lock` WU4a dropped an unused test parameter, and 15
+  before `list-search-filters` WU1), all pre-existing.
   Don't add to them; clearing them is its own change. Re-run before trusting
   that count.
 

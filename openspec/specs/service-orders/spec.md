@@ -97,7 +97,7 @@ After a successful "Crear", the system MUST navigate to the new order's detail p
 
 ### Requirement: Reception Photos
 
-An order MUST hold up to 12 reception photos, stored as JPEG in object storage under `service-orders/<ordenId>/<photoId>.jpg` with a server-generated id, listed by `position` ascending. The server MUST accept a file only if its leading bytes are a JPEG signature (the declared content type MUST NOT be trusted) and its size is at most 3 MB. Photo bytes MUST be served only through an authenticated same-origin route to sessions holding `service-orders.read`. Adding MUST be allowed to any role holding `service-orders.write` while the order is `open` or `in_progress`, and refused when `done` or `cancelled`. Deleting MUST be allowed only to `administrador` while `open` or `in_progress`; any other role MUST receive 403. Photos MUST never be removed by retention. The order detail MUST show a "Fotos de recepción" card.
+An order MUST hold up to 12 reception photos, stored as JPEG in object storage under `service-orders/<ordenId>/<photoId>.jpg` with a server-generated id, listed by `position` ascending. The server MUST accept a file only if its leading bytes are a JPEG signature (the declared content type MUST NOT be trusted) and its size is at most 3 MB. Photo bytes MUST be served only through an authenticated same-origin route to sessions holding `service-orders.read`. Adding MUST be allowed to any role holding `service-orders.write` while the order is `open` or `in_progress`, and refused when `done` or `cancelled` unless it is an authorized administrator correction (see `service-order-corrections`). Deleting MUST be allowed only to `administrador` while `open` or `in_progress`, or while `done` or `cancelled` under an authorized administrator correction; any other role MUST receive 403, and a closed-order delete without an authorized correction MUST be refused. Photos MUST never be removed by retention. The order detail MUST show a "Fotos de recepción" card.
 
 #### Scenario: Valid JPEG added
 - GIVEN an `open` order with 0 photos and a session with `service-orders.write`
@@ -133,10 +133,15 @@ An order MUST hold up to 12 reception photos, stored as JPEG in object storage u
 - GIVEN an `in_progress` order with a photo
 - WHEN a `tecnico` deletes it THEN the system MUST respond 403 and keep it; WHEN an `administrador` deletes it THEN the photo and its stored object MUST be removed
 
-#### Scenario: Delete refused on closed order
+#### Scenario: Delete refused on closed order without correction
 - GIVEN a `done` or `cancelled` order with a photo
-- WHEN an `administrador` deletes it
-- THEN the system MUST refuse it
+- WHEN an `administrador` deletes it with no password, or a wrong one
+- THEN the system MUST refuse it and keep the photo
+
+#### Scenario: Delete allowed on closed order under correction
+- GIVEN a `done` or `cancelled` order with a photo
+- WHEN an `administrador` deletes it with their correct password
+- THEN the photo and its stored object MUST be removed and the deletion MUST be audited
 
 #### Scenario: Serving is authenticated
 - GIVEN a photo URL
@@ -389,22 +394,20 @@ Printing MUST produce a light sheet regardless of the app's theme. The `(app)` s
 
 The system MUST expose an entry point that opens an existing `orden_servicio` in the order form's edit mode, and MUST allow that edit only when the acting user's role and the order's **current** status jointly permit it.
 
-Today there is no entry point at all: `ServiceOrderFormTrigger` accepts an optional `order` prop that switches `ServiceOrderForm` into edit mode, and the only place it is rendered — the `/service-orders` list-page header — omits that prop, so the trigger is permanently in create mode. The order detail page offers `OrderStatusControls` and links, and no edit control. `updateOrder` and `PATCH /api/service-orders/[id]` exist and are tested; nothing in the UI reaches them, which is why `hallazgos`, `recomendaciones` and `observaciones` are unreachable after creation. This is a missing surface, not a permission denial.
-
 The permitted combinations are exactly:
 
 | Status | `administrador` | `tecnico` |
 |---|---|---|
 | `open` | MUST be allowed | MUST be refused |
 | `in_progress` | MUST be allowed | MUST be allowed |
-| `done` | MUST be refused | MUST be refused |
-| `cancelled` | MUST be refused | MUST be refused |
+| `done` | MUST be refused, except as an audited correction with password re-entry | MUST be refused |
+| `cancelled` | MUST be refused, except as an audited correction with password re-entry | MUST be refused |
 
 The gate covers the fields the form and the patch path already carry — `categoria`, `description`, `appointmentAt`, `hallazgos`, `recomendaciones`, `observaciones`. It does not introduce parts anywhere: `producto` line items are absent from creation and from editing alike (see Service Order Creation (R20)).
 
-`done` and `cancelled` refusing everyone is a decision of this change rather than a restatement of the owner's request, which named only `open` and `in_progress`. Those two are already terminal — `assertTransition` gives them no outgoing edges, so a closed order cannot be reopened through the UI. Letting an order's fields be rewritten after closure would make closure reversible through a side door, one field at a time, with the status still reading `Completada`. Correcting a wrongly-closed order is a separate change with its own audit story; it is not this gate loosened.
+`done` and `cancelled` are terminal: `assertTransition` gives them no outgoing edges, so a closed order cannot be reopened through the UI, and a correction never changes `status` or `completedAt`. Closed orders refuse `tecnico` always and `administrador` by default; the only way through is the administrator correction defined by `service-order-corrections` (the administrator's own password re-typed in the saving request, every changed field audited). That keeps closure from being reversible through a side door: the status keeps reading `Completada` or `Cancelada`, and every rewrite is attributable.
 
-Both the presence of the control and the acceptance of the write MUST be decided by one shared pure predicate over role and status, so the two cannot drift apart. The UI deciding alone is not sufficient: `PATCH /api/service-orders/[id]` is the trust boundary, and it MUST evaluate the same predicate against the order's status **as read from the database**, never a status supplied in the request body. A refusal MUST answer with a Spanish message and an accurate status code, never a 500.
+The presence of the control and the acceptance of the write MUST be decided by one shared pure predicate over role and status, so the two cannot drift apart; for a closed status the predicate MUST report "correction required" for `administrador` (control shown as "Corregir") and "refused" for every other role. The UI deciding alone is not sufficient: `PATCH /api/service-orders/[id]` is the trust boundary, and the decision MUST be enforced in the service under a row lock (see `service-order-corrections`), evaluated against the order's status **as read from the database**, never a status supplied in the request body. A refusal MUST answer with a Spanish message and an accurate status code, never a 500.
 
 #### Scenario: Administrador sees the edit control on an open order
 - GIVEN an order in `open` status
@@ -421,25 +424,34 @@ Both the presence of the control and the acceptance of the write MUST be decided
 - WHEN either a `tecnico` or an `administrador` opens its detail page
 - THEN the page MUST offer the edit control to both
 
-#### Scenario: Neither role sees the edit control on a closed order
+#### Scenario: Only the administrador is offered a way in on a closed order
 - GIVEN an order in `done` or in `cancelled` status
-- WHEN either a `tecnico` or an `administrador` opens its detail page
-- THEN the page MUST NOT offer any edit control to either
+- WHEN an `administrador` opens its detail page THEN the page MUST offer "Corregir" and no plain edit control; WHEN a `tecnico` opens it THEN the page MUST NOT offer any edit or correction control
 
 #### Scenario: The route refuses a patch the UI would not have offered
 - GIVEN an order in `open` status
 - WHEN a `tecnico` sends `PATCH /api/service-orders/[id]` with `hallazgos`
 - THEN the system MUST refuse the patch with a Spanish message, MUST NOT write the field, and MUST NOT answer 500
 
-#### Scenario: The route refuses any patch to a closed order
+#### Scenario: The route refuses a closed-order patch without a verified correction
 - GIVEN an order in `done` status
-- WHEN an `administrador` sends `PATCH /api/service-orders/[id]` with any of the gated fields
+- WHEN an `administrador` sends `PATCH /api/service-orders/[id]` with any of the gated fields and no password, or a wrong one
 - THEN the system MUST refuse the patch with a Spanish message, MUST NOT write the field, and MUST NOT answer 500
+
+#### Scenario: A tecnico's patch to a closed order is refused
+- GIVEN an order in `done` status
+- WHEN a `tecnico` sends `PATCH /api/service-orders/[id]` with any gated field, with or without a password
+- THEN the system MUST refuse the patch with 403 and MUST NOT write the field
+
+#### Scenario: A verified administrator correction of a closed order saves
+- GIVEN an order in `done` status
+- WHEN an `administrador` sends `PATCH /api/service-orders/[id]` with a gated field and their correct password
+- THEN the system MUST persist the field, MUST leave `status` and `completedAt` unchanged, and MUST audit the change
 
 #### Scenario: The route reads status from the record, not from the body
 - GIVEN an order whose stored status is `done`
 - WHEN a patch arrives whose body also claims a status of `in_progress`
-- THEN the gate MUST be evaluated against the stored `done` and the patch MUST be refused
+- THEN the gate MUST be evaluated against the stored `done`: without a verified administrator correction the patch MUST be refused, and with one the stored status MUST remain `done`
 
 #### Scenario: A permitted patch still saves
 - GIVEN an order in `in_progress` status

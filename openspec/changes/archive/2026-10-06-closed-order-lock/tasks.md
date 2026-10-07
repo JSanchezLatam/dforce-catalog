@@ -67,5 +67,5 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## Spec archive notes
 
-- [ ] 5.1 At archive, merge `service-order-corrections` as a NEW main spec; `service-orders` MODIFIES two requirements (Reception Photos; Order Editing Is Gated by Role and Current Status), replacing not duplicating; check for duplicates after the mechanical apply.
-- [ ] 5.2 Follow-ups, not in scope: audit log viewer (first "who changed this?"); work lines plug in via `canEditWorkLines`; DB-backed throttle if the app runs more than one process; fold the PATCH route's copy of the correction error mapping onto `correction-http.ts`; a closed-order photo batch stopped mid-way by a refusal keeps the whole file list, so drop the already-uploaded files before a retry.
+- [x] 5.1 At archive, merge `service-order-corrections` as a NEW main spec; `service-orders` MODIFIES two requirements (Reception Photos; Order Editing Is Gated by Role and Current Status), replacing not duplicating; check for duplicates after the mechanical apply.
+- [x] 5.2 Follow-ups, not in scope: audit log viewer (first "who changed this?"); work lines plug in via `canEditWorkLines`; DB-backed throttle if the app runs more than one process; fold the PATCH route's copy of the correction error mapping onto `correction-http.ts`; a closed-order photo batch stopped mid-way by a refusal keeps the whole file list, so drop the already-uploaded files before a retry.

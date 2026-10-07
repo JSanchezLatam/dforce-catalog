@@ -1,8 +1,8 @@
-# Delta Spec: service-order-corrections
+# Spec: service-order-corrections
 
-New capability. An `administrador` may correct a `done` or `cancelled` order after re-typing their own password; every change is audited. Status and `completedAt` are never touched.
+An `administrador` may correct a `done` or `cancelled` order after re-typing their own password; every change is audited. Status and `completedAt` are never touched.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: One Server-Side Guard for Every Order Mutation
 
@@ -160,7 +160,7 @@ Under an authorized correction (administrator, correct password, not throttled) 
 
 ### Requirement: Correction Interface
 
-On a `done` or `cancelled` order's detail page, an `administrador` MUST be offered a "Corregir" control; every other role MUST see the order read-only with no edit or photo-change control. Activating "Corregir" MUST ask for the administrator's password in a dialog before the form and photo controls become editable; the password MUST be sent with, and verified by, the saving request (the dialog alone proves nothing). The password input MUST mask its value. Wrong, throttled and non-administrator refusals MUST show their Spanish message inline where the operator is looking, with the entered data preserved. A successful correction MUST show a success toast beside the existing refresh. The UI MUST work at tablet and phone widths, copy MUST be Spanish, and "Corregir" and the dialog's actions MUST meet the 44x44 hit-target floor.
+On a `done` or `cancelled` order's detail page, an `administrador` MUST be offered a "Corregir" control; every other role MUST see the order read-only with no edit or photo-change control. The correction form and each photo add/delete confirmation MUST include a masked password field and MUST NOT submit without it; the password MUST be verified by, and sent with, the saving request (the field alone proves nothing). Wrong, throttled and non-administrator refusals MUST show their Spanish message inline where the operator is looking, with the entered data preserved. A successful correction MUST show a success toast beside the existing refresh. The UI MUST work at tablet and phone widths, copy MUST be Spanish, and "Corregir" and the dialog's actions MUST meet the 44x44 hit-target floor.
 
 #### Scenario: Administrator sees Corregir on a closed order
 - GIVEN a `done` or `cancelled` order
@@ -172,10 +172,10 @@ On a `done` or `cancelled` order's detail page, an `administrador` MUST be offer
 - WHEN a `tecnico` opens its detail page
 - THEN the page MUST NOT offer "Corregir", any edit control, or photo add/delete
 
-#### Scenario: Password is asked before editing
-- GIVEN an administrator on a closed order
-- WHEN they activate "Corregir"
-- THEN a password dialog MUST appear and the form MUST NOT be editable until it is confirmed
+#### Scenario: Password is required to save
+- GIVEN an administrator on a closed order with changes to save
+- WHEN they attempt to save without a password
+- THEN the form MUST NOT submit and MUST ask for the password again
 
 #### Scenario: Wrong password shown inline, data kept
 - GIVEN an administrator who typed changes and a wrong password
