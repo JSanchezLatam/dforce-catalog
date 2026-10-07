@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ClienteDeactivatedError } from "@/modules/customers/service";
 
-import { ordenCategoriaEnum, ordenServicioCorreccion, type OrdenServicio, type Vehiculo } from "@/shared/db/schema";
+import { ordenCategoriaEnum, ordenServicioCorreccion, type Vehiculo } from "@/shared/db/schema";
 import { OrderClosedError, OrderEditForbiddenError } from "./order-lock";
 import { OrderTransitionError } from "./transitions";
 import {
@@ -429,66 +429,59 @@ describe("updateOrder", () => {
 });
 
 describe("transitionOrder (R21)", () => {
+  const rowAt = (status: "open" | "in_progress") => ({ ...OPEN_ROW, status });
+
   it("throws OrdenServicioNotFoundError for a missing order", async () => {
-    await expect(transitionOrder("missing", "in_progress", { getById: async () => null })).rejects.toBeInstanceOf(
+    const { database } = lockedDb(null);
+    await expect(transitionOrder("missing", "in_progress", { db: database })).rejects.toBeInstanceOf(
       OrdenServicioNotFoundError,
     );
   });
 
-  it("rejects an invalid transition (open -> done) without writing to the DB", async () => {
-    const current = { orden: { id: "o1", status: "open" } as unknown as OrdenServicio, items: [] };
-    const updateFn = vi.fn();
-    const database = { update: updateFn };
+  it("takes the row lock (FOR UPDATE) before writing, in one transaction", async () => {
+    const { database, log } = lockedDb(rowAt("open"));
 
-    await expect(
-      transitionOrder("o1", "done", {
-        getById: async () => current,
-        db: database as unknown as typeof import("@/shared/db/client").db,
-      }),
-    ).rejects.toBeInstanceOf(OrderTransitionError);
-    expect(updateFn).not.toHaveBeenCalled();
+    await transitionOrder("o1", "in_progress", { db: database });
+
+    expect(log.locks).toEqual(["update"]);
+    expect(log.sets).toEqual([{ status: "in_progress" }]);
   });
 
-  it("open -> in_progress updates status without touching completedAt", async () => {
-    const current = { orden: { id: "o1", status: "open" } as unknown as OrdenServicio, items: [] };
-    let capturedPatch: Record<string, unknown> = {};
-    const database = {
-      update: () => ({
-        set: (patch: Record<string, unknown>) => {
-          capturedPatch = patch;
-          return { where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }) };
-        },
-      }),
-    };
+  it("rejects an invalid transition (open -> done) without writing to the DB", async () => {
+    const { database, log } = lockedDb(rowAt("open"));
 
-    const result = await transitionOrder("o1", "in_progress", {
-      getById: async () => current,
-      db: database as unknown as typeof import("@/shared/db/client").db,
-    });
+    await expect(transitionOrder("o1", "done", { db: database })).rejects.toBeInstanceOf(OrderTransitionError);
+    expect(log.sets).toEqual([]);
+  });
+
+  it.each(["done", "cancelled"] as const)(
+    "refuses a transition out of a locked %s order with OrderTransitionError and no write",
+    async (status) => {
+      const { database, log } = lockedDb({ ...OPEN_ROW, status });
+
+      await expect(transitionOrder("o1", "in_progress", { db: database })).rejects.toBeInstanceOf(OrderTransitionError);
+      expect(log.locks).toEqual(["update"]);
+      expect(log.sets).toEqual([]);
+    },
+  );
+
+  it("open -> in_progress updates status without touching completedAt", async () => {
+    const { database, log } = lockedDb(rowAt("open"));
+
+    const result = await transitionOrder("o1", "in_progress", { db: database });
 
     expect(result.status).toBe("in_progress");
-    expect(capturedPatch).not.toHaveProperty("completedAt");
+    expect(log.sets[0]).not.toHaveProperty("completedAt");
   });
 
   it("in_progress -> done sets completedAt", async () => {
-    const current = { orden: { id: "o1", status: "in_progress" } as unknown as OrdenServicio, items: [] };
+    const { database } = lockedDb(rowAt("in_progress"));
     const fixedNow = new Date("2026-07-26T12:00:00Z");
-    const database = {
-      update: () => ({
-        set: (patch: Record<string, unknown>) => ({
-          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
-        }),
-      }),
-    };
 
     const result = await transitionOrder("o1", "done", {
-      getById: async () => current,
-      db: database as unknown as typeof import("@/shared/db/client").db,
+      db: database,
       now: () => fixedNow,
-      // No cliente found for this fixture's clienteId (undefined) — the
-      // service_due reminder wiring below no-ops gracefully; this test only
-      // asserts the completedAt behavior, not the reminder wiring (see the
-      // "reminder wiring (R23, Phase 4 task 4.5)" describe block below).
+      // No cliente found: the service_due wiring no-ops; this test only asserts completedAt.
       getClienteById: async () => null,
     });
 
@@ -497,25 +490,25 @@ describe("transitionOrder (R21)", () => {
   });
 
   it("calls the onTransitioned seam after persisting (Phase 4 hook point)", async () => {
-    const current = { orden: { id: "o1", status: "in_progress" } as unknown as OrdenServicio, items: [] };
-    const database = {
-      update: () => ({
-        set: (patch: Record<string, unknown>) => ({
-          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
-        }),
-      }),
-    };
+    const { database } = lockedDb(rowAt("in_progress"));
     const onTransitioned = vi.fn();
     const cancelRemindersForOrder = vi.fn().mockResolvedValue(undefined);
 
-    await transitionOrder("o1", "cancelled", {
-      getById: async () => current,
-      db: database as unknown as typeof import("@/shared/db/client").db,
-      onTransitioned,
-      cancelRemindersForOrder,
-    });
+    await transitionOrder("o1", "cancelled", { db: database, onTransitioned, cancelRemindersForOrder });
 
     expect(onTransitioned).toHaveBeenCalledWith(expect.objectContaining({ status: "cancelled" }), "in_progress", "cancelled");
+  });
+
+  it("runs the reminder side effects only AFTER the transaction commits", async () => {
+    const { database, log } = lockedDb(rowAt("in_progress"));
+    let committedWhenCancelled: boolean | undefined;
+    const cancelRemindersForOrder = vi.fn(async () => {
+      committedWhenCancelled = log.committed;
+    });
+
+    await transitionOrder("o1", "cancelled", { db: database, cancelRemindersForOrder });
+
+    expect(committedWhenCancelled).toBe(true);
   });
 });
 
@@ -575,23 +568,11 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
    * for the wrong reason.
    */
   it("transitionOrder -> done schedules a service_due reminder", async () => {
-    const current = {
-      orden: { id: "o1", clienteId: "c1", status: "in_progress", categoria: "mant_preventivo" } as unknown as OrdenServicio,
-      items: [],
-    };
-    const database = {
-      update: () => ({
-        set: (patch: Record<string, unknown>) => ({
-          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
-        }),
-      }),
-      insert: () => ({ values: () => ({ returning: async () => [{ id: "rem-2" }] }) }),
-    };
+    const { database } = lockedDb({ ...OPEN_ROW, clienteId: "c1", status: "in_progress", categoria: "mant_preventivo" });
     const scheduleReminder = vi.fn().mockResolvedValue("job-2");
 
     await transitionOrder("o1", "done", {
-      getById: async () => current,
-      db: database as unknown as typeof import("@/shared/db/client").db,
+      db: database,
       now: () => new Date("2026-07-26T12:00:00.000Z"),
       getClienteById: async () => ({ cliente: clienteRow, orders: [], vehicles: [] }),
       scheduleReminder,
@@ -610,23 +591,11 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
    * own; `instalacion` is now the category that genuinely gets none.
    */
   it("transitionOrder -> done schedules NOTHING for a category the rule excludes", async () => {
-    const current = {
-      orden: { id: "o1", clienteId: "c1", status: "in_progress", categoria: "instalacion" } as unknown as OrdenServicio,
-      items: [],
-    };
-    const database = {
-      update: () => ({
-        set: (patch: Record<string, unknown>) => ({
-          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
-        }),
-      }),
-      insert: () => ({ values: () => ({ returning: async () => [{ id: "rem-2" }] }) }),
-    };
+    const { database } = lockedDb({ ...OPEN_ROW, clienteId: "c1", status: "in_progress", categoria: "instalacion" });
     const scheduleReminder = vi.fn().mockResolvedValue("job-2");
 
     await transitionOrder("o1", "done", {
-      getById: async () => current,
-      db: database as unknown as typeof import("@/shared/db/client").db,
+      db: database,
       now: () => new Date("2026-07-26T12:00:00.000Z"),
       getClienteById: async () => ({ cliente: clienteRow, orders: [], vehicles: [] }),
       scheduleReminder,
@@ -636,19 +605,11 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
   });
 
   it("transitionOrder -> cancelled cancels all pending reminders for the order", async () => {
-    const current = { orden: { id: "o1", clienteId: "c1", status: "open" } as unknown as OrdenServicio, items: [] };
-    const database = {
-      update: () => ({
-        set: (patch: Record<string, unknown>) => ({
-          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
-        }),
-      }),
-    };
+    const { database } = lockedDb({ ...OPEN_ROW, clienteId: "c1", status: "open" });
     const cancelRemindersForOrder = vi.fn().mockResolvedValue(undefined);
 
     await transitionOrder("o1", "cancelled", {
-      getById: async () => current,
-      db: database as unknown as typeof import("@/shared/db/client").db,
+      db: database,
       cancelRemindersForOrder,
     });
 
