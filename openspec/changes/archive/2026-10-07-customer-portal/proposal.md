@@ -9,7 +9,7 @@ Round-2 step 4 (owner grill 2026-10-03, decisions final). Customers have no way 
 ### In Scope
 - **Ley 81/2019 consent, once per customer**: a checkbox on the customer record ("Consentimiento de datos (Ley 81)") that stores who, when, and which clause version. Revoking it is a new row, not a delete. No consent means no token, no QR, and no data in the cloud.
 - **Portal token** per consented customer: 256 random bits from `node:crypto` on the server, base64url, never derived from an id. The administrator can rotate it ("Generar nuevo código", which kills every QR already printed). Revocation deletes it.
-- **Printed sheet**: QR in the reserved slot plus a security notice ("Este código da acceso a tu historial. No lo compartas."). The provisional consent clause and a "Firma del cliente" line are added. The QR prints only when the customer has consented AND `PORTAL_BASE_URL` is set.
+- **Printed sheet**: QR in the reserved slot plus a security notice ("Este código da acceso a tu historial. No lo compartas."). The provisional consent clause and a "Firma del cliente" line are added. The QR prints only when the customer has consented AND `PORTAL_BASE_URL` is set AND the sync is configured (`PORTAL_INGEST_URL` and `PORTAL_INGEST_SECRET` both present).
 - **Outbound sync**: pg-boss jobs push signed snapshots to the portal. Revocation, rotation and customer deactivation push a delete. A nightly job re-pushes everything.
 - **Portal app**, phone-first: a terms gate first. Nothing is shown, not even a plate, until "Acepto" is pressed. Then the history for all of the customer's vehicles. Every legal text carries the banner "TEXTO PROVISORIO — pendiente de revisión legal".
 - Everything can be built and tested locally: the portal runs on `:3001` against a `portal` database in the existing Docker Postgres.
@@ -88,9 +88,9 @@ Unset `PORTAL_BASE_URL` and the secret: QRs stop printing and jobs stop sending.
 
 ## Delivery Estimate
 
-Nine chained PRs of at most 400 lines each (see `tasks.md`):
-1. Consent table and UI.
-2. Token, rotation, QR and sheet changes.
+Sixteen chained PRs of at most 400 lines each (see `tasks.md`):
+1. Consent table and UI (WU1).
+2a. Token and rotation (WU2a). 2b. QR and both print copies (WU2b).
 3. Portal scaffold, schema and local dev.
 4. Ingest endpoint with HMAC and version checks, plus e2e.
 5a. Snapshot builder and worker. 5b. Triggers, reconcile and hints.
