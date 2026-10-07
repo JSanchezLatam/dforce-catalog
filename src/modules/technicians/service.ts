@@ -105,7 +105,7 @@ export async function updateTecnico(
     set.userId = input.userId;
   }
   if (input.active !== undefined) set.deactivatedAt = input.active ? null : new Date();
-  if (Object.keys(set).length === 0) throw new TechnicianValidationError({ nombre: "No hay cambios para guardar." });
+  if (Object.keys(set).length === 0) throw new TechnicianValidationError({ form: "No hay cambios para guardar." });
 
   const update =
     deps.update ?? (async (rowId, patch) => (await db.update(tecnico).set(patch).where(eq(tecnico.id, rowId)).returning())[0] ?? null);

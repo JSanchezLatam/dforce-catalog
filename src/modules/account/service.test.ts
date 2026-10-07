@@ -350,7 +350,7 @@ describe("createUser", () => {
 
     await expectProfileErrors(
       createUser({ username: "ana", password: "temporal1", role: "superadmin" as never }, d),
-      { role: "El rol debe ser tecnico o administrador." },
+      { role: "El rol debe ser técnico, jefe de taller o administrador." },
     );
     expect(d.insert).not.toHaveBeenCalled();
   });
@@ -561,7 +561,7 @@ describe("updateUser", () => {
       const { applyUpdate, deps } = txDeps();
 
       await expectProfileErrors(updateUser("admin-1", "user-9", { role: "superadmin" as never }, deps), {
-        role: "El rol debe ser tecnico o administrador.",
+        role: "El rol debe ser técnico, jefe de taller o administrador.",
       });
       expect(applyUpdate).not.toHaveBeenCalled();
     });

@@ -192,7 +192,7 @@ export async function createUser(input: CreateUserInput, deps: CreateUserDeps = 
   const errors: Record<string, string> = {};
 
   if (!username) errors.username = "El nombre de usuario es obligatorio.";
-  if (!isRole(input.role)) errors.role = "El rol debe ser tecnico o administrador.";
+  if (!isRole(input.role)) errors.role = "El rol debe ser técnico, jefe de taller o administrador.";
   if (!input.password || input.password.length < MIN_PASSWORD_LENGTH) {
     errors.password = `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`;
   }
@@ -400,7 +400,7 @@ export async function updateUser(
   const errors: Record<string, string> = {};
 
   if (input.role !== undefined && !isRole(input.role)) {
-    errors.role = "El rol debe ser tecnico o administrador.";
+    errors.role = "El rol debe ser técnico, jefe de taller o administrador.";
   }
   if (input.password !== undefined && input.password.length < MIN_PASSWORD_LENGTH) {
     errors.password = `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`;

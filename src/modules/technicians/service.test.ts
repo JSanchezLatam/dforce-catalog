@@ -111,6 +111,15 @@ describe("updateTecnico", () => {
     });
   });
 
+  it("files an empty patch under `form`, not under a field it did not touch", async () => {
+    const d = deps();
+
+    await expect(updateTecnico(jefe, "t-1", {}, d)).rejects.toMatchObject({
+      errors: { form: "No hay cambios para guardar." },
+    });
+    expect(d.update).not.toHaveBeenCalled();
+  });
+
   it("deactivation sets deactivatedAt and reactivation clears it", async () => {
     const d = deps();
 
