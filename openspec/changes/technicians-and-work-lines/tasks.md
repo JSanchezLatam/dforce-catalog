@@ -102,7 +102,7 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 - [x] 8.2 RED `OrderWorkCard`/`WorkLineDialog` tests: lines, per-technician totals (90/45), marked or pending per assignee; "Mi parte lista" and un-mark only for the viewer's own assignment; toasts "Línea agregada", "Parte marcada como lista"; `inputMode="numeric"`, `<input type="date">`; inline errors; closed order admin sees password field. GREEN.
 - [x] 8.3 RED detail/list tests (also reword the PATCH `OrderEditForbiddenError` copy "Solo un administrador puede editar una orden abierta." — a jefe may edit too and `ready_for_review` is not "abierta"; and the bulk `forbidden` copy if the bulk menu ever offers ready_for_review → in_progress): badge and status filter "Lista para revisión" (`VALID_STATUS`); técnico sees no edit control in `ready_for_review`. GREEN `ServiceOrderFilters.tsx`, `service-orders/page.tsx`, detail page.
 - [x] 8.4 Mutation-verify 8.1-8.3 by name (show mark to the other technician, list deactivated).
-- [ ] 8.5 Playwright at `http://192.168.0.3:3000` as tecnico, jefe_taller, administrador at 390/768/desktop: console clean, 44x44 measured, full flow create unassigned, assign, mark, close.
+- [x] 8.5 Playwright at `http://192.168.0.3:3000` as tecnico, jefe_taller, administrador at 390/768/desktop: console clean, 44x44 measured, full flow create unassigned, assign, mark, close.
 
 ## Spec archive notes
 
