@@ -511,17 +511,17 @@ describe("ServiceOrderPrintPage — the sheet a técnico is handed", () => {
     );
   });
 
-  // The real logo is a JPEG on solid black: unfiltered, it prints as a black
-  // box. jsdom renders no filter, so this pins the wiring; what it LOOKS like
-  // is a print-preview check.
-  it("knocks the logo's black background out through an SVG filter on the page", async () => {
-    getWorkshopConfig.mockResolvedValue(workshop({ logoR2Key: "logos/abc", logoContentType: "image/jpeg" }));
+  // The owner uploads a print-ready PNG (no black background) and wants it
+  // shown exactly as uploaded: no filter, no blend (2026-10-07).
+  it("prints the logo exactly as uploaded, with no filter or blend", async () => {
+    getWorkshopConfig.mockResolvedValue(workshop({ logoR2Key: "logos/abc", logoContentType: "image/png" }));
 
     const { container } = render(await renderPage());
 
-    expect(screen.getByRole("img", { name: /DForce Car Audio/ }).style.filter).toMatch(/^url\("?#logo-knockout"?\)$/);
-    const filter = container.querySelector("filter#logo-knockout");
-    expect(filter?.querySelector("feColorMatrix")).toHaveAttribute("values", "1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  15 15 15 0 -0.6");
+    const logo = screen.getByRole("img", { name: /DForce Car Audio/ });
+    expect(logo.style.filter).toBe("");
+    expect(logo.style.mixBlendMode).toBe("");
+    expect(container.querySelector("filter")).toBeNull();
   });
 
   // Nullable columns: the Administrador may set any subset independently.

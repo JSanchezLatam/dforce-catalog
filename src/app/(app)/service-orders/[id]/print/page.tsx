@@ -161,30 +161,14 @@ export default async function ServiceOrderPrintPage({
               set a name with no logo or neither — so each renders only when it
               is there, and a missing logo leaves no broken image. */}
           {workshop?.logoR2Key ? (
-            <>
-              {/* ponytail: the logo is a JPEG on solid black, which on paper is
-                  a black box, and the catalog's `mixBlendMode: "screen"` only
-                  works on a dark page. This maps luminance to alpha
-                  (a = 15(r+g+b) - 0.6): only near-black goes transparent, so the
-                  car and lettering stay solid (a gentler 2x slope washed the
-                  dark artwork out on paper, 2026-10-07). It ASSUMES a logo on a dark background — dark
-                  artwork on a light or transparent one would fade out. Upgrade
-                  path: process the uploaded image server-side. A CSS filter is
-                  an effect, not a background, so print keeps it regardless of
-                  the "background graphics" setting. */}
-              <svg width="0" height="0" aria-hidden="true" style={{ position: "absolute" }}>
-                <filter id="logo-knockout" colorInterpolationFilters="sRGB">
-                  <feColorMatrix type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  15 15 15 0 -0.6" />
-                </filter>
-              </svg>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/api/workshop-config/logo"
-                alt={workshop.name ?? "Logo del taller"}
-                className="h-12 w-auto object-contain"
-                style={{ filter: "url(#logo-knockout)" }}
-              />
-            </>
+            /* Shown exactly as uploaded: the owner uploads a print-ready PNG, so
+               no filter or blend (both were tried and washed the artwork out). */
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src="/api/workshop-config/logo"
+              alt={workshop.name ?? "Logo del taller"}
+              className="h-12 w-auto object-contain"
+            />
           ) : null}
           <div>
             {workshop?.name ? <p className="text-sm font-semibold">{workshop.name}</p> : null}
