@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { currentMonthKey, monthKeys, parseMes } from "./months";
+import { currentMonthKey, monthKeys, monthLabel, parseMes } from "./months";
 
 const JAN_2027 = new Date("2027-01-15T12:00:00Z");
 
@@ -41,4 +41,12 @@ describe("parseMes", () => {
       expect(parseMes(raw, now)).toBe("2026-10");
     },
   );
+});
+
+describe("monthLabel", () => {
+  it("names the month in Spanish, capitalised, with the year", () => {
+    expect(monthLabel("2026-10")).toBe("Octubre 2026");
+    expect(monthLabel("2027-01")).toBe("Enero 2027");
+    expect(monthLabel("2026-12")).toBe("Diciembre 2026");
+  });
 });
