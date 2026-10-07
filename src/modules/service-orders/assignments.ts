@@ -8,12 +8,13 @@
  * A closed order refuses it for every role and is NOT correctable: this module
  * never takes a `CorrectionGrant`, so `OrderClosedError` is the only answer.
  */
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
-import { ordenServicio, ordenTecnico, tecnico } from "@/shared/db/schema";
+import { ordenTecnico, tecnico } from "@/shared/db/schema";
 import { isClosedStatus } from "./edit-policy";
 import { lockOrderForMutation, type Tx } from "./order-lock";
+import { applyReadiness } from "./readiness";
 import type { OrderScope } from "./scope";
 
 /** An id that is unknown or deactivated: one error for both, so the roster is not probed. */
@@ -66,9 +67,8 @@ export async function assignTecnico(
       .returning({ tecnicoId: ordenTecnico.tecnicoId });
     if (inserted.length === 0) return { created: false };
 
-    if (order.status === "ready_for_review") {
-      await tx.update(ordenServicio).set({ status: "in_progress" }).where(eq(ordenServicio.id, input.ordenId));
-    }
+    // The new assignee has not marked, so a ready order is no longer ready: readiness owns that write.
+    await applyReadiness(tx, order);
     return { created: true };
   });
 }

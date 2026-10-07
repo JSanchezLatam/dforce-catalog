@@ -60,8 +60,12 @@ export class TransitionForbiddenError extends Error {
  * 400 whoever asks, and only a legal one can be forbidden.
  */
 export function assertTransitionPermitted(canAssign: boolean, from: OrderStatus, to: OrderStatus): void {
-  if (canAssign || (from === "open" && to === "in_progress")) return;
-  throw new TransitionForbiddenError(from, to);
+  if (!isTransitionPermitted(canAssign, from, to)) throw new TransitionForbiddenError(from, to);
+}
+
+/** The same rule as a boolean, so the UI offers only what the route would not answer 403. */
+export function isTransitionPermitted(canAssign: boolean, from: OrderStatus, to: OrderStatus): boolean {
+  return canAssign || (from === "open" && to === "in_progress");
 }
 
 /**

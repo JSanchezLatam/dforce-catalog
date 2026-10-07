@@ -24,6 +24,7 @@ import { CATEGORIA_LABEL, type ServiceCategory } from "./categories";
 import { CorrectionPasswordField } from "./CorrectionPasswordField";
 import { CustomerPicker } from "./CustomerPicker";
 import { isClosedStatus } from "./edit-policy";
+import { TechnicianPicker } from "./TechnicianPicker";
 import { FUEL_LABEL, intakeInputsFor } from "./intake";
 import { FIELD_ERROR } from "@/shared/ui/styles";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
@@ -89,6 +90,7 @@ export function ServiceOrderForm({
   canCreateCustomer,
   triggerLabel,
   motor,
+  tecnicos,
   onSaved,
 }: {
   /** Provided => edit mode (PATCH); omitted => create mode (POST). */
@@ -107,6 +109,11 @@ export function ServiceOrderForm({
    * and battery show. Create mode reads it from the vehicle being picked.
    */
   motor?: VehiculoMotor | null;
+  /**
+   * Create mode only: the ACTIVE roster to pick from. Omitted => no picker and
+   * no `tecnicoIds` on the wire. Editing never assigns; the detail page does.
+   */
+  tecnicos?: { id: string; nombre: string }[];
   onSaved?: (orden: OrdenServicio) => void;
 }) {
   const isEdit = Boolean(order);
@@ -133,6 +140,7 @@ export function ServiceOrderForm({
   const [kilometraje, setKilometraje] = useState(order?.kilometraje?.toString() ?? "");
   const [nivelCombustible, setNivelCombustible] = useState<number | null>(order?.nivelCombustible ?? null);
   const [bateriaPct, setBateriaPct] = useState(order?.bateriaPct?.toString() ?? "");
+  const [tecnicoIds, setTecnicoIds] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Held only while the dialog is open and cleared after every attempt, so it is
@@ -237,6 +245,7 @@ export function ServiceOrderForm({
     setKilometraje(order?.kilometraje?.toString() ?? "");
     setNivelCombustible(order?.nivelCombustible ?? null);
     setBateriaPct(order?.bateriaPct?.toString() ?? "");
+    setTecnicoIds([]);
     setErrors({});
     setPassword("");
   }
@@ -306,6 +315,7 @@ export function ServiceOrderForm({
               // `recomendaciones` are findings and stay off the create wire.
               observaciones: observaciones.trim() || undefined,
               appointmentAt: appointmentAt ? new Date(appointmentAt).toISOString() : undefined,
+              ...(tecnicos ? { tecnicoIds } : {}),
               ...intakePayload(),
             }),
           });
@@ -663,6 +673,15 @@ export function ServiceOrderForm({
                 onChange={(e) => setObservaciones(e.target.value)}
               />
             </div>
+
+            {!isEdit && tecnicos && (
+              <div className="grid gap-2">
+                <Label>
+                  Técnicos <span className="font-normal text-muted-foreground">(opcional)</span>
+                </Label>
+                <TechnicianPicker tecnicos={tecnicos} selected={tecnicoIds} onChange={setTecnicoIds} />
+              </div>
+            )}
 
             {isCorrection && <CorrectionPasswordField value={password} onChange={setPassword} error={errors.password} />}
 
