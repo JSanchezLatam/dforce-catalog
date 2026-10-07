@@ -297,12 +297,13 @@ type TxLike = { execute: (query: ReturnType<typeof sql>) => Promise<{ rows: Reco
  * Idempotent — `tecnico.user_id` is UNIQUE, so an existing link (the backfill's,
  * or a manual one) is reused and a second row can never appear. The name is read
  * from `users` in the same statement, falling back to `username` like the
- * 0029 backfill. Demotion or deactivation never calls this, and never removes the row.
+ * 0029 backfill, and so is `deactivated_at`. Demotion or deactivation never calls
+ * this, and never removes the row.
  */
 export async function ensureRosterRow(tx: TxLike, userId: string): Promise<void> {
   await tx.execute(sql`
-    INSERT INTO tecnico (id, nombre, user_id)
-    SELECT gen_random_uuid()::text, coalesce(nullif(btrim(name), ''), username), id
+    INSERT INTO tecnico (id, nombre, user_id, deactivated_at)
+    SELECT gen_random_uuid()::text, coalesce(nullif(btrim(name), ''), username), id, deactivated_at
     FROM users WHERE id = ${userId}
     ON CONFLICT (user_id) DO NOTHING`);
 }

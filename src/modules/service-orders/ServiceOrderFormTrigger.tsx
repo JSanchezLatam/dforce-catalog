@@ -20,6 +20,7 @@ export function ServiceOrderFormTrigger({
   canCreateCustomer,
   triggerLabel,
   motor,
+  tecnicos,
 }: {
   order?: OrdenServicio | null;
   selectedCustomer?: ServiceOrderCustomerOption | null;
@@ -27,6 +28,8 @@ export function ServiceOrderFormTrigger({
   triggerLabel?: ReactNode;
   /** The order's vehicle's motor (edit mode); decides which intake inputs show. */
   motor?: VehiculoMotor | null;
+  /** Create mode: the active roster for the picker (plain data; see `ServiceOrderForm`). */
+  tecnicos?: { id: string; nombre: string }[];
 }) {
   const router = useRouter();
   const { addToast } = useToast();
@@ -42,6 +45,7 @@ export function ServiceOrderFormTrigger({
       canCreateCustomer={canCreateCustomer}
       triggerLabel={triggerLabel}
       motor={motor}
+      tecnicos={tecnicos}
       onSaved={(saved) => {
         // ABOVE the navigation, the ordering `OrderStatusControls` records
         // for the mirror-image case: a refresh or push that throws must not

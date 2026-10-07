@@ -7,6 +7,7 @@ import type { NavGroup } from "./nav-items";
 
 const admin: SessionUser = { id: "admin-1", role: "administrador" };
 const tecnico: SessionUser = { id: "user-1", role: "tecnico" };
+const jefe: SessionUser = { id: "jefe-1", role: "jefe_taller" };
 
 function labelTree(groups: NavGroup[]): Record<string, string[]> {
   const result: Record<string, string[]> = {};
@@ -51,10 +52,10 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     expect(cat.items.map((i) => i.label)).not.toContain("Inventario");
   });
 
-  it("admin sees Configuración with three children: Config. del CRM + Config. de catálogos (with nested Configuración de plantillas) + Gestión de usuarios", () => {
+  it("admin sees Configuración with four children: Config. del CRM + Config. de catálogos (with nested Configuración de plantillas) + Gestión de usuarios + Técnicos", () => {
     const groups = getNavGroups(admin);
     const cfg = groups.find((g) => g.label === "Configuración")!;
-    expect(cfg.items).toHaveLength(3);
+    expect(cfg.items).toHaveLength(4);
     expect(cfg.items[0]).toEqual({ kind: "link", href: "/workshop-config", label: "Config. del CRM", icon: "template-config", action: "workshop.edit" });
     const parent = cfg.items[1];
     expect(parent.kind).toBe("parent");
@@ -64,6 +65,26 @@ describe("getNavGroups() — grouped sidebar nav", () => {
       expect(parent.children[0].label).toBe("Configuración de plantillas");
     }
     expect(cfg.items[2]).toEqual({ kind: "link", href: "/users", label: "Gestión de usuarios", icon: "users", action: "users.manage" });
+    expect(cfg.items[3]).toEqual({ kind: "link", href: "/technicians", label: "Técnicos", icon: "technicians", action: "technicians.manage" });
+  });
+
+  // technicians-and-work-lines WU3: the jefe keeps CRM, Catálogo and "Técnicos";
+  // every other Configuración entry is gated on an action the jefe lacks.
+  it("jefe sees Técnicos as the ONLY Configuración entry", () => {
+    const cfg = getNavGroups(jefe).find((g) => g.label === "Configuración")!;
+    expect(cfg.items.map((i) => i.label)).toEqual(["Técnicos"]);
+  });
+
+  it("jefe sees no Gestión de usuarios, Config. del CRM or plantillas entry anywhere", () => {
+    const labels = Object.values(labelTree(getNavGroups(jefe))).flat().join(" | ");
+    expect(labels).not.toContain("Gestión de usuarios");
+    expect(labels).not.toContain("Config. del CRM");
+    expect(labels).not.toContain("plantillas");
+  });
+
+  it("técnico does not see Técnicos", () => {
+    const labels = Object.values(labelTree(getNavGroups(tecnico))).flat().join(" | ");
+    expect(labels).not.toContain("Técnicos");
   });
 
   // The entry is gated on `users.manage`, the same action /api/users and
@@ -102,10 +123,10 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     expect(totalItems).toBe(4);
   });
 
-  it("admin sees 9 total items across 3 groups", () => {
+  it("admin sees 10 total items across 3 groups", () => {
     const groups = getNavGroups(admin);
     const totalItems = groups.reduce((s, g) => s + g.items.length, 0);
-    expect(totalItems).toBe(9);
+    expect(totalItems).toBe(10);
   });
 
   // Stable ids decouple sidebar-group-collapse cookie state from display

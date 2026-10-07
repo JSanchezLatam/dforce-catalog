@@ -194,6 +194,14 @@ describe("UsersTable — the role label it renders", () => {
     expect(within(rowFor("beto")).getByText("Técnico")).toBeInTheDocument();
     expect(screen.queryByText("tecnico")).not.toBeInTheDocument();
   });
+
+  it("shows Jefe de taller, not the raw jefe_taller, in the table row and the phone card", () => {
+    render(<UsersTable users={[{ ...ACTIVE, id: "u-9", username: "jefa", role: "jefe_taller" }]} />);
+
+    expect(within(rowFor("jefa")).getByText("Jefe de taller")).toBeInTheDocument();
+    expect(within(screen.getByTestId("users-cards")).getByText("Jefe de taller")).toBeInTheDocument();
+    expect(screen.queryByText("jefe_taller")).not.toBeInTheDocument();
+  });
 });
 
 describe("UsersTable — the action each row offers", () => {

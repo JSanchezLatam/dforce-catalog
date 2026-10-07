@@ -11,6 +11,7 @@ import { and, count, desc, eq, isNotNull, isNull, or, sql, type SQL } from "driz
 import { db } from "@/shared/db/client";
 import { unaccentIlike } from "@/shared/db/text-search";
 import { cliente, ordenServicio, type Cliente, type OrdenServicio, type Vehiculo } from "@/shared/db/schema";
+import type { OrderScope } from "@/modules/service-orders/scope";
 import { listVehiculosByCliente, platesSubquery, vehiculoPlateExists } from "./vehicles";
 
 export const DEFAULT_PAGE_SIZE = 10;
@@ -214,6 +215,7 @@ export async function countClientes(
 /** R16 — customer detail + its service-order history, most-recent first. */
 export async function getClienteById(
   id: string,
+  scope: OrderScope,
   queryFn: () => Promise<ClienteDetail | null> = async () => {
     const rows = await db.select().from(cliente).where(eq(cliente.id, id)).limit(1);
     const clienteRow = rows[0];
@@ -221,7 +223,7 @@ export async function getClienteById(
     const orders = await db
       .select()
       .from(ordenServicio)
-      .where(eq(ordenServicio.clienteId, id))
+      .where(and(eq(ordenServicio.clienteId, id), scope.where))
       .orderBy(desc(ordenServicio.createdAt));
     // R16/restore — the WHOLE collection, not just active vehicles: the
     // detail view renders an inactive vehicle as visibly secondary, and

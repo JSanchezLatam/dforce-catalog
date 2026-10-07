@@ -80,6 +80,7 @@ import { GET as filePOST } from "../app/api/catalogs/[id]/file/route";
 import { GET as customersGET, POST as customersPOST } from "../app/api/customers/route";
 import { PATCH as customersPATCH } from "../app/api/customers/[id]/route";
 import { POST as vehiclesPOST } from "../app/api/customers/[id]/vehicles/route";
+import { SYSTEM_SCOPE } from "../modules/service-orders/scope";
 
 const PASSWORD = "Sup3rSecret!1";
 
@@ -782,7 +783,7 @@ describe("vehicle search (E2E)", () => {
      * third assertion would have been a second name for them.
      */
     it("does not hand a customer another customer's vehicle — the page's ownership 404 is this, not extra code", async () => {
-      const detail = await getClienteById(threeVehicles.id);
+      const detail = await getClienteById(threeVehicles.id, SYSTEM_SCOPE);
       expect(detail).not.toBeNull();
       // historyVehicleId belongs to historyCliente. The page does
       // `detail.vehicles.find(v => v.id === vehicleId)` and calls notFound()
@@ -826,12 +827,12 @@ describe("vehicle search (E2E)", () => {
         })
         .returning({ id: ordenServicio.id });
 
-      const firstVehicleHistory = await listOrdenesByVehiculo(firstVehicleId);
+      const firstVehicleHistory = await listOrdenesByVehiculo(firstVehicleId, SYSTEM_SCOPE);
       expect(firstVehicleHistory.map((o) => o.id)).toContain(firstOrder.id);
       expect(firstVehicleHistory.map((o) => o.id)).not.toContain(secondOrder.id);
       expect(firstVehicleHistory.map((o) => o.id)).toEqual([firstOrder.id, olderOrder.id]);
 
-      const secondVehicleHistory = await listOrdenesByVehiculo(secondVehicleId);
+      const secondVehicleHistory = await listOrdenesByVehiculo(secondVehicleId, SYSTEM_SCOPE);
       expect(secondVehicleHistory.map((o) => o.id)).toContain(secondOrder.id);
       expect(secondVehicleHistory.map((o) => o.id)).not.toContain(firstOrder.id);
     });
@@ -942,7 +943,7 @@ describe("customer deactivation (E2E)", () => {
   // D3's deliberate exception, and the one place a filter here would be a bug:
   // you cannot reactivate a record you cannot open.
   it("still returns the customer by id, with vehicles and history intact", async () => {
-    const detail = await getClienteById(target.id);
+    const detail = await getClienteById(target.id, SYSTEM_SCOPE);
     expect(detail).not.toBeNull();
     expect(detail!.cliente.deactivatedAt).toBeTruthy();
     expect(detail!.vehicles.map((v) => v.id)).toContain(vehicleId);
@@ -959,12 +960,12 @@ describe("customer deactivation (E2E)", () => {
   // page still shows "Desactivar", B clicks — and a plain `set` would erase
   // when it actually happened. Only real SQL can prove the `coalesce`.
   it("does not restamp the date when an already-deactivated customer is deactivated again", async () => {
-    const first = (await getClienteById(target.id))!.cliente.deactivatedAt;
+    const first = (await getClienteById(target.id, SYSTEM_SCOPE))!.cliente.deactivatedAt;
     expect(first).toBeTruthy();
 
     await deactivateCliente(target.id);
 
-    const second = (await getClienteById(target.id))!.cliente.deactivatedAt;
+    const second = (await getClienteById(target.id, SYSTEM_SCOPE))!.cliente.deactivatedAt;
     expect(second?.getTime()).toBe(first?.getTime());
   });
 
@@ -972,7 +973,7 @@ describe("customer deactivation (E2E)", () => {
     await reactivateCliente(target.id);
 
     expect(idsOf(await list("search=Retirado"))).toContain(target.id);
-    const detail = await getClienteById(target.id);
+    const detail = await getClienteById(target.id, SYSTEM_SCOPE);
     expect(detail!.cliente.deactivatedAt).toBeNull();
     expect(detail!.vehicles.map((v) => v.id)).toContain(vehicleId);
   });
@@ -1541,17 +1542,17 @@ describe("order search (E2E)", () => {
   }
 
   it("finds the order by customer name, accent-folded (no accent in the term, accent in the row)", async () => {
-    const results = await listOrdenesServicio({ search: "perez" }, { offset: 0, limit: 50 });
+    const results = await listOrdenesServicio({ search: "perez" }, { offset: 0, limit: 50 }, SYSTEM_SCOPE);
     expect(idsOf(results)).toContain(orderA.id);
   });
 
   it("finds the order by customer phone", async () => {
-    const results = await listOrdenesServicio({ search: "50767171717" }, { offset: 0, limit: 50 });
+    const results = await listOrdenesServicio({ search: "50767171717" }, { offset: 0, limit: 50 }, SYSTEM_SCOPE);
     expect(idsOf(results)).toContain(orderA.id);
   });
 
   it("finds the order by its vehicle's plate", async () => {
-    const results = await listOrdenesServicio({ search: "SRCH01" }, { offset: 0, limit: 50 });
+    const results = await listOrdenesServicio({ search: "SRCH01" }, { offset: 0, limit: 50 }, SYSTEM_SCOPE);
     expect(idsOf(results)).toContain(orderA.id);
   });
 
@@ -1563,17 +1564,17 @@ describe("order search (E2E)", () => {
    * customer has".
    */
   it("searching the customer's OTHER vehicle's plate returns zero orders", async () => {
-    const results = await listOrdenesServicio({ search: "SRCH02" }, { offset: 0, limit: 50 });
+    const results = await listOrdenesServicio({ search: "SRCH02" }, { offset: 0, limit: 50 }, SYSTEM_SCOPE);
     expect(results).toHaveLength(0);
   });
 
   it("still finds the order whose vehicle was deactivated AFTER the order was created", async () => {
-    const results = await listOrdenesServicio({ search: "SRCH03" }, { offset: 0, limit: 50 });
+    const results = await listOrdenesServicio({ search: "SRCH03" }, { offset: 0, limit: 50 }, SYSTEM_SCOPE);
     expect(idsOf(results)).toContain(deactivatedOrder.id);
   });
 
   it("does not match a word present only in description — unindexed free text, no user-meaningful match", async () => {
-    const results = await listOrdenesServicio({ search: "alineación" }, { offset: 0, limit: 50 });
+    const results = await listOrdenesServicio({ search: "alineación" }, { offset: 0, limit: 50 }, SYSTEM_SCOPE);
     expect(idsOf(results)).not.toContain(orderA.id);
   });
 
@@ -1584,7 +1585,7 @@ describe("order search (E2E)", () => {
    */
   it("the unfiltered row count is unchanged from before the join", async () => {
     const [raw] = await db.select({ value: count() }).from(ordenServicio);
-    const joined = await countOrdenesServicio({});
+    const joined = await countOrdenesServicio({}, SYSTEM_SCOPE);
     expect(joined).toBe(raw.value);
   });
 
@@ -1594,7 +1595,7 @@ describe("order search (E2E)", () => {
    * of these three orders' creation order (B, A/C created, then A last).
    */
   it("with no sort in the URL, orders read appointment-next-week, then appointment-yesterday, then no-appointment — not creation order", async () => {
-    const results = await listOrdenesServicio({}, { offset: 0, limit: 50 });
+    const results = await listOrdenesServicio({}, { offset: 0, limit: 50 }, SYSTEM_SCOPE);
     const ids = idsOf(results);
     const relevant = [orderA.id, orderB.id, orderC.id].map((id) => ids.indexOf(id));
     expect(relevant.every((index) => index !== -1)).toBe(true);
