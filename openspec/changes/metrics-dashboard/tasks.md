@@ -29,11 +29,11 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU1: Months, shape, queries (PR 1)
 
-- [ ] 1.1 RED `src/modules/metrics/months.test.ts`: month keys across a year boundary (Jan 2027 window starts Aug 2026 for 6, Feb 2026 for 12); current key from `toWorkshopDateKey` at 04:59Z vs 05:00Z on the 1st; `parseMes` accepts only keys in the 12-key list, rejects `2019-01`, `garbage`, `2026-13`, arrays, undefined (all fall back to current). GREEN `months.ts`.
-- [ ] 1.2 RED `shape.test.ts`: zero-fill against a key list (July present with 0), minutes to hours (270 min = 4.5), backlog zero-fill for all three statuses, inactive technicians dropped when all numbers are 0, shared order credits each assignee while the closed total stays 1. GREEN `shape.ts`.
-- [ ] 1.3 `queries.ts` (Drizzle builder, `sql<string>` month fragment, `'America/Panama'` via `sql.raw`, `::int` casts): `closedByTecnicoMonth`, `minutesByTecnicoMonth` (optional `tecnicoId`), `receivedByMonth`, `closedByMonth`, `backlogByStatus`. RED e2e first (1.4), GREEN here.
-- [ ] 1.4 RED `src/e2e/metrics.e2e.test.ts` (`dforce_e2e`): order completed 04:59Z Oct 1 counts September and 05:00Z counts October; `fecha` bucketed as-is; two assignees give 1 each and `closedByMonth` 1; cancelled only in `receivedByMonth`; `tecnicoId` filter returns only own rows for both closed and minutes; lower bound excludes older rows; backlog excludes done/cancelled. GREEN: fix real-SQL defects.
-- [ ] 1.5 Mutation-verify 1.1-1.4 by name (bucket in UTC, drop `status = 'done'`, drop the `tecnico_id` filter, count `ids` instead of `count(*)`, bind the zone as a param).
+- [x] 1.1 RED `src/modules/metrics/months.test.ts`: month keys across a year boundary (Jan 2027 window starts Aug 2026 for 6, Feb 2026 for 12); current key from `toWorkshopDateKey` at 04:59Z vs 05:00Z on the 1st; `parseMes` accepts only keys in the 12-key list, rejects `2019-01`, `garbage`, `2026-13`, arrays, undefined (all fall back to current). GREEN `months.ts`.
+- [x] 1.2 RED `shape.test.ts`: zero-fill against a key list (July present with 0), minutes to hours (270 min = 4.5), backlog zero-fill for all three statuses, inactive technicians dropped when all numbers are 0, shared order credits each assignee while the closed total stays 1. GREEN `shape.ts`.
+- [x] 1.3 `queries.ts` (Drizzle builder, `sql<string>` month fragment, `'America/Panama'` via `sql.raw`, `::int` casts): `closedByTecnicoMonth`, `minutesByTecnicoMonth` (optional `tecnicoId`), `receivedByMonth`, `closedByMonth`, `backlogByStatus`. RED e2e first (1.4), GREEN here.
+- [x] 1.4 RED `src/e2e/metrics.e2e.test.ts` (`dforce_e2e`): order completed 04:59Z Oct 1 counts September and 05:00Z counts October; `fecha` bucketed as-is; two assignees give 1 each and `closedByMonth` 1; cancelled only in `receivedByMonth`; `tecnicoId` filter returns only own rows for both closed and minutes; lower bound excludes older rows; backlog excludes done/cancelled. GREEN: fix real-SQL defects.
+- [x] 1.5 Mutation-verify 1.1-1.4 by name (bucket in UTC, drop `status = 'done'`, drop the `tecnico_id` filter, count `ids` instead of `count(*)`, bind the zone as a param).
 
 ## WU2: Policy, nav, `/metrics` with plain numbers (PR 2)
 
