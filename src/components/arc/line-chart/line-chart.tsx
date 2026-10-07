@@ -370,7 +370,7 @@ export function LineChart({ data, series, label, unit = "", height = 220, format
   const format = (value: number, line: LineChartSeries) => `${formatValue ? formatValue(value, line) : grouped.format(value)}${unit ? ` ${unit}` : ""}`;
   const reading = index === null ? null : data[index];
   const valueText = reading ? `${reading.label}: ${visible.map(line => `${line.label} ${format(reading.values[line.key] ?? 0, line)}`).join(", ")}` : empty ? emptyLabel : `${visible.length} de ${series.length} series visibles`;
-  const summary = empty ? `${label}. ${emptyLabel}.` : `${label}, ${data[0].label} to ${data[last].label}. ${visible.map(line => `${line.label}, latest ${format(data[last].values[line.key] ?? 0, line)}`).join(". ")}.`;
+  const summary = empty ? `${label}. ${emptyLabel}.` : `${label}, de ${data[0].label} a ${data[last].label}. ${visible.map(line => `${line.label}, último ${format(data[last].values[line.key] ?? 0, line)}`).join(". ")}.`;
   const picks = axisPicks(data, plotWidth);
   const allHidden = !empty && visible.length === 0;
   const tipX = reduced ? tipTargetX : tipSpringX, tipY = reduced ? tipTargetY : tipSpringY;

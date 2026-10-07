@@ -7,8 +7,9 @@ const NUMBER = new Intl.NumberFormat("es-PA", { maximumFractionDigits: 1 });
 
 /**
  * Client wrapper: owns `formatValue`, so no function crosses the RSC boundary.
- * ponytail: Arc rounds the at-rest average to an integer, hence the label says so;
- * the exact hours per técnico stay in the table beside the chart.
+ * The vendored bar chart no longer rounds its average (edited in
+ * `src/components/arc/bar-chart`), so `formatValue` shows one decimal; the
+ * exact hours per técnico still live in the table beside the chart.
  */
 export function HoursBarChart({ bars, mesLabel }: { bars: BarChartDatum[]; mesLabel: string }) {
   if (bars.every((b) => b.value === 0)) {

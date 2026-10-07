@@ -2,7 +2,7 @@
 
 /* Series toggles: a plain line swatch beside each name. A hidden series keeps its place, its swatch empties and its name steps back. */
 .legend { display: flex; flex-wrap: wrap; gap: 2px 4px; min-width: 0; margin-inline: -8px; }
-.toggle { display: inline-flex; min-height: 32px; align-items: center; gap: 8px; padding: 0 10px 0 8px; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--text-secondary); cursor: pointer; font: inherit; font-size: var(--text-sm); line-height: var(--leading-body); -webkit-tap-highlight-color: transparent; transition: color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard), transform var(--duration-instant) var(--ease-standard); }
+.toggle { display: inline-flex; min-height: 44px; align-items: center; gap: 8px; padding: 0 10px 0 8px; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--text-secondary); cursor: pointer; font: inherit; font-size: var(--text-sm); line-height: var(--leading-body); -webkit-tap-highlight-color: transparent; transition: color var(--duration-fast) var(--ease-standard), background-color var(--duration-fast) var(--ease-standard), transform var(--duration-instant) var(--ease-standard); }
 .toggle:active { transform: scale(.97); }
 .toggle[aria-pressed="false"] { color: var(--text-muted); }
 .toggleLabel { white-space: nowrap; transition: opacity var(--duration-fast) var(--ease-standard); }
