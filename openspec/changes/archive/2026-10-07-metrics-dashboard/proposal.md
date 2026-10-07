@@ -23,14 +23,14 @@ The workshop's client asked for a dashboard of main metrics. Most requested: tec
 - `metrics-dashboard`: workshop metrics, technician productivity, role-scoped "Mis números".
 
 ### Modified Capabilities
-- None (`user-management` RBAC gains one action; behavior of existing grants unchanged).
+- None (`user-management` RBAC gains two actions `metrics.read` and `metrics.self`; behavior of existing grants unchanged).
 
 ## Approach
 
 - **Business rules**: a closed order credits EVERY assigned technician (1 each; assignments are never removed), so the per-technician column sum exceeds total closed orders — the table states it: "Una orden con varios técnicos cuenta para cada uno". `done` is terminal (`transitions.ts`), so counts are stable. Cancelled orders count nowhere except "received".
 - **Months** in America/Panama: `date_trunc('month', completed_at AT TIME ZONE 'America/Panama')`; `fecha` is already a local date. Current month from `toWorkshopDateKey`.
-- **Access**: new `metrics.read` action (administrador + jefe_taller). Técnico gets `/mis-numeros` only; `tecnicoId` resolved server-side via `findTecnicoByUserId(session.user.id)`, NEVER from URL/query. A técnico without a roster link sees an empty state, not an error. e2e row pins the `WHERE`.
-- **UI**: month table per technician (default current month) + trend for the last 6 months. Charts from Arc (`@uiarc/*` shadcn registry, adds `motion`): single-series bar charts — one per series (orders closed/month, received/month, hours per technician). No grouped/stacked/tooltip charts, so exact numbers live in the table. Design direction via the impeccable skill at implementation. 390/768 layouts; nothing secure-context-only.
+- **Access**: new `metrics.read` action (administrador + jefe_taller) for `/metrics`. Técnico gets `/mis-numeros` only via `metrics.self` action; `tecnicoId` resolved server-side via `findTecnicoByUserId(session.user.id)`, NEVER from URL/query. A técnico without a roster link sees an empty state, not an error. e2e row pins the `WHERE`.
+- **UI**: month table per technician (12-month select, default current month) + trend for the last 6 months. Charts from Arc (`@uiarc/*` shadcn registry, adds `motion`): line chart (received vs closed per month), bar chart (hours per technician), animated counters (backlog). No grouped/stacked/tooltip charts; exact numbers live in the table. Design direction via the impeccable skill at implementation. 390/768 layouts; nothing secure-context-only.
 
 ## Affected Areas
 
@@ -38,8 +38,8 @@ The workshop's client asked for a dashboard of main metrics. Most requested: tec
 |------|--------|-------------|
 | `src/modules/metrics/` | New | Aggregation queries (SQL-heavy) |
 | `src/app/(app)/metrics/`, `mis-numeros/` | New | Pages |
-| `src/modules/auth/policy.ts` | Modified | `metrics.read` |
-| `src/components/ui/` + `package.json` | New | Arc charts, `motion` |
+| `src/modules/auth/policy.ts` | Modified | `metrics.read`, `metrics.self` |
+| `src/components/arc/` + `package.json` | New | Arc charts, `motion` |
 | nav/sidebar | Modified | Entry per role |
 | `src/e2e/` | New | Real-SQL rows for aggregates and técnico scope |
 
@@ -54,7 +54,7 @@ The workshop's client asked for a dashboard of main metrics. Most requested: tec
 
 ## Rollback Plan
 
-Revert the chained PRs (new module/pages only); remove `metrics.read` and `motion`. No migration, no data written.
+Revert the chained PRs (new module/pages only); remove `metrics.read`, `metrics.self` and `motion`. No migration, no data written.
 
 ## Dependencies
 
