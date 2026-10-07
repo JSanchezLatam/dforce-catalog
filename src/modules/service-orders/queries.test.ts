@@ -3,6 +3,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 import type { OrdenServicio, OrdenServicioItem } from "@/shared/db/schema";
+import { orderScope, SYSTEM_SCOPE } from "./scope";
 import {
   buildOrdenServicioOrderBy,
   buildOrdenServicioWhere,
@@ -19,17 +20,17 @@ import {
 
 /** Renders the built condition to real Postgres SQL + bound params, no connection needed. */
 function compileWhere(filters: Parameters<typeof buildOrdenServicioWhere>[0]) {
-  const condition = buildOrdenServicioWhere(filters);
+  const condition = buildOrdenServicioWhere(filters, SYSTEM_SCOPE);
   return condition === undefined ? undefined : new PgDialect().sqlToQuery(condition);
 }
 
 describe("buildOrdenServicioWhere (R21)", () => {
   it("returns undefined when no status filter is given", () => {
-    expect(buildOrdenServicioWhere({})).toBeUndefined();
+    expect(buildOrdenServicioWhere({}, SYSTEM_SCOPE)).toBeUndefined();
   });
 
   it("returns a defined condition when a status filter is given", () => {
-    expect(buildOrdenServicioWhere({ status: "open" })).toBeDefined();
+    expect(buildOrdenServicioWhere({ status: "open" }, SYSTEM_SCOPE)).toBeDefined();
   });
 });
 
@@ -71,7 +72,7 @@ describe("buildOrdenServicioWhere — search (D7)", () => {
   });
 
   it("returns undefined for a blank/whitespace-only search term", () => {
-    expect(buildOrdenServicioWhere({ search: "   " })).toBeUndefined();
+    expect(buildOrdenServicioWhere({ search: "   " }, SYSTEM_SCOPE)).toBeUndefined();
   });
 });
 
@@ -84,7 +85,7 @@ describe("buildOrdenServicioWhere — search (D7)", () => {
  */
 describe("ordenServicioListQuery — joins (D7/D9)", () => {
   it("inner joins cliente and vehiculo on the order's own FKs", () => {
-    const rendered = ordenServicioListQuery({}, { offset: 0, limit: 10 }).toSQL();
+    const rendered = ordenServicioListQuery({}, { offset: 0, limit: 10 }, SYSTEM_SCOPE).toSQL();
     expect(rendered.sql).toContain('inner join "cliente"');
     expect(rendered.sql).toContain('inner join "vehiculo"');
     expect(rendered.sql).toContain('"orden_servicio"."cliente_id" = "cliente"."id"');
@@ -93,7 +94,7 @@ describe("ordenServicioListQuery — joins (D7/D9)", () => {
 
   /** D9's count-parity trap: missed here, the list filters and the pager does not. */
   it("countOrdenesServicio's query carries the identical two joins", () => {
-    const rendered = ordenServicioCountQuery({}).toSQL();
+    const rendered = ordenServicioCountQuery({}, SYSTEM_SCOPE).toSQL();
     expect(rendered.sql).toContain('inner join "cliente"');
     expect(rendered.sql).toContain('inner join "vehiculo"');
   });
@@ -105,7 +106,7 @@ describe("ordenServicioListQuery — joins (D7/D9)", () => {
    * future reader) cannot tell which `id` is meant.
    */
   it("qualifies every identifier — no bare column with three tables in scope", () => {
-    const rendered = ordenServicioListQuery({ search: "perez", status: "open" }, { offset: 0, limit: 10 }, { key: "id", dir: "asc" }).toSQL();
+    const rendered = ordenServicioListQuery({ search: "perez", status: "open" }, { offset: 0, limit: 10 }, SYSTEM_SCOPE, { key: "id", dir: "asc" }).toSQL();
     expect(rendered.sql).not.toMatch(/[^."]"id"/);
     expect(rendered.sql).toContain('"orden_servicio"."id"');
     expect(rendered.sql).toContain('"cliente"."id"');
@@ -133,7 +134,7 @@ describe("listOrdenesServicio (R21)", () => {
     await expect(
       // `sort` moved to the 3rd positional slot (table-column-sorting WU3) —
       // `undefined` here reproduces today's default order.
-      listOrdenesServicio({ status: "open" }, { offset: 0, limit: 10 }, undefined, async () => rows),
+      listOrdenesServicio({ status: "open" }, { offset: 0, limit: 10 }, SYSTEM_SCOPE, undefined, async () => rows),
     ).resolves.toEqual(rows);
   });
 
@@ -143,6 +144,7 @@ describe("listOrdenesServicio (R21)", () => {
       listOrdenesServicio(
         { status: "open" },
         { offset: 0, limit: 10 },
+        SYSTEM_SCOPE,
         { key: "status", dir: "asc" },
         async () => rows,
       ),
@@ -239,20 +241,20 @@ describe("buildOrdenServicioOrderBy renders valid SQL", () => {
 
 describe("countOrdenesServicio (R21)", () => {
   it("returns whatever the injected queryFn resolves", async () => {
-    await expect(countOrdenesServicio({}, async () => 7)).resolves.toBe(7);
+    await expect(countOrdenesServicio({}, SYSTEM_SCOPE, async () => 7)).resolves.toBe(7);
   });
 });
 
 describe("listOrdenesByVehiculo (C4)", () => {
   it("returns whatever the injected queryFn resolves", async () => {
     const rows = [{ id: "o1", vehiculoId: "v1" }] as unknown as OrdenServicio[];
-    await expect(listOrdenesByVehiculo("v1", async () => rows)).resolves.toEqual(rows);
+    await expect(listOrdenesByVehiculo("v1", SYSTEM_SCOPE, async () => rows)).resolves.toEqual(rows);
   });
 });
 
 describe("getOrdenServicioById (R20)", () => {
   it("returns null when the injected queryFn finds nothing", async () => {
-    await expect(getOrdenServicioById("missing", async () => null)).resolves.toBeNull();
+    await expect(getOrdenServicioById("missing", SYSTEM_SCOPE, async () => null)).resolves.toBeNull();
   });
 
   it("returns the order + its line items when found", async () => {
@@ -262,6 +264,44 @@ describe("getOrdenServicioById (R20)", () => {
         { id: "i1", ordenId: "o1", productName: "Filtro de aceite", quantity: 2 },
       ] as unknown as OrdenServicioItem[],
     };
-    await expect(getOrdenServicioById("o1", async () => detail)).resolves.toEqual(detail);
+    await expect(getOrdenServicioById("o1", SYSTEM_SCOPE, async () => detail)).resolves.toEqual(detail);
+  });
+});
+
+/**
+ * The scope is the whole security boundary for a técnico: it must reach the
+ * list AND the count (or the pager leaks how many orders exist), and omitting
+ * it must not compile. Real SQL is proven in `order-scope.e2e.test.ts`.
+ */
+describe("order scope on the read paths", () => {
+  const tecnicoScope = orderScope({ id: "user-7", role: "tecnico" });
+
+  it("the list and the count both carry the scope's EXISTS, ANDed with the filters", () => {
+    for (const rendered of [
+      ordenServicioListQuery({ status: "open" }, { offset: 0, limit: 10 }, tecnicoScope).toSQL(),
+      ordenServicioCountQuery({ status: "open" }, tecnicoScope).toSQL(),
+    ]) {
+      expect(rendered.sql).toContain("exists");
+      expect(rendered.sql).toContain('"orden_servicio"."status"');
+      expect(rendered.params).toContain("user-7");
+    }
+  });
+
+  it("a scope with no condition adds no EXISTS", () => {
+    expect(ordenServicioCountQuery({}, SYSTEM_SCOPE).toSQL().sql).not.toContain("exists");
+  });
+
+  it("every order read requires a scope (a type-level check: tsc fails when the @ts-expect-error goes unused)", () => {
+    const never = [
+      // @ts-expect-error scope is required
+      () => listOrdenesServicio({}, { offset: 0, limit: 10 }),
+      // @ts-expect-error scope is required
+      () => countOrdenesServicio({}),
+      // @ts-expect-error scope is required
+      () => getOrdenServicioById("o1"),
+      // @ts-expect-error scope is required
+      () => listOrdenesByVehiculo("v1"),
+    ];
+    expect(never).toHaveLength(4);
   });
 });

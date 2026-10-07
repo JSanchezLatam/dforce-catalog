@@ -25,6 +25,9 @@ vi.mock("next/navigation", () => ({ notFound, useRouter: () => ({ refresh }) }))
 vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders: vi.fn(async () => ({ id: "u1", role: "tecnico" })) }));
 const can = vi.hoisted(() => vi.fn<(user: unknown, action: string) => boolean>(() => true));
 vi.mock("@/modules/auth/policy", () => ({ can }));
+const SCOPE = vi.hoisted(() => ({ where: "scope-sentinel" }));
+const orderScope = vi.hoisted(() => vi.fn<(user: unknown) => typeof SCOPE>(() => SCOPE));
+vi.mock("@/modules/service-orders/scope", () => ({ orderScope }));
 // Records the props the server hands across the RSC boundary: what is passed
 // here is what lands in the browser's payload.
 const triggerProps = vi.hoisted(() => vi.fn());
@@ -345,5 +348,15 @@ describe("CustomerDetailPage — order history cards (WU6)", () => {
 
     expect(cards.getAllByRole("listitem")).toHaveLength(2);
     expect(table.getAllByRole("row")).toHaveLength(1 + 2);
+  });
+});
+
+describe("CustomerDetailPage — order scope", () => {
+  it("reads the customer's order history through the session user's scope", async () => {
+    getClienteById.mockClear();
+    render(await renderPage());
+
+    expect(orderScope).toHaveBeenCalledWith({ id: "u1", role: "tecnico" });
+    expect(getClienteById.mock.calls[0][1]).toBe(SCOPE);
   });
 });

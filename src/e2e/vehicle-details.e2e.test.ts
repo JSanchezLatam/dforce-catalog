@@ -18,6 +18,7 @@ import { db } from "@/shared/db/client";
 import { cliente, vehiculo } from "@/shared/db/schema";
 import { PATCH } from "../app/api/customers/[id]/route";
 import { POST } from "../app/api/customers/route";
+import { SYSTEM_SCOPE } from "../modules/service-orders/scope";
 
 const admin = { "x-user-id": "e2e-vd-admin", "x-user-role": "administrador" };
 const tecnico = { "x-user-id": "e2e-vd-tecnico", "x-user-role": "tecnico" };
@@ -69,7 +70,7 @@ describe("vehicle details and internal fields (E2E)", () => {
     );
     expect(response.status).toBe(201);
     clienteId = (await response.json()).cliente.id;
-    vehiculoId = (await getClienteById(clienteId))!.vehicles[0].id;
+    vehiculoId = (await getClienteById(clienteId, SYSTEM_SCOPE))!.vehicles[0].id;
   }, 60_000);
 
   // Deleting by captured id cascades to the vehicle.

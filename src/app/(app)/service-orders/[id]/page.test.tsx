@@ -17,7 +17,19 @@ const requireSessionFromHeaders = vi.hoisted(() =>
 );
 vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders }));
 vi.mock("@/modules/auth/policy", () => ({ can: vi.fn(() => true) }));
-vi.mock("@/modules/service-orders/OrderStatusControls", () => ({ OrderStatusControls: () => null }));
+const SCOPE = vi.hoisted(() => ({ where: "scope-sentinel" }));
+const orderScope = vi.hoisted(() => vi.fn<(user: unknown) => typeof SCOPE>(() => SCOPE));
+vi.mock("@/modules/service-orders/scope", () => ({ orderScope }));
+const statusControls = vi.hoisted(() => vi.fn<(props: { orderId: string; status: string; canAssign: boolean }) => null>(() => null));
+vi.mock("@/modules/service-orders/OrderStatusControls", () => ({ OrderStatusControls: statusControls }));
+const listOrderAssignees = vi.hoisted(() => vi.fn<(ordenId: string) => Promise<OrderAssignee[]>>(async () => []));
+const listOrderLines = vi.hoisted(() => vi.fn<(ordenId: string) => Promise<OrderWorkLine[]>>(async () => []));
+vi.mock("@/modules/service-orders/order-team", () => ({ listOrderAssignees, listOrderLines }));
+const listTecnicos = vi.hoisted(() => vi.fn(async () => [] as { id: string; nombre: string; userId: null; deactivatedAt: null; createdAt: Date }[]));
+const findTecnicoByUserId = vi.hoisted(() => vi.fn<(userId: string) => Promise<{ id: string } | null>>(async () => null));
+vi.mock("@/modules/technicians/queries", () => ({ listTecnicos, findTecnicoByUserId }));
+const workCard = vi.hoisted(() => vi.fn<(props: Record<string, unknown>) => null>(() => null));
+vi.mock("@/modules/service-orders/OrderWorkCard", () => ({ OrderWorkCard: workCard }));
 
 const getOrdenServicioById = vi.hoisted(() => vi.fn());
 const getClienteById = vi.hoisted(() => vi.fn());
@@ -31,6 +43,7 @@ vi.mock("@/modules/service-orders/photos", () => ({ listOrderPhotos }));
 
 import { can } from "@/modules/auth/policy";
 import type { Role } from "@/modules/auth/roles";
+import type { OrderAssignee, OrderWorkLine } from "@/modules/service-orders/order-team";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import type { OrdenServicio, Reminder, Vehiculo } from "@/shared/db/schema";
 import { ToastProvider } from "@/shared/ui/ToastProvider";
@@ -300,6 +313,8 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
   it.each<[Role, OrderStatus]>([
     ["administrador", "open"],
     ["administrador", "in_progress"],
+    ["administrador", "ready_for_review"],
+    ["jefe_taller", "ready_for_review"],
     ["tecnico", "in_progress"],
   ])("offers the edit control to a %s on a %s order", async (role, status) => {
     render(await renderAs(role, status));
@@ -309,6 +324,7 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
 
   it.each<[Role, OrderStatus]>([
     ["tecnico", "open"],
+    ["tecnico", "ready_for_review"],
     ["administrador", "done"],
     ["tecnico", "done"],
     ["administrador", "cancelled"],
@@ -578,7 +594,7 @@ describe("ServiceOrderDetailPage — reception photos card", () => {
 
     render(await renderPage());
 
-    expect(listOrderPhotos).toHaveBeenCalledWith("o1");
+    expect(listOrderPhotos).toHaveBeenCalledWith("o1", SCOPE);
     expect(within(card()).getAllByRole("img").map((i) => i.getAttribute("src"))).toEqual([
       "/api/service-orders/o1/photos/p9",
       "/api/service-orders/o1/photos/p2",
@@ -635,6 +651,28 @@ describe("ServiceOrderDetailPage — reception photos card", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("offers a técnico no add control on a ready_for_review order, and says who may", async () => {
+    roleCan(["service-orders.read", "service-orders.write"]);
+    asOrder("ready_for_review");
+
+    render(await renderPage());
+
+    expect(within(card()).queryByLabelText("Agregar fotos")).not.toBeInTheDocument();
+    expect(
+      within(card()).getByText("Las fotos de una orden lista para revisión las agrega el administrador o el jefe de taller."),
+    ).toBeInTheDocument();
+  });
+
+  it("offers staff (service-orders.assign) the add control on a ready_for_review order", async () => {
+    roleCan(["service-orders.read", "service-orders.write", "service-orders.assign"]);
+    asOrder("ready_for_review");
+
+    render(await renderPage());
+
+    expect(within(card()).getByLabelText("Agregar fotos")).toBeInTheDocument();
+    expect(within(card()).queryByText(/lista para revisión las agrega/)).not.toBeInTheDocument();
+  });
+
   it("asks for no password to delete a photo of an order that is still open", async () => {
     roleCan(["service-orders.read", "service-orders.write", "service-orders.deletePhoto", "service-orders.correct"]);
     asOrder("in_progress");
@@ -687,5 +725,171 @@ describe("ServiceOrderDetailPage — the customer and vehicle links on touch (au
     const link = screen.getByRole("link", { name });
     expect(link).toHaveAttribute("href", href);
     expect(link).toHaveClass("pointer-coarse:inline-flex", "pointer-coarse:min-h-11", "pointer-coarse:items-center");
+  });
+});
+
+describe("ServiceOrderDetailPage — order scope", () => {
+  it("scopes the order, its photos and the customer lookup by the session user; an unassigned order is a 404", async () => {
+    getOrdenServicioById.mockClear();
+    getClienteById.mockClear();
+    listOrderPhotos.mockClear();
+    render(<ToastProvider>{await ServiceOrderDetailPage({ params: Promise.resolve({ id: ORDEN.id }) })}</ToastProvider>);
+
+    expect(orderScope).toHaveBeenCalledWith({ id: "u1", role: "tecnico" });
+    expect(getOrdenServicioById).toHaveBeenCalledWith(ORDEN.id, SCOPE);
+    expect(getClienteById.mock.calls[0][1]).toBe(SCOPE);
+    expect(listOrderPhotos).toHaveBeenCalledWith(ORDEN.id, SCOPE);
+
+    getOrdenServicioById.mockResolvedValue(null);
+    await expect(ServiceOrderDetailPage({ params: Promise.resolve({ id: ORDEN.id }) })).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+});
+
+describe("ServiceOrderDetailPage — technicians on the order", () => {
+  const tecnicoRow = (id: string, nombre: string) => ({ id, nombre, userId: null, deactivatedAt: null, createdAt: new Date("2026-01-01") });
+  const roleCan = (allowed: string[]) =>
+    vi.mocked(can).mockImplementation(((_user: unknown, action: string) => allowed.includes(action)) as typeof can);
+
+  beforeEach(() => {
+    requireSessionFromHeaders.mockResolvedValue({ id: "u1", role: "jefe_taller" });
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status: "in_progress" }, items: [] });
+    getClienteById.mockResolvedValue(detailWith(null));
+    listRemindersForOrder.mockResolvedValue([]);
+    listOrderPhotos.mockResolvedValue([]);
+    listOrderAssignees.mockResolvedValue([]);
+    listOrderLines.mockResolvedValue([]);
+    findTecnicoByUserId.mockResolvedValue(null);
+    workCard.mockClear();
+    listTecnicos.mockResolvedValue([]);
+    listTecnicos.mockClear();
+    statusControls.mockClear();
+    roleCan(["service-orders.read", "service-orders.assign", "service-orders.write"]);
+  });
+  afterEach(() => vi.mocked(can).mockImplementation(() => true));
+
+  const card = () => screen.getByText("Técnicos asignados").closest("[data-slot='card']") as HTMLElement;
+
+  it("lists the assignees by name and flags a deactivated one", async () => {
+    listOrderAssignees.mockResolvedValue([
+      { tecnicoId: "t1", nombre: "Ana Mecánica", active: true, parteLista: false },
+      { tecnicoId: "t2", nombre: "Beto Frenos", active: false, parteLista: false },
+    ]);
+    render(await renderPage());
+
+    expect(within(card()).getByText("Ana Mecánica")).toBeInTheDocument();
+    expect(within(card()).getByText("Beto Frenos")).toBeInTheDocument();
+    expect(within(card()).getByText("Inactivo")).toBeInTheDocument();
+  });
+
+  it("says nobody is assigned yet", async () => {
+    render(await renderPage());
+
+    expect(within(card()).getByText("Esta orden todavía no tiene técnicos asignados.")).toBeInTheDocument();
+  });
+
+  it("offers staff the active roster minus the technicians already assigned", async () => {
+    listOrderAssignees.mockResolvedValue([{ tecnicoId: "t1", nombre: "Ana Mecánica", active: true, parteLista: false }]);
+    listTecnicos.mockResolvedValue([tecnicoRow("t1", "Ana Mecánica"), tecnicoRow("t2", "Beto Frenos")]);
+    render(await renderPage());
+
+    // `listTecnicos()` with no argument is the ACTIVE roster: a deactivated technician is never offered.
+    expect(listTecnicos).toHaveBeenCalledWith();
+    const options = Array.from(within(card()).getByLabelText("Asignar técnico").querySelectorAll("option")).map((o) => o.textContent);
+    expect(options).toEqual(["Elegí un técnico", "Beto Frenos"]);
+  });
+
+  it("offers a caller without service-orders.assign no assignment control and reads no roster", async () => {
+    roleCan(["service-orders.read", "service-orders.write"]);
+    render(await renderPage());
+
+    expect(screen.queryByLabelText("Asignar técnico")).not.toBeInTheDocument();
+    expect(listTecnicos).not.toHaveBeenCalled();
+  });
+
+  it.each<OrderStatus>(["done", "cancelled"])("offers no assignment control on a %s order", async (status) => {
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status }, items: [] });
+    listTecnicos.mockResolvedValue([tecnicoRow("t2", "Beto Frenos")]);
+    render(await renderPage());
+
+    expect(screen.queryByLabelText("Asignar técnico")).not.toBeInTheDocument();
+    expect(listTecnicos).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])("hands the status controls canAssign=%s to match service-orders.assign", async (assign) => {
+    roleCan(assign ? ["service-orders.read", "service-orders.assign"] : ["service-orders.read"]);
+    render(await renderPage());
+
+    expect(statusControls).toHaveBeenCalledWith({ orderId: "o1", status: "in_progress", canAssign: assign }, undefined);
+  });
+
+  describe("the work-lines card", () => {
+    const ASSIGNEE: OrderAssignee = { tecnicoId: "t1", nombre: "Ana Mecánica", active: true, parteLista: false };
+    const LINE: OrderWorkLine = {
+      id: "l1", tecnicoId: "t1", tecnicoNombre: "Ana Mecánica", descripcion: "Cambio de aceite", duracionMinutos: 45, fecha: "2026-03-04",
+    };
+    const asRole = (role: Role, status: OrderStatus = "in_progress") => {
+      requireSessionFromHeaders.mockResolvedValue({ id: "u7", role });
+      getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status }, items: [] });
+    };
+    const lastProps = () => workCard.mock.calls.at(-1)![0];
+
+    it("titles the card and hands it this order's team, lines and the viewer's roster row", async () => {
+      listOrderAssignees.mockResolvedValue([ASSIGNEE]);
+      listOrderLines.mockResolvedValue([LINE]);
+      findTecnicoByUserId.mockResolvedValue({ id: "t1" });
+      asRole("tecnico");
+      render(await renderPage());
+
+      expect(screen.getByText("Líneas de trabajo")).toBeInTheDocument();
+      expect(listOrderLines).toHaveBeenCalledWith("o1");
+      expect(findTecnicoByUserId).toHaveBeenCalledWith("u7");
+      expect(lastProps()).toEqual({
+        orderId: "o1",
+        status: "in_progress",
+        assignees: [ASSIGNEE],
+        lines: [LINE],
+        mode: "write",
+        viewerTecnicoId: "t1",
+        canManageAll: true,
+      });
+    });
+
+    it("crosses the RSC boundary as plain data: it survives a JSON round trip unchanged", async () => {
+      listOrderAssignees.mockResolvedValue([ASSIGNEE]);
+      listOrderLines.mockResolvedValue([LINE]);
+      render(await renderPage());
+
+      const props = lastProps();
+      expect(JSON.parse(JSON.stringify(props))).toEqual(props);
+      expect(Object.values(props).some((v) => typeof v === "function")).toBe(false);
+    });
+
+    it("passes viewerTecnicoId null to a login with no roster row", async () => {
+      render(await renderPage());
+
+      expect(lastProps().viewerTecnicoId).toBeNull();
+    });
+
+    it("passes canManageAll=false to a caller without service-orders.assign", async () => {
+      roleCan(["service-orders.read", "service-orders.write"]);
+      render(await renderPage());
+
+      expect(lastProps().canManageAll).toBe(false);
+    });
+
+    it.each<[Role, OrderStatus, string]>([
+      ["administrador", "done", "correction"],
+      ["administrador", "cancelled", "correction"],
+      ["jefe_taller", "done", "refused"],
+      ["tecnico", "open", "refused"],
+      ["tecnico", "ready_for_review", "refused"],
+      ["jefe_taller", "ready_for_review", "write"],
+      ["tecnico", "in_progress", "write"],
+    ])("resolves mode for %s on a %s order as %s", async (role, status, mode) => {
+      asRole(role, status);
+      render(await renderPage());
+
+      expect(lastProps().mode).toBe(mode);
+    });
   });
 });
