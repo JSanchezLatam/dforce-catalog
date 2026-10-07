@@ -22,7 +22,7 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getClienteById } from "@/modules/customers/queries";
 import { listRemindersForOrder } from "@/modules/reminders/queries";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
-import { canChangeOrderPhotos, canEditOrderFields } from "@/modules/service-orders/edit-policy";
+import { canChangeOrderPhotos, orderEditMode } from "@/modules/service-orders/edit-policy";
 import { FUEL_LABEL, formatKilometraje, intakeInputsFor } from "@/modules/service-orders/intake";
 import { OrderPhotos } from "@/modules/service-orders/OrderPhotos";
 import { OrderStatusControls } from "@/modules/service-orders/OrderStatusControls";
@@ -104,8 +104,12 @@ export default async function ServiceOrderDetailPage({
   // The same predicates the photo routes enforce (status gate + role), resolved
   // here so only booleans cross to the client card.
   const photosOpen = canChangeOrderPhotos(orden.status);
-  const canAddPhotos = photosOpen && can(user, "service-orders.write");
-  const canDeletePhotos = photosOpen && can(user, "service-orders.deletePhoto");
+  // closed-order-lock: on a closed order only an administrador's audited
+  // correction (password in each add/delete) may change photos.
+  const correctingPhotos = !photosOpen && can(user, "service-orders.correct");
+  const photosChangeable = photosOpen || correctingPhotos;
+  const canAddPhotos = photosChangeable && can(user, "service-orders.write");
+  const canDeletePhotos = photosChangeable && can(user, "service-orders.deletePhoto");
   // C4 — `includeInactive: true` (getClienteById's own vehicles read) means a
   // deactivated vehicle is still found here, so its identity+link render
   // exactly as for an active one (spec §"Service Order Detail Displays
@@ -120,6 +124,7 @@ export default async function ServiceOrderDetailPage({
   // The list's 8-character form (audit #15): a uuid broke across lines on a
   // phone. The full id stays in each element's `title`.
   const shortId = orden.id.slice(0, 8);
+  const editMode = orderEditMode(user.role, orden.status);
 
   return (
     <div className="p-4 sm:p-8">
@@ -143,9 +148,10 @@ export default async function ServiceOrderDetailPage({
           </CardTitle>
           <div className="flex flex-wrap items-center gap-2">
             {/* D11 — the same predicate the PATCH route enforces, so the
-                control and the write cannot drift. Only its BOOLEAN result
-                crosses to the client trigger; no function is serialized. */}
-            {canEditOrderFields(user.role, orden.status) && (
+                control and the write cannot drift. An administrador on a closed
+                order gets "Corregir" (closed-order-lock); only strings and
+                booleans cross to the client trigger, no function is serialized. */}
+            {editMode !== "refused" && (
               /* AGENTS.md's 44x44 floor. `ServiceOrderForm` renders its edit
                  trigger as `size="sm"` (h-7 = 28px) and exposes no `className`
                  for this mount to pass, so the floor is applied to its button
@@ -159,6 +165,7 @@ export default async function ServiceOrderDetailPage({
                      customer is fixed), so this value is unreachable. */
                   canCreateCustomer={false}
                   motor={vehiculo?.motor ?? null}
+                  triggerLabel={editMode === "correction" ? "Corregir" : undefined}
                 />
               </div>
             )}
@@ -262,8 +269,14 @@ export default async function ServiceOrderDetailPage({
           <CardTitle>Fotos de recepción</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <OrderPhotos orderId={orden.id} photos={photos} canAdd={canAddPhotos} canDelete={canDeletePhotos} />
-          {!photosOpen && (
+          <OrderPhotos
+            orderId={orden.id}
+            photos={photos}
+            canAdd={canAddPhotos}
+            canDelete={canDeletePhotos}
+            correcting={correctingPhotos}
+          />
+          {!photosChangeable && (
             <p className="text-sm text-muted-foreground">
               Las fotos no se pueden agregar ni borrar cuando la orden está terminada o cancelada.
             </p>

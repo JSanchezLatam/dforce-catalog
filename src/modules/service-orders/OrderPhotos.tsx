@@ -11,6 +11,7 @@ import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { FIELD_ERROR } from "@/shared/ui/styles";
 import { useToast } from "@/shared/ui/ToastProvider";
 import { compressPhoto } from "./compress-photo";
+import { CorrectionPasswordField } from "./CorrectionPasswordField";
 import { MAX_PHOTOS } from "./photo-limits";
 
 /** Per photo (<=3 MB after compression); a healthy LAN takes a fraction of this. */
@@ -18,9 +19,12 @@ const UPLOAD_TIMEOUT_MS = 60_000;
 const photoUrl = (orderId: string, photoId: string) => `/api/service-orders/${orderId}/photos/${photoId}`;
 const plural = (n: number, one: string, many: string) => (n === 1 ? `1 ${one}` : `${n} ${many}`);
 
-/** Every 409 from the photo routes is `{error, message}` with the Spanish text ready to show. */
-async function conflictMessage(response: Response): Promise<string | null> {
-  if (response.status !== 409) return null;
+/**
+ * Every 409 from the photo routes is `{error, message}` with the Spanish text ready to show.
+ * `refusals` adds the correction refusals (403 wrong password / not admin, 429 throttled), which carry the same shape.
+ */
+async function conflictMessage(response: Response, refusals = false): Promise<string | null> {
+  if (response.status !== 409 && !(refusals && (response.status === 403 || response.status === 429))) return null;
   const body = (await response.json().catch(() => null)) as { message?: unknown } | null;
   return typeof body?.message === "string" ? body.message : null;
 }
@@ -41,12 +45,15 @@ export function OrderPhotos({
   photos,
   canAdd,
   canDelete,
+  correcting = false,
   compress = compressPhoto,
 }: {
   orderId: string;
   photos: { id: string }[];
   canAdd: boolean;
   canDelete: boolean;
+  /** closed-order-lock: the order is closed and the viewer is an administrador, so add/delete need their password. */
+  correcting?: boolean;
   compress?: (file: File) => Promise<Blob>;
 }) {
   const router = useRouter();
@@ -55,11 +62,18 @@ export function OrderPhotos({
   const [pendingDelete, setPendingDelete] = useState<{ id: string; number: number } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Held only while its dialog is open and cleared after every attempt: never kept, typed again on every action.
+  const [password, setPassword] = useState("");
+  const [pendingAdd, setPendingAdd] = useState<File[] | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const slots = MAX_PHOTOS - photos.length;
   const isUploading = progress !== null;
 
-  async function uploadAll(selected: File[]) {
+  /** Resolves to the correction refusal that stopped the batch, if any (wrong password, throttled). */
+  async function uploadAll(selected: File[], correctionPassword?: string): Promise<string | null> {
+    let refusal: string | null = null;
     const files = selected.slice(0, Math.max(slots, 0));
     const skipped = selected.length - files.length;
     if (skipped > 0) {
@@ -80,6 +94,7 @@ export function OrderPhotos({
 
       const form = new FormData();
       form.append("file", body, "foto.jpg");
+      if (correctionPassword !== undefined) form.append("password", correctionPassword);
       let response: Response;
       // A stalled LAN connection never rejects by itself; the abort makes it
       // the same failure a dropped one is. Plain AbortController + setTimeout:
@@ -104,6 +119,12 @@ export function OrderPhotos({
         applied += 1;
         continue;
       }
+      if (correctionPassword !== undefined && (response.status === 403 || response.status === 429)) {
+        // Every remaining file would be refused the same way, and the dialog is
+        // where the operator retypes the password.
+        refusal = (await conflictMessage(response, true)) ?? "No se pudo subir la foto.";
+        break;
+      }
       const conflict = await conflictMessage(response);
       if (conflict) {
         // photo_limit / order_closed: every remaining file would fail the same way.
@@ -121,6 +142,24 @@ export function OrderPhotos({
       addToast("success", `${plural(applied, "foto agregada", "fotos agregadas")}`);
       router.refresh();
     }
+    return refusal;
+  }
+
+  function closeAdd() {
+    setPendingAdd(null);
+    setPassword("");
+    setAddError(null);
+  }
+
+  async function confirmAdd() {
+    if (!pendingAdd) return;
+    setIsAdding(true);
+    setAddError(null);
+    const refusal = await uploadAll(pendingAdd, password);
+    setIsAdding(false);
+    setPassword("");
+    if (refusal) setAddError(refusal);
+    else closeAdd();
   }
 
   async function confirmDelete() {
@@ -128,9 +167,14 @@ export function OrderPhotos({
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      const response = await fetch(photoUrl(orderId, pendingDelete.id), { method: "DELETE" });
+      const response = await fetch(
+        photoUrl(orderId, pendingDelete.id),
+        correcting
+          ? { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) }
+          : { method: "DELETE" },
+      );
       if (!response.ok) {
-        setDeleteError((await conflictMessage(response)) ?? "No se pudo eliminar la foto.");
+        setDeleteError((await conflictMessage(response, true)) ?? "No se pudo eliminar la foto.");
         return;
       }
     } catch {
@@ -138,6 +182,7 @@ export function OrderPhotos({
       return;
     } finally {
       setIsDeleting(false);
+      setPassword("");
     }
     setPendingDelete(null);
     addToast("success", "Foto eliminada");
@@ -170,7 +215,9 @@ export function OrderPhotos({
                 const selected = Array.from(event.target.files ?? []);
                 // Reset so choosing the same file again still fires `change`.
                 event.target.value = "";
-                if (selected.length > 0) void uploadAll(selected);
+                if (selected.length === 0) return;
+                if (correcting) setPendingAdd(selected);
+                else void uploadAll(selected);
               }}
             />
           </label>
@@ -218,6 +265,7 @@ export function OrderPhotos({
                   aria-label={`Borrar foto ${index + 1}`}
                   onClick={() => {
                     setDeleteError(null);
+                    setPassword("");
                     setPendingDelete({ id: photo.id, number: index + 1 });
                   }}
                 >
@@ -229,10 +277,20 @@ export function OrderPhotos({
         </ul>
       )}
 
-      <Dialog open={pendingDelete !== null} onOpenChange={(open) => !open && !isDeleting && setPendingDelete(null)}>
+      <Dialog open={pendingDelete !== null} onOpenChange={(open) => {
+          if (open || isDeleting) return;
+          setPendingDelete(null);
+          setPassword("");
+        }}
+      >
         <DialogContent showCloseButton={false}>
           <DialogTitle>¿Eliminar la foto {pendingDelete?.number}?</DialogTitle>
           <p className="px-6 text-sm text-muted-foreground">Esta acción no se puede deshacer.</p>
+          {correcting && (
+            <div className="px-6">
+              <CorrectionPasswordField value={password} onChange={setPassword} />
+            </div>
+          )}
           {deleteError && (
             <p role="alert" className={`px-6 ${FIELD_ERROR}`}>
               {deleteError}
@@ -242,8 +300,36 @@ export function OrderPhotos({
             <DialogClose render={<Button variant="outline" disabled={isDeleting} className="min-h-11 min-w-11" />}>
               Cancelar
             </DialogClose>
-            <Button variant="destructive" className="min-h-11 min-w-11" disabled={isDeleting} onClick={confirmDelete}>
+            <Button
+              variant="destructive"
+              className="min-h-11 min-w-11"
+              disabled={isDeleting || (correcting && password === "")}
+              onClick={confirmDelete}
+            >
               {isDeleting ? "Eliminando…" : "Eliminar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pendingAdd !== null} onOpenChange={(open) => !open && !isAdding && closeAdd()}>
+        <DialogContent showCloseButton={false}>
+          <DialogTitle>Agregar {pendingAdd && plural(pendingAdd.length, "foto", "fotos")} a una orden cerrada</DialogTitle>
+          <p className="px-6 text-sm text-muted-foreground">Confirmá con tu contraseña. Queda registrado quién hizo el cambio.</p>
+          <div className="px-6">
+            <CorrectionPasswordField value={password} onChange={setPassword} />
+          </div>
+          {addError && (
+            <p role="alert" className={`px-6 ${FIELD_ERROR}`}>
+              {addError}
+            </p>
+          )}
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" disabled={isAdding} className="min-h-11 min-w-11" />}>
+              Cancelar
+            </DialogClose>
+            <Button className="min-h-11 min-w-11" disabled={isAdding || password === ""} onClick={confirmAdd}>
+              {isAdding ? "Agregando…" : "Agregar"}
             </Button>
           </DialogFooter>
         </DialogContent>

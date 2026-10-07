@@ -19,6 +19,16 @@ describe("CorrectionPasswordField", () => {
     expect(input).toBeRequired();
   });
 
+  it("takes focus when an error arrives, so a field below the dialog's fold scrolls into view", () => {
+    const { rerender } = render(<CorrectionPasswordField value="" onChange={() => {}} />);
+    const input = screen.getByLabelText("Tu contraseña");
+    expect(input).not.toHaveFocus();
+
+    rerender(<CorrectionPasswordField value="" onChange={() => {}} error="Contraseña incorrecta" />);
+
+    expect(input).toHaveFocus();
+  });
+
   it("reports what is typed and shows the controlled value", () => {
     const onChange = vi.fn();
     render(<CorrectionPasswordField value="abc" onChange={onChange} />);

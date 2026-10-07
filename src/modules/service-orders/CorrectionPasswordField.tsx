@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useEffect, useId, useRef } from "react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,10 +24,21 @@ export function CorrectionPasswordField({
 }) {
   const id = useId();
   const errorId = `${id}-error`;
+  const inputRef = useRef<HTMLInputElement>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  // The field sits at the bottom of a long correction form: focus it and scroll
+  // the error text into view instead of leaving only a red border below the fold.
+  useEffect(() => {
+    if (!error) return;
+    inputRef.current?.focus({ preventScroll: true });
+    // Optional call: jsdom has no scrollIntoView.
+    errorRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [error]);
   return (
     <div className="grid gap-2">
       <Label htmlFor={id}>Tu contraseña</Label>
       <Input
+        ref={inputRef}
         id={id}
         type="password"
         autoComplete="current-password"
@@ -39,7 +50,7 @@ export function CorrectionPasswordField({
         aria-describedby={error ? errorId : undefined}
       />
       {error && (
-        <p id={errorId} role="alert" className={FIELD_ERROR}>
+        <p ref={errorRef} id={errorId} role="alert" className={FIELD_ERROR}>
           {error}
         </p>
       )}
