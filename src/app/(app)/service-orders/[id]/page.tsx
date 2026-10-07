@@ -23,10 +23,11 @@ import { orderScope } from "@/modules/service-orders/scope";
 import { getClienteById } from "@/modules/customers/queries";
 import { listRemindersForOrder } from "@/modules/reminders/queries";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
-import { canChangeOrderPhotos, isClosedStatus, orderEditMode } from "@/modules/service-orders/edit-policy";
+import { canChangeOrderPhotos, isClosedStatus, orderEditMode, workLineMode } from "@/modules/service-orders/edit-policy";
 import { FUEL_LABEL, formatKilometraje, intakeInputsFor } from "@/modules/service-orders/intake";
 import { AssignTecnicoControl } from "@/modules/service-orders/AssignTecnicoControl";
-import { listOrderAssignees } from "@/modules/service-orders/order-team";
+import { listOrderAssignees, listOrderLines } from "@/modules/service-orders/order-team";
+import { OrderWorkCard } from "@/modules/service-orders/OrderWorkCard";
 import { OrderPhotos } from "@/modules/service-orders/OrderPhotos";
 import { OrderStatusControls } from "@/modules/service-orders/OrderStatusControls";
 import { vehicleDescriptiveRows } from "@/modules/service-orders/vehicle-rows";
@@ -34,7 +35,7 @@ import { ServiceOrderFormTrigger } from "@/modules/service-orders/ServiceOrderFo
 import { listOrderPhotos } from "@/modules/service-orders/photos";
 import { getOrdenServicioById } from "@/modules/service-orders/queries";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
-import { listTecnicos } from "@/modules/technicians/queries";
+import { findTecnicoByUserId, listTecnicos } from "@/modules/technicians/queries";
 import { formatDateTime } from "@/shared/datetime";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 
@@ -105,11 +106,13 @@ export default async function ServiceOrderDetailPage({
   // Assignment is staff-only and never on a closed order (not correctable), so
   // the roster is read only where the control would render.
   const canAssignNow = canAssign && !isClosedStatus(orden.status);
-  const [clienteDetail, reminders, photos, assignees, roster] = await Promise.all([
+  const [clienteDetail, reminders, photos, assignees, lines, viewerTecnico, roster] = await Promise.all([
     getClienteById(orden.clienteId, scope),
     listRemindersForOrder(orden.id),
     listOrderPhotos(orden.id, scope),
     listOrderAssignees(orden.id),
+    listOrderLines(orden.id),
+    findTecnicoByUserId(user.id),
     canAssignNow ? listTecnicos() : Promise.resolve([]),
   ]);
   // ACTIVE roster (the default) minus who is already on the order; plain pairs for the client.
@@ -267,6 +270,26 @@ export default async function ServiceOrderDetailPage({
             </ul>
           )}
           {canAssignNow && <AssignTecnicoControl orderId={orden.id} available={assignable} />}
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Líneas de trabajo</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {/* RSC boundary: strings, numbers and booleans only. `mode` and
+              `canManageAll` are the same predicates the work-line routes
+              enforce, resolved here so no function is serialized. */}
+          <OrderWorkCard
+            orderId={orden.id}
+            status={orden.status}
+            assignees={assignees}
+            lines={lines}
+            mode={workLineMode(user.role, orden.status)}
+            viewerTecnicoId={viewerTecnico?.id ?? null}
+            canManageAll={canAssign}
+          />
         </CardContent>
       </Card>
 

@@ -98,3 +98,18 @@ export function orderEditMode(role: Role, status: OrderStatus): "edit" | "correc
   if (canEditOrderFields(role, status)) return "edit";
   return isClosedStatus(status) && role === "administrador" ? "correction" : "refused";
 }
+
+/**
+ * Who may write a work line, by role and status — the same split the work-line
+ * routes enforce (`work-lines.ts`): staff while `in_progress` or
+ * `ready_for_review`, a técnico only `in_progress`, nobody on `open`, and on a
+ * closed order only an administrador's password-backed correction (a jefe never
+ * holds a grant). A técnico's own-line and not-yet-marked conditions are data
+ * the page does not have here; the card checks them and the server stays the gate.
+ */
+export function workLineMode(role: Role, status: OrderStatus): "write" | "correction" | "refused" {
+  const staff = role === "administrador" || role === "jefe_taller";
+  if (isClosedStatus(status)) return role === "administrador" ? "correction" : "refused";
+  if (status === "in_progress") return staff || role === "tecnico" ? "write" : "refused";
+  return staff && status === "ready_for_review" ? "write" : "refused";
+}

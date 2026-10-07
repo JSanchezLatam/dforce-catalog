@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ROLES, type Role } from "@/modules/auth/roles";
 import { orderStatusEnum } from "@/shared/db/schema";
 import { MATRIX } from "@/modules/auth/policy";
-import { canChangeOrderPhotos, canEditOrderFields, isClosedStatus, orderEditMode } from "./edit-policy";
+import { canChangeOrderPhotos, canEditOrderFields, isClosedStatus, orderEditMode, workLineMode } from "./edit-policy";
 import type { OrderStatus } from "./transitions";
 
 /**
@@ -134,5 +134,32 @@ describe("orderEditMode", () => {
     for (const role of ROLES) {
       expect(orderEditMode(role, "done") === "correction").toBe(MATRIX[role]["service-orders.correct"]);
     }
+  });
+});
+
+/** The status/role half of who writes work lines; the técnico's own-line and un-marked conditions are the card's. */
+describe("workLineMode (order-work-lines, who writes lines)", () => {
+  it.each<[Role, OrderStatus, "write" | "correction" | "refused"]>([
+    ["administrador", "open", "refused"],
+    ["administrador", "in_progress", "write"],
+    ["administrador", "ready_for_review", "write"],
+    ["administrador", "done", "correction"],
+    ["administrador", "cancelled", "correction"],
+    ["jefe_taller", "open", "refused"],
+    ["jefe_taller", "in_progress", "write"],
+    ["jefe_taller", "ready_for_review", "write"],
+    ["jefe_taller", "done", "refused"],
+    ["jefe_taller", "cancelled", "refused"],
+    ["tecnico", "open", "refused"],
+    ["tecnico", "in_progress", "write"],
+    ["tecnico", "ready_for_review", "refused"],
+    ["tecnico", "done", "refused"],
+    ["tecnico", "cancelled", "refused"],
+  ])("%s on a %s order -> %s", (role, status, expected) => {
+    expect(workLineMode(role, status)).toBe(expected);
+  });
+
+  it("refuses an unrecognised role", () => {
+    expect(workLineMode("intruso" as Role, "in_progress")).toBe("refused");
   });
 });
