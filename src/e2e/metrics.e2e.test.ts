@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db } from "@/shared/db/client";
 import { cliente, ordenLineaTrabajo, ordenServicio, ordenTecnico, tecnico, users, vehiculo } from "@/shared/db/schema";
+import { findTecnicoByUserId } from "../modules/technicians/queries";
 import { backlogByStatus, closedByMonth, closedByTecnicoMonth, minutesByTecnicoMonth, receivedByMonth } from "../modules/metrics/queries";
 
 describe("metrics queries (E2E)", () => {
@@ -18,6 +19,8 @@ describe("metrics queries (E2E)", () => {
   let adminId: string;
   let rosterA: string;
   let rosterB: string;
+  let loginA: string;
+  let loginUnlinked: string;
   let clienteId: string;
   let vehiculoId: string;
   const FROM = "2031-01";
@@ -45,8 +48,13 @@ describe("metrics queries (E2E)", () => {
     execSync("npx drizzle-kit migrate", { stdio: "inherit" });
     const [u] = await db.insert(users).values({ username: `e2e-metrics-${stamp}`, passwordHash: "x", role: "administrador" }).returning({ id: users.id });
     adminId = u.id;
-    const roster = async (nombre: string) => (await db.insert(tecnico).values({ nombre }).returning({ id: tecnico.id }))[0].id;
-    rosterA = await roster("Metrics A");
+    const [la] = await db.insert(users).values({ username: `e2e-metrics-a-${stamp}`, passwordHash: "x", role: "tecnico" }).returning({ id: users.id });
+    const [lu] = await db.insert(users).values({ username: `e2e-metrics-u-${stamp}`, passwordHash: "x", role: "tecnico" }).returning({ id: users.id });
+    loginA = la.id;
+    loginUnlinked = lu.id;
+    const roster = async (nombre: string, userId?: string) =>
+      (await db.insert(tecnico).values({ nombre, userId }).returning({ id: tecnico.id }))[0].id;
+    rosterA = await roster("Metrics A", loginA);
     rosterB = await roster("Metrics B");
     const [c] = await db.insert(cliente).values({ name: "Metrics Cliente", phone: "50769994004" }).returning({ id: cliente.id });
     clienteId = c.id;
@@ -64,7 +72,7 @@ describe("metrics queries (E2E)", () => {
     await db.delete(vehiculo).where(eq(vehiculo.clienteId, clienteId));
     await db.delete(cliente).where(eq(cliente.id, clienteId));
     await db.delete(tecnico).where(inArray(tecnico.id, [rosterA, rosterB]));
-    await db.delete(users).where(eq(users.id, adminId));
+    await db.delete(users).where(inArray(users.id, [adminId, loginA, loginUnlinked]));
     await db.$client.end();
   });
 
@@ -132,6 +140,24 @@ describe("metrics queries (E2E)", () => {
     expect(closed.length).toBeGreaterThan(0);
     expect(minutes.length).toBeGreaterThan(0);
     expect(new Set([...closed, ...minutes].map((r) => r.tecnicoId))).toEqual(new Set([rosterB]));
+  });
+
+  it("the técnico's own page path: the session's login resolves A, and A's id returns only A's closed and minutes", async () => {
+    const me = await findTecnicoByUserId(loginA);
+    expect(me).toEqual({ id: rosterA });
+
+    const closed = await closedByTecnicoMonth({ from: FROM, tecnicoId: me!.id });
+    const minutes = await minutesByTecnicoMonth({ from: FROM, tecnicoId: me!.id });
+    expect(closed.length).toBeGreaterThan(0);
+    expect(minutes.length).toBeGreaterThan(0);
+    expect(new Set([...closed, ...minutes].map((r) => r.tecnicoId))).toEqual(new Set([rosterA]));
+    // B also closed in June (shared order) and logged 45 min in August: neither may show up as A's.
+    expect(inMonth(closed, "2031-06")).toEqual([{ tecnicoId: rosterA, mes: "2031-06", n: 1 }]);
+    expect(minutes.find((r) => r.mes === "2031-08")?.n).toBe(270);
+  });
+
+  it("a login with no roster row resolves no technician", async () => {
+    expect(await findTecnicoByUserId(loginUnlinked)).toBeNull();
   });
 
   it("backlog counts open, in_progress and ready_for_review as integers, never done or cancelled", async () => {

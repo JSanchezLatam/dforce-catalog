@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { FileSpreadsheet, Package, BookOpen, Settings, GalleryVerticalEnd, ChevronDown, ChevronRight, Users, Wrench, User, UserCog, CalendarClock, HardHat } from "lucide-react"
+import { FileSpreadsheet, Package, BookOpen, Settings, GalleryVerticalEnd, ChevronDown, ChevronRight, Users, Wrench, User, UserCog, CalendarClock, HardHat, BarChart3, Gauge } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -58,6 +58,8 @@ const ICON_MAP: Record<string, typeof Package> = {
   vencimientos: CalendarClock,
   users: UserCog,
   technicians: HardHat,
+  metrics: BarChart3,
+  "my-metrics": Gauge,
 }
 
 function NavLinkItem({ item }: { item: NavLink }) {
