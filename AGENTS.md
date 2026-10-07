@@ -88,7 +88,9 @@ evidence.
 - **`portal/` is a separate Next app, with its own install and gate commands**
   (`cd portal && npm test && npx tsc --noEmit && npm run lint`). Root
   `tsc`/`vitest`/`eslint` exclude it; the one shared file is
-  `portal/src/contract.ts`, imported as `@portal/contract`.
+  `portal/src/contract.ts`, imported as `@portal/contract`. `npm run test:portal-sync` (root) runs the
+  workshop job against the portal's handlers on two throwaway databases; it is in
+  no default run.
 - **Security headers** in `next.config.ts`. CSP is deliberately unconfigured:
   it needs the R2/Interfuerza image hosts allowlisted first, or it silently
   breaks product images app-wide.
