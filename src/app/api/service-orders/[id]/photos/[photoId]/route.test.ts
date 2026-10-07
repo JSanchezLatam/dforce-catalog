@@ -2,16 +2,18 @@ import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Role } from "@/modules/auth/roles";
+import { CorrectionRefusedError } from "@/modules/service-orders/correction-auth";
 import { OrderClosedError, PhotoNotFoundError } from "@/modules/service-orders/photos";
 import { OrdenServicioNotFoundError } from "@/modules/service-orders/service";
 import { DELETE, GET, handleDeletePhoto, handleGetPhoto } from "./route";
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
 
-function req(method: "GET" | "DELETE", role: Role = "tecnico") {
+function req(method: "GET" | "DELETE", role: Role = "tecnico", body?: unknown) {
   return new NextRequest("http://localhost/api/service-orders/o1/photos/p1", {
     method,
     headers: { "x-user-id": "user-1", "x-user-role": role },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 }
 
@@ -85,14 +87,85 @@ describe("DELETE /api/service-orders/[id]/photos/[photoId]", () => {
     expect(deletePhoto).toHaveBeenCalledWith(ids);
   });
 
-  it("409 order_closed on a closed order", async () => {
+  it("409 order_closed on a closed order for an administrador with no password", async () => {
     const deletePhoto = vi.fn().mockRejectedValue(new OrderClosedError());
-    const res = await handleDeletePhoto(req("DELETE", "administrador"), ids, { deletePhoto });
+    const authorize = vi.fn();
+    const res = await handleDeletePhoto(req("DELETE", "administrador"), ids, { deletePhoto, authorize });
+    expect(authorize).not.toHaveBeenCalled();
 
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({
       error: "order_closed",
       message: "La orden está cerrada",
+    });
+  });
+
+  describe("a closed order (closed-order-lock)", () => {
+    const closed = () => vi.fn().mockRejectedValue(new OrderClosedError());
+
+    it.each([undefined, { password: "pw" }])("403 for a tecnico with body %j, and the password is never verified", async (body) => {
+      const deletePhoto = closed();
+      const authorize = vi.fn();
+      const res = await handleDeletePhoto(req("DELETE", "tecnico", body), ids, { deletePhoto, authorize });
+
+      expect(res.status).toBe(403);
+      expect(authorize).not.toHaveBeenCalled();
+      expect(deletePhoto).not.toHaveBeenCalled();
+    });
+
+    it("403 wrong_password, and nothing is retried", async () => {
+      const deletePhoto = closed();
+      const authorize = vi.fn().mockRejectedValue(new CorrectionRefusedError("wrong_password"));
+      const res = await handleDeletePhoto(req("DELETE", "administrador", { password: "bad" }), ids, { deletePhoto, authorize });
+
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ error: "wrong_password", message: "Contraseña incorrecta" });
+      expect(deletePhoto).toHaveBeenCalledTimes(1);
+    });
+
+    it("429 with Retry-After 900 when throttled", async () => {
+      const authorize = vi.fn().mockRejectedValue(new CorrectionRefusedError("throttled"));
+      const res = await handleDeletePhoto(req("DELETE", "administrador", { password: "pw" }), ids, {
+        deletePhoto: closed(),
+        authorize,
+      });
+
+      expect(res.status).toBe(429);
+      expect(res.headers.get("Retry-After")).toBe("900");
+      expect(await res.json()).toEqual({ error: "throttled", message: "Demasiados intentos. Probá de nuevo en 15 minutos." });
+    });
+
+    it("verifies the password, then retries WITH the grant and answers 200", async () => {
+      const deletePhoto = vi.fn().mockRejectedValueOnce(new OrderClosedError()).mockResolvedValueOnce(undefined);
+      const authorize = vi.fn().mockResolvedValue({ correctorId: "user-1" });
+      const res = await handleDeletePhoto(req("DELETE", "administrador", { password: "pw" }), ids, { deletePhoto, authorize });
+
+      expect(res.status).toBe(200);
+      expect(authorize).toHaveBeenCalledWith("user-1", "pw");
+      expect(deletePhoto).toHaveBeenNthCalledWith(1, ids);
+      expect(deletePhoto).toHaveBeenNthCalledWith(2, { ...ids, correction: { correctorId: "user-1" } });
+    });
+
+    it("never verifies a password sent for an OPEN order", async () => {
+      const authorize = vi.fn();
+      const res = await handleDeletePhoto(req("DELETE", "administrador", { password: "pw" }), ids, {
+        deletePhoto: vi.fn().mockResolvedValue(undefined),
+        authorize,
+      });
+
+      expect(res.status).toBe(200);
+      expect(authorize).not.toHaveBeenCalled();
+    });
+
+    it("an unreadable body is treated as no password, not a 500", async () => {
+      const request = new NextRequest("http://localhost/api/service-orders/o1/photos/p1", {
+        method: "DELETE",
+        headers: { "x-user-id": "user-1", "x-user-role": "administrador" },
+        body: "not json",
+      });
+      const res = await handleDeletePhoto(request, ids, { deletePhoto: closed(), authorize: vi.fn() });
+
+      expect(res.status).toBe(409);
     });
   });
 

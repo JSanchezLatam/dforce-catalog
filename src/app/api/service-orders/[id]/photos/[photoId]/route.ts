@@ -3,19 +3,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import { getObject } from "@/modules/catalog-storage/r2";
-import {
-  deleteOrderPhoto,
-  findOrderPhoto,
-  OrderClosedError,
-  PhotoNotFoundError,
-} from "@/modules/service-orders/photos";
+import { deleteOrderPhoto, findOrderPhoto, PhotoNotFoundError } from "@/modules/service-orders/photos";
 import { OrdenServicioNotFoundError } from "@/modules/service-orders/service";
+import { attemptWithCorrection, correctionErrorResponse, type Authorize } from "../../../correction-http";
 
 type Ids = { ordenId: string; photoId: string };
 type Context = { params: Promise<{ id: string; photoId: string }> };
 
 export type GetPhotoDeps = { findPhoto?: typeof findOrderPhoto; getObject?: typeof getObject };
-export type DeletePhotoDeps = { deletePhoto?: typeof deleteOrderPhoto };
+export type DeletePhotoDeps = { deletePhoto?: typeof deleteOrderPhoto; authorize?: Authorize };
 
 export async function handleGetPhoto(
   request: NextRequest,
@@ -59,17 +55,28 @@ export async function handleDeletePhoto(
   if (!can(user, "service-orders.deletePhoto")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const canCorrect = can(user, "service-orders.correct");
+
+  // The existing client sends no body: an unreadable one means "no password", not a 500.
+  const body = await request.json().catch(() => null);
+  const password = typeof body?.password === "string" ? body.password : undefined;
 
   try {
-    await (deps.deletePhoto ?? deleteOrderPhoto)(ids);
+    const remove = deps.deletePhoto ?? deleteOrderPhoto;
+    await attemptWithCorrection(
+      user,
+      canCorrect,
+      password,
+      (correction) => remove(correction ? { ...ids, correction } : ids),
+      deps.authorize,
+    );
     return NextResponse.json({ success: true });
   } catch (err) {
     if (err instanceof PhotoNotFoundError || err instanceof OrdenServicioNotFoundError) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
-    if (err instanceof OrderClosedError) {
-      return NextResponse.json({ error: "order_closed", message: err.message }, { status: 409 });
-    }
+    const refused = correctionErrorResponse(err, canCorrect);
+    if (refused) return refused;
     throw err;
   }
 }
