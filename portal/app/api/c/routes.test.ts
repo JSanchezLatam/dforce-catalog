@@ -144,6 +144,7 @@ describe("accept", () => {
   });
 
   it("does not record anything for an invalid token", async () => {
+    gate.on = true;
     findByToken.mockResolvedValue(null);
     await call(accept, tok());
     expect(recordAcceptance).not.toHaveBeenCalled();

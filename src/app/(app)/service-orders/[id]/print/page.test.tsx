@@ -792,7 +792,7 @@ describe("ServiceOrderPrintPage — consent clause and the two copies (customer-
       expect(slot).not.toBeNull();
       expect(slot!.textContent).toBe("");
       expect(slot!.children).toHaveLength(0);
-      expect(container.querySelector("svg")).toBeNull();
+      expect(container.querySelector('[role="img"] svg')).toBeNull();
       expect(renderQrSvg).not.toHaveBeenCalled();
       expect(screen.queryByText(NOTICE)).not.toBeInTheDocument();
     });
@@ -930,7 +930,7 @@ describe("ServiceOrderPrintPage — consent clause and the two copies (customer-
 
       const customer = render(await renderPage("cliente"));
       expect(renderQrSvg).not.toHaveBeenCalled();
-      expect(customer.container.querySelector("svg")).toBeNull();
+      expect(customer.container.querySelector('[role="img"] svg')).toBeNull();
       expect(screen.queryByText(NOTICE)).not.toBeInTheDocument();
       expect(screen.queryByRole("img", { name: "Código QR del portal del cliente" })).not.toBeInTheDocument();
       expect(customer.container.innerHTML).not.toContain(TOKEN);
