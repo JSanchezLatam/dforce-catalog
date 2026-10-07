@@ -105,7 +105,7 @@ export default async function ServiceOrderDetailPage({
   ]);
   // The same predicates the photo routes enforce (status gate + role), resolved
   // here so only booleans cross to the client card.
-  const photosOpen = canChangeOrderPhotos(orden.status);
+  const photosOpen = canChangeOrderPhotos(orden.status, can(user, "service-orders.assign"));
   // closed-order-lock: on a closed order only an administrador's audited
   // correction (password in each add/delete) may change photos.
   const correctingPhotos = !photosOpen && can(user, "service-orders.correct");
@@ -280,7 +280,9 @@ export default async function ServiceOrderDetailPage({
           />
           {!photosChangeable && (
             <p className="text-sm text-muted-foreground">
-              Las fotos no se pueden agregar ni borrar cuando la orden está terminada o cancelada.
+              {orden.status === "ready_for_review"
+                ? "Las fotos de una orden lista para revisión las agrega el administrador o el jefe de taller."
+                : "Las fotos no se pueden agregar ni borrar cuando la orden está terminada o cancelada."}
             </p>
           )}
         </CardContent>

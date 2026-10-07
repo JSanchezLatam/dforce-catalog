@@ -638,6 +638,28 @@ describe("ServiceOrderDetailPage — reception photos card", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("offers a técnico no add control on a ready_for_review order, and says who may", async () => {
+    roleCan(["service-orders.read", "service-orders.write"]);
+    asOrder("ready_for_review");
+
+    render(await renderPage());
+
+    expect(within(card()).queryByLabelText("Agregar fotos")).not.toBeInTheDocument();
+    expect(
+      within(card()).getByText("Las fotos de una orden lista para revisión las agrega el administrador o el jefe de taller."),
+    ).toBeInTheDocument();
+  });
+
+  it("offers staff (service-orders.assign) the add control on a ready_for_review order", async () => {
+    roleCan(["service-orders.read", "service-orders.write", "service-orders.assign"]);
+    asOrder("ready_for_review");
+
+    render(await renderPage());
+
+    expect(within(card()).getByLabelText("Agregar fotos")).toBeInTheDocument();
+    expect(within(card()).queryByText(/lista para revisión las agrega/)).not.toBeInTheDocument();
+  });
+
   it("asks for no password to delete a photo of an order that is still open", async () => {
     roleCan(["service-orders.read", "service-orders.write", "service-orders.deletePhoto", "service-orders.correct"]);
     asOrder("in_progress");

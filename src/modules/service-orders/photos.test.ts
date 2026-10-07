@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { db } from "@/shared/db/client";
+import { OrderEditForbiddenError } from "./order-lock";
 import { SYSTEM_SCOPE } from "./scope";
 import { OrdenServicioNotFoundError } from "./service";
 import {
@@ -124,6 +125,24 @@ describe("addOrderPhoto", () => {
   it.each(["open", "in_progress"])("accepts a photo on a %s order", async (status) => {
     const h = harness({ results: orderAt(status) });
     await expect(addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", bytes: JPEG }, h.deps)).resolves.toMatchObject({ position: 0 });
+  });
+
+  it("refuses a técnico on a ready_for_review order (OrderEditForbiddenError), before counting or storing", async () => {
+    const h = harness({ results: orderAt("ready_for_review") });
+
+    await expect(addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", bytes: JPEG }, h.deps)).rejects.toBeInstanceOf(
+      OrderEditForbiddenError,
+    );
+
+    expect(h.log).toEqual(["select"]);
+    expect(h.putObject).not.toHaveBeenCalled();
+  });
+
+  it("accepts staff on a ready_for_review order", async () => {
+    const h = harness({ results: orderAt("ready_for_review") });
+    await expect(
+      addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", bytes: JPEG, canManageAll: true }, h.deps),
+    ).resolves.toMatchObject({ position: 0 });
   });
 
   it("refuses a 13th photo with PhotoLimitError and stores nothing", async () => {

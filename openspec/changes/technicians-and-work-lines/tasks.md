@@ -89,11 +89,11 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU6: Mi parte lista and readiness (PR 6)
 
-- [ ] 7.1 RED `readiness.test.ts` truth table: zero active assignees never ready; all active marked becomes `ready_for_review` with timestamp; deactivated unmarked ignored; un-mark returns `in_progress`; only runs in `in_progress`/`ready_for_review`. GREEN `readiness.ts` (`applyReadiness`, no `assertTransition`).
-- [ ] 7.2 RED `parte-lista.test.ts`: marks only own assignment (403 naming another); refused outside `in_progress`, already marked, closed orders for every role (never correctable); un-mark in `ready_for_review`; no line required. GREEN service, `/parte-lista` POST/DELETE (+ guard rows).
-- [ ] 7.3 RED e2e race `src/e2e/order-readiness.e2e.test.ts`: second connection holds `FOR UPDATE`; `markParteLista` does not resolve within 300ms, then resolves `ready_for_review`; two simultaneous last marks end `ready_for_review` once. GREEN.
-- [ ] 7.4 RED admin/jefe `ready_for_review → in_progress` transition. GREEN. Also: a técnico is refused photo add/delete on a `ready_for_review` order (spec); WU1 left `canChangeOrderPhotos` status-only (`ready_for_review: true`), so add the role split here (route/page gate), RED first.
-- [ ] 7.5 Mutation-verify 7.1-7.4 by name (remove the lock so the race test goes red).
+- [x] 7.1 RED `readiness.test.ts` truth table: zero active assignees never ready; all active marked becomes `ready_for_review` with timestamp; deactivated unmarked ignored; un-mark returns `in_progress`; only runs in `in_progress`/`ready_for_review`. GREEN `readiness.ts` (`applyReadiness`, no `assertTransition`).
+- [x] 7.2 RED `parte-lista.test.ts`: marks only own assignment (403 naming another); refused outside `in_progress`, already marked, closed orders for every role (never correctable); un-mark in `ready_for_review`; no line required. GREEN service, `/parte-lista` POST/DELETE (+ guard rows).
+- [x] 7.3 RED e2e race `src/e2e/order-readiness.e2e.test.ts`: second connection holds `FOR UPDATE`; `markParteLista` does not resolve within 300ms, then resolves `ready_for_review`; two simultaneous last marks end `ready_for_review` once. GREEN.
+- [x] 7.4 RED admin/jefe `ready_for_review → in_progress` transition. GREEN. Also: a técnico is refused photo add/delete on a `ready_for_review` order (spec); WU1 left `canChangeOrderPhotos` status-only (`ready_for_review: true`), so add the role split here (route/page gate), RED first.
+- [x] 7.5 Mutation-verify 7.1-7.4 by name (remove the lock so the race test goes red).
 
 ## WU7: Order UI (PR 7)
 
