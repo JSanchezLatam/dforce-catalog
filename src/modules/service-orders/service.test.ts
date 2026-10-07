@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ClienteDeactivatedError } from "@/modules/customers/service";
 
-import { ordenCategoriaEnum, type OrdenServicio, type Vehiculo } from "@/shared/db/schema";
+import { ordenCategoriaEnum, ordenServicioCorreccion, type OrdenServicio, type Vehiculo } from "@/shared/db/schema";
+import { OrderClosedError, OrderEditForbiddenError } from "./order-lock";
 import { OrderTransitionError } from "./transitions";
 import {
   createOrder,
@@ -12,6 +13,7 @@ import {
   transitionOrder,
   UnknownClienteError,
   updateOrder,
+  type UpdateOrdenServicioPatch,
 } from "./service";
 
 function fakeVehiculo(overrides: Partial<Vehiculo> = {}): Vehiculo {
@@ -244,49 +246,108 @@ describe("createOrder (R20)", () => {
   });
 });
 
+const OPEN_ROW = {
+  id: "o1",
+  clienteId: "c1",
+  status: "open",
+  categoria: "mant_preventivo",
+  description: null,
+  appointmentAt: null,
+  completedAt: null,
+  hallazgos: null,
+  recomendaciones: null,
+  observaciones: null,
+  kilometraje: null,
+};
+
+/**
+ * A fake database whose transaction hands out a tx shaped like the real builders
+ * (`select().from().where().for()`, `update().set().where().returning()`,
+ * `insert().values()`), recording what each statement received. `committed`
+ * flips only when the callback returns, so a test can ask "was this step after
+ * commit?". `auditOutside` catches an audit row written through the pool
+ * instead of the transaction.
+ */
+function lockedDb(order: Record<string, unknown> | null) {
+  const log = {
+    locks: [] as unknown[],
+    sets: [] as Record<string, unknown>[],
+    audit: [] as Record<string, unknown>[],
+    auditOutside: [] as unknown[],
+    committed: false,
+  };
+  const tx = {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          for: (mode: unknown) => {
+            log.locks.push(mode);
+            return Promise.resolve(order ? [order] : []);
+          },
+        }),
+      }),
+    }),
+    update: () => ({
+      set: (patch: Record<string, unknown>) => {
+        log.sets.push(patch);
+        return { where: () => ({ returning: async () => [{ ...order, ...patch }] }) };
+      },
+    }),
+    insert: () => ({
+      values: async (rows: Record<string, unknown> | Record<string, unknown>[]) => {
+        log.audit.push(...[rows].flat());
+      },
+    }),
+  };
+  const database = {
+    transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
+      const result = await fn(tx);
+      log.committed = true;
+      return result;
+    },
+    insert: (table: unknown) => ({
+      values: (values: Record<string, unknown>) => {
+        if (table === ordenServicioCorreccion) log.auditOutside.push(values);
+        return { returning: async () => [{ id: "rem", ...values }] };
+      },
+    }),
+  };
+  return { database: database as unknown as typeof import("@/shared/db/client").db, log };
+}
+
+const GRANT = { correctorId: "admin-1" };
+
 describe("updateOrder", () => {
   it("throws OrdenServicioNotFoundError for a missing order", async () => {
-    await expect(updateOrder("missing", { description: "x" }, { getById: async () => null })).rejects.toBeInstanceOf(
+    const { database } = lockedDb(null);
+    await expect(updateOrder("missing", { description: "x" }, { db: database, role: "administrador" })).rejects.toBeInstanceOf(
       OrdenServicioNotFoundError,
     );
   });
 
-  it("persists the patch fields", async () => {
-    const current = { orden: { id: "o1", status: "open" } as unknown as OrdenServicio, items: [] };
-    const database = {
-      update: () => ({
-        set: (patch: Record<string, unknown>) => ({
-          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
-        }),
-      }),
-    };
+  it("takes the row lock (FOR UPDATE) before writing, in one transaction", async () => {
+    const { database, log } = lockedDb(OPEN_ROW);
 
-    const result = await updateOrder(
-      "o1",
-      { description: "Cambio de aceite" },
-      { getById: async () => current, db: database as unknown as typeof import("@/shared/db/client").db },
-    );
+    await updateOrder("o1", { description: "Cambio de aceite" }, { db: database, role: "administrador" });
+
+    expect(log.locks).toEqual(["update"]);
+    expect(log.sets).toEqual([{ description: "Cambio de aceite" }]);
+  });
+
+  it("persists the patch fields", async () => {
+    const { database } = lockedDb(OPEN_ROW);
+
+    const result = await updateOrder("o1", { description: "Cambio de aceite" }, { db: database, role: "administrador" });
 
     expect(result).toMatchObject({ id: "o1", description: "Cambio de aceite" });
   });
 
   /**
    * Task 2.2 — widens `UpdateOrdenServicioPatch` for `categoria` + the 3 note
-   * fields (`hallazgos`/`recomendaciones`/`observaciones`), leaving every
-   * other field's behavior untouched. `updateOrder` already applies `patch`
-   * generically via `.set(patch)`, so the meaningful assertion is that the
-   * TYPE accepts these fields (a stray property here is a `tsc` error before
-   * it is a runtime one) and that all four values actually reach the result.
+   * fields, leaving every other field's behavior untouched.
    */
   it("persists categoria and the 3 note fields (task 2.2)", async () => {
-    const current = { orden: { id: "o1", status: "open" } as unknown as OrdenServicio, items: [] };
-    const database = {
-      update: () => ({
-        set: (patch: Record<string, unknown>) => ({
-          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
-        }),
-      }),
-    };
+    const { database } = lockedDb(OPEN_ROW);
 
     const result = await updateOrder(
       "o1",
@@ -296,7 +357,7 @@ describe("updateOrder", () => {
         recomendaciones: "Cambiar empaque del cárter",
         observaciones: "Cliente notificado por WhatsApp",
       },
-      { getById: async () => current, db: database as unknown as typeof import("@/shared/db/client").db },
+      { db: database, role: "administrador" },
     );
 
     expect(result).toMatchObject({
@@ -309,25 +370,61 @@ describe("updateOrder", () => {
   });
 
   it("leaves description untouched when only categoria is patched (task 2.2 — other fields untouched)", async () => {
-    const current = {
-      orden: { id: "o1", status: "open", description: "Original" } as unknown as OrdenServicio,
-      items: [],
-    };
-    const database = {
-      update: () => ({
-        set: (patch: Record<string, unknown>) => ({
-          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
-        }),
-      }),
-    };
+    const { database } = lockedDb({ ...OPEN_ROW, description: "Original" });
 
-    const result = await updateOrder(
-      "o1",
-      { categoria: "instalacion" },
-      { getById: async () => current, db: database as unknown as typeof import("@/shared/db/client").db },
-    );
+    const result = await updateOrder("o1", { categoria: "instalacion" }, { db: database, role: "administrador" });
 
     expect(result).toMatchObject({ id: "o1", description: "Original", categoria: "instalacion" });
+  });
+
+  it("refuses a closed order read from the LOCKED row when no correction is granted, writing nothing", async () => {
+    // The status is whatever the lock returned: there is no earlier read to go stale.
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: "done" });
+
+    await expect(
+      updateOrder("o1", { hallazgos: "x" }, { db: database, role: "administrador" }),
+    ).rejects.toBeInstanceOf(OrderClosedError);
+    expect(log.sets).toEqual([]);
+    expect(log.audit).toEqual([]);
+  });
+
+  it("refuses a tecnico on an open order with OrderEditForbiddenError, writing nothing", async () => {
+    const { database, log } = lockedDb(OPEN_ROW);
+
+    await expect(updateOrder("o1", { hallazgos: "x" }, { db: database, role: "tecnico" })).rejects.toBeInstanceOf(
+      OrderEditForbiddenError,
+    );
+    expect(log.sets).toEqual([]);
+  });
+
+  it("writes the fields and the audit rows in ONE transaction on a closed order with a grant", async () => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: "done" });
+
+    await updateOrder("o1", { hallazgos: "nuevo", observaciones: null }, { db: database, role: "administrador", correction: GRANT });
+
+    expect(log.sets).toEqual([{ hallazgos: "nuevo", observaciones: null }]);
+    // `observaciones` was null before and is null after: no row for it.
+    expect(log.audit).toEqual([
+      { ordenId: "o1", userId: "admin-1", field: "hallazgos", oldValue: null, newValue: "nuevo" },
+    ]);
+    expect(log.auditOutside).toEqual([]);
+  });
+
+  it("writes no audit row for an edit of an OPEN order, even when a grant is present", async () => {
+    const { database, log } = lockedDb(OPEN_ROW);
+
+    await updateOrder("o1", { hallazgos: "nuevo" }, { db: database, role: "administrador", correction: GRANT });
+
+    expect(log.sets).toEqual([{ hallazgos: "nuevo" }]);
+    expect(log.audit).toEqual([]);
+  });
+
+  it("cannot be handed status or completedAt: the patch type excludes them", () => {
+    // @ts-expect-error status is not patchable; a correction never reopens an order
+    const status: UpdateOrdenServicioPatch = { status: "open" };
+    // @ts-expect-error completedAt is not patchable either
+    const completedAt: UpdateOrdenServicioPatch = { completedAt: new Date() };
+    expect([status, completedAt]).toHaveLength(2);
   });
 });
 
@@ -559,28 +656,16 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
   });
 
   it("updateOrder reschedules the appointment reminder when appointmentAt changes: cancels the old one, schedules a new one", async () => {
-    const current = {
-      orden: { id: "o1", clienteId: "c1", appointmentAt: new Date("2026-08-01T10:00:00.000Z") } as unknown as OrdenServicio,
-      items: [],
-    };
-    const newAppointmentAt = new Date("2026-08-05T10:00:00.000Z");
-    const database = {
-      update: () => ({
-        set: (patch: Record<string, unknown>) => ({
-          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
-        }),
-      }),
-      insert: () => ({ values: () => ({ returning: async () => [{ id: "rem-3" }] }) }),
-    };
+    const { database } = lockedDb({ ...OPEN_ROW, appointmentAt: new Date("2026-08-01T10:00:00.000Z") });
     const cancelRemindersForOrder = vi.fn().mockResolvedValue(undefined);
     const scheduleReminder = vi.fn().mockResolvedValue("job-3");
 
     await updateOrder(
       "o1",
-      { appointmentAt: newAppointmentAt },
+      { appointmentAt: new Date("2026-08-05T10:00:00.000Z") },
       {
-        getById: async () => current,
-        db: database as unknown as typeof import("@/shared/db/client").db,
+        db: database,
+        role: "administrador",
         now: () => new Date("2026-07-26T12:00:00.000Z"),
         getClienteById: async () => ({ cliente: clienteRow, orders: [], vehicles: [] }),
         cancelRemindersForOrder,
@@ -593,27 +678,14 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
   });
 
   it("updateOrder does NOT touch reminders when appointmentAt is unchanged", async () => {
-    const appointmentAt = new Date("2026-08-01T10:00:00.000Z");
-    const current = { orden: { id: "o1", clienteId: "c1", appointmentAt } as unknown as OrdenServicio, items: [] };
-    const database = {
-      update: () => ({
-        set: (patch: Record<string, unknown>) => ({
-          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
-        }),
-      }),
-    };
+    const { database } = lockedDb({ ...OPEN_ROW, appointmentAt: new Date("2026-08-01T10:00:00.000Z") });
     const cancelRemindersForOrder = vi.fn();
     const scheduleReminder = vi.fn();
 
     await updateOrder(
       "o1",
       { description: "solo cambio de nota" },
-      {
-        getById: async () => current,
-        db: database as unknown as typeof import("@/shared/db/client").db,
-        cancelRemindersForOrder,
-        scheduleReminder,
-      },
+      { db: database, role: "administrador", cancelRemindersForOrder, scheduleReminder },
     );
 
     expect(cancelRemindersForOrder).not.toHaveBeenCalled();
@@ -623,8 +695,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
   /**
    * A `service_due` reminder's `scheduledFor` is frozen at completion time from
    * the category's interval, but `job.ts` reads `categoria` at FIRE time to pick
-   * the copy. Re-categorising a finished order (a legitimate workshop
-   * correction — the PATCH route deliberately allows it on a `done` order)
+   * the copy. Re-categorising a finished order (a closed-order-lock correction)
    * desynchronised the two:
    *
    * - The STALE INTERVAL is pre-existing. Before revisado got its 365-day
@@ -634,39 +705,19 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
    *   same 90-day booking now reads "Pasó un año desde tu último revisado".
    *
    * One replan closes both. Mirrors the `appointmentChanged` branch exactly —
-   * same `cancelRemindersForOrder` / `planAndScheduleReminders` seams.
+   * same `cancelRemindersForOrder` / `planAndScheduleReminders` seams. The order
+   * is `done`, so every case here runs as a correction (a grant is passed).
    */
   function makeCategoriaFixture(ordenOverrides: Record<string, unknown>) {
-    const current = {
-      orden: {
-        id: "o1",
-        clienteId: "c1",
-        status: "done",
-        appointmentAt: null,
-        completedAt: new Date("2026-07-01T00:00:00.000Z"),
-        categoria: "mant_preventivo",
-        ...ordenOverrides,
-      } as unknown as OrdenServicio,
-      items: [] as never[],
-    };
-    const database = {
-      update: () => ({
-        set: (patch: Record<string, unknown>) => ({
-          where: () => ({ returning: async () => [{ ...current.orden, ...patch }] }),
-        }),
-      }),
-      // Echoes the planned values back, exactly as a real `insert ... returning`
-      // does. Without this the fake drops `scheduledFor` and the interval
-      // assertions below could not see a wrong one.
-      insert: () => ({
-        values: (values: Record<string, unknown>) => ({
-          returning: async () => [{ id: "rem-cat", ...values }],
-        }),
-      }),
-    };
+    const { database, log } = lockedDb({
+      ...OPEN_ROW,
+      status: "done",
+      completedAt: new Date("2026-07-01T00:00:00.000Z"),
+      ...ordenOverrides,
+    });
     return {
-      current,
       database,
+      log,
       cancelRemindersForOrder: vi.fn().mockResolvedValue(undefined),
       scheduleReminder: vi.fn().mockResolvedValue("job-cat"),
       getClienteById: vi.fn().mockResolvedValue({ cliente: clienteRow, orders: [], vehicles: [] }),
@@ -674,22 +725,20 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
   }
 
   const CATEGORIA_NOW = new Date("2026-07-26T12:00:00.000Z");
+  const asCorrection = (f: ReturnType<typeof makeCategoriaFixture>) => ({
+    db: f.database,
+    role: "administrador" as const,
+    correction: GRANT,
+    now: () => CATEGORIA_NOW,
+    getClienteById: f.getClienteById,
+    cancelRemindersForOrder: f.cancelRemindersForOrder,
+    scheduleReminder: f.scheduleReminder,
+  });
 
   it("updateOrder replans the service_due at the NEW category's interval when categoria changes on a completed order", async () => {
     const f = makeCategoriaFixture({});
 
-    await updateOrder(
-      "o1",
-      { categoria: "revisado" },
-      {
-        getById: async () => f.current,
-        db: f.database as unknown as typeof import("@/shared/db/client").db,
-        now: () => CATEGORIA_NOW,
-        getClienteById: f.getClienteById,
-        cancelRemindersForOrder: f.cancelRemindersForOrder,
-        scheduleReminder: f.scheduleReminder,
-      },
-    );
+    await updateOrder("o1", { categoria: "revisado" }, asCorrection(f));
 
     expect(f.cancelRemindersForOrder).toHaveBeenCalledWith("o1", "service_due", expect.anything());
     // The interval, not just "something was scheduled": at 90 days this reads
@@ -701,21 +750,22 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
     }
   });
 
+  it("updateOrder replans reminders only AFTER the transaction commits", async () => {
+    const f = makeCategoriaFixture({});
+    const committedAtCancel: boolean[] = [];
+    f.cancelRemindersForOrder.mockImplementation(async () => {
+      committedAtCancel.push(f.log.committed);
+    });
+
+    await updateOrder("o1", { categoria: "revisado" }, asCorrection(f));
+
+    expect(committedAtCancel).toEqual([true]);
+  });
+
   it("updateOrder cancels and schedules NOTHING when categoria changes to one with no service_due interval", async () => {
     const f = makeCategoriaFixture({});
 
-    await updateOrder(
-      "o1",
-      { categoria: "instalacion" },
-      {
-        getById: async () => f.current,
-        db: f.database as unknown as typeof import("@/shared/db/client").db,
-        now: () => CATEGORIA_NOW,
-        getClienteById: f.getClienteById,
-        cancelRemindersForOrder: f.cancelRemindersForOrder,
-        scheduleReminder: f.scheduleReminder,
-      },
-    );
+    await updateOrder("o1", { categoria: "instalacion" }, asCorrection(f));
 
     expect(f.cancelRemindersForOrder).toHaveBeenCalledWith("o1", "service_due", expect.anything());
     expect(f.scheduleReminder).not.toHaveBeenCalled();
@@ -724,18 +774,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
   it("updateOrder does NOT touch reminders when categoria changes on an order that was never completed", async () => {
     const f = makeCategoriaFixture({ status: "in_progress", completedAt: null });
 
-    await updateOrder(
-      "o1",
-      { categoria: "revisado" },
-      {
-        getById: async () => f.current,
-        db: f.database as unknown as typeof import("@/shared/db/client").db,
-        now: () => CATEGORIA_NOW,
-        getClienteById: f.getClienteById,
-        cancelRemindersForOrder: f.cancelRemindersForOrder,
-        scheduleReminder: f.scheduleReminder,
-      },
-    );
+    await updateOrder("o1", { categoria: "revisado" }, asCorrection(f));
 
     expect(f.cancelRemindersForOrder).not.toHaveBeenCalled();
     expect(f.scheduleReminder).not.toHaveBeenCalled();
@@ -746,18 +785,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
   it("updateOrder does NOT touch reminders when the patch re-sends the categoria it already has", async () => {
     const f = makeCategoriaFixture({});
 
-    await updateOrder(
-      "o1",
-      { categoria: "mant_preventivo" },
-      {
-        getById: async () => f.current,
-        db: f.database as unknown as typeof import("@/shared/db/client").db,
-        now: () => CATEGORIA_NOW,
-        getClienteById: f.getClienteById,
-        cancelRemindersForOrder: f.cancelRemindersForOrder,
-        scheduleReminder: f.scheduleReminder,
-      },
-    );
+    await updateOrder("o1", { categoria: "mant_preventivo" }, asCorrection(f));
 
     expect(f.cancelRemindersForOrder).not.toHaveBeenCalled();
     expect(f.scheduleReminder).not.toHaveBeenCalled();
@@ -770,14 +798,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
     await updateOrder(
       "o1",
       { appointmentAt: new Date("2026-08-05T10:00:00.000Z"), categoria: "revisado" },
-      {
-        getById: async () => f.current,
-        db: f.database as unknown as typeof import("@/shared/db/client").db,
-        now: () => CATEGORIA_NOW,
-        getClienteById: f.getClienteById,
-        cancelRemindersForOrder: f.cancelRemindersForOrder,
-        scheduleReminder: f.scheduleReminder,
-      },
+      asCorrection(f),
     );
 
     expect(f.cancelRemindersForOrder).toHaveBeenCalledWith("o1", "appointment", expect.anything());

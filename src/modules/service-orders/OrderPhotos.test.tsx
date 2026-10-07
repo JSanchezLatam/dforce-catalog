@@ -232,14 +232,14 @@ describe("OrderPhotos — uploading", () => {
 
   it("stops at a 409 and shows the server's own message instead of failing every remaining file", async () => {
     const user = userEvent.setup();
-    const fetchMock = vi.fn().mockResolvedValue(conflict("order_closed", "La orden está cerrada; no se pueden cambiar sus fotos"));
+    const fetchMock = vi.fn().mockResolvedValue(conflict("order_closed", "La orden está cerrada"));
     vi.stubGlobal("fetch", fetchMock);
     renderCard();
 
     await user.upload(screen.getByLabelText("Agregar fotos"), [jpeg("a.jpg"), jpeg("b.jpg"), jpeg("c.jpg")]);
 
     await waitFor(() =>
-      expect(addToast).toHaveBeenCalledWith("error", "La orden está cerrada; no se pueden cambiar sus fotos"),
+      expect(addToast).toHaveBeenCalledWith("error", "La orden está cerrada"),
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
     // Nothing applied: no success toast and nothing to refresh.
@@ -371,14 +371,14 @@ describe("OrderPhotos — deleting", () => {
     const user = userEvent.setup();
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => conflict("order_closed", "La orden está cerrada; no se pueden cambiar sus fotos")),
+      vi.fn(async () => conflict("order_closed", "La orden está cerrada")),
     );
     renderCard({ canDelete: true });
 
     await user.click(screen.getByRole("button", { name: "Borrar foto 1" }));
     await user.click(await screen.findByRole("button", { name: "Eliminar" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("La orden está cerrada; no se pueden cambiar sus fotos");
+    expect(await screen.findByRole("alert")).toHaveTextContent("La orden está cerrada");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(addToast).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();

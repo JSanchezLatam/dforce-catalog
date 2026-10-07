@@ -24,7 +24,7 @@ export type CorrectionGrant = { correctorId: string };
 
 export class OrderClosedError extends Error {
   constructor() {
-    super("La orden está cerrada; no se pueden cambiar sus fotos");
+    super("La orden está cerrada");
   }
 }
 

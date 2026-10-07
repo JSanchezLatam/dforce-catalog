@@ -33,7 +33,10 @@ import { cancelRemindersForOrder, scheduleReminder } from "@/modules/reminders/j
 import { planReminders, type ReminderType } from "@/modules/reminders/schedule";
 import { isServiceCategory, type ServiceCategory } from "./categories";
 import type { IntakeValues } from "./intake";
+import type { Role } from "@/modules/auth/roles";
+import { canEditOrderFields } from "./edit-policy";
 import { getOrdenServicioById } from "./queries";
+import { lockOrderForMutation, recordCorrections, type CorrectionGrant } from "./order-lock";
 import { assertTransition, type OrderStatus } from "./transitions";
 
 /**
@@ -218,14 +221,21 @@ export type UpdateOrdenServicioPatch = {
 } & IntakeValues;
 
 export type UpdateOrdenServicioDeps = {
-  getById?: typeof getOrdenServicioById;
+  /** The acting role: each caller's own write rule, evaluated against the LOCKED row's status. */
+  role: Role;
+  /** Issued by `authorizeCorrection` after the password check; the only way to write a closed order. */
+  correction?: CorrectionGrant;
 } & ReminderWiringDeps;
 
 /**
  * Plain field edits (description/appointmentAt/categoria/notes) — status
- * changes go through transitionOrder(). R23 — a patch replans reminders on two
+ * changes go through transitionOrder(). The row is locked first (`FOR UPDATE`)
+ * and its status read from the LOCKED row, so a close that lands between a
+ * caller's read and this write is seen; a closed order is written only with a
+ * `correction` grant, and then every changed field gets an audit row in the same
+ * transaction. R23 — a patch replans reminders on two
  * independent triggers, and "the old and new reminders MUST NOT both fire"
- * (spec R23 scenario) applies to each:
+ * (spec R23 scenario) applies to each, AFTER the commit:
  *
  * - `appointmentAt` changes (including being cleared to `null`): any pending
  *   `appointment` reminder is cancelled, then a new one planned+scheduled if
@@ -240,20 +250,24 @@ export type UpdateOrdenServicioDeps = {
 export async function updateOrder(
   id: string,
   patch: UpdateOrdenServicioPatch,
-  deps: UpdateOrdenServicioDeps = {},
+  deps: UpdateOrdenServicioDeps,
 ): Promise<OrdenServicio> {
-  const getById = deps.getById ?? getOrdenServicioById;
-  const current = await getById(id);
-  if (!current) {
-    throw new OrdenServicioNotFoundError(id);
-  }
-
   const database = deps.db ?? db;
-  const [updated] = await database.update(ordenServicio).set(patch).where(eq(ordenServicio.id, id)).returning();
+  const { before, updated } = await database.transaction(async (tx) => {
+    const { order, correcting } = await lockOrderForMutation(tx, id, {
+      canWrite: (status) => canEditOrderFields(deps.role, status),
+      correction: deps.correction,
+    });
+    const [row] = await tx.update(ordenServicio).set(patch).where(eq(ordenServicio.id, id)).returning();
+    if (correcting && deps.correction) {
+      await recordCorrections(tx, { ordenId: id, userId: deps.correction.correctorId, before: order, after: patch });
+    }
+    return { before: order, updated: row };
+  });
 
   const appointmentChanged =
     patch.appointmentAt !== undefined &&
-    (patch.appointmentAt?.getTime() ?? null) !== (current.orden.appointmentAt?.getTime() ?? null);
+    (patch.appointmentAt?.getTime() ?? null) !== (before.appointmentAt?.getTime() ?? null);
 
   // Only when it ACTUALLY differs: the edit form re-sends every field, so a
   // patch routinely carries the category it already has, and replanning on that
@@ -267,7 +281,7 @@ export async function updateOrder(
   // below: `!== null` would also fire for an `undefined`, which is what a row
   // missing the column reads as.
   const serviceDueChanged = Boolean(
-    patch.categoria !== undefined && patch.categoria !== current.orden.categoria && updated.completedAt,
+    patch.categoria !== undefined && patch.categoria !== before.categoria && updated.completedAt,
   );
 
   const replanAppointment = appointmentChanged && Boolean(updated.appointmentAt);

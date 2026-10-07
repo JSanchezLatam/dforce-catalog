@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Role } from "@/modules/auth/roles";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import type { OrdenServicio } from "@/shared/db/schema";
+import { CorrectionRefusedError } from "@/modules/service-orders/correction-auth";
 import { handleUpdateOrdenServicio, PATCH } from "./route";
 
 /**
@@ -57,6 +58,31 @@ function detailWith(status: OrderStatus) {
 
 const current = detailWith("open");
 
+/**
+ * The transaction the service opens for a field patch: `select().from().where()
+ * .for()` answers with the locked row (`null` = no such order), `update().set()`
+ * is the caller's spy, `insert().values()` collects audit rows. Statuses come
+ * from the ROW, never from a mock of `getById`.
+ */
+function lockedDb(
+  status: OrderStatus | null,
+  setSpy: (...args: never[]) => unknown = vi.fn(() => ({
+    where: () => ({ returning: async () => [ordenWith(status ?? "open")] }),
+  })),
+) {
+  const audit: Record<string, unknown>[] = [];
+  const tx = {
+    select: () => ({ from: () => ({ where: () => ({ for: async () => (status ? [ordenWith(status)] : []) }) }) }),
+    update: () => ({ set: setSpy }),
+    insert: () => ({
+      values: async (rows: Record<string, unknown> | Record<string, unknown>[]) => {
+        audit.push(...[rows].flat());
+      },
+    }),
+  };
+  return { db: { transaction: async (fn: (tx: unknown) => unknown) => fn(tx) } as never, audit };
+}
+
 function fakeDb(updated: Partial<OrdenServicio>) {
   return {
     update: () => ({
@@ -107,23 +133,13 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
   });
 
   it("updates plain fields (description/appointmentAt) without a status transition", async () => {
-    const update = vi.fn();
+    const setSpy = vi.fn(() => ({
+      where: () => ({ returning: async () => [{ ...current.orden, description: "Cambio de aceite" }] }),
+    }));
     const response = await handleUpdateOrdenServicio(
       requestWith({ description: "Cambio de aceite" }),
       "o1",
-      {
-        getById: async () => current,
-        db: {
-          update: (...args: unknown[]) => {
-            update(...args);
-            return {
-              set: () => ({
-                where: () => ({ returning: async () => [{ ...current.orden, description: "Cambio de aceite" }] }),
-              }),
-            };
-          },
-        } as never,
-      },
+      { db: lockedDb("open", setSpy).db },
     );
 
     expect(response.status).toBe(200);
@@ -154,7 +170,7 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
         observaciones: "Cliente notificado",
       }),
       "o1",
-      { getById: async () => current, db: { update: () => ({ set: setSpy }) } as never },
+      { db: lockedDb("open", setSpy).db },
     );
 
     expect(response.status).toBe(200);
@@ -189,8 +205,7 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
       requestWith({ categoria: "revisado", vehiculoId: "sneaky-vehicle-swap" }),
       "o1",
       {
-        getById: async () => current,
-        db: { update: () => ({ set: setSpy }) } as never,
+        db: lockedDb("open", setSpy).db,
       },
     );
 
@@ -201,8 +216,7 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
     const setSpy = vi.fn();
 
     const response = await handleUpdateOrdenServicio(requestWith({ categoria: "banana" }), "o1", {
-      getById: async () => current,
-      db: { update: () => ({ set: setSpy }) } as never,
+      db: lockedDb("open", setSpy).db,
     });
 
     expect(response.status).toBe(400);
@@ -224,8 +238,7 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
       const setSpy = vi.fn();
 
       const response = await handleUpdateOrdenServicio(requestWith({ [field]: { evil: 1 } }), "o1", {
-        getById: async () => current,
-        db: { update: () => ({ set: setSpy }) } as never,
+        db: lockedDb("open", setSpy).db,
       });
 
       expect(response.status).toBe(400);
@@ -239,8 +252,7 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
     const setSpy = vi.fn();
 
     const response = await handleUpdateOrdenServicio(requestWith({ hallazgos: "x".repeat(5001) }), "o1", {
-      getById: async () => current,
-      db: { update: () => ({ set: setSpy }) } as never,
+      db: lockedDb("open", setSpy).db,
     });
 
     expect(response.status).toBe(400);
@@ -253,8 +265,7 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
     }));
 
     const response = await handleUpdateOrdenServicio(requestWith({ hallazgos: null }), "o1", {
-      getById: async () => current,
-      db: { update: () => ({ set: setSpy }) } as never,
+      db: lockedDb("open", setSpy).db,
     });
 
     expect(response.status).toBe(200);
@@ -273,8 +284,7 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
     const setSpy = vi.fn();
 
     const response = await handleUpdateOrdenServicio(requestWith({ appointmentAt: "no soy una fecha" }), "o1", {
-      getById: async () => current,
-      db: { update: () => ({ set: setSpy }) } as never,
+      db: lockedDb("open", setSpy).db,
     });
 
     expect(response.status).toBe(400);
@@ -296,8 +306,7 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
     }));
 
     const response = await handleUpdateOrdenServicio(requestWith({ appointmentAt: null }), "o1", {
-      getById: async () => current,
-      db: { update: () => ({ set: setSpy }) } as never,
+      db: lockedDb("open", setSpy).db,
     });
 
     expect(response.status).toBe(200);
@@ -314,8 +323,7 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
     const setSpy = vi.fn();
 
     const response = await handleUpdateOrdenServicio(requestWith({ vehiculoId: "sneaky-vehicle-swap" }), "o1", {
-      getById: async () => current,
-      db: { update: () => ({ set: setSpy }) } as never,
+      db: lockedDb("open", setSpy).db,
     });
 
     expect(response.status).toBe(400);
@@ -337,7 +345,7 @@ describe("PATCH /api/service-orders/[id] — the edit gate (D11)", () => {
     const response = await handleUpdateOrdenServicio(
       requestWith({ hallazgos: "Fuga de aceite" }, "tecnico"),
       "o1",
-      { getById: async () => detailWith("open"), db: { update: () => ({ set: setSpy }) } as never },
+      { db: lockedDb("open", setSpy).db },
     );
 
     expect(response.status).toBe(403);
@@ -355,7 +363,7 @@ describe("PATCH /api/service-orders/[id] — the edit gate (D11)", () => {
     const response = await handleUpdateOrdenServicio(
       requestWith({ hallazgos: "Fuga de aceite" }, "administrador"),
       "o1",
-      { getById: async () => detailWith("done"), db: { update: () => ({ set: setSpy }) } as never },
+      { db: lockedDb("done", setSpy).db },
     );
 
     // 409, not 403: the caller IS permitted, the record's state is what
@@ -373,7 +381,7 @@ describe("PATCH /api/service-orders/[id] — the edit gate (D11)", () => {
     const response = await handleUpdateOrdenServicio(
       requestWith({ observaciones: "Cliente notificado" }, "administrador"),
       "o1",
-      { getById: async () => detailWith("cancelled"), db: { update: () => ({ set: setSpy }) } as never },
+      { db: lockedDb("cancelled", setSpy).db },
     );
 
     expect(response.status).toBe(409);
@@ -401,7 +409,7 @@ describe("PATCH /api/service-orders/[id] — the edit gate (D11)", () => {
     const response = await handleUpdateOrdenServicio(
       requestWith({ status: ["in_progress"], hallazgos: "Fuga de aceite" }, "administrador"),
       "o1",
-      { getById: async () => detailWith("done"), db: { update: () => ({ set: setSpy }) } as never },
+      { db: lockedDb("done", setSpy).db },
     );
 
     expect(response.status).toBe(409);
@@ -443,7 +451,7 @@ describe("PATCH /api/service-orders/[id] — the edit gate (D11)", () => {
     const response = await handleUpdateOrdenServicio(
       requestWith({ hallazgos: "Fuga de aceite", recomendaciones: "Cambiar empaque" }, "tecnico"),
       "o1",
-      { getById: async () => detailWith("in_progress"), db: { update: () => ({ set: setSpy }) } as never },
+      { db: lockedDb("in_progress", setSpy).db },
     );
 
     expect(response.status).toBe(200);
@@ -460,7 +468,7 @@ describe("PATCH /api/service-orders/[id] — the edit gate (D11)", () => {
     const response = await handleUpdateOrdenServicio(
       requestWith({ hallazgos: "Revisión inicial" }, "administrador"),
       "o1",
-      { getById: async () => detailWith("open"), db: { update: () => ({ set: setSpy }) } as never },
+      { db: lockedDb("open", setSpy).db },
     );
 
     expect(response.status).toBe(200);
@@ -476,8 +484,7 @@ describe("PATCH /api/service-orders/[id] — the edit gate (D11)", () => {
     const setSpy = vi.fn();
 
     const response = await handleUpdateOrdenServicio(requestWith({ hallazgos: "Fuga de aceite" }), "missing", {
-      getById: async () => null,
-      db: { update: () => ({ set: setSpy }) } as never,
+      db: lockedDb(null, setSpy).db,
     });
 
     expect(response.status).toBe(404);
@@ -493,10 +500,7 @@ describe("PATCH /api/service-orders/[id] — the edit gate (D11)", () => {
 describe("PATCH /api/service-orders/[id] — intake fields", () => {
   const patchWith = (body: unknown, role: Role = "administrador", status: OrderStatus = "open") => {
     const setSpy = vi.fn(() => ({ where: () => ({ returning: async () => [ordenWith(status)] }) }));
-    const response = handleUpdateOrdenServicio(requestWith(body, role), "o1", {
-      getById: async () => detailWith(status),
-      db: { update: () => ({ set: setSpy }) } as never,
-    });
+    const response = handleUpdateOrdenServicio(requestWith(body, role), "o1", { db: lockedDb(status, setSpy).db });
     return { response, setSpy };
   };
 
@@ -535,5 +539,120 @@ describe("PATCH /api/service-orders/[id] — intake fields", () => {
     const done = patchWith({ kilometraje: 100 }, "administrador", "done");
     expect((await done.response).status).toBe(409);
     expect(done.setSpy).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * closed-order-lock — the password travels with the save. The route verifies it
+ * (`authorize`, injected: bcrypt is not what is under test here) BEFORE the
+ * transaction and hands the service a grant; the service's lock decides.
+ */
+describe("PATCH /api/service-orders/[id] — closed-order correction", () => {
+  const GRANT = { correctorId: "user-1" };
+
+  function correct(
+    body: Record<string, unknown>,
+    role: Role,
+    status: OrderStatus,
+    authorize: (userId: string, password: string) => Promise<{ correctorId: string }> = vi.fn().mockResolvedValue(GRANT),
+  ) {
+    const setSpy = vi.fn(() => ({
+      where: () => ({ returning: async () => [{ ...ordenWith(status), hallazgos: "nuevo" }] }),
+    }));
+    const { db, audit } = lockedDb(status, setSpy);
+    const response = handleUpdateOrdenServicio(requestWith(body, role), "o1", { db, authorize });
+    return { response, setSpy, audit, authorize };
+  }
+
+  it("refuses a tecnico who sends a password on a closed order with 403, never verifying it", async () => {
+    const { response, setSpy, audit, authorize } = correct({ hallazgos: "nuevo", password: "pw" }, "tecnico", "done");
+
+    expect((await response).status).toBe(403);
+    expect(authorize).not.toHaveBeenCalled();
+    expect(setSpy).not.toHaveBeenCalled();
+    expect(audit).toEqual([]);
+  });
+
+  it("answers an administrator with no password on a closed order 409, without verifying anything", async () => {
+    const { response, setSpy, audit, authorize } = correct({ hallazgos: "nuevo" }, "administrador", "done");
+
+    const res = await response;
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ errors: { form: "No se puede editar una orden completada o cancelada." } });
+    expect(authorize).not.toHaveBeenCalled();
+    expect(setSpy).not.toHaveBeenCalled();
+    expect(audit).toEqual([]);
+  });
+
+  it("answers a wrong password 403 wrong_password, writing nothing", async () => {
+    const authorize = vi.fn().mockRejectedValue(new CorrectionRefusedError("wrong_password"));
+    const { response, setSpy, audit } = correct({ hallazgos: "nuevo", password: "mal" }, "administrador", "done", authorize);
+
+    const res = await response;
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "wrong_password", message: "Contraseña incorrecta" });
+    expect(setSpy).not.toHaveBeenCalled();
+    expect(audit).toEqual([]);
+  });
+
+  it("answers a throttled attempt 429 with Retry-After, writing nothing", async () => {
+    const authorize = vi.fn().mockRejectedValue(new CorrectionRefusedError("throttled"));
+    const { response, setSpy, audit } = correct({ hallazgos: "nuevo", password: "pw" }, "administrador", "done", authorize);
+
+    const res = await response;
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("900");
+    expect(await res.json()).toEqual({
+      error: "throttled",
+      message: "Demasiados intentos. Probá de nuevo en 15 minutos.",
+    });
+    expect(setSpy).not.toHaveBeenCalled();
+    expect(audit).toEqual([]);
+  });
+
+  it("answers an authorizer refusal for a non-administrator 403, writing nothing", async () => {
+    const authorize = vi.fn().mockRejectedValue(new CorrectionRefusedError("not_admin"));
+    const { response, setSpy } = correct({ hallazgos: "nuevo", password: "pw" }, "administrador", "done", authorize);
+
+    expect((await response).status).toBe(403);
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
+  it("accepts a correct password on a closed order: 200, the field written, one audit row, password not stored", async () => {
+    const { response, setSpy, audit, authorize } = correct({ hallazgos: "nuevo", password: "pw" }, "administrador", "cancelled");
+
+    expect((await response).status).toBe(200);
+    expect(authorize).toHaveBeenCalledWith("user-1", "pw");
+    // The password is not a column: it must never reach `.set()`.
+    expect(setSpy).toHaveBeenCalledWith({ hallazgos: "nuevo" });
+    expect(audit).toEqual([
+      { ordenId: "o1", userId: "user-1", field: "hallazgos", oldValue: null, newValue: "nuevo" },
+    ]);
+  });
+
+  it("ignores a password on an open order: the edit goes through and writes no audit row", async () => {
+    const { response, setSpy, audit } = correct({ hallazgos: "nuevo", password: "pw" }, "administrador", "open");
+
+    expect((await response).status).toBe(200);
+    expect(setSpy).toHaveBeenCalledWith({ hallazgos: "nuevo" });
+    expect(audit).toEqual([]);
+  });
+
+  it("does not spend a password check on a body that fails validation", async () => {
+    const { response, authorize } = correct({ hallazgos: { evil: 1 }, password: "pw" }, "administrador", "done");
+
+    expect((await response).status).toBe(400);
+    expect(authorize).not.toHaveBeenCalled();
+  });
+
+  it("never writes status or completedAt on a correction, whatever the body claims", async () => {
+    const { response, setSpy } = correct(
+      { hallazgos: "nuevo", password: "pw", status: ["open"], completedAt: "2020-01-01T00:00:00.000Z" },
+      "administrador",
+      "done",
+    );
+
+    expect((await response).status).toBe(200);
+    expect(setSpy).toHaveBeenCalledWith({ hallazgos: "nuevo" });
   });
 });

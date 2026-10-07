@@ -92,7 +92,7 @@ describe("DELETE /api/service-orders/[id]/photos/[photoId]", () => {
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({
       error: "order_closed",
-      message: "La orden está cerrada; no se pueden cambiar sus fotos",
+      message: "La orden está cerrada",
     });
   });
 
