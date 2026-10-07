@@ -6,7 +6,7 @@
  * here in PR8 (catalog-storage) — see design.md → "Database Schema Outline".
  * Each table is added alongside the code that first needs it.
  */
-import { boolean, check, date, foreignKey, index, integer, jsonb, pgEnum, pgTable, primaryKey, real, smallint, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, check, date, foreignKey, index, integer, jsonb, pgEnum, pgSequence, pgTable, primaryKey, real, smallint, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 /** R9.6 / NFR-8 — single `role` column, extensible without an RBAC library. */
@@ -420,6 +420,14 @@ export const clienteConsentimiento = pgTable(
 );
 
 export type ClienteConsentimiento = typeof clienteConsentimiento.$inferSelect;
+
+/**
+ * Ordering of every push to the portal (customer-portal WU5a). A SEQUENCE, not
+ * a clock: the worker draws a value while holding the per-customer advisory
+ * lock, so a later read always carries a later number. `nextval` is a bigint,
+ * which node-postgres returns as a STRING — `portal-sync/job.ts` converts it.
+ */
+export const portalSyncVersionSeq = pgSequence("portal_sync_version_seq");
 
 /**
  * `vehiculo` — a `cliente`'s vehicle collection (vehicles-one-to-many, C3,

@@ -1015,3 +1015,98 @@ describe("updateOrder — the lock's scope", () => {
     expect(params).toContain("tec-user");
   });
 });
+
+/**
+ * customer-portal WU5b — every committed change to an order re-syncs its
+ * customer to the portal. The enqueue must come AFTER the commit (a rolled-back
+ * edit must enqueue nothing, a committed one must not wait on the queue) and
+ * must reach the customer the ORDER belongs to.
+ */
+describe("portal sync triggers", () => {
+  /** Records `committed` as of each enqueue, so "after the commit" is observable. */
+  function observed(log: { committed: boolean }) {
+    const calls: { clienteId: string; committed: boolean }[] = [];
+    const enqueuePortalSync = vi.fn(async (clienteId: string) => void calls.push({ clienteId, committed: log.committed }));
+    return { calls, enqueuePortalSync };
+  }
+
+  it("createOrder enqueues the order's customer once, after the commit", async () => {
+    const { tx } = makeFakeTx();
+    const log = { committed: false };
+    const database = {
+      transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
+        const result = await fn(tx);
+        log.committed = true;
+        return result;
+      },
+    };
+    const { calls, enqueuePortalSync } = observed(log);
+
+    await createOrder(
+      { clienteId: "c1", vehiculoId: "v1", categoria: "revisado" },
+      {
+        getClienteById: async () => ({ cliente: { id: "c1" }, orders: [], vehicles: [fakeVehiculo()] }) as never,
+        db: database as unknown as typeof import("@/shared/db/client").db,
+        enqueuePortalSync,
+      },
+    );
+
+    expect(calls).toEqual([{ clienteId: "c1", committed: true }]);
+  });
+
+  it("updateOrder enqueues the order's customer once, after the commit, corrections included", async () => {
+    const plain = lockedDb(OPEN_ROW);
+    const a = observed(plain.log);
+    await updateOrder("o1", { hallazgos: "Fuga" }, { db: plain.database, scope: SYSTEM_SCOPE, role: "administrador", enqueuePortalSync: a.enqueuePortalSync });
+    expect(a.calls).toEqual([{ clienteId: "c1", committed: true }]);
+
+    const closed = lockedDb({ ...OPEN_ROW, status: "done" });
+    const b = observed(closed.log);
+    await updateOrder(
+      "o1",
+      { hallazgos: "Fuga" },
+      { db: closed.database, scope: SYSTEM_SCOPE, role: "administrador", correction: GRANT, enqueuePortalSync: b.enqueuePortalSync },
+    );
+    expect(b.calls).toEqual([{ clienteId: "c1", committed: true }]);
+  });
+
+  it("transitionOrder enqueues the order's customer once, after the commit", async () => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: "open" });
+    const { calls, enqueuePortalSync } = observed(log);
+    await transitionOrder("o1", "in_progress", { db: database, scope: SYSTEM_SCOPE, canAssign: true, enqueuePortalSync });
+    expect(calls).toEqual([{ clienteId: "c1", committed: true }]);
+  });
+
+  it("enqueues before the reminder wiring, so a reminder failure cannot lose the sync", async () => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: "in_progress" });
+    const { calls, enqueuePortalSync } = observed(log);
+    await expect(
+      transitionOrder("o1", "done", {
+        db: database,
+        scope: SYSTEM_SCOPE,
+        canAssign: true,
+        enqueuePortalSync,
+        getClienteById: async () => {
+          throw new Error("reminder wiring blew up");
+        },
+      }),
+    ).rejects.toThrow("reminder wiring blew up");
+    expect(calls).toEqual([{ clienteId: "c1", committed: true }]);
+  });
+
+  it("enqueues nothing when the transaction rolls back (refused edit, illegal transition, missing order)", async () => {
+    const enqueuePortalSync = vi.fn(async () => {});
+    const closed = lockedDb({ ...OPEN_ROW, status: "done" });
+    await expect(
+      updateOrder("o1", { hallazgos: "x" }, { db: closed.database, scope: SYSTEM_SCOPE, role: "administrador", enqueuePortalSync }),
+    ).rejects.toBeInstanceOf(OrderClosedError);
+    await expect(
+      transitionOrder("o1", "in_progress", { db: closed.database, scope: SYSTEM_SCOPE, canAssign: true, enqueuePortalSync }),
+    ).rejects.toBeInstanceOf(OrderTransitionError);
+    const missing = lockedDb(null);
+    await expect(
+      transitionOrder("nope", "in_progress", { db: missing.database, scope: SYSTEM_SCOPE, canAssign: true, enqueuePortalSync }),
+    ).rejects.toBeInstanceOf(OrdenServicioNotFoundError);
+    expect(enqueuePortalSync).not.toHaveBeenCalled();
+  });
+});

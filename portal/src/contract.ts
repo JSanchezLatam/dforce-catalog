@@ -67,7 +67,7 @@ export function verify(
 ): boolean {
   const timestamp = headers.get(TIMESTAMP_HEADER);
   const signature = headers.get(SIGNATURE_HEADER);
-  if (!timestamp || !signature || !/^\d+$/.test(timestamp)) return false;
+  if (!timestamp || !signature || !/^\d+$/.test(timestamp) || !/^[0-9a-f]{64}$/.test(signature)) return false;
   if (Math.abs(nowSeconds - Number(timestamp)) > MAX_SKEW_SECONDS) return false;
   const expected = Buffer.from(mac(secret, timestamp, rawBody), "hex");
   const given = Buffer.from(signature, "hex");
