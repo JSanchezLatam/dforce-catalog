@@ -13,7 +13,7 @@ describe("/c static shell", () => {
     const out = html();
     expect(out).toContain("DForce Car Audio");
     expect(out).toContain("Cargando");
-    expect(out).not.toMatch(/Acepto|Historial de servicio|Antes de ver|Este enlace|patente/);
+    expect(out).not.toMatch(/Acepto|Historial de servicio|Antes de ver|Este enlace|placa/);
   });
 
   it("says in Spanish that JavaScript is required", () => {
