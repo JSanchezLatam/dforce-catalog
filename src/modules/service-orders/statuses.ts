@@ -16,6 +16,7 @@ import type { OrderStatus } from "./transitions";
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   open: "Abierta",
   in_progress: "En progreso",
+  ready_for_review: "Lista para revisión",
   done: "Completada",
   cancelled: "Cancelada",
 };

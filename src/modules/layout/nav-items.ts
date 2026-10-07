@@ -1,7 +1,7 @@
 import { can, type Action } from "@/modules/auth/policy";
 import type { SessionUser } from "@/modules/auth/session";
 
-export type NavIconKey = "inventory" | "builder" | "catalogs" | "template-config" | "customers" | "service-orders" | "vencimientos" | "users";
+export type NavIconKey = "inventory" | "builder" | "catalogs" | "template-config" | "customers" | "service-orders" | "vencimientos" | "users" | "technicians";
 
 export type NavLink = { kind: "link"; href: string; label: string; icon: NavIconKey; action?: Action; badge?: number };
 
@@ -43,6 +43,9 @@ const CONFIGURACION_ITEMS: (NavLink | NavParent)[] = [
   // arrival. Its own icon key — reusing `customers` (the Clientes icon) would
   // put the same glyph on two unrelated entries.
   { kind: "link", href: "/users", label: "Gestión de usuarios", icon: "users", action: "users.manage" },
+  // The one Configuración entry a jefe_taller keeps: `technicians.manage` is
+  // the action /technicians enforces, so the link never renders for a 403.
+  { kind: "link", href: "/technicians", label: "Técnicos", icon: "technicians", action: "technicians.manage" },
 ];
 
 const GROUPS: NavGroup[] = [

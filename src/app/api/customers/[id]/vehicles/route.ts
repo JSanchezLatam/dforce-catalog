@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import { getClienteById as getClienteByIdQuery } from "@/modules/customers/queries";
+import { SYSTEM_SCOPE } from "@/modules/service-orders/scope";
 import { ClienteValidationError, validateVehiculoInput } from "@/modules/customers/validation";
 import {
   createVehiculo as createVehiculoService,
@@ -128,7 +129,8 @@ export async function handleCreateVehiculo(
   // D3 — one lookup answers both record-state questions, and turns what would
   // otherwise be an FK violation into an answer instead of a 500.
   const findCliente = deps.getClienteById ?? getClienteByIdQuery;
-  const detail = await findCliente(clienteId);
+  // SYSTEM_SCOPE: this reads the customer row and vehicles; the order history it also returns is unused here.
+  const detail = await findCliente(clienteId, SYSTEM_SCOPE);
   if (!detail) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }

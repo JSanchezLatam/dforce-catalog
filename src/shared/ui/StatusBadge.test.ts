@@ -20,13 +20,14 @@ const TINT = {
 
 const ALL_STATUSES: BadgeStatus[] = [
   "running", "uploading", "completed", "uploaded", "failed", "pending",
-  "open", "in_progress", "done", "cancelled", "scheduled", "sent", "skipped", "opted_out",
+  "open", "in_progress", "ready_for_review", "done", "cancelled", "scheduled", "sent", "skipped", "opted_out",
 ];
 
 describe("statusBadgeClassName() — theme-paired colours (audit #6)", () => {
   it.each([
     ["open", TINT.zinc],
     ["in_progress", TINT.amber],
+    ["ready_for_review", TINT.amber],
     ["done", TINT.green],
     ["cancelled", `${TINT.zinc} line-through decoration-1`],
   ] as const)("%s carries the mockup CHIP classes", (status, expected) => {

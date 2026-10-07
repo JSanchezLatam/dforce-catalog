@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
+import { orderScope } from "@/modules/service-orders/scope";
 import { getClienteById } from "@/modules/customers/queries";
 import { getWorkshopConfig } from "@/modules/workshop-config/service";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
@@ -78,15 +79,16 @@ export default async function ServiceOrderPrintPage({
 }) {
   const { id } = await params;
   const user = await requireSessionFromHeaders();
+  const scope = orderScope(user);
   if (!can(user, "service-orders.read")) {
     return <PermissionDenied title="Orden de servicio" />;
   }
 
-  const detail = await getOrdenServicioById(id);
+  const detail = await getOrdenServicioById(id, scope);
   if (!detail) notFound();
 
   const { orden } = detail;
-  const clienteDetail = await getClienteById(orden.clienteId);
+  const clienteDetail = await getClienteById(orden.clienteId, scope);
   // C4 — `getClienteById` reads vehicles with `includeInactive: true`, so a
   // DEACTIVATED vehicle is still found here and its identity still prints.
   // Same resolution as `[id]/page.tsx`.
@@ -97,7 +99,7 @@ export default async function ServiceOrderPrintPage({
   const workshop = await getWorkshopConfig();
   // Either column counts: one filled and one empty still means the order was
   // worked, and the block below prints both rows rather than half a form.
-  const photos = await listOrderPhotos(orden.id);
+  const photos = await listOrderPhotos(orden.id, scope);
   // Explicit chunks of 4, one sheet each: a single CSS grid fragments
   // unpredictably across pages in Chrome.
   const photoPages = Array.from({ length: Math.ceil(photos.length / PHOTOS_PER_PAGE) }, (_, i) =>

@@ -6,11 +6,11 @@
  * here in PR8 (catalog-storage) — see design.md → "Database Schema Outline".
  * Each table is added alongside the code that first needs it.
  */
-import { boolean, check, date, index, integer, jsonb, pgEnum, pgTable, primaryKey, real, smallint, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, check, date, foreignKey, index, integer, jsonb, pgEnum, pgTable, primaryKey, real, smallint, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 /** R9.6 / NFR-8 — single `role` column, extensible without an RBAC library. */
-export const roleEnum = pgEnum("role", ["tecnico", "administrador"]);
+export const roleEnum = pgEnum("role", ["tecnico", "administrador", "jefe_taller"]);
 
 export const users = pgTable("users", {
   id: text("id")
@@ -236,7 +236,7 @@ export type Catalog = typeof catalogs.$inferSelect;
  * the full rationale (ADR-5 opt-out re-check, ADR-6 inline vehicle + FK
  * restrict, ADR-7 line-item snapshot, ADR-8 retry idempotency).
  */
-export const orderStatusEnum = pgEnum("order_status", ["open", "in_progress", "done", "cancelled"]);
+export const orderStatusEnum = pgEnum("order_status", ["open", "in_progress", "ready_for_review", "done", "cancelled"]);
 /**
  * `orden_categoria` — service type vocabulary (C4, design.md D3). Unaccented
  * Spanish slugs, same convention `roleEnum` already established
@@ -570,6 +570,87 @@ export const ordenServicioCorreccion = pgTable("orden_servicio_correccion", {
   oldValue: text("old_value"),
   newValue: text("new_value"),
 });
+
+/**
+ * `tecnico` — the workshop roster (technicians-and-work-lines), kept apart from
+ * login accounts: a mechanic can be assigned work without ever having a login.
+ * `user_id` is the optional link to one; UNIQUE so a login maps to one roster
+ * row. Soft delete (`deactivated_at`) and no delete path: assignments and work
+ * lines reference it with `restrict`.
+ */
+export const tecnico = pgTable("tecnico", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  nombre: text("nombre").notNull(),
+  userId: text("user_id")
+    .unique()
+    .references(() => users.id, { onDelete: "restrict" }),
+  deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Tecnico = typeof tecnico.$inferSelect;
+
+/**
+ * `orden_tecnico` — who is assigned to an order. Never deleted (un-assigning
+ * is out of scope), so `restrict` on both sides is safe, and it is the target
+ * of `orden_linea_trabajo`'s composite FK. `parte_lista_at` is that
+ * technician's "Mi parte lista" mark.
+ */
+export const ordenTecnico = pgTable(
+  "orden_tecnico",
+  {
+    ordenId: text("orden_id")
+      .notNull()
+      .references(() => ordenServicio.id, { onDelete: "restrict" }),
+    tecnicoId: text("tecnico_id")
+      .notNull()
+      .references(() => tecnico.id, { onDelete: "restrict" }),
+    parteListaAt: timestamp("parte_lista_at", { withTimezone: true }),
+    assignedBy: text("assigned_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    assignedAt: timestamp("assigned_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.ordenId, table.tecnicoId] }),
+    // the técnico scope's `EXISTS` looks up by technician
+    index("orden_tecnico_tecnico_idx").on(table.tecnicoId),
+  ],
+);
+
+/**
+ * `orden_linea_trabajo` — one line of work done on an order. The composite FK
+ * makes "the line's technician is assigned to that order" a database rule, not
+ * an app check. `fecha` is a local `YYYY-MM-DD` (string mode: no timezone
+ * shift); minutes are bounded to one day.
+ */
+export const ordenLineaTrabajo = pgTable(
+  "orden_linea_trabajo",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    ordenId: text("orden_id").notNull(),
+    tecnicoId: text("tecnico_id").notNull(),
+    descripcion: text("descripcion").notNull(),
+    duracionMinutos: integer("duracion_minutos").notNull(),
+    fecha: date("fecha", { mode: "string" }).notNull(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.ordenId, table.tecnicoId],
+      foreignColumns: [ordenTecnico.ordenId, ordenTecnico.tecnicoId],
+      name: "orden_linea_trabajo_asignacion_fk",
+    }).onDelete("restrict"),
+    check("orden_linea_duracion_range", sql`${table.duracionMinutos} > 0 and ${table.duracionMinutos} <= 1440`),
+    // metrics: one indexed SUM per technician and month
+    index("orden_linea_tecnico_fecha_idx").on(table.tecnicoId, table.fecha),
+    index("orden_linea_orden_idx").on(table.ordenId),
+  ],
+);
 
 /**
  * `orden_servicio_item` — parts used on a service order (ADR-7). `productName`

@@ -11,6 +11,7 @@ const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
   { value: "open", label: "Abierta" },
   { value: "in_progress", label: "En progreso" },
+  { value: "ready_for_review", label: "Lista para revisión" },
   { value: "done", label: "Completada" },
   { value: "cancelled", label: "Cancelada" },
 ];
@@ -43,7 +44,7 @@ export function ServiceOrderFilters({
       <div className="flex flex-col gap-1">
         <Label>Estado</Label>
         <Select items={STATUS_OPTIONS} value={selected.status ?? ""} onValueChange={(v) => applyFilter("status", v ?? "")}>
-          <SelectTrigger className="w-44">
+          <SelectTrigger className="w-48">
             <SelectValue placeholder="Todos" />
           </SelectTrigger>
           <SelectContent>

@@ -3,8 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   allowedTransitionsForAll,
   assertTransition,
+  assertTransitionPermitted,
   getAllowedTransitions,
+  isTransitionPermitted,
   OrderTransitionError,
+  TransitionForbiddenError,
+  type OrderStatus,
 } from "./transitions";
 
 describe("assertTransition (R21)", () => {
@@ -55,6 +59,20 @@ describe("assertTransition (R21)", () => {
       expect(transitionError.to).toBe("done");
     }
   });
+});
+
+describe("ready_for_review edges", () => {
+  it("leaves ready_for_review to in_progress, done and cancelled", () => {
+    expect(getAllowedTransitions("ready_for_review")).toEqual(["in_progress", "done", "cancelled"]);
+  });
+
+  // Readiness is derived (applyReadiness), never chosen: no manual edge leads in.
+  it.each(["open", "in_progress", "ready_for_review", "done", "cancelled"] as const)(
+    "rejects %s -> ready_for_review as a manual transition",
+    (from) => {
+      expect(() => assertTransition(from, "ready_for_review")).toThrow(OrderTransitionError);
+    },
+  );
 });
 
 describe("getAllowedTransitions (R21 — Phase 6 status-transition controls)", () => {
@@ -125,5 +143,55 @@ describe("allowedTransitionsForAll (D9 — the bulk status menu's intersection)"
     const common = allowedTransitionsForAll(["open"]);
     common.pop();
     expect(getAllowedTransitions("open")).toEqual(["in_progress", "cancelled"]);
+  });
+});
+
+describe("ready_for_review is never a manual target (R21)", () => {
+  it.each<OrderStatus>(["open", "in_progress", "ready_for_review", "done", "cancelled"])(
+    "rejects %s -> ready_for_review",
+    (from) => {
+      expect(() => assertTransition(from, "ready_for_review")).toThrow(OrderTransitionError);
+    },
+  );
+});
+
+describe("assertTransitionPermitted (R21, who may transition)", () => {
+  const LEGAL_EDGES: [OrderStatus, OrderStatus][] = [
+    ["open", "in_progress"],
+    ["open", "cancelled"],
+    ["in_progress", "done"],
+    ["in_progress", "cancelled"],
+    ["ready_for_review", "in_progress"],
+    ["ready_for_review", "done"],
+    ["ready_for_review", "cancelled"],
+  ];
+
+  it.each(LEGAL_EDGES)("lets a holder of service-orders.assign do %s -> %s", (from, to) => {
+    expect(() => assertTransitionPermitted(true, from, to)).not.toThrow();
+  });
+
+  it("lets everyone start work: open -> in_progress", () => {
+    expect(() => assertTransitionPermitted(false, "open", "in_progress")).not.toThrow();
+  });
+
+  it.each(LEGAL_EDGES.filter(([from, to]) => !(from === "open" && to === "in_progress")))(
+    "refuses %s -> %s for a caller without service-orders.assign",
+    (from, to) => {
+      expect(() => assertTransitionPermitted(false, from, to)).toThrow(TransitionForbiddenError);
+    },
+  );
+});
+
+describe("isTransitionPermitted (the boolean the controls filter by)", () => {
+  it("lets a holder of service-orders.assign pick any legal edge", () => {
+    expect(isTransitionPermitted(true, "in_progress", "done")).toBe(true);
+    expect(isTransitionPermitted(true, "ready_for_review", "in_progress")).toBe(true);
+  });
+
+  it("lets a caller without it start work and nothing else", () => {
+    expect(isTransitionPermitted(false, "open", "in_progress")).toBe(true);
+    expect(isTransitionPermitted(false, "open", "cancelled")).toBe(false);
+    expect(isTransitionPermitted(false, "in_progress", "done")).toBe(false);
+    expect(isTransitionPermitted(false, "ready_for_review", "in_progress")).toBe(false);
   });
 });

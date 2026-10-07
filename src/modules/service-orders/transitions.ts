@@ -28,6 +28,9 @@ export class OrderTransitionError extends Error {
 const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   open: ["in_progress", "cancelled"],
   in_progress: ["done", "cancelled"],
+  // No manual edge leads INTO ready_for_review: readiness is derived and
+  // written by `applyReadiness`, never through `assertTransition`.
+  ready_for_review: ["in_progress", "done", "cancelled"],
   done: [],
   cancelled: [],
 };
@@ -37,6 +40,32 @@ export function assertTransition(from: OrderStatus, to: OrderStatus): void {
   if (!ALLOWED_TRANSITIONS[from].includes(to)) {
     throw new OrderTransitionError(from, to);
   }
+}
+
+/** R21 — thrown when the transition is legal but the caller may not make it. */
+export class TransitionForbiddenError extends Error {
+  constructor(
+    public readonly from: OrderStatus,
+    public readonly to: OrderStatus,
+  ) {
+    super(`This caller may not transition a service order from "${from}" to "${to}"`);
+  }
+}
+
+/**
+ * R21 — who may make a legal transition. Starting work (`open -> in_progress`)
+ * is open to everyone who reaches the order; every other edge (close, cancel,
+ * return from review) needs `service-orders.assign`, which the CALLER evaluates
+ * with `can()` and passes in. Run AFTER `assertTransition`: an illegal edge is a
+ * 400 whoever asks, and only a legal one can be forbidden.
+ */
+export function assertTransitionPermitted(canAssign: boolean, from: OrderStatus, to: OrderStatus): void {
+  if (!isTransitionPermitted(canAssign, from, to)) throw new TransitionForbiddenError(from, to);
+}
+
+/** The same rule as a boolean, so the UI offers only what the route would not answer 403. */
+export function isTransitionPermitted(canAssign: boolean, from: OrderStatus, to: OrderStatus): boolean {
+  return canAssign || (from === "open" && to === "in_progress");
 }
 
 /**
