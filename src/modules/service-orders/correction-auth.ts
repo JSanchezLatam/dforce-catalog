@@ -56,12 +56,18 @@ export async function authorizeCorrection(
   // same list and each write back one entry, so a parallel batch counted as a single failure.
   failures.set(userId, [...recent, now]);
 
-  const user = await (deps.findUser ?? findUserById)(userId);
-  if (!user || user.deactivatedAt || !can(user, "service-orders.correct")) {
-    // No password was guessed, so the reservation must not throttle a legitimate attempt.
+  // No password was guessed on these paths, so the reservation must not throttle a legitimate attempt.
+  const release = () => {
     const held = failures.get(userId) ?? [];
     const at = held.indexOf(now);
     if (at >= 0) failures.set(userId, held.toSpliced(at, 1));
+  };
+  const user = await (deps.findUser ?? findUserById)(userId).catch((err: unknown) => {
+    release();
+    throw err;
+  });
+  if (!user || user.deactivatedAt || !can(user, "service-orders.correct")) {
+    release();
     throw new CorrectionRefusedError("not_admin");
   }
 

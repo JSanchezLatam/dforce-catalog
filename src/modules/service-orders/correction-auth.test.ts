@@ -130,4 +130,13 @@ describe("authorizeCorrection", () => {
     const t = setup(users);
     for (let i = 0; i < 6; i++) expect(await refusal(t.run("rel-a", "pw"))).toBe("not_admin");
   });
+
+  it("a failing users lookup leaves no reservation behind", async () => {
+    const t = setup({ "rel-b": admin("pw") });
+    t.findUser.mockRejectedValue(new Error("db down"));
+    for (let i = 0; i < 6; i++) await expect(t.run("rel-b", "pw")).rejects.toThrow("db down");
+    t.findUser.mockReset();
+    t.findUser.mockResolvedValue(admin("pw"));
+    await expect(t.run("rel-b", "pw")).resolves.toEqual({ correctorId: "rel-b" });
+  });
 });
