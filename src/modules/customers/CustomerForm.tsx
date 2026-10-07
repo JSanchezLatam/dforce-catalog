@@ -4,7 +4,8 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { Info, Lock, Pencil, Plus, RotateCcw, Save, Trash2, TriangleAlert, X } from "lucide-react";
 
-import type { Cliente, Vehiculo } from "@/shared/db/schema";
+import type { Vehiculo } from "@/shared/db/schema";
+import type { PublicCliente } from "./portal-token";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -137,7 +138,7 @@ function emptyVehicleRow(): VehiculoRow {
  * ownership. No caller does that today — which is exactly why the guard is one
  * line now instead of a bug report later.
  */
-function toFormState(cliente?: Cliente | null, allVehicles?: CustomerFormVehiculo[] | null): CustomerFormState {
+function toFormState(cliente?: PublicCliente | null, allVehicles?: CustomerFormVehiculo[] | null): CustomerFormState {
   const vehicles = cliente ? allVehicles : null;
   return {
     name: cliente?.name ?? "",
@@ -268,7 +269,7 @@ export function CustomerForm({
   onSaved,
 }: {
   /** Provided => edit mode (PATCH); omitted => create mode (POST). */
-  cliente?: Cliente | null;
+  cliente?: PublicCliente | null;
   /** The customer's whole vehicle collection (active + inactive) — ignored in create mode. */
   vehicles?: CustomerFormVehiculo[] | null;
   /**
@@ -289,7 +290,7 @@ export function CustomerForm({
   canDeleteVehicle?: boolean;
   triggerLabel?: ReactNode;
   /** `plates` is exactly what this save just sent — the API's 201/200 body carries no `vehicles`/`plates` of its own. */
-  onSaved?: (cliente: Cliente, plates: string[]) => void;
+  onSaved?: (cliente: PublicCliente, plates: string[]) => void;
 }) {
   const isEdit = Boolean(cliente);
   const [open, setOpen] = useState(false);
@@ -416,7 +417,7 @@ export function CustomerForm({
   async function submit(confirmSharedPhone: boolean) {
     setIsSubmitting(true);
     setErrors({});
-    let saved: Cliente;
+    let saved: PublicCliente;
 
     try {
       const payload = buildPayload(form, canEditInternal);

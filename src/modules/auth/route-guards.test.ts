@@ -36,6 +36,10 @@ export const ROUTE_GUARDS: Record<
   // R21 — manual Interfuerza customer import trigger (customer-import).
   "/api/customer-import": { POST: "customers.write" },
   "/api/customers/[id]": { PATCH: ["customers.write", "customers.deleteVehicle", "vencimientos.read"] },
+  // Ley 81 consent for the customer portal (customer-portal WU1).
+  "/api/customers/[id]/consent": { POST: "customers.consent" },
+  // customer-portal WU2: administrador only; replaces the token and kills every printed QR.
+  "/api/customers/[id]/portal-token/rotate": { POST: "customers.portalRotate" },
   // C4 — the vehicle picker's data source (design.md D2's gap). POST is the
   // single-vehicle insert (service-order-intake-and-print D3): a reversible
   // write, so `customers.write`, the same Action `PATCH /api/customers/[id]`

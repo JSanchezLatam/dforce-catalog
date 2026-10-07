@@ -28,6 +28,7 @@ import { TechnicianPicker } from "./TechnicianPicker";
 import { FUEL_LABEL, intakeInputsFor } from "./intake";
 import { FIELD_ERROR } from "@/shared/ui/styles";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
+import { PORTAL_VISIBLE_HINT } from "./portal-visibility";
 
 const CATEGORIA_OPTIONS = Object.entries(CATEGORIA_LABEL) as [ServiceCategory, string][];
 
@@ -540,8 +541,12 @@ export function ServiceOrderForm({
                 id="orden-description"
                 className={`${NATIVE_FIELD} min-h-16 px-2.5 py-1.5`}
                 value={description}
+                aria-describedby="orden-description-hint"
                 onChange={(e) => setDescription(e.target.value)}
               />
+              <p id="orden-description-hint" className="text-sm text-muted-foreground">
+                {PORTAL_VISIBLE_HINT}
+              </p>
             </div>
 
             <div className="grid gap-2">
@@ -645,8 +650,12 @@ export function ServiceOrderForm({
                     id="orden-hallazgos"
                     className={`${NATIVE_FIELD} min-h-16 px-2.5 py-1.5`}
                     value={hallazgos}
+                    aria-describedby="orden-hallazgos-hint"
                     onChange={(e) => setHallazgos(e.target.value)}
                   />
+                  <p id="orden-hallazgos-hint" className="text-sm text-muted-foreground">
+                    {PORTAL_VISIBLE_HINT}
+                  </p>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="orden-recomendaciones">Recomendaciones</Label>
@@ -654,8 +663,12 @@ export function ServiceOrderForm({
                     id="orden-recomendaciones"
                     className={`${NATIVE_FIELD} min-h-16 px-2.5 py-1.5`}
                     value={recomendaciones}
+                    aria-describedby="orden-recomendaciones-hint"
                     onChange={(e) => setRecomendaciones(e.target.value)}
                   />
+                  <p id="orden-recomendaciones-hint" className="text-sm text-muted-foreground">
+                    {PORTAL_VISIBLE_HINT}
+                  </p>
                 </div>
               </>
             )}

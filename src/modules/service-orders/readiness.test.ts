@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const enqueuePortalSync = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock("@/modules/portal-sync/enqueue", () => ({ enqueuePortalSync }));
 
 import type { Tx } from "./order-lock";
 import { applyReadiness } from "./readiness";
@@ -87,5 +90,14 @@ describe("applyReadiness truth table", () => {
     await expect(applyReadiness(tx, order(status))).resolves.toBe(status);
     expect(log.selects).toBe(0);
     expect(log.sets).toEqual([]);
+  });
+});
+
+describe("applyReadiness and the customer portal (WU5b)", () => {
+  it("never enqueues a portal sync: in_progress and ready_for_review both read 'En proceso'", async () => {
+    const { tx, log } = fakeTx([marked]);
+    await expect(applyReadiness(tx, order("in_progress"))).resolves.toBe("ready_for_review");
+    expect(log.sets).toHaveLength(1); // the status really flipped, so the absence below is not vacuous
+    expect(enqueuePortalSync).not.toHaveBeenCalled();
   });
 });

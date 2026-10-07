@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // portal/ is a separate Next app with its own eslint config and gate.
+    "portal/**",
   ]),
 ]);
 

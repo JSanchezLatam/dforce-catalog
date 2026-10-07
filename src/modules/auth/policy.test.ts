@@ -9,6 +9,8 @@ const adminGrants: Grants = {
   "customers.read": true,
   "customers.write": true,
   "customers.deleteVehicle": true,
+  "customers.consent": true,
+  "customers.portalRotate": true,
   "vencimientos.read": true,
   "vencimientos.contact": true,
   "service-orders.read": true,
@@ -43,12 +45,15 @@ const jefeGrants: Grants = {
   "workshop.edit": false,
   "template.edit": false,
   "service-orders.correct": false,
+  "customers.portalRotate": false,
 };
 
 const tecnicoGrants: Grants = {
   "customers.read": true,
   "customers.write": true,
   "customers.deleteVehicle": false,
+  "customers.consent": false,
+  "customers.portalRotate": false,
   "vencimientos.read": false,
   "vencimientos.contact": false,
   "service-orders.read": true,
@@ -101,6 +106,18 @@ describe("can() — role × action permission matrix", () => {
     for (const [action, expected] of Object.entries(jefeGrants)) {
       expect(can(user, action as Action)).toBe(expected);
     }
+  });
+
+  it("records consent for administrador and jefe_taller, never for tecnico", () => {
+    expect(can({ role: "administrador" }, "customers.consent")).toBe(true);
+    expect(can({ role: "jefe_taller" }, "customers.consent")).toBe(true);
+    expect(can({ role: "tecnico" }, "customers.consent")).toBe(false);
+  });
+
+  it("rotates the portal code for administrador only", () => {
+    expect(can({ role: "administrador" }, "customers.portalRotate")).toBe(true);
+    expect(can({ role: "jefe_taller" }, "customers.portalRotate")).toBe(false);
+    expect(can({ role: "tecnico" }, "customers.portalRotate")).toBe(false);
   });
 
   it("jefe_taller keeps sync.manual and catalogs.generate", () => {
