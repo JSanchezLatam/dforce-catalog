@@ -160,6 +160,40 @@ describe("VehicleDetailPage — descriptive and internal fields", () => {
   });
 });
 
+describe("VehicleDetailPage — plate municipio", () => {
+  beforeEach(() => {
+    can.mockReturnValue(true);
+    listOrdenesByVehiculo.mockResolvedValue([]);
+    getClienteById.mockResolvedValue({
+      cliente: { id: "c1", name: "Ana Gómez" }, orders: [],
+      vehicles: [vehiculo({ placaMunicipio: "San Miguelito" })],
+    });
+  });
+
+  it("shows the municipio to a viewer with vencimientos.read", async () => {
+    render(await renderPage());
+
+    expect(screen.getByText("Municipio de la placa")).toBeInTheDocument();
+    expect(screen.getByText("San Miguelito")).toBeInTheDocument();
+  });
+
+  it("renders neither the label nor the value without vencimientos.read", async () => {
+    can.mockImplementation((_user, action) => action !== "vencimientos.read");
+    const { container } = render(await renderPage());
+
+    expect(screen.queryByText("Municipio de la placa")).not.toBeInTheDocument();
+    expect(container).not.toHaveTextContent("San Miguelito");
+  });
+
+  it("omits the row when the vehicle has no municipio", async () => {
+    getClienteById.mockResolvedValue({ cliente: { id: "c1", name: "Ana Gómez" }, orders: [], vehicles: [vehiculo()] });
+    const { container } = render(await renderPage());
+
+    expect(screen.queryByText("Municipio de la placa")).not.toBeInTheDocument();
+    expect(container).not.toHaveTextContent("null");
+  });
+});
+
 /** mobile-responsive-pass WU6 (#4) — same contract as the customer detail history. */
 describe("VehicleDetailPage — order history cards (WU6)", () => {
   const order = (id: string, status: string) =>
