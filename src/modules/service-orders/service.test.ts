@@ -45,7 +45,7 @@ function makeFakeTx() {
   const updateSpy = vi.fn();
 
   const tx = {
-    insert: (table: unknown) => ({
+    insert: () => ({
       values: (values: unknown) => {
         if (Array.isArray(values)) {
           insertedItems.push(values as unknown[]);

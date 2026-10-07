@@ -397,3 +397,219 @@ describe("OrderPhotos — deleting", () => {
     expect(screen.getByRole("button", { name: "Eliminar" })).toBeEnabled();
   });
 });
+
+/**
+ * closed-order-lock WU4. On a done/cancelled order only an administrador may
+ * add or delete photos, and each action re-authenticates: the password rides
+ * in multipart field `password` (POST) or the JSON body (DELETE). The refusal
+ * shapes are the ones `correction-http.ts` builds: `{error, message}`.
+ */
+describe("OrderPhotos — correcting a closed order", () => {
+  const wrongPassword = () =>
+    new Response(JSON.stringify({ error: "wrong_password", message: "Contraseña incorrecta" }), { status: 403 });
+  const throttled = () =>
+    new Response(
+      JSON.stringify({ error: "throttled", message: "Demasiados intentos. Probá de nuevo en 15 minutos." }),
+      { status: 429 },
+    );
+  const deleted = () => new Response(JSON.stringify({ success: true }), { status: 200 });
+
+  const passwordInput = () => screen.getByLabelText("Tu contraseña") as HTMLInputElement;
+
+  async function pickFiles(user: ReturnType<typeof userEvent.setup>, names: string[]) {
+    await user.upload(screen.getByLabelText("Agregar fotos"), names.map(jpeg));
+    return screen.findByRole("dialog");
+  }
+
+  describe("adding", () => {
+    it("sends nothing until the password is confirmed", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.fn(async () => created());
+      vi.stubGlobal("fetch", fetchMock);
+      renderCard({ correcting: true });
+
+      await pickFiles(user, ["a.jpg"]);
+
+      expect(passwordInput()).toHaveAttribute("type", "password");
+      expect(screen.getByRole("button", { name: "Agregar" })).toBeDisabled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("POSTs every file with the password as multipart field `password`, then toasts above the refresh", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.fn(async () => created());
+      vi.stubGlobal("fetch", fetchMock);
+      renderCard({ correcting: true });
+
+      await pickFiles(user, ["a.jpg", "b.jpg"]);
+      await user.type(passwordInput(), "secreta");
+      await user.click(screen.getByRole("button", { name: "Agregar" }));
+
+      await waitFor(() => expect(addToast).toHaveBeenCalledWith("success", "2 fotos agregadas"));
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      for (const [, init] of fetchMock.mock.calls as unknown as [string, RequestInit][]) {
+        expect((init.body as FormData).get("password")).toBe("secreta");
+      }
+      expect(addToast.mock.invocationCallOrder[0]).toBeLessThan(refresh.mock.invocationCallOrder[0]);
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    });
+
+    it("shows 'Contraseña incorrecta' inline, keeps the dialog and the files, and asks for the password again", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.fn().mockResolvedValueOnce(wrongPassword()).mockResolvedValue(created());
+      vi.stubGlobal("fetch", fetchMock);
+      renderCard({ correcting: true });
+
+      await pickFiles(user, ["a.jpg"]);
+      await user.type(passwordInput(), "mala");
+      await user.click(screen.getByRole("button", { name: "Agregar" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("Contraseña incorrecta");
+      expect(passwordInput()).toHaveValue("");
+      expect(screen.getByRole("button", { name: "Agregar" })).toBeDisabled();
+      expect(addToast).not.toHaveBeenCalled();
+      expect(refresh).not.toHaveBeenCalled();
+
+      // The same files go out on the retry: nothing had to be picked again.
+      await user.type(passwordInput(), "buena");
+      await user.click(screen.getByRole("button", { name: "Agregar" }));
+      await waitFor(() => expect(addToast).toHaveBeenCalledWith("success", "1 foto agregada"));
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("stops the batch at a wrong password instead of failing every remaining file", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.fn(async () => wrongPassword());
+      vi.stubGlobal("fetch", fetchMock);
+      renderCard({ correcting: true });
+
+      await pickFiles(user, ["a.jpg", "b.jpg", "c.jpg"]);
+      await user.type(passwordInput(), "mala");
+      await user.click(screen.getByRole("button", { name: "Agregar" }));
+
+      await screen.findByRole("alert");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("tells the operator to wait on a 429", async () => {
+      const user = userEvent.setup();
+      vi.stubGlobal("fetch", vi.fn(async () => throttled()));
+      renderCard({ correcting: true });
+
+      await pickFiles(user, ["a.jpg"]);
+      await user.type(passwordInput(), "x");
+      await user.click(screen.getByRole("button", { name: "Agregar" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("Demasiados intentos. Probá de nuevo en 15 minutos.");
+    });
+
+    it("cancelling sends nothing and does not keep the password", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      renderCard({ correcting: true });
+
+      await pickFiles(user, ["a.jpg"]);
+      await user.type(passwordInput(), "secreta");
+      await user.click(screen.getByRole("button", { name: "Cancelar" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      await pickFiles(user, ["b.jpg"]);
+
+      expect(passwordInput()).toHaveValue("");
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("uploads at once, with no password, on an order that is not being corrected", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.fn(async () => created());
+      vi.stubGlobal("fetch", fetchMock);
+      renderCard();
+
+      await user.upload(screen.getByLabelText("Agregar fotos"), [jpeg("a.jpg")]);
+
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      expect(screen.queryByLabelText("Tu contraseña")).not.toBeInTheDocument();
+      const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+      expect((init.body as FormData).has("password")).toBe(false);
+    });
+  });
+
+  describe("deleting", () => {
+    async function openDelete(user: ReturnType<typeof userEvent.setup>) {
+      await user.click(screen.getByRole("button", { name: "Borrar foto 2" }));
+      return screen.findByRole("dialog");
+    }
+
+    it("asks for the password in the confirmation and keeps Eliminar disabled until it is typed", async () => {
+      const user = userEvent.setup();
+      renderCard({ correcting: true, canDelete: true });
+
+      await openDelete(user);
+
+      expect(screen.getByRole("button", { name: "Eliminar" })).toBeDisabled();
+      await user.type(passwordInput(), "x");
+      expect(screen.getByRole("button", { name: "Eliminar" })).toBeEnabled();
+    });
+
+    it("DELETEs with the password in a JSON body, toasts 'Foto eliminada' above the refresh", async () => {
+      const user = userEvent.setup();
+      const fetchMock = vi.fn(async () => deleted());
+      vi.stubGlobal("fetch", fetchMock);
+      renderCard({ correcting: true, canDelete: true });
+
+      await openDelete(user);
+      await user.type(passwordInput(), "secreta");
+      await user.click(screen.getByRole("button", { name: "Eliminar" }));
+
+      await waitFor(() => expect(addToast).toHaveBeenCalledWith("success", "Foto eliminada"));
+      expect(fetchMock).toHaveBeenCalledWith("/api/service-orders/o1/photos/p2", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: "secreta" }),
+      });
+      expect(addToast.mock.invocationCallOrder[0]).toBeLessThan(refresh.mock.invocationCallOrder[0]);
+    });
+
+    it("shows 'Contraseña incorrecta' inline, keeps the dialog and asks for the password again", async () => {
+      const user = userEvent.setup();
+      vi.stubGlobal("fetch", vi.fn(async () => wrongPassword()));
+      renderCard({ correcting: true, canDelete: true });
+
+      await openDelete(user);
+      await user.type(passwordInput(), "mala");
+      await user.click(screen.getByRole("button", { name: "Eliminar" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("Contraseña incorrecta");
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(passwordInput()).toHaveValue("");
+      expect(screen.getByRole("button", { name: "Eliminar" })).toBeDisabled();
+      expect(addToast).not.toHaveBeenCalled();
+      expect(refresh).not.toHaveBeenCalled();
+    });
+
+    it("tells the operator to wait on a 429", async () => {
+      const user = userEvent.setup();
+      vi.stubGlobal("fetch", vi.fn(async () => throttled()));
+      renderCard({ correcting: true, canDelete: true });
+
+      await openDelete(user);
+      await user.type(passwordInput(), "x");
+      await user.click(screen.getByRole("button", { name: "Eliminar" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("Demasiados intentos. Probá de nuevo en 15 minutos.");
+    });
+
+    it("does not keep the password after the confirmation is cancelled", async () => {
+      const user = userEvent.setup();
+      renderCard({ correcting: true, canDelete: true });
+
+      await openDelete(user);
+      await user.type(passwordInput(), "secreta");
+      await user.click(screen.getByRole("button", { name: "Cancelar" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      await openDelete(user);
+
+      expect(passwordInput()).toHaveValue("");
+    });
+  });
+});
