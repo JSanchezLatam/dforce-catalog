@@ -483,6 +483,26 @@ describe("ServiceOrdersPage — bulk status change (WU6)", () => {
     expect(failed[0]).toHaveTextContent("Su estado actual ya no permite ese cambio");
   });
 
+  it("names a role-refused row in Spanish, never the raw `forbidden` code", async () => {
+    const user = userEvent.setup();
+    mockOrdersApi({
+      o1: {
+        status: 403,
+        body: { error: "forbidden", message: "Solo un administrador o el jefe de taller puede cerrar, cancelar o devolver una orden." },
+      },
+    });
+    render(await renderAt());
+
+    await select(user, "o1");
+    await openStatusMenu(user);
+    await user.click(screen.getByRole("menuitem", { name: "Marcar como Cancelada" }));
+    await user.click(await screen.findByRole("button", { name: "Confirmar" }));
+
+    const failed = await waitFor(() => within(resultPanel()).getAllByRole("listitem"));
+    expect(failed[0]).toHaveTextContent("Solo un administrador o el jefe de taller puede cerrar o cancelar una orden.");
+    expect(failed[0]).not.toHaveTextContent(/\bforbidden\b/);
+  });
+
   /**
    * Spec Scenario "Terminal-status warning shown before applying". `done` and
    * `cancelled` have no outgoing edges, so the operator has to be told the move

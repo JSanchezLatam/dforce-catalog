@@ -321,6 +321,9 @@ const ORDER_REFUSAL_MESSAGES: Record<string, string> = {
   invalid_transition: "Su estado actual ya no permite ese cambio. Recargá la página.",
   not_found: "Esa orden ya no existe. Recargá la página.",
   Forbidden: "No tenés permiso para cambiar el estado de esta orden.",
+  // The role-gated transition refusal (technicians-and-work-lines): a técnico
+  // may only start an order, never close or cancel one.
+  forbidden: "Solo un administrador o el jefe de taller puede cerrar o cancelar una orden.",
   // `runSequential`'s own code for a `fetch` that threw — the only reason
   // reaching the panel that no route produced.
   request_failed: "No se pudo conectar con el servidor. Intentá de nuevo.",
