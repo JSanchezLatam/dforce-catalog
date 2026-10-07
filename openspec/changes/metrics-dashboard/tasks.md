@@ -45,7 +45,7 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 - [x] 2.5 RED `MonthSelect` test: native `<select>` with 12 options in a GET form with a submit button, current month selected, `min-h-11 min-w-11` on select and button. GREEN `src/modules/metrics/MonthSelect.tsx` (no client JS).
 - [x] 2.6 RED `src/app/(app)/metrics/page.test.tsx` (`render(await Page({searchParams}))`, queries mocked, fixtures match the wire): técnico gets the shared no-permission screen; admin/jefe see counters as plain numbers "Pendientes"/"En curso"/"En revisión", the table, and a 6-month received/closed table; `?mes=2026-08` selects August; `?mes=garbage` selects current; empty month shows "Sin datos para este mes"; no currency amount. GREEN `page.tsx`.
 - [x] 2.7 Mutation-verify 2.1-2.6 by name (grant `metrics.read` to tecnico, trust `?mes` unvalidated, drop the footnote, drop `min-h-11`, show "Mis números" to admin).
-- [ ] 2.8 Playwright at `http://192.168.0.3:3000` (LAN IP, not localhost) as administrador and técnico at 390, 768 and desktop: console clean (RSC boundary, hydration); no horizontal overflow at 390; select and button >=44x44 measured; técnico sees denial screen on `/metrics`.
+- [x] 2.8 Playwright at `http://192.168.0.3:3000` (LAN IP, not localhost) as administrador and técnico at 390, 768 and desktop: console clean (RSC boundary, hydration); no horizontal overflow at 390; select and button >=44x44 measured; técnico sees denial screen on `/metrics`.
 
 ## WU3: Arc charts (PR 3)
 
