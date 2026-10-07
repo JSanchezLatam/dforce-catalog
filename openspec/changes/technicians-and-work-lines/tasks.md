@@ -105,4 +105,4 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 ## Spec archive notes
 
 - [ ] 9.1 Archive after `closed-order-lock`: NEW `technicians`, `order-work-lines`; `service-orders` MODIFIES R20, R21, R23, Reception Photos, Order Editing and ADDS Order Assignment, Técnico Scoping; `user-management` ADDS two; `service-order-corrections` ADDS one. Check duplicates after the mechanical apply.
-- [ ] 9.2 Follow-ups: metrics dashboard, un-assigning, notifications, prices (v2).
+- [ ] 9.2 Follow-ups: malformed JSON on the technician routes answers 500 (same as `/api/users`), guard with a 400;  metrics dashboard, un-assigning, notifications, prices (v2).
