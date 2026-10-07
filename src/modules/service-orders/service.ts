@@ -35,7 +35,6 @@ import { isServiceCategory, type ServiceCategory } from "./categories";
 import type { IntakeValues } from "./intake";
 import type { Role } from "@/modules/auth/roles";
 import { canEditOrderFields } from "./edit-policy";
-import { getOrdenServicioById } from "./queries";
 import { lockOrderForMutation, recordCorrections, type CorrectionGrant } from "./order-lock";
 import { assertTransition, type OrderStatus } from "./transitions";
 
@@ -316,7 +315,6 @@ export async function updateOrder(
 }
 
 export type TransitionOrdenServicioDeps = {
-  getById?: typeof getOrdenServicioById;
   /**
    * General-purpose extension seam kept from Phase 3: invoked AFTER the
    * status write (and after the reminder wiring below), with the updated row
@@ -338,23 +336,21 @@ export async function transitionOrder(
   to: OrderStatus,
   deps: TransitionOrdenServicioDeps = {},
 ): Promise<OrdenServicio> {
-  const getById = deps.getById ?? getOrdenServicioById;
-  const current = await getById(id);
-  if (!current) {
-    throw new OrdenServicioNotFoundError(id);
-  }
-
-  const from = current.orden.status;
-  assertTransition(from, to);
-
   const now = deps.now ?? (() => new Date());
-  const patch: Partial<OrdenServicio> = { status: to };
-  if (to === "done") {
-    patch.completedAt = now();
-  }
-
   const database = deps.db ?? db;
-  const [updated] = await database.update(ordenServicio).set(patch).where(eq(ordenServicio.id, id)).returning();
+
+  // Lock, read the status from the LOCKED row, validate and write in one transaction: a
+  // concurrent done-vs-cancel (or a correction) waits on the lock, then fails the state
+  // machine instead of both winning. `canWrite: () => true` because every status may
+  // TRY a transition; `assertTransition` is the rule, and it has no edge out of a closed one.
+  const { from, updated } = await database.transaction(async (tx) => {
+    const { order } = await lockOrderForMutation(tx, id, { canWrite: () => true });
+    assertTransition(order.status, to);
+    const patch: Partial<OrdenServicio> = { status: to };
+    if (to === "done") patch.completedAt = now();
+    const [row] = await tx.update(ordenServicio).set(patch).where(eq(ordenServicio.id, id)).returning();
+    return { from: order.status, updated: row };
+  });
 
   if (to === "done") {
     const findCliente = deps.getClienteById ?? getClienteById;

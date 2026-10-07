@@ -52,11 +52,7 @@ function ordenWith(status: OrderStatus): OrdenServicio {
   };
 }
 
-function detailWith(status: OrderStatus) {
-  return { orden: ordenWith(status), items: [] };
-}
-
-const current = detailWith("open");
+const current = { orden: ordenWith("open") };
 
 /**
  * The transaction the service opens for a field patch: `select().from().where()
@@ -83,18 +79,6 @@ function lockedDb(
   return { db: { transaction: async (fn: (tx: unknown) => unknown) => fn(tx) } as never, audit };
 }
 
-function fakeDb(updated: Partial<OrdenServicio>) {
-  return {
-    update: () => ({
-      set: () => ({
-        where: () => ({
-          returning: async () => [{ ...current.orden, ...updated }],
-        }),
-      }),
-    }),
-  };
-}
-
 describe("PATCH /api/service-orders/[id] (R21)", () => {
   it("throws when called without session headers", async () => {
     const request = new NextRequest("http://localhost/api/service-orders/o1", {
@@ -106,8 +90,7 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
 
   it("drives a valid status transition and returns 200", async () => {
     const response = await handleUpdateOrdenServicio(requestWith({ status: "in_progress" }), "o1", {
-      getById: async () => current,
-      db: fakeDb({ status: "in_progress" }) as never,
+      db: lockedDb("open", vi.fn(() => ({ where: () => ({ returning: async () => [ordenWith("in_progress")] }) }))).db,
     });
 
     expect(response.status).toBe(200);
@@ -119,7 +102,7 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
     const response = await handleUpdateOrdenServicio(
       requestWith({ status: "done" }),
       "o1",
-      { getById: async () => current },
+      { db: lockedDb("open").db },
     );
 
     expect(response.status).toBe(400);
@@ -127,7 +110,7 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
 
   it("returns 404 for a missing order", async () => {
     const response = await handleUpdateOrdenServicio(requestWith({ status: "in_progress" }), "missing", {
-      getById: async () => null,
+      db: lockedDb(null).db,
     });
     expect(response.status).toBe(404);
   });
@@ -431,7 +414,7 @@ describe("PATCH /api/service-orders/[id] — the edit gate (D11)", () => {
     const response = await handleUpdateOrdenServicio(
       requestWith({ status: "in_progress", hallazgos: "Fuga de aceite" }, "administrador"),
       "o1",
-      { getById: async () => detailWith("done"), db: { update: () => ({ set: setSpy }) } as never },
+      { db: lockedDb("done", setSpy).db },
     );
 
     expect(response.status).toBe(400);

@@ -51,9 +51,14 @@ export const ROUTE_GUARDS: Record<
   // closed order (closed-order-lock).
   "/api/service-orders/[id]": { PATCH: ["service-orders.write", "service-orders.correct"] },
   // Reception photos (service-order-reception WU3b). POST is `write` (both roles
-  // photograph an open order); GET is `read`; DELETE is admin-only.
-  "/api/service-orders/[id]/photos": { POST: "service-orders.write" },
-  "/api/service-orders/[id]/photos/[photoId]": { GET: "service-orders.read", DELETE: "service-orders.deletePhoto" },
+  // photograph an open order); GET is `read`; DELETE is admin-only. Both writes
+  // also evaluate `service-orders.correct`: it decides whether a password sent
+  // with them is verified (closed-order-lock).
+  "/api/service-orders/[id]/photos": { POST: ["service-orders.write", "service-orders.correct"] },
+  "/api/service-orders/[id]/photos/[photoId]": {
+    GET: "service-orders.read",
+    DELETE: ["service-orders.deletePhoto", "service-orders.correct"],
+  },
   "/api/inventory-sync/manual": { GET: "sync.manual", POST: "sync.manual" },
   "/api/template-config": { GET: "template.edit", POST: "template.edit" },
   // Per-template cover image (catalog-cover-templates WU3a): template config,

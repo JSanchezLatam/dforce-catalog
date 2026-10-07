@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import type { OrdenServicio } from "@/shared/db/schema";
 import { useToast } from "@/shared/ui/ToastProvider";
 import type { VehiculoMotor } from "@/modules/customers/vehicle-options";
+import { isClosedStatus } from "./edit-policy";
 import { ServiceOrderForm, type ServiceOrderCustomerOption } from "./ServiceOrderForm";
 
 /**
@@ -46,7 +47,7 @@ export function ServiceOrderFormTrigger({
         // for the mirror-image case: a refresh or push that throws must not
         // take the only evidence the save happened with it. The dialog has
         // already closed by here, so the toast is all the operator gets.
-        addToast("success", isEdit ? "Orden actualizada" : "Orden creada");
+        addToast("success", isEdit ? (isClosedStatus(order!.status) ? "Orden corregida" : "Orden actualizada") : "Orden creada");
         // A created order lands on its own detail page (server-rendered, so
         // fresh); an edit stays put and repaints. A failed save never reaches
         // here — `ServiceOrderForm` only calls `onSaved` after the server said ok.
