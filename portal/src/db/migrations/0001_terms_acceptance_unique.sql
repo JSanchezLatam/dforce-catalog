@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "portal_terms_acceptance_token_version_uq" ON "portal_terms_acceptance" USING btree ("token_hash","terms_version");
