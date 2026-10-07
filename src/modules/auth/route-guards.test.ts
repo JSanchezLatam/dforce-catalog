@@ -174,7 +174,9 @@ describe("ROUTE_GUARDS completeness", () => {
     // `users.manage` came off this list once /api/users landed — it now has a
     // real route and must stay reachable. `catalogs.listAll` has no dedicated
     // route of its own by design.
-    const exempt: readonly Action[] = ["catalogs.listAll"];
+    // `service-orders.correct` is declared in closed-order-lock WU1 and wired
+    // into the PATCH route in WU2, which removes it from this list.
+    const exempt: readonly Action[] = ["catalogs.listAll", "service-orders.correct"];
 
     for (const action of ACTIONS) {
       if ((exempt as readonly string[]).includes(action)) continue;
