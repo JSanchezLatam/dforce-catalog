@@ -419,6 +419,8 @@ export const vehiculo = pgTable(
     numeroUnidad: text("numero_unidad"),
     /** INTERNAL (needs `vencimientos.read`): month 1..12 the plate renews. Never on an order, a sheet, or a public route. */
     placaRenovacionMes: smallint("placa_renovacion_mes"),
+    /** INTERNAL: free-text municipio that issued the plate (max 80, enforced in `validateVehiculoInput`). Never on an order, a sheet, or a public route. */
+    placaMunicipio: text("placa_municipio"),
     /** INTERNAL: insurance expiry as a `YYYY-MM-DD` string (string mode: no `Date`, no timezone shift). */
     seguroVence: date("seguro_vence", { mode: "string" }),
     /** NULL = active; stamped on soft delete. See table doc comment above. */

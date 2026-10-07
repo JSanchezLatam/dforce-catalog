@@ -43,6 +43,7 @@ function due(overrides: Record<string, unknown> = {}) {
     model: "Frontier",
     plate: "BF0921",
     numeroUnidad: "U-12",
+    placaMunicipio: null,
     ...overrides,
   };
 }
@@ -133,6 +134,40 @@ describe("/vencimientos — list", () => {
     expect(screen.getByText("Nada por vencer")).toBeInTheDocument();
     expect(screen.getByText("No hay placas ni seguros por vencer en los próximos 30 días.")).toBeInTheDocument();
     expect(screen.queryByTestId("vencimientos-table")).not.toBeInTheDocument();
+  });
+});
+
+describe("/vencimientos — plate municipio", () => {
+  const LONG = "San Miguelito ".repeat(5).trim();
+
+  it("shows the municipio on a plate row, in the table and in the card", async () => {
+    await renderPage([due({ placaMunicipio: "San Miguelito" })]);
+
+    expect(within(screen.getByTestId("vencimientos-table")).getByText("San Miguelito")).toBeInTheDocument();
+    expect(within(screen.getByTestId("vencimientos-cards")).getByText("San Miguelito")).toBeInTheDocument();
+  });
+
+  it("does not show it on the insurance row of the same vehicle", async () => {
+    await renderPage([
+      due({ kind: "seguro", periodKey: "2026-10-20", daysLeft: 16, placaMunicipio: "San Miguelito" }),
+    ]);
+
+    expect(screen.queryByText("San Miguelito")).not.toBeInTheDocument();
+  });
+
+  it("shows no municipio text, null or placeholder when the vehicle has none", async () => {
+    await renderPage([due({ placaMunicipio: null })]);
+
+    const vehicleCell = within(screen.getByTestId("vencimientos-table")).getAllByRole("cell")[1];
+    expect(vehicleCell.textContent).toBe("BF0921Nissan Frontier· U-12");
+  });
+
+  it("lets a long municipio wrap instead of widening the row", async () => {
+    await renderPage([due({ placaMunicipio: LONG })]);
+
+    const text = within(screen.getByTestId("vencimientos-cards")).getByText(LONG);
+    expect(text).toHaveClass("min-w-0", "break-words");
+    expect(text.parentElement).toHaveClass("flex-wrap");
   });
 });
 

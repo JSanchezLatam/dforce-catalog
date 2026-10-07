@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { db } from "@/shared/db/client";
 import { cliente, users, vehiculo, vehiculoContacto } from "@/shared/db/schema";
 import { getDueVencimientos, markContactado } from "@/modules/vencimientos/service";
-import { listContacts } from "@/modules/vencimientos/queries";
+import { listContacts, listDueCandidates } from "@/modules/vencimientos/queries";
 import { POST } from "../app/api/vencimientos/contact/route";
 import { NextRequest } from "next/server";
 
@@ -47,7 +47,7 @@ describe("vencimientos due list and contact mark (E2E)", () => {
       const [row] = await db.insert(vehiculo).values({ clienteId, plate: `E2E-${key}`, ...fields }).returning();
       v[key] = row.id;
     };
-    await insertVehicle("placa", active.id, { make: "Toyota", model: "Corolla", numeroUnidad: "U-1", placaRenovacionMes: 10 });
+    await insertVehicle("placa", active.id, { make: "Toyota", model: "Corolla", numeroUnidad: "U-1", placaRenovacionMes: 10, placaMunicipio: "San Miguelito" });
     await insertVehicle("seguro", active.id, { seguroVence: "2026-09-01" });
     await insertVehicle("lejos", active.id, { seguroVence: "2026-11-04", placaRenovacionMes: 3 });
     await insertVehicle("sinCampos", active.id, {});
@@ -77,7 +77,11 @@ describe("vencimientos due list and contact mark (E2E)", () => {
       make: "Toyota",
       model: "Corolla",
       numeroUnidad: "U-1",
+      placaMunicipio: "San Miguelito",
     });
+    // The seguro vehicle has none: the column is selected, not invented.
+    expect(rows[0].placaMunicipio).toBeNull();
+    expect((await listDueCandidates()).find((c) => c.vehiculoId === v.placa)?.placaMunicipio).toBe("San Miguelito");
   });
 
   it("a double insert through the real route leaves exactly one mark, and the item drops out", async () => {

@@ -29,6 +29,7 @@ function storedVehiculo(overrides: Partial<Vehiculo> = {}): Vehiculo {
     motor: null,
     numeroUnidad: null,
     placaRenovacionMes: null,
+    placaMunicipio: null,
     seguroVence: null,
     deactivatedAt: null,
     createdAt: new Date(),
@@ -400,6 +401,8 @@ describe("internal renewal fields are administrador-only on PATCH", () => {
     ["an insurance date", { seguroVence: "2026-11-15" }],
     ["a null month (would clear the stored value)", { placaRenovacionMes: null }],
     ["a null insurance date (would clear the stored value)", { seguroVence: null }],
+    ["a municipio", { placaMunicipio: "David" }],
+    ["a null municipio (would clear the stored value)", { placaMunicipio: null }],
   ])("refuses a tecnico sending %s with 403 and persists nothing", async (_label, vehicle) => {
     transaction.mockClear();
     const response = await patch(vehicle);

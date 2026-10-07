@@ -186,6 +186,22 @@ export function validateVehiculoInput(input: unknown): VehiculoInput {
   if (rawMes !== undefined && rawMes !== null && !(Number.isInteger(rawMes) && (rawMes as number) >= 1 && (rawMes as number) <= 12)) {
     errors.placaRenovacionMes = "El mes de renovación tiene que ser un número entre 1 y 12";
   }
+  // Free text, trimmed here (the trust boundary). Blank is an explicit clear
+  // (`null`), so the form can empty it; `undefined` stays "not sent".
+  const rawMunicipio = value.placaMunicipio;
+  let placaMunicipio: string | null | undefined;
+  if (rawMunicipio === undefined) {
+    placaMunicipio = undefined;
+  } else if (rawMunicipio === null) {
+    placaMunicipio = null;
+  } else if (typeof rawMunicipio !== "string") {
+    errors.placaMunicipio = "El municipio no es válido";
+  } else {
+    placaMunicipio = rawMunicipio.trim() || null;
+    if (placaMunicipio !== null && placaMunicipio.length > 80) {
+      errors.placaMunicipio = "El municipio no puede superar 80 caracteres";
+    }
+  }
   const rawSeguro = value.seguroVence;
   if (rawSeguro !== undefined && rawSeguro !== null && !isRealIsoDate(rawSeguro)) {
     errors.seguroVence = "La fecha de vencimiento del seguro no es válida";
@@ -213,6 +229,7 @@ export function validateVehiculoInput(input: unknown): VehiculoInput {
     ...(motor !== undefined ? { motor: motor as VehiculoMotor } : {}),
     ...(numeroUnidad !== undefined ? { numeroUnidad } : {}),
     ...(rawMes !== undefined ? { placaRenovacionMes: rawMes as number | null } : {}),
+    ...(placaMunicipio !== undefined ? { placaMunicipio } : {}),
     ...(rawSeguro !== undefined ? { seguroVence: rawSeguro as string | null } : {}),
     ...(deactivated !== undefined ? { deactivated } : {}),
     ...(deleted !== undefined ? { deleted } : {}),

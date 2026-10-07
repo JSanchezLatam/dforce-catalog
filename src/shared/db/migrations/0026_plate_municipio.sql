@@ -1,0 +1,1 @@
+ALTER TABLE "vehiculo" ADD COLUMN "placa_municipio" text;

@@ -27,23 +27,23 @@ Rule for every pair: RED test, confirm red BY NAME, GREEN, mutation-verify (reve
 
 ## WU1: Server (PR 1)
 
-- [ ] 1.1 RED `validation.test.ts`: `"  San Miguelito "` trimmed; `""` and `"   "` null; absent stays absent; 81 chars errors "El municipio no puede superar 80 caracteres"; 80 accepted; number errors "El municipio no es válido". GREEN `validation.ts`.
-- [ ] 1.2 RED `vehicles.test.ts`: update without the key has no `placaMunicipio` in SET; `null` clears; insert defaults null; `sendsInternalVehiculoFields` true for `null`, false for `undefined`. GREEN `vehicles.ts`; mutation-verify by deleting the spread guard.
-- [ ] 1.3 RED refusal rows: add key (null included) to `it.each` in `api/customers/route.test.ts` and `[id]/route.test.ts` (tecnico 403, nothing stored) and `[id]/vehicles/route.test.ts` (400 for all). GREEN `COLLECTION_ONLY_FIELDS` in `vehicles/route.ts`.
-- [ ] 1.4 RED leak: `placaMunicipio: "SENTINEL-MUNICIPIO"` in every POISONED fixture (vehicles GET, `toPublicVehiculo`, customer page tecnico props, order detail, print sheet); sentinel absent. `tsc` forces the other `Vehiculo` fixtures. Mutation-verify: spread the full row into each allowlist, each goes red by name.
-- [ ] 1.5 `schema.ts`: `placaMunicipio: text("placa_municipio")` after `placaRenovacionMes`; run `drizzle-kit generate --name plate_municipio` (0026); confirm one `ADD COLUMN`, no default.
-- [ ] 1.6 RED e2e `vehicle-details.e2e.test.ts` (throwaway DB): create with municipio; tecnico PATCH keeps it; tecnico sending `null` gets 403; admin `"  X "` stores `"X"`, `""` stores null. GREEN: fix real-SQL defects.
-- [ ] 1.7 RED e2e `vencimientos.e2e.test.ts`: `listDueCandidates` returns `placaMunicipio`. GREEN `queries.ts`, `service.ts` (`DueCandidate`/`DueVencimiento`).
+- [x] 1.1 RED `validation.test.ts`: `"  San Miguelito "` trimmed; `""` and `"   "` null; absent stays absent; 81 chars errors "El municipio no puede superar 80 caracteres"; 80 accepted; number errors "El municipio no es válido". GREEN `validation.ts`.
+- [x] 1.2 RED `vehicles.test.ts`: update without the key has no `placaMunicipio` in SET; `null` clears; insert defaults null; `sendsInternalVehiculoFields` true for `null`, false for `undefined`. GREEN `vehicles.ts`; mutation-verify by deleting the spread guard.
+- [x] 1.3 RED refusal rows: add key (null included) to `it.each` in `api/customers/route.test.ts` and `[id]/route.test.ts` (tecnico 403, nothing stored) and `[id]/vehicles/route.test.ts` (400 for all). GREEN `COLLECTION_ONLY_FIELDS` in `vehicles/route.ts`.
+- [x] 1.4 RED leak: `placaMunicipio: "SENTINEL-MUNICIPIO"` in every POISONED fixture (vehicles GET, `toPublicVehiculo`, customer page tecnico props, order detail, print sheet); sentinel absent. `tsc` forces the other `Vehiculo` fixtures. Mutation-verify: spread the full row into each allowlist, each goes red by name.
+- [x] 1.5 `schema.ts`: `placaMunicipio: text("placa_municipio")` after `placaRenovacionMes`; run `drizzle-kit generate --name plate_municipio` (0026); confirm one `ADD COLUMN`, no default.
+- [x] 1.6 RED e2e `vehicle-details.e2e.test.ts` (throwaway DB): create with municipio; tecnico PATCH keeps it; tecnico sending `null` gets 403; admin `"  X "` stores `"X"`, `""` stores null. GREEN: fix real-SQL defects.
+- [x] 1.7 RED e2e `vencimientos.e2e.test.ts`: `listDueCandidates` returns `placaMunicipio`. GREEN `queries.ts`, `service.ts` (`DueCandidate`/`DueVencimiento`).
 
 ## WU2: UI (PR 2)
 
-- [ ] 2.1 RED `CustomerForm.test.tsx`: grant sends trimmed value, or `null` when blank; no grant omits the key and shows no control; row error under the input. GREEN `CustomerForm.tsx` (Pick, row state, payload, `<Input maxLength={80}>` "Municipio de la placa" on its own row, `ROW_ERROR_FIELDS`).
-- [ ] 2.2 RED vehicle detail page test: "Municipio de la placa" shows for admin, hidden without grant and when null. GREEN `customers/[id]/vehicles/[vehicleId]/page.tsx`.
-- [ ] 2.3 RED `vencimientos/page` test: placa row shows "San Miguelito"; seguro row for the same vehicle does not; null shows no "null" or placeholder. GREEN `toItem` and `Vehicle` (`flex-wrap`, `min-w-0 break-words`).
-- [ ] 2.4 Mutation-verify 2.1-2.3 (drop the grant gate, drop the `kind === "placa"` check).
-- [ ] 2.5 Playwright at `http://192.168.0.3:3000` (not localhost), 390px, 768px, desktop: an 80-char municipio wraps in the due card and table cell with no horizontal overflow; form row fits; console clean (RSC, hydration); `Pagination`-style volume traps need rows in dev DB.
+- [x] 2.1 RED `CustomerForm.test.tsx`: grant sends trimmed value, or `null` when blank; no grant omits the key and shows no control; row error under the input. GREEN `CustomerForm.tsx` (Pick, row state, payload, `<Input maxLength={80}>` "Municipio de la placa" on its own row, `ROW_ERROR_FIELDS`).
+- [x] 2.2 RED vehicle detail page test: "Municipio de la placa" shows for admin, hidden without grant and when null. GREEN `customers/[id]/vehicles/[vehicleId]/page.tsx`.
+- [x] 2.3 RED `vencimientos/page` test: placa row shows "San Miguelito"; seguro row for the same vehicle does not; null shows no "null" or placeholder. GREEN `toItem` and `Vehicle` (`flex-wrap`, `min-w-0 break-words`).
+- [x] 2.4 Mutation-verify 2.1-2.3 (drop the grant gate, drop the `kind === "placa"` check).
+- [x] 2.5 Playwright at `http://192.168.0.3:3000` (not localhost), 390px, 768px, desktop: an 80-char municipio wraps in the due card and table cell with no horizontal overflow; form row fits; console clean (RSC, hydration); `Pagination`-style volume traps need rows in dev DB.
 
 ## Deployment and archive notes
 
-- [ ] 3.1 Migration note in the PR body: the workshop PC must run `standalone.ps1` (migration 0026) or the due page and vehicle detail error on the missing column.
+- [x] 3.1 Migration note in the PR body: the workshop PC must run `standalone.ps1` (migration 0026) or the due page and vehicle detail error on the missing column.
 - [ ] 3.2 At archive, merge the MODIFIED `vehicle-renewals` requirements (not a rename). Follow-ups out of scope: municipio picker, filtering, contact message.

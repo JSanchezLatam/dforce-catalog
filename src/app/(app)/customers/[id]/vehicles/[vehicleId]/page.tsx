@@ -122,6 +122,7 @@ export default async function VehicleDetailPage({
                 "Mes de renovación de placa",
                 vehiculo.placaRenovacionMes ? capitalize(MONTH_NAMES[vehiculo.placaRenovacionMes - 1]) : null,
               )}
+            {canSeeInternal && field("Municipio de la placa", vehiculo.placaMunicipio)}
             {/* Split from the stored `YYYY-MM-DD`, never parsed: a date-only
                 string read as a `Date` is off by a day in a western zone. */}
             {canSeeInternal && field("Vencimiento del seguro", vehiculo.seguroVence?.split("-").reverse().join("/"))}

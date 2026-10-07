@@ -31,6 +31,7 @@ function vehiculo(overrides: Partial<Vehiculo> = {}): Vehiculo {
     motor: null,
     numeroUnidad: null,
     placaRenovacionMes: null,
+    placaMunicipio: null,
     seguroVence: null,
     deactivatedAt: null,
     createdAt: new Date("2026-01-01"),
@@ -273,6 +274,18 @@ describe("applyVehiculoPlan — internal fields are tri-state, public columns ke
     expect(sets[0]).toMatchObject({ placaRenovacionMes: null, seguroVence: null });
   });
 
+  it("leaves placaMunicipio out of SET when absent, clears it on null, sets it on a value", async () => {
+    const { tx, sets } = recordingTx();
+    await applyVehiculoPlan(tx, "c1", update({ id: "v1", plate: "ABC222" }));
+    expect(sets[0]).not.toHaveProperty("placaMunicipio");
+    const { tx: tx2, sets: sets2 } = recordingTx();
+    await applyVehiculoPlan(tx2, "c1", update({ id: "v1", plate: "ABC222", placaMunicipio: null }));
+    expect(sets2[0]).toMatchObject({ placaMunicipio: null });
+    const { tx: tx3, sets: sets3 } = recordingTx();
+    await applyVehiculoPlan(tx3, "c1", update({ id: "v1", plate: "ABC222", placaMunicipio: "David" }));
+    expect(sets3[0]).toMatchObject({ placaMunicipio: "David" });
+  });
+
   it("sets an internal column when the plan carries a value, and only that one", async () => {
     const { tx, sets } = recordingTx();
     await applyVehiculoPlan(tx, "c1", update({ id: "v1", plate: "ABC222", seguroVence: "2026-11-15" }));
@@ -312,6 +325,20 @@ describe("applyVehiculoPlan — internal fields are tri-state, public columns ke
       delete: [],
     });
     expect(inserted[0][0]).toMatchObject({ estilo: "SUV", seguroVence: "2026-11-15", chasis: null, placaRenovacionMes: null });
+    expect(inserted[0][0]).toMatchObject({ placaMunicipio: null });
+  });
+
+  it("inserts a placaMunicipio the plan carries", async () => {
+    const inserted: Record<string, unknown>[][] = [];
+    const tx = {
+      insert: () => ({
+        values: async (rows: Record<string, unknown>[]) => {
+          inserted.push(rows);
+        },
+      }),
+    } as unknown as TxLike;
+    await applyVehiculoPlan(tx, "c1", { inserts: [{ plate: "NEW1", placaMunicipio: "David" }], updates: [], deactivate: [], delete: [] });
+    expect(inserted[0][0]).toMatchObject({ placaMunicipio: "David" });
   });
 });
 
@@ -513,6 +540,7 @@ describe("toPublicVehiculo — allowlist", () => {
     motor: "hibrido",
     numeroUnidad: "12",
     placaRenovacionMes: 11,
+    placaMunicipio: "SENTINEL-MUNICIPIO",
     seguroVence: "2031-07-23",
   });
 
@@ -534,7 +562,9 @@ describe("toPublicVehiculo — allowlist", () => {
     const out = toPublicVehiculo(row);
     expect(out).not.toHaveProperty("placaRenovacionMes");
     expect(out).not.toHaveProperty("seguroVence");
+    expect(out).not.toHaveProperty("placaMunicipio");
     expect(JSON.stringify(out)).not.toContain("2031-07-23");
+    expect(JSON.stringify(out)).not.toContain("SENTINEL-MUNICIPIO");
   });
 
   it("drops a column it was never told about, so a later column stays hidden by default", () => {
@@ -549,11 +579,14 @@ describe("sendsInternalVehiculoFields — reads the RAW body", () => {
     expect(sendsInternalVehiculoFields({ vehicles: [{ seguroVence: "2026-11-15" }] })).toBe(true);
     expect(sendsInternalVehiculoFields({ vehicles: [{ placaRenovacionMes: null }] })).toBe(true);
     expect(sendsInternalVehiculoFields({ vehicles: [{ seguroVence: null }] })).toBe(true);
+    expect(sendsInternalVehiculoFields({ vehicles: [{ placaMunicipio: "David" }] })).toBe(true);
+    expect(sendsInternalVehiculoFields({ vehicles: [{ placaMunicipio: null }] })).toBe(true);
   });
 
   it("is false when no vehicle carries a key, or the body is not shaped like one", () => {
     expect(sendsInternalVehiculoFields({ vehicles: [{ plate: "A", colorPrimario: "Rojo" }] })).toBe(false);
     expect(sendsInternalVehiculoFields({ vehicles: [{ placaRenovacionMes: undefined }] })).toBe(false);
+    expect(sendsInternalVehiculoFields({ vehicles: [{ placaMunicipio: undefined }] })).toBe(false);
     expect(sendsInternalVehiculoFields({ name: "x" })).toBe(false);
     expect(sendsInternalVehiculoFields({ vehicles: "nope" })).toBe(false);
     expect(sendsInternalVehiculoFields({ vehicles: [null, 3] })).toBe(false);

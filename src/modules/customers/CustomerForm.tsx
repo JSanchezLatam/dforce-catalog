@@ -38,7 +38,7 @@ import type { PublicVehiculo } from "./vehicles";
  * because a caller without `vencimientos.read` is handed `toPublicVehiculo`
  * rows, which do not carry them (a full `Vehiculo` is assignable too).
  */
-export type CustomerFormVehiculo = PublicVehiculo & Partial<Pick<Vehiculo, "placaRenovacionMes" | "seguroVence">>;
+export type CustomerFormVehiculo = PublicVehiculo & Partial<Pick<Vehiculo, "placaRenovacionMes" | "placaMunicipio" | "seguroVence">>;
 
 /** Same focus-ring pairing as `ServiceOrderForm`'s native selects: `outline-none` needs its ring back. */
 const NATIVE_FIELD =
@@ -75,6 +75,8 @@ type VehiculoRow = {
   numeroUnidad: string;
   /** "" = none, else "1".."12". Only ever sent when `canEditInternal`. */
   placaRenovacionMes: string;
+  /** Free text, "" = none. Only ever sent when `canEditInternal`. */
+  placaMunicipio: string;
   /** "" = none, else `YYYY-MM-DD`. Only ever sent when `canEditInternal`. */
   seguroVence: string;
   deactivated: boolean;
@@ -120,6 +122,7 @@ function emptyVehicleRow(): VehiculoRow {
     motor: "",
     numeroUnidad: "",
     placaRenovacionMes: "",
+    placaMunicipio: "",
     seguroVence: "",
     deactivated: false,
     deleted: false,
@@ -155,6 +158,7 @@ function toFormState(cliente?: Cliente | null, allVehicles?: CustomerFormVehicul
       motor: v.motor ?? "",
       numeroUnidad: v.numeroUnidad ?? "",
       placaRenovacionMes: v.placaRenovacionMes != null ? String(v.placaRenovacionMes) : "",
+      placaMunicipio: v.placaMunicipio ?? "",
       seguroVence: v.seguroVence ?? "",
       deactivated: v.deactivatedAt !== null,
       deleted: false,
@@ -226,6 +230,7 @@ function buildPayload(form: CustomerFormState, canEditInternal: boolean) {
         ...(canEditInternal
           ? {
               placaRenovacionMes: v.placaRenovacionMes ? Number(v.placaRenovacionMes) : null,
+              placaMunicipio: v.placaMunicipio.trim() || null,
               seguroVence: v.seguroVence || null,
             }
           : {}),
@@ -855,6 +860,15 @@ export function CustomerForm({
                             />
                           </div>
                         </div>
+                        <div className="grid min-w-0 gap-2">
+                          <Label htmlFor={`${row.key}-municipio`}>Municipio de la placa</Label>
+                          <Input
+                            id={`${row.key}-municipio`}
+                            maxLength={80}
+                            value={row.placaMunicipio}
+                            onChange={(e) => updateVehicle(row.key, { placaMunicipio: e.target.value })}
+                          />
+                        </div>
                       </div>
                     )}
 
@@ -980,7 +994,7 @@ export function CustomerForm({
 }
 
 /** The `vehicles.<i>.<field>` keys this form has a card to show under; `validateVehiculoInput` can name any of them. */
-const ROW_ERROR_FIELDS = ["plate", "estilo", "motor", "placaRenovacionMes", "seguroVence"] as const;
+const ROW_ERROR_FIELDS = ["plate", "estilo", "motor", "placaRenovacionMes", "placaMunicipio", "seguroVence"] as const;
 
 /** Pairs EVERY row with its 1-based display index and its index within the ACTIVE-only array the server sees (-1 for a deactivated row, which has no server-side error slot). Filtering is `activeVehicles`' job. */
 function indexedVehicleRows(vehicles: VehiculoRow[]) {
