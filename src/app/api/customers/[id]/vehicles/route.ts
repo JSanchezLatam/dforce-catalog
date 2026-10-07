@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
+import { enqueuePortalSync, type PortalSyncDeps } from "@/modules/portal-sync/enqueue";
 import { getClienteById as getClienteByIdQuery } from "@/modules/customers/queries";
 import { SYSTEM_SCOPE } from "@/modules/service-orders/scope";
 import { ClienteValidationError, validateVehiculoInput } from "@/modules/customers/validation";
@@ -18,7 +19,7 @@ export type ListVehiculosByClienteDeps = {
 export type CreateVehiculoRouteDeps = {
   getClienteById?: typeof getClienteByIdQuery;
   createVehiculo?: typeof createVehiculoService;
-};
+} & PortalSyncDeps;
 
 /**
  * D1's trust boundary. `validateVehiculoInput` is REUSED rather than copied,
@@ -151,6 +152,7 @@ export async function handleCreateVehiculo(
     ...(input.model !== undefined ? { model: input.model } : {}),
     ...(input.year !== undefined ? { year: input.year } : {}),
   });
+  await (deps.enqueuePortalSync ?? enqueuePortalSync)(clienteId);
   return NextResponse.json({ vehiculo: toPublicVehiculo(vehiculo) }, { status: 201 });
 }
 

@@ -23,6 +23,7 @@ import { orderScope } from "@/modules/service-orders/scope";
 import { CustomerActivationButton } from "@/modules/customers/CustomerActivationButton";
 import { CustomerConsentPanel } from "@/modules/customers/CustomerConsentPanel";
 import { currentConsent } from "@/modules/customers/consent";
+import { toPublicCliente } from "@/modules/customers/portal-token";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
 import { getClienteById } from "@/modules/customers/queries";
 import { toPublicVehiculo } from "@/modules/customers/vehicles";
@@ -98,7 +99,9 @@ export default async function CustomerDetailPage({
           <div className="flex items-center gap-2">
             {isActive && (
               <CustomerFormTrigger
-                cliente={cliente}
+                // Client component: this prop lands in the browser payload, so the
+                // portal token is dropped here (customer-portal WU2).
+                cliente={toPublicCliente(cliente)}
                 // The trigger is a client component, so this prop is serialized
                 // into the browser's RSC payload: without the grant the full
                 // row would ship the renewal month and insurance expiry too.
@@ -149,6 +152,7 @@ export default async function CustomerDetailPage({
       <CustomerConsentPanel
         clienteId={cliente.id}
         canRecord={isActive && can(user, "customers.consent")}
+        canRotate={isActive && can(user, "customers.portalRotate")}
         deactivated={!isActive}
         consent={
           consent

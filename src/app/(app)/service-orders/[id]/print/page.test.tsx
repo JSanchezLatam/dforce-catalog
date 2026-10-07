@@ -31,7 +31,7 @@ const requireSessionFromHeaders = vi.hoisted(() =>
 );
 vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders }));
 
-const can = vi.hoisted(() => vi.fn(() => true));
+const can = vi.hoisted(() => vi.fn<(user: unknown, action: string) => boolean>(() => true));
 vi.mock("@/modules/auth/policy", () => ({ can }));
 const SCOPE = vi.hoisted(() => ({ where: "scope-sentinel" }));
 const orderScope = vi.hoisted(() => vi.fn<(user: unknown) => typeof SCOPE>(() => SCOPE));
@@ -48,6 +48,26 @@ vi.mock("@/modules/workshop-config/service", () => ({ getWorkshopConfig }));
 
 const listOrderPhotos = vi.hoisted(() => vi.fn<(id: string, scope: unknown) => Promise<{ id: string }[]>>(async () => []));
 vi.mock("@/modules/service-orders/photos", () => ({ listOrderPhotos }));
+
+/** Latest consent of the order's customer; `null` is "no row ever recorded". */
+const currentConsent = vi.hoisted(() => vi.fn<(id: string) => Promise<{ granted: boolean } | null>>(async () => null));
+vi.mock("@/modules/customers/consent", () => ({ currentConsent }));
+
+/** `env` is read at render time, so a test can unset it. */
+const envMock = vi.hoisted(() => ({
+  PORTAL_BASE_URL: undefined as string | undefined,
+  PORTAL_INGEST_URL: "http://localhost:3001/api/ingest" as string | undefined,
+  PORTAL_INGEST_SECRET: "secret" as string | undefined,
+}));
+vi.mock("@/shared/config/env", () => ({ env: envMock }));
+
+/** The REAL encoder, spied: the SVG under test is what the library draws, and the input is what it was asked to encode. */
+const renderQrSvg = vi.hoisted(() => vi.fn());
+vi.mock("@/modules/service-orders/qr", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/modules/service-orders/qr")>();
+  renderQrSvg.mockImplementation(actual.renderQrSvg);
+  return { renderQrSvg };
+});
 
 import type { Role } from "@/modules/auth/roles";
 import type { Cliente, OrdenServicio, Vehiculo, WorkshopConfig } from "@/shared/db/schema";
@@ -76,7 +96,7 @@ const ORDEN: OrdenServicio = {
 const CLIENTE: Cliente = {
   id: "c1", name: "Ana Gómez", phone: "61234567", email: "ana@example.com",
   documentoIdentidad: null, externalId: null, whatsappOptOut: false, emailOptOut: false,
-  deactivatedAt: null,
+  deactivatedAt: null, portalToken: null,
   createdAt: new Date("2026-01-01T00:00:00Z"), updatedAt: new Date("2026-01-01T00:00:00Z"),
 };
 
@@ -88,8 +108,11 @@ const VEHICULO: Vehiculo = {
   numeroUnidad: null, placaRenovacionMes: null, placaMunicipio: null, seguroVence: null, createdAt: new Date("2026-01-01T00:00:00Z"),
 };
 
-function renderPage() {
-  return ServiceOrderPrintPage({ params: Promise.resolve({ id: "o1" }) });
+function renderPage(copia?: string | string[]) {
+  return ServiceOrderPrintPage({
+    params: Promise.resolve({ id: "o1" }),
+    searchParams: Promise.resolve(copia === undefined ? {} : { copia }),
+  });
 }
 
 /**
@@ -135,6 +158,11 @@ beforeEach(() => {
   getClienteById.mockResolvedValue({ cliente: CLIENTE, orders: [], vehicles: [VEHICULO] });
   getWorkshopConfig.mockResolvedValue(null);
   listOrderPhotos.mockResolvedValue([]);
+  currentConsent.mockResolvedValue(null);
+  envMock.PORTAL_BASE_URL = undefined;
+  envMock.PORTAL_INGEST_URL = "http://localhost:3001/api/ingest";
+  envMock.PORTAL_INGEST_SECRET = "secret";
+  renderQrSvg.mockClear();
 });
 
 describe("ServiceOrderPrintPage — vehicle descriptive fields", () => {
@@ -668,5 +696,226 @@ describe("ServiceOrderPrintPage — order scope", () => {
 
     getOrdenServicioById.mockResolvedValue(null);
     await expect(renderPage()).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+});
+
+// customer-portal WU2 — the consent clause on the workshop copy and the
+// "Copia del cliente" with the portal QR.
+describe("ServiceOrderPrintPage — consent clause and the two copies (customer-portal WU2)", () => {
+  const TOKEN = "SENTINEL-PORTAL-TOKEN-0123456789abcdefghijklm";
+  const BASE = "http://192.168.0.3:3001";
+  const BANNER = "Texto provisorio — pendiente de revisión legal";
+  const NOTICE = "Este código da acceso a tu historial. No lo compartas.";
+
+  /** A consented, active customer holding a token with a configured portal: the one case that prints a QR. */
+  function consented(overrides: Partial<Cliente> = {}) {
+    currentConsent.mockResolvedValue({ granted: true });
+    envMock.PORTAL_BASE_URL = BASE;
+    getClienteById.mockResolvedValue({ cliente: { ...CLIENTE, portalToken: TOKEN, ...overrides }, orders: [], vehicles: [VEHICULO] });
+  }
+
+  describe("workshop copy (the default)", () => {
+    it("carries the clause, banner first, and the Firma del cliente line for a consented customer", async () => {
+      consented();
+      render(await renderPage());
+
+      const clause = screen.getByTestId("consent-clause");
+      expect(clause.textContent?.startsWith(BANNER)).toBe(true);
+      expect(clause.textContent).toMatch(/fuera de Panamá/);
+      expect(screen.getByText("Firma del cliente")).toBeInTheDocument();
+      // The technician's line is still there, and so is the findings block it closes.
+      expect(screen.getByText("Firma del técnico")).toBeInTheDocument();
+      expect(screen.getByText("Trabajo realizado / Hallazgos")).toBeInTheDocument();
+    });
+
+    it("carries neither the clause nor Firma del cliente without current consent", async () => {
+      currentConsent.mockResolvedValue({ granted: false });
+      render(await renderPage());
+
+      expect(screen.queryByTestId("consent-clause")).not.toBeInTheDocument();
+      expect(screen.queryByText("Firma del cliente")).not.toBeInTheDocument();
+      expect(screen.queryByText(BANNER)).not.toBeInTheDocument();
+      expect(screen.getByText("Firma del técnico")).toBeInTheDocument();
+    });
+
+    it("carries neither when the customer never consented", async () => {
+      render(await renderPage());
+
+      expect(screen.queryByTestId("consent-clause")).not.toBeInTheDocument();
+      expect(screen.queryByText("Firma del cliente")).not.toBeInTheDocument();
+    });
+
+    it("keeps the 25 mm slot blank and prints no QR, with or without consent", async () => {
+      consented();
+      const { container } = render(await renderPage());
+
+      const slot = container.querySelector<HTMLElement>('[aria-hidden="true"][class*="size-[25mm]"]');
+      expect(slot).not.toBeNull();
+      expect(slot!.textContent).toBe("");
+      expect(slot!.children).toHaveLength(0);
+      expect(container.querySelector("svg")).toBeNull();
+      expect(renderQrSvg).not.toHaveBeenCalled();
+      expect(screen.queryByText(NOTICE)).not.toBeInTheDocument();
+    });
+
+    it("never lets the token into the HTML", async () => {
+      consented();
+      const { container } = render(await renderPage());
+
+      expect(container.innerHTML).not.toContain(TOKEN);
+    });
+
+    it("offers the Copia del cliente control, off the paper, to a consented customer with a configured portal", async () => {
+      consented();
+      render(await renderPage());
+
+      const link = screen.getByRole("link", { name: "Copia del cliente" });
+      expect(link).toHaveAttribute("href", "/service-orders/o1/print?copia=cliente");
+      expect(link).toHaveClass("print:hidden", "min-h-11", "min-w-11");
+    });
+  });
+
+  describe("customer copy (?copia=cliente)", () => {
+    it("shows the QR of <PORTAL_BASE_URL>/c#<token> in the slot, with the notice", async () => {
+      consented();
+      const { container } = render(await renderPage("cliente"));
+
+      expect(renderQrSvg).toHaveBeenCalledWith(`${BASE}/c#${TOKEN}`);
+      const qr = screen.getByRole("img", { name: "Código QR del portal del cliente" });
+      expect(qr.className).toMatch(/size-\[25mm\]/);
+      expect(qr.querySelector("svg")).not.toBeNull();
+      expect(screen.getByText(NOTICE)).toBeInTheDocument();
+      // The token is only ever INSIDE the encoded drawing, never as text or an attribute.
+      expect(container.innerHTML).not.toContain(TOKEN);
+    });
+
+    it("tolerates a trailing slash on PORTAL_BASE_URL", async () => {
+      consented();
+      envMock.PORTAL_BASE_URL = `${BASE}/`;
+      await renderPage("cliente");
+
+      expect(renderQrSvg).toHaveBeenCalledWith(`${BASE}/c#${TOKEN}`);
+    });
+
+    it("is titled Copia del cliente and carries the order's identifying data", async () => {
+      consented();
+      render(await renderPage("cliente"));
+
+      expect(screen.getByRole("heading", { level: 1, name: "Copia del cliente" })).toBeInTheDocument();
+      expect(screen.getByText("N.º o1")).toBeInTheDocument();
+      expect(valueFor("Cliente")).toBe("Ana Gómez");
+      expect(valueFor("Placa")).toBe("ABC123");
+      expect(valueFor("Descripción")).toBe("Ruido en el tren delantero");
+      expect(valueFor("Categoría")).toBeTruthy();
+      expect(valueFor("Fecha y hora de inicio")).toBe(formatDateTime(APPOINTMENT_AT));
+    });
+
+    it("has no Firma del cliente, no signature block, no findings block and no photos", async () => {
+      consented();
+      listOrderPhotos.mockResolvedValue([{ id: "p1" }, { id: "p2" }]);
+      const { container } = render(await renderPage("cliente"));
+
+      expect(screen.queryByText("Firma del cliente")).not.toBeInTheDocument();
+      expect(screen.queryByText("Firma del técnico")).not.toBeInTheDocument();
+      expect(screen.queryByText("Trabajo realizado / Hallazgos")).not.toBeInTheDocument();
+      expect(container.querySelectorAll("img[src*='/photos/']")).toHaveLength(0);
+      expect(listOrderPhotos).not.toHaveBeenCalled();
+    });
+
+    it("keeps the staff-only rows off the customer's paper", async () => {
+      consented();
+      render(await renderPage("cliente"));
+
+      expect(screen.queryByText("Observaciones")).not.toBeInTheDocument();
+      expect(screen.queryByText("Teléfono")).not.toBeInTheDocument();
+      expect(screen.queryByText("El cliente espera en el taller")).not.toBeInTheDocument();
+    });
+
+    it("withholds the Copia del cliente control on the customer copy itself", async () => {
+      consented();
+      render(await renderPage("cliente"));
+
+      expect(screen.queryByRole("link", { name: "Copia del cliente" })).not.toBeInTheDocument();
+    });
+
+    it("carries the clause when consent is current, but no signature line", async () => {
+      consented();
+      render(await renderPage("cliente"));
+
+      expect(screen.getByTestId("consent-clause").textContent?.startsWith(BANNER)).toBe(true);
+    });
+
+    it("ignores any other copia value and prints the workshop copy", async () => {
+      consented();
+      render(await renderPage("otra"));
+
+      expect(screen.getByText("Firma del técnico")).toBeInTheDocument();
+      expect(screen.queryByRole("img", { name: "Código QR del portal del cliente" })).not.toBeInTheDocument();
+    });
+
+    it("reads the first value when copia is repeated", async () => {
+      consented();
+      render(await renderPage(["cliente", "taller"]));
+
+      expect(screen.getByRole("img", { name: "Código QR del portal del cliente" })).toBeInTheDocument();
+    });
+  });
+
+  describe("the QR is withheld, without an error and with no control, when ANY condition fails", () => {
+    const cases: [string, () => void][] = [
+      ["the customer has no current consent", () => currentConsent.mockResolvedValue({ granted: false })],
+      ["the customer never consented", () => currentConsent.mockResolvedValue(null)],
+      ["the customer has no token", () => getClienteById.mockResolvedValue({ cliente: { ...CLIENTE, portalToken: null }, orders: [], vehicles: [VEHICULO] })],
+      ["the customer is deactivated", () => getClienteById.mockResolvedValue({ cliente: { ...CLIENTE, portalToken: TOKEN, deactivatedAt: new Date("2026-02-01") }, orders: [], vehicles: [VEHICULO] })],
+      ["PORTAL_BASE_URL is unset", () => { envMock.PORTAL_BASE_URL = undefined; }],
+      ["PORTAL_BASE_URL is blank", () => { envMock.PORTAL_BASE_URL = "  "; }],
+      // The sync is off: a printed QR would only ever open "Este enlace no es válido".
+      ["PORTAL_INGEST_URL is unset", () => { envMock.PORTAL_INGEST_URL = undefined; }],
+      ["PORTAL_INGEST_SECRET is unset", () => { envMock.PORTAL_INGEST_SECRET = undefined; }],
+    ];
+
+    it.each(cases)("when %s", async (_label, breakIt) => {
+      consented();
+      breakIt();
+
+      const customer = render(await renderPage("cliente"));
+      expect(renderQrSvg).not.toHaveBeenCalled();
+      expect(customer.container.querySelector("svg")).toBeNull();
+      expect(screen.queryByText(NOTICE)).not.toBeInTheDocument();
+      expect(screen.queryByRole("img", { name: "Código QR del portal del cliente" })).not.toBeInTheDocument();
+      expect(customer.container.innerHTML).not.toContain(TOKEN);
+      customer.unmount();
+
+      render(await renderPage());
+      expect(screen.queryByRole("link", { name: "Copia del cliente" })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("what neither copy may carry", () => {
+    it.each([undefined, "cliente"])("never prints the renewal month, municipality or insurance expiry (copia=%s)", async (copia) => {
+      consented();
+      getClienteById.mockResolvedValue({
+        cliente: { ...CLIENTE, portalToken: TOKEN },
+        orders: [],
+        vehicles: [{ ...VEHICULO, placaRenovacionMes: 7, placaMunicipio: "SENTINEL-MUNICIPIO", seguroVence: "2031-12-24" }],
+      });
+      const { container } = render(await renderPage(copia));
+
+      expect(container.textContent).not.toContain("SENTINEL-MUNICIPIO");
+      expect(container.textContent).not.toContain("2031-12-24");
+    });
+  });
+
+  describe("read gate", () => {
+    it("refuses the customer copy without service-orders.read, before any customer or token read", async () => {
+      consented();
+      can.mockImplementation((_user, action) => action !== "service-orders.read");
+      render(await renderPage("cliente"));
+
+      expect(screen.getByText(/permiso/i)).toBeInTheDocument();
+      expect(getClienteById).not.toHaveBeenCalled();
+      expect(currentConsent).not.toHaveBeenCalled();
+      expect(renderQrSvg).not.toHaveBeenCalled();
+    });
   });
 });

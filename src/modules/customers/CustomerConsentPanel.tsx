@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/shared/ui/ToastProvider";
 import { CONSENT_CLAUSE_BANNER, CONSENT_CLAUSE_PARAGRAPHS } from "./consent-clause";
+import { PortalCodeRotate } from "./PortalCodeRotate";
 
 export type ConsentView = {
   granted: boolean;
@@ -34,11 +35,14 @@ const FAILURE = "No se pudo registrar el consentimiento.";
 export function CustomerConsentPanel({
   clienteId,
   canRecord,
+  canRotate = false,
   deactivated = false,
   consent,
 }: {
   clienteId: string;
   canRecord: boolean;
+  /** `customers.portalRotate`, resolved on the server: administrador only. */
+  canRotate?: boolean;
   deactivated?: boolean;
   consent: ConsentView | null;
 }) {
@@ -133,6 +137,13 @@ export function CustomerConsentPanel({
             >
               Guardar consentimiento
             </Button>
+          </div>
+        )}
+
+        {/* Rotation only makes sense while a token exists: current consent, active customer. */}
+        {canRotate && !deactivated && consent?.granted && (
+          <div>
+            <PortalCodeRotate clienteId={clienteId} />
           </div>
         )}
 

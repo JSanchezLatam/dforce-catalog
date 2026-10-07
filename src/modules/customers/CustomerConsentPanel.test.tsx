@@ -219,3 +219,34 @@ describe("CustomerConsentPanel", () => {
     expect(saveButton()).toHaveClass("min-h-11", "min-w-11");
   });
 });
+
+describe("CustomerConsentPanel — Generar nuevo código (customer-portal WU2)", () => {
+  const rotate = () => screen.queryByRole("button", { name: "Generar nuevo código" });
+
+  it("is offered to a user who may rotate, for a customer with current consent", () => {
+    render(<CustomerConsentPanel clienteId="c1" canRecord canRotate consent={granted} />);
+
+    expect(rotate()).toBeInTheDocument();
+  });
+
+  it("is not offered without the rotate grant, even with current consent", () => {
+    render(<CustomerConsentPanel clienteId="c1" canRecord canRotate={false} consent={granted} />);
+
+    expect(rotate()).not.toBeInTheDocument();
+  });
+
+  it("is not offered when the latest consent is a revocation, or when there is none", () => {
+    const { unmount } = render(<CustomerConsentPanel clienteId="c1" canRecord canRotate consent={revoked} />);
+    expect(rotate()).not.toBeInTheDocument();
+    unmount();
+
+    render(<CustomerConsentPanel clienteId="c1" canRecord canRotate consent={null} />);
+    expect(rotate()).not.toBeInTheDocument();
+  });
+
+  it("is not offered for a deactivated customer", () => {
+    render(<CustomerConsentPanel clienteId="c1" canRecord={false} canRotate deactivated consent={granted} />);
+
+    expect(rotate()).not.toBeInTheDocument();
+  });
+});

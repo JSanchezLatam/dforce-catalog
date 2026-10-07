@@ -77,6 +77,22 @@ export const env = {
    * sensitive, since `NEXT_PUBLIC_*` ships in every client bundle already.
    */
   NEXT_PUBLIC_SENTRY_DSN: optional("NEXT_PUBLIC_SENTRY_DSN"),
+  /**
+   * Customer portal origin (customer-portal WU2), e.g. `http://192.168.0.3:3001`
+   * locally. The "Copia del cliente" QR encodes `<PORTAL_BASE_URL>/c#<token>`, so
+   * it is baked into every printed QR: fix the production domain BEFORE any QR
+   * is printed. Unset = no QR is ever printed. Read server-side only; NOT
+   * `NEXT_PUBLIC_*`, and not sensitive (it is printed on paper).
+   */
+  PORTAL_BASE_URL: optional("PORTAL_BASE_URL"),
+  /**
+   * Portal ingest endpoint (customer-portal WU3), e.g.
+   * `http://localhost:3001/api/ingest`, and the HMAC secret shared with
+   * portal/ (`PORTAL_INGEST_SECRET` in portal/.env.local). Server-side only.
+   * Unset = the workshop never pushes to the portal.
+   */
+  PORTAL_INGEST_URL: optional("PORTAL_INGEST_URL"),
+  PORTAL_INGEST_SECRET: optional("PORTAL_INGEST_SECRET"),
 } as const;
 
 /** Keys that must never be included in logs, error messages, or responses. */
@@ -88,4 +104,5 @@ export const SENSITIVE_ENV_KEYS = [
   "RESEND_API_KEY",
   "KAPSO_API_KEY",
   "SENTRY_DSN",
+  "PORTAL_INGEST_SECRET",
 ] as const;

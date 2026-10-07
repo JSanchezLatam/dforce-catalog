@@ -360,3 +360,16 @@ describe("GET /api/customers — status (R20)", () => {
     expect(listClientes.mock.calls[1][0].status).toBe("all");
   });
 });
+
+describe("customer portal token never leaves in a response (WU2)", () => {
+  it("POST /api/customers returns the new customer without portalToken", async () => {
+    const response = await handleCreateCliente(requestWith(validInput), {
+      findByPhone: async () => null,
+      insert: async () => ({ id: "c1", name: "Juan Pérez", portalToken: "SECRET-TOKEN" }) as unknown as Cliente,
+    });
+
+    const text = await response.text();
+    expect(text).not.toContain("SECRET-TOKEN");
+    expect(text).not.toContain("portalToken");
+  });
+});

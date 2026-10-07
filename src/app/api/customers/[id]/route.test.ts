@@ -303,7 +303,7 @@ describe("PATCH /api/customers/[id] — activation (R20)", () => {
         body: JSON.stringify({ active: false }),
       }),
       "c1",
-      { getById: async () => current, deactivateCliente: vi.fn() },
+      { getById: async () => current, deactivateCliente: vi.fn().mockResolvedValue(current.cliente) },
     );
     // `tecnico` HOLDS customers.write (policy.ts), so this must succeed - the
     // assertion pins design D2's "no new grant", not a denial.
@@ -429,5 +429,26 @@ describe("internal renewal fields are administrador-only on PATCH", () => {
     const response = await patch({ placaRenovacionMes: null, seguroVence: "2026-11-15" }, "administrador");
     expect(response.status).toBe(200);
     expect(transaction).toHaveBeenCalled();
+  });
+});
+
+describe("customer portal token never leaves in a response (WU2)", () => {
+  const withToken = { ...current.cliente, portalToken: "SECRET-TOKEN" } as unknown as Cliente;
+
+  it.each([
+    ["an edit", { name: "Nuevo" }, { update: async () => withToken }],
+    ["a deactivation", { active: false }, { deactivateCliente: async () => withToken }],
+    ["a reactivation", { active: true }, { reactivateCliente: async () => withToken }],
+  ])("PATCH answering %s carries no portalToken", async (_label, body, deps) => {
+    const response = await handleUpdateCliente(requestWith(body, "administrador"), "c1", {
+      getById: async () => current,
+      findByPhone: async () => null,
+      ...deps,
+    });
+
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    expect(text).not.toContain("SECRET-TOKEN");
+    expect(text).not.toContain("portalToken");
   });
 });

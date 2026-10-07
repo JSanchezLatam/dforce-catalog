@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { CONSENT_CLAUSE_BANNER, CONSENT_CLAUSE_PARAGRAPHS } from "./consent-clause";
-import { CONSENT_CLAUSE_VERSION, decideConsent } from "./consent";
+import { CONSENT_CLAUSE_VERSION, decideConsent, decideRotation } from "./consent";
 
 const active = { deactivatedAt: null };
 
@@ -46,5 +46,24 @@ describe("the provisional clause", () => {
 
   it("carries a version id that rows can pin", () => {
     expect(CONSENT_CLAUSE_VERSION).toMatch(/^\S+$/);
+  });
+});
+
+describe("decideRotation", () => {
+  it("answers not_found before anything else when there is no customer", () => {
+    expect(decideRotation(undefined, true)).toBe("not_found");
+  });
+
+  it("refuses a deactivated customer even with current consent", () => {
+    expect(decideRotation({ deactivatedAt: new Date() }, true)).toBe("deactivated");
+  });
+
+  it("refuses without current consent: no row, or a latest row that is a revoke", () => {
+    expect(decideRotation(active, undefined)).toBe("no_consent");
+    expect(decideRotation(active, false)).toBe("no_consent");
+  });
+
+  it("rotates only for an active customer whose latest consent is granted", () => {
+    expect(decideRotation(active, true)).toBe("rotate");
   });
 });

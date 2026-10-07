@@ -218,6 +218,20 @@
       "when": 1791367835828,
       "tag": "0030_portal_consent",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1791369123499,
+      "tag": "0031_portal_token",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1791372104639,
+      "tag": "0032_portal_sync_version_seq",
+      "breakpoints": true
     }
   ]
 }

@@ -38,6 +38,8 @@ export const ROUTE_GUARDS: Record<
   "/api/customers/[id]": { PATCH: ["customers.write", "customers.deleteVehicle", "vencimientos.read"] },
   // Ley 81 consent for the customer portal (customer-portal WU1).
   "/api/customers/[id]/consent": { POST: "customers.consent" },
+  // customer-portal WU2: administrador only; replaces the token and kills every printed QR.
+  "/api/customers/[id]/portal-token/rotate": { POST: "customers.portalRotate" },
   // C4 — the vehicle picker's data source (design.md D2's gap). POST is the
   // single-vehicle insert (service-order-intake-and-print D3): a reversible
   // write, so `customers.write`, the same Action `PATCH /api/customers/[id]`
@@ -213,12 +215,7 @@ describe("ROUTE_GUARDS completeness", () => {
     // `service-orders.readAll` is exempt for good, like `catalogs.listAll`: it
     // is read by `orderScope` (technicians-and-work-lines WU4a), never by a
     // route handler.
-    //
-    // `customers.portalRotate` is exempt ONLY until customer-portal WU2 adds
-    // the rotate route (tasks 2.3). It is declared in `policy.ts` first so the
-    // matrix lands with the consent action; delete this exemption in WU2 so
-    // the action cannot go unreachable again.
-    const exempt: readonly Action[] = ["catalogs.listAll", "service-orders.readAll", "customers.portalRotate"];
+    const exempt: readonly Action[] = ["catalogs.listAll", "service-orders.readAll"];
 
     for (const action of ACTIONS) {
       if ((exempt as readonly string[]).includes(action)) continue;
