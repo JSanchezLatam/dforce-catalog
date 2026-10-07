@@ -77,7 +77,7 @@ describe("metrics queries (E2E)", () => {
     expect(inMonth(closed, "2031-03")).toEqual([{ tecnicoId: rosterA, mes: "2031-03", n: 1 }]);
   });
 
-  it("the same boundary buckets received (created_at) and closed totals", async () => {
+  it("the same boundary buckets received (created_at)", async () => {
     await newOrder({ status: "open", createdAt: "2031-04-01T04:59:00Z" });
     await newOrder({ status: "open", createdAt: "2031-04-01T05:00:00Z" });
 
