@@ -21,3 +21,13 @@ export function monthKeys(now: Date, count: number): string[] {
 export function parseMes(raw: unknown, now: Date): string {
   return typeof raw === "string" && monthKeys(now, 12).includes(raw) ? raw : currentMonthKey(now);
 }
+
+// A fixed map, not `Intl`: the label is built from the KEY, so no `Date` (and no
+// zone) is involved and a month can never come out one off.
+const MONTH_NAMES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+/** `2026-10` -> `Octubre 2026`. */
+export function monthLabel(key: string): string {
+  const [year, month] = key.split("-").map(Number);
+  return `${MONTH_NAMES[month - 1]} ${year}`;
+}
