@@ -2,13 +2,13 @@
 
 ## Intent
 
-Orders have no notion of WHO works them: `createdBy` is the only person column, every `tecnico` user sees and edits every order, and nothing records time spent. Round 2 step 3 (owner grill 2026-10-03/06): a technician roster, a `jefe_taller` role, orders assigned to 1+ technicians, per-technician work lines and "Mi parte lista", so the workshop knows who did what and how long it took. It also lays the data `metrics-dashboard` needs.
+Orders have no notion of WHO works them: `createdBy` is the only person column, every `tecnico` user sees and edits every order, and nothing records time spent. Round 2 step 3 (owner grill 2026-10-03/06): a technician roster, a `jefe_taller` role, orders assigned to 0+ technicians (assigned later or not), per-technician work lines and "Mi parte lista", so the workshop knows who did what and how long it took. It also lays the data `metrics-dashboard` needs.
 
 ## Scope
 
 ### In Scope
 - `tecnico` table (name, active, OPTIONAL unique link to `users`); backfill one row per existing `tecnico`-role user (1 today).
-- `jefe_taller` role: admin grants minus `users.manage`, `workshop.edit`, `template.edit`, `service-orders.correct`.
+- `jefe_taller` role: admin grants minus `users.manage`, `workshop.edit`, `template.edit`, `service-orders.correct`, `service-orders.deletePhoto`.
 - `orden_tecnico` assignment (order, tecnico, `parte_lista_at`); never deleted (FK `restrict`, no delete path).
 - Admin/jefe create orders and assign; técnico cannot create, and sees/edits ONLY assigned orders (list, detail, print, photos, transitions, PATCH).
 - `orden_linea_trabajo`: description, tecnico, `duracion_minutos` integer > 0, `fecha`; index `(tecnico_id, fecha)`. No prices.
@@ -32,7 +32,7 @@ Orders have no notion of WHO works them: `createdBy` is the only person column, 
 
 ## Approach
 
-Additive migration `0028` (after `plate-municipio` 0026 and `closed-order-lock` 0027). Enum values added in their own migration file (`ALTER TYPE … ADD VALUE` is unusable in the same transaction). Scoping lives in one service predicate `isAssigned(user, orderId)` used by queries and the lock's `canWrite`, not per route. Readiness is recomputed inside the same locked transaction as the mark.
+Additive migration `0028` (after `plate-municipio` 0026 and `closed-order-lock` 0027). Enum values in a separate migration file (`0028` holds only the two `ALTER TYPE … ADD VALUE` statements); applied in one transaction with `0029` (the workshop's `standalone.ps1` and `migrate()` both run all pending files in one transaction, so isolation requires not referencing the new enums elsewhere). Scoping lives in one service predicate `orderScope(user)` used by queries and the lock's `canWrite`, not per route. Readiness is recomputed inside the same locked transaction as the mark.
 
 Estimate ~2,500 changed lines, feature-branch chain (400/PR):
 
