@@ -46,4 +46,4 @@ Rule for every pair: RED test, confirm red BY NAME, GREEN, mutation-verify (reve
 ## Deployment and archive notes
 
 - [x] 3.1 Migration note in the PR body: the workshop PC must run `standalone.ps1` (migration 0026) or the due page and vehicle detail error on the missing column.
-- [ ] 3.2 At archive, merge the MODIFIED `vehicle-renewals` requirements (not a rename). Follow-ups out of scope: municipio picker, filtering, contact message.
+- [x] 3.2 At archive, merge the MODIFIED `vehicle-renewals` requirements (not a rename). Follow-ups out of scope: municipio picker, filtering, contact message.
