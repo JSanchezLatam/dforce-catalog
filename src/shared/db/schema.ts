@@ -384,6 +384,35 @@ export const cliente = pgTable(
 export type Cliente = typeof cliente.$inferSelect;
 
 /**
+ * `cliente_consentimiento` — Ley 81 consent to the customer portal
+ * (customer-portal WU1). APPEND-ONLY: granting and revoking each add a row and
+ * nothing here is ever updated or deleted, so "who, when, which clause text"
+ * survives a withdrawal. A customer's current consent is their LATEST row by
+ * `recorded_at` (no row = no consent) — never by `id`, which is a random uuid.
+ *
+ * `recorded_by` is `set null`, not `restrict`: removing a user must not be
+ * blocked by, or erase, the legal record they leave behind.
+ */
+export const clienteConsentimiento = pgTable(
+  "cliente_consentimiento",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    clienteId: text("cliente_id")
+      .notNull()
+      .references(() => cliente.id, { onDelete: "cascade" }),
+    granted: boolean("granted").notNull(),
+    clauseVersion: text("clause_version").notNull(),
+    recordedBy: text("recorded_by").references(() => users.id, { onDelete: "set null" }),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("cliente_consentimiento_cliente_idx").on(table.clienteId, table.recordedAt.desc())],
+);
+
+export type ClienteConsentimiento = typeof clienteConsentimiento.$inferSelect;
+
+/**
  * `vehiculo` — a `cliente`'s vehicle collection (vehicles-one-to-many, C3,
  * design.md D1/D3). Child table, not JSONB — C4's `orden_servicio.vehiculo_id`
  * needs a real FK target (D1). `cliente_id` cascades on delete: vehicles have
