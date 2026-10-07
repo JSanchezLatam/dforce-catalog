@@ -53,7 +53,7 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 - [x] 3.2 RED photo route tests (POST multipart `password`, DELETE JSON body `password`): técnico 403 (closed delete AND add); admin no/wrong password 409/403; throttled 429; correct 201/200; open-order behaviour unchanged; `route-guards.test.ts` lists `service-orders.correct` on photo POST and DELETE. GREEN `photos/route.ts`, `photos/[photoId]/route.ts`.
 - [x] 3.3 RED e2e rows in `order-corrections.e2e.test.ts`: admin adds to a `done` order with 2 photos (position 2, one `foto` row); admin deletes from `cancelled` (row removed, one `foto` row); 12 photos refuses the 13th with no audit row; throwing put leaves 0 new photo rows and 0 audit rows. GREEN: fix real-SQL defects.
 - [x] 3.4 Mutation-verify 3.1-3.3 by name (audit outside the tx, delete the object before commit, skip the cap under correction).
-- [ ] 3.5 curl at `http://192.168.0.3:3000` as both roles: técnico photo POST/DELETE on a closed order 403.
+- [x] 3.5 curl at `http://192.168.0.3:3000` as both roles: técnico photo POST/DELETE on a closed order 403.
 
 ## WU4: Correction interface (PR 4)
 
