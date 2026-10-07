@@ -719,6 +719,36 @@ describe("ServiceOrderForm", () => {
       expect(field).toHaveValue("x");
     });
 
+    /**
+     * customer-portal WU5b — a consenting customer reads these fields on the
+     * portal, so the person typing must know. Shown whether or not THIS
+     * customer consented: the form does not know, and the hint is a property
+     * of the field. `observaciones` stays internal and must never carry it.
+     */
+    describe("'Visible para el cliente' hint (customer-portal WU5b)", () => {
+      const HINT = "Visible para el cliente";
+
+      it("create dialog: only Descripción carries it, and there is no hallazgos or recomendaciones field", () => {
+        renderCreate();
+
+        expect(screen.getAllByText(HINT)).toHaveLength(1);
+        expect(screen.getByLabelText(/descripción/i)).toHaveAccessibleDescription(HINT);
+        expect(screen.getByLabelText(/observaciones/i)).not.toHaveAccessibleDescription(HINT);
+        expect(screen.queryByLabelText(/hallazgos/i)).not.toBeInTheDocument();
+        expect(screen.queryByLabelText(/recomendaciones/i)).not.toBeInTheDocument();
+      });
+
+      it("edit form: Descripción, Hallazgos and Recomendaciones carry it, Observaciones never does", () => {
+        renderEdit();
+
+        expect(screen.getAllByText(HINT)).toHaveLength(3);
+        for (const label of [/descripción/i, /hallazgos/i, /recomendaciones/i]) {
+          expect(screen.getByLabelText(label)).toHaveAccessibleDescription(HINT);
+        }
+        expect(screen.getByLabelText(/observaciones/i)).not.toHaveAccessibleDescription(HINT);
+      });
+    });
+
     it("labels the appointment field exactly 'Fecha y hora de inicio' and keeps it datetime-local", () => {
       renderCreate();
 

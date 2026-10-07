@@ -285,3 +285,27 @@ describe("POST /api/customers/[id]/vehicles (D1/D3/D10 — the single insert)", 
     expect(forwarded).toEqual({ plate: "NEW111" });
   });
 });
+
+describe("POST /api/customers/[id]/vehicles — portal sync trigger (WU5b)", () => {
+  it("enqueues the customer once, after the vehicle row exists", async () => {
+    const order: string[] = [];
+    const deps = {
+      ...activeCustomerDeps(vi.fn(async () => (order.push("create"), fakeVehiculo()))),
+      enqueuePortalSync: vi.fn(async () => void order.push("enqueue")),
+    };
+    const response = await handleCreateVehiculo(postRequest("c1", { plate: "NEW111" }), "c1", deps);
+    expect(response.status).toBe(201);
+    expect(deps.enqueuePortalSync).toHaveBeenCalledExactlyOnceWith("c1");
+    expect(order).toEqual(["create", "enqueue"]);
+  });
+
+  it("enqueues nothing when the insert fails or the request is refused", async () => {
+    const enqueuePortalSync = vi.fn(async () => {});
+    const failing = { ...activeCustomerDeps(vi.fn().mockRejectedValue(new Error("insert failed"))), enqueuePortalSync };
+    await expect(handleCreateVehiculo(postRequest("c1", { plate: "NEW111" }), "c1", failing)).rejects.toThrow("insert failed");
+
+    const refused = await handleCreateVehiculo(postRequest("c1", { plate: "" }), "c1", { ...activeCustomerDeps(), enqueuePortalSync });
+    expect(refused.status).toBe(400);
+    expect(enqueuePortalSync).not.toHaveBeenCalled();
+  });
+});
