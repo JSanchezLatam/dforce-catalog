@@ -73,6 +73,16 @@ describe("ServiceOrderFilters — status select routes through the one hook", ()
 
     expect(push).toHaveBeenCalledWith("/service-orders?status=done");
   });
+
+  it("offers 'Lista para revisión' and pushes its value", async () => {
+    const user = userEvent.setup();
+    render(<ServiceOrderFilters selected={{}} pageSize={10} />);
+
+    await user.click(screen.getAllByRole("combobox")[0]);
+    await user.click(await screen.findByRole("option", { name: "Lista para revisión" }));
+
+    expect(push).toHaveBeenCalledWith("/service-orders?status=ready_for_review");
+  });
 });
 
 /**
@@ -183,6 +193,7 @@ describe("ServiceOrderFilters — the status trigger shows the Spanish label", (
   it.each([
     ["open", "Abierta"],
     ["in_progress", "En progreso"],
+    ["ready_for_review", "Lista para revisión"],
     ["done", "Completada"],
     ["cancelled", "Cancelada"],
   ] as const)("shows %s as %s", (value, label) => {

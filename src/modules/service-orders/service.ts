@@ -376,6 +376,11 @@ export async function transitionOrder(
     const patch: Partial<OrdenServicio> = { status: to };
     if (to === "done") patch.completedAt = now();
     const [row] = await tx.update(ordenServicio).set(patch).where(eq(ordenServicio.id, id)).returning();
+    // Sending a ready order back for rework reopens every part: the old marks describe work that is being redone,
+    // and while they persisted nobody could mark again, so readiness could never recur.
+    if (order.status === "ready_for_review" && to === "in_progress") {
+      await tx.update(ordenTecnico).set({ parteListaAt: null }).where(eq(ordenTecnico.ordenId, id));
+    }
     return { from: order.status, updated: row };
   });
 

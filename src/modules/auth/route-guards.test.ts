@@ -62,11 +62,15 @@ export const ROUTE_GUARDS: Record<
     PATCH: ["service-orders.write", "service-orders.assign", "service-orders.correct"],
     DELETE: ["service-orders.write", "service-orders.assign", "service-orders.correct"],
   },
+  // "Mi parte lista": `write` is the whole gate (a técnico holds it). Which assignment is the caller's own,
+  // and that a closed order is refused for every role, are service rules; there is no `correct` here.
+  "/api/service-orders/[id]/parte-lista": { POST: "service-orders.write", DELETE: "service-orders.write" },
   // Reception photos (service-order-reception WU3b). POST is `write` (both roles
   // photograph an open order); GET is `read`; DELETE is admin-only. Both writes
   // also evaluate `service-orders.correct`: it decides whether a password sent
-  // with them is verified (closed-order-lock).
-  "/api/service-orders/[id]/photos": { POST: ["service-orders.write", "service-orders.correct"] },
+  // with them is verified (closed-order-lock). POST also evaluates `service-orders.assign`:
+  // only staff add photos to a `ready_for_review` order.
+  "/api/service-orders/[id]/photos": { POST: ["service-orders.write", "service-orders.correct", "service-orders.assign"] },
   "/api/service-orders/[id]/photos/[photoId]": {
     GET: "service-orders.read",
     DELETE: ["service-orders.deletePhoto", "service-orders.correct"],
