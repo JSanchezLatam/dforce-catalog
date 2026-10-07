@@ -94,6 +94,7 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 - [x] 7.3 RED e2e race `src/e2e/order-readiness.e2e.test.ts`: second connection holds `FOR UPDATE`; `markParteLista` does not resolve within 300ms, then resolves `ready_for_review`; two simultaneous last marks end `ready_for_review` once. GREEN.
 - [x] 7.4 RED admin/jefe `ready_for_review → in_progress` transition. GREEN. Also: a técnico is refused photo add/delete on a `ready_for_review` order (spec); WU1 left `canChangeOrderPhotos` status-only (`ready_for_review: true`), so add the role split here (route/page gate), RED first.
 - [x] 7.5 Mutation-verify 7.1-7.4 by name (remove the lock so the race test goes red).
+- [x] 7.6 Send-back (`ready_for_review → in_progress` by admin/jefe) clears every assignment's `parte_lista_at` in the same locked transaction, so technicians re-mark after the rework. RED unit in `service.test.ts`, e2e row in `order-readiness.e2e.test.ts`; mutation: drop the clear.
 
 ## WU7: Order UI (PR 7)
 
