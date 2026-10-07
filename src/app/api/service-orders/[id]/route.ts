@@ -108,14 +108,22 @@ export async function handleUpdateOrdenServicio(
       return NextResponse.json({ errors: { form: "No hay cambios para guardar" } }, { status: 400 });
     }
 
-    // The password is verified here, outside the transaction (bcrypt must not
-    // hold the row lock), and only after the body validated. A tecnico's is never
-    // verified. Whether the order is closed is decided by the service, under the
-    // lock: on an open order the grant is simply not used.
+    // Try the plain edit first: only a closed order needs the password, and the
+    // service decides that under the lock. On `OrderClosedError` an administrator's
+    // password is verified here, outside the transaction (bcrypt must not hold the
+    // row lock), and the edit retried with the grant. So a password sent with an
+    // open-order edit is never checked, and a tecnico's never is. A closed order
+    // never reopens, so the retry cannot find it writable without the grant.
     const password = typeof body.password === "string" ? body.password : undefined;
-    const correction =
-      password !== undefined && can(user, "service-orders.correct") ? await authorize(user.id, password) : undefined;
-
+    try {
+      const orden = await updateOrder(id, patch, { ...serviceDeps, role: user.role });
+      return NextResponse.json({ orden });
+    } catch (err) {
+      if (!(err instanceof OrderClosedError) || password === undefined || !can(user, "service-orders.correct")) {
+        throw err;
+      }
+    }
+    const correction = await authorize(user.id, password);
     const orden = await updateOrder(id, patch, { ...serviceDeps, role: user.role, correction });
     return NextResponse.json({ orden });
   } catch (err) {
@@ -131,10 +139,9 @@ export async function handleUpdateOrdenServicio(
         : NextResponse.json({ errors: { form: "Solo un administrador puede corregir una orden cerrada." } }, { status: 403 });
     }
     if (err instanceof OrderClosedError) {
-      // A password from someone who may not correct is refused (403); otherwise
-      // the closed order refuses the caller as before (409).
-      const refused = typeof body.password === "string" && !can(user, "service-orders.correct");
-      return refused
+      // Someone who may not correct is refused (403), password or not; an
+      // administrator without one is told the order is closed (409).
+      return !can(user, "service-orders.correct")
         ? NextResponse.json({ errors: { form: "Solo un administrador puede corregir una orden cerrada." } }, { status: 403 })
         : NextResponse.json({ errors: { form: "No se puede editar una orden completada o cancelada." } }, { status: 409 });
     }

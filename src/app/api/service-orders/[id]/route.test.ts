@@ -638,6 +638,27 @@ describe("PATCH /api/service-orders/[id] — closed-order correction", () => {
     expect(audit).toEqual([]);
   });
 
+  it("refuses a tecnico with no password on a closed order with 403, not the administrator's 409", async () => {
+    const { response, setSpy, audit, authorize } = correct({ hallazgos: "nuevo" }, "tecnico", "done");
+
+    const res = await response;
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ errors: { form: "Solo un administrador puede corregir una orden cerrada." } });
+    expect(authorize).not.toHaveBeenCalled();
+    expect(setSpy).not.toHaveBeenCalled();
+    expect(audit).toEqual([]);
+  });
+
+  it("never verifies a password sent with an open-order edit, so a wrong one neither refuses nor counts", async () => {
+    const authorize = vi.fn().mockRejectedValue(new CorrectionRefusedError("wrong_password"));
+    const { response, setSpy, audit } = correct({ hallazgos: "nuevo", password: "mal" }, "administrador", "open", authorize);
+
+    expect((await response).status).toBe(200);
+    expect(authorize).not.toHaveBeenCalled();
+    expect(setSpy).toHaveBeenCalledWith({ hallazgos: "nuevo" });
+    expect(audit).toEqual([]);
+  });
+
   it("does not spend a password check on a body that fails validation", async () => {
     const { response, authorize } = correct({ hallazgos: { evil: 1 }, password: "pw" }, "administrador", "done");
 
