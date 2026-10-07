@@ -20,8 +20,6 @@ const CRM_ITEMS: (NavLink | NavParent)[] = [
   { kind: "link", href: "/vencimientos", label: "Vencimientos", icon: "vencimientos", action: "vencimientos.read" },
   { kind: "link", href: "/inventory", label: "Inventario", icon: "inventory", action: "inventory.read" },
   // One entry per viewer: `metrics.read` is admin/jefe, `metrics.self` the técnico only.
-  // "Mis números" links to /mis-numeros, whose page lands in metrics-dashboard WU4; until
-  // then a técnico's link 404s, which is why the tracker branch is what merges to main.
   { kind: "link", href: "/metrics", label: "Métricas", icon: "metrics", action: "metrics.read" },
   { kind: "link", href: "/mis-numeros", label: "Mis números", icon: "my-metrics", action: "metrics.self" },
 ];
