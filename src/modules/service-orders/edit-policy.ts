@@ -13,9 +13,9 @@
  * machine, and a role concern does not belong inside `assertTransition`'s file.
  *
  * The two call sites — the detail page (whether to render the control) and
- * `PATCH /api/service-orders/[id]` (whether to accept the write) — import this
- * one function so they cannot drift. The UI is convenience; the route is the
- * trust boundary and re-reads the status from the record.
+ * `updateOrder` (whether to accept the write) — import this one function so
+ * they cannot drift. The UI is convenience; `updateOrder` is the trust
+ * boundary and reads the status from the row it has locked (`order-lock.ts`).
  */
 import type { Role } from "@/modules/auth/roles";
 
@@ -28,7 +28,7 @@ import type { OrderStatus } from "./transitions";
  * restatement of the request. `assertTransition` gives them no outgoing edges,
  * so a closed order cannot be reopened; letting its fields be rewritten anyway
  * would make closure reversible one field at a time while the badge still
- * reads "Completada". Correcting a wrongly-closed order is its own change.
+ * reads "Completada". Correcting a closed order goes through `order-lock.ts` with an administrator `CorrectionGrant` (closed-order-lock).
  *
  * Written as an exhaustive `Record<Role, Record<OrderStatus, boolean>>` rather
  * than a boolean expression so that adding a role or a status is a tsc error
@@ -64,4 +64,31 @@ const PHOTOS_CHANGEABLE: Record<OrderStatus, boolean> = {
 /** True while the order is still open for work; photos are frozen once it closes. */
 export function canChangeOrderPhotos(status: OrderStatus): boolean {
   return PHOTOS_CHANGEABLE[status] ?? false;
+}
+
+/** Closed orders are locked: only an authenticated administrator correction (closed-order-lock) may change them. Exhaustive, so a new status is a tsc error here. */
+const CLOSED: Record<OrderStatus, boolean> = {
+  open: false,
+  in_progress: false,
+  done: true,
+  cancelled: true,
+};
+
+export function isClosedStatus(status: OrderStatus): boolean {
+  return CLOSED[status] ?? false;
+}
+
+/**
+ * What the detail page offers for `(role, status)`. A closed order is never
+ * plainly editable: an administrador may CORRECT it (password required, audited
+ * server-side); anyone else is refused. The server stays the trust boundary —
+ * this only decides which control to render.
+ *
+ * The role literal mirrors `service-orders.correct` in `policy.ts`, which this
+ * file cannot import for its `can()` (it takes a user, and the page tests mock
+ * that module); `edit-policy.test.ts` pins the two together.
+ */
+export function orderEditMode(role: Role, status: OrderStatus): "edit" | "correction" | "refused" {
+  if (canEditOrderFields(role, status)) return "edit";
+  return isClosedStatus(status) && role === "administrador" ? "correction" : "refused";
 }

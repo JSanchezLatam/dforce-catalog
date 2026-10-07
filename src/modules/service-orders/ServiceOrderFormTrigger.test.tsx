@@ -250,3 +250,83 @@ describe("ServiceOrderFormTrigger — a save that only refreshes the page is a s
     }
   });
 });
+
+/**
+ * closed-order-lock WU4: the same toast rule for a correction. "Orden
+ * actualizada" over a correction would hide that an audited change happened.
+ */
+describe("ServiceOrderFormTrigger — correcting a closed order", () => {
+  const CLOSED: OrdenServicio = { ...EXISTING_ORDER, status: "done", completedAt: new Date("2026-09-02T10:00:00Z") };
+
+  async function correct() {
+    fireEvent.click(screen.getByRole("button", { name: "Corregir" }));
+    await flush();
+    fireEvent.change(screen.getByLabelText("Tu contraseña"), { target: { value: "secreta" } });
+    await save();
+  }
+
+  function renderCorrection() {
+    return render(
+      <ToastProvider>
+        <ServiceOrderFormTrigger order={CLOSED} canCreateCustomer={false} triggerLabel="Corregir" />
+      </ToastProvider>,
+    );
+  }
+
+  it("announces 'Orden corregida' and refreshes after the PATCH lands", async () => {
+    mockApi();
+    renderCorrection();
+    await correct();
+
+    expect(await screen.findByText("Orden corregida")).toBeInTheDocument();
+    expect(screen.queryByText("Orden actualizada")).not.toBeInTheDocument();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("still announces the correction when the refresh that follows it throws", async () => {
+    mockApi();
+    const boom = new Error("refresh blew up");
+    refresh.mockImplementationOnce(() => {
+      throw boom;
+    });
+    const escaped: unknown[] = [];
+    const capture = (reason: unknown) => escaped.push(reason);
+    process.on("unhandledRejection", capture);
+    try {
+      renderCorrection();
+      await correct();
+
+      expect(await screen.findByText("Orden corregida")).toBeInTheDocument();
+      await vi.waitFor(() => expect(escaped).toContain(boom));
+    } finally {
+      process.off("unhandledRejection", capture);
+    }
+  });
+
+  it("does not toast or refresh when the password is wrong", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 403,
+        json: async () => ({ error: "wrong_password", message: "Contraseña incorrecta" }),
+      }) as Response),
+    );
+    renderCorrection();
+    await correct();
+
+    expect(screen.queryByText("Orden corregida")).not.toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("asks for the password again on every save", async () => {
+    mockApi();
+    renderCorrection();
+    await correct();
+    fireEvent.click(screen.getByRole("button", { name: "Corregir" }));
+
+    expect(screen.getByLabelText("Tu contraseña")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled();
+  });
+});
