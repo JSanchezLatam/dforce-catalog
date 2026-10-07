@@ -16,8 +16,9 @@ vi.mock("@/modules/auth/policy", () => ({ can }));
 const SCOPE = vi.hoisted(() => ({ where: "scope-sentinel" }));
 const orderScope = vi.hoisted(() => vi.fn<(user: unknown) => typeof SCOPE>(() => SCOPE));
 vi.mock("@/modules/service-orders/scope", () => ({ orderScope }));
+const createTrigger = vi.hoisted(() => vi.fn(() => null));
 vi.mock("@/modules/service-orders/ServiceOrderFormTrigger", () => ({
-  ServiceOrderFormTrigger: () => null,
+  ServiceOrderFormTrigger: createTrigger,
 }));
 vi.mock("@/modules/service-orders/ServiceOrderFilters", () => ({
   ServiceOrderFilters: () => null,
@@ -782,5 +783,26 @@ describe("ServiceOrdersPage — order scope", () => {
     expect(orderScope).toHaveBeenCalledWith({ id: "u1", role: "tecnico" });
     expect(listOrdenesServicio.mock.calls[0][2]).toBe(SCOPE);
     expect(countOrdenesServicio.mock.calls[0][1]).toBe(SCOPE);
+  });
+});
+
+describe("ServiceOrdersPage — the create control (R20)", () => {
+  beforeEach(() => createTrigger.mockClear());
+
+  it("renders the create control for a session holding service-orders.create", async () => {
+    render(await renderPage({}));
+    expect(createTrigger).toHaveBeenCalled();
+  });
+
+  it("does not render it for a session without service-orders.create, which still sees the list", async () => {
+    can.mockImplementation((_user, action) => action !== "service-orders.create");
+    try {
+      render(await renderPage({}));
+    } finally {
+      can.mockImplementation(() => true);
+    }
+    expect(createTrigger).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { level: 1, name: "Órdenes de servicio" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Actualizar" })).toBeInTheDocument();
   });
 });

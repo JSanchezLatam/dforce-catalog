@@ -70,13 +70,14 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU4b: Create, assignments, lock scope (PR 4b)
 
-- [ ] 5.1 RED `service.test.ts`: `createOrder` accepts 0..n `tecnicoIds`; assignments written in the same tx; deactivated or unknown technician refused with nothing created; zero technicians yields an `open` order with no assignment. GREEN `service.ts`.
-- [ ] 5.2 RED route tests: POST `/api/service-orders` técnico 403 (`service-orders.create`), jefe 201; create control hidden for técnico. GREEN route, trigger, list page.
-- [ ] 5.3 RED `order-lock.test.ts`: `scope` option adds the condition; no row for an unassigned técnico throws not-found (404). GREEN `order-lock.ts`; PATCH and transition routes pass the scope.
+- [x] 5.1 RED `service.test.ts`: `createOrder` accepts 0..n `tecnicoIds`; assignments written in the same tx; deactivated or unknown technician refused with nothing created; zero technicians yields an `open` order with no assignment. GREEN `service.ts`.
+- [x] 5.2 RED route tests: POST `/api/service-orders` técnico 403 (`service-orders.create`), jefe 201; create control hidden for técnico. GREEN route, trigger, list page.
+- [x] 5.3 RED `order-lock.test.ts`: `scope` option adds the condition; no row for an unassigned técnico throws not-found (404). GREEN `order-lock.ts`; PATCH and transition routes pass the scope.
 - [ ] 5.4 RED `assignments.test.ts`: admin/jefe assign on `open`/`in_progress` leaves status; `ready_for_review` returns to `in_progress`, new `parte_lista_at` null; duplicate is a no-op; `done`/`cancelled` refused even with correction; técnico 403; deactivated refused; no delete path. GREEN `assignments.ts`, `/api/service-orders/[id]/assignments` POST (guard row `service-orders.assign`).
-- [ ] 5.5 RED `transitions` tests: técnico `open → in_progress` allowed; técnico to `done`/`cancelled` 403; admin/jefe close from `in_progress`/`ready_for_review`; target `ready_for_review` rejected. GREEN.
+- [x] 5.5 RED `transitions` tests: técnico `open → in_progress` allowed; técnico to `done`/`cancelled` 403; admin/jefe close from `in_progress`/`ready_for_review`; target `ready_for_review` rejected. GREEN.
 - [ ] 5.6 RED e2e rows: técnico PATCH/transition on unassigned order 404 and unchanged; assignment idempotence on real SQL; assign during review reopens. GREEN.
-- [ ] 5.7 Mutation-verify 5.1-5.6 by name. 5.8 curl at the LAN IP as técnico, jefe, administrador.
+- [ ] 5.7 Mutation-verify 5.1-5.6 by name.
+- [ ] 5.8 curl at the LAN IP as técnico, jefe, administrador.
 
 ## WU5: Work lines (PR 5)
 

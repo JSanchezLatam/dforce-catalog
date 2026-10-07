@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import { addOrderPhoto, isJpeg, MAX_PHOTO_BYTES, PhotoLimitError } from "@/modules/service-orders/photos";
+import { orderScope } from "@/modules/service-orders/scope";
 import { OrdenServicioNotFoundError } from "@/modules/service-orders/service";
 import { attemptWithCorrection, correctionErrorResponse, type Authorize } from "../../correction-http";
 
@@ -57,7 +58,7 @@ export async function handleAddPhoto(
       user,
       canCorrect,
       typeof password === "string" ? password : undefined,
-      (correction) => add({ ordenId, bytes, createdBy: user.id, ...(correction && { correction }) }),
+      (correction) => add({ ordenId, bytes, createdBy: user.id, scope: orderScope(user), ...(correction && { correction }) }),
       deps.authorize,
     );
     return NextResponse.json({ id, position }, { status: 201 });

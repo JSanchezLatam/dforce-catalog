@@ -81,7 +81,7 @@ describe("orden_servicio_foto (E2E)", () => {
     const ordenId = await newOrder();
 
     const results = await Promise.allSettled(
-      Array.from({ length: MAX_PHOTOS + 1 }, () => addOrderPhoto({ ordenId, bytes: JPEG, createdBy: userId }, deps())),
+      Array.from({ length: MAX_PHOTOS + 1 }, () => addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, bytes: JPEG, createdBy: userId }, deps())),
     );
 
     const refused = results.filter((r) => r.status === "rejected");
@@ -96,13 +96,13 @@ describe("orden_servicio_foto (E2E)", () => {
   it("assigns ascending positions, and a delete leaves a gap that the next add does not reuse", async () => {
     reset();
     const ordenId = await newOrder("in_progress");
-    const a = await addOrderPhoto({ ordenId, bytes: JPEG }, deps());
-    const b = await addOrderPhoto({ ordenId, bytes: JPEG }, deps());
-    const c = await addOrderPhoto({ ordenId, bytes: JPEG }, deps());
+    const a = await addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, bytes: JPEG }, deps());
+    const b = await addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, bytes: JPEG }, deps());
+    const c = await addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, bytes: JPEG }, deps());
     expect([a.position, b.position, c.position]).toEqual([0, 1, 2]);
 
-    await deleteOrderPhoto({ ordenId, photoId: b.id }, deps());
-    const d = await addOrderPhoto({ ordenId, bytes: JPEG }, deps());
+    await deleteOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, photoId: b.id }, deps());
+    const d = await addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, bytes: JPEG }, deps());
 
     expect((await rows(ordenId)).map((r) => r.id)).toEqual([a.id, c.id, d.id]);
     expect(d.position).toBe(3);
@@ -114,7 +114,7 @@ describe("orden_servicio_foto (E2E)", () => {
     const ordenId = await newOrder();
 
     await expect(
-      addOrderPhoto({ ordenId, bytes: JPEG }, deps({ putObject: async () => Promise.reject(new Error("r2 down")) })),
+      addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, bytes: JPEG }, deps({ putObject: async () => Promise.reject(new Error("r2 down")) })),
     ).rejects.toThrow("r2 down");
 
     expect(await rows(ordenId)).toHaveLength(0);
@@ -125,7 +125,7 @@ describe("orden_servicio_foto (E2E)", () => {
     reset();
     const ordenId = await newOrder(status);
 
-    await expect(addOrderPhoto({ ordenId, bytes: JPEG }, deps())).rejects.toBeInstanceOf(OrderClosedError);
+    await expect(addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, bytes: JPEG }, deps())).rejects.toBeInstanceOf(OrderClosedError);
 
     expect(await rows(ordenId)).toHaveLength(0);
     expect(r2.put).toEqual([]);
@@ -134,10 +134,10 @@ describe("orden_servicio_foto (E2E)", () => {
   it("delete on a done order is refused: the row and the object stay", async () => {
     reset();
     const ordenId = await newOrder("open");
-    const photo = await addOrderPhoto({ ordenId, bytes: JPEG }, deps());
+    const photo = await addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, bytes: JPEG }, deps());
     await db.update(ordenServicio).set({ status: "done" }).where(eq(ordenServicio.id, ordenId));
 
-    await expect(deleteOrderPhoto({ ordenId, photoId: photo.id }, deps())).rejects.toBeInstanceOf(OrderClosedError);
+    await expect(deleteOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, photoId: photo.id }, deps())).rejects.toBeInstanceOf(OrderClosedError);
 
     expect(await rows(ordenId)).toHaveLength(1);
     expect(r2.deleted).toEqual([]);
@@ -147,16 +147,16 @@ describe("orden_servicio_foto (E2E)", () => {
     reset();
     const ordenId = await newOrder();
     const other = await newOrder();
-    const photo = await addOrderPhoto({ ordenId, bytes: JPEG }, deps());
+    const photo = await addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, bytes: JPEG }, deps());
 
-    await expect(deleteOrderPhoto({ ordenId: other, photoId: photo.id }, deps())).rejects.toThrow("La foto no existe");
+    await expect(deleteOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: other, photoId: photo.id }, deps())).rejects.toThrow("La foto no existe");
 
     expect(await rows(ordenId)).toHaveLength(1);
   });
 
   it("two photos of one order cannot share a position (unique index)", async () => {
     const ordenId = await newOrder();
-    const photo = await addOrderPhoto({ ordenId, bytes: JPEG }, deps());
+    const photo = await addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, bytes: JPEG }, deps());
 
     await expect(
       db.insert(ordenServicioFoto).values({ id: "dup", ordenId, r2Key: "k", position: photo.position }),
@@ -166,8 +166,8 @@ describe("orden_servicio_foto (E2E)", () => {
   it("deleting the order cascades to its photos", async () => {
     reset();
     const ordenId = await newOrder();
-    await addOrderPhoto({ ordenId, bytes: JPEG }, deps());
-    await addOrderPhoto({ ordenId, bytes: JPEG }, deps());
+    await addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, bytes: JPEG }, deps());
+    await addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, bytes: JPEG }, deps());
     expect(await rows(ordenId)).toHaveLength(2);
 
     await db.delete(ordenServicio).where(eq(ordenServicio.id, ordenId));
@@ -178,7 +178,7 @@ describe("orden_servicio_foto (E2E)", () => {
   it("a retention run evicts the surplus catalog and deletes nothing under service-orders/", async () => {
     reset();
     const ordenId = await newOrder();
-    await addOrderPhoto({ ordenId, bytes: JPEG }, deps());
+    await addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, bytes: JPEG }, deps());
     const ids = ["old", "mid", "new"].map((n) => `e2e-photos-cat-${n}-${Date.now()}`);
     for (const [i, id] of ids.entries()) {
       await db.insert(catalogs).values({
@@ -210,7 +210,7 @@ describe("orden_servicio_foto (E2E)", () => {
   it("findOrderPhoto resolves by (photoId, ordenId): the same id under another order is not found", async () => {
     const ordenId = await newOrder();
     const otherId = await newOrder();
-    const { id, r2Key } = await addOrderPhoto({ ordenId, bytes: JPEG }, deps());
+    const { id, r2Key } = await addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, bytes: JPEG }, deps());
 
     expect(await findOrderPhoto({ ordenId, photoId: id }, SYSTEM_SCOPE)).toEqual({ r2Key });
     expect(await findOrderPhoto({ ordenId: otherId, photoId: id }, SYSTEM_SCOPE)).toBeNull();

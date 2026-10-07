@@ -123,10 +123,13 @@ export default async function ServiceOrdersPage({
         actions={
           <>
             <RefreshListButton />
-            <ServiceOrderFormTrigger
-              canCreateCustomer={can(user, "customers.write")}
-              triggerLabel="Nueva orden de servicio"
-            />
+            {/* Hidden, not disabled: a técnico cannot create (the route answers 403 too). */}
+            {can(user, "service-orders.create") && (
+              <ServiceOrderFormTrigger
+                canCreateCustomer={can(user, "customers.write")}
+                triggerLabel="Nueva orden de servicio"
+              />
+            )}
           </>
         }
       />

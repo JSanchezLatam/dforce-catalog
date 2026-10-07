@@ -47,7 +47,15 @@ describe("POST /api/service-orders/[id]/photos", () => {
 
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ id: "p1", position: 0 });
-    expect(addPhoto).toHaveBeenCalledWith({ ordenId: "o1", bytes: JPEG, createdBy: "user-1" });
+    expect(addPhoto).toHaveBeenCalledWith({ ordenId: "o1", bytes: JPEG, createdBy: "user-1", scope: expect.anything() });
+    // a técnico's scope carries the assignment condition; an administrador's carries none
+    expect(addPhoto.mock.calls[0][0].scope.where).toBeDefined();
+  });
+
+  it("hands the lock no condition for an administrador, who sees every order", async () => {
+    const addPhoto = vi.fn().mockResolvedValue(added);
+    await handleAddPhoto(req(form(JPEG), { role: "administrador" }), "o1", { addPhoto });
+    expect(addPhoto.mock.calls[0][0].scope.where).toBeUndefined();
   });
 
   it("400 for a PNG even when it declares image/jpeg: the bytes decide, not the label", async () => {
@@ -198,11 +206,12 @@ describe("POST /api/service-orders/[id]/photos", () => {
 
       expect(res.status).toBe(201);
       expect(authorize).toHaveBeenCalledWith("user-1", "pw");
-      expect(addPhoto).toHaveBeenNthCalledWith(1, { ordenId: "o1", bytes: JPEG, createdBy: "user-1" });
+      expect(addPhoto).toHaveBeenNthCalledWith(1, { ordenId: "o1", bytes: JPEG, createdBy: "user-1", scope: expect.anything() });
       expect(addPhoto).toHaveBeenNthCalledWith(2, {
         ordenId: "o1",
         bytes: JPEG,
         createdBy: "user-1",
+        scope: expect.anything(),
         correction: { correctorId: "user-1" },
       });
     });

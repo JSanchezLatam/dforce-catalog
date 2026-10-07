@@ -64,7 +64,7 @@ export type PhotoDeps = {
 };
 
 export async function addOrderPhoto(
-  input: { ordenId: string; bytes: Buffer; createdBy?: string | null; correction?: CorrectionGrant },
+  input: { ordenId: string; bytes: Buffer; scope: OrderScope; createdBy?: string | null; correction?: CorrectionGrant },
   deps: PhotoDeps = {},
 ): Promise<{ id: string; position: number; r2Key: string }> {
   const database = deps.db ?? db;
@@ -78,6 +78,7 @@ export async function addOrderPhoto(
   try {
     return await database.transaction(async (tx) => {
       const { correcting } = await lockOrderForMutation(tx, input.ordenId, {
+        scope: input.scope,
         canWrite: canChangeOrderPhotos,
         correction: input.correction,
       });
@@ -143,7 +144,7 @@ export async function findOrderPhoto(
 }
 
 export async function deleteOrderPhoto(
-  input: { ordenId: string; photoId: string; correction?: CorrectionGrant },
+  input: { ordenId: string; photoId: string; scope: OrderScope; correction?: CorrectionGrant },
   deps: PhotoDeps = {},
 ): Promise<void> {
   const database = deps.db ?? db;
@@ -151,6 +152,7 @@ export async function deleteOrderPhoto(
 
   const r2Key = await database.transaction(async (tx) => {
     const { correcting } = await lockOrderForMutation(tx, input.ordenId, {
+      scope: input.scope,
       canWrite: canChangeOrderPhotos,
       correction: input.correction,
     });

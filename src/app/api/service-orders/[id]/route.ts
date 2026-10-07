@@ -14,7 +14,8 @@ import {
   type UpdateOrdenServicioDeps,
   type UpdateOrdenServicioPatch,
 } from "@/modules/service-orders/service";
-import { OrderTransitionError, type OrderStatus } from "@/modules/service-orders/transitions";
+import { orderScope } from "@/modules/service-orders/scope";
+import { OrderTransitionError, TransitionForbiddenError, type OrderStatus } from "@/modules/service-orders/transitions";
 
 /** Nullable `text` columns this route accepts, all guarded the same way. */
 const NULLABLE_TEXT_FIELDS = ["description", "hallazgos", "recomendaciones", "observaciones"] as const;
@@ -22,8 +23,8 @@ const NULLABLE_TEXT_FIELDS = ["description", "hallazgos", "recomendaciones", "ob
 /** Generous for a technician's notes, finite for everyone else. */
 const MAX_TEXT_LENGTH = 5000;
 
-export type UpdateOrdenServicioRouteDeps = Omit<UpdateOrdenServicioDeps, "role" | "correction"> &
-  TransitionOrdenServicioDeps & {
+export type UpdateOrdenServicioRouteDeps = Omit<UpdateOrdenServicioDeps, "role" | "correction" | "scope"> &
+  Omit<TransitionOrdenServicioDeps, "scope" | "canAssign"> & {
     /** Injected so a test never runs bcrypt; defaults to the real re-authentication. */
     authorize?: (userId: string, password: string) => Promise<CorrectionGrant>;
   };
@@ -47,9 +48,15 @@ export async function handleUpdateOrdenServicio(
 
   const body = await request.json();
   const { authorize = authorizeCorrection, ...serviceDeps } = deps;
+  // Every lock below is scoped to the caller: an order a técnico is not assigned to is a 404.
+  const scope = orderScope(user);
   try {
     if (typeof body.status === "string") {
-      const orden = await transitionOrder(id, body.status as OrderStatus, serviceDeps);
+      const orden = await transitionOrder(id, body.status as OrderStatus, {
+        ...serviceDeps,
+        scope,
+        canAssign: can(user, "service-orders.assign"),
+      });
       return NextResponse.json({ orden });
     }
 
@@ -116,7 +123,7 @@ export async function handleUpdateOrdenServicio(
     // never reopens, so the retry cannot find it writable without the grant.
     const password = typeof body.password === "string" ? body.password : undefined;
     try {
-      const orden = await updateOrder(id, patch, { ...serviceDeps, role: user.role });
+      const orden = await updateOrder(id, patch, { ...serviceDeps, role: user.role, scope });
       return NextResponse.json({ orden });
     } catch (err) {
       if (!(err instanceof OrderClosedError) || password === undefined || !can(user, "service-orders.correct")) {
@@ -124,7 +131,7 @@ export async function handleUpdateOrdenServicio(
       }
     }
     const correction = await authorize(user.id, password);
-    const orden = await updateOrder(id, patch, { ...serviceDeps, role: user.role, correction });
+    const orden = await updateOrder(id, patch, { ...serviceDeps, role: user.role, scope, correction });
     return NextResponse.json({ orden });
   } catch (err) {
     if (err instanceof CorrectionRefusedError) {
@@ -147,6 +154,12 @@ export async function handleUpdateOrdenServicio(
     }
     if (err instanceof OrderEditForbiddenError) {
       return NextResponse.json({ errors: { form: "Solo un administrador puede editar una orden abierta." } }, { status: 403 });
+    }
+    if (err instanceof TransitionForbiddenError) {
+      return NextResponse.json(
+        { error: "forbidden", message: "Solo un administrador o el jefe de taller puede cerrar, cancelar o devolver una orden." },
+        { status: 403 },
+      );
     }
     if (err instanceof OrderTransitionError) {
       return NextResponse.json({ error: "invalid_transition", from: err.from, to: err.to }, { status: 400 }); // R21

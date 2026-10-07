@@ -42,6 +42,28 @@ export function assertTransition(from: OrderStatus, to: OrderStatus): void {
   }
 }
 
+/** R21 — thrown when the transition is legal but the caller may not make it. */
+export class TransitionForbiddenError extends Error {
+  constructor(
+    public readonly from: OrderStatus,
+    public readonly to: OrderStatus,
+  ) {
+    super(`This caller may not transition a service order from "${from}" to "${to}"`);
+  }
+}
+
+/**
+ * R21 — who may make a legal transition. Starting work (`open -> in_progress`)
+ * is open to everyone who reaches the order; every other edge (close, cancel,
+ * return from review) needs `service-orders.assign`, which the CALLER evaluates
+ * with `can()` and passes in. Run AFTER `assertTransition`: an illegal edge is a
+ * 400 whoever asks, and only a legal one can be forbidden.
+ */
+export function assertTransitionPermitted(canAssign: boolean, from: OrderStatus, to: OrderStatus): void {
+  if (canAssign || (from === "open" && to === "in_progress")) return;
+  throw new TransitionForbiddenError(from, to);
+}
+
 /**
  * Phase 6 — read-only lookup of the legal next states for `from`, so the
  * order-detail page's status-transition controls can render only the

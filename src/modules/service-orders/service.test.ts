@@ -1,10 +1,13 @@
+import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it, vi } from "vitest";
 
 import { ClienteDeactivatedError } from "@/modules/customers/service";
 
 import { ordenCategoriaEnum, ordenServicioCorreccion, type Vehiculo } from "@/shared/db/schema";
 import { OrderClosedError, OrderEditForbiddenError } from "./order-lock";
-import { OrderTransitionError } from "./transitions";
+import { orderScope, SYSTEM_SCOPE } from "./scope";
+import { InvalidTecnicoError } from "./assignments";
+import { OrderTransitionError, TransitionForbiddenError } from "./transitions";
 import {
   createOrder,
   InvalidCategoriaError,
@@ -271,6 +274,7 @@ const OPEN_ROW = {
 function lockedDb(order: Record<string, unknown> | null) {
   const log = {
     locks: [] as unknown[],
+    wheres: [] as unknown[],
     sets: [] as Record<string, unknown>[],
     audit: [] as Record<string, unknown>[],
     auditOutside: [] as unknown[],
@@ -279,12 +283,15 @@ function lockedDb(order: Record<string, unknown> | null) {
   const tx = {
     select: () => ({
       from: () => ({
-        where: () => ({
-          for: (mode: unknown) => {
-            log.locks.push(mode);
-            return Promise.resolve(order ? [order] : []);
-          },
-        }),
+        where: (condition: unknown) => {
+          log.wheres.push(condition);
+          return {
+            for: (mode: unknown) => {
+              log.locks.push(mode);
+              return Promise.resolve(order ? [order] : []);
+            },
+          };
+        },
       }),
     }),
     update: () => ({
@@ -320,7 +327,7 @@ const GRANT = { correctorId: "admin-1" };
 describe("updateOrder", () => {
   it("throws OrdenServicioNotFoundError for a missing order", async () => {
     const { database } = lockedDb(null);
-    await expect(updateOrder("missing", { description: "x" }, { db: database, role: "administrador" })).rejects.toBeInstanceOf(
+    await expect(updateOrder("missing", { description: "x" }, { db: database, scope: SYSTEM_SCOPE, role: "administrador" })).rejects.toBeInstanceOf(
       OrdenServicioNotFoundError,
     );
   });
@@ -328,7 +335,7 @@ describe("updateOrder", () => {
   it("takes the row lock (FOR UPDATE) before writing, in one transaction", async () => {
     const { database, log } = lockedDb(OPEN_ROW);
 
-    await updateOrder("o1", { description: "Cambio de aceite" }, { db: database, role: "administrador" });
+    await updateOrder("o1", { description: "Cambio de aceite" }, { db: database, scope: SYSTEM_SCOPE, role: "administrador" });
 
     expect(log.locks).toEqual(["update"]);
     expect(log.sets).toEqual([{ description: "Cambio de aceite" }]);
@@ -337,7 +344,7 @@ describe("updateOrder", () => {
   it("persists the patch fields", async () => {
     const { database } = lockedDb(OPEN_ROW);
 
-    const result = await updateOrder("o1", { description: "Cambio de aceite" }, { db: database, role: "administrador" });
+    const result = await updateOrder("o1", { description: "Cambio de aceite" }, { db: database, scope: SYSTEM_SCOPE, role: "administrador" });
 
     expect(result).toMatchObject({ id: "o1", description: "Cambio de aceite" });
   });
@@ -357,7 +364,7 @@ describe("updateOrder", () => {
         recomendaciones: "Cambiar empaque del cárter",
         observaciones: "Cliente notificado por WhatsApp",
       },
-      { db: database, role: "administrador" },
+      { db: database, scope: SYSTEM_SCOPE, role: "administrador" },
     );
 
     expect(result).toMatchObject({
@@ -372,7 +379,7 @@ describe("updateOrder", () => {
   it("leaves description untouched when only categoria is patched (task 2.2 — other fields untouched)", async () => {
     const { database } = lockedDb({ ...OPEN_ROW, description: "Original" });
 
-    const result = await updateOrder("o1", { categoria: "instalacion" }, { db: database, role: "administrador" });
+    const result = await updateOrder("o1", { categoria: "instalacion" }, { db: database, scope: SYSTEM_SCOPE, role: "administrador" });
 
     expect(result).toMatchObject({ id: "o1", description: "Original", categoria: "instalacion" });
   });
@@ -382,7 +389,7 @@ describe("updateOrder", () => {
     const { database, log } = lockedDb({ ...OPEN_ROW, status: "done" });
 
     await expect(
-      updateOrder("o1", { hallazgos: "x" }, { db: database, role: "administrador" }),
+      updateOrder("o1", { hallazgos: "x" }, { db: database, scope: SYSTEM_SCOPE, role: "administrador" }),
     ).rejects.toBeInstanceOf(OrderClosedError);
     expect(log.sets).toEqual([]);
     expect(log.audit).toEqual([]);
@@ -391,7 +398,7 @@ describe("updateOrder", () => {
   it("refuses a tecnico on an open order with OrderEditForbiddenError, writing nothing", async () => {
     const { database, log } = lockedDb(OPEN_ROW);
 
-    await expect(updateOrder("o1", { hallazgos: "x" }, { db: database, role: "tecnico" })).rejects.toBeInstanceOf(
+    await expect(updateOrder("o1", { hallazgos: "x" }, { db: database, scope: SYSTEM_SCOPE, role: "tecnico" })).rejects.toBeInstanceOf(
       OrderEditForbiddenError,
     );
     expect(log.sets).toEqual([]);
@@ -400,7 +407,7 @@ describe("updateOrder", () => {
   it("writes the fields and the audit rows in ONE transaction on a closed order with a grant", async () => {
     const { database, log } = lockedDb({ ...OPEN_ROW, status: "done" });
 
-    await updateOrder("o1", { hallazgos: "nuevo", observaciones: null }, { db: database, role: "administrador", correction: GRANT });
+    await updateOrder("o1", { hallazgos: "nuevo", observaciones: null }, { db: database, scope: SYSTEM_SCOPE, role: "administrador", correction: GRANT });
 
     expect(log.sets).toEqual([{ hallazgos: "nuevo", observaciones: null }]);
     // `observaciones` was null before and is null after: no row for it.
@@ -413,7 +420,7 @@ describe("updateOrder", () => {
   it("writes no audit row for an edit of an OPEN order, even when a grant is present", async () => {
     const { database, log } = lockedDb(OPEN_ROW);
 
-    await updateOrder("o1", { hallazgos: "nuevo" }, { db: database, role: "administrador", correction: GRANT });
+    await updateOrder("o1", { hallazgos: "nuevo" }, { db: database, scope: SYSTEM_SCOPE, role: "administrador", correction: GRANT });
 
     expect(log.sets).toEqual([{ hallazgos: "nuevo" }]);
     expect(log.audit).toEqual([]);
@@ -433,7 +440,7 @@ describe("transitionOrder (R21)", () => {
 
   it("throws OrdenServicioNotFoundError for a missing order", async () => {
     const { database } = lockedDb(null);
-    await expect(transitionOrder("missing", "in_progress", { db: database })).rejects.toBeInstanceOf(
+    await expect(transitionOrder("missing", "in_progress", { scope: SYSTEM_SCOPE, canAssign: true, db: database })).rejects.toBeInstanceOf(
       OrdenServicioNotFoundError,
     );
   });
@@ -441,7 +448,7 @@ describe("transitionOrder (R21)", () => {
   it("takes the row lock (FOR UPDATE) before writing, in one transaction", async () => {
     const { database, log } = lockedDb(rowAt("open"));
 
-    await transitionOrder("o1", "in_progress", { db: database });
+    await transitionOrder("o1", "in_progress", { scope: SYSTEM_SCOPE, canAssign: true, db: database });
 
     expect(log.locks).toEqual(["update"]);
     expect(log.sets).toEqual([{ status: "in_progress" }]);
@@ -450,7 +457,7 @@ describe("transitionOrder (R21)", () => {
   it("rejects an invalid transition (open -> done) without writing to the DB", async () => {
     const { database, log } = lockedDb(rowAt("open"));
 
-    await expect(transitionOrder("o1", "done", { db: database })).rejects.toBeInstanceOf(OrderTransitionError);
+    await expect(transitionOrder("o1", "done", { scope: SYSTEM_SCOPE, canAssign: true, db: database })).rejects.toBeInstanceOf(OrderTransitionError);
     expect(log.sets).toEqual([]);
   });
 
@@ -459,7 +466,7 @@ describe("transitionOrder (R21)", () => {
     async (status) => {
       const { database, log } = lockedDb({ ...OPEN_ROW, status });
 
-      await expect(transitionOrder("o1", "in_progress", { db: database })).rejects.toBeInstanceOf(OrderTransitionError);
+      await expect(transitionOrder("o1", "in_progress", { scope: SYSTEM_SCOPE, canAssign: true, db: database })).rejects.toBeInstanceOf(OrderTransitionError);
       expect(log.locks).toEqual(["update"]);
       expect(log.sets).toEqual([]);
     },
@@ -468,7 +475,7 @@ describe("transitionOrder (R21)", () => {
   it("open -> in_progress updates status without touching completedAt", async () => {
     const { database, log } = lockedDb(rowAt("open"));
 
-    const result = await transitionOrder("o1", "in_progress", { db: database });
+    const result = await transitionOrder("o1", "in_progress", { scope: SYSTEM_SCOPE, canAssign: true, db: database });
 
     expect(result.status).toBe("in_progress");
     expect(log.sets[0]).not.toHaveProperty("completedAt");
@@ -478,7 +485,7 @@ describe("transitionOrder (R21)", () => {
     const { database } = lockedDb(rowAt("in_progress"));
     const fixedNow = new Date("2026-07-26T12:00:00Z");
 
-    const result = await transitionOrder("o1", "done", {
+    const result = await transitionOrder("o1", "done", { scope: SYSTEM_SCOPE, canAssign: true,
       db: database,
       now: () => fixedNow,
       // No cliente found: the service_due wiring no-ops; this test only asserts completedAt.
@@ -494,7 +501,7 @@ describe("transitionOrder (R21)", () => {
     const onTransitioned = vi.fn();
     const cancelRemindersForOrder = vi.fn().mockResolvedValue(undefined);
 
-    await transitionOrder("o1", "cancelled", { db: database, onTransitioned, cancelRemindersForOrder });
+    await transitionOrder("o1", "cancelled", { scope: SYSTEM_SCOPE, canAssign: true, db: database, onTransitioned, cancelRemindersForOrder });
 
     expect(onTransitioned).toHaveBeenCalledWith(expect.objectContaining({ status: "cancelled" }), "in_progress", "cancelled");
   });
@@ -506,7 +513,7 @@ describe("transitionOrder (R21)", () => {
       committedWhenCancelled = log.committed;
     });
 
-    await transitionOrder("o1", "cancelled", { db: database, cancelRemindersForOrder });
+    await transitionOrder("o1", "cancelled", { scope: SYSTEM_SCOPE, canAssign: true, db: database, cancelRemindersForOrder });
 
     expect(committedWhenCancelled).toBe(true);
   });
@@ -571,7 +578,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
     const { database } = lockedDb({ ...OPEN_ROW, clienteId: "c1", status: "in_progress", categoria: "mant_preventivo" });
     const scheduleReminder = vi.fn().mockResolvedValue("job-2");
 
-    await transitionOrder("o1", "done", {
+    await transitionOrder("o1", "done", { scope: SYSTEM_SCOPE, canAssign: true,
       db: database,
       now: () => new Date("2026-07-26T12:00:00.000Z"),
       getClienteById: async () => ({ cliente: clienteRow, orders: [], vehicles: [] }),
@@ -594,7 +601,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
     const { database } = lockedDb({ ...OPEN_ROW, clienteId: "c1", status: "in_progress", categoria: "instalacion" });
     const scheduleReminder = vi.fn().mockResolvedValue("job-2");
 
-    await transitionOrder("o1", "done", {
+    await transitionOrder("o1", "done", { scope: SYSTEM_SCOPE, canAssign: true,
       db: database,
       now: () => new Date("2026-07-26T12:00:00.000Z"),
       getClienteById: async () => ({ cliente: clienteRow, orders: [], vehicles: [] }),
@@ -608,7 +615,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
     const { database } = lockedDb({ ...OPEN_ROW, clienteId: "c1", status: "open" });
     const cancelRemindersForOrder = vi.fn().mockResolvedValue(undefined);
 
-    await transitionOrder("o1", "cancelled", {
+    await transitionOrder("o1", "cancelled", { scope: SYSTEM_SCOPE, canAssign: true,
       db: database,
       cancelRemindersForOrder,
     });
@@ -626,7 +633,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
       { appointmentAt: new Date("2026-08-05T10:00:00.000Z") },
       {
         db: database,
-        role: "administrador",
+        scope: SYSTEM_SCOPE, role: "administrador",
         now: () => new Date("2026-07-26T12:00:00.000Z"),
         getClienteById: async () => ({ cliente: clienteRow, orders: [], vehicles: [] }),
         cancelRemindersForOrder,
@@ -646,7 +653,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
     await updateOrder(
       "o1",
       { description: "solo cambio de nota" },
-      { db: database, role: "administrador", cancelRemindersForOrder, scheduleReminder },
+      { db: database, scope: SYSTEM_SCOPE, role: "administrador", cancelRemindersForOrder, scheduleReminder },
     );
 
     expect(cancelRemindersForOrder).not.toHaveBeenCalled();
@@ -688,7 +695,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
   const CATEGORIA_NOW = new Date("2026-07-26T12:00:00.000Z");
   const asCorrection = (f: ReturnType<typeof makeCategoriaFixture>) => ({
     db: f.database,
-    role: "administrador" as const,
+    scope: SYSTEM_SCOPE, role: "administrador" as const,
     correction: GRANT,
     now: () => CATEGORIA_NOW,
     getClienteById: f.getClienteById,
@@ -821,5 +828,166 @@ describe("createOrder — a deactivated cliente (R20)", () => {
       db: db as never,
     });
     expect(orden).toBeTruthy();
+  });
+});
+
+describe("createOrder — assigned technicians (R20)", () => {
+  type Row = { id: string; deactivatedAt: Date | null };
+  const ACTOR = "admin-1";
+
+  /** `makeFakeTx` plus the roster lookup: `select().from().where()` resolves to `roster`. */
+  function setup(roster: Row[]) {
+    const fake = makeFakeTx();
+    const selects: unknown[] = [];
+    const tx = {
+      ...fake.tx,
+      select: () => ({
+        from: () => ({
+          where: (condition: unknown) => {
+            selects.push(condition);
+            return Promise.resolve(roster);
+          },
+        }),
+      }),
+    };
+    const database = { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(tx) };
+    const deps = {
+      getClienteById: async () => ({ cliente: { id: "c1" }, orders: [], vehicles: [fakeVehiculo()] }) as never,
+      db: database as unknown as typeof import("@/shared/db/client").db,
+    };
+    return { ...fake, selects, deps };
+  }
+  const base = { clienteId: "c1", vehiculoId: "v1", categoria: "revisado" as const };
+
+  it("writes one assignment per technician in the same transaction, after the order, stamped with the creator", async () => {
+    const { deps, insertedOrders, insertedItems } = setup([
+      { id: "t1", deactivatedAt: null },
+      { id: "t2", deactivatedAt: null },
+    ]);
+
+    const orden = await createOrder({ ...base, createdBy: ACTOR, tecnicoIds: ["t1", "t2"] }, deps);
+
+    expect(orden.status).toBe("open");
+    expect(insertedOrders).toHaveLength(1);
+    expect(insertedItems).toEqual([
+      [
+        { ordenId: "o1", tecnicoId: "t1", assignedBy: ACTOR },
+        { ordenId: "o1", tecnicoId: "t2", assignedBy: ACTOR },
+      ],
+    ]);
+  });
+
+  it("assigns a technician named twice once", async () => {
+    const { deps, insertedItems } = setup([{ id: "t1", deactivatedAt: null }]);
+    await createOrder({ ...base, createdBy: ACTOR, tecnicoIds: ["t1", "t1"] }, deps);
+    expect(insertedItems).toEqual([[{ ordenId: "o1", tecnicoId: "t1", assignedBy: ACTOR }]]);
+  });
+
+  it("creates an open order with no assignment and never reads the roster when no technician is named", async () => {
+    const { deps, insertedOrders, insertedItems, selects } = setup([]);
+    const orden = await createOrder({ ...base, createdBy: ACTOR, tecnicoIds: [] }, deps);
+    const omitted = await createOrder({ ...base, createdBy: ACTOR }, deps);
+
+    expect([orden.status, omitted.status]).toEqual(["open", "open"]);
+    expect(insertedOrders).toHaveLength(2);
+    expect(insertedItems).toEqual([]);
+    expect(selects).toEqual([]);
+  });
+
+  it("refuses to assign without an actor to stamp: assigned_by is NOT NULL, so this is a bug in the caller, not a 500 from the FK", async () => {
+    const { deps, insertedOrders } = setup([{ id: "t1", deactivatedAt: null }]);
+    await expect(createOrder({ ...base, tecnicoIds: ["t1"] }, deps)).rejects.toThrow("needs createdBy");
+    expect(insertedOrders).toEqual([]);
+  });
+
+  it("refuses a deactivated technician with a Spanish message and creates nothing", async () => {
+    const { deps, insertedOrders, insertedItems } = setup([{ id: "t1", deactivatedAt: new Date("2026-09-01") }]);
+
+    const refused = createOrder({ ...base, createdBy: ACTOR, tecnicoIds: ["t1"] }, deps);
+
+    await expect(refused).rejects.toBeInstanceOf(InvalidTecnicoError);
+    await expect(refused).rejects.toMatchObject({ errors: { tecnicoIds: "Elegí técnicos activos" } });
+    expect(insertedOrders).toEqual([]);
+    expect(insertedItems).toEqual([]);
+  });
+
+  it("refuses an unknown technician the same way: one id the roster does not return fails the lot", async () => {
+    const { deps, insertedOrders } = setup([{ id: "t1", deactivatedAt: null }]);
+    await expect(createOrder({ ...base, createdBy: ACTOR, tecnicoIds: ["t1", "ghost"] }, deps)).rejects.toBeInstanceOf(
+      InvalidTecnicoError,
+    );
+    expect(insertedOrders).toEqual([]);
+  });
+});
+
+describe("transitionOrder — who may transition, and the lock's scope (R21)", () => {
+  const at = (status: "open" | "in_progress" | "ready_for_review") => ({ ...OPEN_ROW, status });
+
+  it("lets a caller without service-orders.assign start work: open -> in_progress", async () => {
+    const { database, log } = lockedDb(at("open"));
+    await transitionOrder("o1", "in_progress", { db: database, scope: SYSTEM_SCOPE, canAssign: false });
+    expect(log.sets).toEqual([{ status: "in_progress" }]);
+  });
+
+  it.each([
+    ["in_progress", "done"],
+    ["in_progress", "cancelled"],
+    ["ready_for_review", "in_progress"],
+  ] as const)("refuses %s -> %s for a caller without service-orders.assign, writing nothing", async (from, to) => {
+    const { database, log } = lockedDb(at(from));
+    await expect(
+      transitionOrder("o1", to, { db: database, scope: SYSTEM_SCOPE, canAssign: false }),
+    ).rejects.toBeInstanceOf(TransitionForbiddenError);
+    expect(log.sets).toEqual([]);
+  });
+
+  it.each([
+    ["in_progress", "done"],
+    ["ready_for_review", "done"],
+    ["ready_for_review", "cancelled"],
+    ["ready_for_review", "in_progress"],
+  ] as const)("lets service-orders.assign close or return %s -> %s", async (from, to) => {
+    const { database, log } = lockedDb(at(from));
+    await transitionOrder("o1", to, {
+      db: database,
+      scope: SYSTEM_SCOPE,
+      canAssign: true,
+      getClienteById: async () => null,
+      cancelRemindersForOrder: async () => {},
+    });
+    expect(log.sets[0]).toMatchObject({ status: to });
+  });
+
+  it("answers an illegal edge as the state machine's error even for a caller who could not make a legal one", async () => {
+    const { database } = lockedDb(at("open"));
+    await expect(
+      transitionOrder("o1", "done", { db: database, scope: SYSTEM_SCOPE, canAssign: false }),
+    ).rejects.toBeInstanceOf(OrderTransitionError);
+  });
+
+  it("locks through the caller's scope: a técnico's condition reaches the SELECT ... FOR UPDATE", async () => {
+    const { database, log } = lockedDb(at("open"));
+    await transitionOrder("o1", "in_progress", {
+      db: database,
+      scope: orderScope({ id: "tec-user", role: "tecnico" }),
+      canAssign: false,
+    });
+    const { sql, params } = new PgDialect().sqlToQuery(log.wheres[0] as never);
+    expect(sql).toContain('"orden_tecnico"."orden_id" = "orden_servicio"."id"');
+    expect(params).toContain("tec-user");
+  });
+});
+
+describe("updateOrder — the lock's scope", () => {
+  it("locks through the caller's scope: a técnico's condition reaches the SELECT ... FOR UPDATE", async () => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: "in_progress" });
+    await updateOrder(
+      "o1",
+      { hallazgos: "x" },
+      { db: database, role: "tecnico", scope: orderScope({ id: "tec-user", role: "tecnico" }) },
+    );
+    const { sql, params } = new PgDialect().sqlToQuery(log.wheres[0] as never);
+    expect(sql).toContain('"orden_tecnico"."orden_id" = "orden_servicio"."id"');
+    expect(params).toContain("tec-user");
   });
 });

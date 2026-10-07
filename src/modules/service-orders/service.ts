@@ -26,7 +26,7 @@
 import { eq } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
-import { ordenServicio, reminder, type Cliente, type OrdenServicio } from "@/shared/db/schema";
+import { ordenServicio, ordenTecnico, reminder, type Cliente, type OrdenServicio } from "@/shared/db/schema";
 import { getClienteById } from "@/modules/customers/queries";
 import { ClienteDeactivatedError } from "@/modules/customers/service";
 import { cancelRemindersForOrder, scheduleReminder } from "@/modules/reminders/job";
@@ -35,9 +35,10 @@ import { isServiceCategory, type ServiceCategory } from "./categories";
 import type { IntakeValues } from "./intake";
 import type { Role } from "@/modules/auth/roles";
 import { canEditOrderFields } from "./edit-policy";
-import { SYSTEM_SCOPE } from "./scope";
+import { assertActiveTecnicos } from "./assignments";
+import { SYSTEM_SCOPE, type OrderScope } from "./scope";
 import { lockOrderForMutation, recordCorrections, type CorrectionGrant } from "./order-lock";
-import { assertTransition, type OrderStatus } from "./transitions";
+import { assertTransition, assertTransitionPermitted, type OrderStatus } from "./transitions";
 
 /**
  * Shared by createOrder/transitionOrder/updateOrder (R23) — plans reminders
@@ -127,6 +128,8 @@ export type CreateOrdenServicioInput = {
   observaciones?: string | null;
   appointmentAt?: Date | null;
   createdBy?: string | null;
+  /** Zero or more active roster ids, assigned in the creating transaction. `createdBy` stamps them. */
+  tecnicoIds?: readonly string[];
 } & IntakeValues;
 
 export type CreateOrdenServicioDeps = ReminderWiringDeps;
@@ -185,7 +188,15 @@ export async function createOrder(
 
   const database = deps.db ?? db;
 
+  const tecnicoIds = [...new Set(input.tecnicoIds ?? [])];
+  if (tecnicoIds.length > 0 && !input.createdBy) {
+    throw new Error("createOrder: assigning technicians needs createdBy");
+  }
+
   const orden = await database.transaction(async (tx) => {
+    // Before the order insert, so a refused technician leaves nothing behind.
+    if (tecnicoIds.length > 0) await assertActiveTecnicos(tx, tecnicoIds);
+
     const [inserted] = await tx
       .insert(ordenServicio)
       .values({
@@ -201,6 +212,12 @@ export async function createOrder(
         createdBy: input.createdBy ?? null,
       })
       .returning();
+
+    if (tecnicoIds.length > 0) {
+      await tx
+        .insert(ordenTecnico)
+        .values(tecnicoIds.map((tecnicoId) => ({ ordenId: inserted.id, tecnicoId, assignedBy: input.createdBy! })));
+    }
 
     return inserted;
   });
@@ -224,6 +241,8 @@ export type UpdateOrdenServicioPatch = {
 export type UpdateOrdenServicioDeps = {
   /** The acting role: each caller's own write rule, evaluated against the LOCKED row's status. */
   role: Role;
+  /** The caller's `orderScope(user)`: an order outside it is "not found", never a 403. */
+  scope: OrderScope;
   /** Issued by `authorizeCorrection` after the password check; the only way to write a closed order. */
   correction?: CorrectionGrant;
 } & ReminderWiringDeps;
@@ -256,6 +275,7 @@ export async function updateOrder(
   const database = deps.db ?? db;
   const { before, updated } = await database.transaction(async (tx) => {
     const { order, correcting } = await lockOrderForMutation(tx, id, {
+      scope: deps.scope,
       canWrite: (status) => canEditOrderFields(deps.role, status),
       correction: deps.correction,
     });
@@ -325,6 +345,10 @@ export type TransitionOrdenServicioDeps = {
    * wired as first-class steps instead).
    */
   onTransitioned?: (order: OrdenServicio, from: OrderStatus, to: OrderStatus) => Promise<void> | void;
+  /** The caller's `orderScope(user)`: an order outside it is "not found", never a 403. */
+  scope: OrderScope;
+  /** `can(user, "service-orders.assign")`: without it only `open -> in_progress` is allowed. */
+  canAssign: boolean;
 } & ReminderWiringDeps;
 
 /**
@@ -336,7 +360,7 @@ export type TransitionOrdenServicioDeps = {
 export async function transitionOrder(
   id: string,
   to: OrderStatus,
-  deps: TransitionOrdenServicioDeps = {},
+  deps: TransitionOrdenServicioDeps,
 ): Promise<OrdenServicio> {
   const now = deps.now ?? (() => new Date());
   const database = deps.db ?? db;
@@ -346,8 +370,9 @@ export async function transitionOrder(
   // machine instead of both winning. `canWrite: () => true` because every status may
   // TRY a transition; `assertTransition` is the rule, and it has no edge out of a closed one.
   const { from, updated } = await database.transaction(async (tx) => {
-    const { order } = await lockOrderForMutation(tx, id, { canWrite: () => true });
+    const { order } = await lockOrderForMutation(tx, id, { scope: deps.scope, canWrite: () => true });
     assertTransition(order.status, to);
+    assertTransitionPermitted(deps.canAssign, order.status, to);
     const patch: Partial<OrdenServicio> = { status: to };
     if (to === "done") patch.completedAt = now();
     const [row] = await tx.update(ordenServicio).set(patch).where(eq(ordenServicio.id, id)).returning();

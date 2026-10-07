@@ -104,7 +104,7 @@ describe("DELETE /api/service-orders/[id]/photos/[photoId]", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ success: true });
-    expect(deletePhoto).toHaveBeenCalledWith(ids);
+    expect(deletePhoto).toHaveBeenCalledWith({ ...ids, scope: { where: undefined } });
   });
 
   it("409 order_closed on a closed order for an administrador with no password", async () => {
@@ -162,8 +162,12 @@ describe("DELETE /api/service-orders/[id]/photos/[photoId]", () => {
 
       expect(res.status).toBe(200);
       expect(authorize).toHaveBeenCalledWith("user-1", "pw");
-      expect(deletePhoto).toHaveBeenNthCalledWith(1, ids);
-      expect(deletePhoto).toHaveBeenNthCalledWith(2, { ...ids, correction: { correctorId: "user-1" } });
+      expect(deletePhoto).toHaveBeenNthCalledWith(1, { ...ids, scope: { where: undefined } });
+      expect(deletePhoto).toHaveBeenNthCalledWith(2, {
+        ...ids,
+        scope: { where: undefined },
+        correction: { correctorId: "user-1" },
+      });
     });
 
     it("never verifies a password sent for an OPEN order", async () => {

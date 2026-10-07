@@ -1,3 +1,4 @@
+import { PgDialect } from "drizzle-orm/pg-core";
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -673,5 +674,117 @@ describe("PATCH /api/service-orders/[id] — closed-order correction", () => {
 
     expect((await response).status).toBe(200);
     expect(setSpy).toHaveBeenCalledWith({ hallazgos: "nuevo" });
+  });
+});
+
+describe("PATCH /api/service-orders/[id] — who may transition (R21)", () => {
+  const transition = (to: OrderStatus, from: OrderStatus, role: Role) => {
+    const setSpy = vi.fn(() => ({ where: () => ({ returning: async () => [ordenWith(to)] }) }));
+    return {
+      setSpy,
+      run: () =>
+        handleUpdateOrdenServicio(requestWith({ status: to }, role), "o1", {
+          db: lockedDb(from, setSpy).db,
+          getClienteById: async () => null,
+          cancelRemindersForOrder: async () => {},
+        }),
+    };
+  };
+
+  it("lets a tecnico start work: open -> in_progress answers 200", async () => {
+    const { run } = transition("in_progress", "open", "tecnico");
+    expect((await run()).status).toBe(200);
+  });
+
+  it.each(["done", "cancelled"] as const)("refuses a tecnico closing an in_progress order as %s with 403 and no write", async (to) => {
+    const { run, setSpy } = transition(to, "in_progress", "tecnico");
+    const response = await run();
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: "forbidden",
+      message: "Solo un administrador o el jefe de taller puede cerrar, cancelar o devolver una orden.",
+    });
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
+  it("refuses a tecnico returning a ready_for_review order to in_progress with 403 and no write", async () => {
+    const { run, setSpy } = transition("in_progress", "ready_for_review", "tecnico");
+    expect((await run()).status).toBe(403);
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["in_progress", "done"],
+    ["ready_for_review", "done"],
+    ["ready_for_review", "cancelled"],
+    ["ready_for_review", "in_progress"],
+  ] as const)("lets a jefe_taller do %s -> %s", async (from, to) => {
+    const { run } = transition(to, from, "jefe_taller");
+    expect((await run()).status).toBe(200);
+  });
+
+  it("lets an administrador return a ready_for_review order to in_progress", async () => {
+    const { run } = transition("in_progress", "ready_for_review", "administrador");
+    expect((await run()).status).toBe(200);
+  });
+
+  it("scopes the lock to the caller: a tecnico's SELECT ... FOR UPDATE carries the assignment condition", async () => {
+    const wheres: unknown[] = [];
+    const tx = {
+      select: () => ({
+        from: () => ({
+          where: (condition: unknown) => {
+            wheres.push(condition);
+            return { for: async () => [] };
+          },
+        }),
+      }),
+    };
+    const response = await handleUpdateOrdenServicio(requestWith({ status: "in_progress" }, "tecnico"), "o1", {
+      db: { transaction: async (fn: (tx: unknown) => unknown) => fn(tx) } as never,
+    });
+
+    // an unassigned order is a 404, never a 403 that would confirm it exists
+    expect(response.status).toBe(404);
+    expect(new PgDialect().sqlToQuery(wheres[0] as never).sql).toContain('"orden_tecnico"."orden_id" = "orden_servicio"."id"');
+  });
+
+  it("scopes a field patch the same way", async () => {
+    const wheres: unknown[] = [];
+    const tx = {
+      select: () => ({
+        from: () => ({
+          where: (condition: unknown) => {
+            wheres.push(condition);
+            return { for: async () => [] };
+          },
+        }),
+      }),
+    };
+    const response = await handleUpdateOrdenServicio(requestWith({ hallazgos: "x" }, "tecnico"), "o1", {
+      db: { transaction: async (fn: (tx: unknown) => unknown) => fn(tx) } as never,
+    });
+
+    expect(response.status).toBe(404);
+    expect(new PgDialect().sqlToQuery(wheres[0] as never).sql).toContain('"orden_tecnico"');
+  });
+
+  it("gives an administrador no scope condition", async () => {
+    const wheres: unknown[] = [];
+    const tx = {
+      select: () => ({
+        from: () => ({
+          where: (condition: unknown) => {
+            wheres.push(condition);
+            return { for: async () => [] };
+          },
+        }),
+      }),
+    };
+    await handleUpdateOrdenServicio(requestWith({ status: "in_progress" }, "administrador"), "o1", {
+      db: { transaction: async (fn: (tx: unknown) => unknown) => fn(tx) } as never,
+    });
+    expect(new PgDialect().sqlToQuery(wheres[0] as never).sql).not.toContain("orden_tecnico");
   });
 });
