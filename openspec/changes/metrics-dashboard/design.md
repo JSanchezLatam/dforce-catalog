@@ -17,7 +17,7 @@ One read-only module `src/modules/metrics/` (SQL in `queries.ts`, pure shaping i
 | Técnico scope | `tecnicoId` from `findTecnicoByUserId(user.id)` passed to the same queries as an optional filter | Separate queries; id from URL | One SQL path to e2e; null link renders an empty state |
 | Charts | Line chart: received vs closed per month (2 series). Bar chart: hours per technician for the selected month; hours per month on Mis números. Animated counters: backlog by status | Proposal's three single-series bar charts | Verified Arc line chart is multi-series with a scrubbing crosshair, so the comparison sits in one chart. Exact numbers always live in the table |
 | RSC boundary | Wrappers in `src/modules/metrics/charts/*.tsx` own `formatValue` and `locale="es-PA"`; pages pass arrays of `{key,label,value(s)}` | Passing `formatValue` from the page | A function across the RSC boundary breaks the page (shipped before) |
-| Registry | Add `"registries": {"@uiarc": "https://uiarc.dev/r/{name}.json"}` to `components.json` (verified on uiarc.dev/docs/installation; `registries` is `{}` today), `npx shadcn@latest add @uiarc/line-chart @uiarc/bar-chart @uiarc/animated-counter`; output in `src/components/arc/`; deps `motion` + `lucide-react` (already present). Arc uses CSS modules + CSS variables and needs `import "@/components/arc/foundation.css"` at the app root | Hand-copy | The CLI pins `motion` in `package.json`; foundation.css must not override the shadcn tokens in `globals.css` (checked in WU3) |
+| Registry | Add `"registries": {"@uiarc": "https://uiarc.dev/r/{name}.json"}` to `components.json` (verified on uiarc.dev/docs/installation; `registries` is `{}` today), `npx shadcn@latest add @uiarc/line-chart @uiarc/bar-chart @uiarc/animated-counter`; output in `src/components/arc/`; deps `motion` + `lucide-react` (already present). Arc uses CSS modules + CSS variables and ships `foundation.css`, which is NOT imported (it redefines shadcn's `--background/--foreground/--border/--accent` app-wide and disables focus outlines); a scoped `arc-scope.module.css` maps the tokens Arc reads onto the shadcn ones | Hand-copy | The CLI pins `motion` in `package.json`; foundation.css must not override the shadcn tokens in `globals.css` (checked in WU3) |
 
 ## SQL (pattern)
 
@@ -89,5 +89,5 @@ No migration required.
 ## Open Questions
 
 - [x] uiarc registry URL template: resolved (see Registry row).
-- [ ] Whether `animated-counter` renders decimals (hours); fallback: counters for integers only (backlog is integers), hours as text. Confirm at WU3 install.
+- [x] Whether `animated-counter` renders decimals (hours): yes, it has a `decimals` prop (Intl.NumberFormat fraction digits). Not needed: counters are the integer backlog only and hours stay in the table and bar chart.
 - [x] Month table range: resolved, last 12 months via native select; trends stay 6.
