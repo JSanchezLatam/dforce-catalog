@@ -521,7 +521,7 @@ describe("ServiceOrderPrintPage — the sheet a técnico is handed", () => {
 
     expect(screen.getByRole("img", { name: /DForce Car Audio/ }).style.filter).toMatch(/^url\("?#logo-knockout"?\)$/);
     const filter = container.querySelector("filter#logo-knockout");
-    expect(filter?.querySelector("feColorMatrix")).toHaveAttribute("values", "1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  2 2 2 0 -0.15");
+    expect(filter?.querySelector("feColorMatrix")).toHaveAttribute("values", "1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  15 15 15 0 -0.6");
   });
 
   // Nullable columns: the Administrador may set any subset independently.
