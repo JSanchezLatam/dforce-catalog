@@ -20,7 +20,12 @@ vi.mock("@/modules/auth/policy", () => ({ can: vi.fn(() => true) }));
 const SCOPE = vi.hoisted(() => ({ where: "scope-sentinel" }));
 const orderScope = vi.hoisted(() => vi.fn<(user: unknown) => typeof SCOPE>(() => SCOPE));
 vi.mock("@/modules/service-orders/scope", () => ({ orderScope }));
-vi.mock("@/modules/service-orders/OrderStatusControls", () => ({ OrderStatusControls: () => null }));
+const statusControls = vi.hoisted(() => vi.fn<(props: { orderId: string; status: string; canAssign: boolean }) => null>(() => null));
+vi.mock("@/modules/service-orders/OrderStatusControls", () => ({ OrderStatusControls: statusControls }));
+const listOrderAssignees = vi.hoisted(() => vi.fn<(ordenId: string) => Promise<OrderAssignee[]>>(async () => []));
+vi.mock("@/modules/service-orders/order-team", () => ({ listOrderAssignees }));
+const listTecnicos = vi.hoisted(() => vi.fn(async () => [] as { id: string; nombre: string; userId: null; deactivatedAt: null; createdAt: Date }[]));
+vi.mock("@/modules/technicians/queries", () => ({ listTecnicos }));
 
 const getOrdenServicioById = vi.hoisted(() => vi.fn());
 const getClienteById = vi.hoisted(() => vi.fn());
@@ -34,6 +39,7 @@ vi.mock("@/modules/service-orders/photos", () => ({ listOrderPhotos }));
 
 import { can } from "@/modules/auth/policy";
 import type { Role } from "@/modules/auth/roles";
+import type { OrderAssignee } from "@/modules/service-orders/order-team";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import type { OrdenServicio, Reminder, Vehiculo } from "@/shared/db/schema";
 import { ToastProvider } from "@/shared/ui/ToastProvider";
@@ -303,6 +309,8 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
   it.each<[Role, OrderStatus]>([
     ["administrador", "open"],
     ["administrador", "in_progress"],
+    ["administrador", "ready_for_review"],
+    ["jefe_taller", "ready_for_review"],
     ["tecnico", "in_progress"],
   ])("offers the edit control to a %s on a %s order", async (role, status) => {
     render(await renderAs(role, status));
@@ -312,6 +320,7 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
 
   it.each<[Role, OrderStatus]>([
     ["tecnico", "open"],
+    ["tecnico", "ready_for_review"],
     ["administrador", "done"],
     ["tecnico", "done"],
     ["administrador", "cancelled"],
@@ -729,5 +738,80 @@ describe("ServiceOrderDetailPage — order scope", () => {
 
     getOrdenServicioById.mockResolvedValue(null);
     await expect(ServiceOrderDetailPage({ params: Promise.resolve({ id: ORDEN.id }) })).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+});
+
+describe("ServiceOrderDetailPage — technicians on the order", () => {
+  const tecnicoRow = (id: string, nombre: string) => ({ id, nombre, userId: null, deactivatedAt: null, createdAt: new Date("2026-01-01") });
+  const roleCan = (allowed: string[]) =>
+    vi.mocked(can).mockImplementation(((_user: unknown, action: string) => allowed.includes(action)) as typeof can);
+
+  beforeEach(() => {
+    requireSessionFromHeaders.mockResolvedValue({ id: "u1", role: "jefe_taller" });
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status: "in_progress" }, items: [] });
+    getClienteById.mockResolvedValue(detailWith(null));
+    listRemindersForOrder.mockResolvedValue([]);
+    listOrderPhotos.mockResolvedValue([]);
+    listOrderAssignees.mockResolvedValue([]);
+    listTecnicos.mockResolvedValue([]);
+    listTecnicos.mockClear();
+    statusControls.mockClear();
+    roleCan(["service-orders.read", "service-orders.assign", "service-orders.write"]);
+  });
+  afterEach(() => vi.mocked(can).mockImplementation(() => true));
+
+  const card = () => screen.getByText("Técnicos asignados").closest("[data-slot='card']") as HTMLElement;
+
+  it("lists the assignees by name and flags a deactivated one", async () => {
+    listOrderAssignees.mockResolvedValue([
+      { tecnicoId: "t1", nombre: "Ana Mecánica", active: true, parteLista: false },
+      { tecnicoId: "t2", nombre: "Beto Frenos", active: false, parteLista: false },
+    ]);
+    render(await renderPage());
+
+    expect(within(card()).getByText("Ana Mecánica")).toBeInTheDocument();
+    expect(within(card()).getByText("Beto Frenos")).toBeInTheDocument();
+    expect(within(card()).getByText("Inactivo")).toBeInTheDocument();
+  });
+
+  it("says nobody is assigned yet", async () => {
+    render(await renderPage());
+
+    expect(within(card()).getByText("Esta orden todavía no tiene técnicos asignados.")).toBeInTheDocument();
+  });
+
+  it("offers staff the active roster minus the technicians already assigned", async () => {
+    listOrderAssignees.mockResolvedValue([{ tecnicoId: "t1", nombre: "Ana Mecánica", active: true, parteLista: false }]);
+    listTecnicos.mockResolvedValue([tecnicoRow("t1", "Ana Mecánica"), tecnicoRow("t2", "Beto Frenos")]);
+    render(await renderPage());
+
+    // `listTecnicos()` with no argument is the ACTIVE roster: a deactivated technician is never offered.
+    expect(listTecnicos).toHaveBeenCalledWith();
+    const options = Array.from(within(card()).getByLabelText("Asignar técnico").querySelectorAll("option")).map((o) => o.textContent);
+    expect(options).toEqual(["Elegí un técnico", "Beto Frenos"]);
+  });
+
+  it("offers a caller without service-orders.assign no assignment control and reads no roster", async () => {
+    roleCan(["service-orders.read", "service-orders.write"]);
+    render(await renderPage());
+
+    expect(screen.queryByLabelText("Asignar técnico")).not.toBeInTheDocument();
+    expect(listTecnicos).not.toHaveBeenCalled();
+  });
+
+  it.each<OrderStatus>(["done", "cancelled"])("offers no assignment control on a %s order", async (status) => {
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status }, items: [] });
+    listTecnicos.mockResolvedValue([tecnicoRow("t2", "Beto Frenos")]);
+    render(await renderPage());
+
+    expect(screen.queryByLabelText("Asignar técnico")).not.toBeInTheDocument();
+    expect(listTecnicos).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])("hands the status controls canAssign=%s to match service-orders.assign", async (assign) => {
+    roleCan(assign ? ["service-orders.read", "service-orders.assign"] : ["service-orders.read"]);
+    render(await renderPage());
+
+    expect(statusControls).toHaveBeenCalledWith({ orderId: "o1", status: "in_progress", canAssign: assign }, undefined);
   });
 });

@@ -98,7 +98,7 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU7: Order UI (PR 7)
 
-- [ ] 8.1 RED `TechnicianPicker` tests: native checkbox list of ACTIVE technicians only, 44px rows; zero selected submits. GREEN picker in the order form (create) and assignment control on detail with "Técnico asignado" toast.
+- [x] 8.1 RED `TechnicianPicker` tests: native checkbox list of ACTIVE technicians only, 44px rows; zero selected submits. GREEN picker in the order form (create) and assignment control on detail with "Técnico asignado" toast.
 - [ ] 8.2 RED `OrderWorkCard`/`WorkLineDialog` tests: lines, per-technician totals (90/45), marked or pending per assignee; "Mi parte lista" and un-mark only for the viewer's own assignment; toasts "Línea agregada", "Parte marcada como lista"; `inputMode="numeric"`, `<input type="date">`; inline errors; closed order admin sees password field. GREEN.
 - [ ] 8.3 RED detail/list tests (also reword the PATCH `OrderEditForbiddenError` copy "Solo un administrador puede editar una orden abierta." — a jefe may edit too and `ready_for_review` is not "abierta"; and the bulk `forbidden` copy if the bulk menu ever offers ready_for_review → in_progress): badge and status filter "Lista para revisión" (`VALID_STATUS`); técnico sees no edit control in `ready_for_review`. GREEN `ServiceOrderFilters.tsx`, `service-orders/page.tsx`, detail page.
 - [ ] 8.4 Mutation-verify 8.1-8.3 by name (show mark to the other technician, list deactivated).

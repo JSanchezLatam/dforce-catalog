@@ -23,8 +23,10 @@ import { orderScope } from "@/modules/service-orders/scope";
 import { getClienteById } from "@/modules/customers/queries";
 import { listRemindersForOrder } from "@/modules/reminders/queries";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
-import { canChangeOrderPhotos, orderEditMode } from "@/modules/service-orders/edit-policy";
+import { canChangeOrderPhotos, isClosedStatus, orderEditMode } from "@/modules/service-orders/edit-policy";
 import { FUEL_LABEL, formatKilometraje, intakeInputsFor } from "@/modules/service-orders/intake";
+import { AssignTecnicoControl } from "@/modules/service-orders/AssignTecnicoControl";
+import { listOrderAssignees } from "@/modules/service-orders/order-team";
 import { OrderPhotos } from "@/modules/service-orders/OrderPhotos";
 import { OrderStatusControls } from "@/modules/service-orders/OrderStatusControls";
 import { vehicleDescriptiveRows } from "@/modules/service-orders/vehicle-rows";
@@ -32,6 +34,7 @@ import { ServiceOrderFormTrigger } from "@/modules/service-orders/ServiceOrderFo
 import { listOrderPhotos } from "@/modules/service-orders/photos";
 import { getOrdenServicioById } from "@/modules/service-orders/queries";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
+import { listTecnicos } from "@/modules/technicians/queries";
 import { formatDateTime } from "@/shared/datetime";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 
@@ -98,14 +101,23 @@ export default async function ServiceOrderDetailPage({
   if (!detail) notFound();
 
   const { orden, items } = detail;
-  const [clienteDetail, reminders, photos] = await Promise.all([
+  const canAssign = can(user, "service-orders.assign");
+  // Assignment is staff-only and never on a closed order (not correctable), so
+  // the roster is read only where the control would render.
+  const canAssignNow = canAssign && !isClosedStatus(orden.status);
+  const [clienteDetail, reminders, photos, assignees, roster] = await Promise.all([
     getClienteById(orden.clienteId, scope),
     listRemindersForOrder(orden.id),
     listOrderPhotos(orden.id, scope),
+    listOrderAssignees(orden.id),
+    canAssignNow ? listTecnicos() : Promise.resolve([]),
   ]);
+  // ACTIVE roster (the default) minus who is already on the order; plain pairs for the client.
+  const assigned = new Set(assignees.map((a) => a.tecnicoId));
+  const assignable = roster.filter((t) => !assigned.has(t.id)).map(({ id, nombre }) => ({ id, nombre }));
   // The same predicates the photo routes enforce (status gate + role), resolved
   // here so only booleans cross to the client card.
-  const photosOpen = canChangeOrderPhotos(orden.status, can(user, "service-orders.assign"));
+  const photosOpen = canChangeOrderPhotos(orden.status, canAssign);
   // closed-order-lock: on a closed order only an administrador's audited
   // correction (password in each add/delete) may change photos.
   const correctingPhotos = !photosOpen && can(user, "service-orders.correct");
@@ -182,7 +194,7 @@ export default async function ServiceOrderDetailPage({
             >
               Imprimir
             </Link>
-            <OrderStatusControls orderId={orden.id} status={orden.status} />
+            <OrderStatusControls orderId={orden.id} status={orden.status} canAssign={canAssign} />
           </div>
         </CardHeader>
         <CardContent>
@@ -234,6 +246,27 @@ export default async function ServiceOrderDetailPage({
             {field("Recomendaciones", orden.recomendaciones || "—")}
             {field("Observaciones", orden.observaciones || "—")}
           </dl>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Técnicos asignados</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {assignees.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Esta orden todavía no tiene técnicos asignados.</p>
+          ) : (
+            <ul className="flex flex-wrap gap-2">
+              {assignees.map((a) => (
+                <li key={a.tecnicoId} className="flex items-center gap-2 rounded-lg border border-input px-3 py-1.5 text-sm">
+                  {a.nombre}
+                  {!a.active && <span className="text-xs text-muted-foreground">Inactivo</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+          {canAssignNow && <AssignTecnicoControl orderId={orden.id} available={assignable} />}
         </CardContent>
       </Card>
 
