@@ -15,6 +15,7 @@ import { recordConsent, rotatePortalToken } from "@/modules/customers/consent";
 import { deactivateCliente, reactivateCliente, updateCliente } from "@/modules/customers/service";
 import { enqueuePortalSync, ensurePortalSyncQueue } from "@/modules/portal-sync/enqueue";
 import { runPortalSync } from "@/modules/portal-sync/job";
+import { runPortalReconcile } from "@/modules/portal-sync/reconcile";
 import { createOrder, transitionOrder, updateOrder } from "@/modules/service-orders/service";
 import { SYSTEM_SCOPE } from "@/modules/service-orders/scope";
 import { db } from "@/shared/db/client";
@@ -290,5 +291,77 @@ describe("portal-sync triggers (E2E)", () => {
     const sent: IngestBody[] = [];
     await runPortalSync(row.id, { config, send: async (b) => void sent.push(b) });
     expect(sent).toEqual([]);
+  });
+});
+
+/** customer-portal WU5b — the reconcile's selection SQL, which only real Postgres can prove. */
+describe("portal-reconcile (E2E)", () => {
+  const created: string[] = [];
+  const T = (iso: string) => new Date(iso);
+  const make = async (extra: Partial<typeof cliente.$inferInsert> = {}) => {
+    const [row] = await db
+      .insert(cliente)
+      .values({ name: "E2E Reconcile", phone: "50761112222", portalToken: `tok-${crypto.randomUUID()}`, ...extra })
+      .returning();
+    created.push(row.id);
+    return row.id;
+  };
+  const consent = (clienteId: string, granted: boolean, at: string, id: string) =>
+    db.insert(clienteConsentimiento).values({ id, clienteId, granted, clauseVersion: "v", recordedAt: T(at) });
+
+  beforeAll(async () => {
+    execSync("npx drizzle-kit migrate", { stdio: "inherit" });
+  }, 60_000);
+
+  afterAll(async () => {
+    if (created.length > 0) await db.delete(cliente).where(inArray(cliente.id, created));
+  });
+
+  it("sends the live set by the newest consent row, and enqueues everyone who ever consented", async () => {
+    const live = await make();
+    await consent(live, true, "2026-01-01T00:00:00Z", "live-1");
+
+    // The newer row has the SMALLER id: ordering by id would get both of these backwards.
+    const revoked = await make({ portalToken: null });
+    await consent(revoked, true, "2026-01-01T00:00:00Z", "zzzz-rev-old-grant");
+    await consent(revoked, false, "2026-02-01T00:00:00Z", "aaaa-rev-new-revoke");
+    const regranted = await make();
+    await consent(regranted, false, "2026-01-01T00:00:00Z", "zzzz-re-old-revoke");
+    await consent(regranted, true, "2026-02-01T00:00:00Z", "aaaa-re-new-grant");
+
+    // Token still set (a race or a manual fix can leave one): only the NEWEST row may decide, not "any grant ever".
+    const revokedWithToken = await make();
+    await consent(revokedWithToken, true, "2026-01-01T00:00:00Z", "rwt-grant");
+    await consent(revokedWithToken, false, "2026-02-01T00:00:00Z", "rwt-revoke");
+    // A lone revoke row still counts as "has ever had consent recorded", so its delete is repeated.
+    const revokeOnly = await make({ portalToken: null });
+    await consent(revokeOnly, false, "2026-01-01T00:00:00Z", "ro-revoke");
+
+    const deactivated = await make({ deactivatedAt: new Date() });
+    await consent(deactivated, true, "2026-01-01T00:00:00Z", "deact-1");
+    const noToken = await make({ portalToken: null });
+    await consent(noToken, true, "2026-01-01T00:00:00Z", "notoken-1");
+    const never = await make();
+
+    const before = Number((((await db.execute(sql`SELECT nextval('portal_sync_version_seq') AS v`)).rows[0]) as { v: string }).v);
+    const enqueued: string[] = [];
+    const sent: IngestBody[] = [];
+    await runPortalReconcile({
+      config,
+      enqueue: async (id) => void enqueued.push(id),
+      send: async (b) => void sent.push(b),
+    });
+
+    expect(sent).toHaveLength(1);
+    const body = sent[0];
+    if (body.kind !== "reconcile") throw new Error("expected reconcile");
+    const mine = [live, revoked, regranted, revokedWithToken, revokeOnly, deactivated, noToken, never];
+    expect(body.liveClienteIds.filter((id) => mine.includes(id)).sort()).toEqual([live, regranted].sort());
+    expect(enqueued.filter((id) => mine.includes(id)).sort()).toEqual(
+      [live, revoked, regranted, revokedWithToken, revokeOnly, deactivated, noToken].sort(),
+    );
+    expect(typeof body.maxVersion).toBe("number");
+    expect(body.maxVersion).toBeGreaterThan(before);
+    expect(parseIngest(JSON.parse(JSON.stringify(body))).ok).toBe(true); // the real portal parser accepts it
   });
 });
