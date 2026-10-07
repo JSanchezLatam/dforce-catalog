@@ -16,6 +16,8 @@ import {
   OrderClosedError,
   recordCorrections,
 } from "../modules/service-orders/order-lock";
+import { transitionOrder } from "../modules/service-orders/service";
+import { OrderTransitionError } from "../modules/service-orders/transitions";
 
 describe("orden_servicio_correccion (E2E)", () => {
   let userId: string;
@@ -23,7 +25,7 @@ describe("orden_servicio_correccion (E2E)", () => {
   let vehiculoId: string;
   let otherUserId: string | undefined;
 
-  const newOrder = async (status: "open" | "done") => {
+  const newOrder = async (status: "open" | "in_progress" | "done") => {
     const [row] = await db
       .insert(ordenServicio)
       .values({ clienteId, vehiculoId, categoria: "revisado", status })
@@ -146,5 +148,22 @@ describe("orden_servicio_correccion (E2E)", () => {
         { field: "appointmentAt", oldValue: null, newValue: "2026-10-06T12:00:00.000Z" },
       ]),
     );
+  });
+
+  it("a concurrent done and cancelled on one order cannot both win: the loser finds it closed", async () => {
+    const ordenId = await newOrder("in_progress");
+    // The reminder side effects are not under test (they are no-ops here); the status write is.
+    const deps = { getClienteById: async () => null, cancelRemindersForOrder: async () => {} };
+    const results = await Promise.allSettled([
+      transitionOrder(ordenId, "done", deps),
+      transitionOrder(ordenId, "cancelled", deps),
+    ]);
+    const won = results.filter((r) => r.status === "fulfilled");
+    const lost = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    expect(won).toHaveLength(1);
+    expect(lost).toHaveLength(1);
+    expect(lost[0].reason).toBeInstanceOf(OrderTransitionError);
+    const [row] = await db.select().from(ordenServicio).where(eq(ordenServicio.id, ordenId));
+    expect(row.status).toBe((won[0] as PromiseFulfilledResult<{ status: string }>).value.status);
   });
 });

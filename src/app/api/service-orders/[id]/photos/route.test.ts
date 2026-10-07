@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Role } from "@/modules/auth/roles";
+import { CorrectionRefusedError } from "@/modules/service-orders/correction-auth";
 import { MAX_PHOTO_BYTES, OrderClosedError, PhotoLimitError } from "@/modules/service-orders/photos";
 import { OrdenServicioNotFoundError } from "@/modules/service-orders/service";
 import { handleAddPhoto, POST } from "./route";
@@ -30,8 +31,9 @@ function req(
   });
 }
 
-function form(bytes: Buffer, type = "image/jpeg") {
+function form(bytes: Buffer, type = "image/jpeg", password?: string) {
   const f = new FormData();
+  if (password !== undefined) f.append("password", password);
   f.append("file", new Blob([new Uint8Array(bytes)], { type }), "foto.jpg");
   return f;
 }
@@ -141,14 +143,79 @@ describe("POST /api/service-orders/[id]/photos", () => {
     expect(await res.json()).toEqual({ error: "photo_limit", message: "La orden ya tiene 12 fotos" });
   });
 
-  it("409 order_closed with the Spanish message", async () => {
+  it("409 order_closed with the Spanish message for an administrador with no password", async () => {
     const addPhoto = vi.fn().mockRejectedValue(new OrderClosedError());
-    const res = await handleAddPhoto(req(form(JPEG)), "o1", { addPhoto });
+    const authorize = vi.fn();
+    const res = await handleAddPhoto(req(form(JPEG), { role: "administrador" }), "o1", { addPhoto, authorize });
+    expect(authorize).not.toHaveBeenCalled();
 
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({
       error: "order_closed",
-      message: "La orden está cerrada; no se pueden cambiar sus fotos",
+      message: "La orden está cerrada",
+    });
+  });
+
+  describe("a closed order (closed-order-lock)", () => {
+    const closed = () => vi.fn().mockRejectedValue(new OrderClosedError());
+
+    it.each([undefined, "pw"])("403 for a tecnico with password %s, and the password is never verified", async (password) => {
+      const addPhoto = closed();
+      const authorize = vi.fn();
+      const res = await handleAddPhoto(req(form(JPEG, "image/jpeg", password), { role: "tecnico" }), "o1", { addPhoto, authorize });
+
+      expect(res.status).toBe(403);
+      expect(authorize).not.toHaveBeenCalled();
+      expect(addPhoto).toHaveBeenCalledTimes(1);
+    });
+
+    it("403 wrong_password when the administrator's password is wrong, and nothing is retried", async () => {
+      const addPhoto = closed();
+      const authorize = vi.fn().mockRejectedValue(new CorrectionRefusedError("wrong_password"));
+      const res = await handleAddPhoto(req(form(JPEG, "image/jpeg", "bad"), { role: "administrador" }), "o1", { addPhoto, authorize });
+
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ error: "wrong_password", message: "Contraseña incorrecta" });
+      expect(addPhoto).toHaveBeenCalledTimes(1);
+    });
+
+    it("429 with Retry-After 900 when throttled", async () => {
+      const authorize = vi.fn().mockRejectedValue(new CorrectionRefusedError("throttled"));
+      const res = await handleAddPhoto(req(form(JPEG, "image/jpeg", "pw"), { role: "administrador" }), "o1", {
+        addPhoto: closed(),
+        authorize,
+      });
+
+      expect(res.status).toBe(429);
+      expect(res.headers.get("Retry-After")).toBe("900");
+      expect(await res.json()).toEqual({ error: "throttled", message: "Demasiados intentos. Probá de nuevo en 15 minutos." });
+    });
+
+    it("verifies the password, then retries WITH the grant and answers 201", async () => {
+      const addPhoto = vi.fn().mockRejectedValueOnce(new OrderClosedError()).mockResolvedValueOnce(added);
+      const authorize = vi.fn().mockResolvedValue({ correctorId: "user-1" });
+      const res = await handleAddPhoto(req(form(JPEG, "image/jpeg", "pw"), { role: "administrador" }), "o1", { addPhoto, authorize });
+
+      expect(res.status).toBe(201);
+      expect(authorize).toHaveBeenCalledWith("user-1", "pw");
+      expect(addPhoto).toHaveBeenNthCalledWith(1, { ordenId: "o1", bytes: JPEG, createdBy: "user-1" });
+      expect(addPhoto).toHaveBeenNthCalledWith(2, {
+        ordenId: "o1",
+        bytes: JPEG,
+        createdBy: "user-1",
+        correction: { correctorId: "user-1" },
+      });
+    });
+
+    it("never verifies a password sent for an OPEN order", async () => {
+      const authorize = vi.fn();
+      const res = await handleAddPhoto(req(form(JPEG, "image/jpeg", "pw"), { role: "administrador" }), "o1", {
+        addPhoto: vi.fn().mockResolvedValue(added),
+        authorize,
+      });
+
+      expect(res.status).toBe(201);
+      expect(authorize).not.toHaveBeenCalled();
     });
   });
 

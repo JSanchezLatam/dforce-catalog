@@ -320,6 +320,51 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
   });
 
   /**
+   * closed-order-lock WU4: a closed order is not plainly editable, but an
+   * administrador may correct it. The same mount carries the 44x44 floor.
+   */
+  const CORRECT_LABEL = "Corregir";
+
+  it.each<OrderStatus>(["done", "cancelled"])("offers Corregir, and no plain edit control, to an administrador on a %s order", async (status) => {
+    render(await renderAs("administrador", status));
+
+    expect(screen.getByRole("button", { name: CORRECT_LABEL })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: EDIT_LABEL })).not.toBeInTheDocument();
+  });
+
+  it.each<[Role, OrderStatus]>([
+    ["tecnico", "done"],
+    ["tecnico", "cancelled"],
+    ["tecnico", "open"],
+    ["tecnico", "in_progress"],
+    ["administrador", "open"],
+    ["administrador", "in_progress"],
+  ])("never offers Corregir to a %s on a %s order", async (role, status) => {
+    render(await renderAs(role, status));
+
+    expect(screen.queryByRole("button", { name: CORRECT_LABEL })).not.toBeInTheDocument();
+  });
+
+  it("opens Corregir on a form that asks for the password", async () => {
+    render(await renderAs("administrador", "done"));
+    fireEvent.click(screen.getByRole("button", { name: CORRECT_LABEL }));
+
+    expect(screen.getByRole("dialog", { name: "Corregir orden de servicio" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Tu contraseña")).toHaveAttribute("type", "password");
+  });
+
+  it("applies the 44x44 floor to Corregir from its mount", async () => {
+    const { container } = render(await renderAs("administrador", "done"));
+
+    const wrapper = Array.from(container.querySelectorAll("div")).find((el) =>
+      el.className.includes("[&>button]:min-h-11"),
+    );
+    expect(wrapper).toBeDefined();
+    expect(wrapper!.className).toContain("[&>button]:min-w-11");
+    expect(wrapper!.firstElementChild).toBe(screen.getByRole("button", { name: CORRECT_LABEL }));
+  });
+
+  /**
    * AGENTS.md's 44x44 floor. `ServiceOrderForm` renders its edit trigger as
    * `<Button variant="outline" size="sm">` — `h-7`, 28px — and exposes no
    * `className` for the mount to pass, so the floor is applied from here with
@@ -563,7 +608,7 @@ describe("ServiceOrderDetailPage — reception photos card", () => {
     expect(within(card()).getByRole("button", { name: "Borrar foto 1" })).toBeInTheDocument();
   });
 
-  it.each(["done", "cancelled"] as const)("offers neither add nor delete on a %s order, even to an administrador", async (status) => {
+  it.each(["done", "cancelled"] as const)("offers neither add nor delete on a %s order to a role that cannot correct", async (status) => {
     roleCan(["service-orders.read", "service-orders.write", "service-orders.deletePhoto"]);
     asOrder(status);
     listOrderPhotos.mockResolvedValue([{ id: "p1" }]);
@@ -575,6 +620,32 @@ describe("ServiceOrderDetailPage — reception photos card", () => {
     expect(within(card()).queryByRole("button", { name: /Borrar foto/ })).not.toBeInTheDocument();
   });
 
+  it.each(["done", "cancelled"] as const)("offers add and delete on a %s order to a role that can correct, behind the password", async (status) => {
+    roleCan(["service-orders.read", "service-orders.write", "service-orders.deletePhoto", "service-orders.correct"]);
+    asOrder(status);
+    listOrderPhotos.mockResolvedValue([{ id: "p1" }]);
+
+    render(await renderPage());
+
+    expect(within(card()).getByLabelText("Agregar fotos")).toBeInTheDocument();
+    fireEvent.click(within(card()).getByRole("button", { name: "Borrar foto 1" }));
+    expect(screen.getByLabelText("Tu contraseña")).toHaveAttribute("type", "password");
+    expect(
+      within(card()).queryByText("Las fotos no se pueden agregar ni borrar cuando la orden está terminada o cancelada."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("asks for no password to delete a photo of an order that is still open", async () => {
+    roleCan(["service-orders.read", "service-orders.write", "service-orders.deletePhoto", "service-orders.correct"]);
+    asOrder("in_progress");
+    listOrderPhotos.mockResolvedValue([{ id: "p1" }]);
+
+    render(await renderPage());
+    fireEvent.click(within(card()).getByRole("button", { name: "Borrar foto 1" }));
+
+    expect(screen.queryByLabelText("Tu contraseña")).not.toBeInTheDocument();
+  });
+
   it("offers no add control to a role without service-orders.write", async () => {
     roleCan(["service-orders.read"]);
 
@@ -583,7 +654,8 @@ describe("ServiceOrderDetailPage — reception photos card", () => {
     expect(within(card()).queryByLabelText("Agregar fotos")).not.toBeInTheDocument();
   });
 
-  it("explains that a finished or cancelled order's photos are frozen", async () => {
+  it("explains that a finished or cancelled order's photos are frozen to a role that cannot correct", async () => {
+    roleCan(["service-orders.read", "service-orders.write"]);
     asOrder("done");
 
     render(await renderPage());
