@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { ROLES, type Role } from "@/modules/auth/roles";
 import { orderStatusEnum } from "@/shared/db/schema";
-import { canChangeOrderPhotos, canEditOrderFields, isClosedStatus } from "./edit-policy";
+import { MATRIX } from "@/modules/auth/policy";
+import { canChangeOrderPhotos, canEditOrderFields, isClosedStatus, orderEditMode } from "./edit-policy";
 import type { OrderStatus } from "./transitions";
 
 /**
@@ -78,6 +79,37 @@ describe("isClosedStatus", () => {
   it("covers every status the schema defines", () => {
     for (const status of orderStatusEnum.enumValues) {
       expect(typeof isClosedStatus(status)).toBe("boolean");
+    }
+  });
+});
+
+/**
+ * What the detail page offers, one row per `(role, status)` cell. A closed order
+ * is never plainly editable: an administrador gets "correction" (password
+ * required), anybody else is "refused".
+ */
+describe("orderEditMode", () => {
+  it.each<[Role, OrderStatus, "edit" | "correction" | "refused"]>([
+    ["administrador", "open", "edit"],
+    ["administrador", "in_progress", "edit"],
+    ["administrador", "done", "correction"],
+    ["administrador", "cancelled", "correction"],
+    ["tecnico", "open", "refused"],
+    ["tecnico", "in_progress", "edit"],
+    ["tecnico", "done", "refused"],
+    ["tecnico", "cancelled", "refused"],
+  ])("%s on a %s order -> %s", (role, status, expected) => {
+    expect(orderEditMode(role, status)).toBe(expected);
+  });
+
+  it("refuses an unrecognised role, as canEditOrderFields does", () => {
+    expect(orderEditMode("intruso" as Role, "done")).toBe("refused");
+  });
+
+  /** The role literal in `edit-policy.ts` must not drift from the policy matrix. */
+  it("offers correction to exactly the roles holding service-orders.correct", () => {
+    for (const role of ROLES) {
+      expect(orderEditMode(role, "done") === "correction").toBe(MATRIX[role]["service-orders.correct"]);
     }
   });
 });

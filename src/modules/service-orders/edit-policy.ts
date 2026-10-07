@@ -77,3 +77,18 @@ const CLOSED: Record<OrderStatus, boolean> = {
 export function isClosedStatus(status: OrderStatus): boolean {
   return CLOSED[status] ?? false;
 }
+
+/**
+ * What the detail page offers for `(role, status)`. A closed order is never
+ * plainly editable: an administrador may CORRECT it (password required, audited
+ * server-side); anyone else is refused. The server stays the trust boundary —
+ * this only decides which control to render.
+ *
+ * The role literal mirrors `service-orders.correct` in `policy.ts`, which this
+ * file cannot import for its `can()` (it takes a user, and the page tests mock
+ * that module); `edit-policy.test.ts` pins the two together.
+ */
+export function orderEditMode(role: Role, status: OrderStatus): "edit" | "correction" | "refused" {
+  if (canEditOrderFields(role, status)) return "edit";
+  return isClosedStatus(status) && role === "administrador" ? "correction" : "refused";
+}
