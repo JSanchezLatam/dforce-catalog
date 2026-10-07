@@ -61,6 +61,7 @@ describe("vehicle details and internal fields (E2E)", () => {
             estilo: "SUV",
             motor: "hibrido",
             placaRenovacionMes: 3,
+            placaMunicipio: "David",
             seguroVence: "2026-11-15",
           },
         ],
@@ -116,6 +117,31 @@ describe("vehicle details and internal fields (E2E)", () => {
 
     expect((await patch(admin, { placaRenovacionMes: null })).status).toBe(200);
     expect(await stored()).toMatchObject({ placaRenovacionMes: null, seguroVence: null });
+  });
+
+  it("keeps the municipio through a tecnico edit, refuses a tecnico sending it, and an admin trims, sets and clears it", async () => {
+    // Created with "David" in beforeAll: the real INSERT wrote the column.
+    expect((await stored()).placaMunicipio).toBe("David");
+
+    expect((await patch(tecnico, { colorPrimario: "Azul" })).status).toBe(200);
+    expect((await stored()).placaMunicipio).toBe("David");
+
+    for (const value of ["Otro", null]) {
+      expect((await patch(tecnico, { placaMunicipio: value })).status).toBe(403);
+    }
+    expect((await stored()).placaMunicipio).toBe("David");
+
+    expect((await patch(admin, { colorPrimario: "Negro" })).status).toBe(200);
+    expect((await stored()).placaMunicipio).toBe("David");
+
+    expect((await patch(admin, { placaMunicipio: "  X " })).status).toBe(200);
+    expect((await stored()).placaMunicipio).toBe("X");
+
+    expect((await patch(admin, { placaMunicipio: "" })).status).toBe(200);
+    expect((await stored()).placaMunicipio).toBeNull();
+
+    expect((await patch(admin, { placaMunicipio: "x".repeat(81) })).status).toBe(400);
+    expect((await stored()).placaMunicipio).toBeNull();
   });
 
   it("the CHECK constraint rejects a renewal month of 13 and accepts 12", async () => {

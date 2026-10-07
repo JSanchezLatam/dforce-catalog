@@ -25,12 +25,12 @@ export type CreateVehiculoRouteDeps = {
  * `deactivated`, and it permits `plate: ""` when `deleted === true` — the
  * plate-less row migration 0013's pre-flight guard aborts on. A single-insert
  * endpoint has no meaning for any of the three, so they are REFUSED rather
- * than dropped (the two renewal fields included: this route has no gate for
+ * than dropped (the three renewal fields included: this route has no gate for
  * them, and a `null` must not read as "clear" to anyone), matching
  * `api/customers/[id]/route.ts`'s refusal of a non-boolean `active`: this repo answers a body it does not understand
  * instead of quietly writing something else.
  */
-const COLLECTION_ONLY_FIELDS = ["id", "deleted", "deactivated", "placaRenovacionMes", "seguroVence"] as const;
+const COLLECTION_ONLY_FIELDS = ["id", "deleted", "deactivated", "placaRenovacionMes", "placaMunicipio", "seguroVence"] as const;
 
 /**
  * C4/design.md D2 — the gap explore.md and the proposal missed: the vehicle

@@ -33,6 +33,8 @@ export type DueVencimiento = DueItem & {
   model: string | null;
   plate: string;
   numeroUnidad: string | null;
+  /** INTERNAL: where the plate was issued. The page shows it on plate rows only. */
+  placaMunicipio: string | null;
 };
 
 export type DueVencimientosResult = {
@@ -82,6 +84,7 @@ export async function getDueVencimientos(now: Date, deps: GetDueDeps = {}): Prom
         model: c.model,
         plate: c.plate,
         numeroUnidad: c.numeroUnidad,
+        placaMunicipio: c.placaMunicipio,
         ...item,
       })),
     )

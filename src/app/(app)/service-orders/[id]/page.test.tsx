@@ -54,7 +54,7 @@ const ORDEN: OrdenServicio = {
 const VEHICULO: Vehiculo = {
   id: "v1", clienteId: "c1", plate: "ABC123", make: "Toyota", model: "Corolla", year: 2020,
   chasis: null, colorPrimario: null, colorSecundario: null, estilo: null, motor: null,
-  numeroUnidad: null, placaRenovacionMes: null, seguroVence: null,
+  numeroUnidad: null, placaRenovacionMes: null, placaMunicipio: null, seguroVence: null,
   deactivatedAt: null, createdAt: new Date("2026-01-01"),
 };
 
@@ -266,13 +266,14 @@ describe("ServiceOrderDetailPage — vehicle descriptive fields", () => {
 
   it("never renders the plate renewal month or the insurance expiry, even when the row carries them", async () => {
     getClienteById.mockResolvedValue(
-      detailWith(null, { chasis: "CH1", placaRenovacionMes: 11, seguroVence: "2031-12-24" }),
+      detailWith(null, { chasis: "CH1", placaRenovacionMes: 11, placaMunicipio: "SENTINEL-MUNICIPIO", seguroVence: "2031-12-24" }),
     );
 
     const { container } = render(await renderPage());
 
     const text = container.textContent!;
     expect(text).not.toContain("2031-12-24");
+    expect(text).not.toContain("SENTINEL-MUNICIPIO");
     expect(text).not.toContain("24/12/2031");
     expect(text).not.toContain("noviembre");
     expect(screen.getAllByRole("definition").map((dd) => dd.textContent)).not.toContain("11");

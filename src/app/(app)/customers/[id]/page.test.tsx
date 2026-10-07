@@ -44,7 +44,7 @@ function vehiculo(id: string, plate: string, deactivatedAt: Date | null) {
   return {
     id, clienteId: "c1", plate, make: "Toyota", model: "Corolla", year: 2020,
     chasis: null, colorPrimario: null, colorSecundario: null, estilo: null, motor: null, numeroUnidad: null,
-    placaRenovacionMes: null, seguroVence: null,
+    placaRenovacionMes: null, placaMunicipio: null, seguroVence: null,
     deactivatedAt, createdAt: new Date("2026-01-01"),
   };
 }
@@ -264,7 +264,7 @@ describe("CustomerDetailPage — read gate", () => {
  * shape. The sentinels are values no legitimate field would hold.
  */
 describe("CustomerDetailPage — internal vehicle fields and the RSC payload", () => {
-  const POISONED = { ...vehiculo("v1", "ABC123", null), placaRenovacionMes: 7, seguroVence: "2031-12-24" };
+  const POISONED = { ...vehiculo("v1", "ABC123", null), placaRenovacionMes: 7, placaMunicipio: "SENTINEL-MUNICIPIO", seguroVence: "2031-12-24" };
 
   beforeEach(() => {
     triggerProps.mockClear();
@@ -284,6 +284,8 @@ describe("CustomerDetailPage — internal vehicle fields and the RSC payload", (
     expect(props.vehicles).toHaveLength(1);
     expect(props.vehicles[0]).not.toHaveProperty("placaRenovacionMes");
     expect(props.vehicles[0]).not.toHaveProperty("seguroVence");
+    expect(props.vehicles[0]).not.toHaveProperty("placaMunicipio");
+    expect(JSON.stringify(props)).not.toContain("SENTINEL-MUNICIPIO");
     expect(JSON.stringify(props)).not.toContain("2031-12-24");
     // The public columns still arrive: the form round-trips them.
     expect(props.vehicles[0]).toMatchObject({ id: "v1", plate: "ABC123", make: "Toyota" });

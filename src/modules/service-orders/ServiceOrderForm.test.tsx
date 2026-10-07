@@ -57,6 +57,7 @@ function vehiculoRow(overrides: Partial<Vehiculo> = {}): Vehiculo {
     motor: null,
     numeroUnidad: null,
     placaRenovacionMes: null,
+    placaMunicipio: null,
     seguroVence: null,
     deactivatedAt: null,
     createdAt: new Date("2026-01-01"),
