@@ -30,10 +30,11 @@ import { and, asc, count, eq, sql } from "drizzle-orm";
 
 import { deleteObject, putObject } from "@/modules/catalog-storage/r2";
 import { db } from "@/shared/db/client";
-import { ordenServicioFoto } from "@/shared/db/schema";
+import { ordenServicio, ordenServicioFoto } from "@/shared/db/schema";
 import { canChangeOrderPhotos } from "./edit-policy";
 import { lockOrderForMutation, OrderClosedError, recordCorrections, type CorrectionGrant } from "./order-lock";
 import { MAX_PHOTOS } from "./photo-limits";
+import type { OrderScope } from "./scope";
 
 export { MAX_PHOTOS, OrderClosedError };
 export const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
@@ -116,24 +117,28 @@ export async function addOrderPhoto(
 /** The order's photos in display order (position ascends; gaps after a delete are fine). */
 export async function listOrderPhotos(
   ordenId: string,
+  scope: OrderScope,
   deps: Pick<PhotoDeps, "db"> = {},
 ): Promise<{ id: string }[]> {
   return (deps.db ?? db)
     .select({ id: ordenServicioFoto.id })
     .from(ordenServicioFoto)
-    .where(eq(ordenServicioFoto.ordenId, ordenId))
+    .innerJoin(ordenServicio, eq(ordenServicioFoto.ordenId, ordenServicio.id))
+    .where(and(eq(ordenServicioFoto.ordenId, ordenId), scope.where))
     .orderBy(asc(ordenServicioFoto.position));
 }
 
 /** Scoped by BOTH ids: a photo id from another order is "not found", never a cross-order read. */
 export async function findOrderPhoto(
   input: { ordenId: string; photoId: string },
+  scope: OrderScope,
   deps: Pick<PhotoDeps, "db"> = {},
 ): Promise<{ r2Key: string } | null> {
   const [row] = await (deps.db ?? db)
     .select({ r2Key: ordenServicioFoto.r2Key })
     .from(ordenServicioFoto)
-    .where(and(eq(ordenServicioFoto.id, input.photoId), eq(ordenServicioFoto.ordenId, input.ordenId)));
+    .innerJoin(ordenServicio, eq(ordenServicioFoto.ordenId, ordenServicio.id))
+    .where(and(eq(ordenServicioFoto.id, input.photoId), eq(ordenServicioFoto.ordenId, input.ordenId), scope.where));
   return row ?? null;
 }
 

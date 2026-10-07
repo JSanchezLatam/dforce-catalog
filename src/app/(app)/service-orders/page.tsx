@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, CalendarDays, Eye, Wrench } from "lucide-react";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
+import { orderScope } from "@/modules/service-orders/scope";
 import { computePageWindow, parsePageSize } from "@/modules/inventory-view/queries";
 import { OrderBulkStatusActions } from "@/modules/service-orders/OrderBulkStatusActions";
 import { RefreshListButton } from "@/modules/service-orders/RefreshListButton";
@@ -77,6 +78,7 @@ export default async function ServiceOrdersPage({
   const sort = parseOrdenSort(params);
 
   const user = await requireSessionFromHeaders();
+  const scope = orderScope(user);
   if (!can(user, "service-orders.read")) {
     return <PermissionDenied title="Órdenes de servicio" />;
   }
@@ -96,8 +98,8 @@ export default async function ServiceOrdersPage({
   // to the form, they get their own `GET /api/products?search=` — the shape
   // `CustomerPicker` already uses — not a preload of the catalogue.
   const [items, total] = await Promise.all([
-    listOrdenesServicio(filters, pageWindow, sort),
-    countOrdenesServicio(filters),
+    listOrdenesServicio(filters, pageWindow, scope, sort),
+    countOrdenesServicio(filters, scope),
   ]);
 
   const pageCount = Math.max(1, Math.ceil(total / pageWindow.limit));

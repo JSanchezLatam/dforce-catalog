@@ -14,6 +14,7 @@ import { db } from "@/shared/db/client";
 import { catalogs, cliente, ordenServicio, ordenServicioFoto, users, vehiculo } from "@/shared/db/schema";
 import { runRetentionForUser } from "../modules/catalog-storage/retention";
 import { addOrderPhoto, deleteOrderPhoto, findOrderPhoto, listOrderPhotos, MAX_PHOTOS, OrderClosedError, PhotoLimitError, type PhotoDeps } from "../modules/service-orders/photos";
+import { SYSTEM_SCOPE } from "../modules/service-orders/scope";
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -211,8 +212,8 @@ describe("orden_servicio_foto (E2E)", () => {
     const otherId = await newOrder();
     const { id, r2Key } = await addOrderPhoto({ ordenId, bytes: JPEG }, deps());
 
-    expect(await findOrderPhoto({ ordenId, photoId: id })).toEqual({ r2Key });
-    expect(await findOrderPhoto({ ordenId: otherId, photoId: id })).toBeNull();
+    expect(await findOrderPhoto({ ordenId, photoId: id }, SYSTEM_SCOPE)).toEqual({ r2Key });
+    expect(await findOrderPhoto({ ordenId: otherId, photoId: id }, SYSTEM_SCOPE)).toBeNull();
   });
 
   it("listOrderPhotos orders by position, not by insertion, and only returns this order's photos", async () => {
@@ -226,7 +227,7 @@ describe("orden_servicio_foto (E2E)", () => {
       { id: "list-other", ordenId: otherId, r2Key: `service-orders/${otherId}/list-other.jpg`, position: 0 },
     ]);
 
-    expect(await listOrderPhotos(ordenId)).toEqual([{ id: "list-p0" }, { id: "list-p1" }, { id: "list-p2" }]);
-    expect(await listOrderPhotos("no-such-order")).toEqual([]);
+    expect(await listOrderPhotos(ordenId, SYSTEM_SCOPE)).toEqual([{ id: "list-p0" }, { id: "list-p1" }, { id: "list-p2" }]);
+    expect(await listOrderPhotos("no-such-order", SYSTEM_SCOPE)).toEqual([]);
   });
 });

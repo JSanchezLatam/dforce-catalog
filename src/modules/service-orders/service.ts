@@ -35,6 +35,7 @@ import { isServiceCategory, type ServiceCategory } from "./categories";
 import type { IntakeValues } from "./intake";
 import type { Role } from "@/modules/auth/roles";
 import { canEditOrderFields } from "./edit-policy";
+import { SYSTEM_SCOPE } from "./scope";
 import { lockOrderForMutation, recordCorrections, type CorrectionGrant } from "./order-lock";
 import { assertTransition, type OrderStatus } from "./transitions";
 
@@ -150,7 +151,8 @@ export async function createOrder(
   deps: CreateOrdenServicioDeps = {},
 ): Promise<OrdenServicio> {
   const findCliente = deps.getClienteById ?? getClienteById;
-  const clienteDetail = await findCliente(input.clienteId);
+  // SYSTEM_SCOPE: this reads the customer row and vehicles; the order history it also returns is unused here.
+  const clienteDetail = await findCliente(input.clienteId, SYSTEM_SCOPE);
   if (!clienteDetail) {
     throw new UnknownClienteError(input.clienteId);
   }
@@ -294,7 +296,7 @@ export async function updateOrder(
       // Fetched once for both branches, and not at all when neither replans
       // (an appointment cleared to `null` cancels and books nothing).
       const findCliente = deps.getClienteById ?? getClienteById;
-      const clienteDetail = await findCliente(updated.clienteId);
+      const clienteDetail = await findCliente(updated.clienteId, SYSTEM_SCOPE);
       if (clienteDetail) {
         if (replanAppointment) {
           await planAndScheduleReminders(updated, clienteDetail.cliente, "appointment", deps);
@@ -354,7 +356,7 @@ export async function transitionOrder(
 
   if (to === "done") {
     const findCliente = deps.getClienteById ?? getClienteById;
-    const clienteDetail = await findCliente(updated.clienteId);
+    const clienteDetail = await findCliente(updated.clienteId, SYSTEM_SCOPE);
     if (clienteDetail) {
       await planAndScheduleReminders(updated, clienteDetail.cliente, "service_due", deps);
     }

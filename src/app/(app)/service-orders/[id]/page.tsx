@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
+import { orderScope } from "@/modules/service-orders/scope";
 import { getClienteById } from "@/modules/customers/queries";
 import { listRemindersForOrder } from "@/modules/reminders/queries";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
@@ -88,18 +89,19 @@ export default async function ServiceOrderDetailPage({
 }) {
   const { id } = await params;
   const user = await requireSessionFromHeaders();
+  const scope = orderScope(user);
   if (!can(user, "service-orders.read")) {
     return <PermissionDenied title="Orden de servicio" />;
   }
 
-  const detail = await getOrdenServicioById(id);
+  const detail = await getOrdenServicioById(id, scope);
   if (!detail) notFound();
 
   const { orden, items } = detail;
   const [clienteDetail, reminders, photos] = await Promise.all([
-    getClienteById(orden.clienteId),
+    getClienteById(orden.clienteId, scope),
     listRemindersForOrder(orden.id),
-    listOrderPhotos(orden.id),
+    listOrderPhotos(orden.id, scope),
   ]);
   // The same predicates the photo routes enforce (status gate + role), resolved
   // here so only booleans cross to the client card.

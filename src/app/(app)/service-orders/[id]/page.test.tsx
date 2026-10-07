@@ -17,6 +17,9 @@ const requireSessionFromHeaders = vi.hoisted(() =>
 );
 vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders }));
 vi.mock("@/modules/auth/policy", () => ({ can: vi.fn(() => true) }));
+const SCOPE = vi.hoisted(() => ({ where: "scope-sentinel" }));
+const orderScope = vi.hoisted(() => vi.fn<(user: unknown) => typeof SCOPE>(() => SCOPE));
+vi.mock("@/modules/service-orders/scope", () => ({ orderScope }));
 vi.mock("@/modules/service-orders/OrderStatusControls", () => ({ OrderStatusControls: () => null }));
 
 const getOrdenServicioById = vi.hoisted(() => vi.fn());
@@ -578,7 +581,7 @@ describe("ServiceOrderDetailPage — reception photos card", () => {
 
     render(await renderPage());
 
-    expect(listOrderPhotos).toHaveBeenCalledWith("o1");
+    expect(listOrderPhotos).toHaveBeenCalledWith("o1", SCOPE);
     expect(within(card()).getAllByRole("img").map((i) => i.getAttribute("src"))).toEqual([
       "/api/service-orders/o1/photos/p9",
       "/api/service-orders/o1/photos/p2",
@@ -687,5 +690,22 @@ describe("ServiceOrderDetailPage — the customer and vehicle links on touch (au
     const link = screen.getByRole("link", { name });
     expect(link).toHaveAttribute("href", href);
     expect(link).toHaveClass("pointer-coarse:inline-flex", "pointer-coarse:min-h-11", "pointer-coarse:items-center");
+  });
+});
+
+describe("ServiceOrderDetailPage — order scope", () => {
+  it("scopes the order, its photos and the customer lookup by the session user; an unassigned order is a 404", async () => {
+    getOrdenServicioById.mockClear();
+    getClienteById.mockClear();
+    listOrderPhotos.mockClear();
+    render(<ToastProvider>{await ServiceOrderDetailPage({ params: Promise.resolve({ id: ORDEN.id }) })}</ToastProvider>);
+
+    expect(orderScope).toHaveBeenCalledWith({ id: "u1", role: "tecnico" });
+    expect(getOrdenServicioById).toHaveBeenCalledWith(ORDEN.id, SCOPE);
+    expect(getClienteById.mock.calls[0][1]).toBe(SCOPE);
+    expect(listOrderPhotos).toHaveBeenCalledWith(ORDEN.id, SCOPE);
+
+    getOrdenServicioById.mockResolvedValue(null);
+    await expect(ServiceOrderDetailPage({ params: Promise.resolve({ id: ORDEN.id }) })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 });

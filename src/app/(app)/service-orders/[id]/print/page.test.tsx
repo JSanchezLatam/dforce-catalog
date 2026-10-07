@@ -33,6 +33,9 @@ vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders }));
 
 const can = vi.hoisted(() => vi.fn(() => true));
 vi.mock("@/modules/auth/policy", () => ({ can }));
+const SCOPE = vi.hoisted(() => ({ where: "scope-sentinel" }));
+const orderScope = vi.hoisted(() => vi.fn<(user: unknown) => typeof SCOPE>(() => SCOPE));
+vi.mock("@/modules/service-orders/scope", () => ({ orderScope }));
 
 const getOrdenServicioById = vi.hoisted(() => vi.fn());
 const getClienteById = vi.hoisted(() => vi.fn());
@@ -43,7 +46,7 @@ vi.mock("@/modules/customers/queries", () => ({ getClienteById }));
 const getWorkshopConfig = vi.hoisted(() => vi.fn<() => Promise<WorkshopConfig | null>>(async () => null));
 vi.mock("@/modules/workshop-config/service", () => ({ getWorkshopConfig }));
 
-const listOrderPhotos = vi.hoisted(() => vi.fn<(id: string) => Promise<{ id: string }[]>>(async () => []));
+const listOrderPhotos = vi.hoisted(() => vi.fn<(id: string, scope: unknown) => Promise<{ id: string }[]>>(async () => []));
 vi.mock("@/modules/service-orders/photos", () => ({ listOrderPhotos }));
 
 import type { Role } from "@/modules/auth/roles";
@@ -612,7 +615,7 @@ describe("ServiceOrderPrintPage — reception photos", () => {
 
     expect(chunks(container)).toHaveLength(0);
     expect(screen.queryByText(/Fotos de recepción/)).not.toBeInTheDocument();
-    expect(listOrderPhotos).toHaveBeenCalledWith("o1");
+    expect(listOrderPhotos).toHaveBeenCalledWith("o1", SCOPE);
   });
 
   it.each([[4, [4]], [5, [4, 1]], [9, [4, 4, 1]]])("%i photos make chunks %j, one page each", async (n, sizes) => {
@@ -651,5 +654,19 @@ describe("ServiceOrderPrintPage — reception photos", () => {
     const firstChunk = container.querySelector("section.break-before-page")!;
     expect(signature.compareDocumentPosition(firstChunk) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(firstChunk.contains(signature)).toBe(false);
+  });
+});
+
+describe("ServiceOrderPrintPage — order scope", () => {
+  it("scopes the order, the customer lookup and the photos by the session user; an unassigned order is a 404", async () => {
+    render(await renderPage());
+
+    expect(orderScope).toHaveBeenCalledWith({ id: "u1", role: "tecnico" });
+    expect(getOrdenServicioById.mock.calls[0][1]).toBe(SCOPE);
+    expect(getClienteById.mock.calls[0][1]).toBe(SCOPE);
+    expect(listOrderPhotos.mock.calls[0][1]).toBe(SCOPE);
+
+    getOrdenServicioById.mockResolvedValue(null);
+    await expect(renderPage()).rejects.toThrow("NEXT_NOT_FOUND");
   });
 });

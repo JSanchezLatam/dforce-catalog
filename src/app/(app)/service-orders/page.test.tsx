@@ -13,6 +13,9 @@ vi.mock("@/modules/auth/session", () => ({
 }));
 const can = vi.hoisted(() => vi.fn<(user: unknown, action: string) => boolean>(() => true));
 vi.mock("@/modules/auth/policy", () => ({ can }));
+const SCOPE = vi.hoisted(() => ({ where: "scope-sentinel" }));
+const orderScope = vi.hoisted(() => vi.fn<(user: unknown) => typeof SCOPE>(() => SCOPE));
+vi.mock("@/modules/service-orders/scope", () => ({ orderScope }));
 vi.mock("@/modules/service-orders/ServiceOrderFormTrigger", () => ({
   ServiceOrderFormTrigger: () => null,
 }));
@@ -171,14 +174,14 @@ describe("ServiceOrdersPage — column sorting", () => {
   it("hands the parsed sort to listOrdenesServicio, which is the entire feature", async () => {
     render(await renderPage({ sort: "id", dir: "desc" }));
 
-    expect(listOrdenesServicio.mock.calls[0][2]).toEqual({ key: "id", dir: "desc" });
+    expect(listOrdenesServicio.mock.calls[0][3]).toEqual({ key: "id", dir: "desc" });
   });
 
   it("composes sorting with the status filter — both reach listOrdenesServicio together", async () => {
     render(await renderPage({ sort: "status", dir: "asc", status: "done" }));
 
     expect(listOrdenesServicio.mock.calls[0][0]).toEqual({ status: "done" });
-    expect(listOrdenesServicio.mock.calls[0][2]).toEqual({ key: "status", dir: "asc" });
+    expect(listOrdenesServicio.mock.calls[0][3]).toEqual({ key: "status", dir: "asc" });
   });
 
   it("keeps the sort on every pagination link, like the status filter beside it", async () => {
@@ -203,7 +206,7 @@ describe("ServiceOrdersPage — column sorting", () => {
   it("falls back to default order without throwing on a hand-typed garbage sort/dir", async () => {
     render(await renderPage({ sort: "garbage", dir: "sideways" }));
 
-    expect(listOrdenesServicio.mock.calls[0][2]).toBeUndefined();
+    expect(listOrdenesServicio.mock.calls[0][3]).toBeUndefined();
     expect(screen.getByRole("link", { name: "ID" })).toBeInTheDocument();
   });
 
@@ -767,5 +770,17 @@ describe("ServiceOrdersPage — secondary columns below xl (mobile-responsive-pa
         expect(within(r).getAllByRole("cell")[i], `${label} cell`).not.toHaveClass("hidden");
       }
     }
+  });
+});
+
+describe("ServiceOrdersPage — order scope", () => {
+  it("scopes the list AND the count by the session user, so neither leaks an unassigned order", async () => {
+    listOrdenesServicio.mockClear();
+    countOrdenesServicio.mockClear();
+    render(await renderPage({}));
+
+    expect(orderScope).toHaveBeenCalledWith({ id: "u1", role: "tecnico" });
+    expect(listOrdenesServicio.mock.calls[0][2]).toBe(SCOPE);
+    expect(countOrdenesServicio.mock.calls[0][1]).toBe(SCOPE);
   });
 });

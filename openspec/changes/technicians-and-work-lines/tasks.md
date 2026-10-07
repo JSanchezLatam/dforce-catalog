@@ -62,11 +62,11 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU4a: orderScope and read paths (PR 4a)
 
-- [ ] 4.1 RED `scope.test.ts`: `orderScope(user)` returns no condition for `readAll` holders; an `EXISTS` over `orden_tecnico` for a técnico via their roster row; a técnico without a row gets a match-nothing scope; `SYSTEM_SCOPE` exists. GREEN `scope.ts`.
-- [ ] 4.2 RED `queries.test.ts`: `listOrdenesServicio`, `countOrdenesServicio`, `getOrdenServicioById`, `listOrdenesByVehiculo` take a REQUIRED `scope` (tsc fails when omitted). GREEN `queries.ts`, `customers/queries.ts` (orders in `getClienteById`).
-- [ ] 4.3 RED page/route tests: list, detail, print, photo GET, customer page, vehicle page each pass `orderScope(user)`; photo GET unassigned 404. GREEN callers; non-order callers pass `SYSTEM_SCOPE` explicitly.
-- [ ] 4.4 RED e2e `src/e2e/order-scope.e2e.test.ts` (7 rows: list, count, detail, photo GET lookup, customer orders, vehicle history, lock): técnico sees only the assigned order and gets null/404 on the other; search "perez" cannot reach unassigned; roster-less técnico sees empty. GREEN: fix real-SQL defects.
-- [ ] 4.5 Mutation-verify 4.1-4.4 by name (drop the `EXISTS`, pass `SYSTEM_SCOPE` in one path).
+- [x] 4.1 RED `scope.test.ts`: `orderScope(user)` returns no condition for `readAll` holders; an `EXISTS` over `orden_tecnico` for a técnico via their roster row; a técnico without a row gets a match-nothing scope; `SYSTEM_SCOPE` exists. GREEN `scope.ts`.
+- [x] 4.2 RED `queries.test.ts`: `listOrdenesServicio`, `countOrdenesServicio`, `getOrdenServicioById`, `listOrdenesByVehiculo` take a REQUIRED `scope` (tsc fails when omitted). GREEN `queries.ts`, `customers/queries.ts` (orders in `getClienteById`).
+- [x] 4.3 RED page/route tests: list, detail, print, photo GET, customer page, vehicle page each pass `orderScope(user)`; photo GET unassigned 404. GREEN callers; non-order callers pass `SYSTEM_SCOPE` explicitly.
+- [x] 4.4 RED e2e `src/e2e/order-scope.e2e.test.ts` (7 rows: list, count, detail, photo GET lookup, customer orders, vehicle history, lock): técnico sees only the assigned order and gets null/404 on the other; search "perez" cannot reach unassigned; roster-less técnico sees empty. GREEN: fix real-SQL defects.
+- [x] 4.5 Mutation-verify 4.1-4.4 by name (drop the `EXISTS`, pass `SYSTEM_SCOPE` in one path).
 
 ## WU4b: Create, assignments, lock scope (PR 4b)
 

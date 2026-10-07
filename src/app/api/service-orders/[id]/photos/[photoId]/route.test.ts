@@ -40,9 +40,21 @@ describe("GET /api/service-orders/[id]/photos/[photoId]", () => {
     const getObject = vi.fn();
     const res = await handleGetPhoto(req("GET"), { ordenId: "other-order", photoId: "p1" }, { findPhoto, getObject });
 
-    expect(findPhoto).toHaveBeenCalledWith({ ordenId: "other-order", photoId: "p1" });
+    expect(findPhoto).toHaveBeenCalledWith({ ordenId: "other-order", photoId: "p1" }, expect.anything());
     expect(res.status).toBe(404);
     expect(getObject).not.toHaveBeenCalled();
+  });
+
+  it("looks the photo up through the caller's order scope: a técnico is scoped, an administrador is not", async () => {
+    const findPhoto = vi.fn().mockResolvedValue(null);
+    const ids = { ordenId: "o1", photoId: "p1" };
+
+    const asTecnico = await handleGetPhoto(req("GET", "tecnico"), ids, { findPhoto, getObject: vi.fn() });
+    expect(asTecnico.status).toBe(404);
+    expect(findPhoto.mock.calls[0][1].where).toBeDefined();
+
+    await handleGetPhoto(req("GET", "administrador"), ids, { findPhoto, getObject: vi.fn() });
+    expect(findPhoto.mock.calls[1][1].where).toBeUndefined();
   });
 
   it("404 when the row exists but the object is gone", async () => {
