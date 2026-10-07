@@ -77,7 +77,7 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 - [x] 5.5 RED `transitions` tests: técnico `open → in_progress` allowed; técnico to `done`/`cancelled` 403; admin/jefe close from `in_progress`/`ready_for_review`; target `ready_for_review` rejected. GREEN.
 - [x] 5.6 RED e2e rows: técnico PATCH/transition on unassigned order 404 and unchanged; assignment idempotence on real SQL; assign during review reopens. GREEN.
 - [x] 5.7 Mutation-verify 5.1-5.6 by name.
-- [ ] 5.8 curl at the LAN IP as técnico, jefe, administrador.
+- [x] 5.8 curl at the LAN IP as técnico, jefe, administrador.
 
 ## WU5: Work lines (PR 5)
 
