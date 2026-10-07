@@ -53,6 +53,8 @@ export const ROUTE_GUARDS: Record<
   // transition other than `open -> in_progress` (close, cancel, return from
   // review) needs it, evaluated in the handler and handed to the service.
   "/api/service-orders/[id]": { PATCH: ["service-orders.write", "service-orders.correct", "service-orders.assign"] },
+  // Assigning a technician: admin and jefe only; a closed order is never assignable, so no `correct`.
+  "/api/service-orders/[id]/assignments": { POST: "service-orders.assign" },
   // Reception photos (service-order-reception WU3b). POST is `write` (both roles
   // photograph an open order); GET is `read`; DELETE is admin-only. Both writes
   // also evaluate `service-orders.correct`: it decides whether a password sent
