@@ -197,6 +197,20 @@
       "when": 1791344575305,
       "tag": "0027_orden_servicio_correccion",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1791349138077,
+      "tag": "0028_enum_jefe_ready",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1791349156553,
+      "tag": "0029_technicians_work_lines",
+      "breakpoints": true
     }
   ]
 }

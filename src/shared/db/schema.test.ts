@@ -32,8 +32,8 @@ function findIndex(indexes: ReturnType<typeof getTableConfig>["indexes"], name: 
 }
 
 describe("schema — role enum (renamed in crm-shell-settings-rbac WU1)", () => {
-  it("roleEnum has exactly the 2 renamed values (usuario → tecnico)", () => {
-    expect(roleEnum.enumValues).toEqual(["tecnico", "administrador"]);
+  it("roleEnum has the renamed values (usuario → tecnico) plus jefe_taller", () => {
+    expect(roleEnum.enumValues).toEqual(["tecnico", "administrador", "jefe_taller"]);
   });
 });
 
@@ -87,8 +87,8 @@ describe("schema — workshop_config singleton table", () => {
 });
 
 describe("schema — crm-workshop-management enums (Phase 1, task 1.1)", () => {
-  it("order_status enum has exactly the 4 lifecycle values", () => {
-    expect(orderStatusEnum.enumValues).toEqual(["open", "in_progress", "done", "cancelled"]);
+  it("order_status enum has exactly the 5 lifecycle values, ready_for_review before done", () => {
+    expect(orderStatusEnum.enumValues).toEqual(["open", "in_progress", "ready_for_review", "done", "cancelled"]);
   });
 
   it("reminder_type enum has exactly the 2 milestone values", () => {

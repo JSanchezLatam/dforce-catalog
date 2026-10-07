@@ -19,6 +19,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
+import { orderScope } from "@/modules/service-orders/scope";
 import { CustomerActivationButton } from "@/modules/customers/CustomerActivationButton";
 import { CustomerFormTrigger } from "@/modules/customers/CustomerFormTrigger";
 import { getClienteById } from "@/modules/customers/queries";
@@ -60,7 +61,7 @@ export default async function CustomerDetailPage({
     return <PermissionDenied title="Cliente" />;
   }
 
-  const detail = await getClienteById(id);
+  const detail = await getClienteById(id, orderScope(user));
 
   if (!detail) notFound();
 

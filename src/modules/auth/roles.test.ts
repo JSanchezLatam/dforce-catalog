@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { isRole, type Role } from "./roles";
+import { isRole, ROLE_LABELS, type Role } from "./roles";
 
-const ALL_ROLES: Role[] = ["tecnico", "administrador"];
+const ALL_ROLES: Role[] = ["tecnico", "jefe_taller", "administrador"];
 
 describe("isRole()", () => {
   it("tecnico is a valid role", () => {
@@ -11,6 +11,11 @@ describe("isRole()", () => {
 
   it("administrador is a valid role", () => {
     expect(isRole("administrador")).toBe(true);
+  });
+
+  it("jefe_taller is a valid role, labelled \"Jefe de taller\"", () => {
+    expect(isRole("jefe_taller")).toBe(true);
+    expect(ROLE_LABELS.jefe_taller).toBe("Jefe de taller");
   });
 
   it("usuario is NOT a valid role (renamed to tecnico)", () => {

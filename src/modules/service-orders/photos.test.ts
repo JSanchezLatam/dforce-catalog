@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { db } from "@/shared/db/client";
+import { OrderEditForbiddenError } from "./order-lock";
+import { SYSTEM_SCOPE } from "./scope";
 import { OrdenServicioNotFoundError } from "./service";
 import {
   addOrderPhoto,
@@ -109,7 +111,7 @@ describe("addOrderPhoto", () => {
   it("locks the order row, inserts the row, then puts the object, at the next position", async () => {
     const h = harness({ results: orderAt("open", 3, 7) });
 
-    const photo = await addOrderPhoto({ ordenId: "ord-1", bytes: JPEG, createdBy: "user-1" }, h.deps);
+    const photo = await addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", bytes: JPEG, createdBy: "user-1" }, h.deps);
 
     expect(photo).toEqual({ id: "photo-1", position: 7, r2Key: "service-orders/ord-1/photo-1.jpg" });
     expect(h.forArgs).toEqual(["update"]);
@@ -122,13 +124,31 @@ describe("addOrderPhoto", () => {
 
   it.each(["open", "in_progress"])("accepts a photo on a %s order", async (status) => {
     const h = harness({ results: orderAt(status) });
-    await expect(addOrderPhoto({ ordenId: "ord-1", bytes: JPEG }, h.deps)).resolves.toMatchObject({ position: 0 });
+    await expect(addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", bytes: JPEG }, h.deps)).resolves.toMatchObject({ position: 0 });
+  });
+
+  it("refuses a técnico on a ready_for_review order (OrderEditForbiddenError), before counting or storing", async () => {
+    const h = harness({ results: orderAt("ready_for_review") });
+
+    await expect(addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", bytes: JPEG }, h.deps)).rejects.toBeInstanceOf(
+      OrderEditForbiddenError,
+    );
+
+    expect(h.log).toEqual(["select"]);
+    expect(h.putObject).not.toHaveBeenCalled();
+  });
+
+  it("accepts staff on a ready_for_review order", async () => {
+    const h = harness({ results: orderAt("ready_for_review") });
+    await expect(
+      addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", bytes: JPEG, canManageAll: true }, h.deps),
+    ).resolves.toMatchObject({ position: 0 });
   });
 
   it("refuses a 13th photo with PhotoLimitError and stores nothing", async () => {
     const h = harness({ results: orderAt("open", 12, 12) });
 
-    const refused = addOrderPhoto({ ordenId: "ord-1", bytes: JPEG }, h.deps);
+    const refused = addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", bytes: JPEG }, h.deps);
 
     await expect(refused).rejects.toBeInstanceOf(PhotoLimitError);
     await expect(refused).rejects.toThrow("La orden ya tiene 12 fotos");
@@ -138,13 +158,13 @@ describe("addOrderPhoto", () => {
 
   it("still accepts the 12th photo (11 stored)", async () => {
     const h = harness({ results: orderAt("open", 11, 11) });
-    await expect(addOrderPhoto({ ordenId: "ord-1", bytes: JPEG }, h.deps)).resolves.toMatchObject({ position: 11 });
+    await expect(addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", bytes: JPEG }, h.deps)).resolves.toMatchObject({ position: 11 });
   });
 
   it.each(["done", "cancelled"])("refuses a %s order with OrderClosedError, before counting or storing", async (status) => {
     const h = harness({ results: orderAt(status) });
 
-    const refused = addOrderPhoto({ ordenId: "ord-1", bytes: JPEG }, h.deps);
+    const refused = addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", bytes: JPEG }, h.deps);
 
     await expect(refused).rejects.toBeInstanceOf(OrderClosedError);
     await expect(refused).rejects.toThrow("La orden está cerrada");
@@ -154,7 +174,7 @@ describe("addOrderPhoto", () => {
 
   it("throws OrdenServicioNotFoundError for an order that does not exist", async () => {
     const h = harness({ results: [[]] });
-    await expect(addOrderPhoto({ ordenId: "nope", bytes: JPEG }, h.deps)).rejects.toBeInstanceOf(OrdenServicioNotFoundError);
+    await expect(addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "nope", bytes: JPEG }, h.deps)).rejects.toBeInstanceOf(OrdenServicioNotFoundError);
     expect(h.putObject).not.toHaveBeenCalled();
   });
 
@@ -162,7 +182,7 @@ describe("addOrderPhoto", () => {
     const h = harness({ results: [...orderAt("done", 2, 2), []] });
 
     const photo = await addOrderPhoto(
-      { ordenId: "ord-1", bytes: JPEG, createdBy: "admin-1", correction: { correctorId: "admin-1" } },
+      { scope: SYSTEM_SCOPE, ordenId: "ord-1", bytes: JPEG, createdBy: "admin-1", correction: { correctorId: "admin-1" } },
       h.deps,
     );
 
@@ -174,7 +194,7 @@ describe("addOrderPhoto", () => {
   it("an open order with a grant writes NO audit row (nothing was corrected)", async () => {
     const h = harness({ results: orderAt("open", 2, 2) });
 
-    await addOrderPhoto({ ordenId: "ord-1", bytes: JPEG, correction: { correctorId: "admin-1" } }, h.deps);
+    await addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", bytes: JPEG, correction: { correctorId: "admin-1" } }, h.deps);
 
     expect(h.log).toEqual(["select", "select", "insert", "put"]);
   });
@@ -183,7 +203,7 @@ describe("addOrderPhoto", () => {
     const h = harness({ results: orderAt("done", 12, 12) });
 
     await expect(
-      addOrderPhoto({ ordenId: "ord-1", bytes: JPEG, correction: { correctorId: "admin-1" } }, h.deps),
+      addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", bytes: JPEG, correction: { correctorId: "admin-1" } }, h.deps),
     ).rejects.toBeInstanceOf(PhotoLimitError);
 
     expect(h.inserted).toEqual([]);
@@ -194,7 +214,7 @@ describe("addOrderPhoto", () => {
     const h = harness({ results: [...orderAt("cancelled"), []], putFails: true });
 
     await expect(
-      addOrderPhoto({ ordenId: "ord-1", bytes: JPEG, correction: { correctorId: "admin-1" } }, h.deps),
+      addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", bytes: JPEG, correction: { correctorId: "admin-1" } }, h.deps),
     ).rejects.toThrow("r2 down");
 
     // Both inserts ran BEFORE the put, i.e. inside the callback that threw.
@@ -205,7 +225,7 @@ describe("addOrderPhoto", () => {
   it("propagates a throwing put and never calls deleteObject (the transaction rolls the row back)", async () => {
     const h = harness({ results: orderAt("open"), putFails: true });
 
-    await expect(addOrderPhoto({ ordenId: "ord-1", bytes: JPEG }, h.deps)).rejects.toThrow("r2 down");
+    await expect(addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", bytes: JPEG }, h.deps)).rejects.toThrow("r2 down");
 
     expect(h.deleteObject).not.toHaveBeenCalled();
   });
@@ -213,7 +233,7 @@ describe("addOrderPhoto", () => {
   it("deletes the object when the commit fails after the put, and rethrows", async () => {
     const h = harness({ results: orderAt("open"), commitFails: true });
 
-    await expect(addOrderPhoto({ ordenId: "ord-1", bytes: JPEG }, h.deps)).rejects.toThrow("commit failed");
+    await expect(addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", bytes: JPEG }, h.deps)).rejects.toThrow("commit failed");
 
     expect(h.deleteObject).toHaveBeenCalledWith("service-orders/ord-1/photo-1.jpg");
     expect(h.log.at(-1)).toBe("deleteObject");
@@ -221,7 +241,7 @@ describe("addOrderPhoto", () => {
 
   it("rethrows the commit failure even when the cleanup delete also fails", async () => {
     const h = harness({ results: orderAt("open"), commitFails: true, deleteObjectFails: true });
-    await expect(addOrderPhoto({ ordenId: "ord-1", bytes: JPEG }, h.deps)).rejects.toThrow("commit failed");
+    await expect(addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", bytes: JPEG }, h.deps)).rejects.toThrow("commit failed");
   });
 });
 
@@ -232,7 +252,7 @@ describe("deleteOrderPhoto", () => {
   it("locks and gates the order, deletes the row, and only then deletes the object", async () => {
     const h = harness({ results: lockedThenDeleted("in_progress", [{ r2Key: "service-orders/ord-1/photo-1.jpg" }]) });
 
-    await deleteOrderPhoto({ ordenId: "ord-1", photoId: "photo-1" }, h.deps);
+    await deleteOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", photoId: "photo-1" }, h.deps);
 
     expect(h.forArgs).toEqual(["update"]);
     expect(h.deleteObject).toHaveBeenCalledWith("service-orders/ord-1/photo-1.jpg");
@@ -242,7 +262,7 @@ describe("deleteOrderPhoto", () => {
   it.each(["done", "cancelled"])("refuses a %s order and deletes neither the row nor the object", async (status) => {
     const h = harness({ results: lockedThenDeleted(status, [{ r2Key: "k" }]) });
 
-    await expect(deleteOrderPhoto({ ordenId: "ord-1", photoId: "photo-1" }, h.deps)).rejects.toBeInstanceOf(OrderClosedError);
+    await expect(deleteOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", photoId: "photo-1" }, h.deps)).rejects.toBeInstanceOf(OrderClosedError);
 
     expect(h.log).toEqual(["select"]);
     expect(h.deleteObject).not.toHaveBeenCalled();
@@ -251,7 +271,7 @@ describe("deleteOrderPhoto", () => {
   it("on a closed order WITH a grant deletes the row, writes one foto audit row (photoId, null), then deletes the object", async () => {
     const h = harness({ results: [[{ status: "cancelled" }], [{ r2Key: "k" }], []] });
 
-    await deleteOrderPhoto({ ordenId: "ord-1", photoId: "photo-1", correction: { correctorId: "admin-1" } }, h.deps);
+    await deleteOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", photoId: "photo-1", correction: { correctorId: "admin-1" } }, h.deps);
 
     expect(h.inserted).toEqual([[{ ordenId: "ord-1", userId: "admin-1", field: "foto", oldValue: "photo-1", newValue: null }]]);
     expect(h.log).toEqual(["select", "delete", "insert", "deleteObject"]);
@@ -260,7 +280,7 @@ describe("deleteOrderPhoto", () => {
   it("deletes the object only AFTER the transaction commits", async () => {
     const h = harness({ results: [[{ status: "done" }], [{ r2Key: "k" }], []] });
 
-    await deleteOrderPhoto({ ordenId: "ord-1", photoId: "photo-1", correction: { correctorId: "admin-1" } }, h.deps);
+    await deleteOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", photoId: "photo-1", correction: { correctorId: "admin-1" } }, h.deps);
 
     expect(h.committedAtObjectDelete).toEqual([true]);
   });
@@ -269,7 +289,7 @@ describe("deleteOrderPhoto", () => {
     const h = harness({ results: [[{ status: "done" }], []] });
 
     await expect(
-      deleteOrderPhoto({ ordenId: "ord-1", photoId: "other", correction: { correctorId: "admin-1" } }, h.deps),
+      deleteOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", photoId: "other", correction: { correctorId: "admin-1" } }, h.deps),
     ).rejects.toBeInstanceOf(PhotoNotFoundError);
 
     expect(h.inserted).toEqual([]);
@@ -279,19 +299,19 @@ describe("deleteOrderPhoto", () => {
   it("throws PhotoNotFoundError when no row matches (photoId, ordenId) and touches no object", async () => {
     const h = harness({ results: lockedThenDeleted("open", []) });
 
-    await expect(deleteOrderPhoto({ ordenId: "ord-1", photoId: "other" }, h.deps)).rejects.toBeInstanceOf(PhotoNotFoundError);
+    await expect(deleteOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", photoId: "other" }, h.deps)).rejects.toBeInstanceOf(PhotoNotFoundError);
 
     expect(h.deleteObject).not.toHaveBeenCalled();
   });
 
   it("throws OrdenServicioNotFoundError for a missing order", async () => {
     const h = harness({ results: [[]] });
-    await expect(deleteOrderPhoto({ ordenId: "nope", photoId: "p" }, h.deps)).rejects.toBeInstanceOf(OrdenServicioNotFoundError);
+    await expect(deleteOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "nope", photoId: "p" }, h.deps)).rejects.toBeInstanceOf(OrdenServicioNotFoundError);
   });
 
   it("swallows an object-delete failure: the row is already gone and the delete succeeded", async () => {
     const h = harness({ results: lockedThenDeleted("open", [{ r2Key: "k" }]), deleteObjectFails: true });
-    await expect(deleteOrderPhoto({ ordenId: "ord-1", photoId: "photo-1" }, h.deps)).resolves.toBeUndefined();
+    await expect(deleteOrderPhoto({ scope: SYSTEM_SCOPE, ordenId: "ord-1", photoId: "photo-1" }, h.deps)).resolves.toBeUndefined();
     expect(h.deleteObject).toHaveBeenCalledTimes(1);
   });
 });

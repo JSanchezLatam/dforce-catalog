@@ -19,6 +19,7 @@ import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { cliente, type Cliente, type Vehiculo } from "@/shared/db/schema";
+import { SYSTEM_SCOPE } from "@/modules/service-orders/scope";
 import { findClienteByPhone, getClienteById } from "./queries";
 import {
   ClienteValidationError,
@@ -192,7 +193,8 @@ export async function updateCliente(
   deps: UpdateClienteDeps = {},
 ): Promise<Cliente> {
   const getById = deps.getById ?? getClienteById;
-  const current = await getById(id);
+  // SYSTEM_SCOPE: this reads the customer row and vehicles; the order history it also returns is unused here.
+  const current = await getById(id, SYSTEM_SCOPE);
   if (!current) {
     throw new ClienteNotFoundError(id);
   }

@@ -16,6 +16,7 @@ import {
   OrderClosedError,
   recordCorrections,
 } from "../modules/service-orders/order-lock";
+import { SYSTEM_SCOPE } from "../modules/service-orders/scope";
 import { transitionOrder } from "../modules/service-orders/service";
 import { OrderTransitionError } from "../modules/service-orders/transitions";
 
@@ -94,15 +95,15 @@ describe("orden_servicio_correccion (E2E)", () => {
     const openId = await newOrder("open");
     const doneId = await newOrder("done");
     await db.transaction(async (tx) => {
-      const open = await lockOrderForMutation(tx, openId, { canWrite: (s) => s === "open" });
+      const open = await lockOrderForMutation(tx, openId, { scope: SYSTEM_SCOPE, canWrite: (s) => s === "open" });
       expect(open.correcting).toBe(false);
     });
     await db.transaction(async (tx) => {
-      const done = await lockOrderForMutation(tx, doneId, { canWrite: () => false, correction: { correctorId: userId } });
+      const done = await lockOrderForMutation(tx, doneId, { scope: SYSTEM_SCOPE, canWrite: () => false, correction: { correctorId: userId } });
       expect(done).toMatchObject({ correcting: true, order: { id: doneId, status: "done" } });
     });
     await expect(
-      db.transaction((tx) => lockOrderForMutation(tx, doneId, { canWrite: () => false })),
+      db.transaction((tx) => lockOrderForMutation(tx, doneId, { scope: SYSTEM_SCOPE, canWrite: () => false })),
     ).rejects.toBeInstanceOf(OrderClosedError);
   });
 
@@ -112,14 +113,14 @@ describe("orden_servicio_correccion (E2E)", () => {
     let release!: () => void;
     const held = new Promise<void>((resolve) => (release = resolve));
     const first = db.transaction(async (tx) => {
-      await lockOrderForMutation(tx, ordenId, { canWrite: () => true });
+      await lockOrderForMutation(tx, ordenId, { scope: SYSTEM_SCOPE, canWrite: () => true });
       order.push("first locked");
       await held;
       order.push("first committing");
     });
     await new Promise((r) => setTimeout(r, 100));
     const second = db.transaction(async (tx) => {
-      await lockOrderForMutation(tx, ordenId, { canWrite: () => true });
+      await lockOrderForMutation(tx, ordenId, { scope: SYSTEM_SCOPE, canWrite: () => true });
       order.push("second locked");
     });
     await new Promise((r) => setTimeout(r, 200));
@@ -153,7 +154,7 @@ describe("orden_servicio_correccion (E2E)", () => {
   it("a concurrent done and cancelled on one order cannot both win: the loser finds it closed", async () => {
     const ordenId = await newOrder("in_progress");
     // The reminder side effects are not under test (they are no-ops here); the status write is.
-    const deps = { getClienteById: async () => null, cancelRemindersForOrder: async () => {} };
+    const deps = { scope: SYSTEM_SCOPE, canAssign: true, getClienteById: async () => null, cancelRemindersForOrder: async () => {} };
     const results = await Promise.allSettled([
       transitionOrder(ordenId, "done", deps),
       transitionOrder(ordenId, "cancelled", deps),

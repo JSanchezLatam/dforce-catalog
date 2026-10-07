@@ -1,6 +1,8 @@
+import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 import { lockOrderForMutation, OrderClosedError, OrderEditForbiddenError, recordCorrections } from "./order-lock";
+import { orderScope, SYSTEM_SCOPE } from "./scope";
 import { OrdenServicioNotFoundError } from "./service";
 import type { OrderStatus } from "./transitions";
 
@@ -11,6 +13,7 @@ import type { OrderStatus } from "./transitions";
  */
 function fakeTx(results: unknown[][] = []) {
   const forArgs: unknown[] = [];
+  const whereArgs: unknown[] = [];
   const inserted: unknown[] = [];
   let next = 0;
   const statement = () => {
@@ -23,6 +26,7 @@ function fakeTx(results: unknown[][] = []) {
         }
         return (...args: unknown[]) => {
           if (prop === "for") forArgs.push(args[0]);
+          if (prop === "where") whereArgs.push(args[0]);
           if (prop === "values") inserted.push(args[0]);
           return chain;
         };
@@ -31,7 +35,7 @@ function fakeTx(results: unknown[][] = []) {
     return chain;
   };
   const tx = { select: statement, insert: statement } as never;
-  return { tx, forArgs, inserted, statements: () => next };
+  return { tx, forArgs, whereArgs, inserted, statements: () => next };
 }
 
 const row = (status: OrderStatus) => ({ id: "ord-1", status });
@@ -42,51 +46,70 @@ const grant = { correctorId: "admin-1" };
 describe("lockOrderForMutation", () => {
   it("throws OrdenServicioNotFoundError when the order does not exist", async () => {
     const { tx } = fakeTx([[]]);
-    await expect(lockOrderForMutation(tx, "ord-1", { canWrite: anyStatus })).rejects.toBeInstanceOf(
+    await expect(lockOrderForMutation(tx, "ord-1", { scope: SYSTEM_SCOPE, canWrite: anyStatus })).rejects.toBeInstanceOf(
       OrdenServicioNotFoundError,
     );
   });
 
   it("returns correcting:false when the order is open and canWrite allows it", async () => {
     const { tx } = fakeTx([[row("open")]]);
-    const out = await lockOrderForMutation(tx, "ord-1", { canWrite: (s) => s === "open" });
+    const out = await lockOrderForMutation(tx, "ord-1", { scope: SYSTEM_SCOPE, canWrite: (s) => s === "open" });
     expect(out).toEqual({ order: row("open"), correcting: false });
   });
 
   it.each<OrderStatus>(["done", "cancelled"])("returns correcting:true for a %s order with a grant", async (status) => {
     const { tx } = fakeTx([[row(status)]]);
-    const out = await lockOrderForMutation(tx, "ord-1", { canWrite: noStatus, correction: grant });
+    const out = await lockOrderForMutation(tx, "ord-1", { scope: SYSTEM_SCOPE, canWrite: noStatus, correction: grant });
     expect(out).toEqual({ order: row(status), correcting: true });
   });
 
   it.each<OrderStatus>(["done", "cancelled"])("throws OrderClosedError for a %s order without a grant", async (status) => {
     const { tx } = fakeTx([[row(status)]]);
-    await expect(lockOrderForMutation(tx, "ord-1", { canWrite: noStatus })).rejects.toBeInstanceOf(OrderClosedError);
+    await expect(lockOrderForMutation(tx, "ord-1", { scope: SYSTEM_SCOPE, canWrite: noStatus })).rejects.toBeInstanceOf(OrderClosedError);
   });
 
   it("throws OrderEditForbiddenError for an open order the caller may not write", async () => {
     const { tx } = fakeTx([[row("open")]]);
-    await expect(lockOrderForMutation(tx, "ord-1", { canWrite: noStatus })).rejects.toBeInstanceOf(
+    await expect(lockOrderForMutation(tx, "ord-1", { scope: SYSTEM_SCOPE, canWrite: noStatus })).rejects.toBeInstanceOf(
       OrderEditForbiddenError,
     );
   });
 
   it("ignores a grant on an open order the caller may not write", async () => {
     const { tx } = fakeTx([[row("in_progress")]]);
-    await expect(lockOrderForMutation(tx, "ord-1", { canWrite: noStatus, correction: grant })).rejects.toBeInstanceOf(
+    await expect(lockOrderForMutation(tx, "ord-1", { scope: SYSTEM_SCOPE, canWrite: noStatus, correction: grant })).rejects.toBeInstanceOf(
       OrderEditForbiddenError,
     );
   });
 
   it("lets a closed order through when canWrite allows it (a status transition) and reports no correction", async () => {
     const { tx } = fakeTx([[row("done")]]);
-    const out = await lockOrderForMutation(tx, "ord-1", { canWrite: anyStatus });
+    const out = await lockOrderForMutation(tx, "ord-1", { scope: SYSTEM_SCOPE, canWrite: anyStatus });
     expect(out.correcting).toBe(false);
+  });
+
+  it("adds the scope's condition to the locking SELECT, and a scoped miss is the same not-found as a missing order", async () => {
+    const { tx, whereArgs } = fakeTx([[]]);
+    await expect(
+      lockOrderForMutation(tx, "ord-1", { scope: orderScope({ id: "tec-1", role: "tecnico" }), canWrite: anyStatus }),
+    ).rejects.toBeInstanceOf(OrdenServicioNotFoundError);
+    const { sql, params } = new PgDialect().sqlToQuery(whereArgs[0] as never);
+    expect(sql).toContain('"orden_servicio"."id" = $1');
+    expect(sql).toContain('"orden_tecnico"."orden_id" = "orden_servicio"."id"');
+    expect(params).toEqual(["ord-1", "tec-1"]);
+  });
+
+  it("adds no extra condition for SYSTEM_SCOPE", async () => {
+    const { tx, whereArgs } = fakeTx([[row("open")]]);
+    await lockOrderForMutation(tx, "ord-1", { scope: SYSTEM_SCOPE, canWrite: anyStatus });
+    const { sql, params } = new PgDialect().sqlToQuery(whereArgs[0] as never);
+    expect(sql).not.toContain("orden_tecnico");
+    expect(params).toEqual(["ord-1"]);
   });
 
   it("locks the row with FOR UPDATE", async () => {
     const { tx, forArgs } = fakeTx([[row("open")]]);
-    await lockOrderForMutation(tx, "ord-1", { canWrite: anyStatus });
+    await lockOrderForMutation(tx, "ord-1", { scope: SYSTEM_SCOPE, canWrite: anyStatus });
     expect(forArgs).toEqual(["update"]);
   });
 });

@@ -62,7 +62,7 @@ function renderActions() {
         {PAGE_IDS.map((id) => (
           <RowCheckbox key={id} id={id} label={`orden ${id}`} />
         ))}
-        <OrderBulkStatusActions statuses={STATUSES} />
+        <OrderBulkStatusActions statuses={STATUSES} canAssign />
         {/* The sibling every list page mounts beside the action — it is what names
             the rows that failed, and what proves the run finished. */}
         <BulkResultPanel />
@@ -142,5 +142,62 @@ describe("OrderBulkStatusActions — the run ends by emptying the bar, so it has
     // than a race against one that had not appeared yet.
     expect(await screen.findByText(/Se aplicaron 0 filas y 2 no se pudieron/)).toBeInTheDocument();
     expect(screen.queryByText(/actualizada/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The menu is the role's menu: a técnico who selects `open` rows is offered the
+ * start and nothing the route would answer 403, and one whose selection holds no
+ * permitted edge gets the same "no common action" stand-down as any other empty
+ * intersection.
+ */
+describe("OrderBulkStatusActions — only what the role may do", () => {
+  function renderWith(statuses: Record<string, OrderStatus | undefined>, canAssign: boolean) {
+    const ids = Object.keys(statuses);
+    render(
+      <ToastProvider>
+        <SelectionProvider pageIds={ids} labels={Object.fromEntries(ids.map((id) => [id, `orden ${id}`]))} filterKey="role">
+          {ids.map((id) => (
+            <RowCheckbox key={id} id={id} label={`orden ${id}`} />
+          ))}
+          <OrderBulkStatusActions statuses={statuses} canAssign={canAssign} />
+        </SelectionProvider>
+      </ToastProvider>,
+    );
+    return ids;
+  }
+
+  async function openMenu(user: User, ids: string[]) {
+    for (const id of ids) await user.click(screen.getByRole("checkbox", { name: `Seleccionar orden ${id}` }));
+    await user.click(screen.getByRole("button", { name: "Cambiar estado" }));
+    await screen.findByRole("menu");
+    return screen.getAllByRole("menuitem").map((item) => item.textContent);
+  }
+
+  it("offers a técnico only the start over open rows", async () => {
+    const user = userEvent.setup();
+    const ids = renderWith({ a: "open", b: "open" }, false);
+
+    expect(await openMenu(user, ids)).toEqual(["Marcar como En progreso"]);
+  });
+
+  it("offers a técnico no action over in_progress rows and says so", async () => {
+    const user = userEvent.setup();
+    const ids = renderWith({ a: "in_progress" }, false);
+    await user.click(screen.getByRole("checkbox", { name: `Seleccionar orden ${ids[0]}` }));
+
+    expect(screen.getByRole("button", { name: "Cambiar estado" })).toBeDisabled();
+    expect(screen.getByText("No hay ninguna acción común a esta selección")).toBeInTheDocument();
+  });
+
+  it("offers staff close, cancel and the send-back over ready_for_review rows", async () => {
+    const user = userEvent.setup();
+    const ids = renderWith({ a: "ready_for_review" }, true);
+
+    expect(await openMenu(user, ids)).toEqual([
+      "Marcar como En progreso",
+      "Marcar como Completada",
+      "Marcar como Cancelada",
+    ]);
   });
 });

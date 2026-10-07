@@ -16,6 +16,10 @@ describe("ORDER_STATUS_LABEL", () => {
     }
   });
 
+  it("labels ready_for_review as Lista para revisión", () => {
+    expect(ORDER_STATUS_LABEL.ready_for_review).toBe("Lista para revisión");
+  });
+
   it("labels in_progress distinctly from done, the pair a technician reads fastest", () => {
     expect(ORDER_STATUS_LABEL.in_progress).toBe("En progreso");
     expect(ORDER_STATUS_LABEL.done).toBe("Completada");

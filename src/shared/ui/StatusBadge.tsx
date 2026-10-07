@@ -1,4 +1,4 @@
-import { Ban, BellOff, CheckCircle, Clock, Loader2, MinusCircle, XCircle, type LucideIcon } from "lucide-react";
+import { Ban, BellOff, CheckCircle, ClipboardCheck, Clock, Loader2, MinusCircle, XCircle, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -12,6 +12,7 @@ export type BadgeStatus =
   // order_status (R21, Phase 6 — service-orders/[id] page)
   | "open"
   | "in_progress"
+  | "ready_for_review"
   | "done"
   | "cancelled"
   // reminder_status (R24/R25/R26, Phase 6 — service-orders/[id] reminders list)
@@ -44,6 +45,7 @@ const STATUS_TONE: Record<BadgeStatus, string> = {
   pending: TONE.neutral,
   open: TONE.neutral,
   in_progress: TONE.warning,
+  ready_for_review: TONE.warning,
   done: TONE.success,
   // Struck through, as in the mockup: neutral grey alone reads the same as "open".
   cancelled: `${TONE.neutral} line-through decoration-1`,
@@ -62,6 +64,7 @@ const STATUS_ICON: Record<BadgeStatus, LucideIcon> = {
   pending: Clock,
   open: Clock,
   in_progress: Loader2,
+  ready_for_review: ClipboardCheck,
   done: CheckCircle,
   cancelled: Ban,
   scheduled: Clock,

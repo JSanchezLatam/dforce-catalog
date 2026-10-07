@@ -1,12 +1,15 @@
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 
+import type { Role } from "@/modules/auth/roles";
+import { InvalidTecnicoError } from "@/modules/service-orders/assignments";
 import { handleCreateOrdenServicio, POST } from "./route";
 
-function requestWith(body: unknown) {
+/** Defaults to `jefe_taller`: creating is `service-orders.create`, which a técnico does not hold. */
+function requestWith(body: unknown, role: Role = "jefe_taller") {
   return new NextRequest("http://localhost/api/service-orders", {
     method: "POST",
-    headers: { "x-user-id": "user-1", "x-user-role": "tecnico", "Content-Type": "application/json" },
+    headers: { "x-user-id": "user-1", "x-user-role": role, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
@@ -443,5 +446,78 @@ describe("POST /api/service-orders — intake fields", () => {
     expect((await response.json()).errors).toEqual({ [key]: message });
     expect(database.transaction).not.toHaveBeenCalled();
     expect(captured.values).toBeNull();
+  });
+});
+
+describe("POST /api/service-orders — create is service-orders.create, with technicians", () => {
+  const payload = { clienteId: "cli-1", vehiculoId: "v1", categoria: "revisado" };
+  const withDb = () => {
+    const inserted: unknown[] = [];
+    const tx = {
+      select: () => ({ from: () => ({ where: async () => [{ id: "t1", deactivatedAt: null }] }) }),
+      insert: () => ({
+        values: (values: unknown) => {
+          inserted.push(values);
+          return Array.isArray(values)
+            ? Promise.resolve()
+            : { returning: async () => [{ id: "o1", status: "open", ...(values as object) }] };
+        },
+      }),
+    };
+    return {
+      inserted,
+      deps: {
+        getClienteById: async () => clienteDetail as never,
+        db: { transaction: async (cb: (tx: unknown) => unknown) => cb(tx) } as never,
+      },
+    };
+  };
+
+  it("refuses a técnico with 403 and creates nothing: it holds write but not create", async () => {
+    const database = { transaction: vi.fn() };
+    const response = await handleCreateOrdenServicio(requestWith(payload, "tecnico"), {
+      getClienteById: async () => clienteDetail as never,
+      db: database as never,
+    });
+    expect(response.status).toBe(403);
+    expect(database.transaction).not.toHaveBeenCalled();
+  });
+
+  it.each(["jefe_taller", "administrador"] as const)("lets %s create: 201", async (role) => {
+    const { deps } = withDb();
+    expect((await handleCreateOrdenServicio(requestWith(payload, role), deps)).status).toBe(201);
+  });
+
+  it("assigns the technicians in the body, stamped with the SESSION user", async () => {
+    const { deps, inserted } = withDb();
+    const response = await handleCreateOrdenServicio(requestWith({ ...payload, tecnicoIds: ["t1"] }), deps);
+
+    expect(response.status).toBe(201);
+    expect(inserted).toContainEqual([{ ordenId: "o1", tecnicoId: "t1", assignedBy: "user-1" }]);
+  });
+
+  it.each([["t1"], [[1]], [{ 0: "t1" }], [null]])("rejects tecnicoIds %j with 400 before touching the DB", async (tecnicoIds) => {
+    const database = { transaction: vi.fn() };
+    const response = await handleCreateOrdenServicio(requestWith({ ...payload, tecnicoIds }), {
+      getClienteById: async () => clienteDetail as never,
+      db: database as never,
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ errors: { tecnicoIds: "Valor inválido" } });
+    expect(database.transaction).not.toHaveBeenCalled();
+  });
+
+  it("answers a refused technician with 400 under errors.tecnicoIds", async () => {
+    const database = {
+      transaction: async () => {
+        throw new InvalidTecnicoError({ tecnicoIds: "Elegí técnicos activos" });
+      },
+    };
+    const response = await handleCreateOrdenServicio(requestWith({ ...payload, tecnicoIds: ["t9"] }), {
+      getClienteById: async () => clienteDetail as never,
+      db: database as never,
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ errors: { tecnicoIds: "Elegí técnicos activos" } });
   });
 });
