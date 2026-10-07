@@ -65,7 +65,7 @@ export const MATRIX: Record<Role, Grants> = {
     "technicians.manage": false,
   },
   // The workshop manager: everything the owner holds except user management,
-  // workshop and template settings, and closed-order corrections.
+  // workshop and template settings, closed-order corrections and photo deletion.
   jefe_taller: {
     "customers.read": true,
     "customers.write": true,
@@ -74,7 +74,7 @@ export const MATRIX: Record<Role, Grants> = {
     "vencimientos.contact": true,
     "service-orders.read": true,
     "service-orders.write": true,
-    "service-orders.deletePhoto": true,
+    "service-orders.deletePhoto": false, // administrador-only (spec: Reception Photos)
     "service-orders.correct": false,
     "service-orders.readAll": true,
     "service-orders.create": true,

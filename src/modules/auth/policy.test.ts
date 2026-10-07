@@ -32,9 +32,11 @@ const adminGrants: Grants = {
   "technicians.manage": true,
 };
 
-// Every administrador grant except the four the owner keeps for himself.
+// Every administrador grant except the four the owner keeps for himself, and
+// photo deletion, which the spec keeps administrador-only.
 const jefeGrants: Grants = {
   ...adminGrants,
+  "service-orders.deletePhoto": false,
   "users.manage": false,
   "workshop.edit": false,
   "template.edit": false,
@@ -90,7 +92,7 @@ describe("can() — role × action permission matrix", () => {
     }
   });
 
-  it("grants jefe_taller every administrador action except the owner-only four", () => {
+  it("grants jefe_taller every administrador action except the owner-only four and photo deletion", () => {
     const user = { id: "j", role: "jefe_taller" as const };
     for (const [action, expected] of Object.entries(jefeGrants)) {
       expect(can(user, action as Action)).toBe(expected);

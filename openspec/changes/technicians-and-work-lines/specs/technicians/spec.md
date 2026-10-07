@@ -83,7 +83,7 @@ An `administrador` and a `jefe_taller` MUST be able to list, create, rename and 
 
 ### Requirement: Jefe de Taller Role
 
-The system MUST define a `jefe_taller` role holding every permission of `administrador` EXCEPT `users.manage`, `workshop.edit`, `template.edit` and `service-orders.correct`. It MUST keep, among others, `sync.manual` and `catalogs.generate`. Every route guarded by an excluded permission MUST answer a `jefe_taller` session with 403, and the corresponding navigation entries MUST NOT render for that role. Role checks that name `administrador` literally (for example photo deletion, closed-order corrections) are NOT widened to `jefe_taller` by this change. The role MUST be added to the database enum in a migration separate from any statement that uses the new value.
+The system MUST define a `jefe_taller` role holding every permission of `administrador` EXCEPT `users.manage`, `workshop.edit`, `template.edit`, `service-orders.correct` and `service-orders.deletePhoto`. It MUST keep, among others, `sync.manual` and `catalogs.generate`. Every route guarded by an excluded permission MUST answer a `jefe_taller` session with 403, and the corresponding navigation entries MUST NOT render for that role. Role checks that name `administrador` literally (for example photo deletion, closed-order corrections) are NOT widened to `jefe_taller` by this change. The role MUST be added to the database enum in a migration separate from any statement that uses the new value.
 
 #### Scenario: Jefe refused on users
 - GIVEN a `jefe_taller` session

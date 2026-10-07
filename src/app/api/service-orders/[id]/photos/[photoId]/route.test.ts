@@ -71,6 +71,14 @@ describe("DELETE /api/service-orders/[id]/photos/[photoId]", () => {
     expect(deletePhoto).not.toHaveBeenCalled();
   });
 
+  it("403 for a jefe_taller and nothing is deleted: photo deletion stays administrador-only", async () => {
+    const deletePhoto = vi.fn();
+    const res = await handleDeletePhoto(req("DELETE", "jefe_taller"), ids, { deletePhoto });
+
+    expect(res.status).toBe(403);
+    expect(deletePhoto).not.toHaveBeenCalled();
+  });
+
   it("403 for a tecnico even when the photo does not exist (403 before 404)", async () => {
     const deletePhoto = vi.fn().mockRejectedValue(new PhotoNotFoundError());
     const res = await handleDeletePhoto(req("DELETE", "tecnico"), ids, { deletePhoto });
