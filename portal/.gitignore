@@ -3,3 +3,9 @@ node_modules
 .env*.local
 next-env.d.ts
 *.tsbuildinfo
+
+# Vercel CLI link and Marketplace agent skills (vercel link / vercel integration add)
+.vercel
+.agents/
+.claude/
+skills-lock.json

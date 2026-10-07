@@ -1,0 +1,8 @@
+# Never upload local env files or agent tooling to Vercel.
+.env*
+.agents
+.claude
+skills-lock.json
+e2e
+node_modules
+.next
