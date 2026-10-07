@@ -19,6 +19,7 @@ import { eq, sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { cliente, type Cliente, type Vehiculo } from "@/shared/db/schema";
+import { enqueuePortalSync, type PortalSyncDeps } from "@/modules/portal-sync/enqueue";
 import { SYSTEM_SCOPE } from "@/modules/service-orders/scope";
 import { findClienteByPhone, getClienteById } from "./queries";
 import {
@@ -173,7 +174,7 @@ export type UpdateClienteDeps = {
   update?: (id: string, patch: Partial<ClienteInput>) => Promise<Cliente>;
   /** Only opened when the patch carries a `vehicles` key — see design.md D5. */
   database?: DatabaseDep;
-};
+} & PortalSyncDeps;
 
 export type ClientePatch = Partial<ClienteInput> & { vehicles?: unknown; allowDuplicatePhone?: unknown };
 
@@ -259,7 +260,7 @@ export async function updateCliente(
   const plan = planVehiculoReconcile(current.vehicles, vehiclesInput);
 
   const database = deps.database ?? { transaction: (fn: (tx: TxLike) => Promise<Cliente>) => db.transaction(fn) };
-  return database.transaction(async (tx) => {
+  const row = await database.transaction(async (tx) => {
     const row =
       Object.keys(persistedPatch).length > 0
         ? (await tx.update(cliente).set(persistedPatch).where(eq(cliente.id, id)).returning())[0]
@@ -267,6 +268,9 @@ export async function updateCliente(
     await applyVehiculoPlan(tx, id, plan);
     return row;
   });
+  // Only the vehicle branch: the scalar columns (name, phone, ...) are not in the portal snapshot.
+  await (deps.enqueuePortalSync ?? enqueuePortalSync)(id);
+  return row;
 }
 
 /**
@@ -278,7 +282,7 @@ export async function updateCliente(
  */
 export type ActivationDeps = {
   setDeactivatedAt?: (id: string, at: Date | null) => Promise<Cliente | undefined>;
-};
+} & PortalSyncDeps;
 
 /**
  * One UPDATE, no preceding read: `returning()` already distinguishes "row
@@ -311,6 +315,8 @@ async function setActivation(id: string, at: Date | null, deps: ActivationDeps):
   if (!row) {
     throw new ClienteNotFoundError(id);
   }
+  // Eligibility changed: the worker decides upsert or delete from the current row.
+  await (deps.enqueuePortalSync ?? enqueuePortalSync)(id);
   return row;
 }
 

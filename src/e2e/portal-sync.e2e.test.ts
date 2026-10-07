@@ -6,13 +6,21 @@
  */
 import { execSync } from "node:child_process";
 import { eq, inArray, sql } from "drizzle-orm";
+import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { IngestBody } from "@portal/contract";
 import { parseIngest } from "../../portal/src/ingest/parse";
+import { recordConsent, rotatePortalToken } from "@/modules/customers/consent";
+import { deactivateCliente, reactivateCliente, updateCliente } from "@/modules/customers/service";
+import { enqueuePortalSync, ensurePortalSyncQueue } from "@/modules/portal-sync/enqueue";
 import { runPortalSync } from "@/modules/portal-sync/job";
+import { createOrder, transitionOrder, updateOrder } from "@/modules/service-orders/service";
+import { SYSTEM_SCOPE } from "@/modules/service-orders/scope";
 import { db } from "@/shared/db/client";
-import { cliente, clienteConsentimiento, ordenServicio, vehiculo } from "@/shared/db/schema";
+import { getBoss } from "@/shared/jobs/boss";
+import { cliente, clienteConsentimiento, ordenServicio, users, vehiculo } from "@/shared/db/schema";
+import { handleCreateVehiculo } from "../app/api/customers/[id]/vehicles/route";
 
 const config = { url: "https://portal.example/api/ingest", secret: "e2e-secret" };
 const T = (iso: string) => new Date(iso);
@@ -161,5 +169,126 @@ describe("portal-sync (E2E)", () => {
     expect(sa).toMatchObject({ who: "A", hallazgos: "before" });
     expect(sb).toMatchObject({ who: "B", hallazgos: "after" });
     expect(sb.version).toBeGreaterThan(sa.version);
+  });
+});
+
+/**
+ * customer-portal WU5b — the triggers against real Postgres and a real pg-boss.
+ * No worker runs in this process, so every enqueued job stays `created` and
+ * `pgboss.job` is the whole observable.
+ */
+describe("portal-sync triggers (E2E)", () => {
+  const ADMIN = "e2e-trigger-admin";
+  const created: string[] = [];
+  const enqueue = (id: string) => enqueuePortalSync(id, { config });
+  const jobs = async (id: string, state?: string) => {
+    const result = await db.execute(
+      sql`SELECT count(*)::int AS n FROM pgboss.job WHERE name = 'portal-sync' AND data->>'clienteId' = ${id} AND (${state ?? null}::text IS NULL OR state::text = ${state ?? null})`,
+    );
+    return (result.rows[0] as { n: number }).n;
+  };
+  const clearJobs = (id: string) => db.execute(sql`DELETE FROM pgboss.job WHERE name = 'portal-sync' AND data->>'clienteId' = ${id}`);
+
+  /** A consented customer with one active vehicle and one open order, jobs cleared. */
+  const seed = async (extra: Partial<typeof cliente.$inferInsert> = {}) => {
+    const [row] = await db
+      .insert(cliente)
+      .values({ name: "E2E Trigger", phone: `5076${Math.floor(Math.random() * 1e7)}`, portalToken: `tok-${crypto.randomUUID()}`, ...extra })
+      .returning();
+    created.push(row.id);
+    await db.insert(clienteConsentimiento).values({ clienteId: row.id, granted: true, clauseVersion: "v" });
+    const [veh] = await db.insert(vehiculo).values({ clienteId: row.id, plate: "TRG-1" }).returning();
+    const [order] = await db.insert(ordenServicio).values({ clienteId: row.id, vehiculoId: veh.id, categoria: "revisado" }).returning();
+    await clearJobs(row.id);
+    return { id: row.id, vehicleId: veh.id, orderId: order.id };
+  };
+
+  beforeAll(async () => {
+    execSync("npx drizzle-kit migrate", { stdio: "inherit" });
+    await db.insert(users).values({ id: ADMIN, username: ADMIN, passwordHash: "x", role: "administrador" });
+    await ensurePortalSyncQueue(await getBoss()); // starting pg-boss creates the `pgboss` schema the queries below read
+  }, 60_000);
+
+  afterAll(async () => {
+    if (created.length > 0) {
+      await db.execute(sql`DELETE FROM pgboss.job WHERE name = 'portal-sync' AND data->>'clienteId' IN (${sql.join(created.map((c) => sql`${c}`), sql`, `)})`);
+      await db.delete(ordenServicio).where(inArray(ordenServicio.clienteId, created));
+      await db.delete(cliente).where(inArray(cliente.id, created));
+    }
+    await db.delete(users).where(eq(users.id, ADMIN));
+    await (await getBoss()).stop({ graceful: false });
+  });
+
+  it("enqueues exactly one job per trigger, each for the customer it changed", async () => {
+    const c = await seed();
+    const orderDeps = { enqueuePortalSync: enqueue, role: "administrador" as const, scope: SYSTEM_SCOPE };
+    const triggers: [string, () => Promise<unknown>][] = [
+      ["createOrder", () => createOrder({ clienteId: c.id, vehiculoId: c.vehicleId, categoria: "reparacion" }, { enqueuePortalSync: enqueue })],
+      ["updateOrder", () => updateOrder(c.orderId, { hallazgos: "x" }, orderDeps)],
+      ["transitionOrder", () => transitionOrder(c.orderId, "in_progress", { ...orderDeps, canAssign: true })],
+      ["updateCliente (vehicle plan)", () => updateCliente(c.id, { vehicles: [{ id: c.vehicleId, plate: "TRG-1" }, { plate: "TRG-2" }] }, { enqueuePortalSync: enqueue })],
+      [
+        "createVehiculo route",
+        () =>
+          handleCreateVehiculo(
+            new NextRequest("http://localhost/x", {
+              method: "POST",
+              headers: { "x-user-id": ADMIN, "x-user-role": "administrador", "content-type": "application/json" },
+              body: JSON.stringify({ plate: "TRG-3" }),
+            }),
+            c.id,
+            { enqueuePortalSync: enqueue },
+          ),
+      ],
+      ["deactivateCliente", () => deactivateCliente(c.id, { enqueuePortalSync: enqueue })],
+      ["reactivateCliente", () => reactivateCliente(c.id, { enqueuePortalSync: enqueue })],
+      ["consent revoke", () => recordConsent(c.id, false, ADMIN, { enqueuePortalSync: enqueue })],
+      ["consent grant", () => recordConsent(c.id, true, ADMIN, { enqueuePortalSync: enqueue })],
+      ["rotate", () => rotatePortalToken(c.id, { enqueuePortalSync: enqueue })],
+    ];
+    for (const [name, fire] of triggers) {
+      await clearJobs(c.id);
+      await fire();
+      expect(await jobs(c.id), name).toBe(1);
+    }
+  });
+
+  it("a burst of edits queues ONE job, but an edit during a running job queues the next", async () => {
+    const c = await seed();
+    for (let i = 0; i < 3; i++) await updateOrder(c.orderId, { hallazgos: `v${i}` }, { enqueuePortalSync: enqueue, role: "administrador", scope: SYSTEM_SCOPE });
+    expect(await jobs(c.id, "created")).toBe(1);
+
+    await db.execute(sql`UPDATE pgboss.job SET state = 'active' WHERE name = 'portal-sync' AND data->>'clienteId' = ${c.id}`);
+    await updateOrder(c.orderId, { hallazgos: "during" }, { enqueuePortalSync: enqueue, role: "administrador", scope: SYSTEM_SCOPE });
+    expect(await jobs(c.id, "created")).toBe(1);
+    expect(await jobs(c.id, "active")).toBe(1);
+  });
+
+  it("a rolled-back write enqueues nothing", async () => {
+    const holder = await seed();
+    const taken = (await db.select().from(cliente).where(eq(cliente.id, holder.id)))[0].portalToken!;
+    const c = await seed({ portalToken: null });
+    await db.delete(clienteConsentimiento).where(eq(clienteConsentimiento.clienteId, c.id));
+
+    // The UNIQUE collision on the token rolls the consent row back with it.
+    await expect(recordConsent(c.id, true, ADMIN, { generateToken: () => taken, enqueuePortalSync: enqueue })).rejects.toThrow();
+    expect(await jobs(c.id)).toBe(0);
+  });
+
+  it("a repeat of the current consent state changes nothing and enqueues nothing", async () => {
+    const c = await seed();
+    await recordConsent(c.id, true, ADMIN, { enqueuePortalSync: enqueue });
+    expect(await jobs(c.id)).toBe(0);
+  });
+
+  it("a customer who never consented still enqueues, but the worker pushes nothing", async () => {
+    const [row] = await db.insert(cliente).values({ name: "E2E Never", phone: "50760000001" }).returning();
+    created.push(row.id);
+    await enqueue(row.id);
+    expect(await jobs(row.id)).toBe(1);
+
+    const sent: IngestBody[] = [];
+    await runPortalSync(row.id, { config, send: async (b) => void sent.push(b) });
+    expect(sent).toEqual([]);
   });
 });
