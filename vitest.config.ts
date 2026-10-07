@@ -12,7 +12,10 @@ export default defineConfig({
     env: { DATABASE_URL },
     // src/e2e/** needs a REAL reachable Postgres (see vitest.e2e.config.ts +
     // README) — excluded here so plain `npm run test` stays fast/infra-free.
-    exclude: [...configDefaults.exclude, "src/e2e/**"],
+    // portal/** is a separate app with its own gate. The two projects below
+    // inherit this list (`extends: true`; mutation-checked 2026-10-07: dropping
+    // the entry here is what makes a broken portal test run under both).
+    exclude: [...configDefaults.exclude, "src/e2e/**", "portal/**"],
     /**
      * Raised from Vitest's 5000ms default. Issue #54: the suite went red
      * intermittently, a different set of files each time, always ones the
@@ -131,6 +134,10 @@ export default defineConfig({
   resolve: {
     // Mirror tsconfig.json's "@/*" path alias (ponytail: no vite-tsconfig-paths
     // dependency needed for a single alias).
-    alias: { "@": path.resolve(__dirname, "./src") },
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+      // Mirror tsconfig.json "paths": the workshop signs with the portal's own code.
+      "@portal/contract": path.resolve(__dirname, "./portal/src/contract.ts"),
+    },
   },
 });

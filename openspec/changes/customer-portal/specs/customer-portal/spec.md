@@ -117,7 +117,7 @@ All portal copy MUST be Spanish (Rioplatense, matching the workshop app). The la
 
 ### Requirement: Provisional Legal Text Is Marked
 
-Every legal text the portal shows (the terms, and any privacy notice) MUST carry the banner "TEXTO PROVISORIO — pendiente de revisión legal" until the lawyer's text replaces it. Each legal text MUST carry a version identifier, and that identifier MUST be the one used by the acceptance cookie and the acceptance log. The terms MUST state what is shown, that the data is stored by a cloud provider outside Panama, and how the customer asks the workshop to remove it.
+Every legal text the portal shows (the terms, and any privacy notice) MUST carry the banner "TEXTO PROVISORIO — pendiente de revisión legal" until the lawyer's text replaces it. Each legal text MUST carry a version identifier, and that identifier MUST be the one recorded in the acceptance log per token hash. The terms MUST state what is shown, that the data is stored by a cloud provider outside Panama, and how the customer asks the workshop to remove it.
 
 #### Scenario: Banner on the terms
 - GIVEN the terms page
@@ -126,7 +126,7 @@ Every legal text the portal shows (the terms, and any privacy notice) MUST carry
 
 #### Scenario: Replacing the text changes the version
 - GIVEN terms text replaced by a new version
-- WHEN a device with the old acceptance cookie opens the portal
+- WHEN a token whose recorded acceptance is for the old version opens the portal
 - THEN the gate MUST show again
 
 ### Requirement: Ingest Endpoint Authentication

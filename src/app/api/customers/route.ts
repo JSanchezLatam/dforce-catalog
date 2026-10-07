@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import { countClientes as countClientesQuery, listClientes as listClientesQuery, type ClienteFilters, type ClienteListItem } from "@/modules/customers/queries";
+import { toPublicCliente } from "@/modules/customers/portal-token";
 import { relaxSearchTerm } from "@/modules/customers/near-match";
 import { createCliente, DuplicatePhoneError, type CreateClienteDeps } from "@/modules/customers/service";
 import { ClienteValidationError } from "@/modules/customers/validation";
@@ -100,7 +101,7 @@ export async function handleCreateCliente(
   }
   try {
     const cliente = await createCliente(body, deps);
-    return NextResponse.json({ cliente }, { status: 201 });
+    return NextResponse.json({ cliente: toPublicCliente(cliente) }, { status: 201 });
   } catch (err) {
     if (err instanceof ClienteValidationError) {
       return NextResponse.json({ errors: err.errors }, { status: 400 }); // R17

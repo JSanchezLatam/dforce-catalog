@@ -9,10 +9,11 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { Cliente, Vehiculo } from "@/shared/db/schema";
+import type { Vehiculo } from "@/shared/db/schema";
+import type { PublicCliente } from "./portal-token";
 import { CustomerForm } from "./CustomerForm";
 
-const CLIENTE: Cliente = {
+const CLIENTE: PublicCliente = {
   id: "c1",
   name: "Juan Pérez",
   phone: "+525512345678",

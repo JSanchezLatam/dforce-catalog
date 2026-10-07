@@ -30,6 +30,7 @@ import { listOrderAssignees, listOrderLines } from "@/modules/service-orders/ord
 import { OrderWorkCard } from "@/modules/service-orders/OrderWorkCard";
 import { OrderPhotos } from "@/modules/service-orders/OrderPhotos";
 import { OrderStatusControls } from "@/modules/service-orders/OrderStatusControls";
+import { PORTAL_VISIBLE_HINT } from "@/modules/service-orders/portal-visibility";
 import { vehicleDescriptiveRows } from "@/modules/service-orders/vehicle-rows";
 import { ServiceOrderFormTrigger } from "@/modules/service-orders/ServiceOrderFormTrigger";
 import { listOrderPhotos } from "@/modules/service-orders/photos";
@@ -60,11 +61,14 @@ const REMINDER_STATUS_LABEL: Record<string, string> = {
   opted_out: "Cliente dio de baja",
 };
 
-function field(label: string, value: unknown) {
+function field(label: string, value: unknown, visibleToCustomer = false) {
   if (value == null || value === "") return null;
   return (
     <div className="grid grid-cols-1 gap-1 py-2 border-b border-border last:border-0 sm:grid-cols-3 sm:gap-2">
-      <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
+      <dt className="text-sm font-medium text-muted-foreground">
+        {label}
+        {visibleToCustomer && <span className="block text-xs font-normal">{PORTAL_VISIBLE_HINT}</span>}
+      </dt>
       <dd className="text-sm text-foreground sm:col-span-2">{String(value)}</dd>
     </div>
   );
@@ -236,7 +240,7 @@ export default async function ServiceOrderDetailPage({
               <Fragment key={r.label}>{field(r.label, r.value ?? "—")}</Fragment>
             ))}
             {field("Categoría", CATEGORIA_LABEL[orden.categoria])}
-            {field("Descripción", orden.description)}
+            {field("Descripción", orden.description, true)}
             {/* Mirrors the form's field, so it carries the form's label. The
                 narrow list-column headers keep the short "Cita" on purpose —
                 a column is width-constrained, a field label is not — and
@@ -245,8 +249,8 @@ export default async function ServiceOrderDetailPage({
             {field("Fecha y hora de inicio", orden.appointmentAt && formatDateTime(orden.appointmentAt))}
             {field("Completada", orden.completedAt && formatDateTime(orden.completedAt))}
             {field("Creada", formatDateTime(orden.createdAt))}
-            {field("Hallazgos", orden.hallazgos || "—")}
-            {field("Recomendaciones", orden.recomendaciones || "—")}
+            {field("Hallazgos", orden.hallazgos || "—", true)}
+            {field("Recomendaciones", orden.recomendaciones || "—", true)}
             {field("Observaciones", orden.observaciones || "—")}
           </dl>
         </CardContent>
