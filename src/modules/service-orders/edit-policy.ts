@@ -13,9 +13,9 @@
  * machine, and a role concern does not belong inside `assertTransition`'s file.
  *
  * The two call sites — the detail page (whether to render the control) and
- * `PATCH /api/service-orders/[id]` (whether to accept the write) — import this
- * one function so they cannot drift. The UI is convenience; the route is the
- * trust boundary and re-reads the status from the record.
+ * `updateOrder` (whether to accept the write) — import this one function so
+ * they cannot drift. The UI is convenience; `updateOrder` is the trust
+ * boundary and reads the status from the row it has locked (`order-lock.ts`).
  */
 import type { Role } from "@/modules/auth/roles";
 
