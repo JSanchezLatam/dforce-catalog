@@ -35,8 +35,9 @@ import type { OrderStatus } from "./transitions";
  * here instead of a silent default at two call sites.
  */
 const EDITABLE: Record<Role, Record<OrderStatus, boolean>> = {
-  administrador: { open: true, in_progress: true, done: false, cancelled: false },
-  tecnico: { open: false, in_progress: true, done: false, cancelled: false },
+  administrador: { open: true, in_progress: true, ready_for_review: true, done: false, cancelled: false },
+  jefe_taller: { open: true, in_progress: true, ready_for_review: true, done: false, cancelled: false },
+  tecnico: { open: false, in_progress: true, ready_for_review: false, done: false, cancelled: false },
 };
 
 /** D11 — true only for a `(role, status)` pair the table above permits. */
@@ -57,6 +58,9 @@ export function canEditOrderFields(role: Role, status: OrderStatus): boolean {
 const PHOTOS_CHANGEABLE: Record<OrderStatus, boolean> = {
   open: true,
   in_progress: true,
+  // Status only: the spec refuses a técnico in review, a role split this
+  // status-only gate cannot express and a later WU wires.
+  ready_for_review: true,
   done: false,
   cancelled: false,
 };
@@ -70,6 +74,7 @@ export function canChangeOrderPhotos(status: OrderStatus): boolean {
 const CLOSED: Record<OrderStatus, boolean> = {
   open: false,
   in_progress: false,
+  ready_for_review: false,
   done: true,
   cancelled: true,
 };

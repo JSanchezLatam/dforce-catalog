@@ -45,6 +45,7 @@ vi.mock("@/modules/catalog-storage/r2", () => {
 });
 
 import { hashPassword } from "@/modules/auth/password";
+import type { Role } from "@/modules/auth/roles";
 import { SESSION_COOKIE, validateSession } from "@/modules/auth/session";
 import { resolveAllPrices } from "@/modules/catalog-builder/price-lists";
 import { applyVehiculoPlan } from "@/modules/customers/vehicles";
@@ -82,11 +83,11 @@ import { POST as vehiclesPOST } from "../app/api/customers/[id]/vehicles/route";
 
 const PASSWORD = "Sup3rSecret!1";
 
-function headersFor(user: { id: string; role: "tecnico" | "administrador" }) {
+function headersFor(user: { id: string; role: Role }) {
   return { "x-user-id": user.id, "x-user-role": user.role };
 }
 
-async function loginAs(username: string): Promise<{ id: string; role: "tecnico" | "administrador" }> {
+async function loginAs(username: string): Promise<{ id: string; role: Role }> {
   const response = await loginPOST(
     new NextRequest("http://localhost/api/login", { method: "POST", body: JSON.stringify({ username, password: PASSWORD }) }),
   );
@@ -384,7 +385,7 @@ describe("vehicle search (E2E)", () => {
   async function patchVehicles(
     id: string,
     vehicles: { id?: string; plate?: string; deactivated?: boolean; deleted?: boolean }[],
-    role: "tecnico" | "administrador" = "tecnico",
+    role: Role = "tecnico",
   ) {
     const response = await patchVehiclesRaw(id, vehicles, role);
     expect(response.status).toBe(200);
@@ -394,7 +395,7 @@ describe("vehicle search (E2E)", () => {
   async function patchVehiclesRaw(
     id: string,
     vehicles: { id?: string; plate?: string; deactivated?: boolean; deleted?: boolean }[],
-    role: "tecnico" | "administrador" = "tecnico",
+    role: Role = "tecnico",
   ) {
     return customersPATCH(
       new NextRequest(`http://localhost/api/customers/${id}`, {
@@ -1602,9 +1603,9 @@ describe("order search (E2E)", () => {
 });
 
 describe("full catalog-generation flow (E2E)", () => {
-  let regularUser: { id: string; role: "tecnico" | "administrador" };
-  let adminUser: { id: string; role: "tecnico" | "administrador" };
-  let otherUser: { id: string; role: "tecnico" | "administrador" };
+  let regularUser: { id: string; role: Role };
+  let adminUser: { id: string; role: Role };
+  let otherUser: { id: string; role: Role };
 
   beforeAll(async () => {
     // Real migrations against whatever DATABASE_URL points at (README:

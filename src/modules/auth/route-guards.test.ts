@@ -182,7 +182,18 @@ describe("ROUTE_GUARDS completeness", () => {
     // `users.manage` came off this list once /api/users landed — it now has a
     // real route and must stay reachable. `catalogs.listAll` has no dedicated
     // route of its own by design.
-    const exempt: readonly Action[] = ["catalogs.listAll"];
+    //
+    // technicians-and-work-lines: the four below have no route yet, and each
+    // WU removes its own entry when it wires one. `service-orders.readAll` is
+    // exempt for good, like `catalogs.listAll`: it is read by `orderScope`
+    // (WU4a), never by a route handler.
+    const exempt: readonly Action[] = [
+      "catalogs.listAll",
+      "service-orders.readAll",
+      "service-orders.create", // WU4b: POST /api/service-orders
+      "service-orders.assign", // WU4b: POST /api/service-orders/[id]/assignments
+      "technicians.manage", // WU2: POST /api/technicians
+    ];
 
     for (const action of ACTIONS) {
       if ((exempt as readonly string[]).includes(action)) continue;

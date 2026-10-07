@@ -57,6 +57,20 @@ describe("assertTransition (R21)", () => {
   });
 });
 
+describe("ready_for_review edges", () => {
+  it("leaves ready_for_review to in_progress, done and cancelled", () => {
+    expect(getAllowedTransitions("ready_for_review")).toEqual(["in_progress", "done", "cancelled"]);
+  });
+
+  // Readiness is derived (applyReadiness), never chosen: no manual edge leads in.
+  it.each(["open", "in_progress", "ready_for_review", "done", "cancelled"] as const)(
+    "rejects %s -> ready_for_review as a manual transition",
+    (from) => {
+      expect(() => assertTransition(from, "ready_for_review")).toThrow(OrderTransitionError);
+    },
+  );
+});
+
 describe("getAllowedTransitions (R21 — Phase 6 status-transition controls)", () => {
   it("returns the two legal next states for open", () => {
     expect(getAllowedTransitions("open")).toEqual(["in_progress", "cancelled"]);

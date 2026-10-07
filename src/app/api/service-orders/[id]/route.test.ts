@@ -422,6 +422,21 @@ describe("PATCH /api/service-orders/[id] — the edit gate (D11)", () => {
     expect(setSpy).not.toHaveBeenCalled();
   });
 
+  // Readiness is derived from the marks, never chosen: PATCH refuses it.
+  it("refuses a PATCH status of ready_for_review with 400 and no write", async () => {
+    const setSpy = vi.fn();
+
+    const response = await handleUpdateOrdenServicio(
+      requestWith({ status: "ready_for_review" }, "administrador"),
+      "o1",
+      { db: lockedDb("in_progress", setSpy).db },
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: "invalid_transition", from: "in_progress", to: "ready_for_review" });
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
   it("lets a tecnico patch an in_progress order, and the update receives the notes AS SENT", async () => {
     const setSpy = vi.fn(() => ({
       where: () => ({

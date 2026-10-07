@@ -28,6 +28,9 @@ export class OrderTransitionError extends Error {
 const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   open: ["in_progress", "cancelled"],
   in_progress: ["done", "cancelled"],
+  // No manual edge leads INTO ready_for_review: readiness is derived and
+  // written by `applyReadiness`, never through `assertTransition`.
+  ready_for_review: ["in_progress", "done", "cancelled"],
   done: [],
   cancelled: [],
 };

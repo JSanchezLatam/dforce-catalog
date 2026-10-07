@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { can, type Action, type Grants } from "./policy";
+import { ACTIONS, can, type Action, type Grants } from "./policy";
+import type { Role } from "./roles";
 
 type Row = { action: Action; grants: Grants };
 
@@ -25,6 +26,19 @@ const adminGrants: Grants = {
   "users.manage": true,
   "sync.manual": true,
   "account.self": true,
+  "service-orders.readAll": true,
+  "service-orders.create": true,
+  "service-orders.assign": true,
+  "technicians.manage": true,
+};
+
+// Every administrador grant except the four the owner keeps for himself.
+const jefeGrants: Grants = {
+  ...adminGrants,
+  "users.manage": false,
+  "workshop.edit": false,
+  "template.edit": false,
+  "service-orders.correct": false,
 };
 
 const tecnicoGrants: Grants = {
@@ -48,6 +62,17 @@ const tecnicoGrants: Grants = {
   "users.manage": false,
   "sync.manual": false,
   "account.self": true,
+  "service-orders.readAll": false,
+  "service-orders.create": false,
+  "service-orders.assign": false,
+  "technicians.manage": false,
+};
+
+// Exhaustive over Role: a new role is a tsc error here until it has a row.
+const GRANTS_BY_ROLE: Record<Role, Grants> = {
+  administrador: adminGrants,
+  jefe_taller: jefeGrants,
+  tecnico: tecnicoGrants,
 };
 
 describe("can() — role × action permission matrix", () => {
@@ -62,6 +87,26 @@ describe("can() — role × action permission matrix", () => {
     const user = { id: "b", role: "tecnico" as const };
     for (const [action, expected] of Object.entries(tecnicoGrants)) {
       expect(can(user, action as Action)).toBe(expected);
+    }
+  });
+
+  it("grants jefe_taller every administrador action except the owner-only four", () => {
+    const user = { id: "j", role: "jefe_taller" as const };
+    for (const [action, expected] of Object.entries(jefeGrants)) {
+      expect(can(user, action as Action)).toBe(expected);
+    }
+  });
+
+  it("jefe_taller keeps sync.manual and catalogs.generate", () => {
+    const user = { id: "j", role: "jefe_taller" as const };
+    expect(can(user, "sync.manual")).toBe(true);
+    expect(can(user, "catalogs.generate")).toBe(true);
+    expect(can(user, "users.manage")).toBe(false);
+  });
+
+  it("covers every Role and every Action in the fixtures", () => {
+    for (const grants of Object.values(GRANTS_BY_ROLE)) {
+      expect(Object.keys(grants).sort()).toEqual([...ACTIONS].sort());
     }
   });
 

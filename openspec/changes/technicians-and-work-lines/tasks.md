@@ -33,16 +33,16 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU1: Migrations, schema, roles (PR 1)
 
-- [ ] 1.0 PRECONDITION: `plate-municipio` (0026) AND `closed-order-lock` (0027) merged to `main`. Create the tracker off updated `main`; confirm `src/shared/db/migrations` ends at 0027. Else STOP (blocked, not renumbered).
-- [ ] 1.1 `schema.ts`: `roleEnum` gains `jefe_taller`; `orderStatusEnum` gains `ready_for_review`. `drizzle-kit generate --name enum_jefe_ready` (0028); confirm the SQL is ONLY `ALTER TYPE role ADD VALUE 'jefe_taller'` and `ALTER TYPE order_status ADD VALUE 'ready_for_review' BEFORE 'done'`.
-- [ ] 1.2 `schema.ts`: `tecnico`, `orden_tecnico` (PK `(orden_id,tecnico_id)`, restrict FKs, index `(tecnico_id)`), `orden_linea_trabajo` (composite FK to `orden_tecnico`, CHECK `duracion_minutos > 0 AND <= 1440`, indexes `(tecnico_id,fecha)` and `(orden_id)`). Generate 0029; no SQL references a new enum value.
-- [ ] 1.3 Append to 0029 the backfill `INSERT INTO tecnico (id, nombre, user_id, deactivated_at, created_at) SELECT gen_random_uuid()::text, coalesce(nullif(btrim(name),''), username), id, deactivated_at, now() FROM users WHERE role = 'tecnico'`.
-- [ ] 1.4 RED e2e `src/e2e/technicians-migration.e2e.test.ts` (`dforce_e2e`, apply 0026-0029 in one run): one técnico user (blank `name`) gets one linked row named from `username`; an `administrador` gets none; zero `orden_tecnico` rows; second row for one `user_id` rejected; delete of an assigned tecnico rejected; line with unassigned technician violates composite FK; duration 0 rejected. GREEN: fix real-SQL defects.
-- [ ] 1.5 RED `roles.test.ts`: `jefe_taller` labelled "Jefe de taller". GREEN `roles.ts`.
-- [ ] 1.6 RED `policy.test.ts` exhaustive over `Record<Role, Grants>`: jefe holds every administrador grant except `users.manage`, `workshop.edit`, `template.edit`, `service-orders.correct`; keeps `sync.manual`, `catalogs.generate`; new Actions `service-orders.readAll`, `.create`, `.assign`, `technicians.manage` true for admin and jefe, false for técnico (`write` stays true). GREEN `policy.ts`.
-- [ ] 1.7 RED `route-guards.test.ts`: `service-orders.readAll` exempt like `catalogs.listAll`; guard rows for routes added later are declared per WU. GREEN.
-- [ ] 1.8 RED/GREEN tsc fallout: `edit-policy.ts` jefe row and `ready_for_review` column (exhaustive records), `statuses.ts`, `transitions.ts` map with `ready_for_review: ["in_progress","done","cancelled"]`, `StatusBadge` "Lista para revisión". `ready_for_review` is not accepted as a PATCH target (400).
-- [ ] 1.9 Mutation-verify 1.4-1.8 by name (grant jefe `users.manage`, drop CHECK, drop composite FK, omit `nullif`).
+- [x] 1.0 PRECONDITION: `plate-municipio` (0026) AND `closed-order-lock` (0027) merged to `main`. Create the tracker off updated `main`; confirm `src/shared/db/migrations` ends at 0027. Else STOP (blocked, not renumbered).
+- [x] 1.1 `schema.ts`: `roleEnum` gains `jefe_taller`; `orderStatusEnum` gains `ready_for_review`. `drizzle-kit generate --name enum_jefe_ready` (0028); confirm the SQL is ONLY `ALTER TYPE role ADD VALUE 'jefe_taller'` and `ALTER TYPE order_status ADD VALUE 'ready_for_review' BEFORE 'done'`.
+- [x] 1.2 `schema.ts`: `tecnico`, `orden_tecnico` (PK `(orden_id,tecnico_id)`, restrict FKs, index `(tecnico_id)`), `orden_linea_trabajo` (composite FK to `orden_tecnico`, CHECK `duracion_minutos > 0 AND <= 1440`, indexes `(tecnico_id,fecha)` and `(orden_id)`). Generate 0029; no SQL references a new enum value.
+- [x] 1.3 Append to 0029 the backfill `INSERT INTO tecnico (id, nombre, user_id, deactivated_at, created_at) SELECT gen_random_uuid()::text, coalesce(nullif(btrim(name),''), username), id, deactivated_at, now() FROM users WHERE role = 'tecnico'`.
+- [x] 1.4 RED e2e `src/e2e/technicians-migration.e2e.test.ts` (`dforce_e2e`, apply 0026-0029 in one run): one técnico user (blank `name`) gets one linked row named from `username`; an `administrador` gets none; zero `orden_tecnico` rows; second row for one `user_id` rejected; delete of an assigned tecnico rejected; line with unassigned technician violates composite FK; duration 0 rejected. GREEN: fix real-SQL defects.
+- [x] 1.5 RED `roles.test.ts`: `jefe_taller` labelled "Jefe de taller". GREEN `roles.ts`.
+- [x] 1.6 RED `policy.test.ts` exhaustive over `Record<Role, Grants>`: jefe holds every administrador grant except `users.manage`, `workshop.edit`, `template.edit`, `service-orders.correct`; keeps `sync.manual`, `catalogs.generate`; new Actions `service-orders.readAll`, `.create`, `.assign`, `technicians.manage` true for admin and jefe, false for técnico (`write` stays true). GREEN `policy.ts`.
+- [x] 1.7 RED `route-guards.test.ts`: `service-orders.readAll` exempt like `catalogs.listAll`; guard rows for routes added later are declared per WU. GREEN.
+- [x] 1.8 RED/GREEN tsc fallout: `edit-policy.ts` jefe row and `ready_for_review` column (exhaustive records), `statuses.ts`, `transitions.ts` map with `ready_for_review: ["in_progress","done","cancelled"]`, `StatusBadge` "Lista para revisión". `ready_for_review` is not accepted as a PATCH target (400).
+- [x] 1.9 Mutation-verify 1.4-1.8 by name (grant jefe `users.manage`, drop CHECK, drop composite FK, omit `nullif`).
 
 ## WU2: Roster service and routes (PR 2)
 
@@ -91,7 +91,7 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 - [ ] 7.1 RED `readiness.test.ts` truth table: zero active assignees never ready; all active marked becomes `ready_for_review` with timestamp; deactivated unmarked ignored; un-mark returns `in_progress`; only runs in `in_progress`/`ready_for_review`. GREEN `readiness.ts` (`applyReadiness`, no `assertTransition`).
 - [ ] 7.2 RED `parte-lista.test.ts`: marks only own assignment (403 naming another); refused outside `in_progress`, already marked, closed orders for every role (never correctable); un-mark in `ready_for_review`; no line required. GREEN service, `/parte-lista` POST/DELETE (+ guard rows).
 - [ ] 7.3 RED e2e race `src/e2e/order-readiness.e2e.test.ts`: second connection holds `FOR UPDATE`; `markParteLista` does not resolve within 300ms, then resolves `ready_for_review`; two simultaneous last marks end `ready_for_review` once. GREEN.
-- [ ] 7.4 RED admin/jefe `ready_for_review → in_progress` transition. GREEN.
+- [ ] 7.4 RED admin/jefe `ready_for_review → in_progress` transition. GREEN. Also: a técnico is refused photo add/delete on a `ready_for_review` order (spec); WU1 left `canChangeOrderPhotos` status-only (`ready_for_review: true`), so add the role split here (route/page gate), RED first.
 - [ ] 7.5 Mutation-verify 7.1-7.4 by name (remove the lock so the race test goes red).
 
 ## WU7: Order UI (PR 7)
