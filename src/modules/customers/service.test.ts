@@ -455,3 +455,71 @@ describe("deactivateCliente / reactivateCliente (R20)", () => {
     expect(update).toHaveBeenCalledOnce();
   });
 });
+
+/**
+ * customer-portal WU5b — what a customer's portal snapshot holds changes when
+ * their vehicle set or their active state changes. A name/phone edit changes
+ * nothing the portal shows, so it enqueues nothing.
+ */
+describe("portal sync triggers", () => {
+  const CLIENTE = { id: "c1", name: "Juan", phone: "+525512345678" } as unknown as Cliente;
+  const current = () => ({
+    cliente: { id: "c1", name: "Juan", phone: "+525512345678" } as unknown as Cliente,
+    orders: [],
+    vehicles: [{ id: "v1", plate: "ABC111", deactivatedAt: null } as unknown as Vehiculo],
+  });
+
+  it("updateCliente enqueues the customer once, after the vehicle transaction commits", async () => {
+    const c = current();
+    const { database, transaction } = fakeDatabase(c.cliente);
+    const seen: { clienteId: string; transactionsSettled: boolean }[] = [];
+    let settled = false;
+    transaction.mockImplementation(async (fn) => {
+      const result = await fn({ insert: vi.fn(() => queryBuilder([c.cliente])), update: vi.fn(() => queryBuilder([c.cliente])) } as never);
+      settled = true;
+      return result;
+    });
+    const enqueuePortalSync = vi.fn(async (clienteId: string) => void seen.push({ clienteId, transactionsSettled: settled }));
+
+    await updateCliente("c1", { vehicles: [{ plate: "XYZ999" }] }, { getById: async () => c, database, enqueuePortalSync });
+
+    expect(seen).toEqual([{ clienteId: "c1", transactionsSettled: true }]);
+  });
+
+  it("updateCliente enqueues nothing for a scalar-only edit, which the portal never shows", async () => {
+    const c = current();
+    const enqueuePortalSync = vi.fn(async () => {});
+    await updateCliente("c1", { name: "Juan P." }, { getById: async () => c, update: vi.fn().mockResolvedValue(c.cliente), enqueuePortalSync });
+    expect(enqueuePortalSync).not.toHaveBeenCalled();
+  });
+
+  it("updateCliente enqueues nothing when the vehicle transaction fails", async () => {
+    const c = current();
+    const { database } = fakeDatabase(c.cliente, { vehiculoInsertError: new Error("insert failed") });
+    const enqueuePortalSync = vi.fn(async () => {});
+    await expect(
+      updateCliente("c1", { vehicles: [{ plate: "XYZ999" }] }, { getById: async () => c, database, enqueuePortalSync }),
+    ).rejects.toThrow("insert failed");
+    expect(enqueuePortalSync).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["deactivateCliente", deactivateCliente],
+    ["reactivateCliente", reactivateCliente],
+  ])("%s enqueues the customer once, after the write", async (_name, run) => {
+    const order: string[] = [];
+    const setDeactivatedAt = vi.fn(async () => (order.push("write"), CLIENTE));
+    const enqueuePortalSync = vi.fn(async () => void order.push("enqueue"));
+    await run("c1", { setDeactivatedAt, enqueuePortalSync });
+    expect(enqueuePortalSync).toHaveBeenCalledExactlyOnceWith("c1");
+    expect(order).toEqual(["write", "enqueue"]);
+  });
+
+  it("deactivateCliente enqueues nothing for a customer that does not exist", async () => {
+    const enqueuePortalSync = vi.fn(async () => {});
+    await expect(
+      deactivateCliente("missing", { setDeactivatedAt: async () => undefined, enqueuePortalSync }),
+    ).rejects.toBeInstanceOf(ClienteNotFoundError);
+    expect(enqueuePortalSync).not.toHaveBeenCalled();
+  });
+});

@@ -31,6 +31,7 @@ import { getClienteById } from "@/modules/customers/queries";
 import { ClienteDeactivatedError } from "@/modules/customers/service";
 import { cancelRemindersForOrder, scheduleReminder } from "@/modules/reminders/job";
 import { planReminders, type ReminderType } from "@/modules/reminders/schedule";
+import { enqueuePortalSync, type PortalSyncDeps } from "@/modules/portal-sync/enqueue";
 import { isServiceCategory, type ServiceCategory } from "./categories";
 import type { IntakeValues } from "./intake";
 import type { Role } from "@/modules/auth/roles";
@@ -132,7 +133,7 @@ export type CreateOrdenServicioInput = {
   tecnicoIds?: readonly string[];
 } & IntakeValues;
 
-export type CreateOrdenServicioDeps = ReminderWiringDeps;
+export type CreateOrdenServicioDeps = ReminderWiringDeps & PortalSyncDeps;
 
 /**
  * R20 — creates the order. Rejects unknown `clienteId` BEFORE opening the
@@ -222,6 +223,9 @@ export async function createOrder(
     return inserted;
   });
 
+  // Before the reminder wiring: a failure there must not lose the portal sync.
+  await (deps.enqueuePortalSync ?? enqueuePortalSync)(orden.clienteId);
+
   if (orden.appointmentAt) {
     await planAndScheduleReminders(orden, clienteDetail.cliente, "appointment", deps);
   }
@@ -245,7 +249,8 @@ export type UpdateOrdenServicioDeps = {
   scope: OrderScope;
   /** Issued by `authorizeCorrection` after the password check; the only way to write a closed order. */
   correction?: CorrectionGrant;
-} & ReminderWiringDeps;
+} & ReminderWiringDeps &
+  PortalSyncDeps;
 
 /**
  * Plain field edits (description/appointmentAt/categoria/notes) — status
@@ -285,6 +290,9 @@ export async function updateOrder(
     }
     return { before: order, updated: row };
   });
+
+  // Before the reminder wiring: a failure there must not lose the portal sync.
+  await (deps.enqueuePortalSync ?? enqueuePortalSync)(updated.clienteId);
 
   const appointmentChanged =
     patch.appointmentAt !== undefined &&
@@ -349,7 +357,8 @@ export type TransitionOrdenServicioDeps = {
   scope: OrderScope;
   /** `can(user, "service-orders.assign")`: without it only `open -> in_progress` is allowed. */
   canAssign: boolean;
-} & ReminderWiringDeps;
+} & ReminderWiringDeps &
+  PortalSyncDeps;
 
 /**
  * R21 — validates the transition via transitions.ts, then persists status +
@@ -383,6 +392,9 @@ export async function transitionOrder(
     }
     return { from: order.status, updated: row };
   });
+
+  // Before the reminder wiring: a failure there must not lose the portal sync.
+  await (deps.enqueuePortalSync ?? enqueuePortalSync)(updated.clienteId);
 
   if (to === "done") {
     const findCliente = deps.getClienteById ?? getClienteById;
