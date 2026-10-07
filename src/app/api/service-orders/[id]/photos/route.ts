@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import { addOrderPhoto, isJpeg, MAX_PHOTO_BYTES, PhotoLimitError } from "@/modules/service-orders/photos";
+import { orderScope } from "@/modules/service-orders/scope";
+import { OrderEditForbiddenError } from "@/modules/service-orders/order-lock";
 import { OrdenServicioNotFoundError } from "@/modules/service-orders/service";
 import { attemptWithCorrection, correctionErrorResponse, type Authorize } from "../../correction-http";
 
@@ -21,6 +23,8 @@ export async function handleAddPhoto(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const canCorrect = can(user, "service-orders.correct");
+  // Staff only may add to a `ready_for_review` order; the lock decides, from the locked row.
+  const canManageAll = can(user, "service-orders.assign");
 
   const tooLarge = () => NextResponse.json({ error: "La foto es demasiado grande" }, { status: 413 });
   // Refuse before buffering the body. A request with no usable length (chunked) could stream
@@ -57,7 +61,7 @@ export async function handleAddPhoto(
       user,
       canCorrect,
       typeof password === "string" ? password : undefined,
-      (correction) => add({ ordenId, bytes, createdBy: user.id, ...(correction && { correction }) }),
+      (correction) => add({ ordenId, bytes, createdBy: user.id, canManageAll, scope: orderScope(user), ...(correction && { correction }) }),
       deps.authorize,
     );
     return NextResponse.json({ id, position }, { status: 201 });
@@ -67,6 +71,15 @@ export async function handleAddPhoto(
     }
     if (err instanceof PhotoLimitError) {
       return NextResponse.json({ error: "photo_limit", message: err.message }, { status: 409 });
+    }
+    if (err instanceof OrderEditForbiddenError) {
+      return NextResponse.json(
+        {
+          error: "forbidden",
+          message: "Solo un administrador o el jefe de taller puede agregar fotos a una orden lista para revisión.",
+        },
+        { status: 403 },
+      );
     }
     const refused = correctionErrorResponse(err, canCorrect);
     if (refused) return refused;

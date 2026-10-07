@@ -68,7 +68,7 @@ export async function handleDeletePhoto(
       user,
       canCorrect,
       password,
-      (correction) => remove(correction ? { ...ids, correction } : ids),
+      (correction) => remove({ ...ids, scope: orderScope(user), ...(correction && { correction }) }),
       deps.authorize,
     );
     return NextResponse.json({ success: true });

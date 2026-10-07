@@ -20,6 +20,7 @@ import {
   type OrdenSort,
 } from "@/modules/service-orders/queries";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
+import { listTecnicos } from "@/modules/technicians/queries";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import { formatDateTime } from "@/shared/datetime";
 import { Pagination } from "@/shared/ui/Pagination";
@@ -37,7 +38,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-const VALID_STATUS = new Set<OrderStatus>(["open", "in_progress", "done", "cancelled"]);
+const VALID_STATUS = new Set<OrderStatus>(["open", "in_progress", "ready_for_review", "done", "cancelled"]);
 
 function firstValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -104,6 +105,12 @@ export default async function ServiceOrdersPage({
 
   const pageCount = Math.max(1, Math.ceil(total / pageWindow.limit));
 
+  // Only the create form reads the roster, and a técnico cannot create. Plain
+  // `{ id, nombre }` pairs: the roster row's `Date`s must not cross the boundary.
+  const tecnicos = can(user, "service-orders.create")
+    ? (await listTecnicos()).map(({ id, nombre }) => ({ id, nombre }))
+    : [];
+
   // The props that cross into the client (design D3). Every one is a string, an
   // array of strings, or a `Record<string, string>` — no function, no `Date`,
   // no class instance. `orden.appointmentAt` IS a `Date` and is deliberately
@@ -123,10 +130,14 @@ export default async function ServiceOrdersPage({
         actions={
           <>
             <RefreshListButton />
-            <ServiceOrderFormTrigger
-              canCreateCustomer={can(user, "customers.write")}
-              triggerLabel="Nueva orden de servicio"
-            />
+            {/* Hidden, not disabled: a técnico cannot create (the route answers 403 too). */}
+            {can(user, "service-orders.create") && (
+              <ServiceOrderFormTrigger
+                canCreateCustomer={can(user, "customers.write")}
+                tecnicos={tecnicos}
+                triggerLabel="Nueva orden de servicio"
+              />
+            )}
           </>
         }
       />
@@ -147,7 +158,7 @@ export default async function ServiceOrdersPage({
             so a bar there could only show a count the operator cannot change. */}
         <div className="hidden md:block">
           <SelectionBar>
-            <OrderBulkStatusActions statuses={statuses} />
+            <OrderBulkStatusActions statuses={statuses} canAssign={can(user, "service-orders.assign")} />
           </SelectionBar>
         </div>
         <BulkResultPanel reasons={ORDER_REFUSAL_MESSAGES} />
@@ -318,6 +329,9 @@ const ORDER_REFUSAL_MESSAGES: Record<string, string> = {
   invalid_transition: "Su estado actual ya no permite ese cambio. Recargá la página.",
   not_found: "Esa orden ya no existe. Recargá la página.",
   Forbidden: "No tenés permiso para cambiar el estado de esta orden.",
+  // The role-gated transition refusal (technicians-and-work-lines): a técnico
+  // may only start an order, never close or cancel one.
+  forbidden: "Solo un administrador o el jefe de taller puede cerrar, cancelar o devolver una orden.",
   // `runSequential`'s own code for a `fetch` that threw — the only reason
   // reaching the panel that no route produced.
   request_failed: "No se pudo conectar con el servidor. Intentá de nuevo.",

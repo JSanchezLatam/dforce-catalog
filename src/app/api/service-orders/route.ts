@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import { ClienteDeactivatedError } from "@/modules/customers/service";
+import { InvalidTecnicoError } from "@/modules/service-orders/assignments";
 import { parseIntake } from "@/modules/service-orders/intake";
 import {
   createOrder,
@@ -31,11 +32,17 @@ export async function handleCreateOrdenServicio(
   deps: CreateOrdenServicioDeps = {},
 ): Promise<NextResponse> {
   const user = requireSession(request);
-  if (!can(user, "service-orders.write")) {
+  // `create`, not `write`: a técnico keeps `write` for its own orders and loses only creation.
+  if (!can(user, "service-orders.create")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const body = await request.json();
+
+  // Zero or more roster ids. A claim about the body, so checked, not cast.
+  if (body.tecnicoIds !== undefined && !(Array.isArray(body.tecnicoIds) && body.tecnicoIds.every((id: unknown) => typeof id === "string"))) {
+    return NextResponse.json({ errors: { tecnicoIds: "Valor inválido" } }, { status: 400 });
+  }
 
   for (const field of NULLABLE_TEXT_FIELDS) {
     if (body[field] === undefined || body[field] === null) continue;
@@ -87,6 +94,7 @@ export async function handleCreateOrdenServicio(
         description: body.description,
         observaciones: body.observaciones,
         appointmentAt,
+        tecnicoIds: body.tecnicoIds,
         ...intake.value,
         createdBy: user.id,
       },
@@ -104,6 +112,9 @@ export async function handleCreateOrdenServicio(
     }
     if (err instanceof InvalidCategoriaError) {
       return NextResponse.json({ errors: err.errors }, { status: 400 }); // C4
+    }
+    if (err instanceof InvalidTecnicoError) {
+      return NextResponse.json({ errors: err.errors }, { status: 400 }); // R20: deactivated or unknown technician
     }
     if (err instanceof InvalidVehiculoError) {
       return NextResponse.json({ errors: err.errors }, { status: 400 }); // C4

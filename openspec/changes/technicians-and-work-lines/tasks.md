@@ -70,39 +70,41 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU4b: Create, assignments, lock scope (PR 4b)
 
-- [ ] 5.1 RED `service.test.ts`: `createOrder` accepts 0..n `tecnicoIds`; assignments written in the same tx; deactivated or unknown technician refused with nothing created; zero technicians yields an `open` order with no assignment. GREEN `service.ts`.
-- [ ] 5.2 RED route tests: POST `/api/service-orders` técnico 403 (`service-orders.create`), jefe 201; create control hidden for técnico. GREEN route, trigger, list page.
-- [ ] 5.3 RED `order-lock.test.ts`: `scope` option adds the condition; no row for an unassigned técnico throws not-found (404). GREEN `order-lock.ts`; PATCH and transition routes pass the scope.
-- [ ] 5.4 RED `assignments.test.ts`: admin/jefe assign on `open`/`in_progress` leaves status; `ready_for_review` returns to `in_progress`, new `parte_lista_at` null; duplicate is a no-op; `done`/`cancelled` refused even with correction; técnico 403; deactivated refused; no delete path. GREEN `assignments.ts`, `/api/service-orders/[id]/assignments` POST (guard row `service-orders.assign`).
-- [ ] 5.5 RED `transitions` tests: técnico `open → in_progress` allowed; técnico to `done`/`cancelled` 403; admin/jefe close from `in_progress`/`ready_for_review`; target `ready_for_review` rejected. GREEN.
-- [ ] 5.6 RED e2e rows: técnico PATCH/transition on unassigned order 404 and unchanged; assignment idempotence on real SQL; assign during review reopens. GREEN.
-- [ ] 5.7 Mutation-verify 5.1-5.6 by name. 5.8 curl at the LAN IP as técnico, jefe, administrador.
+- [x] 5.1 RED `service.test.ts`: `createOrder` accepts 0..n `tecnicoIds`; assignments written in the same tx; deactivated or unknown technician refused with nothing created; zero technicians yields an `open` order with no assignment. GREEN `service.ts`.
+- [x] 5.2 RED route tests: POST `/api/service-orders` técnico 403 (`service-orders.create`), jefe 201; create control hidden for técnico. GREEN route, trigger, list page.
+- [x] 5.3 RED `order-lock.test.ts`: `scope` option adds the condition; no row for an unassigned técnico throws not-found (404). GREEN `order-lock.ts`; PATCH and transition routes pass the scope.
+- [x] 5.4 RED `assignments.test.ts`: admin/jefe assign on `open`/`in_progress` leaves status; `ready_for_review` returns to `in_progress`, new `parte_lista_at` null; duplicate is a no-op; `done`/`cancelled` refused even with correction; técnico 403; deactivated refused; no delete path. GREEN `assignments.ts`, `/api/service-orders/[id]/assignments` POST (guard row `service-orders.assign`).
+- [x] 5.5 RED `transitions` tests: técnico `open → in_progress` allowed; técnico to `done`/`cancelled` 403; admin/jefe close from `in_progress`/`ready_for_review`; target `ready_for_review` rejected. GREEN.
+- [x] 5.6 RED e2e rows: técnico PATCH/transition on unassigned order 404 and unchanged; assignment idempotence on real SQL; assign during review reopens. GREEN.
+- [x] 5.7 Mutation-verify 5.1-5.6 by name.
+- [x] 5.8 curl at the LAN IP as técnico, jefe, administrador.
 
 ## WU5: Work lines (PR 5)
 
-- [ ] 6.1 RED `work-lines.test.ts`: duration 0/-5/1.5/"abc" and blank description refused; `fecha` defaults to local today; técnico only own technician (403) and only in `in_progress`; admin/jefe in `in_progress`/`ready_for_review`; `open` refused; unassigned technician refused; marked técnico refused; edit cannot change technician or order; status read from the locked row. GREEN `work-lines.ts`.
-- [ ] 6.2 RED correction tests: closed + grant writes `linea_trabajo` add `(null,id)`, delete `(id,null)`, edit `linea_trabajo.<field>`; same tx (audit failure rolls back the line); jefe 403 without verifying password; no password 409; open order writes no audit. GREEN.
-- [ ] 6.3 RED route tests `/work-lines` POST, `/[lineId]` PATCH/DELETE (+ guard rows); unassigned técnico 404. GREEN routes.
-- [ ] 6.4 RED e2e `src/e2e/order-work-lines.e2e.test.ts`: composite FK rejects unassigned technician; `SUM(duracion_minutos)` for A in October excludes B and November; correction audit rows exact; throwing audit leaves no line. GREEN.
-- [ ] 6.5 Mutation-verify 6.1-6.4 by name (audit outside tx, drop the status gate, let edit change `tecnico_id`).
+- [x] 6.1 RED `work-lines.test.ts`: duration 0/-5/1.5/"abc" and blank description refused; `fecha` defaults to local today; técnico only own technician (403) and only in `in_progress`; admin/jefe in `in_progress`/`ready_for_review`; `open` refused; unassigned technician refused; marked técnico refused; edit cannot change technician or order; status read from the locked row. GREEN `work-lines.ts`.
+- [x] 6.2 RED correction tests: closed + grant writes `linea_trabajo` add `(null,id)`, delete `(id,null)`, edit `linea_trabajo.<field>`; same tx (audit failure rolls back the line); jefe 403 without verifying password; no password 409; open order writes no audit. GREEN.
+- [x] 6.3 RED route tests `/work-lines` POST, `/[lineId]` PATCH/DELETE (+ guard rows); unassigned técnico 404. GREEN routes.
+- [x] 6.4 RED e2e `src/e2e/order-work-lines.e2e.test.ts`: composite FK rejects unassigned technician; `SUM(duracion_minutos)` for A in October excludes B and November; correction audit rows exact; throwing audit leaves no line. GREEN.
+- [x] 6.5 Mutation-verify 6.1-6.4 by name (audit outside tx, drop the status gate, let edit change `tecnico_id`).
 
 ## WU6: Mi parte lista and readiness (PR 6)
 
-- [ ] 7.1 RED `readiness.test.ts` truth table: zero active assignees never ready; all active marked becomes `ready_for_review` with timestamp; deactivated unmarked ignored; un-mark returns `in_progress`; only runs in `in_progress`/`ready_for_review`. GREEN `readiness.ts` (`applyReadiness`, no `assertTransition`).
-- [ ] 7.2 RED `parte-lista.test.ts`: marks only own assignment (403 naming another); refused outside `in_progress`, already marked, closed orders for every role (never correctable); un-mark in `ready_for_review`; no line required. GREEN service, `/parte-lista` POST/DELETE (+ guard rows).
-- [ ] 7.3 RED e2e race `src/e2e/order-readiness.e2e.test.ts`: second connection holds `FOR UPDATE`; `markParteLista` does not resolve within 300ms, then resolves `ready_for_review`; two simultaneous last marks end `ready_for_review` once. GREEN.
-- [ ] 7.4 RED admin/jefe `ready_for_review → in_progress` transition. GREEN. Also: a técnico is refused photo add/delete on a `ready_for_review` order (spec); WU1 left `canChangeOrderPhotos` status-only (`ready_for_review: true`), so add the role split here (route/page gate), RED first.
-- [ ] 7.5 Mutation-verify 7.1-7.4 by name (remove the lock so the race test goes red).
+- [x] 7.1 RED `readiness.test.ts` truth table: zero active assignees never ready; all active marked becomes `ready_for_review` with timestamp; deactivated unmarked ignored; un-mark returns `in_progress`; only runs in `in_progress`/`ready_for_review`. GREEN `readiness.ts` (`applyReadiness`, no `assertTransition`).
+- [x] 7.2 RED `parte-lista.test.ts`: marks only own assignment (403 naming another); refused outside `in_progress`, already marked, closed orders for every role (never correctable); un-mark in `ready_for_review`; no line required. GREEN service, `/parte-lista` POST/DELETE (+ guard rows).
+- [x] 7.3 RED e2e race `src/e2e/order-readiness.e2e.test.ts`: second connection holds `FOR UPDATE`; `markParteLista` does not resolve within 300ms, then resolves `ready_for_review`; two simultaneous last marks end `ready_for_review` once. GREEN.
+- [x] 7.4 RED admin/jefe `ready_for_review → in_progress` transition. GREEN. Also: a técnico is refused photo add/delete on a `ready_for_review` order (spec); WU1 left `canChangeOrderPhotos` status-only (`ready_for_review: true`), so add the role split here (route/page gate), RED first.
+- [x] 7.5 Mutation-verify 7.1-7.4 by name (remove the lock so the race test goes red).
+- [x] 7.6 Send-back (`ready_for_review → in_progress` by admin/jefe) clears every assignment's `parte_lista_at` in the same locked transaction, so technicians re-mark after the rework. RED unit in `service.test.ts`, e2e row in `order-readiness.e2e.test.ts`; mutation: drop the clear.
 
 ## WU7: Order UI (PR 7)
 
-- [ ] 8.1 RED `TechnicianPicker` tests: native checkbox list of ACTIVE technicians only, 44px rows; zero selected submits. GREEN picker in the order form (create) and assignment control on detail with "Técnico asignado" toast.
-- [ ] 8.2 RED `OrderWorkCard`/`WorkLineDialog` tests: lines, per-technician totals (90/45), marked or pending per assignee; "Mi parte lista" and un-mark only for the viewer's own assignment; toasts "Línea agregada", "Parte marcada como lista"; `inputMode="numeric"`, `<input type="date">`; inline errors; closed order admin sees password field. GREEN.
-- [ ] 8.3 RED detail/list tests: badge and status filter "Lista para revisión" (`VALID_STATUS`); técnico sees no edit control in `ready_for_review`. GREEN `ServiceOrderFilters.tsx`, `service-orders/page.tsx`, detail page.
-- [ ] 8.4 Mutation-verify 8.1-8.3 by name (show mark to the other technician, list deactivated).
-- [ ] 8.5 Playwright at `http://192.168.0.3:3000` as tecnico, jefe_taller, administrador at 390/768/desktop: console clean, 44x44 measured, full flow create unassigned, assign, mark, close.
+- [x] 8.1 RED `TechnicianPicker` tests: native checkbox list of ACTIVE technicians only, 44px rows; zero selected submits. GREEN picker in the order form (create) and assignment control on detail with "Técnico asignado" toast.
+- [x] 8.2 RED `OrderWorkCard`/`WorkLineDialog` tests: lines, per-technician totals (90/45), marked or pending per assignee; "Mi parte lista" and un-mark only for the viewer's own assignment; toasts "Línea agregada", "Parte marcada como lista"; `inputMode="numeric"`, `<input type="date">`; inline errors; closed order admin sees password field. GREEN.
+- [x] 8.3 RED detail/list tests (also reword the PATCH `OrderEditForbiddenError` copy "Solo un administrador puede editar una orden abierta." — a jefe may edit too and `ready_for_review` is not "abierta"; and the bulk `forbidden` copy if the bulk menu ever offers ready_for_review → in_progress): badge and status filter "Lista para revisión" (`VALID_STATUS`); técnico sees no edit control in `ready_for_review`. GREEN `ServiceOrderFilters.tsx`, `service-orders/page.tsx`, detail page.
+- [x] 8.4 Mutation-verify 8.1-8.3 by name (show mark to the other technician, list deactivated).
+- [x] 8.5 Playwright at `http://192.168.0.3:3000` as tecnico, jefe_taller, administrador at 390/768/desktop: console clean, 44x44 measured, full flow create unassigned, assign, mark, close.
 
 ## Spec archive notes
 
 - [ ] 9.1 Archive after `closed-order-lock`: NEW `technicians`, `order-work-lines`; `service-orders` MODIFIES R20, R21, R23, Reception Photos, Order Editing and ADDS Order Assignment, Técnico Scoping; `user-management` ADDS two; `service-order-corrections` ADDS one. Check duplicates after the mechanical apply.
-- [ ] 9.2 Follow-ups: malformed JSON on the technician routes answers 500 (same as `/api/users`), guard with a 400;  metrics dashboard, un-assigning, notifications, prices (v2).
+- [ ] 9.2 Follow-ups: re-assigning a now-deactivated technician already on the order answers 400 instead of a no-op (active check runs before the duplicate check); WU4b makes `OrderStatusControls` (detail) and `OrderBulkStatusActions` (list) offer a técnico `done`/`cancelled` buttons the route now answers 403 (generic error toast); filtered by `service-orders.assign` in WU7 (8.3, done: `canAssign` prop, `isTransitionPermitted`); malformed JSON on the technician routes answers 500 (same as `/api/users`), guard with a 400;  metrics dashboard, un-assigning, notifications, prices (v2).

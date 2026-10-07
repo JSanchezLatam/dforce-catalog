@@ -45,16 +45,32 @@ export const ROUTE_GUARDS: Record<
   "/api/customers/[id]/vehicles": { GET: "customers.read", POST: "customers.write" },
   // "Contactado" mark on a due renewal (vehicle-details-and-renewals).
   "/api/vencimientos/contact": { POST: "vencimientos.contact" },
-  "/api/service-orders": { POST: "service-orders.write" },
+  // Creating is `create`, not `write`: a técnico holds `write` and not `create`.
+  "/api/service-orders": { POST: "service-orders.create" },
   // PATCH also evaluates `service-orders.correct`: it decides whether a password
   // sent with the save is verified, so only an administrador can correct a
-  // closed order (closed-order-lock).
-  "/api/service-orders/[id]": { PATCH: ["service-orders.write", "service-orders.correct"] },
+  // closed order (closed-order-lock). And `service-orders.assign`: a status
+  // transition other than `open -> in_progress` (close, cancel, return from
+  // review) needs it, evaluated in the handler and handed to the service.
+  "/api/service-orders/[id]": { PATCH: ["service-orders.write", "service-orders.correct", "service-orders.assign"] },
+  // Assigning a technician: admin and jefe only; a closed order is never assignable, so no `correct`.
+  "/api/service-orders/[id]/assignments": { POST: "service-orders.assign" },
+  // Work lines (order-work-lines): `write` is the coarse gate (técnico included), `assign` marks staff
+  // who may write any assigned technician's line, `correct` decides whether a password is verified.
+  "/api/service-orders/[id]/work-lines": { POST: ["service-orders.write", "service-orders.assign", "service-orders.correct"] },
+  "/api/service-orders/[id]/work-lines/[lineId]": {
+    PATCH: ["service-orders.write", "service-orders.assign", "service-orders.correct"],
+    DELETE: ["service-orders.write", "service-orders.assign", "service-orders.correct"],
+  },
+  // "Mi parte lista": `write` is the whole gate (a técnico holds it). Which assignment is the caller's own,
+  // and that a closed order is refused for every role, are service rules; there is no `correct` here.
+  "/api/service-orders/[id]/parte-lista": { POST: "service-orders.write", DELETE: "service-orders.write" },
   // Reception photos (service-order-reception WU3b). POST is `write` (both roles
   // photograph an open order); GET is `read`; DELETE is admin-only. Both writes
   // also evaluate `service-orders.correct`: it decides whether a password sent
-  // with them is verified (closed-order-lock).
-  "/api/service-orders/[id]/photos": { POST: ["service-orders.write", "service-orders.correct"] },
+  // with them is verified (closed-order-lock). POST also evaluates `service-orders.assign`:
+  // only staff add photos to a `ready_for_review` order.
+  "/api/service-orders/[id]/photos": { POST: ["service-orders.write", "service-orders.correct", "service-orders.assign"] },
   "/api/service-orders/[id]/photos/[photoId]": {
     GET: "service-orders.read",
     DELETE: ["service-orders.deletePhoto", "service-orders.correct"],
@@ -189,16 +205,10 @@ describe("ROUTE_GUARDS completeness", () => {
     // real route and must stay reachable. `catalogs.listAll` has no dedicated
     // route of its own by design.
     //
-    // technicians-and-work-lines: the three below have no route yet, and each
-    // WU removes its own entry when it wires one. `service-orders.readAll` is
-    // exempt for good, like `catalogs.listAll`: it is read by `orderScope`
-    // (WU4a), never by a route handler.
-    const exempt: readonly Action[] = [
-      "catalogs.listAll",
-      "service-orders.readAll",
-      "service-orders.create", // WU4b: POST /api/service-orders
-      "service-orders.assign", // WU4b: POST /api/service-orders/[id]/assignments
-    ];
+    // `service-orders.readAll` is exempt for good, like `catalogs.listAll`: it
+    // is read by `orderScope` (technicians-and-work-lines WU4a), never by a
+    // route handler.
+    const exempt: readonly Action[] = ["catalogs.listAll", "service-orders.readAll"];
 
     for (const action of ACTIONS) {
       if ((exempt as readonly string[]).includes(action)) continue;
