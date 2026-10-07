@@ -126,7 +126,7 @@ describe("TechnicianRoster — create", () => {
     expect(bodyOf(fetchMock)).toEqual({ nombre: "Beto", userId: "u-2" });
   });
 
-  it("shows a 409 link refusal and a 400 field error inline, with no toast", async () => {
+  it("shows a 409 link refusal inline, with no toast", async () => {
     const user = userEvent.setup();
     mockFetch({ status: 409, body: { error: "Ese usuario ya está vinculado a otro técnico." } });
     render(<TechnicianRoster technicians={[]} logins={LOGINS} canLink />);
