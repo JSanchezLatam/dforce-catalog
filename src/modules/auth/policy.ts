@@ -23,6 +23,11 @@ export const ACTIONS = [
   "workshop.edit",
   "users.manage",
   "technicians.manage",
+  // Two actions, not one: `getNavGroups` filters on a positive action, so a técnico-only
+  // page needs its own or the admin would see two entries. A jefe cannot be roster-linked,
+  // so `metrics.self` is exactly the técnico.
+  "metrics.read",
+  "metrics.self",
   "sync.manual",
   "account.self",
 ] as const;
@@ -63,6 +68,8 @@ export const MATRIX: Record<Role, Grants> = {
     "service-orders.create": false,
     "service-orders.assign": false,
     "technicians.manage": false,
+    "metrics.read": false,
+    "metrics.self": true,
   },
   // The workshop manager: everything the owner holds except user management,
   // workshop and template settings, closed-order corrections and photo deletion.
@@ -89,6 +96,8 @@ export const MATRIX: Record<Role, Grants> = {
     "workshop.edit": false,
     "users.manage": false,
     "technicians.manage": true,
+    "metrics.read": true,
+    "metrics.self": false,
     "sync.manual": true,
     "account.self": true,
   },
@@ -117,6 +126,8 @@ export const MATRIX: Record<Role, Grants> = {
     "service-orders.create": true,
     "service-orders.assign": true,
     "technicians.manage": true,
+    "metrics.read": true,
+    "metrics.self": false,
   },
 };
 

@@ -114,6 +114,9 @@ export const ROUTE_GUARDS: Record<
   "/account": { GET: "account.self" },
   "/users": { GET: "users.manage" },
   "/technicians": { GET: "technicians.manage" },
+  // metrics-dashboard: admin and jefe read `/metrics`; the técnico reads only `/mis-numeros`.
+  "/metrics": { GET: "metrics.read" },
+  "/mis-numeros": { GET: "metrics.self" },
   "/api/account": { GET: "account.self", PATCH: "account.self" },
   "/api/users": { GET: "users.manage", POST: "users.manage" },
   "/api/users/[id]": { PATCH: "users.manage" },
