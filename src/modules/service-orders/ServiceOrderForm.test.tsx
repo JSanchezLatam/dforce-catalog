@@ -1209,7 +1209,7 @@ describe("ServiceOrderForm — correcting a closed order", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   function stubPatch(status: number, body: unknown) {
-    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: status < 300, status, json: async () => body }) as Response);
+    const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async () => ({ ok: status < 300, status, json: async () => body }) as Response);
     vi.stubGlobal("fetch", fetchMock);
     return fetchMock;
   }
