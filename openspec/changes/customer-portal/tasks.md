@@ -70,11 +70,11 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU4: Ingest endpoint (PR 4)
 
-- [ ] 4.1 RED `portal/src/ingest/parse.test.ts`: strict whitelist at every level; extra `phone` key rejected; missing required field; status outside the four labels; `reconcile` shape; wrong `kind`. GREEN `parse.ts` (hand-rolled, no new dependency).
-- [ ] 4.2 RED `portal/e2e/ingest.e2e.test.ts` (`dforce_portal_test`, real SQL): version 6 over 5 replaces; 5 over 6 changes nothing and returns 2xx; equal version is a no-op; delete writes `token_hash = NULL, snapshot = NULL` and keeps the version; delayed upsert v6 after delete v7 stores nothing; delete of an unknown customer 2xx; rotation upsert swaps the hash so the old hash resolves nothing; reconcile deletes only rows NOT in the live set AND with `version < maxVersion` (a newer row survives); no plaintext token in any column. GREEN `portal/src/ingest/apply.ts` (one `INSERT ... ON CONFLICT (cliente_id) DO UPDATE ... WHERE portal_customer.version < excluded.version`).
-- [ ] 4.3 RED `portal/app/api/ingest/route.test.ts`: missing or wrong signature 401, stale timestamp (6 min) 401, tampered body 401, nothing persisted (assert `apply` never called); every method without signature (GET, PUT, DELETE) 401; bad shape 400; 200 `{applied}`; `runtime = "nodejs"`. GREEN `route.ts`.
-- [ ] 4.4 Mutation-verify 4.1-4.3 by name (flip `<` to `<=`, drop the reconcile `version <` bound, hard `DELETE`, skip the signature check on GET, drop one whitelist key check, compare signatures with `===`).
-- [ ] 4.5 Run the ingest e2e twice back to back on the same throwaway DB (isolation); drop `dforce_portal_test` afterwards.
+- [x] 4.1 RED `portal/src/ingest/parse.test.ts`: strict whitelist at every level; extra `phone` key rejected; missing required field; status outside the four labels; `reconcile` shape; wrong `kind`. GREEN `parse.ts` (hand-rolled, no new dependency).
+- [x] 4.2 RED `portal/e2e/ingest.e2e.test.ts` (`dforce_portal_test`, real SQL): version 6 over 5 replaces; 5 over 6 changes nothing and returns 2xx; equal version is a no-op; delete writes `token_hash = NULL, snapshot = NULL` and keeps the version; delayed upsert v6 after delete v7 stores nothing; delete of an unknown customer 2xx; rotation upsert swaps the hash so the old hash resolves nothing; reconcile deletes only rows NOT in the live set AND with `version < maxVersion` (a newer row survives); no plaintext token in any column. GREEN `portal/src/ingest/apply.ts` (one `INSERT ... ON CONFLICT (cliente_id) DO UPDATE ... WHERE portal_customer.version < excluded.version`).
+- [x] 4.3 RED `portal/app/api/ingest/route.test.ts`: missing or wrong signature 401, stale timestamp (6 min) 401, tampered body 401, nothing persisted (assert `apply` never called); every method without signature (GET, PUT, DELETE) 401; bad shape 400; 200 `{applied}`; `runtime = "nodejs"`. GREEN `route.ts`.
+- [x] 4.4 Mutation-verify 4.1-4.3 by name (flip `<` to `<=`, drop the reconcile `version <` bound, hard `DELETE`, skip the signature check on GET, drop one whitelist key check, compare signatures with `===`).
+- [x] 4.5 Run the ingest e2e twice back to back on the same throwaway DB (isolation); drop `dforce_portal_test` afterwards.
 
 ## WU5a: Snapshot builder and worker (PR 5a)
 
