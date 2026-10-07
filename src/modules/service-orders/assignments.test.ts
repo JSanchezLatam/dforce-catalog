@@ -63,11 +63,12 @@ describe("assignTecnico", () => {
   );
 
   it("returns a ready_for_review order to in_progress when the assignment is new", async () => {
-    const { database, log } = fakeDb([order("ready_for_review"), ACTIVE, NEW_ROW, []]);
+    // the fourth statement is `applyReadiness`'s read: the new assignee has not marked
+    const { database, log } = fakeDb([order("ready_for_review"), ACTIVE, NEW_ROW, [{ parteListaAt: null, deactivatedAt: null }], []]);
 
     await assignTecnico(input, { db: database });
 
-    expect(log.sets).toEqual([{ status: "in_progress" }]);
+    expect(log.sets).toEqual([{ status: "in_progress", updatedAt: expect.any(Date) }]);
   });
 
   it("is a no-op for a technician already assigned: no error, and a ready_for_review order stays ready", async () => {
