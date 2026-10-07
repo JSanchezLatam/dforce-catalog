@@ -15,6 +15,7 @@ import {
   reactivateUser,
   AdminSafetyError,
   MIN_PASSWORD_LENGTH,
+  ensureRosterRow,
 } from "./service";
 
 /**
@@ -228,10 +229,15 @@ describe("changePassword", () => {
  */
 describe("createUser", () => {
   function deps(overrides: Record<string, unknown> = {}) {
+    const tx = { marker: "tx" as const, execute: vi.fn() };
     return {
+      tx,
       findByUsername: async () => null,
       findByEmail: async () => null,
+      // Real `db.transaction` semantics are the e2e's job; this fake only hands the callback ONE tx.
+      database: { transaction: async <T>(fn: (t: typeof tx) => Promise<T>) => fn(tx) },
       insert: vi.fn().mockResolvedValue({ id: "new-user" }),
+      ensureRosterRow: vi.fn().mockResolvedValue(undefined),
       ...overrides,
     };
   }
@@ -278,6 +284,29 @@ describe("createUser", () => {
     expect(d.insert.mock.calls[0][0]).toMatchObject({ name: null, email: null });
   });
 
+  it("ensures a roster row for a new técnico, inside the insert's transaction", async () => {
+    const d = deps();
+
+    await createUser({ username: "ana", password: "temporal1", role: "tecnico" }, d);
+
+    expect(d.insert.mock.calls[0][1]).toBe(d.tx);
+    expect(d.ensureRosterRow).toHaveBeenCalledExactlyOnceWith(d.tx, "new-user");
+  });
+
+  it("does not touch the roster for an administrador or a jefe_taller", async () => {
+    for (const role of ["administrador", "jefe_taller"] as const) {
+      const d = deps();
+      await createUser({ username: "ana", password: "temporal1", role }, d);
+      expect(d.ensureRosterRow).not.toHaveBeenCalled();
+    }
+  });
+
+  it("propagates a roster failure, so the transaction (and the user insert) rolls back", async () => {
+    const d = deps({ ensureRosterRow: vi.fn().mockRejectedValue(new Error("roster down")) });
+
+    await expect(createUser({ username: "ana", password: "temporal1", role: "tecnico" }, d)).rejects.toThrow("roster down");
+  });
+
   it("rejects a duplicate username and writes nothing", async () => {
     const d = deps({ findByUsername: async () => ({ id: "existing" }) });
 
@@ -321,7 +350,7 @@ describe("createUser", () => {
 
     await expectProfileErrors(
       createUser({ username: "ana", password: "temporal1", role: "superadmin" as never }, d),
-      { role: "El rol debe ser tecnico o administrador." },
+      { role: "El rol debe ser técnico, jefe de taller o administrador." },
     );
     expect(d.insert).not.toHaveBeenCalled();
   });
@@ -366,6 +395,34 @@ describe("updateUser", () => {
       },
     };
   }
+
+  it("a role change to tecnico ensures the roster row in the same transaction", async () => {
+    const ensure = vi.fn().mockResolvedValue(undefined);
+    const { deps } = txDeps({ getTarget: async () => ({ role: "administrador" as const, email: null }), ensureRosterRow: ensure });
+
+    await updateUser("admin-1", "user-9", { role: "tecnico" }, deps);
+
+    expect(ensure).toHaveBeenCalledOnce();
+    expect(ensure.mock.calls[0][1]).toBe("user-9");
+  });
+
+  it("demotion, an unchanged técnico role and non-role edits leave the roster alone", async () => {
+    const ensure = vi.fn().mockResolvedValue(undefined);
+    const demote = txDeps({ getTarget: async () => ({ role: "tecnico" as const, email: null }), ensureRosterRow: ensure });
+    await updateUser("admin-1", "user-9", { role: "administrador" }, demote.deps);
+    await updateUser("admin-1", "user-9", { role: "tecnico" }, demote.deps);
+    await updateUser("admin-1", "user-9", { name: "Ana" }, demote.deps);
+    expect(ensure).not.toHaveBeenCalled();
+  });
+
+  it("a roster failure on promotion rejects the update", async () => {
+    const { deps } = txDeps({
+      getTarget: async () => ({ role: "administrador" as const, email: null }),
+      ensureRosterRow: vi.fn().mockRejectedValue(new Error("roster down")),
+    });
+
+    await expect(updateUser("admin-1", "user-9", { role: "tecnico" }, deps)).rejects.toThrow("roster down");
+  });
 
   it("persists name, email and role edits", async () => {
     const { applyUpdate, deps } = txDeps();
@@ -504,7 +561,7 @@ describe("updateUser", () => {
       const { applyUpdate, deps } = txDeps();
 
       await expectProfileErrors(updateUser("admin-1", "user-9", { role: "superadmin" as never }, deps), {
-        role: "El rol debe ser tecnico o administrador.",
+        role: "El rol debe ser técnico, jefe de taller o administrador.",
       });
       expect(applyUpdate).not.toHaveBeenCalled();
     });
@@ -701,5 +758,20 @@ describe("reactivateUser", () => {
     await reactivateUser("user-1", { setDeactivatedAt });
 
     expect(setDeactivatedAt).toHaveBeenCalledWith("user-1", null);
+  });
+});
+
+describe("ensureRosterRow", () => {
+  it("issues one idempotent INSERT keyed on the user id, on the tx it was given", async () => {
+    const execute = vi.fn().mockResolvedValue({ rows: [] });
+
+    await ensureRosterRow({ execute }, "user-9");
+
+    expect(execute).toHaveBeenCalledOnce();
+    const { PgDialect } = await import("drizzle-orm/pg-core");
+    const { sql: text, params } = new PgDialect().sqlToQuery(execute.mock.calls[0][0]);
+    expect(text).toMatch(/INSERT INTO tecnico/i);
+    expect(text).toMatch(/ON CONFLICT \(user_id\) DO NOTHING/i);
+    expect(params).toEqual(["user-9"]);
   });
 });

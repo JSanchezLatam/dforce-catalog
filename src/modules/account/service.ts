@@ -163,6 +163,8 @@ export type CreateUserInput = {
 };
 
 export type CreateUserDeps = {
+  database?: { transaction: <T>(fn: (tx: TxLike) => Promise<T>) => Promise<T> };
+  ensureRosterRow?: typeof ensureRosterRow;
   findByUsername?: (username: string) => Promise<{ id: string } | null>;
   findByEmail?: (email: string) => Promise<{ id: string } | null>;
   insert?: (row: {
@@ -172,7 +174,7 @@ export type CreateUserDeps = {
     name: string | null;
     email: string | null;
     mustChangePassword: boolean;
-  }) => Promise<{ id: string }>;
+  }, tx: TxLike) => Promise<{ id: string }>;
 };
 
 /**
@@ -190,7 +192,7 @@ export async function createUser(input: CreateUserInput, deps: CreateUserDeps = 
   const errors: Record<string, string> = {};
 
   if (!username) errors.username = "El nombre de usuario es obligatorio.";
-  if (!isRole(input.role)) errors.role = "El rol debe ser tecnico o administrador.";
+  if (!isRole(input.role)) errors.role = "El rol debe ser técnico, jefe de taller o administrador.";
   if (!input.password || input.password.length < MIN_PASSWORD_LENGTH) {
     errors.password = `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`;
   }
@@ -222,10 +224,19 @@ export async function createUser(input: CreateUserInput, deps: CreateUserDeps = 
     mustChangePassword: true,
   };
 
+  // A técnico login and its roster row commit together or not at all: a técnico
+  // with no row logs in and sees nothing, and cannot be assigned.
   const insert =
     deps.insert ??
-    (async (r: typeof row) => (await db.insert(users).values(r).returning({ id: users.id }))[0]);
-  return insert(row);
+    // `tx` is always the drizzle transaction of `db.transaction` on this path.
+    (async (r: typeof row, tx: TxLike) =>
+      (await (tx as unknown as typeof db).insert(users).values(r).returning({ id: users.id }))[0]);
+  const ensure = deps.ensureRosterRow ?? ensureRosterRow;
+  return (deps.database ?? db).transaction(async (tx) => {
+    const created = await insert(row, tx);
+    if (row.role === "tecnico") await ensure(tx, created.id);
+    return created;
+  });
 }
 
 export type AdminSafetyOperation = "change-role" | "deactivate";
@@ -280,6 +291,22 @@ export class AdminSafetyError extends Error {
  * tests, no real Postgres needed.
  */
 type TxLike = { execute: (query: ReturnType<typeof sql>) => Promise<{ rows: Record<string, unknown>[] }> };
+
+/**
+ * technicians-and-work-lines: every técnico login has exactly one roster row.
+ * Idempotent — `tecnico.user_id` is UNIQUE, so an existing link (the backfill's,
+ * or a manual one) is reused and a second row can never appear. The name is read
+ * from `users` in the same statement, falling back to `username` like the
+ * 0029 backfill, and so is `deactivated_at`. Demotion or deactivation never calls
+ * this, and never removes the row.
+ */
+export async function ensureRosterRow(tx: TxLike, userId: string): Promise<void> {
+  await tx.execute(sql`
+    INSERT INTO tecnico (id, nombre, user_id, deactivated_at)
+    SELECT gen_random_uuid()::text, coalesce(nullif(btrim(name), ''), username), id, deactivated_at
+    FROM users WHERE id = ${userId}
+    ON CONFLICT (user_id) DO NOTHING`);
+}
 
 async function listActiveAdminIdsTx(tx: TxLike): Promise<string[]> {
   const result = await tx.execute(
@@ -342,6 +369,7 @@ export type UpdateUserDeps = {
   listActiveAdminIds?: (tx: TxLike) => Promise<string[]>;
   findByEmail?: (email: string) => Promise<{ id: string } | null>;
   applyUpdate?: (tx: TxLike, targetId: string, patch: UserPatch) => Promise<void>;
+  ensureRosterRow?: typeof ensureRosterRow;
   revokeOtherSessions?: typeof revokeOtherSessions;
 };
 
@@ -373,7 +401,7 @@ export async function updateUser(
   const errors: Record<string, string> = {};
 
   if (input.role !== undefined && !isRole(input.role)) {
-    errors.role = "El rol debe ser tecnico o administrador.";
+    errors.role = "El rol debe ser técnico, jefe de taller o administrador.";
   }
   if (input.password !== undefined && input.password.length < MIN_PASSWORD_LENGTH) {
     errors.password = `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`;
@@ -425,6 +453,12 @@ export async function updateUser(
     }
 
     await applyUpdate(tx, targetId, patch);
+
+    // Promotion only. Runs after the UPDATE so the roster name reads the new
+    // `users.name`; a failure aborts the whole edit.
+    if (input.role === "tecnico" && target.role !== "tecnico") {
+      await (deps.ensureRosterRow ?? ensureRosterRow)(tx, targetId);
+    }
   });
 
   // After commit, and only for a reset: keepTokenId is null because the admin

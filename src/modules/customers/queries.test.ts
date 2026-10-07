@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
+import { SYSTEM_SCOPE } from "@/modules/service-orders/scope";
 import type { Cliente, OrdenServicio, Vehiculo } from "@/shared/db/schema";
 import {
   buildClienteListWhere,
@@ -281,7 +282,7 @@ describe("countClientes (R19)", () => {
 
 describe("getClienteById (R16)", () => {
   it("returns null when the injected queryFn finds nothing", async () => {
-    await expect(getClienteById("missing", async () => null)).resolves.toBeNull();
+    await expect(getClienteById("missing", SYSTEM_SCOPE, async () => null)).resolves.toBeNull();
   });
 
   it("returns the cliente + its service-order history (most-recent first is the queryFn's contract)", async () => {
@@ -290,7 +291,7 @@ describe("getClienteById (R16)", () => {
       orders: [{ id: "o2" }, { id: "o1" }] as unknown as OrdenServicio[],
       vehicles: [] as Vehiculo[],
     };
-    await expect(getClienteById("c1", async () => detail)).resolves.toEqual(detail);
+    await expect(getClienteById("c1", SYSTEM_SCOPE, async () => detail)).resolves.toEqual(detail);
   });
 });
 

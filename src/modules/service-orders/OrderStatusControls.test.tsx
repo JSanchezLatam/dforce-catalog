@@ -31,7 +31,7 @@ afterEach(() => {
 function renderControls() {
   return render(
     <ToastProvider>
-      <OrderStatusControls orderId="o1" status="open" />
+      <OrderStatusControls orderId="o1" status="open" canAssign={false} />
     </ToastProvider>,
   );
 }
@@ -152,4 +152,45 @@ it("lets the status controls wrap onto a second line", () => {
 
   const [button] = screen.getAllByRole("button", { name: /Marcar como/ });
   expect(button.parentElement!.className).toContain("flex-wrap");
+});
+
+/**
+ * The route answers 403 to a técnico asking for done/cancelled/send-back, so the
+ * buttons are not offered: a control that can only fail is a trap.
+ */
+describe("OrderStatusControls — only what the role may do", () => {
+  const labels = () => screen.queryAllByRole("button").map((b) => b.textContent);
+
+  function renderFor(status: "open" | "in_progress" | "ready_for_review", canAssign: boolean) {
+    return render(
+      <ToastProvider>
+        <OrderStatusControls orderId="o1" status={status} canAssign={canAssign} />
+      </ToastProvider>,
+    );
+  }
+
+  it("offers a técnico only 'En progreso' on an open order", () => {
+    renderFor("open", false);
+    expect(labels()).toEqual(["Marcar como En progreso"]);
+  });
+
+  it("offers a técnico nothing on an in_progress order", () => {
+    renderFor("in_progress", false);
+    expect(labels()).toEqual([]);
+  });
+
+  it("offers a técnico nothing on a ready_for_review order", () => {
+    renderFor("ready_for_review", false);
+    expect(labels()).toEqual([]);
+  });
+
+  it("offers staff every legal next state on an in_progress order", () => {
+    renderFor("in_progress", true);
+    expect(labels()).toEqual(["Marcar como Completada", "Marcar como Cancelada"]);
+  });
+
+  it("offers staff the send-back, the close and the cancel on a ready_for_review order", () => {
+    renderFor("ready_for_review", true);
+    expect(labels()).toEqual(["Marcar como En progreso", "Marcar como Completada", "Marcar como Cancelada"]);
+  });
 });

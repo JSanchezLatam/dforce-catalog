@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
+import { orderScope } from "@/modules/service-orders/scope";
 import { getClienteById } from "@/modules/customers/queries";
 import { MONTH_NAMES, MOTOR_LABEL } from "@/modules/customers/vehicle-options";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
@@ -44,7 +45,7 @@ function capitalize(value: string) {
 
 /**
  * C4/design.md D6 — nested under `customers/[id]` because `vehiculo` has no
- * independent lifecycle or list route. `getClienteById(id)` reads with
+ * independent lifecycle or list route. `getClienteById(id, scope)` reads with
  * `includeInactive: true`, so a deactivated vehicle's screen still renders
  * (spec scenario). Finding the vehicle inside THIS customer's own collection
  * is what makes a mismatched `/customers/A/vehicles/<B's vehicle>` a 404 —
@@ -57,17 +58,18 @@ export default async function VehicleDetailPage({
 }) {
   const { id, vehicleId } = await params;
   const user = await requireSessionFromHeaders();
+  const scope = orderScope(user);
   if (!can(user, "customers.read")) {
     return <PermissionDenied title="Vehículo" />;
   }
 
-  const detail = await getClienteById(id);
+  const detail = await getClienteById(id, scope);
   if (!detail) notFound();
 
   const vehiculo = detail.vehicles.find((v) => v.id === vehicleId);
   if (!vehiculo) notFound();
 
-  const orders = await listOrdenesByVehiculo(vehiculo.id);
+  const orders = await listOrdenesByVehiculo(vehiculo.id, scope);
   const canSeeInternal = can(user, "vencimientos.read");
 
   return (

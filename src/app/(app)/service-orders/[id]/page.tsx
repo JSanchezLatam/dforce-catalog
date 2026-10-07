@@ -19,11 +19,15 @@ import { cn } from "@/lib/utils";
 
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
+import { orderScope } from "@/modules/service-orders/scope";
 import { getClienteById } from "@/modules/customers/queries";
 import { listRemindersForOrder } from "@/modules/reminders/queries";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
-import { canChangeOrderPhotos, orderEditMode } from "@/modules/service-orders/edit-policy";
+import { canChangeOrderPhotos, isClosedStatus, orderEditMode, workLineMode } from "@/modules/service-orders/edit-policy";
 import { FUEL_LABEL, formatKilometraje, intakeInputsFor } from "@/modules/service-orders/intake";
+import { AssignTecnicoControl } from "@/modules/service-orders/AssignTecnicoControl";
+import { listOrderAssignees, listOrderLines } from "@/modules/service-orders/order-team";
+import { OrderWorkCard } from "@/modules/service-orders/OrderWorkCard";
 import { OrderPhotos } from "@/modules/service-orders/OrderPhotos";
 import { OrderStatusControls } from "@/modules/service-orders/OrderStatusControls";
 import { vehicleDescriptiveRows } from "@/modules/service-orders/vehicle-rows";
@@ -31,6 +35,7 @@ import { ServiceOrderFormTrigger } from "@/modules/service-orders/ServiceOrderFo
 import { listOrderPhotos } from "@/modules/service-orders/photos";
 import { getOrdenServicioById } from "@/modules/service-orders/queries";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
+import { findTecnicoByUserId, listTecnicos } from "@/modules/technicians/queries";
 import { formatDateTime } from "@/shared/datetime";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 
@@ -88,22 +93,34 @@ export default async function ServiceOrderDetailPage({
 }) {
   const { id } = await params;
   const user = await requireSessionFromHeaders();
+  const scope = orderScope(user);
   if (!can(user, "service-orders.read")) {
     return <PermissionDenied title="Orden de servicio" />;
   }
 
-  const detail = await getOrdenServicioById(id);
+  const detail = await getOrdenServicioById(id, scope);
   if (!detail) notFound();
 
   const { orden, items } = detail;
-  const [clienteDetail, reminders, photos] = await Promise.all([
-    getClienteById(orden.clienteId),
+  const canAssign = can(user, "service-orders.assign");
+  // Assignment is staff-only and never on a closed order (not correctable), so
+  // the roster is read only where the control would render.
+  const canAssignNow = canAssign && !isClosedStatus(orden.status);
+  const [clienteDetail, reminders, photos, assignees, lines, viewerTecnico, roster] = await Promise.all([
+    getClienteById(orden.clienteId, scope),
     listRemindersForOrder(orden.id),
-    listOrderPhotos(orden.id),
+    listOrderPhotos(orden.id, scope),
+    listOrderAssignees(orden.id),
+    listOrderLines(orden.id),
+    findTecnicoByUserId(user.id),
+    canAssignNow ? listTecnicos() : Promise.resolve([]),
   ]);
+  // ACTIVE roster (the default) minus who is already on the order; plain pairs for the client.
+  const assigned = new Set(assignees.map((a) => a.tecnicoId));
+  const assignable = roster.filter((t) => !assigned.has(t.id)).map(({ id, nombre }) => ({ id, nombre }));
   // The same predicates the photo routes enforce (status gate + role), resolved
   // here so only booleans cross to the client card.
-  const photosOpen = canChangeOrderPhotos(orden.status);
+  const photosOpen = canChangeOrderPhotos(orden.status, canAssign);
   // closed-order-lock: on a closed order only an administrador's audited
   // correction (password in each add/delete) may change photos.
   const correctingPhotos = !photosOpen && can(user, "service-orders.correct");
@@ -180,7 +197,7 @@ export default async function ServiceOrderDetailPage({
             >
               Imprimir
             </Link>
-            <OrderStatusControls orderId={orden.id} status={orden.status} />
+            <OrderStatusControls orderId={orden.id} status={orden.status} canAssign={canAssign} />
           </div>
         </CardHeader>
         <CardContent>
@@ -237,6 +254,47 @@ export default async function ServiceOrderDetailPage({
 
       <Card className="mb-6">
         <CardHeader>
+          <CardTitle>Técnicos asignados</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {assignees.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Esta orden todavía no tiene técnicos asignados.</p>
+          ) : (
+            <ul className="flex flex-wrap gap-2">
+              {assignees.map((a) => (
+                <li key={a.tecnicoId} className="flex items-center gap-2 rounded-lg border border-input px-3 py-1.5 text-sm">
+                  {a.nombre}
+                  {!a.active && <span className="text-xs text-muted-foreground">Inactivo</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+          {canAssignNow && <AssignTecnicoControl orderId={orden.id} available={assignable} />}
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Líneas de trabajo</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {/* RSC boundary: strings, numbers and booleans only. `mode` and
+              `canManageAll` are the same predicates the work-line routes
+              enforce, resolved here so no function is serialized. */}
+          <OrderWorkCard
+            orderId={orden.id}
+            status={orden.status}
+            assignees={assignees}
+            lines={lines}
+            mode={workLineMode(user.role, orden.status)}
+            viewerTecnicoId={viewerTecnico?.id ?? null}
+            canManageAll={canAssign}
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
           <CardTitle>Recepción</CardTitle>
         </CardHeader>
         <CardContent>
@@ -278,7 +336,9 @@ export default async function ServiceOrderDetailPage({
           />
           {!photosChangeable && (
             <p className="text-sm text-muted-foreground">
-              Las fotos no se pueden agregar ni borrar cuando la orden está terminada o cancelada.
+              {orden.status === "ready_for_review"
+                ? "Las fotos de una orden lista para revisión las agrega el administrador o el jefe de taller."
+                : "Las fotos no se pueden agregar ni borrar cuando la orden está terminada o cancelada."}
             </p>
           )}
         </CardContent>

@@ -330,3 +330,16 @@ describe("ServiceOrderFormTrigger — correcting a closed order", () => {
     expect(screen.getByRole("button", { name: "Guardar" })).toBeDisabled();
   });
 });
+
+describe("ServiceOrderFormTrigger — the roster reaches the picker", () => {
+  it("passes the roster through to the create form", () => {
+    render(
+      <ToastProvider>
+        <ServiceOrderFormTrigger canCreateCustomer={false} tecnicos={[{ id: "t1", nombre: "Ana Mecánica" }]} />
+      </ToastProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /nueva orden de servicio/i }));
+
+    expect(screen.getByRole("checkbox", { name: "Ana Mecánica" })).toBeInTheDocument();
+  });
+});
