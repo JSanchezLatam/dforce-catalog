@@ -1,1 +1,6 @@
-portal/
+# The portal app is not part of the workshop image, except the one wire-contract
+# file the workshop imports through the `@portal/contract` alias.
+portal/*
+!portal/src/
+portal/src/*
+!portal/src/contract.ts
