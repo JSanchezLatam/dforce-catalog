@@ -57,6 +57,8 @@ function harness(opts: { results: unknown[][]; commitFails?: boolean; putFails?:
   const inserted: Record<string, unknown>[] = [];
   const forArgs: unknown[] = [];
   let next = 0;
+  let committed = false;
+  const committedAtObjectDelete: boolean[] = [];
 
   const statement = (kind: string) => {
     log.push(kind);
@@ -81,6 +83,7 @@ function harness(opts: { results: unknown[][]; commitFails?: boolean; putFails?:
     transaction: async <T>(fn: (t: typeof tx) => Promise<T>) => {
       const out = await fn(tx);
       if (opts.commitFails) throw new Error("commit failed");
+      committed = true;
       return out;
     },
   } as unknown as typeof db;
@@ -92,10 +95,11 @@ function harness(opts: { results: unknown[][]; commitFails?: boolean; putFails?:
   });
   const deleteObject = vi.fn(async () => {
     log.push("deleteObject");
+    committedAtObjectDelete.push(committed);
     if (opts.deleteObjectFails) throw new Error("r2 down");
   });
 
-  return { deps: { db: database, putObject, deleteObject, newId: () => "photo-1" }, log, inserted, forArgs, putObject, deleteObject };
+  return { deps: { db: database, putObject, deleteObject, newId: () => "photo-1" }, log, inserted, forArgs, putObject, deleteObject, committedAtObjectDelete };
 }
 
 /** [order lock + status, count + next position] for `addOrderPhoto`. */
@@ -154,6 +158,50 @@ describe("addOrderPhoto", () => {
     expect(h.putObject).not.toHaveBeenCalled();
   });
 
+  it("on a closed order WITH a grant adds at the next position and writes one foto audit row (null, photoId)", async () => {
+    const h = harness({ results: [...orderAt("done", 2, 2), []] });
+
+    const photo = await addOrderPhoto(
+      { ordenId: "ord-1", bytes: JPEG, createdBy: "admin-1", correction: { correctorId: "admin-1" } },
+      h.deps,
+    );
+
+    expect(photo.position).toBe(2);
+    expect(h.inserted[1]).toEqual([{ ordenId: "ord-1", userId: "admin-1", field: "foto", oldValue: null, newValue: "photo-1" }]);
+    expect(h.log).toEqual(["select", "select", "insert", "insert", "put"]);
+  });
+
+  it("an open order with a grant writes NO audit row (nothing was corrected)", async () => {
+    const h = harness({ results: orderAt("open", 2, 2) });
+
+    await addOrderPhoto({ ordenId: "ord-1", bytes: JPEG, correction: { correctorId: "admin-1" } }, h.deps);
+
+    expect(h.log).toEqual(["select", "select", "insert", "put"]);
+  });
+
+  it("refuses a 13th photo under correction with PhotoLimitError and writes no audit row", async () => {
+    const h = harness({ results: orderAt("done", 12, 12) });
+
+    await expect(
+      addOrderPhoto({ ordenId: "ord-1", bytes: JPEG, correction: { correctorId: "admin-1" } }, h.deps),
+    ).rejects.toBeInstanceOf(PhotoLimitError);
+
+    expect(h.inserted).toEqual([]);
+    expect(h.putObject).not.toHaveBeenCalled();
+  });
+
+  it("a failing put under correction propagates; the audit row was inside the rolled-back transaction", async () => {
+    const h = harness({ results: [...orderAt("cancelled"), []], putFails: true });
+
+    await expect(
+      addOrderPhoto({ ordenId: "ord-1", bytes: JPEG, correction: { correctorId: "admin-1" } }, h.deps),
+    ).rejects.toThrow("r2 down");
+
+    // Both inserts ran BEFORE the put, i.e. inside the callback that threw.
+    expect(h.log).toEqual(["select", "select", "insert", "insert", "put"]);
+    expect(h.deleteObject).not.toHaveBeenCalled();
+  });
+
   it("propagates a throwing put and never calls deleteObject (the transaction rolls the row back)", async () => {
     const h = harness({ results: orderAt("open"), putFails: true });
 
@@ -197,6 +245,34 @@ describe("deleteOrderPhoto", () => {
     await expect(deleteOrderPhoto({ ordenId: "ord-1", photoId: "photo-1" }, h.deps)).rejects.toBeInstanceOf(OrderClosedError);
 
     expect(h.log).toEqual(["select"]);
+    expect(h.deleteObject).not.toHaveBeenCalled();
+  });
+
+  it("on a closed order WITH a grant deletes the row, writes one foto audit row (photoId, null), then deletes the object", async () => {
+    const h = harness({ results: [[{ status: "cancelled" }], [{ r2Key: "k" }], []] });
+
+    await deleteOrderPhoto({ ordenId: "ord-1", photoId: "photo-1", correction: { correctorId: "admin-1" } }, h.deps);
+
+    expect(h.inserted).toEqual([[{ ordenId: "ord-1", userId: "admin-1", field: "foto", oldValue: "photo-1", newValue: null }]]);
+    expect(h.log).toEqual(["select", "delete", "insert", "deleteObject"]);
+  });
+
+  it("deletes the object only AFTER the transaction commits", async () => {
+    const h = harness({ results: [[{ status: "done" }], [{ r2Key: "k" }], []] });
+
+    await deleteOrderPhoto({ ordenId: "ord-1", photoId: "photo-1", correction: { correctorId: "admin-1" } }, h.deps);
+
+    expect(h.committedAtObjectDelete).toEqual([true]);
+  });
+
+  it("a photo that is not on the order under a grant writes no audit row and touches no object", async () => {
+    const h = harness({ results: [[{ status: "done" }], []] });
+
+    await expect(
+      deleteOrderPhoto({ ordenId: "ord-1", photoId: "other", correction: { correctorId: "admin-1" } }, h.deps),
+    ).rejects.toBeInstanceOf(PhotoNotFoundError);
+
+    expect(h.inserted).toEqual([]);
     expect(h.deleteObject).not.toHaveBeenCalled();
   });
 

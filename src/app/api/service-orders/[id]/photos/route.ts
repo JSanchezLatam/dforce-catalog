@@ -2,19 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
-import {
-  addOrderPhoto,
-  isJpeg,
-  MAX_PHOTO_BYTES,
-  OrderClosedError,
-  PhotoLimitError,
-} from "@/modules/service-orders/photos";
+import { addOrderPhoto, isJpeg, MAX_PHOTO_BYTES, PhotoLimitError } from "@/modules/service-orders/photos";
 import { OrdenServicioNotFoundError } from "@/modules/service-orders/service";
+import { attemptWithCorrection, correctionErrorResponse, type Authorize } from "../../correction-http";
 
 /** Multipart framing around the file itself; the real byte count is re-checked after the read. */
 const MULTIPART_SLACK_BYTES = 64 * 1024;
 
-export type AddPhotoDeps = { addPhoto?: typeof addOrderPhoto };
+export type AddPhotoDeps = { addPhoto?: typeof addOrderPhoto; authorize?: Authorize };
 
 export async function handleAddPhoto(
   request: NextRequest,
@@ -25,6 +20,7 @@ export async function handleAddPhoto(
   if (!can(user, "service-orders.write")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  const canCorrect = can(user, "service-orders.correct");
 
   const tooLarge = () => NextResponse.json({ error: "La foto es demasiado grande" }, { status: 413 });
   // Refuse before buffering the body. A request with no usable length (chunked) could stream
@@ -37,8 +33,11 @@ export async function handleAddPhoto(
   if (declared > MAX_PHOTO_BYTES + MULTIPART_SLACK_BYTES) return tooLarge();
 
   let file: FormDataEntryValue | null;
+  let password: FormDataEntryValue | null;
   try {
-    file = (await request.formData()).get("file");
+    const data = await request.formData();
+    file = data.get("file");
+    password = data.get("password");
   } catch {
     return NextResponse.json({ error: "No se pudo leer la foto" }, { status: 400 });
   }
@@ -53,7 +52,14 @@ export async function handleAddPhoto(
   }
 
   try {
-    const { id, position } = await (deps.addPhoto ?? addOrderPhoto)({ ordenId, bytes, createdBy: user.id });
+    const add = deps.addPhoto ?? addOrderPhoto;
+    const { id, position } = await attemptWithCorrection(
+      user,
+      canCorrect,
+      typeof password === "string" ? password : undefined,
+      (correction) => add({ ordenId, bytes, createdBy: user.id, ...(correction && { correction }) }),
+      deps.authorize,
+    );
     return NextResponse.json({ id, position }, { status: 201 });
   } catch (err) {
     if (err instanceof OrdenServicioNotFoundError) {
@@ -62,9 +68,8 @@ export async function handleAddPhoto(
     if (err instanceof PhotoLimitError) {
       return NextResponse.json({ error: "photo_limit", message: err.message }, { status: 409 });
     }
-    if (err instanceof OrderClosedError) {
-      return NextResponse.json({ error: "order_closed", message: err.message }, { status: 409 });
-    }
+    const refused = correctionErrorResponse(err, canCorrect);
+    if (refused) return refused;
     throw err;
   }
 }

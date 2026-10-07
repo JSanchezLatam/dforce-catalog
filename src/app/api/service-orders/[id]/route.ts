@@ -3,9 +3,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import { isServiceCategory } from "@/modules/service-orders/categories";
-import { canEditOrderFields } from "@/modules/service-orders/edit-policy";
+import { authorizeCorrection, CorrectionRefusedError } from "@/modules/service-orders/correction-auth";
 import { parseIntake } from "@/modules/service-orders/intake";
-import { getOrdenServicioById } from "@/modules/service-orders/queries";
+import { OrderClosedError, OrderEditForbiddenError, type CorrectionGrant } from "@/modules/service-orders/order-lock";
 import {
   OrdenServicioNotFoundError,
   updateOrder,
@@ -22,7 +22,18 @@ const NULLABLE_TEXT_FIELDS = ["description", "hallazgos", "recomendaciones", "ob
 /** Generous for a technician's notes, finite for everyone else. */
 const MAX_TEXT_LENGTH = 5000;
 
-export type UpdateOrdenServicioRouteDeps = UpdateOrdenServicioDeps & TransitionOrdenServicioDeps;
+export type UpdateOrdenServicioRouteDeps = Omit<UpdateOrdenServicioDeps, "role" | "correction"> &
+  TransitionOrdenServicioDeps & {
+    /** Injected so a test never runs bcrypt; defaults to the real re-authentication. */
+    authorize?: (userId: string, password: string) => Promise<CorrectionGrant>;
+  };
+
+/**
+ * `Retry-After` for a throttled correction: the full window. The exact wait is
+ * "until the oldest failure ages out", which the throttle does not expose; the
+ * window is the honest upper bound.
+ */
+const RETRY_AFTER_SECONDS = "900";
 
 export async function handleUpdateOrdenServicio(
   request: NextRequest,
@@ -35,46 +46,11 @@ export async function handleUpdateOrdenServicio(
   }
 
   const body = await request.json();
+  const { authorize = authorizeCorrection, ...serviceDeps } = deps;
   try {
     if (typeof body.status === "string") {
-      const orden = await transitionOrder(id, body.status as OrderStatus, deps);
+      const orden = await transitionOrder(id, body.status as OrderStatus, serviceDeps);
       return NextResponse.json({ orden });
-    }
-
-    // D11 — the fine-grained gate, run after the coarse
-    // `can(user, "service-orders.write")` above, which BOTH roles pass
-    // (policy.ts:30, :43). Field patches only: the status branch returned
-    // already, so R21's state machine keeps owning status exclusively and this
-    // gate never sees a status change request.
-    //
-    // The status is read from the RECORD, before the write — never from
-    // `body.status`, which is a client claim, and one a tab rendered while the
-    // order was still open will happily carry after someone else closed it.
-    // Same reasoning as `isServiceCategory` being called here rather than
-    // trusted from the form: the route is the trust boundary, the UI gate is
-    // convenience. Accepted cost: `updateOrder` resolves the row again below,
-    // so a permitted patch does two primary-key reads (design.md D11).
-    const getById = deps.getById ?? getOrdenServicioById;
-    const current = await getById(id);
-    if (!current) {
-      throw new OrdenServicioNotFoundError(id);
-    }
-    const { status } = current.orden;
-    if (!canEditOrderFields(user.role, status)) {
-      // Two answers, because the operator's next move differs: a técnico on an
-      // open order must ask an admin (403, the caller is refused), while a
-      // closed order refuses everyone (409 — the caller is permitted, the
-      // record's state is what says no).
-      if (status === "done" || status === "cancelled") {
-        return NextResponse.json(
-          { errors: { form: "No se puede editar una orden completada o cancelada." } },
-          { status: 409 },
-        );
-      }
-      return NextResponse.json(
-        { errors: { form: "Solo un administrador puede editar una orden abierta." } },
-        { status: 403 },
-      );
     }
 
     const patch: UpdateOrdenServicioPatch = {};
@@ -132,9 +108,46 @@ export async function handleUpdateOrdenServicio(
       return NextResponse.json({ errors: { form: "No hay cambios para guardar" } }, { status: 400 });
     }
 
-    const orden = await updateOrder(id, patch, deps);
+    // Try the plain edit first: only a closed order needs the password, and the
+    // service decides that under the lock. On `OrderClosedError` an administrator's
+    // password is verified here, outside the transaction (bcrypt must not hold the
+    // row lock), and the edit retried with the grant. So a password sent with an
+    // open-order edit is never checked, and a tecnico's never is. A closed order
+    // never reopens, so the retry cannot find it writable without the grant.
+    const password = typeof body.password === "string" ? body.password : undefined;
+    try {
+      const orden = await updateOrder(id, patch, { ...serviceDeps, role: user.role });
+      return NextResponse.json({ orden });
+    } catch (err) {
+      if (!(err instanceof OrderClosedError) || password === undefined || !can(user, "service-orders.correct")) {
+        throw err;
+      }
+    }
+    const correction = await authorize(user.id, password);
+    const orden = await updateOrder(id, patch, { ...serviceDeps, role: user.role, correction });
     return NextResponse.json({ orden });
   } catch (err) {
+    if (err instanceof CorrectionRefusedError) {
+      if (err.reason === "throttled") {
+        return NextResponse.json(
+          { error: "throttled", message: "Demasiados intentos. Probá de nuevo en 15 minutos." },
+          { status: 429, headers: { "Retry-After": RETRY_AFTER_SECONDS } },
+        );
+      }
+      return err.reason === "wrong_password"
+        ? NextResponse.json({ error: "wrong_password", message: "Contraseña incorrecta" }, { status: 403 })
+        : NextResponse.json({ errors: { form: "Solo un administrador puede corregir una orden cerrada." } }, { status: 403 });
+    }
+    if (err instanceof OrderClosedError) {
+      // Someone who may not correct is refused (403), password or not; an
+      // administrator without one is told the order is closed (409).
+      return !can(user, "service-orders.correct")
+        ? NextResponse.json({ errors: { form: "Solo un administrador puede corregir una orden cerrada." } }, { status: 403 })
+        : NextResponse.json({ errors: { form: "No se puede editar una orden completada o cancelada." } }, { status: 409 });
+    }
+    if (err instanceof OrderEditForbiddenError) {
+      return NextResponse.json({ errors: { form: "Solo un administrador puede editar una orden abierta." } }, { status: 403 });
+    }
     if (err instanceof OrderTransitionError) {
       return NextResponse.json({ error: "invalid_transition", from: err.from, to: err.to }, { status: 400 }); // R21
     }
