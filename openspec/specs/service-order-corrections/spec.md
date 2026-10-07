@@ -1,4 +1,6 @@
-# Spec: service-order-corrections
+# Service Order Corrections Specification
+
+## Purpose
 
 An `administrador` may correct a `done` or `cancelled` order after re-typing their own password; every change is audited. Status and `completedAt` are never touched.
 
