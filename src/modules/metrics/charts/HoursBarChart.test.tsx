@@ -26,6 +26,15 @@ describe("HoursBarChart", () => {
     expect(props.categoryLabel).toBe("Técnico");
   });
 
+  it("takes the labels and empty text from the caller, defaulting to the per-técnico copy", () => {
+    render(<HoursBarChart bars={bars} mesLabel="Últimos 6 meses" label="Horas por mes" categoryLabel="Mes" averageLabel="Promedio por mes" />);
+    const props = arc.mock.calls[0][0] as { label: string; categoryLabel: string; averageLabel: string };
+    expect([props.label, props.categoryLabel, props.averageLabel]).toEqual(["Horas por mes", "Mes", "Promedio por mes"]);
+
+    render(<HoursBarChart bars={[]} mesLabel="x" emptyText="Sin horas" />);
+    expect(screen.getByText("Sin horas")).toBeInTheDocument();
+  });
+
   it("owns the number formatting in es-PA and is a client module", () => {
     render(<HoursBarChart bars={bars} mesLabel="Octubre 2026" />);
 

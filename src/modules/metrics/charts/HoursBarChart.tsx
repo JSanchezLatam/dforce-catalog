@@ -11,19 +11,33 @@ const NUMBER = new Intl.NumberFormat("es-PA", { maximumFractionDigits: 1 });
  * `src/components/arc/bar-chart`), so `formatValue` shows one decimal; the
  * exact hours per técnico still live in the table beside the chart.
  */
-export function HoursBarChart({ bars, mesLabel }: { bars: BarChartDatum[]; mesLabel: string }) {
+export function HoursBarChart({
+  bars,
+  mesLabel,
+  label = "Horas registradas por técnico",
+  categoryLabel = "Técnico",
+  averageLabel = "Promedio por técnico",
+  emptyText = "Sin datos para este mes",
+}: {
+  bars: BarChartDatum[];
+  mesLabel: string;
+  label?: string;
+  categoryLabel?: string;
+  averageLabel?: string;
+  emptyText?: string;
+}) {
   if (bars.every((b) => b.value === 0)) {
-    return <p className="text-sm text-muted-foreground">Sin datos para este mes</p>;
+    return <p className="text-sm text-muted-foreground">{emptyText}</p>;
   }
   return (
     <div className={scope.scope}>
       <BarChart
-        label="Horas registradas por técnico"
+        label={label}
         period={mesLabel}
         unit="h"
-        averageLabel="Promedio por técnico"
+        averageLabel={averageLabel}
         valueLabel="Horas"
-        categoryLabel="Técnico"
+        categoryLabel={categoryLabel}
         data={bars}
         showAverage={false}
         formatValue={(value) => NUMBER.format(value)}
