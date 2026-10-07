@@ -372,6 +372,15 @@ export const cliente = pgTable(
      * `reminders/job.ts` refuses to send to them at fire time.
      */
     deactivatedAt: timestamp("deactivated_at", { withTimezone: true }),
+    /**
+     * Customer-portal token (customer-portal WU2), stored PLAINTEXT on purpose:
+     * the workshop reprints it, and encrypting it would put the key beside the
+     * database it protects. NULL whenever the customer has no current consent;
+     * issued on grant, nulled on revoke, replaced on rotate. SERVER-ONLY: it
+     * must never reach a list, an API response or a client component — go
+     * through `toPublicCliente` before a row leaves the server.
+     */
+    portalToken: text("portal_token").unique(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

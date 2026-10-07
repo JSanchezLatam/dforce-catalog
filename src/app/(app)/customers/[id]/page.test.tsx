@@ -414,3 +414,44 @@ describe("CustomerDetailPage — Ley 81 consent (customer-portal WU1)", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("CustomerDetailPage — portal token and rotation (customer-portal WU2)", () => {
+  const SECRET = "SENTINEL-PORTAL-TOKEN";
+
+  beforeEach(() => {
+    can.mockReturnValue(true);
+    triggerProps.mockClear();
+    currentConsent.mockReset();
+    currentConsent.mockResolvedValue({ granted: true, recordedByName: "Ana Admin", recordedAt: new Date("2026-10-07T15:30:00Z"), clauseVersion: "v1" });
+    getClienteById.mockResolvedValue({
+      cliente: { id: "c1", name: "Ana Gómez", phone: "50761111111", email: null, deactivatedAt: null, portalToken: SECRET, createdAt: new Date("2026-01-01") },
+      orders: [],
+      vehicles: [],
+    });
+  });
+
+  it("hands the client-side edit trigger a customer row without the token", async () => {
+    const { container } = render(await renderPage());
+
+    const props = triggerProps.mock.calls[0][0];
+    expect(props.cliente).toMatchObject({ id: "c1", name: "Ana Gómez" });
+    expect(props.cliente).not.toHaveProperty("portalToken");
+    expect(JSON.stringify(props)).not.toContain(SECRET);
+    expect(container.innerHTML).not.toContain(SECRET);
+  });
+
+  it("offers Generar nuevo código to a user holding customers.portalRotate, for a consented customer", async () => {
+    render(await renderPage());
+
+    expect(screen.getByRole("button", { name: "Generar nuevo código" })).toBeInTheDocument();
+    expect(can).toHaveBeenCalledWith(expect.anything(), "customers.portalRotate");
+  });
+
+  it("withholds it from a user without customers.portalRotate even though they may record consent", async () => {
+    can.mockImplementation((_user, action) => action !== "customers.portalRotate");
+    render(await renderPage());
+
+    expect(screen.getByRole("checkbox", { name: "Consentimiento de datos (Ley 81)" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Generar nuevo código" })).not.toBeInTheDocument();
+  });
+});
