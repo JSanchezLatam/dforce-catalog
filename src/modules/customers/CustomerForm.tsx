@@ -859,6 +859,23 @@ export function CustomerForm({
                               value={row.seguroVence}
                               onChange={(e) => updateVehicle(row.key, { seguroVence: e.target.value })}
                             />
+                            {/* iOS's native date picker has no reliable way to
+                                empty a chosen date. A draft edit, not a
+                                mutation: the `|| null` in the payload turns the
+                                "" into the explicit clear on Guardar. */}
+                            {row.seguroVence ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="default"
+                                className="min-h-11 min-w-11 justify-self-start"
+                                aria-label="Quitar fecha de vencimiento del seguro"
+                                onClick={() => updateVehicle(row.key, { seguroVence: "" })}
+                              >
+                                <X aria-hidden="true" />
+                                Quitar fecha
+                              </Button>
+                            ) : null}
                           </div>
                         </div>
                         <div className="grid min-w-0 gap-2">

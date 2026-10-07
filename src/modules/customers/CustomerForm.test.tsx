@@ -1057,6 +1057,37 @@ describe("CustomerForm — Uso interno (vencimientos.read)", () => {
 
     expect(bodyOf(fetchMock).vehicles[0].placaRenovacionMes).toBeNull();
   });
+
+  // iOS's native date picker has no reliable way to empty a chosen date, so
+  // `user.clear` above is not something the operator on a tablet can do.
+  it("offers Quitar fecha only while the insurance date has a value", async () => {
+    const user = userEvent.setup();
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ seguroVence: null })]} canEditInternal />);
+    await open(user, "Editar");
+
+    const group = vehicleGroup(1);
+    expect(within(group).queryByRole("button", { name: "Quitar fecha de vencimiento del seguro" })).not.toBeInTheDocument();
+    await user.type(within(group).getByLabelText("Vencimiento del seguro"), "2026-12-01");
+    expect(within(group).getByRole("button", { name: "Quitar fecha de vencimiento del seguro" })).toBeInTheDocument();
+  });
+
+  it("Quitar fecha empties the insurance date, and Guardar sends an explicit null", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ ...INTERNAL })]} canEditInternal />);
+    await open(user, "Editar");
+
+    const group = vehicleGroup(1);
+    await user.click(within(group).getByRole("button", { name: "Quitar fecha de vencimiento del seguro" }));
+    expect(within(group).getByLabelText("Vencimiento del seguro")).toHaveValue("");
+    expect(within(group).queryByRole("button", { name: "Quitar fecha de vencimiento del seguro" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    const sent = bodyOf(fetchMock).vehicles[0];
+    expect(sent.id).toBe(vehiculo().id);
+    expect(sent).toHaveProperty("seguroVence", null);
+    expect(sent.placaRenovacionMes).toBe(10);
+  });
 });
 
 describe("CustomerForm — Municipio de la placa (vencimientos.read)", () => {
