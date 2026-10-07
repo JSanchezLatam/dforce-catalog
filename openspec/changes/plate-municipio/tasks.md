@@ -37,13 +37,13 @@ Rule for every pair: RED test, confirm red BY NAME, GREEN, mutation-verify (reve
 
 ## WU2: UI (PR 2)
 
-- [ ] 2.1 RED `CustomerForm.test.tsx`: grant sends trimmed value, or `null` when blank; no grant omits the key and shows no control; row error under the input. GREEN `CustomerForm.tsx` (Pick, row state, payload, `<Input maxLength={80}>` "Municipio de la placa" on its own row, `ROW_ERROR_FIELDS`).
-- [ ] 2.2 RED vehicle detail page test: "Municipio de la placa" shows for admin, hidden without grant and when null. GREEN `customers/[id]/vehicles/[vehicleId]/page.tsx`.
-- [ ] 2.3 RED `vencimientos/page` test: placa row shows "San Miguelito"; seguro row for the same vehicle does not; null shows no "null" or placeholder. GREEN `toItem` and `Vehicle` (`flex-wrap`, `min-w-0 break-words`).
-- [ ] 2.4 Mutation-verify 2.1-2.3 (drop the grant gate, drop the `kind === "placa"` check).
-- [ ] 2.5 Playwright at `http://192.168.0.3:3000` (not localhost), 390px, 768px, desktop: an 80-char municipio wraps in the due card and table cell with no horizontal overflow; form row fits; console clean (RSC, hydration); `Pagination`-style volume traps need rows in dev DB.
+- [x] 2.1 RED `CustomerForm.test.tsx`: grant sends trimmed value, or `null` when blank; no grant omits the key and shows no control; row error under the input. GREEN `CustomerForm.tsx` (Pick, row state, payload, `<Input maxLength={80}>` "Municipio de la placa" on its own row, `ROW_ERROR_FIELDS`).
+- [x] 2.2 RED vehicle detail page test: "Municipio de la placa" shows for admin, hidden without grant and when null. GREEN `customers/[id]/vehicles/[vehicleId]/page.tsx`.
+- [x] 2.3 RED `vencimientos/page` test: placa row shows "San Miguelito"; seguro row for the same vehicle does not; null shows no "null" or placeholder. GREEN `toItem` and `Vehicle` (`flex-wrap`, `min-w-0 break-words`).
+- [x] 2.4 Mutation-verify 2.1-2.3 (drop the grant gate, drop the `kind === "placa"` check).
+- [x] 2.5 Playwright at `http://192.168.0.3:3000` (not localhost), 390px, 768px, desktop: an 80-char municipio wraps in the due card and table cell with no horizontal overflow; form row fits; console clean (RSC, hydration); `Pagination`-style volume traps need rows in dev DB.
 
 ## Deployment and archive notes
 
-- [ ] 3.1 Migration note in the PR body: the workshop PC must run `standalone.ps1` (migration 0026) or the due page and vehicle detail error on the missing column.
+- [x] 3.1 Migration note in the PR body: the workshop PC must run `standalone.ps1` (migration 0026) or the due page and vehicle detail error on the missing column.
 - [ ] 3.2 At archive, merge the MODIFIED `vehicle-renewals` requirements (not a rename). Follow-ups out of scope: municipio picker, filtering, contact message.

@@ -1058,6 +1058,59 @@ describe("CustomerForm — Uso interno (vencimientos.read)", () => {
   });
 });
 
+describe("CustomerForm — Municipio de la placa (vencimientos.read)", () => {
+  it("an administrador sends the trimmed municipio", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ placaMunicipio: "David" })]} canEditInternal />);
+    await open(user, "Editar");
+
+    const input = within(vehicleGroup(1)).getByLabelText("Municipio de la placa");
+    expect(input).toHaveValue("David");
+    expect(input).toHaveAttribute("maxlength", "80");
+    await user.clear(input);
+    await user.type(input, "  San Miguelito ");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(bodyOf(fetchMock).vehicles[0].placaMunicipio).toBe("San Miguelito");
+  });
+
+  it("an administrador blanking the municipio sends an explicit null", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ placaMunicipio: "David" })]} canEditInternal />);
+    await open(user, "Editar");
+
+    const input = within(vehicleGroup(1)).getByLabelText("Municipio de la placa");
+    await user.clear(input);
+    await user.type(input, "   ");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(bodyOf(fetchMock).vehicles[0].placaMunicipio).toBeNull();
+  });
+
+  it("a tecnico sees no municipio control and sends no key, even when the row carries a value", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { cliente: { id: "c1" } } });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo({ placaMunicipio: "SENTINEL-MUNICIPIO" })]} />);
+    await open(user, "Editar");
+
+    expect(screen.queryByLabelText("Municipio de la placa")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+    expect(bodyOf(fetchMock).vehicles[0]).not.toHaveProperty("placaMunicipio");
+  });
+
+  it("shows the server's municipio error on the vehicle row", async () => {
+    const user = userEvent.setup();
+    mockFetch({ status: 400, body: { errors: { "vehicles.0.placaMunicipio": "El municipio no puede superar 80 caracteres" } } });
+    render(<CustomerForm cliente={CLIENTE} vehicles={[vehiculo()]} canEditInternal />);
+    await open(user, "Editar");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    expect(await screen.findByText("El municipio no puede superar 80 caracteres")).toBeInTheDocument();
+  });
+});
+
 describe("CustomerForm — Cédula / RUC", () => {
   it("shows the optional field with its free-text hint", async () => {
     const user = userEvent.setup();

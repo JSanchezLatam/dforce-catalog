@@ -49,6 +49,8 @@ function toItem(row: DueVencimiento, todayKey: string, workshop: Workshop) {
     plate: row.plate,
     vehicle,
     unit: row.numeroUnidad ? `· ${row.numeroUnidad}` : null,
+    // Where the PLATE renews: noise on an insurance row.
+    municipio: row.kind === "placa" ? row.placaMunicipio : null,
     ...describeDue(row, todayKey),
   };
 }
@@ -156,12 +158,13 @@ function Customer({ item }: { item: Pick<Item, "customerName" | "customerPhone">
   );
 }
 
-function Vehicle({ item }: { item: Pick<Item, "plate" | "vehicle" | "unit"> }) {
+function Vehicle({ item }: { item: Pick<Item, "plate" | "vehicle" | "unit" | "municipio"> }) {
   return (
-    <div className="flex items-center gap-2 text-sm">
+    <div className="flex flex-wrap items-center gap-2 text-sm">
       <span className="font-mono font-medium">{item.plate}</span>
       {item.vehicle}
       {item.unit && <span className="text-xs text-muted-foreground">{item.unit}</span>}
+      {item.municipio && <span className="min-w-0 break-words text-xs text-muted-foreground">{item.municipio}</span>}
     </div>
   );
 }
