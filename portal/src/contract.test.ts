@@ -41,6 +41,12 @@ describe("portal wire contract", () => {
     expect(verify(BODY, headersAt(NOW), "other-secret", NOW)).toBe(false);
   });
 
+  it("rejects a valid signature with trailing junk (Buffer.from hex stops at the first non-hex char)", () => {
+    const h = headersAt(NOW);
+    h.set(SIGNATURE_HEADER, `${h.get(SIGNATURE_HEADER)}zz`);
+    expect(verify(BODY, h, SECRET, NOW)).toBe(false);
+  });
+
   it("returns false, without throwing, on a signature of the wrong length", () => {
     const h = headersAt(NOW);
     h.set(SIGNATURE_HEADER, "abcd");

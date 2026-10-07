@@ -6,7 +6,7 @@ snapshots from the workshop and stores only `sha256(token)`. Design:
 
 ## Local dev (portal on :3001, workshop on :3000)
 
-1. Create the database once: `docker exec dforce-catalog-db-1 createdb -U dforce dforce_portal`
+1. Create the database once: `docker compose exec db createdb -U dforce dforce_portal`
 2. `cp .env.example .env.local` (`DATABASE_URL` points at `dforce_portal` on :5433).
 3. `npm install && npx drizzle-kit migrate`
 4. `npm run dev -- -p 3001`
