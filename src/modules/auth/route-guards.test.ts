@@ -100,6 +100,11 @@ export const ROUTE_GUARDS: Record<
   "/api/account": { GET: "account.self", PATCH: "account.self" },
   "/api/users": { GET: "users.manage", POST: "users.manage" },
   "/api/users/[id]": { PATCH: "users.manage" },
+  // technicians-and-work-lines: roster writes need `technicians.manage`; naming a
+  // login (`userId`) additionally needs `users.manage`, so both are declared and
+  // the "actually evaluated" test below proves each is checked in the file.
+  "/api/technicians": { POST: ["technicians.manage", "users.manage"] },
+  "/api/technicians/[id]": { PATCH: ["technicians.manage", "users.manage"] },
   // session-only, never Action-gated: this is the only route that can clear a
   // `mustChangePassword` flag, so gating it by the matrix would make one matrix
   // mistake an unrecoverable lockout (design.md Decision 8). It is safe without
@@ -183,7 +188,7 @@ describe("ROUTE_GUARDS completeness", () => {
     // real route and must stay reachable. `catalogs.listAll` has no dedicated
     // route of its own by design.
     //
-    // technicians-and-work-lines: the four below have no route yet, and each
+    // technicians-and-work-lines: the three below have no route yet, and each
     // WU removes its own entry when it wires one. `service-orders.readAll` is
     // exempt for good, like `catalogs.listAll`: it is read by `orderScope`
     // (WU4a), never by a route handler.
@@ -192,7 +197,6 @@ describe("ROUTE_GUARDS completeness", () => {
       "service-orders.readAll",
       "service-orders.create", // WU4b: POST /api/service-orders
       "service-orders.assign", // WU4b: POST /api/service-orders/[id]/assignments
-      "technicians.manage", // WU2: POST /api/technicians
     ];
 
     for (const action of ACTIONS) {
