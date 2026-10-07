@@ -127,8 +127,11 @@ export default async function ServiceOrderPrintPage({
   // the modules of an SVG: never as text, an attribute or a client prop.
   const portalToken = clienteDetail?.cliente.portalToken;
   const portalBase = env.PORTAL_BASE_URL?.trim().replace(/\/+$/, "");
+  // No QR while the sync is off: nothing would reach the portal, so a scan
+  // could only ever open the "Este enlace no es válido" page.
+  const syncConfigured = Boolean(env.PORTAL_INGEST_URL && env.PORTAL_INGEST_SECRET);
   const portalUrl =
-    consented && portalToken && portalBase && !clienteDetail?.cliente.deactivatedAt
+    consented && portalToken && portalBase && syncConfigured && !clienteDetail?.cliente.deactivatedAt
       ? `${portalBase}/c#${portalToken}`
       : null;
   const qrSvg = isClientCopy && portalUrl ? await renderQrSvg(portalUrl) : null;
