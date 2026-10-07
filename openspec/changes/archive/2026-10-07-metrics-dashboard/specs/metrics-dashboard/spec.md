@@ -16,7 +16,7 @@ The system MUST define a `metrics.read` action granted to `administrador` and `j
 
 ### Requirement: Technician Productivity
 
-For a selected month (default: current month in America/Panama), the dashboard MUST show per active technician BOTH orders closed (`status = done`, bucketed by `completed_at`) AND hours logged (sum of work-line minutes by technician, bucketed by line `fecha`, shown in hours). The two figures MUST always appear together. Cancelled orders MUST NOT count as closed.
+For a selected month (default: current month in America/Panama), the dashboard MUST show per technician BOTH orders closed (`status = done`, bucketed by `completed_at`) AND hours logged (sum of work-line minutes by technician, bucketed by line `fecha`, shown in hours). A technician is listed when they have closed orders or hours in that month; inactive technicians are shown only when they have non-zero numbers. The two figures MUST always appear together. Cancelled orders MUST NOT count as closed.
 
 #### Scenario: Both figures shown
 - GIVEN technician A closed 3 orders and logged 270 minutes in the selected month
@@ -87,7 +87,7 @@ The dashboard MUST show the current count of orders in `open`, `in_progress` and
 
 ### Requirement: Mis Números
 
-A `tecnico` MUST have `/mis-numeros` showing the productivity metric (closed orders and hours) for their own roster row only. The technician id MUST be resolved server-side from the session user, never from the URL, query, or body. Any supplied technician parameter MUST be ignored or refused, and MUST NOT change the data shown. `/mis-numeros` is for `tecnico` only (action `metrics.self`); `administrador` and `jefe_taller` use `/metrics` and MUST get the shared no-permission screen on `/mis-numeros`.
+A `tecnico` MUST have `/mis-numeros` showing closed orders (in a table) and hours-per-month (as a bar chart) for their own roster row only. The technician id MUST be resolved server-side from the session user, never from the URL, query, or body. Any supplied technician parameter MUST be ignored or refused, and MUST NOT change the data shown. `/mis-numeros` is for `tecnico` only (action `metrics.self`); `administrador` and `jefe_taller` use `/metrics` and MUST get the shared no-permission screen on `/mis-numeros`.
 
 #### Scenario: Own numbers only
 - GIVEN técnico A and técnico B both have closed orders
@@ -111,7 +111,7 @@ A `tecnico` MUST have `/mis-numeros` showing the productivity metric (closed ord
 
 ### Requirement: Empty States
 
-With no data in the selected month, the dashboard MUST show Spanish empty copy ("Sin datos para este mes") instead of blank charts or an error. A `tecnico` whose user has no roster row MUST see an empty state ("Todavía no estás en la lista de técnicos") on `/mis-numeros`, not an error.
+With no data in the selected month, the dashboard MUST show Spanish empty copy ("Todavía no hay órdenes cerradas en {mes}. Una orden cuenta cuando pasa a Completada.") instead of blank charts or an error. A `tecnico` whose user has no roster row MUST see an empty state ("Todavía no estás en la lista de técnicos") on `/mis-numeros`, not an error.
 
 #### Scenario: Técnico without roster row
 - GIVEN a `tecnico` user not linked to any roster row
@@ -125,7 +125,7 @@ With no data in the selected month, the dashboard MUST show Spanish empty copy (
 
 ### Requirement: Charts and Exact Numbers
 
-The received-vs-closed trend SHOULD be a line chart (`@uiarc/line-chart`, two series), hours SHOULD be bar charts (`@uiarc/bar-chart`: per technician for the selected month, per month on Mis números), and backlog counters SHOULD be animated counters (`@uiarc/animated-counter`, `locale="es-PA"`), which MUST respect reduced motion. Charts MUST NOT be the only carrier of a number: every plotted value MUST also be available as text in a table on the same page, readable without hover, scrubbing or JS-only interaction. Chart touch interaction MUST NOT block vertical page scroll.
+The received-vs-closed trend SHOULD be a line chart (`@uiarc/line-chart`, two series, on `/metrics` only), hours SHOULD be a bar chart (`@uiarc/bar-chart`: per technician for the selected month on `/metrics`, per month on `/mis-numeros`), and backlog counters on `/metrics` SHOULD be animated counters (`@uiarc/animated-counter`, `locale="es-PA"`), which MUST respect reduced motion. Charts MUST NOT be the only carrier of a number: every plotted value MUST also be available as text in a table on the same page, readable without hover, scrubbing or JS-only interaction. Chart touch interaction MUST NOT block vertical page scroll.
 
 #### Scenario: Numbers in a table
 - GIVEN the 6-month trend chart is rendered
