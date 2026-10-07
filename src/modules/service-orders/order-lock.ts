@@ -47,7 +47,7 @@ export async function lockOrderForMutation(
   return { order, correcting: true };
 }
 
-/** `text` columns: Date as ISO, number via `String()`, null/undefined as NULL. */
+/** `text` columns: Date as ISO, number via `String()`, null as NULL. */
 function encode(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   return value instanceof Date ? value.toISOString() : String(value);
@@ -63,6 +63,8 @@ export async function recordCorrections(
   input: { ordenId: string; userId: string; before: Record<string, unknown>; after: Record<string, unknown> },
 ): Promise<void> {
   const rows = Object.keys(input.after).flatMap((field) => {
+    // `.set()` skips an undefined key, so that column was never written.
+    if (input.after[field] === undefined) return [];
     const oldValue = encode(input.before[field]);
     const newValue = encode(input.after[field]);
     return oldValue === newValue

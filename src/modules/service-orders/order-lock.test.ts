@@ -130,6 +130,16 @@ describe("recordCorrections", () => {
     expect(statements()).toBe(0);
   });
 
+  it("skips a key whose value is undefined, as drizzle's .set() leaves that column untouched", async () => {
+    const { tx, inserted } = fakeTx();
+    await recordCorrections(tx, {
+      ...base,
+      before: { hallazgos: "x", recomendaciones: "old" },
+      after: { hallazgos: undefined, recomendaciones: "new" },
+    });
+    expect(inserted).toEqual([[{ ...base, field: "recomendaciones", oldValue: "old", newValue: "new" }]]);
+  });
+
   it("writes nothing when no field changed", async () => {
     const { tx, statements } = fakeTx();
     await recordCorrections(tx, { ...base, before: { hallazgos: "a" }, after: { hallazgos: "a" } });

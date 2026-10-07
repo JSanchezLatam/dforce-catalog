@@ -28,7 +28,7 @@ import type { OrderStatus } from "./transitions";
  * restatement of the request. `assertTransition` gives them no outgoing edges,
  * so a closed order cannot be reopened; letting its fields be rewritten anyway
  * would make closure reversible one field at a time while the badge still
- * reads "Completada". Correcting a wrongly-closed order is its own change.
+ * reads "Completada". Correcting a closed order goes through `order-lock.ts` with an administrator `CorrectionGrant` (closed-order-lock).
  *
  * Written as an exhaustive `Record<Role, Record<OrderStatus, boolean>>` rather
  * than a boolean expression so that adding a role or a status is a tsc error
