@@ -40,6 +40,9 @@ vi.mock("@/modules/service-orders/queries", async (importOriginal) => {
   return { ...actual, listOrdenesServicio, countOrdenesServicio };
 });
 
+const listTecnicos = vi.hoisted(() => vi.fn(async () => [{ id: "t1", nombre: "Ana Mecánica", userId: null, deactivatedAt: null, createdAt: new Date("2026-01-01") }]));
+vi.mock("@/modules/technicians/queries", () => ({ listTecnicos }));
+
 const listInventory = vi.hoisted(() => vi.fn(async () => ({ items: [] })));
 vi.mock("@/modules/inventory-view/queries", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/modules/inventory-view/queries")>();
@@ -499,7 +502,7 @@ describe("ServiceOrdersPage — bulk status change (WU6)", () => {
     await user.click(await screen.findByRole("button", { name: "Confirmar" }));
 
     const failed = await waitFor(() => within(resultPanel()).getAllByRole("listitem"));
-    expect(failed[0]).toHaveTextContent("Solo un administrador o el jefe de taller puede cerrar o cancelar una orden.");
+    expect(failed[0]).toHaveTextContent("Solo un administrador o el jefe de taller puede cerrar, cancelar o devolver una orden.");
     expect(failed[0]).not.toHaveTextContent(/\bforbidden\b/);
   });
 
@@ -824,5 +827,52 @@ describe("ServiceOrdersPage — the create control (R20)", () => {
     expect(createTrigger).not.toHaveBeenCalled();
     expect(screen.getByRole("heading", { level: 1, name: "Órdenes de servicio" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Actualizar" })).toBeInTheDocument();
+  });
+});
+
+describe("ServiceOrdersPage — technicians and ready_for_review", () => {
+  beforeEach(() => {
+    can.mockImplementation(() => true);
+    createTrigger.mockClear();
+    listTecnicos.mockClear();
+    listOrdenesServicio.mockResolvedValue([]);
+    countOrdenesServicio.mockResolvedValue(0);
+    listOrdenesServicio.mockClear();
+  });
+
+  it("filters by ready_for_review instead of dropping it as an unknown status", async () => {
+    render(await ServiceOrdersPage({ searchParams: Promise.resolve({ status: "ready_for_review" }) }));
+
+    expect(listOrdenesServicio.mock.calls[0][0]).toEqual({ status: "ready_for_review" });
+  });
+
+  it("hands the create form the ACTIVE roster as plain id/nombre pairs", async () => {
+    render(await ServiceOrdersPage({ searchParams: Promise.resolve({}) }));
+
+    // No `includeInactive`: a deactivated technician is never offered for new work.
+    expect(listTecnicos).toHaveBeenCalledWith();
+    const props = (createTrigger.mock.calls as unknown as [Record<string, unknown>][])[0][0];
+    // RSC boundary: plain data only, nothing the roster row carries beyond what the picker shows.
+    expect(props.tecnicos).toEqual([{ id: "t1", nombre: "Ana Mecánica" }]);
+  });
+
+  it("reads no roster for a caller who cannot create an order", async () => {
+    can.mockImplementation((_user, action) => action !== "service-orders.create");
+    render(await ServiceOrdersPage({ searchParams: Promise.resolve({}) }));
+
+    expect(listTecnicos).not.toHaveBeenCalled();
+    expect(createTrigger).not.toHaveBeenCalled();
+  });
+
+  it("gives a caller without service-orders.assign no bulk action over an in_progress row", async () => {
+    can.mockImplementation((_user, action) => action !== "service-orders.assign");
+    listOrdenesServicio.mockResolvedValue([orden({ id: "o1", status: "in_progress" })]);
+    countOrdenesServicio.mockResolvedValue(1);
+    const user = userEvent.setup();
+    render(<ToastProvider>{await ServiceOrdersPage({ searchParams: Promise.resolve({}) })}</ToastProvider>);
+
+    await user.click(screen.getByRole("checkbox", { name: "Seleccionar orden o1" }));
+
+    expect(screen.getByRole("button", { name: "Cambiar estado" })).toBeDisabled();
   });
 });

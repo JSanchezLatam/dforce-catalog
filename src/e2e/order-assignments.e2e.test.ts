@@ -1,6 +1,7 @@
 /**
- * Real-SQL proof for technicians-and-work-lines WU4b: the lock's scope and create
- * with technicians are `WHERE`s and a transaction, so only Postgres proves them.
+ * Real-SQL proof for technicians-and-work-lines WU4b: the lock's scope, create
+ * with technicians, assignment idempotence and the reopen-on-assign rule are
+ * `WHERE`s, an `ON CONFLICT` and a transaction, so only Postgres proves them.
  * Run against a THROWAWAY database (`dforce_e2e`) — never the dev one.
  */
 import { execSync } from "node:child_process";
@@ -12,8 +13,9 @@ import type { Role } from "@/modules/auth/roles";
 import { db } from "@/shared/db/client";
 import { cliente, ordenServicio, ordenServicioFoto, ordenTecnico, tecnico, users, vehiculo } from "@/shared/db/schema";
 import { handleUpdateOrdenServicio } from "../app/api/service-orders/[id]/route";
-import { InvalidTecnicoError } from "../modules/service-orders/assignments";
-import { lockOrderForMutation } from "../modules/service-orders/order-lock";
+import { handleAssign } from "../app/api/service-orders/[id]/assignments/route";
+import { assignTecnico, InvalidTecnicoError } from "../modules/service-orders/assignments";
+import { lockOrderForMutation, OrderClosedError } from "../modules/service-orders/order-lock";
 import { addOrderPhoto, deleteOrderPhoto } from "../modules/service-orders/photos";
 import { orderScope, SYSTEM_SCOPE } from "../modules/service-orders/scope";
 import { createOrder, OrdenServicioNotFoundError } from "../modules/service-orders/service";
@@ -181,6 +183,80 @@ describe("order assignments and lock scope (E2E)", () => {
       const before = await orderCount();
       await expect(createOrder({ ...base(), tecnicoIds: ["no-such-tecnico"] })).rejects.toBeInstanceOf(InvalidTecnicoError);
       expect(await orderCount()).toBe(before);
+    });
+  });
+
+  describe("assignments", () => {
+    const assign = (ordenId: string, tecnicoId: string) =>
+      assignTecnico({ ordenId, tecnicoId, assignedBy: admin.id, scope: SYSTEM_SCOPE });
+
+    it("is idempotent: the second call is a no-op and leaves exactly one row", async () => {
+      const ordenId = await newOrder("open");
+
+      expect(await assign(ordenId, rosterA)).toEqual({ created: true });
+      expect(await assign(ordenId, rosterA)).toEqual({ created: false });
+
+      expect(await assignmentsOf(ordenId)).toHaveLength(1);
+      expect((await orderRow(ordenId)).status).toBe("open");
+    });
+
+    it("assigning during review returns the order to in_progress; the new mark is null and the old one stays", async () => {
+      const ordenId = await newOrder("ready_for_review");
+      const marked = new Date("2026-10-06T12:00:00.000Z");
+      await assignDirect(ordenId, rosterA, marked);
+
+      await assign(ordenId, rosterB);
+
+      expect((await orderRow(ordenId)).status).toBe("in_progress");
+      const rows = await assignmentsOf(ordenId);
+      expect(rows.find((r) => r.tecnicoId === rosterB)?.parteListaAt).toBeNull();
+      expect(rows.find((r) => r.tecnicoId === rosterA)?.parteListaAt).toEqual(marked);
+    });
+
+    it("re-assigning someone during review is a no-op: the order stays ready_for_review", async () => {
+      const ordenId = await newOrder("ready_for_review");
+      await assignDirect(ordenId, rosterA, new Date());
+
+      expect(await assign(ordenId, rosterA)).toEqual({ created: false });
+      expect((await orderRow(ordenId)).status).toBe("ready_for_review");
+    });
+
+    it("assigning on an in_progress order leaves its status", async () => {
+      const ordenId = await newOrder("in_progress");
+      await assign(ordenId, rosterA);
+      expect((await orderRow(ordenId)).status).toBe("in_progress");
+    });
+
+    it.each(["done", "cancelled"] as const)("refuses a %s order and writes no row", async (status) => {
+      const ordenId = await newOrder(status);
+      await expect(assign(ordenId, rosterA)).rejects.toBeInstanceOf(OrderClosedError);
+      expect(await assignmentsOf(ordenId)).toEqual([]);
+    });
+
+    it("refuses a deactivated technician and writes no row", async () => {
+      const ordenId = await newOrder("open");
+      await expect(assign(ordenId, rosterOff)).rejects.toBeInstanceOf(InvalidTecnicoError);
+      expect(await assignmentsOf(ordenId)).toEqual([]);
+    });
+
+    it("the route: a técnico gets 403, the jefe 201 then 200 for the repeat, a closed order 409", async () => {
+      const ordenId = await newOrder("open");
+      const post = (user: { id: string; role: Role }, id = ordenId) =>
+        handleAssign(
+          new NextRequest(`http://localhost/api/service-orders/${id}/assignments`, {
+            method: "POST",
+            headers: { "x-user-id": user.id, "x-user-role": user.role, "Content-Type": "application/json" },
+            body: JSON.stringify({ tecnicoId: rosterA }),
+          }),
+          id,
+        );
+
+      expect((await post(tecA)).status).toBe(403);
+      expect(await assignmentsOf(ordenId)).toEqual([]);
+      expect((await post({ ...admin, role: "jefe_taller" })).status).toBe(201);
+      expect((await post({ ...admin, role: "jefe_taller" })).status).toBe(200);
+      expect(await assignmentsOf(ordenId)).toHaveLength(1);
+      expect((await post(admin, await newOrder("done"))).status).toBe(409);
     });
   });
 });

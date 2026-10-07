@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Role } from "@/modules/auth/roles";
 import { CorrectionRefusedError } from "@/modules/service-orders/correction-auth";
+import { OrderEditForbiddenError } from "@/modules/service-orders/order-lock";
 import { MAX_PHOTO_BYTES, OrderClosedError, PhotoLimitError } from "@/modules/service-orders/photos";
 import { OrdenServicioNotFoundError } from "@/modules/service-orders/service";
 import { handleAddPhoto, POST } from "./route";
@@ -47,9 +48,30 @@ describe("POST /api/service-orders/[id]/photos", () => {
 
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ id: "p1", position: 0 });
-    expect(addPhoto).toHaveBeenCalledWith({ ordenId: "o1", bytes: JPEG, createdBy: "user-1", scope: expect.anything() });
+    expect(addPhoto).toHaveBeenCalledWith({ ordenId: "o1", bytes: JPEG, createdBy: "user-1", canManageAll: false, scope: expect.anything() });
     // a técnico's scope carries the assignment condition; an administrador's carries none
     expect(addPhoto.mock.calls[0][0].scope.where).toBeDefined();
+  });
+
+  it.each([
+    ["tecnico", false],
+    ["jefe_taller", true],
+    ["administrador", true],
+  ] as const)("tells the service whether %s is staff (%s), for the ready_for_review split", async (role, canManageAll) => {
+    const addPhoto = vi.fn().mockResolvedValue(added);
+    await handleAddPhoto(req(form(JPEG), { role }), "o1", { addPhoto });
+    expect(addPhoto.mock.calls[0][0].canManageAll).toBe(canManageAll);
+  });
+
+  it("403 with a Spanish message for a técnico adding to a ready_for_review order", async () => {
+    const addPhoto = vi.fn().mockRejectedValue(new OrderEditForbiddenError());
+    const res = await handleAddPhoto(req(form(JPEG)), "o1", { addPhoto });
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      error: "forbidden",
+      message: "Solo un administrador o el jefe de taller puede agregar fotos a una orden lista para revisión.",
+    });
   });
 
   it("hands the lock no condition for an administrador, who sees every order", async () => {
@@ -206,11 +228,12 @@ describe("POST /api/service-orders/[id]/photos", () => {
 
       expect(res.status).toBe(201);
       expect(authorize).toHaveBeenCalledWith("user-1", "pw");
-      expect(addPhoto).toHaveBeenNthCalledWith(1, { ordenId: "o1", bytes: JPEG, createdBy: "user-1", scope: expect.anything() });
+      expect(addPhoto).toHaveBeenNthCalledWith(1, { ordenId: "o1", bytes: JPEG, createdBy: "user-1", canManageAll: true, scope: expect.anything() });
       expect(addPhoto).toHaveBeenNthCalledWith(2, {
         ordenId: "o1",
         bytes: JPEG,
         createdBy: "user-1",
+        canManageAll: true,
         scope: expect.anything(),
         correction: { correctorId: "user-1" },
       });
