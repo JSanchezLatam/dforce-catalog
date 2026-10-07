@@ -60,10 +60,10 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU4: Mis números (PR 4)
 
-- [ ] 4.1 RED e2e rows in `metrics.e2e.test.ts`: técnico A and B both with closed orders and hours, `tecnicoId` of A returns only A (closed and minutes, per month); unlinked user resolves no id. GREEN: fix real-SQL defects.
-- [ ] 4.2 RED `src/app/(app)/mis-numeros/page.test.tsx`: id resolved from `findTecnicoByUserId(session.user.id)`; `?tecnicoId=<B>` and `?mes` for B are ignored and queries are called with A's id; unlinked técnico sees "Todavía no estás en la lista de técnicos" with no error; administrador and jefe_taller get the shared no-permission screen; closed orders and hours shown with the month select and hours-per-month bar chart; no currency. GREEN `mis-numeros/page.tsx`.
-- [ ] 4.3 Mutation-verify 4.1-4.2 by name (read `tecnicoId` from `searchParams`, drop the `WHERE`, grant `metrics.self` to administrador).
-- [ ] 4.4 Playwright at `http://192.168.0.3:3000` as técnico at 390, 768 and desktop: console clean, no overflow, select >=44x44, own numbers only, `?tecnicoId=` forged URL shows own data.
+- [x] 4.1 RED e2e rows in `metrics.e2e.test.ts`: técnico A and B both with closed orders and hours, `tecnicoId` of A returns only A (closed and minutes, per month); unlinked user resolves no id. GREEN: fix real-SQL defects.
+- [x] 4.2 RED `src/app/(app)/mis-numeros/page.test.tsx`: id resolved from `findTecnicoByUserId(session.user.id)`; `?tecnicoId=<B>` and `?mes` for B are ignored and queries are called with A's id; unlinked técnico sees "Todavía no estás en la lista de técnicos" with no error; administrador and jefe_taller get the shared no-permission screen; closed orders and hours shown with the month select and hours-per-month bar chart; no currency. GREEN `mis-numeros/page.tsx`.
+- [x] 4.3 Mutation-verify 4.1-4.2 by name (read `tecnicoId` from `searchParams`, drop the `WHERE`, grant `metrics.self` to administrador).
+- [x] 4.4 Playwright at `http://192.168.0.3:3000` as técnico at 390, 768 and desktop: console clean, no overflow, select >=44x44, own numbers only, `?tecnicoId=` forged URL shows own data.
 
 ## Spec archive notes
 

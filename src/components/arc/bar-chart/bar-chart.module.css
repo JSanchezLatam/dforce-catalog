@@ -47,3 +47,6 @@
 @media (prefers-reduced-motion: reduce) { .bar { transition: none; } }
 .measure { position: absolute; top: 0; left: 0; display: flex; visibility: hidden; pointer-events: none; }
 .measure > span { flex: none; font-size: var(--text-xs); line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Keyboard focus must stay visible (the base rule drops the outline). */
+.scrubber:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }

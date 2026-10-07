@@ -114,8 +114,9 @@ export const ROUTE_GUARDS: Record<
   "/account": { GET: "account.self" },
   "/users": { GET: "users.manage" },
   "/technicians": { GET: "technicians.manage" },
-  // metrics-dashboard: admin and jefe. `/mis-numeros` (`metrics.self`, técnico) joins in WU4.
+  // metrics-dashboard: admin and jefe read `/metrics`; the técnico reads only `/mis-numeros`.
   "/metrics": { GET: "metrics.read" },
+  "/mis-numeros": { GET: "metrics.self" },
   "/api/account": { GET: "account.self", PATCH: "account.self" },
   "/api/users": { GET: "users.manage", POST: "users.manage" },
   "/api/users/[id]": { PATCH: "users.manage" },
@@ -210,11 +211,7 @@ describe("ROUTE_GUARDS completeness", () => {
     // `service-orders.readAll` is exempt for good, like `catalogs.listAll`: it
     // is read by `orderScope` (technicians-and-work-lines WU4a), never by a
     // route handler.
-    //
-    // metrics-dashboard: `metrics.self` is exempt only until WU4 lands `/mis-numeros`,
-    // because the completeness test above fails on a guard entry with no page. WU4
-    // adds the entry and removes this exemption.
-    const exempt: readonly Action[] = ["catalogs.listAll", "service-orders.readAll", "metrics.self"];
+    const exempt: readonly Action[] = ["catalogs.listAll", "service-orders.readAll"];
 
     for (const action of ACTIONS) {
       if ((exempt as readonly string[]).includes(action)) continue;

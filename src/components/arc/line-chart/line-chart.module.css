@@ -58,3 +58,6 @@
   .toggle, .swatch::before, .line, .tooltip, .crosshair, .dot, .series { transition: none; }
   .chart[data-loading] .series, .skeleton { animation: none; }
 }
+
+/* Keyboard focus must stay visible (the base rule drops the outline). */
+.plot:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 6px; }
