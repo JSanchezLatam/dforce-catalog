@@ -81,10 +81,10 @@ Rule for every task pair: RED test, confirm red BY NAME, GREEN, then mutation-ve
 
 ## WU5: Work lines (PR 5)
 
-- [ ] 6.1 RED `work-lines.test.ts`: duration 0/-5/1.5/"abc" and blank description refused; `fecha` defaults to local today; técnico only own technician (403) and only in `in_progress`; admin/jefe in `in_progress`/`ready_for_review`; `open` refused; unassigned technician refused; marked técnico refused; edit cannot change technician or order; status read from the locked row. GREEN `work-lines.ts`.
-- [ ] 6.2 RED correction tests: closed + grant writes `linea_trabajo` add `(null,id)`, delete `(id,null)`, edit `linea_trabajo.<field>`; same tx (audit failure rolls back the line); jefe 403 without verifying password; no password 409; open order writes no audit. GREEN.
+- [x] 6.1 RED `work-lines.test.ts`: duration 0/-5/1.5/"abc" and blank description refused; `fecha` defaults to local today; técnico only own technician (403) and only in `in_progress`; admin/jefe in `in_progress`/`ready_for_review`; `open` refused; unassigned technician refused; marked técnico refused; edit cannot change technician or order; status read from the locked row. GREEN `work-lines.ts`.
+- [x] 6.2 RED correction tests: closed + grant writes `linea_trabajo` add `(null,id)`, delete `(id,null)`, edit `linea_trabajo.<field>`; same tx (audit failure rolls back the line); jefe 403 without verifying password; no password 409; open order writes no audit. GREEN.
 - [ ] 6.3 RED route tests `/work-lines` POST, `/[lineId]` PATCH/DELETE (+ guard rows); unassigned técnico 404. GREEN routes.
-- [ ] 6.4 RED e2e `src/e2e/order-work-lines.e2e.test.ts`: composite FK rejects unassigned technician; `SUM(duracion_minutos)` for A in October excludes B and November; correction audit rows exact; throwing audit leaves no line. GREEN.
+- [x] 6.4 RED e2e `src/e2e/order-work-lines.e2e.test.ts`: composite FK rejects unassigned technician; `SUM(duracion_minutos)` for A in October excludes B and November; correction audit rows exact; throwing audit leaves no line. GREEN.
 - [ ] 6.5 Mutation-verify 6.1-6.4 by name (audit outside tx, drop the status gate, let edit change `tecnico_id`).
 
 ## WU6: Mi parte lista and readiness (PR 6)
