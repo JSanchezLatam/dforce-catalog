@@ -7,7 +7,7 @@ import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { orderScope } from "@/modules/service-orders/scope";
 import { currentConsent } from "@/modules/customers/consent";
-import { CONSENT_CLAUSE_BANNER, CONSENT_CLAUSE_PARAGRAPHS } from "@/modules/customers/consent-clause";
+import { CONSENT_CLAUSE_BANNER, CONSENT_CLAUSE_PARAGRAPHS, SHOW_CONSENT_CLAUSE } from "@/modules/customers/consent-clause";
 import { getClienteById } from "@/modules/customers/queries";
 import { getWorkshopConfig } from "@/modules/workshop-config/service";
 import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
@@ -317,14 +317,14 @@ export default async function ServiceOrderPrintPage({
           the two signature lines rather than above them, so page 1 pays for one
           extra line, not for the clause's height as well. */}
       {isClientCopy ? (
-        consented && (
+        consented && SHOW_CONSENT_CLAUSE && (
           <div className="mt-6 flex">
             <ConsentClause />
           </div>
         )
       ) : (
-        <div className={consented ? "mt-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6" : "mt-12 flex justify-end"}>
-          {consented && <ConsentClause />}
+        <div className={consented && SHOW_CONSENT_CLAUSE ? "mt-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6" : "mt-12 flex justify-end"}>
+          {consented && SHOW_CONSENT_CLAUSE && <ConsentClause />}
           <div className="w-72 max-w-full shrink-0">
             {consented && <div className="mb-8 border-t border-black pt-1 text-center text-xs">Firma del cliente</div>}
             <div className="border-t border-black pt-1 text-center text-xs">Firma del técnico</div>

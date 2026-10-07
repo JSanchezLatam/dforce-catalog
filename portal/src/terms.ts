@@ -3,6 +3,14 @@
  * Bump TERMS_VERSION whenever the text changes: every customer is re-gated.
  * Plain strings only: the "use client" terms screen imports this file.
  */
+/**
+ * Provisional text hidden at the client's request (2026-10-07): a valid token goes
+ * straight to the history and NO acceptance is recorded (accepting text the customer
+ * never saw would be false evidence). Set to true to show the terms screen again once
+ * the lawyer's text lands.
+ */
+export const TERMS_GATE_ENABLED = false;
+
 export const TERMS_VERSION = "2026-10-provisorio";
 
 export const TERMS_BANNER = "TEXTO PROVISORIO — pendiente de revisión legal";

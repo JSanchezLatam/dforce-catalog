@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/shared/ui/ToastProvider";
-import { CONSENT_CLAUSE_BANNER, CONSENT_CLAUSE_PARAGRAPHS } from "./consent-clause";
+import { CONSENT_CLAUSE_BANNER, CONSENT_CLAUSE_PARAGRAPHS, SHOW_CONSENT_CLAUSE } from "./consent-clause";
 import { PortalCodeRotate } from "./PortalCodeRotate";
 
 export type ConsentView = {
@@ -109,12 +109,14 @@ export function CustomerConsentPanel({
       <CardContent className="flex flex-col gap-4">
         <p className="text-sm text-foreground">{status}</p>
 
-        <div data-testid="consent-clause" className="flex max-w-prose flex-col gap-2 rounded-lg bg-muted p-3 text-sm text-muted-foreground">
-          <p className="font-semibold text-foreground">{CONSENT_CLAUSE_BANNER}</p>
-          {CONSENT_CLAUSE_PARAGRAPHS.map((paragraph) => (
-            <p key={paragraph}>{paragraph}</p>
-          ))}
-        </div>
+        {SHOW_CONSENT_CLAUSE && (
+          <div data-testid="consent-clause" className="flex max-w-prose flex-col gap-2 rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+            <p className="font-semibold text-foreground">{CONSENT_CLAUSE_BANNER}</p>
+            {CONSENT_CLAUSE_PARAGRAPHS.map((paragraph) => (
+              <p key={paragraph}>{paragraph}</p>
+            ))}
+          </div>
+        )}
 
         {deactivated && (
           <p className="text-sm text-muted-foreground">

@@ -69,6 +69,18 @@ vi.mock("@/modules/service-orders/qr", async (importOriginal) => {
   return { renderQrSvg };
 });
 
+// `undefined` = the real SHOW_CONSENT_CLAUSE, so the default-state tests read the shipped value.
+const clauseFlag = vi.hoisted(() => ({ show: undefined as boolean | undefined }));
+vi.mock("@/modules/customers/consent-clause", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/modules/customers/consent-clause")>();
+  return {
+    ...actual,
+    get SHOW_CONSENT_CLAUSE() {
+      return clauseFlag.show ?? actual.SHOW_CONSENT_CLAUSE;
+    },
+  };
+});
+
 import type { Role } from "@/modules/auth/roles";
 import type { Cliente, OrdenServicio, Vehiculo, WorkshopConfig } from "@/shared/db/schema";
 import { formatDateTime } from "@/shared/datetime";
@@ -152,6 +164,7 @@ beforeEach(() => {
   // These mocks are module-level; without this, call counts accumulate across
   // tests and `not.toHaveBeenCalled()` below would assert nothing.
   vi.clearAllMocks();
+  clauseFlag.show = undefined;
   can.mockReturnValue(true);
   requireSessionFromHeaders.mockResolvedValue({ id: "u1", role: "tecnico" });
   getOrdenServicioById.mockResolvedValue({ orden: ORDEN, items: [] });
@@ -715,7 +728,8 @@ describe("ServiceOrderPrintPage — consent clause and the two copies (customer-
   }
 
   describe("workshop copy (the default)", () => {
-    it("carries the clause, banner first, and the Firma del cliente line for a consented customer", async () => {
+    it("carries the clause, banner first, and the Firma del cliente line for a consented customer when SHOW_CONSENT_CLAUSE is on", async () => {
+      clauseFlag.show = true;
       consented();
       render(await renderPage());
 
@@ -726,6 +740,18 @@ describe("ServiceOrderPrintPage — consent clause and the two copies (customer-
       // The technician's line is still there, and so is the findings block it closes.
       expect(screen.getByText("Firma del técnico")).toBeInTheDocument();
       expect(screen.getByText("Trabajo realizado / Hallazgos")).toBeInTheDocument();
+    });
+
+    it("hides the provisional clause by default but keeps Firma del cliente, right-aligned", async () => {
+      consented();
+      render(await renderPage());
+
+      expect(screen.queryByTestId("consent-clause")).not.toBeInTheDocument();
+      expect(screen.queryByText(BANNER)).not.toBeInTheDocument();
+      const firma = screen.getByText("Firma del cliente");
+      expect(screen.getByText("Firma del técnico")).toBeInTheDocument();
+      // With nothing beside it, the signature block sits right as it did without consent.
+      expect(firma.parentElement?.parentElement).toHaveClass("justify-end");
     });
 
     it("carries neither the clause nor Firma del cliente without current consent", async () => {
@@ -838,11 +864,22 @@ describe("ServiceOrderPrintPage — consent clause and the two copies (customer-
       expect(screen.queryByRole("link", { name: "Copia del cliente" })).not.toBeInTheDocument();
     });
 
-    it("carries the clause when consent is current, but no signature line", async () => {
+    it("carries the clause when consent is current and SHOW_CONSENT_CLAUSE is on, but no signature line", async () => {
+      clauseFlag.show = true;
       consented();
       render(await renderPage("cliente"));
 
       expect(screen.getByTestId("consent-clause").textContent?.startsWith(BANNER)).toBe(true);
+    });
+
+    it("hides the provisional clause by default but keeps the QR and its notice", async () => {
+      consented();
+      render(await renderPage("cliente"));
+
+      expect(screen.queryByTestId("consent-clause")).not.toBeInTheDocument();
+      expect(screen.queryByText(BANNER)).not.toBeInTheDocument();
+      expect(screen.getByRole("img", { name: "Código QR del portal del cliente" })).toBeInTheDocument();
+      expect(screen.getByText(NOTICE)).toBeInTheDocument();
     });
 
     it("ignores any other copia value and prints the workshop copy", async () => {
