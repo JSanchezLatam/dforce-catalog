@@ -54,7 +54,11 @@ const currentConsent = vi.hoisted(() => vi.fn<(id: string) => Promise<{ granted:
 vi.mock("@/modules/customers/consent", () => ({ currentConsent }));
 
 /** `env` is read at render time, so a test can unset it. */
-const envMock = vi.hoisted(() => ({ PORTAL_BASE_URL: undefined as string | undefined }));
+const envMock = vi.hoisted(() => ({
+  PORTAL_BASE_URL: undefined as string | undefined,
+  PORTAL_INGEST_URL: "http://localhost:3001/api/ingest" as string | undefined,
+  PORTAL_INGEST_SECRET: "secret" as string | undefined,
+}));
 vi.mock("@/shared/config/env", () => ({ env: envMock }));
 
 /** The REAL encoder, spied: the SVG under test is what the library draws, and the input is what it was asked to encode. */
@@ -156,6 +160,8 @@ beforeEach(() => {
   listOrderPhotos.mockResolvedValue([]);
   currentConsent.mockResolvedValue(null);
   envMock.PORTAL_BASE_URL = undefined;
+  envMock.PORTAL_INGEST_URL = "http://localhost:3001/api/ingest";
+  envMock.PORTAL_INGEST_SECRET = "secret";
   renderQrSvg.mockClear();
 });
 
@@ -863,6 +869,9 @@ describe("ServiceOrderPrintPage — consent clause and the two copies (customer-
       ["the customer is deactivated", () => getClienteById.mockResolvedValue({ cliente: { ...CLIENTE, portalToken: TOKEN, deactivatedAt: new Date("2026-02-01") }, orders: [], vehicles: [VEHICULO] })],
       ["PORTAL_BASE_URL is unset", () => { envMock.PORTAL_BASE_URL = undefined; }],
       ["PORTAL_BASE_URL is blank", () => { envMock.PORTAL_BASE_URL = "  "; }],
+      // The sync is off: a printed QR would only ever open "Este enlace no es válido".
+      ["PORTAL_INGEST_URL is unset", () => { envMock.PORTAL_INGEST_URL = undefined; }],
+      ["PORTAL_INGEST_SECRET is unset", () => { envMock.PORTAL_INGEST_SECRET = undefined; }],
     ];
 
     it.each(cases)("when %s", async (_label, breakIt) => {

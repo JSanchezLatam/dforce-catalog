@@ -20,6 +20,10 @@ export default defineConfig({
     fileParallelism: false,
   },
   resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+      // Mirrors vitest.config.ts and tsconfig "paths": the workshop signs with the portal's own code.
+      "@portal/contract": path.resolve(__dirname, "./portal/src/contract.ts"),
+    },
   },
 });
