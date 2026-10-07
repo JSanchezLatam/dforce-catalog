@@ -9,12 +9,17 @@
  * lock and the closed/correction rule. A closed order is writable solely with a
  * `CorrectionGrant`, which `correction-auth.ts` issues after the password check
  * (outside the transaction: bcrypt must not hold this row lock).
+ *
+ * `scope` is REQUIRED: the lookup is `WHERE id AND <scope>`, so an order the
+ * caller may not see is "not found" (404), never a 403 that confirms it exists.
+ * Non-user callers pass `SYSTEM_SCOPE` and say so.
  */
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { db } from "@/shared/db/client";
 import { ordenServicio, ordenServicioCorreccion, type OrdenServicio } from "@/shared/db/schema";
 import { isClosedStatus } from "./edit-policy";
+import type { OrderScope } from "./scope";
 import { OrdenServicioNotFoundError } from "./service";
 import type { OrderStatus } from "./transitions";
 
@@ -37,9 +42,13 @@ export class OrderEditForbiddenError extends Error {
 export async function lockOrderForMutation(
   tx: Tx,
   id: string,
-  opts: { canWrite: (status: OrderStatus) => boolean; correction?: CorrectionGrant },
+  opts: { scope: OrderScope; canWrite: (status: OrderStatus) => boolean; correction?: CorrectionGrant },
 ): Promise<{ order: OrdenServicio; correcting: boolean }> {
-  const [order] = await tx.select().from(ordenServicio).where(eq(ordenServicio.id, id)).for("update");
+  const [order] = await tx
+    .select()
+    .from(ordenServicio)
+    .where(and(eq(ordenServicio.id, id), opts.scope.where))
+    .for("update");
   if (!order) throw new OrdenServicioNotFoundError(id);
   if (opts.canWrite(order.status)) return { order, correcting: false };
   if (!isClosedStatus(order.status)) throw new OrderEditForbiddenError();

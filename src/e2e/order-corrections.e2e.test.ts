@@ -15,10 +15,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashPassword } from "@/modules/auth/password";
 import type { Role } from "@/modules/auth/roles";
 import { db } from "@/shared/db/client";
-import { cliente, ordenServicio, ordenServicioCorreccion, ordenServicioFoto, users, vehiculo } from "@/shared/db/schema";
+import { cliente, ordenServicio, ordenServicioCorreccion, ordenServicioFoto, ordenTecnico, tecnico, users, vehiculo } from "@/shared/db/schema";
 import { handleUpdateOrdenServicio } from "../app/api/service-orders/[id]/route";
 import { OrderClosedError } from "../modules/service-orders/order-lock";
 import { addOrderPhoto, deleteOrderPhoto, MAX_PHOTOS, PhotoLimitError } from "../modules/service-orders/photos";
+import { SYSTEM_SCOPE } from "../modules/service-orders/scope";
 import { updateOrder } from "../modules/service-orders/service";
 
 const PASSWORD = "correct-horse-battery";
@@ -28,6 +29,7 @@ describe("order corrections (E2E)", () => {
   const userIds: string[] = [];
   let adminId: string;
   let tecnicoId: string;
+  let rosterId: string; // the técnico's roster row, so they can be ASSIGNED to an order
   let clienteId: string;
   let vehiculoId: string;
 
@@ -81,6 +83,7 @@ describe("order corrections (E2E)", () => {
     execSync("npx drizzle-kit migrate", { stdio: "inherit" });
     adminId = await newUser("administrador", "admin");
     tecnicoId = await newUser("tecnico", "tecnico");
+    [{ id: rosterId }] = await db.insert(tecnico).values({ nombre: "E2E Corr", userId: tecnicoId }).returning({ id: tecnico.id });
     const [c] = await db.insert(cliente).values({ name: "E2E Corr", phone: "50769993003" }).returning({ id: cliente.id });
     clienteId = c.id;
     const [v] = await db.insert(vehiculo).values({ clienteId, plate: "COR001", motor: "combustion" }).returning({ id: vehiculo.id });
@@ -90,9 +93,11 @@ describe("order corrections (E2E)", () => {
   afterAll(async () => {
     const orders = await db.select({ id: ordenServicio.id }).from(ordenServicio).where(eq(ordenServicio.clienteId, clienteId));
     for (const { id } of orders) await db.delete(ordenServicioCorreccion).where(eq(ordenServicioCorreccion.ordenId, id));
+    for (const { id } of orders) await db.delete(ordenTecnico).where(eq(ordenTecnico.ordenId, id));
     await db.delete(ordenServicio).where(eq(ordenServicio.clienteId, clienteId));
     await db.delete(vehiculo).where(eq(vehiculo.clienteId, clienteId));
     await db.delete(cliente).where(eq(cliente.id, clienteId));
+    await db.delete(tecnico).where(eq(tecnico.id, rosterId));
     for (const id of userIds) await db.delete(users).where(eq(users.id, id));
     await db.$client.end();
   });
@@ -151,12 +156,23 @@ describe("order corrections (E2E)", () => {
 
   it("a tecnico with their own correct password is 403 and changes nothing", async () => {
     const ordenId = await newOrder({ hallazgos: "intacto" });
+    // Assigned: an UNASSIGNED técnico never gets this far, the scope answers 404 first (next case).
+    await db.insert(ordenTecnico).values({ ordenId, tecnicoId: rosterId, assignedBy: adminId });
 
     const res = await patch(ordenId, { hallazgos: "cambiado", password: PASSWORD }, tecnicoId, "tecnico");
 
     expect(res.status).toBe(403);
     expect((await orderRow(ordenId)).hallazgos).toBe("intacto");
     expect(await auditRows(ordenId)).toEqual([]);
+  });
+
+  it("an UNASSIGNED tecnico is 404 on a closed order, not the 403 that would confirm it exists", async () => {
+    const ordenId = await newOrder({ hallazgos: "intacto" });
+
+    const res = await patch(ordenId, { hallazgos: "cambiado", password: PASSWORD }, tecnicoId, "tecnico");
+
+    expect(res.status).toBe(404);
+    expect((await orderRow(ordenId)).hallazgos).toBe("intacto");
   });
 
   it("an administrator with no password on a closed order is 409 and changes nothing", async () => {
@@ -183,7 +199,7 @@ describe("order corrections (E2E)", () => {
     const ordenId = await newOrder({ hallazgos: "intacto" });
 
     await expect(
-      updateOrder(ordenId, { hallazgos: "cambiado" }, { role: "administrador", correction: { correctorId: randomUUID() } }),
+      updateOrder(ordenId, { hallazgos: "cambiado" }, { scope: SYSTEM_SCOPE, role: "administrador", correction: { correctorId: randomUUID() } }),
     ).rejects.toThrow();
 
     expect((await orderRow(ordenId)).hallazgos).toBe("intacto");
@@ -193,7 +209,7 @@ describe("order corrections (E2E)", () => {
   it("a closed order without a grant is refused by the real lock", async () => {
     const ordenId = await newOrder({ hallazgos: "intacto" });
 
-    await expect(updateOrder(ordenId, { hallazgos: "cambiado" }, { role: "administrador" })).rejects.toBeInstanceOf(
+    await expect(updateOrder(ordenId, { hallazgos: "cambiado" }, { scope: SYSTEM_SCOPE, role: "administrador" })).rejects.toBeInstanceOf(
       OrderClosedError,
     );
     expect((await orderRow(ordenId)).hallazgos).toBe("intacto");
@@ -205,7 +221,7 @@ describe("order corrections (E2E)", () => {
       await seedPhotos(ordenId, 2);
 
       const photo = await addOrderPhoto(
-        { ordenId, bytes: JPEG, createdBy: adminId, correction: { correctorId: adminId } },
+        { scope: SYSTEM_SCOPE, ordenId, bytes: JPEG, createdBy: adminId, correction: { correctorId: adminId } },
         r2(),
       );
 
@@ -221,7 +237,7 @@ describe("order corrections (E2E)", () => {
       await seedPhotos(ordenId, 2);
       const [first] = await photoRows(ordenId);
 
-      await deleteOrderPhoto({ ordenId, photoId: first.id, correction: { correctorId: adminId } }, r2());
+      await deleteOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, photoId: first.id, correction: { correctorId: adminId } }, r2());
 
       expect((await photoRows(ordenId)).map((p) => p.id)).not.toContain(first.id);
       expect(await photoRows(ordenId)).toHaveLength(1);
@@ -235,7 +251,7 @@ describe("order corrections (E2E)", () => {
       await seedPhotos(ordenId, MAX_PHOTOS);
 
       await expect(
-        addOrderPhoto({ ordenId, bytes: JPEG, correction: { correctorId: adminId } }, r2()),
+        addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, bytes: JPEG, correction: { correctorId: adminId } }, r2()),
       ).rejects.toBeInstanceOf(PhotoLimitError);
 
       expect(await photoRows(ordenId)).toHaveLength(MAX_PHOTOS);
@@ -246,7 +262,7 @@ describe("order corrections (E2E)", () => {
       const ordenId = await newOrder();
 
       await expect(
-        addOrderPhoto({ ordenId, bytes: JPEG, correction: { correctorId: adminId } }, r2(true)),
+        addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, bytes: JPEG, correction: { correctorId: adminId } }, r2(true)),
       ).rejects.toThrow("r2 down");
 
       expect(await photoRows(ordenId)).toEqual([]);
@@ -258,8 +274,8 @@ describe("order corrections (E2E)", () => {
       await seedPhotos(ordenId, 1);
       const [only] = await photoRows(ordenId);
 
-      await expect(addOrderPhoto({ ordenId, bytes: JPEG }, r2())).rejects.toBeInstanceOf(OrderClosedError);
-      await expect(deleteOrderPhoto({ ordenId, photoId: only.id }, r2())).rejects.toBeInstanceOf(OrderClosedError);
+      await expect(addOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, bytes: JPEG }, r2())).rejects.toBeInstanceOf(OrderClosedError);
+      await expect(deleteOrderPhoto({ scope: SYSTEM_SCOPE, ordenId, photoId: only.id }, r2())).rejects.toBeInstanceOf(OrderClosedError);
 
       expect(await photoRows(ordenId)).toHaveLength(1);
       expect(await auditRows(ordenId)).toEqual([]);

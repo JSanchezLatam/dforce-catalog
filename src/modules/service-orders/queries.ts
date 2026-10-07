@@ -12,6 +12,7 @@ import { and, count, desc, eq, or, sql } from "drizzle-orm";
 import { db } from "@/shared/db/client";
 import { unaccentIlike } from "@/shared/db/text-search";
 import { cliente, ordenServicio, ordenServicioItem, vehiculo, type OrdenServicio, type OrdenServicioItem } from "@/shared/db/schema";
+import type { OrderScope } from "./scope";
 import type { OrderStatus } from "./transitions";
 
 export const DEFAULT_PAGE_SIZE = 10;
@@ -36,17 +37,15 @@ export type OrdenServicioListItem = Pick<OrdenServicio, "id" | "status" | "appoi
  * (D9): both add the identical two joins and both build from this one
  * `WHERE`.
  */
-export function buildOrdenServicioWhere(filters: OrdenServicioFilters) {
+export function buildOrdenServicioWhere(filters: OrdenServicioFilters, scope: OrderScope) {
   const status = filters.status ? eq(ordenServicio.status, filters.status) : undefined;
   const term = filters.search?.trim();
-  if (!term) return status;
   const pattern = `%${term}%`;
-  const search = or(
-    unaccentIlike(cliente.name, pattern),
-    unaccentIlike(cliente.phone, pattern),
-    unaccentIlike(vehiculo.plate, pattern),
-  );
-  return status ? and(status, search) : search;
+  const search = term
+    ? or(unaccentIlike(cliente.name, pattern), unaccentIlike(cliente.phone, pattern), unaccentIlike(vehiculo.plate, pattern))
+    : undefined;
+  // The scope is ANDed with the search, never ORed: a search must not reach an order the caller cannot see.
+  return and(scope.where, status, search);
 }
 
 /**
@@ -156,6 +155,7 @@ export function buildOrdenServicioOrderBy(sort?: OrdenSort) {
 export function ordenServicioListQuery(
   filters: OrdenServicioFilters,
   window: { offset: number; limit: number },
+  scope: OrderScope,
   sort?: OrdenSort,
 ) {
   return db
@@ -171,7 +171,7 @@ export function ordenServicioListQuery(
     .from(ordenServicio)
     .innerJoin(cliente, eq(ordenServicio.clienteId, cliente.id))
     .innerJoin(vehiculo, eq(ordenServicio.vehiculoId, vehiculo.id))
-    .where(buildOrdenServicioWhere(filters))
+    .where(buildOrdenServicioWhere(filters, scope))
     .orderBy(...buildOrdenServicioOrderBy(sort))
     .limit(window.limit)
     .offset(window.offset);
@@ -181,8 +181,9 @@ export function ordenServicioListQuery(
 export async function listOrdenesServicio(
   filters: OrdenServicioFilters,
   window: { offset: number; limit: number },
+  scope: OrderScope,
   sort?: OrdenSort,
-  queryFn: () => Promise<OrdenServicioListItem[]> = () => ordenServicioListQuery(filters, window, sort),
+  queryFn: () => Promise<OrdenServicioListItem[]> = () => ordenServicioListQuery(filters, window, scope, sort),
 ): Promise<OrdenServicioListItem[]> {
   return queryFn();
 }
@@ -192,20 +193,21 @@ export async function listOrdenesServicio(
  * does, or the pager offers pages that do not exist — a search predicate over
  * `cliente.name`/`vehiculo.plate` cannot be evaluated without them.
  */
-export function ordenServicioCountQuery(filters: OrdenServicioFilters) {
+export function ordenServicioCountQuery(filters: OrdenServicioFilters, scope: OrderScope) {
   return db
     .select({ value: count() })
     .from(ordenServicio)
     .innerJoin(cliente, eq(ordenServicio.clienteId, cliente.id))
     .innerJoin(vehiculo, eq(ordenServicio.vehiculoId, vehiculo.id))
-    .where(buildOrdenServicioWhere(filters));
+    .where(buildOrdenServicioWhere(filters, scope));
 }
 
 /** R21 — total count for the same filter, for pagination math. */
 export async function countOrdenesServicio(
   filters: OrdenServicioFilters,
+  scope: OrderScope,
   queryFn: () => Promise<number> = async () => {
-    const rows = await ordenServicioCountQuery(filters);
+    const rows = await ordenServicioCountQuery(filters, scope);
     return rows[0]?.value ?? 0;
   },
 ): Promise<number> {
@@ -229,8 +231,13 @@ export async function countOrdenesServicio(
  */
 export async function listOrdenesByVehiculo(
   vehiculoId: string,
+  scope: OrderScope,
   queryFn: () => Promise<OrdenServicio[]> = () =>
-    db.select().from(ordenServicio).where(eq(ordenServicio.vehiculoId, vehiculoId)).orderBy(desc(ordenServicio.createdAt)),
+    db
+      .select()
+      .from(ordenServicio)
+      .where(and(eq(ordenServicio.vehiculoId, vehiculoId), scope.where))
+      .orderBy(desc(ordenServicio.createdAt)),
 ): Promise<OrdenServicio[]> {
   return queryFn();
 }
@@ -238,8 +245,9 @@ export async function listOrdenesByVehiculo(
 /** R20 — service-order detail + its line items. */
 export async function getOrdenServicioById(
   id: string,
+  scope: OrderScope,
   queryFn: () => Promise<OrdenServicioDetail | null> = async () => {
-    const rows = await db.select().from(ordenServicio).where(eq(ordenServicio.id, id)).limit(1);
+    const rows = await db.select().from(ordenServicio).where(and(eq(ordenServicio.id, id), scope.where)).limit(1);
     const orden = rows[0];
     if (!orden) return null;
     const items = await db.select().from(ordenServicioItem).where(eq(ordenServicioItem.ordenId, id));

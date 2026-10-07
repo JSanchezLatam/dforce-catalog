@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ROLES, type Role } from "@/modules/auth/roles";
 import { orderStatusEnum } from "@/shared/db/schema";
 import { MATRIX } from "@/modules/auth/policy";
-import { canChangeOrderPhotos, canEditOrderFields, isClosedStatus, orderEditMode } from "./edit-policy";
+import { canChangeOrderPhotos, canEditOrderFields, isClosedStatus, orderEditMode, workLineMode } from "./edit-policy";
 import type { OrderStatus } from "./transitions";
 
 /**
@@ -53,23 +53,31 @@ describe("canEditOrderFields (D11)", () => {
 
 /**
  * Photos are a separate gate from `canEditOrderFields`: a técnico must be able
- * to photograph an `open` order (D11 forbids them its field edits), so this
- * takes no role. One row per status so a flipped cell fails by name.
+ * to photograph an `open` order (D11 forbids them its field edits), so the
+ * status decides, with ONE role split: in review only staff (a caller holding
+ * `service-orders.assign`) may add. One row per cell so a flipped one fails by name.
  */
 describe("canChangeOrderPhotos", () => {
-  it.each<[OrderStatus, boolean]>([
-    ["open", true],
-    ["in_progress", true],
-    ["ready_for_review", true],
-    ["done", false],
-    ["cancelled", false],
-  ])("a %s order -> %s", (status, expected) => {
-    expect(canChangeOrderPhotos(status)).toBe(expected);
+  it.each<[OrderStatus, boolean, boolean]>([
+    // status, staff, expected
+    ["open", false, true],
+    ["open", true, true],
+    ["in_progress", false, true],
+    ["in_progress", true, true],
+    ["ready_for_review", false, false],
+    ["ready_for_review", true, true],
+    ["done", false, false],
+    ["done", true, false],
+    ["cancelled", false, false],
+    ["cancelled", true, false],
+  ])("a %s order, staff %s -> %s", (status, staff, expected) => {
+    expect(canChangeOrderPhotos(status, staff)).toBe(expected);
   });
 
   it("covers every status the schema defines", () => {
     for (const status of orderStatusEnum.enumValues) {
-      expect(typeof canChangeOrderPhotos(status)).toBe("boolean");
+      expect(typeof canChangeOrderPhotos(status, false)).toBe("boolean");
+      expect(typeof canChangeOrderPhotos(status, true)).toBe("boolean");
     }
   });
 });
@@ -126,5 +134,32 @@ describe("orderEditMode", () => {
     for (const role of ROLES) {
       expect(orderEditMode(role, "done") === "correction").toBe(MATRIX[role]["service-orders.correct"]);
     }
+  });
+});
+
+/** The status/role half of who writes work lines; the técnico's own-line and un-marked conditions are the card's. */
+describe("workLineMode (order-work-lines, who writes lines)", () => {
+  it.each<[Role, OrderStatus, "write" | "correction" | "refused"]>([
+    ["administrador", "open", "refused"],
+    ["administrador", "in_progress", "write"],
+    ["administrador", "ready_for_review", "write"],
+    ["administrador", "done", "correction"],
+    ["administrador", "cancelled", "correction"],
+    ["jefe_taller", "open", "refused"],
+    ["jefe_taller", "in_progress", "write"],
+    ["jefe_taller", "ready_for_review", "write"],
+    ["jefe_taller", "done", "refused"],
+    ["jefe_taller", "cancelled", "refused"],
+    ["tecnico", "open", "refused"],
+    ["tecnico", "in_progress", "write"],
+    ["tecnico", "ready_for_review", "refused"],
+    ["tecnico", "done", "refused"],
+    ["tecnico", "cancelled", "refused"],
+  ])("%s on a %s order -> %s", (role, status, expected) => {
+    expect(workLineMode(role, status)).toBe(expected);
+  });
+
+  it("refuses an unrecognised role", () => {
+    expect(workLineMode("intruso" as Role, "in_progress")).toBe("refused");
   });
 });

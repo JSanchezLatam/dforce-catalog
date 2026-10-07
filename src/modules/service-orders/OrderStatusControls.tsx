@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { useToast } from "@/shared/ui/ToastProvider";
 import { ORDER_STATUS_LABEL } from "./statuses";
-import { getAllowedTransitions, type OrderStatus } from "./transitions";
+import { getAllowedTransitions, isTransitionPermitted, type OrderStatus } from "./transitions";
 
 /**
  * R21 — status-transition controls for the order-detail page. Renders one
@@ -17,11 +17,20 @@ import { getAllowedTransitions, type OrderStatus } from "./transitions";
  * carries R23's reminder scheduling/cancellation), then refreshes the
  * server-rendered page. Terminal states (`done`/`cancelled`) render nothing.
  */
-export function OrderStatusControls({ orderId, status }: { orderId: string; status: OrderStatus }) {
+export function OrderStatusControls({
+  orderId,
+  status,
+  canAssign,
+}: {
+  orderId: string;
+  status: OrderStatus;
+  /** `can(user, "service-orders.assign")`: without it only starting work is offered; the route stays the gate. */
+  canAssign: boolean;
+}) {
   const router = useRouter();
   const { addToast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const nextStates = getAllowedTransitions(status);
+  const nextStates = getAllowedTransitions(status).filter((next) => isTransitionPermitted(canAssign, status, next));
 
   async function transitionTo(next: OrderStatus) {
     setIsSubmitting(true);

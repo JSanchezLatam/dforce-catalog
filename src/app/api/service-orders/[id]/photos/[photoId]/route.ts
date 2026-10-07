@@ -4,6 +4,7 @@ import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
 import { getObject } from "@/modules/catalog-storage/r2";
 import { deleteOrderPhoto, findOrderPhoto, PhotoNotFoundError } from "@/modules/service-orders/photos";
+import { orderScope } from "@/modules/service-orders/scope";
 import { OrdenServicioNotFoundError } from "@/modules/service-orders/service";
 import { attemptWithCorrection, correctionErrorResponse, type Authorize } from "../../../correction-http";
 
@@ -23,8 +24,8 @@ export async function handleGetPhoto(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Both ids: a photo id taken from another order must not resolve here.
-  const photo = await (deps.findPhoto ?? findOrderPhoto)(ids);
+  // Both ids, and the caller's scope: a photo of an order a técnico is not assigned to answers 404 like a missing one.
+  const photo = await (deps.findPhoto ?? findOrderPhoto)(ids, orderScope(user));
   if (!photo) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const buffer = await (deps.getObject ?? getObject)(photo.r2Key);
@@ -67,7 +68,7 @@ export async function handleDeletePhoto(
       user,
       canCorrect,
       password,
-      (correction) => remove(correction ? { ...ids, correction } : ids),
+      (correction) => remove({ ...ids, scope: orderScope(user), ...(correction && { correction }) }),
       deps.authorize,
     );
     return NextResponse.json({ success: true });

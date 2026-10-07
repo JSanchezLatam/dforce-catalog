@@ -40,9 +40,21 @@ describe("GET /api/service-orders/[id]/photos/[photoId]", () => {
     const getObject = vi.fn();
     const res = await handleGetPhoto(req("GET"), { ordenId: "other-order", photoId: "p1" }, { findPhoto, getObject });
 
-    expect(findPhoto).toHaveBeenCalledWith({ ordenId: "other-order", photoId: "p1" });
+    expect(findPhoto).toHaveBeenCalledWith({ ordenId: "other-order", photoId: "p1" }, expect.anything());
     expect(res.status).toBe(404);
     expect(getObject).not.toHaveBeenCalled();
+  });
+
+  it("looks the photo up through the caller's order scope: a técnico is scoped, an administrador is not", async () => {
+    const findPhoto = vi.fn().mockResolvedValue(null);
+    const ids = { ordenId: "o1", photoId: "p1" };
+
+    const asTecnico = await handleGetPhoto(req("GET", "tecnico"), ids, { findPhoto, getObject: vi.fn() });
+    expect(asTecnico.status).toBe(404);
+    expect(findPhoto.mock.calls[0][1].where).toBeDefined();
+
+    await handleGetPhoto(req("GET", "administrador"), ids, { findPhoto, getObject: vi.fn() });
+    expect(findPhoto.mock.calls[1][1].where).toBeUndefined();
   });
 
   it("404 when the row exists but the object is gone", async () => {
@@ -92,7 +104,7 @@ describe("DELETE /api/service-orders/[id]/photos/[photoId]", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ success: true });
-    expect(deletePhoto).toHaveBeenCalledWith(ids);
+    expect(deletePhoto).toHaveBeenCalledWith({ ...ids, scope: { where: undefined } });
   });
 
   it("409 order_closed on a closed order for an administrador with no password", async () => {
@@ -150,8 +162,12 @@ describe("DELETE /api/service-orders/[id]/photos/[photoId]", () => {
 
       expect(res.status).toBe(200);
       expect(authorize).toHaveBeenCalledWith("user-1", "pw");
-      expect(deletePhoto).toHaveBeenNthCalledWith(1, ids);
-      expect(deletePhoto).toHaveBeenNthCalledWith(2, { ...ids, correction: { correctorId: "user-1" } });
+      expect(deletePhoto).toHaveBeenNthCalledWith(1, { ...ids, scope: { where: undefined } });
+      expect(deletePhoto).toHaveBeenNthCalledWith(2, {
+        ...ids,
+        scope: { where: undefined },
+        correction: { correctorId: "user-1" },
+      });
     });
 
     it("never verifies a password sent for an OPEN order", async () => {
