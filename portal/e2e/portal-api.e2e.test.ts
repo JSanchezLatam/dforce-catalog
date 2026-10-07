@@ -71,6 +71,16 @@ describe("portal API e2e", () => {
     expect(JSON.stringify(rows)).not.toContain("tok-a");
   });
 
+  it("two concurrent accepts end with exactly one row and both return the snapshot", async () => {
+    await seed("c1", "tok-a");
+    for (let i = 0; i < 10; i++) {
+      await db.delete(portalTermsAcceptance);
+      const [a, b] = await Promise.all([call(accept, "tok-a"), call(accept, "tok-a")]);
+      expect([a.status, b.status]).toEqual([200, 200]);
+      expect(await acceptances()).toHaveLength(1);
+    }
+  });
+
   it("after accept, open says accepted and snapshot returns the data", async () => {
     await seed("c1", "tok-a");
     await call(accept, "tok-a");

@@ -14,10 +14,9 @@ const nextConfig: NextConfig = {
   // Next would otherwise guess the workspace root from the wrong one.
   outputFileTracingRoot: path.resolve(__dirname),
   async headers() {
-    return [
-      { source: "/c", headers: secure },
-      { source: "/api/c/:path*", headers: secure },
-    ];
+    // Every page and route, so the neutral `/` boot page is covered too. Only the
+    // framework's hashed assets are left out: `no-store` would break their caching.
+    return [{ source: "/((?!_next/static|_next/image|favicon.ico).*)", headers: secure }];
   },
 };
 
