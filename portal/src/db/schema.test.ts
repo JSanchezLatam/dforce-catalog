@@ -25,4 +25,11 @@ describe("portal schema", () => {
     expect(c.id.columnType).toBe("PgBigSerial53");
     for (const name of ["token_hash", "terms_version", "accepted_at"]) expect(c[name].notNull).toBe(true);
   });
+
+  it("portal_terms_acceptance: one acceptance per (token_hash, terms_version), enforced by a unique index", () => {
+    const unique = getTableConfig(portalTermsAcceptance).indexes.filter((i) => i.config.unique);
+    expect(unique.map((i) => i.config.columns.map((c) => ("name" in c ? c.name : "")))).toEqual([
+      ["token_hash", "terms_version"],
+    ]);
+  });
 });

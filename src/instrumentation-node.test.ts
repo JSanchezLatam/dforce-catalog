@@ -13,11 +13,12 @@ vi.mock("@/modules/pdf-generation/worker", () => ({ registerPdfGenerateWorker: s
 vi.mock("@/modules/catalog-storage/upload-status", () => ({ registerPdfUploadWorker: spy("pdf-upload") }));
 vi.mock("@/modules/reminders/job", () => ({ registerReminderWorker: spy("reminder") }));
 vi.mock("@/modules/portal-sync/job", () => ({ registerPortalSyncWorker: spy("portal-sync") }));
+vi.mock("@/modules/portal-sync/reconcile", () => ({ registerPortalReconcile: spy("portal-reconcile") }));
 
 describe("registerNodeWorkers", () => {
-  it("registers the portal sync worker at boot", async () => {
+  it("registers the portal sync worker and the nightly reconcile at boot", async () => {
     const { registerNodeWorkers } = await import("./instrumentation-node");
     await registerNodeWorkers();
-    expect(calls).toContain("portal-sync");
+    expect(calls).toEqual(expect.arrayContaining(["portal-sync", "portal-reconcile"]));
   });
 });

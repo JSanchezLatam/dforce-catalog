@@ -18,7 +18,8 @@
  * on demand by `service-orders/service.ts` via `scheduleReminder`.
  *
  * The portal sync (customer-portal WU5b) registers its per-customer worker, fed
- * by `enqueuePortalSync` after each committed mutation. It is inert while
+ * by `enqueuePortalSync` after each committed mutation, and its nightly
+ * reconcile cron at 03:00 America/Panama. Both are inert while
  * `PORTAL_INGEST_URL`/`PORTAL_INGEST_SECRET` are unset.
  */
 export async function registerNodeWorkers(): Promise<void> {
@@ -27,6 +28,7 @@ export async function registerNodeWorkers(): Promise<void> {
   const { registerPdfUploadWorker } = await import("@/modules/catalog-storage/upload-status");
   const { registerReminderWorker } = await import("@/modules/reminders/job");
   const { registerPortalSyncWorker } = await import("@/modules/portal-sync/job");
+  const { registerPortalReconcile } = await import("@/modules/portal-sync/reconcile");
 
   await registerInventorySyncWorker();
   await scheduleWeeklySync();
@@ -34,4 +36,5 @@ export async function registerNodeWorkers(): Promise<void> {
   await registerPdfUploadWorker();
   await registerReminderWorker();
   await registerPortalSyncWorker();
+  await registerPortalReconcile();
 }

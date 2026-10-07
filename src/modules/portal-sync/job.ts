@@ -108,7 +108,7 @@ async function readState(tx: Tx, clienteId: string): Promise<SyncState | null> {
 }
 
 /** `nextval` is a bigint and node-postgres hands it back as a string. */
-async function nextVersion(tx: Tx): Promise<number> {
+export async function nextVersion(tx: Pick<Tx, "execute">): Promise<number> {
   const result = await tx.execute(sql`SELECT nextval('portal_sync_version_seq') AS v`);
   const version = Number((result.rows[0] as { v: string }).v);
   if (!Number.isSafeInteger(version)) throw new Error("portal-sync: version sequence left the safe integer range");

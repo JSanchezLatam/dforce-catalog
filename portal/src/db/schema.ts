@@ -2,7 +2,7 @@
  * Portal database (Neon in production). Holds only sha256(token) hashes and
  * the whitelisted snapshot the workshop pushes — never a raw token.
  */
-import { bigint, bigserial, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { bigint, bigserial, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 import type { PortalVehicle } from "../contract";
 
@@ -16,9 +16,14 @@ export const portalCustomer = pgTable("portal_customer", {
   syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const portalTermsAcceptance = pgTable("portal_terms_acceptance", {
-  id: bigserial("id", { mode: "number" }).primaryKey(),
-  tokenHash: text("token_hash").notNull(),
-  termsVersion: text("terms_version").notNull(),
-  acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const portalTermsAcceptance = pgTable(
+  "portal_terms_acceptance",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    tokenHash: text("token_hash").notNull(),
+    termsVersion: text("terms_version").notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // What makes two concurrent accepts one row: `where not exists` alone races.
+  (t) => [uniqueIndex("portal_terms_acceptance_token_version_uq").on(t.tokenHash, t.termsVersion)],
+);
