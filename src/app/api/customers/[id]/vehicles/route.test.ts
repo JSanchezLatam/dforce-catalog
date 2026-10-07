@@ -63,7 +63,7 @@ describe("GET /api/customers/[id]/vehicles (C4, task 1.11 — the gap D2 found)"
 const POISONED = fakeVehiculo({ placaRenovacionMes: 11, placaMunicipio: "SENTINEL-MUNICIPIO", seguroVence: "2031-07-23" });
 
 describe("vehicles routes never carry the internal renewal fields", () => {
-  it("GET omits both internal keys and their values, even for an administrador", async () => {
+  it("GET omits all three internal keys and their values, even for an administrador", async () => {
     const listVehiculosByCliente = vi.fn().mockResolvedValue([POISONED]);
     const response = await handleListVehiculosByCliente(
       requestFor("c1", { "x-user-id": "u1", "x-user-role": "administrador" }),
@@ -79,7 +79,7 @@ describe("vehicles routes never carry the internal renewal fields", () => {
     expect(JSON.parse(text).vehicles[0]).toMatchObject({ id: "v1", plate: "ABC111", make: "Toyota" });
   });
 
-  it("POST omits both internal keys from the 201 body", async () => {
+  it("POST omits all three internal keys from the 201 body", async () => {
     const deps = {
       getClienteById: vi.fn().mockResolvedValue({ cliente: clienteRow(), vehicles: [] }),
       createVehiculo: vi.fn().mockResolvedValue(POISONED),

@@ -57,7 +57,7 @@ export type VehiculoInput = {
    * INTERNAL fields (need `vencimientos.read`), TRI-STATE on purpose, unlike
    * every field above: `undefined` = the caller did not send it, so the stored
    * value is left alone; `null` = clear it; a value = set it. The public
-   * columns round-trip through `CustomerForm` and keep `?? null`; these two are
+   * columns round-trip through `CustomerForm` and keep `?? null`; these three are
    * never in a technician's form, so omitting one must never wipe it.
    */
   placaRenovacionMes?: number | null;
@@ -86,8 +86,8 @@ export type TxLike = Pick<typeof db, "insert" | "update" | "delete" | "select">;
 /**
  * The vehicle as every caller WITHOUT `vencimientos.read` may see it: an
  * ALLOWLIST, so a column added to `vehiculo` later is hidden until someone
- * names it here. `Omit` would do the opposite. The renewal month and insurance
- * expiry are deliberately absent.
+ * names it here. `Omit` would do the opposite. The renewal month, insurance
+ * expiry and plate municipio are deliberately absent.
  */
 export type PublicVehiculo = Pick<
   Vehiculo,
