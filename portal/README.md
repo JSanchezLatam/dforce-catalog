@@ -49,7 +49,15 @@ hand at the LAN IP.
 
 ## Deploying (owner runbook)
 
-1. **Vercel project.** Import the repo, set **Root Directory** to `portal`.
+1. **Vercel project, deployed from the CLI only.** From `portal/`: `vercel link`,
+   then every release is `vercel deploy --prod`. Do NOT connect the project to
+   GitHub: on 2026-10-07 a Git-connected project with no Root Directory published
+   the WORKSHOP app at the portal URL on a merge to `main`, and with Root
+   Directory `portal` the Git build fails (`outputFileTracingRoot` pins tracing to
+   `portal/`, ENOENT `.next/package.json`; without it Turbopack builds the repo
+   root's `src/proxy.ts`). `portal/.vercelignore` keeps `.env*` and agent files out
+   of the upload. Production today: project `dforce-portal`,
+   https://dforce-portal.vercel.app.
    Plan: Hobby is for non-commercial use under Vercel's terms and a workshop
    serving customers is commercial, so check the current terms and pick Pro if
    in doubt.
@@ -64,7 +72,9 @@ hand at the LAN IP.
    match exactly.
 5. **Domain, before any QR is printed.** Every printed "Copia del cliente"
    embeds `PORTAL_BASE_URL`. Fix the final domain first; if it must change later,
-   keep the old one redirecting.
+   keep the old one redirecting. QRs are already in customers' hands with
+   `dforce-portal.vercel.app`: never delete or rename that Vercel project (adding
+   a custom domain keeps the `vercel.app` one working).
 6. **Workshop `.env`** (restart the workshop after editing):
    ```
    PORTAL_BASE_URL=https://<final-domain>
@@ -74,9 +84,14 @@ hand at the LAN IP.
    `PORTAL_INGEST_URL` must be https (plain http is accepted only for
    `localhost`). With the secret or URL unset the sync is inert and no QR is offered.
 7. **Check.** Give a test customer consent, scan the printed copy on a phone,
-   accept the terms, and confirm only their own plates and orders appear.
+   and confirm only their own plates and orders appear (with the terms gate on,
+   accept the terms first).
 
-**Legal text.** The consent clause and portal terms are provisional. Replacing
+**Legal text.** The consent clause and portal terms are provisional and, at the
+client's request, HIDDEN: `SHOW_CONSENT_CLAUSE` (`src/modules/customers/consent-clause.ts`)
+and `TERMS_GATE_ENABLED` (`portal/src/terms.ts`) ship `false`. With the gate off a
+valid token opens the history directly and no acceptance is recorded. Flip both to
+`true` when the lawyer's text lands, and redeploy the portal. Replacing
 either with the lawyer's text needs a NEW version id (`CONSENT_CLAUSE_VERSION` in
 `src/modules/customers/consent.ts`, `TERMS_VERSION` in `portal/src/terms.ts`).
 Bumping the terms version makes every customer accept again, which is intended.
