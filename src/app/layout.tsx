@@ -19,7 +19,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("font-sans", geist.variable)} suppressHydrationWarning>
+    // Chrome auto-translate wraps React-owned text nodes in <font>, so React's removeChild throws NotFoundError (Sentry DFORCE-CATALOG-A).
+    <html lang="es" translate="no" className={cn("font-sans", geist.variable)} suppressHydrationWarning>
       <body>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
           <TooltipProvider>
