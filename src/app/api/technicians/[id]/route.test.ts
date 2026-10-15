@@ -69,3 +69,21 @@ describe("PATCH /api/technicians/[id]", () => {
     expect((await run(new TechnicianNotFoundError())).status).toBe(404);
   });
 });
+
+describe("PATCH /api/technicians/[id] — malformed body", () => {
+  it("answers 400 with a form error, not 500, and runs nothing", async () => {
+    const d = deps();
+    // A real request with an unparseable body: `request.json()` rejects exactly as it does on the wire.
+    const raw = new NextRequest("http://localhost/api/technicians/t-1", {
+      method: "PATCH",
+      headers: { "x-user-id": "u-1", "x-user-role": "jefe_taller", "Content-Type": "application/json" },
+      body: "{not json",
+    });
+
+    const response = await handleUpdateTecnico(raw, "t-1", d);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ errors: { form: "No se pudo leer el pedido" } });
+    expect(d.updateTecnico).not.toHaveBeenCalled();
+  });
+});

@@ -44,7 +44,10 @@ export async function handleCreateUser(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (body === null || typeof body !== "object") {
+    return NextResponse.json({ errors: { form: "No se pudo leer el pedido" } }, { status: 400 });
+  }
   const { createUser: injected, ...serviceDeps } = deps;
   const create = injected ?? createUserService;
 

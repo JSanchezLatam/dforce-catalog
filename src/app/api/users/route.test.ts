@@ -134,3 +134,21 @@ describe("POST /api/users", () => {
     expect((await response.json()).error).toBe("duplicate_username");
   });
 });
+
+describe("POST /api/users — malformed body", () => {
+  it("answers 400 with a form error, not 500, and runs nothing", async () => {
+    const createUser = vi.fn();
+    // A real request with an unparseable body: `request.json()` rejects exactly as it does on the wire.
+    const raw = new NextRequest("http://localhost/api/users", {
+      method: "POST",
+      headers: { "x-user-id": "u-1", "x-user-role": "administrador", "Content-Type": "application/json" },
+      body: "{not json",
+    });
+
+    const response = await handleCreateUser(raw, { createUser });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ errors: { form: "No se pudo leer el pedido" } });
+    expect(createUser).not.toHaveBeenCalled();
+  });
+});

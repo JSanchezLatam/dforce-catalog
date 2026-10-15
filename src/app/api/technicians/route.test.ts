@@ -79,3 +79,21 @@ describe("POST /api/technicians", () => {
     expect(d.createTecnico).toHaveBeenCalledWith({ role: "jefe_taller" }, { nombre: "Luis" });
   });
 });
+
+describe("POST /api/technicians — malformed body", () => {
+  it("answers 400 with a form error, not 500, and runs nothing", async () => {
+    const d = deps();
+    // A real request with an unparseable body: `request.json()` rejects exactly as it does on the wire.
+    const raw = new NextRequest("http://localhost/api/technicians", {
+      method: "POST",
+      headers: { "x-user-id": "u-1", "x-user-role": "jefe_taller", "Content-Type": "application/json" },
+      body: "{not json",
+    });
+
+    const response = await handleCreateTecnico(raw, d);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ errors: { form: "No se pudo leer el pedido" } });
+    expect(d.createTecnico).not.toHaveBeenCalled();
+  });
+});

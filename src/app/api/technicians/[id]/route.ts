@@ -16,7 +16,10 @@ export async function handleUpdateTecnico(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (body === null || typeof body !== "object") {
+    return NextResponse.json({ errors: { form: "No se pudo leer el pedido" } }, { status: 400 });
+  }
   const input: { nombre?: string; userId?: string | null; active?: boolean } = {};
   if (typeof body?.nombre === "string") input.nombre = body.nombre;
   if (body?.userId !== undefined) {
