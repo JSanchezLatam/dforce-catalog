@@ -413,6 +413,23 @@ describe("CustomerDetailPage — Ley 81 consent (customer-portal WU1)", () => {
       screen.getByText("El consentimiento no se puede cambiar mientras el cliente está desactivado."),
     ).toBeInTheDocument();
   });
+
+  it("re-syncs the draft when a refresh brings a newer consent recorded from another device", async () => {
+    currentConsent.mockResolvedValue({ granted: false, recordedByName: "Ana Admin", recordedAt, clauseVersion: "v1" });
+    const { rerender } = render(await renderPage());
+    const checkbox = () => screen.getByRole("checkbox", { name: "Consentimiento de datos (Ley 81)" });
+    expect(checkbox()).not.toBeChecked();
+
+    // Another machine grants; router.refresh() re-runs the page with the newer row.
+    currentConsent.mockResolvedValue({
+      granted: true, recordedByName: "Beto Admin", recordedAt: new Date("2026-10-07T16:00:00Z"), clauseVersion: "v1",
+    });
+    rerender(await renderPage());
+
+    expect(screen.getByText(/Consentimiento otorgado por Beto Admin/)).toBeInTheDocument();
+    expect(checkbox()).toBeChecked();
+    expect(screen.getByRole("button", { name: "Guardar consentimiento" })).toBeDisabled();
+  });
 });
 
 describe("CustomerDetailPage — portal token and rotation (customer-portal WU2)", () => {
