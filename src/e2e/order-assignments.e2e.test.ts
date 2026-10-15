@@ -239,6 +239,14 @@ describe("order assignments and lock scope (E2E)", () => {
       expect(await assignmentsOf(ordenId)).toEqual([]);
     });
 
+    it("re-assigning a technician deactivated after being assigned is a no-op, not a refusal", async () => {
+      const ordenId = await newOrder("open");
+      await assignDirect(ordenId, rosterOff);
+
+      expect(await assign(ordenId, rosterOff)).toEqual({ created: false });
+      expect(await assignmentsOf(ordenId)).toHaveLength(1);
+    });
+
     it("the route: a técnico gets 403, the jefe 201 then 200 for the repeat, a closed order 409", async () => {
       const ordenId = await newOrder("open");
       const post = (user: { id: string; role: Role }, id = ordenId) =>

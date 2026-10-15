@@ -8,7 +8,7 @@
  * A closed order refuses it for every role and is NOT correctable: this module
  * never takes a `CorrectionGrant`, so `OrderClosedError` is the only answer.
  */
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { ordenTecnico, tecnico } from "@/shared/db/schema";
@@ -58,7 +58,18 @@ export async function assignTecnico(
       scope: input.scope,
       canWrite: (status) => !isClosedStatus(status),
     });
-    await assertActiveTecnicos(tx, [input.tecnicoId]);
+    try {
+      await assertActiveTecnicos(tx, [input.tecnicoId]);
+    } catch (err) {
+      // A technician deactivated AFTER being assigned is still on the order: a repeat is the usual no-op, not a 400.
+      if (!(err instanceof InvalidTecnicoError)) throw err;
+      const existing = await tx
+        .select({ tecnicoId: ordenTecnico.tecnicoId })
+        .from(ordenTecnico)
+        .where(and(eq(ordenTecnico.ordenId, input.ordenId), eq(ordenTecnico.tecnicoId, input.tecnicoId)));
+      if (existing.length === 0) throw err;
+      return { created: false };
+    }
 
     const inserted = await tx
       .insert(ordenTecnico)
