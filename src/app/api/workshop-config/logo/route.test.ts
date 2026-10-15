@@ -173,3 +173,22 @@ describe("workshop-config logo route", () => {
     });
   });
 });
+
+describe("POST /api/workshop-config/logo — unreadable body", () => {
+  it.each([
+    ["a JSON body", "application/json"],
+    ["a multipart type with no boundary", "multipart/form-data"],
+  ])("answers 400, not 500, for %s", async (_label, contentType) => {
+    // Real bytes `request.formData()` cannot parse, so it rejects as it does on the wire.
+    const raw = new NextRequest("http://localhost/api/workshop-config/logo", {
+      method: "POST",
+      headers: { "x-user-id": "u-1", "x-user-role": "administrador", "Content-Type": contentType },
+      body: '{"file":"x"}',
+    });
+
+    const response = await POST(raw);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "No se pudo leer el archivo" });
+  });
+});

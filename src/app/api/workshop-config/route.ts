@@ -24,7 +24,10 @@ export async function POST(request: NextRequest) {
   const denied = authorize("workshop.edit", request);
   if (denied) return denied;
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json({ errors: { form: "No se pudo leer el pedido" } }, { status: 400 });
+  }
   try {
     const config = await saveWorkshopConfig(body);
     return NextResponse.json({ config });

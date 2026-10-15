@@ -39,7 +39,10 @@ export async function handleUpdateCliente(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json({ errors: { form: "No se pudo leer el pedido" } }, { status: 400 });
+  }
 
   // Deactivating a vehicle is reversible and stays with `customers.write`;
   // destroying the row is not, and every other irreversible capability in this

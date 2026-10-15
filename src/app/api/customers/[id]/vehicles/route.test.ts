@@ -309,3 +309,29 @@ describe("POST /api/customers/[id]/vehicles — portal sync trigger (WU5b)", () 
     expect(enqueuePortalSync).not.toHaveBeenCalled();
   });
 });
+
+describe("POST /api/customers/[id]/vehicles — unreadable body", () => {
+  // A real request carrying the bad bytes: `request.json()` fails (or yields a non-object) exactly as on the wire.
+  it.each(["{not json", "null"])("answers 400, not 500, for the body %s", async (body) => {
+    const raw = new NextRequest("http://localhost/api/customers/c1/vehicles", {
+      method: "POST",
+      headers: { "x-user-id": "u-1", "x-user-role": "tecnico", "Content-Type": "application/json" },
+      body,
+    });
+
+    const response = await handleCreateVehiculo(raw, "c1");
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ errors: { form: "No se pudo leer el pedido" } });
+  });
+
+  it("already answers a field-level 400 for an array body, left as is", async () => {
+    const raw = new NextRequest("http://localhost/api/customers/c1/vehicles", {
+      method: "POST",
+      headers: { "x-user-id": "u-1", "x-user-role": "tecnico", "Content-Type": "application/json" },
+      body: "[]",
+    });
+
+    expect((await handleCreateVehiculo(raw, "c1")).status).toBe(400);
+  });
+});

@@ -373,3 +373,29 @@ describe("customer portal token never leaves in a response (WU2)", () => {
     expect(text).not.toContain("portalToken");
   });
 });
+
+describe("POST /api/customers — unreadable body", () => {
+  // A real request carrying the bad bytes: `request.json()` fails (or yields a non-object) exactly as on the wire.
+  it.each(["{not json", "null"])("answers 400, not 500, for the body %s", async (body) => {
+    const raw = new NextRequest("http://localhost/api/customers", {
+      method: "POST",
+      headers: { "x-user-id": "u-1", "x-user-role": "tecnico", "Content-Type": "application/json" },
+      body,
+    });
+
+    const response = await handleCreateCliente(raw);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ errors: { form: "No se pudo leer el pedido" } });
+  });
+
+  it("already answers a field-level 400 for an array body, left as is", async () => {
+    const raw = new NextRequest("http://localhost/api/customers", {
+      method: "POST",
+      headers: { "x-user-id": "u-1", "x-user-role": "tecnico", "Content-Type": "application/json" },
+      body: "[]",
+    });
+
+    expect((await handleCreateCliente(raw)).status).toBe(400);
+  });
+});

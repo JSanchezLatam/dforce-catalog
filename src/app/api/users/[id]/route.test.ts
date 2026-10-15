@@ -158,3 +158,19 @@ describe("PATCH /api/users/[id] — malformed body", () => {
     expect(d.updateUser).not.toHaveBeenCalled();
   });
 });
+
+describe("PATCH /api/users/[id] — non-object body", () => {
+  // A real request carrying the bad bytes: `request.json()` fails (or yields a non-object) exactly as on the wire.
+  it.each(["null"])("answers 400, not 500, for the body %s", async (body) => {
+    const raw = new NextRequest("http://localhost/api/users/user-9", {
+      method: "PATCH",
+      headers: { "x-user-id": "u-1", "x-user-role": "administrador", "Content-Type": "application/json" },
+      body,
+    });
+
+    const response = await handleUpdateUser(raw, "user-9");
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ errors: { form: "No se pudo leer el pedido" } });
+  });
+});

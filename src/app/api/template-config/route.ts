@@ -31,7 +31,10 @@ export async function POST(request: NextRequest) {
   const denied = requireTemplateEditAccess(request);
   if (denied) return denied;
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json({ errors: { form: "No se pudo leer el pedido" } }, { status: 400 });
+  }
   try {
     const config = await saveTemplateConfig(body);
     return NextResponse.json({ config });
