@@ -200,6 +200,16 @@ export default async function ServiceOrderPrintPage({
               Copia del cliente
             </Link>
           ) : null}
+          {/* The way back: without it the customer copy's only exit was
+              Volver, which leaves the print route entirely. */}
+          {isClientCopy ? (
+            <Link
+              href={`/service-orders/${orden.id}/print`}
+              className="min-h-11 min-w-11 inline-flex items-center rounded-md border border-black/30 px-3 text-sm print:hidden"
+            >
+              Copia del taller
+            </Link>
+          ) : null}
           {qrSvg ? (
             <>
               <p className="max-w-[45mm] text-right text-[10px] leading-tight">

@@ -811,6 +811,8 @@ describe("ServiceOrderPrintPage — consent clause and the two copies (customer-
       const link = screen.getByRole("link", { name: "Copia del cliente" });
       expect(link).toHaveAttribute("href", "/service-orders/o1/print?copia=cliente");
       expect(link).toHaveClass("print:hidden", "min-h-11", "min-w-11");
+      // The workshop copy does not link to itself.
+      expect(screen.queryByRole("link", { name: "Copia del taller" })).not.toBeInTheDocument();
     });
   });
 
@@ -875,6 +877,15 @@ describe("ServiceOrderPrintPage — consent clause and the two copies (customer-
       render(await renderPage("cliente"));
 
       expect(screen.queryByRole("link", { name: "Copia del cliente" })).not.toBeInTheDocument();
+    });
+
+    it("offers the Copia del taller control back to the workshop copy, off the paper", async () => {
+      consented();
+      render(await renderPage("cliente"));
+
+      const link = screen.getByRole("link", { name: "Copia del taller" });
+      expect(link).toHaveAttribute("href", "/service-orders/o1/print");
+      expect(link).toHaveClass("print:hidden", "min-h-11", "min-w-11");
     });
 
     it("carries the clause when consent is current and SHOW_CONSENT_CLAUSE is on, but no signature line", async () => {
