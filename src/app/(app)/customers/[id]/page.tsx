@@ -148,8 +148,13 @@ export default async function CustomerDetailPage({
 
       {/* Ley 81 consent for the customer portal. Visible to anyone who can read the
           customer; the controls need `customers.consent` AND an active customer
-          (a deactivated customer's consent is frozen, like the rest of the record). */}
+          (a deactivated customer's consent is frozen, like the rest of the record).
+          Keyed on the latest row so a refresh carrying another device's change
+          remounts the panel instead of leaving its draft stale. `recordedAt` is
+          that row's identity: appends are serialized on the cliente lock and
+          stamped clock_timestamp(), so each new row is strictly later. */}
       <CustomerConsentPanel
+        key={consent?.recordedAt.toISOString() ?? "none"}
         clienteId={cliente.id}
         canRecord={isActive && can(user, "customers.consent")}
         canRotate={isActive && can(user, "customers.portalRotate")}
