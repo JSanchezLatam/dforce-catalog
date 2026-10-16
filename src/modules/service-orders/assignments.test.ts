@@ -100,6 +100,15 @@ describe("assignTecnico", () => {
     expect(log.values).toEqual([]);
   });
 
+  it("is a no-op for a deactivated technician who is already on the order, and writes nothing", async () => {
+    const { database, log } = fakeDb([order("open"), [{ id: "t1", deactivatedAt: new Date("2026-09-01") }], [{ tecnicoId: "t1" }]]);
+
+    await expect(assignTecnico(input, { db: database })).resolves.toEqual({ created: false });
+
+    expect(log.values).toEqual([]);
+    expect(log.sets).toEqual([]);
+  });
+
   it("refuses an unknown technician", async () => {
     const { database } = fakeDb([order("open"), []]);
     await expect(assignTecnico(input, { db: database })).rejects.toBeInstanceOf(InvalidTecnicoError);
