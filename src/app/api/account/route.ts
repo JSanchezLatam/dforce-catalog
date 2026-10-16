@@ -17,7 +17,10 @@ export async function PATCH(request: NextRequest) {
   const user = requireSession(request);
   if (!can(user, "account.self")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json({ error: "validation_error", errors: { form: "No se pudo leer el pedido" } }, { status: 400 });
+  }
   try {
     await updateProfile(user.id, { name: body.name ?? null, email: body.email ?? null });
   } catch (err) {

@@ -64,8 +64,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "File too large" }, { status: 413 });
   }
 
-  const form = await request.formData();
-  const file = form.get("file");
+  let file: FormDataEntryValue | null;
+  try {
+    file = (await request.formData()).get("file");
+  } catch {
+    return NextResponse.json({ error: "No se pudo leer el archivo" }, { status: 400 });
+  }
 
   if (!file || !(file instanceof Blob)) {
     return NextResponse.json({ error: "No file provided" }, { status: 400 });

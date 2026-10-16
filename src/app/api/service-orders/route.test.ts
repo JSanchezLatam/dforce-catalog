@@ -521,3 +521,19 @@ describe("POST /api/service-orders — create is service-orders.create, with tec
     expect(await response.json()).toEqual({ errors: { tecnicoIds: "Elegí técnicos activos" } });
   });
 });
+
+describe("POST /api/service-orders — unreadable body", () => {
+  // A real request carrying the bad bytes: `request.json()` fails (or yields a non-object) exactly as on the wire.
+  it.each(["{not json", "null", "[]"])("answers 400, not 500, for the body %s", async (body) => {
+    const raw = new NextRequest("http://localhost/api/service-orders", {
+      method: "POST",
+      headers: { "x-user-id": "u-1", "x-user-role": "jefe_taller", "Content-Type": "application/json" },
+      body,
+    });
+
+    const response = await handleCreateOrdenServicio(raw);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ errors: { form: "No se pudo leer el pedido" } });
+  });
+});

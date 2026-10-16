@@ -134,3 +134,47 @@ describe("POST /api/users", () => {
     expect((await response.json()).error).toBe("duplicate_username");
   });
 });
+
+describe("POST /api/users — malformed body", () => {
+  it("answers 400 with a form error, not 500, and runs nothing", async () => {
+    const createUser = vi.fn();
+    // A real request with an unparseable body: `request.json()` rejects exactly as it does on the wire.
+    const raw = new NextRequest("http://localhost/api/users", {
+      method: "POST",
+      headers: { "x-user-id": "u-1", "x-user-role": "administrador", "Content-Type": "application/json" },
+      body: "{not json",
+    });
+
+    const response = await handleCreateUser(raw, { createUser });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ errors: { form: "No se pudo leer el pedido" } });
+    expect(createUser).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/users — non-object body", () => {
+  // A real request carrying the bad bytes: `request.json()` fails (or yields a non-object) exactly as on the wire.
+  it.each(["null"])("answers 400, not 500, for the body %s", async (body) => {
+    const raw = new NextRequest("http://localhost/api/users", {
+      method: "POST",
+      headers: { "x-user-id": "u-1", "x-user-role": "administrador", "Content-Type": "application/json" },
+      body,
+    });
+
+    const response = await handleCreateUser(raw);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ errors: { form: "No se pudo leer el pedido" } });
+  });
+
+  it("already answers a field-level 400 for an array body, left as is", async () => {
+    const raw = new NextRequest("http://localhost/api/users", {
+      method: "POST",
+      headers: { "x-user-id": "u-1", "x-user-role": "administrador", "Content-Type": "application/json" },
+      body: "[]",
+    });
+
+    expect((await handleCreateUser(raw)).status).toBe(400);
+  });
+});

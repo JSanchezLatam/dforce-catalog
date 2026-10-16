@@ -452,3 +452,19 @@ describe("customer portal token never leaves in a response (WU2)", () => {
     expect(text).not.toContain("portalToken");
   });
 });
+
+describe("PATCH /api/customers/[id] — unreadable body", () => {
+  // A real request carrying the bad bytes: `request.json()` fails (or yields a non-object) exactly as on the wire.
+  it.each(["{not json", "null", "[]"])("answers 400, not 500, for the body %s", async (body) => {
+    const raw = new NextRequest("http://localhost/api/customers/c1", {
+      method: "PATCH",
+      headers: { "x-user-id": "u-1", "x-user-role": "tecnico", "Content-Type": "application/json" },
+      body,
+    });
+
+    const response = await handleUpdateCliente(raw, "c1");
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ errors: { form: "No se pudo leer el pedido" } });
+  });
+});

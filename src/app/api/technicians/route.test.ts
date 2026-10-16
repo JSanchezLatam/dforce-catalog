@@ -79,3 +79,47 @@ describe("POST /api/technicians", () => {
     expect(d.createTecnico).toHaveBeenCalledWith({ role: "jefe_taller" }, { nombre: "Luis" });
   });
 });
+
+describe("POST /api/technicians — malformed body", () => {
+  it("answers 400 with a form error, not 500, and runs nothing", async () => {
+    const d = deps();
+    // A real request with an unparseable body: `request.json()` rejects exactly as it does on the wire.
+    const raw = new NextRequest("http://localhost/api/technicians", {
+      method: "POST",
+      headers: { "x-user-id": "u-1", "x-user-role": "jefe_taller", "Content-Type": "application/json" },
+      body: "{not json",
+    });
+
+    const response = await handleCreateTecnico(raw, d);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ errors: { form: "No se pudo leer el pedido" } });
+    expect(d.createTecnico).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/technicians — non-object body", () => {
+  // A real request carrying the bad bytes: `request.json()` fails (or yields a non-object) exactly as on the wire.
+  it.each(["null"])("answers 400, not 500, for the body %s", async (body) => {
+    const raw = new NextRequest("http://localhost/api/technicians", {
+      method: "POST",
+      headers: { "x-user-id": "u-1", "x-user-role": "jefe_taller", "Content-Type": "application/json" },
+      body,
+    });
+
+    const response = await handleCreateTecnico(raw);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ errors: { form: "No se pudo leer el pedido" } });
+  });
+
+  it("already answers a field-level 400 for an array body, left as is", async () => {
+    const raw = new NextRequest("http://localhost/api/technicians", {
+      method: "POST",
+      headers: { "x-user-id": "u-1", "x-user-role": "jefe_taller", "Content-Type": "application/json" },
+      body: "[]",
+    });
+
+    expect((await handleCreateTecnico(raw)).status).toBe(400);
+  });
+});
