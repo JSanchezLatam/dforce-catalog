@@ -10,7 +10,7 @@ import { currentConsent } from "@/modules/customers/consent";
 import { CONSENT_CLAUSE_BANNER, CONSENT_CLAUSE_PARAGRAPHS, SHOW_CONSENT_CLAUSE } from "@/modules/customers/consent-clause";
 import { getClienteById } from "@/modules/customers/queries";
 import { getWorkshopConfig } from "@/modules/workshop-config/service";
-import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
+import { categoriaLabel } from "@/modules/service-orders/categories";
 import { vehicleDescriptiveRows } from "@/modules/service-orders/vehicle-rows";
 import { FUEL_LABEL, formatKilometraje } from "@/modules/service-orders/intake";
 import { listOrderPhotos } from "@/modules/service-orders/photos";
@@ -243,11 +243,11 @@ export default async function ServiceOrderPrintPage({
            handed out and may be lost carries the least that identifies the job. */
         <dl className="mb-6 grid grid-cols-4 gap-x-5">
           {field("Cliente", clienteDetail?.cliente.name ?? orden.clienteId)}
-          {field("Placa", vehiculo?.plate ?? orden.vehiculoId)}
+          {field("Placa", vehiculo?.plate ?? orden.vehiculoId ?? "Sin vehículo")}
           {field("Marca", vehiculo?.make)}
           {field("Modelo", vehiculo?.model)}
           {field("Año", vehiculo?.year)}
-          {field("Categoría", CATEGORIA_LABEL[orden.categoria])}
+          {field("Categoría", categoriaLabel(orden.categoria))}
           {field("Fecha y hora de inicio", formatDateTime(orden.appointmentAt))}
         </dl>
       ) : (
@@ -255,7 +255,7 @@ export default async function ServiceOrderPrintPage({
           {field("Cliente", clienteDetail?.cliente.name ?? orden.clienteId)}
           {field("Teléfono", clienteDetail?.cliente.phone)}
           {hasText(clienteDetail?.cliente.documentoIdentidad) && field("Cédula / RUC", clienteDetail?.cliente.documentoIdentidad)}
-          {field("Placa", vehiculo?.plate ?? orden.vehiculoId)}
+          {field("Placa", vehiculo?.plate ?? orden.vehiculoId ?? "Sin vehículo")}
           {field("Marca", vehiculo?.make)}
           {field("Modelo", vehiculo?.model)}
           {field("Año", vehiculo?.year)}
@@ -264,7 +264,7 @@ export default async function ServiceOrderPrintPage({
           {vehiculo && vehicleDescriptiveRows(vehiculo).map((r) => (
             <Fragment key={r.label}>{field(r.label, r.value)}</Fragment>
           ))}
-          {field("Categoría", CATEGORIA_LABEL[orden.categoria])}
+          {field("Categoría", categoriaLabel(orden.categoria))}
           {field("Fecha y hora de inicio", formatDateTime(orden.appointmentAt))}
           {field("Kilometraje", orden.kilometraje == null ? null : formatKilometraje(orden.kilometraje))}
           {orden.nivelCombustible != null && field("Combustible", FUEL_LABEL[orden.nivelCombustible])}

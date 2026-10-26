@@ -179,6 +179,22 @@ beforeEach(() => {
   renderQrSvg.mockClear();
 });
 
+describe("ServiceOrderPrintPage — an Agendada order with no vehicle or category", () => {
+  beforeEach(() => {
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status: "booked", vehiculoId: null, categoria: null }, items: [] });
+  });
+
+  it.each([
+    ["the workshop copy", undefined],
+    ["the customer copy", "cliente"],
+  ])("prints Sin vehículo and Sin categoría on %s", async (_name, copia) => {
+    render(await renderPage(copia));
+
+    expect(valueFor("Placa")).toBe("Sin vehículo");
+    expect(valueFor("Categoría")).toBe("Sin categoría");
+  });
+});
+
 describe("ServiceOrderPrintPage — vehicle descriptive fields", () => {
   it("prints chasis, both colors on one line, estilo, motor in Spanish and the unit number beside placa/marca/modelo/año", async () => {
     getClienteById.mockResolvedValue({

@@ -7,7 +7,9 @@ import { authorizeCorrection, CorrectionRefusedError } from "@/modules/service-o
 import { parseIntake } from "@/modules/service-orders/intake";
 import { OrderClosedError, OrderEditForbiddenError, type CorrectionGrant } from "@/modules/service-orders/order-lock";
 import {
+  AppointmentRequiredError,
   EsperaMotivoError,
+  InvalidVehiculoError,
   OrdenServicioNotFoundError,
   OrderIncompleteError,
   updateOrder,
@@ -108,6 +110,14 @@ export async function handleUpdateOrdenServicio(
       patch.categoria = body.categoria;
     }
 
+    // Only a booked order takes it (`updateOrder` decides under the lock); here it is just a string claim about the body.
+    if (body.vehiculoId !== undefined) {
+      if (typeof body.vehiculoId !== "string" || body.vehiculoId === "") {
+        return NextResponse.json({ errors: { vehiculoId: "Valor inválido" } }, { status: 400 });
+      }
+      patch.vehiculoId = body.vehiculoId;
+    }
+
     const intake = parseIntake(body);
     if (!intake.ok) {
       return NextResponse.json({ errors: intake.errors }, { status: 400 });
@@ -173,6 +183,9 @@ export async function handleUpdateOrdenServicio(
     }
     if (err instanceof EsperaMotivoError) {
       return NextResponse.json({ errors: { esperaMotivo: err.message } }, { status: 400 });
+    }
+    if (err instanceof InvalidVehiculoError || err instanceof AppointmentRequiredError) {
+      return NextResponse.json({ errors: err.errors }, { status: 400 });
     }
     if (err instanceof OrderIncompleteError) {
       return NextResponse.json({ errors: { form: err.message } }, { status: 400 });

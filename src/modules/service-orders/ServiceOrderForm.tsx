@@ -467,9 +467,9 @@ export function ServiceOrderForm({
                     </p>
                     {/*
                      * D1/D4 — "agregá uno primero" used to be a dead end: 368
-                     * of 370 customers have no vehicle and `vehiculoId` is NOT
-                     * NULL, so the operator had to leave this dialog to open
-                     * an order at all. Gated on `canCreateCustomer`, the same
+                     * of 370 customers have no vehicle and a Recibida order needs
+                     * one (`vehiculoId` is nullable only while Agendada), so the
+                     * operator had to leave this dialog to open an order at all. Gated on `canCreateCustomer`, the same
                      * `customers.write` rule the picker's "Crear cliente
                      * nuevo" uses and the same Action the POST requires (D3).
                      *

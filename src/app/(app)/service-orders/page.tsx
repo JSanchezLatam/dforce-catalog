@@ -287,7 +287,7 @@ export default async function ServiceOrdersPage({
                   />
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <span className="font-mono font-medium">{orden.vehiculoPlate}</span>
+                  <span className="font-mono font-medium">{orden.vehiculoPlate ?? "Sin vehículo"}</span>
                   {[orden.vehiculoMake, orden.vehiculoModel].filter(Boolean).join(" ")}
                 </div>
                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -396,7 +396,9 @@ const COLUMNS: readonly { label: string; hideBelowXl?: boolean; sort?: keyof typ
  */
 function vehiculoLabel(orden: Pick<OrdenServicioListItem, "vehiculoPlate" | "vehiculoMake" | "vehiculoModel">): string {
   const makeModel = [orden.vehiculoMake, orden.vehiculoModel].filter(Boolean).join(" ");
-  return makeModel ? `${orden.vehiculoPlate} ${makeModel}` : orden.vehiculoPlate;
+  // Null plate = no vehicle yet (an Agendada order); its make/model are null with it.
+  const plate = orden.vehiculoPlate ?? "Sin vehículo";
+  return makeModel ? `${plate} ${makeModel}` : plate;
 }
 
 /**

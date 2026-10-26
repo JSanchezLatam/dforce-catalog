@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ordenCategoriaEnum } from "@/shared/db/schema";
-import { CATEGORIA_LABEL, isServiceCategory } from "./categories";
+import { CATEGORIA_LABEL, categoriaLabel, isServiceCategory } from "./categories";
 
 describe("CATEGORIA_LABEL", () => {
   it("covers every ordenCategoriaEnum.enumValues entry with a non-empty label", () => {
@@ -50,5 +50,16 @@ describe("isServiceCategory", () => {
     expect(isServiceCategory(1)).toBe(false);
     expect(isServiceCategory(["revisado"])).toBe(false);
     expect(isServiceCategory({ categoria: "revisado" })).toBe(false);
+  });
+});
+
+describe("categoriaLabel", () => {
+  it("labels a category like CATEGORIA_LABEL does", () => {
+    expect(categoriaLabel("revisado")).toBe("REVISADO");
+    expect(categoriaLabel("mant_correctivo")).toBe("Mant. Correctivo");
+  });
+
+  it("reads \"Sin categoría\" for an Agendada order that has none yet", () => {
+    expect(categoriaLabel(null)).toBe("Sin categoría");
   });
 });

@@ -284,17 +284,22 @@ describe("schema — orden_servicio table (Phase 1, task 1.3)", () => {
     expect(statusIdx.config.columns.map((c) => (c as { name: string }).name)).toEqual(["status"]);
   });
 
-  it("vehiculoId is NOT NULL and FKs to vehiculo with onDelete restrict (C4, D5 — 0015)", () => {
-    expect(findColumn(config.columns, "vehiculo_id").notNull).toBe(true);
+  it("vehiculoId is nullable (0034: an Agendada order may lack one) and FKs to vehiculo with onDelete restrict (C4, D5)", () => {
+    expect(findColumn(config.columns, "vehiculo_id").notNull).toBe(false);
     const fk = config.foreignKeys.find((f) => f.reference().columns.some((c) => c.name === "vehiculo_id"));
     if (!fk) throw new Error("vehiculo_id foreign key not found");
     expect(fk.onDelete).toBe("restrict");
   });
 
-  it("categoria is NOT NULL with no default — no category is a safe default (C4, D5)", () => {
+  it("categoria is nullable (0034) with no default — no category is a safe default (C4, D5)", () => {
     const categoria = findColumn(config.columns, "categoria");
-    expect(categoria.notNull).toBe(true);
+    expect(categoria.notNull).toBe(false);
     expect(categoria.default).toBeUndefined();
+  });
+
+  // The predicate itself is proven against real Postgres in status-migration.e2e.test.ts.
+  it("declares the CHECK that lets only booked/cancelled lack a vehicle or category (0034)", () => {
+    expect(config.checks.map((c) => c.name)).toContain("orden_vehiculo_categoria_required");
   });
 
   it("hallazgos/recomendaciones/observaciones are nullable text — written only at completion (C4)", () => {

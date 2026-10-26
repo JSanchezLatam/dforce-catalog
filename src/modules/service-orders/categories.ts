@@ -21,6 +21,10 @@ export const CATEGORIA_LABEL: Record<ServiceCategory, string> = {
   revisado: "REVISADO",
 };
 
+/** An Agendada order may not have its category yet (0034); every surface reads the same placeholder. */
+export const categoriaLabel = (categoria: ServiceCategory | null): string =>
+  categoria === null ? "Sin categoría" : CATEGORIA_LABEL[categoria];
+
 /**
  * The API is the trust boundary: `POST /api/service-orders` hands the raw
  * JSON body straight to `createOrder`, and PATCH copies `body.categoria`

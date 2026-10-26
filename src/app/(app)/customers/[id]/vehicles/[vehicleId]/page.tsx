@@ -19,7 +19,7 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { orderScope } from "@/modules/service-orders/scope";
 import { getClienteById } from "@/modules/customers/queries";
 import { MONTH_NAMES, MOTOR_LABEL } from "@/modules/customers/vehicle-options";
-import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
+import { categoriaLabel } from "@/modules/service-orders/categories";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import { listOrdenesByVehiculo } from "@/modules/service-orders/queries";
 import { formatDateTime } from "@/shared/datetime";
@@ -163,7 +163,7 @@ export default async function VehicleDetailPage({
                     <TableCell>
                       <StatusBadge status={orden.status} label={ORDER_STATUS_LABEL[orden.status]} />
                     </TableCell>
-                    <TableCell>{CATEGORIA_LABEL[orden.categoria]}</TableCell>
+                    <TableCell>{categoriaLabel(orden.categoria)}</TableCell>
                     <TableCell>{orden.description ?? "—"}</TableCell>
                     <TableCell>{formatDateTime(orden.appointmentAt)}</TableCell>
                     <TableCell>{formatDateTime(orden.createdAt)}</TableCell>
@@ -184,7 +184,7 @@ export default async function VehicleDetailPage({
             {orders.map((orden) => (
               <RecordCard key={orden.id} href={`/service-orders/${orden.id}`}>
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 text-sm"><div className="font-medium">{CATEGORIA_LABEL[orden.categoria]}</div>
+                  <div className="min-w-0 text-sm"><div className="font-medium">{categoriaLabel(orden.categoria)}</div>
                     <div className="text-muted-foreground">{orden.description ?? "—"}</div></div>
                   <StatusBadge
                     status={orden.status}

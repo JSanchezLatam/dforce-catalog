@@ -893,3 +893,20 @@ describe("ServiceOrdersPage — technicians and ready_for_review", () => {
     expect(screen.getByRole("button", { name: "Cambiar estado" })).toBeDisabled();
   });
 });
+
+describe("ServiceOrdersPage — an Agendada order with no vehicle yet", () => {
+  it("reads Sin vehículo in the table row and in the phone card, with no 'null' and no stray make/model", async () => {
+    listOrdenesServicio.mockResolvedValue([
+      orden({ status: "booked", vehiculoPlate: null, vehiculoMake: null, vehiculoModel: null }),
+    ]);
+    countOrdenesServicio.mockResolvedValue(1);
+    render(<ToastProvider>{await ServiceOrdersPage({ searchParams: Promise.resolve({}) })}</ToastProvider>);
+
+    const table = within(screen.getByTestId("service-orders-table"));
+    const cards = within(screen.getByTestId("service-orders-cards"));
+    expect(table.getByText("Sin vehículo")).toHaveTextContent(/^Sin vehículo$/);
+    expect(cards.getByText("Sin vehículo")).toBeInTheDocument();
+    expect(screen.getByTestId("service-orders-table")).not.toHaveTextContent("null");
+    expect(screen.getByTestId("service-orders-cards")).not.toHaveTextContent("null");
+  });
+});
