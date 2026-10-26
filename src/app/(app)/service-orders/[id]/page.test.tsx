@@ -709,6 +709,19 @@ describe("ServiceOrderDetailPage — reception photos card", () => {
     ).toBeInTheDocument();
   });
 
+  it("offers a técnico no add control on an on_hold order, and says who may instead of calling it closed", async () => {
+    roleCan(["service-orders.read", "service-orders.write"]);
+    asOrder("on_hold");
+
+    render(await renderPage());
+
+    expect(within(card()).queryByLabelText("Agregar fotos")).not.toBeInTheDocument();
+    expect(
+      within(card()).getByText("Las fotos de una orden en espera las agrega el administrador o el jefe de taller."),
+    ).toBeInTheDocument();
+    expect(within(card()).queryByText(/terminada o cancelada/)).not.toBeInTheDocument();
+  });
+
   it("offers staff (service-orders.assign) the add control on a ready_for_review order", async () => {
     roleCan(["service-orders.read", "service-orders.write", "service-orders.assign"]);
     asOrder("ready_for_review");

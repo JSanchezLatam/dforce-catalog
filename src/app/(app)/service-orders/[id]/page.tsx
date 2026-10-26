@@ -346,7 +346,9 @@ export default async function ServiceOrderDetailPage({
             <p className="text-sm text-muted-foreground">
               {orden.status === "ready_for_review"
                 ? "Las fotos de una orden lista para revisión las agrega el administrador o el jefe de taller."
-                : "Las fotos no se pueden agregar ni borrar cuando la orden está terminada o cancelada."}
+                : orden.status === "on_hold"
+                  ? "Las fotos de una orden en espera las agrega el administrador o el jefe de taller."
+                  : "Las fotos no se pueden agregar ni borrar cuando la orden está terminada o cancelada."}
             </p>
           )}
         </CardContent>
