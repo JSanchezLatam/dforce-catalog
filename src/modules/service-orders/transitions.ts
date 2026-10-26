@@ -88,7 +88,7 @@ function getBulkTransitions(from: OrderStatus): OrderStatus[] {
 
 /**
  * D9 — the target statuses legal from EVERY status in `froms`: the
- * INTERSECTION of each selected row's bulk transitions (manual, minus `on_hold`), which is what
+ * INTERSECTION of each selected row's bulk transitions (manual, minus `BULK_EXCLUDED`: `on_hold` and receiving), which is what
  * the bulk status menu is allowed to offer.
  *
  * Never the union, and never the four statuses unconditionally. A menu built
