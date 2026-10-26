@@ -100,7 +100,7 @@ describe("markParteLista", () => {
     expect(log.sets).toEqual([]);
   });
 
-  it.each<OrderStatus>(["open", "ready_for_review"])("refuses marking on a %s order, writing nothing", async (status) => {
+  it.each<OrderStatus>(["booked", "open", "diagnosing", "on_hold", "ready_for_review"])("refuses marking on a %s order, writing nothing", async (status) => {
     const { database, log } = fakeDb([order(status)]);
     await expect(markParteLista(input, { db: database })).rejects.toBeInstanceOf(OrderEditForbiddenError);
     expect(log.sets).toEqual([]);
@@ -154,8 +154,8 @@ describe("unmarkParteLista", () => {
     await expect(unmarkParteLista(input, { db: database })).rejects.toBeInstanceOf(OrderClosedError);
   });
 
-  it("refuses an open order", async () => {
-    const { database } = fakeDb([order("open")]);
+  it.each<OrderStatus>(["booked", "open", "diagnosing", "on_hold"])("refuses a %s order", async (status) => {
+    const { database } = fakeDb([order(status)]);
     await expect(unmarkParteLista(input, { db: database })).rejects.toBeInstanceOf(OrderEditForbiddenError);
   });
 });

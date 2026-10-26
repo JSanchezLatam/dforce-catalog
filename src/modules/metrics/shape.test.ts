@@ -27,12 +27,19 @@ describe("minutesToHours", () => {
 });
 
 describe("fillBacklog", () => {
-  it("returns all three statuses with 0 for the missing ones", () => {
-    expect(fillBacklog([{ status: "in_progress", n: 2 }])).toEqual({ open: 0, in_progress: 2, ready_for_review: 0 });
+  const ZEROS = { booked: 0, open: 0, diagnosing: 0, in_progress: 0, on_hold: 0, ready_for_review: 0 };
+
+  it("returns all six non-terminal statuses with 0 for the missing ones", () => {
+    expect(fillBacklog([{ status: "in_progress", n: 2 }])).toEqual({ ...ZEROS, in_progress: 2 });
   });
 
-  it("ignores statuses outside the backlog", () => {
-    expect(fillBacklog([{ status: "done", n: 5 }])).toEqual({ open: 0, in_progress: 0, ready_for_review: 0 });
+  it("counts each of the six statuses under its own key", () => {
+    const rows = Object.keys(ZEROS).map((status, i) => ({ status, n: i + 1 }));
+    expect(fillBacklog(rows)).toEqual({ booked: 1, open: 2, diagnosing: 3, in_progress: 4, on_hold: 5, ready_for_review: 6 });
+  });
+
+  it("ignores the terminal statuses", () => {
+    expect(fillBacklog([{ status: "done", n: 5 }, { status: "cancelled", n: 2 }])).toEqual(ZEROS);
   });
 });
 

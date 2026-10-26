@@ -1230,6 +1230,7 @@ describe("ServiceOrderForm — correcting a closed order", () => {
     kilometraje: null,
     nivelCombustible: null,
     bateriaPct: null,
+    esperaMotivo: null,
     createdBy: "u1",
     createdAt: new Date("2026-09-01T10:00:00Z"),
     updatedAt: new Date("2026-09-02T10:00:00Z"),

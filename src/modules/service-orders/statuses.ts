@@ -3,7 +3,7 @@
  * in one place, typed against the enum.
  *
  * Same shape and same reason as `categories.ts` (C4, design.md D3): the map is a
- * `Record<OrderStatus, string>`, so adding a FIFTH status — the enum has four — is a `tsc` error rather
+ * `Record<OrderStatus, string>`, so adding a ninth status — the enum has eight — is a `tsc` error rather
  * than a `label={undefined}` that ships silently. That holds one indirection
  * deep and was checked: `OrderStatus` in `./transitions` is
  * `(typeof orderStatusEnum.enumValues)[number]`, not a hand-written union, so
@@ -14,8 +14,11 @@
 import type { OrderStatus } from "./transitions";
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
-  open: "Abierta",
+  booked: "Agendada",
+  open: "Recibida",
+  diagnosing: "En diagnóstico",
   in_progress: "En progreso",
+  on_hold: "En espera",
   ready_for_review: "Lista para revisión",
   done: "Completada",
   cancelled: "Cancelada",

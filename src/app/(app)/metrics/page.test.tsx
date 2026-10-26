@@ -99,7 +99,7 @@ describe("MetricsPage", () => {
     await render_();
 
     expect(screen.getByRole("heading", { level: 1, name: "Métricas" })).toBeInTheDocument();
-    expect(charts.backlog).toHaveBeenCalledWith({ counts: { open: 7, in_progress: 3, ready_for_review: 0 } });
+    expect(charts.backlog).toHaveBeenCalledWith({ counts: { booked: 0, open: 7, diagnosing: 0, in_progress: 3, on_hold: 0, ready_for_review: 0 } });
   });
 
   it("lists six months of received and closed orders, newest first, zero-filled", async () => {

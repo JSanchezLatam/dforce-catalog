@@ -58,6 +58,7 @@ const ORDEN: OrdenServicio = {
   hallazgos: null, recomendaciones: null, observaciones: null,
   kilometraje: null, nivelCombustible: null, bateriaPct: null,
   createdAt: new Date("2026-05-01T14:00:00Z"), updatedAt: new Date("2026-05-01T14:00:00Z"),
+  esperaMotivo: null,
   createdBy: null,
 };
 

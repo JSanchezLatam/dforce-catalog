@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
-import type { Cliente, OrdenServicio, Vehiculo } from "@/shared/db/schema";
+import { parseIngest } from "../../../portal/src/ingest/parse";
+import { orderStatusEnum, type Cliente, type OrdenServicio, type Vehiculo } from "@/shared/db/schema";
 import { buildSnapshot, hashToken } from "./snapshot";
 
 const TOKEN = "PLAINTEXT_TOKEN_SENTINEL_0123456789abcdefghijklmnopq";
@@ -59,6 +60,7 @@ const orderRow = (id: string, vehiculoId: string, extra: Partial<OrdenServicio> 
   kilometraje: 918273,
   nivelCombustible: 3,
   bateriaPct: 77,
+  esperaMotivo: null,
   createdBy: "SENTINEL_CREATED_BY",
   createdAt: new Date("2026-09-30T15:00:00.000Z"),
   updatedAt: new Date("2026-10-03T15:00:00.000Z"),
@@ -117,20 +119,34 @@ describe("buildSnapshot content", () => {
   const build = (orders: OrdenServicio[], vehicles: Vehiculo[] = [vehicleRow("v1")]) =>
     buildSnapshot({ cliente: clienteRow, vehicles, orders }, 1, NOW);
 
-  it("maps the five internal statuses to the four customer labels", () => {
-    const statuses = ["open", "in_progress", "ready_for_review", "done", "cancelled"] as const;
+  it("maps every customer-visible internal status to the four customer labels", () => {
+    const statuses = ["open", "diagnosing", "in_progress", "on_hold", "ready_for_review", "done", "cancelled"] as const;
     const s = build(statuses.map((status, i) => orderRow(`o${i}`, "v1", { status })));
     expect(s.vehicles[0].orders.map((o) => o.status)).toEqual([
       "Recibida",
+      "En proceso",
+      "En proceso",
       "En proceso",
       "En proceso",
       "Terminada",
       "Cancelada",
     ]);
     const wire = JSON.stringify(s);
-    for (const internal of ["in_progress", "ready_for_review", '"open"', '"done"', "cancelled"]) {
+    for (const internal of ["in_progress", "ready_for_review", "diagnosing", "on_hold", '"open"', '"done"', "cancelled"]) {
       expect(wire).not.toContain(internal);
     }
+  });
+
+  it("withholds a booked order: the portal never sees an appointment", () => {
+    const s = build([orderRow("o-booked", "v1", { status: "booked" }), orderRow("o-open", "v1", { status: "open" })]);
+    expect(s.vehicles[0].orders.map((o) => o.id)).toEqual(["o-open"]);
+    expect(JSON.stringify(s)).not.toContain("o-booked");
+  });
+
+  it("builds a snapshot the portal's own parser accepts for every status", () => {
+    const s = build(orderStatusEnum.enumValues.map((status, i) => orderRow(`o${i}`, "v1", { status })));
+    expect(parseIngest(JSON.parse(JSON.stringify(s)))).toEqual({ ok: true, body: s });
+    expect(s.vehicles[0].orders).toHaveLength(orderStatusEnum.enumValues.length - 1);
   });
 
   it("sends the Spanish categoria label, not the slug", () => {

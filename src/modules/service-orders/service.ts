@@ -39,7 +39,7 @@ import { canEditOrderFields } from "./edit-policy";
 import { assertActiveTecnicos } from "./assignments";
 import { SYSTEM_SCOPE, type OrderScope } from "./scope";
 import { lockOrderForMutation, recordCorrections, type CorrectionGrant } from "./order-lock";
-import { assertTransition, assertTransitionPermitted, type OrderStatus } from "./transitions";
+import { assertTransition, assertTransitionPermitted, AUTOMATIC_TARGETS, OrderTransitionError, type OrderStatus } from "./transitions";
 
 /**
  * Shared by createOrder/transitionOrder/updateOrder (R23) — plans reminders
@@ -380,7 +380,11 @@ export async function transitionOrder(
   // TRY a transition; `assertTransition` is the rule, and it has no edge out of a closed one.
   const { from, updated } = await database.transaction(async (tx) => {
     const { order } = await lockOrderForMutation(tx, id, { scope: deps.scope, canWrite: () => true });
-    assertTransition(order.status, to);
+    // Automatic targets are written by their own paths. `on_hold` needs its reason, which WU2 adds; until
+    // then a hold would violate `orden_espera_motivo_on_hold` and answer 500.
+    if (AUTOMATIC_TARGETS.has(to) || to === "on_hold") throw new OrderTransitionError(order.status, to);
+    // WU2 removes: `open -> in_progress` is no longer in the table, but the técnico start stays until diagnosing is wired.
+    if (!(order.status === "open" && to === "in_progress")) assertTransition(order.status, to);
     assertTransitionPermitted(deps.canAssign, order.status, to);
     const patch: Partial<OrdenServicio> = { status: to };
     if (to === "done") patch.completedAt = now();

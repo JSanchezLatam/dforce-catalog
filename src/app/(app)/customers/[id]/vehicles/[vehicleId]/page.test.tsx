@@ -225,7 +225,7 @@ describe("VehicleDetailPage — order history cards (WU6)", () => {
 
     const link = cards.getByRole("link");
     expect(link).toHaveAttribute("href", "/service-orders/o1");
-    expect(within(link).getByText("Abierta")).toBeInTheDocument();
+    expect(within(link).getByText("Recibida")).toBeInTheDocument();
     expect(link).toHaveTextContent("Reparación");
     expect(link).toHaveTextContent("Cambio de correa");
   });

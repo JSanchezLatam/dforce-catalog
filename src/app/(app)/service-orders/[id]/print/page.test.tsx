@@ -101,6 +101,7 @@ const ORDEN: OrdenServicio = {
   nivelCombustible: null,
   bateriaPct: null,
   createdAt: new Date("2026-05-01T14:00:00Z"), updatedAt: new Date("2026-05-01T14:00:00Z"),
+  esperaMotivo: null,
   createdBy: null,
 };
 

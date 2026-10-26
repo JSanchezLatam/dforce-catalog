@@ -188,6 +188,21 @@ describe("ServiceOrdersPage — column sorting", () => {
     expect(listOrdenesServicio.mock.calls[0][3]).toEqual({ key: "status", dir: "asc" });
   });
 
+  it.each(["booked", "open", "diagnosing", "in_progress", "on_hold", "ready_for_review", "done", "cancelled"])(
+    "passes ?status=%s to the query",
+    async (status) => {
+      render(await renderPage({ status }));
+
+      expect(listOrdenesServicio.mock.calls[0][0]).toEqual({ status });
+    },
+  );
+
+  it("ignores an unknown ?status= instead of filtering by it", async () => {
+    render(await renderPage({ status: "archived" }));
+
+    expect(listOrdenesServicio.mock.calls[0][0]).toEqual({});
+  });
+
   it("keeps the sort on every pagination link, like the status filter beside it", async () => {
     render(await renderPage({ sort: "id", dir: "asc", status: "open" }));
 
@@ -595,7 +610,7 @@ describe("ServiceOrdersPage — phone cards (WU5)", () => {
     const link = cards.getByRole("link");
     expect(within(link).getByText("AB1234")).toHaveClass("font-mono");
     expect(link).toHaveTextContent("Toyota Hilux");
-    const chip = within(link).getByText("Abierta");
+    const chip = within(link).getByText("Recibida");
     expect(chip).toHaveClass("rounded-full", "bg-zinc-100");
     expect(chip.querySelector("svg")).not.toBeNull();
     expect(link).toHaveTextContent(/Cita/);

@@ -1,4 +1,4 @@
-import { Ban, BellOff, CheckCircle, ClipboardCheck, Clock, Loader2, MinusCircle, XCircle, type LucideIcon } from "lucide-react";
+import { Ban, BellOff, CalendarClock, CheckCircle, ClipboardCheck, Clock, Loader2, MinusCircle, PauseCircle, Search, XCircle, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -10,8 +10,11 @@ export type BadgeStatus =
   | "uploaded"
   | "failed"
   // order_status (R21, Phase 6 — service-orders/[id] page)
+  | "booked"
   | "open"
+  | "diagnosing"
   | "in_progress"
+  | "on_hold"
   | "ready_for_review"
   | "done"
   | "cancelled"
@@ -33,6 +36,7 @@ const TONE = {
   neutral: "bg-zinc-100 text-zinc-700 dark:bg-zinc-400/15 dark:text-zinc-300",
   warning: "bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300",
   success: "bg-green-100 text-green-800 dark:bg-green-400/15 dark:text-green-300",
+  info: "bg-sky-100 text-sky-800 dark:bg-sky-400/15 dark:text-sky-300",
   danger: "bg-red-100 text-red-800 dark:bg-red-400/15 dark:text-red-300",
 } as const;
 
@@ -43,8 +47,12 @@ const STATUS_TONE: Record<BadgeStatus, string> = {
   uploaded: TONE.success,
   failed: TONE.danger,
   pending: TONE.neutral,
+  // booked is info-toned so it never reads as the neutral reminder `scheduled`.
+  booked: TONE.info,
   open: TONE.neutral,
+  diagnosing: TONE.info,
   in_progress: TONE.warning,
+  on_hold: TONE.warning,
   ready_for_review: TONE.warning,
   done: TONE.success,
   // Struck through, as in the mockup: neutral grey alone reads the same as "open".
@@ -62,8 +70,11 @@ const STATUS_ICON: Record<BadgeStatus, LucideIcon> = {
   uploaded: CheckCircle,
   failed: XCircle,
   pending: Clock,
+  booked: CalendarClock,
   open: Clock,
+  diagnosing: Search,
   in_progress: Loader2,
+  on_hold: PauseCircle,
   ready_for_review: ClipboardCheck,
   done: CheckCircle,
   cancelled: Ban,

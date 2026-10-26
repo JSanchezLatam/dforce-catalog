@@ -461,6 +461,25 @@ describe("transitionOrder (R21)", () => {
     expect(log.sets).toEqual([]);
   });
 
+  // Automatic targets are written by their own paths (assignment, readiness), never by the route.
+  it.each([
+    ["open", "diagnosing"],
+    ["in_progress", "ready_for_review"],
+  ] as const)("refuses the automatic target %s -> %s with OrderTransitionError and no write", async (from, to) => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: from });
+
+    await expect(transitionOrder("o1", to, { scope: SYSTEM_SCOPE, canAssign: true, db: database })).rejects.toBeInstanceOf(OrderTransitionError);
+    expect(log.sets).toEqual([]);
+  });
+
+  // WU2 replaces this with the esperaMotivo contract; until then a hold would violate the DB CHECK (500).
+  it("refuses in_progress -> on_hold until the reason contract lands", async () => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: "in_progress" });
+
+    await expect(transitionOrder("o1", "on_hold", { scope: SYSTEM_SCOPE, canAssign: true, db: database })).rejects.toBeInstanceOf(OrderTransitionError);
+    expect(log.sets).toEqual([]);
+  });
+
   it.each(["done", "cancelled"] as const)(
     "refuses a transition out of a locked %s order with OrderTransitionError and no write",
     async (status) => {
