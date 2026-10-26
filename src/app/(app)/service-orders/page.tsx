@@ -351,7 +351,7 @@ const ORDER_REFUSAL_MESSAGES: Record<string, string> = {
  *
  * `search` goes LAST (D11, mirrors `customers/page.tsx:392-397`): it is free
  * text and can contain anything, `|` included, while `status` is a closed
- * four-value enum that cannot be confused with part of a search term.
+ * enum that cannot be confused with part of a search term.
  */
 function buildFilterKey(filters: OrdenServicioFilters): string {
   return `status=${filters.status ?? "all"}|search=${filters.search ?? ""}`;
