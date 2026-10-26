@@ -8,7 +8,10 @@
  * 0032 and then applies the real folder in one `migrate()` proves that, so this
  * file builds its own throwaway databases (same shape as
  * `technicians-migration.e2e.test.ts`) and drops them after.
- * 0034's assertions arrive with WU3.
+ *
+ * WU3 adds 0034 (nullable `vehiculo_id`/`categoria` plus the CHECK that ties them to the
+ * status). It is pending in the same `migrate()` call as 0033, so both run in one
+ * transaction and the CHECK's `::text` is proven by the same run.
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -16,7 +19,7 @@ import path from "node:path";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Client } from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 const MIGRATIONS = path.resolve(import.meta.dirname, "../shared/db/migrations");
 const FROM_0032 = "dforce_e2e_statusmig_0032";
@@ -44,7 +47,7 @@ async function connect(database: string): Promise<Client> {
   return client;
 }
 
-describe("migration 0033 on a database that already holds orders (E2E)", () => {
+describe("migrations 0033 and 0034 on a database that already holds orders (E2E)", () => {
   let admin: Client;
   let db: Client;
   let stage: string;
@@ -63,7 +66,7 @@ describe("migration 0033 on a database that already holds orders (E2E)", () => {
       INSERT INTO orden_servicio (id, cliente_id, vehiculo_id, categoria, status) VALUES
         ('o-progress', 'c1', 'v1', 'revisado', 'in_progress'),
         ('o-done', 'c1', 'v1', 'revisado', 'done')`);
-    // The real folder: 0033 is pending (and WU3's 0034 will be, in the same transaction).
+    // The real folder: 0033 and 0034 are both pending, so they apply in the same transaction.
     await migrate(drizzle(db), { migrationsFolder: MIGRATIONS });
   }, 120_000);
 
@@ -149,6 +152,47 @@ describe("migration 0033 on a database that already holds orders (E2E)", () => {
       } finally {
         await db.query("ROLLBACK");
       }
+    });
+  });
+
+  describe("orden_vehiculo_categoria_required", () => {
+    const insert = (id: string, status: string, vehiculo: string | null, categoria: string | null) =>
+      db.query(
+        `INSERT INTO orden_servicio (id, cliente_id, vehiculo_id, categoria, status, espera_motivo)
+         VALUES ($1, 'c1', $2, $3::orden_categoria, $4::order_status, $5::espera_motivo)`,
+        [id, vehiculo, categoria, status, status === "on_hold" ? "repuesto" : null],
+      );
+
+    afterEach(async () => {
+      await db.query(`DELETE FROM orden_servicio WHERE id LIKE 'o-null-%'`);
+    });
+
+    it.each(["booked", "cancelled"])("accepts a %s order with no vehicle and no category", async (status) => {
+      await expect(insert(`o-null-${status}`, status, null, null)).resolves.toBeDefined();
+    });
+
+    it.each(["open", "diagnosing", "in_progress", "on_hold", "ready_for_review", "done"])(
+      "rejects a %s order with no vehicle and no category",
+      async (status) => {
+        await expect(insert(`o-null-${status}`, status, null, null)).rejects.toMatchObject({
+          code: "23514",
+          constraint: "orden_vehiculo_categoria_required",
+        });
+      },
+    );
+
+    it("rejects an open order with a vehicle but no category, and one with a category but no vehicle", async () => {
+      await expect(insert("o-null-nocat", "open", "v1", null)).rejects.toMatchObject({ constraint: "orden_vehiculo_categoria_required" });
+      await expect(insert("o-null-noveh", "open", null, "revisado")).rejects.toMatchObject({ constraint: "orden_vehiculo_categoria_required" });
+    });
+
+    it("rejects a direct update from booked to open while the vehicle is null, and accepts it once both are set", async () => {
+      await insert("o-null-leave", "booked", null, null);
+      await expect(db.query(`UPDATE orden_servicio SET status = 'open' WHERE id = 'o-null-leave'`)).rejects.toMatchObject({
+        constraint: "orden_vehiculo_categoria_required",
+      });
+      await db.query(`UPDATE orden_servicio SET vehiculo_id = 'v1', categoria = 'revisado' WHERE id = 'o-null-leave'`);
+      await expect(db.query(`UPDATE orden_servicio SET status = 'open' WHERE id = 'o-null-leave'`)).resolves.toBeDefined();
     });
   });
 });

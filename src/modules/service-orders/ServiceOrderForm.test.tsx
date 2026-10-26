@@ -400,7 +400,7 @@ describe("ServiceOrderForm", () => {
 
     /**
      * D1/D4 — the whole reason WU2 exists: only 2 of 370 customers have a
-     * vehicle and `orden_servicio.vehiculoId` is NOT NULL, so the hint above
+     * vehicle and a Recibida order needs one (`vehiculoId` is nullable only while Agendada), so the hint above
      * ("Agregá uno primero") used to be a dead end that sent the operator out
      * of the dialog. The inline form is that "primero", and it is
      * `VehicleQuickForm` — never `CustomerForm`, which would resend consent

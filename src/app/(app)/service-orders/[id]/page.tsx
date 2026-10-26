@@ -22,7 +22,7 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { orderScope } from "@/modules/service-orders/scope";
 import { getClienteById } from "@/modules/customers/queries";
 import { listRemindersForOrder } from "@/modules/reminders/queries";
-import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
+import { categoriaLabel } from "@/modules/service-orders/categories";
 import { canChangeOrderPhotos, isClosedStatus, orderEditMode, workLineMode } from "@/modules/service-orders/edit-policy";
 import { FUEL_LABEL, formatKilometraje, intakeInputsFor } from "@/modules/service-orders/intake";
 import { AssignTecnicoControl } from "@/modules/service-orders/AssignTecnicoControl";
@@ -229,7 +229,8 @@ export default async function ServiceOrderDetailPage({
                     {vehiculo.plate}
                   </Link>
                 ) : (
-                  orden.vehiculoId
+                  // Null while Agendada and not yet completed; a set id with no match is a vehicle outside the customer's list.
+                  orden.vehiculoId ?? "Sin vehículo"
                 )}
               </dd>
             </div>
@@ -239,7 +240,7 @@ export default async function ServiceOrderDetailPage({
             {vehiculo && vehicleDescriptiveRows(vehiculo).map((r) => (
               <Fragment key={r.label}>{field(r.label, r.value ?? "—")}</Fragment>
             ))}
-            {field("Categoría", CATEGORIA_LABEL[orden.categoria])}
+            {field("Categoría", categoriaLabel(orden.categoria))}
             {field("Descripción", orden.description, true)}
             {/* Mirrors the form's field, so it carries the form's label. The
                 narrow list-column headers keep the short "Cita" on purpose —

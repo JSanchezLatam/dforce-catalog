@@ -530,8 +530,8 @@ export type VehiculoContacto = typeof vehiculoContacto.$inferSelect;
 /**
  * `orden_servicio` — service order. `vehiculoId`/`categoria`/the three note
  * columns land in C4 (design.md D5, migration `0015`) — added once `orden_servicio`
- * held 0 rows, which is why `vehiculoId`/`categoria` can be NOT NULL with no
- * backfill.
+ * held 0 rows, which is why they were NOT NULL with no backfill. Migration `0034`
+ * relaxes the two to nullable for an Agendada order that is not yet complete.
  */
 export const ordenServicio = pgTable(
   "orden_servicio",
@@ -542,17 +542,17 @@ export const ordenServicio = pgTable(
     clienteId: text("cliente_id")
       .notNull()
       .references(() => cliente.id, { onDelete: "restrict" }), // protect history (ADR-6)
-    // C4 — every order names exactly one vehicle of its customer's; RESTRICT
+    // C4 — an order names exactly one vehicle of its customer's; RESTRICT
     // is the backstop, `customers/vehicles.ts#applyVehiculoPlan`'s SEAM is
     // what turns a blocked delete into Spanish copy instead of a raw 500.
+    // Null only while `booked` (or `cancelled` from it): CHECK `orden_vehiculo_categoria_required`.
     vehiculoId: text("vehiculo_id")
-      .notNull()
       .references(() => vehiculo.id, { onDelete: "restrict" }),
     status: orderStatusEnum("status").notNull().default("open"),
     esperaMotivo: esperaMotivoEnum("espera_motivo"),
     // C4 — no default: silently mis-filing an order under a guessed category
-    // is worse than forcing staff to choose one (design.md D5).
-    categoria: ordenCategoriaEnum("categoria").notNull(),
+    // is worse than forcing staff to choose one (design.md D5). Nullable on the same terms as `vehiculoId`.
+    categoria: ordenCategoriaEnum("categoria"),
     description: text("description"),
     appointmentAt: timestamp("appointment_at", { withTimezone: true }), // basis for "appointment" reminders
     completedAt: timestamp("completed_at", { withTimezone: true }), // set on -> done; basis for "service_due"
@@ -577,6 +577,11 @@ export const ordenServicio = pgTable(
     // `::text`: migrate() runs every pending file in ONE transaction, and a literal comparison against an
     // enum value added in that same transaction fails with "unsafe use of new value".
     check("orden_espera_motivo_on_hold", sql`(${table.esperaMotivo} IS NOT NULL) = (${table.status}::text = 'on_hold')`),
+    // `::text` for the same reason as above: 0033 and 0034 share one migrate() transaction.
+    check(
+      "orden_vehiculo_categoria_required",
+      sql`${table.status}::text IN ('booked', 'cancelled') OR (${table.vehiculoId} IS NOT NULL AND ${table.categoria} IS NOT NULL)`,
+    ),
     // per-customer history, mirrors catalogs_user_created_idx
     index("orden_cliente_created_idx").on(table.clienteId, table.createdAt),
     index("orden_status_idx").on(table.status),

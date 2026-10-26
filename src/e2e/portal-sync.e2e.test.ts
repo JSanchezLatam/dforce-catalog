@@ -16,12 +16,13 @@ import { deactivateCliente, reactivateCliente, updateCliente } from "@/modules/c
 import { enqueuePortalSync, ensurePortalSyncQueue } from "@/modules/portal-sync/enqueue";
 import { runPortalSync } from "@/modules/portal-sync/job";
 import { runPortalReconcile } from "@/modules/portal-sync/reconcile";
+import { assignTecnico } from "@/modules/service-orders/assignments";
 import { createOrder, transitionOrder, updateOrder } from "@/modules/service-orders/service";
 import { SYSTEM_SCOPE } from "@/modules/service-orders/scope";
 import { db } from "@/shared/db/client";
 import { purgeHistory } from "./purge-history";
 import { getBoss } from "@/shared/jobs/boss";
-import { cliente, clienteConsentimiento, ordenServicio, users, vehiculo } from "@/shared/db/schema";
+import { cliente, clienteConsentimiento, ordenServicio, ordenTecnico, tecnico, users, vehiculo } from "@/shared/db/schema";
 import { handleCreateVehiculo } from "../app/api/customers/[id]/vehicles/route";
 
 const config = { url: "https://portal.example/api/ingest", secret: "e2e-secret" };
@@ -125,6 +126,32 @@ describe("portal-sync (E2E)", () => {
     ]);
   });
 
+  it("withholds a booked order and a cancelled no-show, still builds, and the portal's parser accepts what is left", async () => {
+    const id = await newCliente();
+    await consent(id, true, "2026-01-01T00:00:00Z");
+    const [veh] = await db.insert(vehiculo).values({ clienteId: id, plate: "BKD-1" }).returning();
+    const none = { vehiculoId: null, categoria: null } as const;
+    const seeded = await db
+      .insert(ordenServicio)
+      .values([
+        { clienteId: id, vehiculoId: veh.id, categoria: "revisado", status: "booked", description: "BOOKED_WITH_VEHICLE" },
+        { clienteId: id, status: "booked", description: "BOOKED_NO_VEHICLE", ...none },
+        { clienteId: id, status: "cancelled", description: "NO_SHOW_NO_VEHICLE", ...none },
+        { clienteId: id, vehiculoId: veh.id, status: "cancelled", description: "NO_SHOW_NO_CATEGORY", categoria: null },
+        { clienteId: id, vehiculoId: veh.id, categoria: "revisado", status: "open", description: "VISIBLE" },
+      ])
+      .returning();
+    const open = seeded.find((o) => o.description === "VISIBLE")!;
+
+    const [body] = await run(id);
+
+    const wire = JSON.stringify(body);
+    expect(wire).not.toMatch(/BOOKED_|NO_SHOW_/);
+    expect(parseIngest(JSON.parse(wire)).ok).toBe(true);
+    if (body.kind !== "upsert") throw new Error("expected upsert");
+    expect(body.vehicles[0].orders).toEqual([expect.objectContaining({ id: open.id, status: "Recibida", description: "VISIBLE" })]);
+  });
+
   it("serializes two workers for one customer: the later version carries the later-read data", async () => {
     const id = await newCliente();
     await consent(id, true, "2026-01-01T00:00:00Z");
@@ -183,6 +210,7 @@ describe("portal-sync (E2E)", () => {
 describe("portal-sync triggers (E2E)", () => {
   const ADMIN = "e2e-trigger-admin";
   const created: string[] = [];
+  const roster: string[] = [];
   const enqueue = (id: string) => enqueuePortalSync(id, { config });
   const jobs = async (id: string, state?: string) => {
     const result = await db.execute(
@@ -215,10 +243,13 @@ describe("portal-sync triggers (E2E)", () => {
   afterAll(async () => {
     if (created.length > 0) {
       await db.execute(sql`DELETE FROM pgboss.job WHERE name = 'portal-sync' AND data->>'clienteId' IN (${sql.join(created.map((c) => sql`${c}`), sql`, `)})`);
+      const orders = (await db.select({ id: ordenServicio.id }).from(ordenServicio).where(inArray(ordenServicio.clienteId, created))).map((o) => o.id);
+      if (orders.length) await db.delete(ordenTecnico).where(inArray(ordenTecnico.ordenId, orders));
       await purgeHistory(created);
       await db.delete(ordenServicio).where(inArray(ordenServicio.clienteId, created));
       await db.delete(cliente).where(inArray(cliente.id, created));
     }
+    if (roster.length) await db.delete(tecnico).where(inArray(tecnico.id, roster));
     await db.delete(users).where(eq(users.id, ADMIN));
     await (await getBoss()).stop({ graceful: false });
   });
@@ -257,6 +288,42 @@ describe("portal-sync triggers (E2E)", () => {
       await fire();
       expect(await jobs(c.id), name).toBe(1);
     }
+  });
+
+  it("receiving a booked order enqueues a job, and the next snapshot shows it as Recibida", async () => {
+    const c = await seed();
+    const [booked] = await db.insert(ordenServicio).values({ clienteId: c.id, status: "booked", vehiculoId: null, categoria: null }).returning();
+    const orderDeps = { enqueuePortalSync: enqueue, role: "administrador" as const, scope: SYSTEM_SCOPE };
+
+    // Completing a booked order changes what the snapshot would hold once it is received.
+    await clearJobs(c.id);
+    await updateOrder(booked.id, { vehiculoId: c.vehicleId, categoria: "revisado" }, orderDeps);
+    expect(await jobs(c.id)).toBe(1);
+
+    await clearJobs(c.id);
+    await transitionOrder(booked.id, "open", { ...orderDeps, canAssign: true, actorId: ADMIN });
+    expect(await jobs(c.id)).toBe(1);
+
+    const sent: IngestBody[] = [];
+    await runPortalSync(c.id, { config, send: async (b) => void sent.push(b) });
+    if (sent[0]?.kind !== "upsert") throw new Error("expected upsert");
+    expect(sent[0].vehicles[0].orders.find((o) => o.id === booked.id)).toMatchObject({ status: "Recibida", categoria: "REVISADO" });
+  });
+
+  it("the first technician on a Recibida order enqueues a job; the second, who changes no status, enqueues none", async () => {
+    const c = await seed();
+    const [first, second] = await db.insert(tecnico).values([{ nombre: "Trigger A" }, { nombre: "Trigger B" }]).returning({ id: tecnico.id });
+    roster.push(first.id, second.id);
+    const assign = (tecnicoId: string) => assignTecnico({ ordenId: c.orderId, tecnicoId, assignedBy: ADMIN, scope: SYSTEM_SCOPE }, { enqueuePortalSync: enqueue });
+
+    await clearJobs(c.id);
+    await assign(first.id);
+    expect((await db.select().from(ordenServicio).where(eq(ordenServicio.id, c.orderId)))[0].status).toBe("diagnosing");
+    expect(await jobs(c.id)).toBe(1);
+
+    await clearJobs(c.id);
+    await assign(second.id);
+    expect(await jobs(c.id)).toBe(0);
   });
 
   it("a burst of edits queues ONE job, but an edit during a running job queues the next", async () => {

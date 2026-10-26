@@ -32,7 +32,7 @@ export const SERVICE_DUE_ANNUAL_AFTER_DAYS = 365;
  * strings. The test drives the same keys from `CATEGORIA_LABEL`, which is where
  * a new category would have to be declared anyway.
  */
-const SERVICE_DUE_DAYS_BY_CATEGORY = new Map<OrdenServicio["categoria"], number>([
+const SERVICE_DUE_DAYS_BY_CATEGORY = new Map<NonNullable<OrdenServicio["categoria"]>, number>([
   ["mant_preventivo", SERVICE_DUE_AFTER_DAYS],
   ["mant_correctivo", SERVICE_DUE_AFTER_DAYS],
   ["revisado", SERVICE_DUE_ANNUAL_AFTER_DAYS],
@@ -89,7 +89,7 @@ export function planReminders(order: OrdenServicio, cliente: Cliente, now: Date)
   if (order.appointmentAt) {
     plan("appointment", new Date(order.appointmentAt.getTime() - APPOINTMENT_LEAD_HOURS * HOUR_MS));
   }
-  const serviceDueDays = SERVICE_DUE_DAYS_BY_CATEGORY.get(order.categoria);
+  const serviceDueDays = order.categoria === null ? undefined : SERVICE_DUE_DAYS_BY_CATEGORY.get(order.categoria);
   if (order.completedAt && serviceDueDays !== undefined) {
     plan("service_due", new Date(order.completedAt.getTime() + serviceDueDays * DAY_MS));
   }

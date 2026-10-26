@@ -136,6 +136,17 @@ describe("ServiceOrderDetailPage", () => {
     expect(screen.queryByText("revisado")).not.toBeInTheDocument();
   });
 
+  it("renders an Agendada order with no vehicle or category as placeholders, with no vehicle link", async () => {
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status: "booked", vehiculoId: null, categoria: null }, items: [] });
+
+    render(await renderPage());
+
+    expect(screen.getByText("Sin vehículo")).toBeInTheDocument();
+    expect(screen.getByText("Sin categoría")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "ABC123" })).not.toBeInTheDocument();
+    expect(screen.queryByText("null")).not.toBeInTheDocument();
+  });
+
   // customer-portal WU5b — these three fields reach the customer's portal page.
   it("marks Descripción, Hallazgos and Recomendaciones as visible to the customer, and never Observaciones", async () => {
     getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, description: "Instalar parlantes" }, items: [] });

@@ -6,6 +6,7 @@ import { ClienteDeactivatedError } from "@/modules/customers/service";
 import { InvalidTecnicoError } from "@/modules/service-orders/assignments";
 import { parseIntake } from "@/modules/service-orders/intake";
 import {
+  AppointmentRequiredError,
   createOrder,
   type CreateOrdenServicioDeps,
   InvalidCategoriaError,
@@ -121,7 +122,7 @@ export async function handleCreateOrdenServicio(
     if (err instanceof InvalidTecnicoError) {
       return NextResponse.json({ errors: err.errors }, { status: 400 }); // R20: deactivated or unknown technician
     }
-    if (err instanceof InvalidInitialStatusError) {
+    if (err instanceof InvalidInitialStatusError || err instanceof AppointmentRequiredError) {
       return NextResponse.json({ errors: err.errors }, { status: 400 });
     }
     if (err instanceof InvalidVehiculoError) {

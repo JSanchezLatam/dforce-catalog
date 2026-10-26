@@ -65,9 +65,13 @@ export function buildSnapshot(input: SnapshotInput, version: number, now: Date):
       model: v.model,
       year: v.year,
       orders: input.orders
-        // An appointment is internal until the car is received. (WU3 adds the null vehicle/categoria
-        // guards once 0034 makes those columns nullable.)
-        .filter((o): o is typeof o & { status: Exclude<OrderStatus, "booked"> } => o.status !== "booked" && o.vehiculoId === v.id)
+        // An appointment is internal until the car is received. A cancelled no-show can still have no category
+        // (0034 lets a booked order lack one, and cancelling keeps it): the portal has no label for that, so it is
+        // withheld. A null `vehiculoId` never equals `v.id`, so the vehicle needs no guard of its own.
+        .filter(
+          (o): o is typeof o & { status: Exclude<OrderStatus, "booked">; categoria: NonNullable<typeof o.categoria> } =>
+            o.status !== "booked" && o.categoria !== null && o.vehiculoId === v.id,
+        )
         .map((o) => ({
           id: o.id,
           status: CUSTOMER_STATUS[o.status],

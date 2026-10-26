@@ -52,7 +52,7 @@ describe("order status history (E2E)", () => {
       enqueuePortalSync: async () => {},
     });
   const create = (extra: Partial<Parameters<typeof createOrder>[0]> = {}) =>
-    createOrder({ clienteId, vehiculoId, categoria: "revisado", createdBy: admin, ...extra }, { enqueuePortalSync: async () => {} });
+    createOrder({ clienteId, vehiculoId, categoria: "revisado", createdBy: admin, ...extra }, { enqueuePortalSync: async () => {}, planReminders: () => [] });
   /** Oldest first, as the spec reads history. */
   const trail = async (ordenId: string) =>
     (await db.select().from(ordenEstadoHistorial).where(eq(ordenEstadoHistorial.ordenId, ordenId)).orderBy(asc(ordenEstadoHistorial.changedAt))).map(
@@ -111,7 +111,7 @@ describe("order status history (E2E)", () => {
 
   describe("history per writer", () => {
     it("creation as booked writes one row: null -> booked, by the creator", async () => {
-      const orden = await create({ status: "booked" });
+      const orden = await create({ status: "booked", appointmentAt: new Date("2026-12-01T15:00:00Z") });
       expect(await trail(orden.id)).toEqual([[null, "booked", admin, null]]);
     });
 
@@ -177,7 +177,7 @@ describe("order status history (E2E)", () => {
 
     it("booked -> open continues to diagnosing when a technician is assigned, writing both rows", async () => {
       const t = await technician("receive");
-      const orden = await create({ status: "booked", tecnicoIds: [t.tecnicoId] });
+      const orden = await create({ status: "booked", appointmentAt: new Date("2026-12-01T15:00:00Z"), tecnicoIds: [t.tecnicoId] });
       expect(await trail(orden.id)).toEqual([[null, "booked", admin, null]]);
 
       await move(orden.id, "open");

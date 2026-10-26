@@ -84,10 +84,12 @@ describe("buildOrdenServicioWhere — search (D7)", () => {
  * `productsInCategoriesQuery` is — never executed, only compiled.
  */
 describe("ordenServicioListQuery — joins (D7/D9)", () => {
-  it("inner joins cliente and vehiculo on the order's own FKs", () => {
+  // `vehiculo_id` is null for an Agendada order that has none yet (0034): an inner join would drop it from the list.
+  it("inner joins cliente and LEFT joins vehiculo on the order's own FKs", () => {
     const rendered = ordenServicioListQuery({}, { offset: 0, limit: 10 }, SYSTEM_SCOPE).toSQL();
     expect(rendered.sql).toContain('inner join "cliente"');
-    expect(rendered.sql).toContain('inner join "vehiculo"');
+    expect(rendered.sql).toContain('left join "vehiculo"');
+    expect(rendered.sql).not.toContain('inner join "vehiculo"');
     expect(rendered.sql).toContain('"orden_servicio"."cliente_id" = "cliente"."id"');
     expect(rendered.sql).toContain('"orden_servicio"."vehiculo_id" = "vehiculo"."id"');
   });
@@ -96,7 +98,8 @@ describe("ordenServicioListQuery — joins (D7/D9)", () => {
   it("countOrdenesServicio's query carries the identical two joins", () => {
     const rendered = ordenServicioCountQuery({}, SYSTEM_SCOPE).toSQL();
     expect(rendered.sql).toContain('inner join "cliente"');
-    expect(rendered.sql).toContain('inner join "vehiculo"');
+    expect(rendered.sql).toContain('left join "vehiculo"');
+    expect(rendered.sql).not.toContain('inner join "vehiculo"');
   });
 
   /**
