@@ -51,8 +51,8 @@ export function canEditOrderFields(role: Role, status: OrderStatus): boolean {
 
 /**
  * Reception photos follow the ORDER's status: a técnico must photograph an
- * `open` order even though D11 refuses them its field edits. The one role split
- * is review: `ready_for_review` takes photos from staff only (`"staff"` = the
+ * `open` order even though D11 refuses them its field edits. The role splits
+ * are review and hold: `ready_for_review` and `on_hold` take photos from staff only (`"staff"` = the
  * caller holds `service-orders.assign`). Who may DELETE is a role question and
  * lives in `policy.ts` (`service-orders.deletePhoto`). Exhaustive, so a new
  * status is a tsc error here.

@@ -71,7 +71,7 @@ export function OrderBulkStatusActions({
   canAssign,
 }: {
   statuses: Record<string, OrderStatus | undefined>;
-  /** `can(user, "service-orders.assign")`: without it only starting work is offered; the route stays the gate. */
+  /** `can(user, "service-orders.assign")`: without it nothing is offered; the route stays the gate. */
   canAssign: boolean;
 }) {
   const { selected, setResult, clear } = useSelection();

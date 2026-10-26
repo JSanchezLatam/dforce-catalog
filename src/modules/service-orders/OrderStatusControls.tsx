@@ -24,7 +24,7 @@ export function OrderStatusControls({
 }: {
   orderId: string;
   status: OrderStatus;
-  /** `can(user, "service-orders.assign")`: without it only starting work is offered; the route stays the gate. */
+  /** `can(user, "service-orders.assign")`: without it nothing is offered; the route stays the gate. */
   canAssign: boolean;
 }) {
   const router = useRouter();
