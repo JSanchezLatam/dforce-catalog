@@ -25,3 +25,22 @@ describe("ORDER_STATUS_LABEL", () => {
     expect(ORDER_STATUS_LABEL.done).toBe("Completada");
   });
 });
+
+describe("ORDER_STATUS_LABEL — the eight workflow labels", () => {
+  it("reads the eight Spanish labels, with open relabeled Recibida", () => {
+    expect(ORDER_STATUS_LABEL).toEqual({
+      booked: "Agendada",
+      open: "Recibida",
+      diagnosing: "En diagnóstico",
+      in_progress: "En progreso",
+      on_hold: "En espera",
+      ready_for_review: "Lista para revisión",
+      done: "Completada",
+      cancelled: "Cancelada",
+    });
+  });
+
+  it("no longer calls open Abierta", () => {
+    expect(Object.values(ORDER_STATUS_LABEL)).not.toContain("Abierta");
+  });
+});

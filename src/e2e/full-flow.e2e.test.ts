@@ -69,6 +69,7 @@ import {
 } from "@/modules/pdf-generation/enqueue";
 import { proxy } from "@/proxy";
 import { db } from "@/shared/db/client";
+import { purgeHistory } from "./purge-history";
 import { catalogs, cliente, customerImportRuns, ordenServicio, users, vehiculo } from "@/shared/db/schema";
 import { getBoss } from "@/shared/jobs/boss";
 
@@ -293,7 +294,7 @@ describe("vehicle search (E2E)", () => {
   let collectionDelete: { id: string } | undefined;
   /**
    * C4 — one customer with one vehicle that has real service history, for the
-   * NOT NULL/FK/RESTRICT/SEAM proofs below. `historyOrderId` is what makes the
+   * CHECK/FK/RESTRICT/SEAM proofs below. `historyOrderId` is what makes the
    * SEAM's check find a blocking row and what makes RESTRICT bite on a raw
    * vehicle delete.
    */
@@ -338,7 +339,7 @@ describe("vehicle search (E2E)", () => {
       .returning({ id: vehiculo.id });
     historyVehicleId = historyVehiculoRow.id;
     // Real orden_servicio insert (full column round trip) — proves the whole
-    // migration 0015 shape (vehiculoId FK + categoria NOT NULL) as a byproduct.
+    // migration 0015 shape (vehiculoId FK + categoria, nullable since 0034) as a byproduct.
     const [historyOrderRow] = await db
       .insert(ordenServicio)
       .values({ clienteId: historyCliente.id, vehiculoId: historyVehicleId, categoria: "revisado" })
@@ -364,6 +365,7 @@ describe("vehicle search (E2E)", () => {
     // `ordenServicio.clienteId` is RESTRICT (ADR-6, protect history) — the
     // cliente delete below would itself be blocked by the very constraint
     // this describe exists to prove, unless the order row goes first.
+    await purgeHistory(seeded);
     await db.delete(ordenServicio).where(inArray(ordenServicio.clienteId, seeded));
     await db.delete(cliente).where(inArray(cliente.id, seeded));
   });
@@ -685,7 +687,7 @@ describe("vehicle search (E2E)", () => {
   });
 
   /**
-   * C4 (service-history-per-vehicle, WU1 task 1.14) — the FK/NOT NULL/RESTRICT/
+   * C4 (service-history-per-vehicle, WU1 task 1.14) — the FK/CHECK/RESTRICT/
    * SEAM behaviour AGENTS.md's known coverage limit says no unit test can
    * prove: `service.test.ts`/`vehicles.test.ts` both inject their seam, so a
    * green `npm test` proves zero coverage of the real constraints migration
@@ -693,7 +695,7 @@ describe("vehicle search (E2E)", () => {
    * `createOrder`'s app-level ownership check — the point is the DATABASE
    * constraint, not the validation layer already proven in service.test.ts.
    */
-  describe("service history per vehicle — NOT NULL, FK, RESTRICT, and the SEAM (C4, real Postgres)", () => {
+  describe("service history per vehicle — CHECK, FK, RESTRICT, and the SEAM (C4, real Postgres)", () => {
     /**
      * Asserts the SQLSTATE, not the message text. Drizzle wraps the driver
      * error in its own `Failed query: ...` string, so matching on the outer
@@ -713,10 +715,12 @@ describe("vehicle search (E2E)", () => {
       if (constraint) expect(cause?.constraint).toBe(constraint);
     }
 
-    it("rejects an orden_servicio insert with no vehiculoId — real NOT NULL", async () => {
+    // Since 0034 the column is nullable; the CHECK is what refuses it for any status but booked/cancelled (default: open).
+    it("rejects an open orden_servicio insert with no vehiculoId — real CHECK", async () => {
       await rejectsWithSqlState(
-        db.insert(ordenServicio).values({ clienteId: historyCliente.id, categoria: "revisado" } as never),
-        "23502",
+        db.insert(ordenServicio).values({ clienteId: historyCliente.id, categoria: "revisado" }),
+        "23514",
+        "orden_vehiculo_categoria_required",
       );
     });
 
@@ -1533,6 +1537,7 @@ describe("order search (E2E)", () => {
   afterAll(async () => {
     const clienteIds = [owner?.id, deactivatedOwner?.id].filter((id): id is string => Boolean(id));
     if (clienteIds.length === 0) return;
+    await purgeHistory(clienteIds);
     await db.delete(ordenServicio).where(inArray(ordenServicio.clienteId, clienteIds));
     await db.delete(cliente).where(inArray(cliente.id, clienteIds)); // `vehiculo` cascades
   });

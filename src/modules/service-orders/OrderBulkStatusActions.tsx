@@ -25,8 +25,7 @@ import { useToast } from "@/shared/ui/ToastProvider";
 import { ORDER_STATUS_LABEL } from "./statuses";
 import {
   allowedTransitionsForAll,
-  getAllowedTransitions,
-  isTransitionPermitted,
+  getManualTransitions,
   type OrderStatus,
 } from "./transitions";
 
@@ -72,7 +71,7 @@ export function OrderBulkStatusActions({
   canAssign,
 }: {
   statuses: Record<string, OrderStatus | undefined>;
-  /** `can(user, "service-orders.assign")`: without it only starting work is offered; the route stays the gate. */
+  /** `can(user, "service-orders.assign")`: without it nothing is offered; the route stays the gate. */
   canAssign: boolean;
 }) {
   const { selected, setResult, clear } = useSelection();
@@ -98,10 +97,7 @@ export function OrderBulkStatusActions({
    * is legal" there would be a second unchecked claim, and computing over the
    * visible rows alone would be a claim about the rows nobody read.
    */
-  const targets =
-    offPage > 0
-      ? []
-      : allowedTransitionsForAll(onPage).filter((next) => onPage.every((from) => isTransitionPermitted(canAssign, from, next)));
+  const targets = offPage > 0 || !canAssign ? [] : allowedTransitionsForAll(onPage);
 
   /**
    * Terminal is DERIVED from the state machine, not a hardcoded
@@ -109,7 +105,7 @@ export function OrderBulkStatusActions({
    * otherwise ship without its warning, and this is the fourth place in the app
    * that would have had to know the list.
    */
-  const isTerminal = target !== null && getAllowedTransitions(target).length === 0;
+  const isTerminal = target !== null && getManualTransitions(target).length === 0;
 
   async function apply(next: OrderStatus) {
     setPending(true);

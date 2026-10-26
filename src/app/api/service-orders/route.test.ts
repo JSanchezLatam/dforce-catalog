@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Role } from "@/modules/auth/roles";
 import { InvalidTecnicoError } from "@/modules/service-orders/assignments";
+import { ordenEstadoHistorial } from "@/shared/db/schema";
 import { handleCreateOrdenServicio, POST } from "./route";
 
 /** Defaults to `jefe_taller`: creating is `service-orders.create`, which a técnico does not hold. */
@@ -104,7 +105,7 @@ describe("POST /api/service-orders (service-orders R20)", () => {
     expect(database.transaction).not.toHaveBeenCalled();
   });
 
-  it("rejects a missing categoria with 400 — the column is NOT NULL with no default", async () => {
+  it("rejects a missing categoria on a Recibida order with 400 — only an Agendada one may omit it", async () => {
     const database = { transaction: vi.fn() };
 
     const response = await handleCreateOrdenServicio(requestWith({ clienteId: "cli-1", vehiculoId: "v1" }), {
@@ -129,8 +130,9 @@ describe("POST /api/service-orders (service-orders R20)", () => {
     const database = {
       transaction: async (cb: (tx: unknown) => unknown) =>
         cb({
-          insert: () => ({
+          insert: (table: unknown) => ({
             values: (values: Record<string, unknown>) => {
+              if (table === ordenEstadoHistorial) return Promise.resolve(undefined); // the history row is not the order insert
               inserted = values;
               return { returning: async () => [{ id: "o1", status: "open", ...values }] };
             },
@@ -146,6 +148,63 @@ describe("POST /api/service-orders (service-orders R20)", () => {
     expect(response.status).toBe(201);
     // "user-1" is the x-user-id header requestWith() sends.
     expect(inserted.createdBy).toBe("user-1");
+  });
+});
+
+describe("POST /api/service-orders — Agendada orders (R20)", () => {
+  const BOOKED = { clienteId: "cli-1", status: "booked", appointmentAt: "2026-11-02T09:00" };
+
+  it("creates a booked order with no vehicle and no category", async () => {
+    let inserted: Record<string, unknown> = {};
+    const database = {
+      transaction: async (cb: (tx: unknown) => unknown) =>
+        cb({
+          insert: (table: unknown) => ({
+            values: (values: Record<string, unknown>) => {
+              if (table === ordenEstadoHistorial) return Promise.resolve(undefined);
+              inserted = values;
+              return { returning: async () => [{ id: "o1", ...values }] };
+            },
+          }),
+        }),
+    };
+
+    const response = await handleCreateOrdenServicio(requestWith(BOOKED), {
+      getClienteById: async () => clienteDetail as never,
+      db: database as never,
+      enqueuePortalSync: async () => {},
+      planReminders: () => [],
+    });
+
+    expect(response.status).toBe(201);
+    expect(inserted).toMatchObject({ status: "booked", vehiculoId: null, categoria: null });
+    expect(inserted.appointmentAt).toBeInstanceOf(Date);
+  });
+
+  it.each([{}, { appointmentAt: "" }, { appointmentAt: null }])("answers 400 under errors.appointmentAt for a booked order with %j", async (extra) => {
+    const database = { transaction: vi.fn() };
+
+    const response = await handleCreateOrdenServicio(requestWith({ clienteId: "cli-1", status: "booked", ...extra }), {
+      getClienteById: async () => clienteDetail as never,
+      db: database as never,
+    });
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).errors).toEqual({ appointmentAt: "Indicá la fecha y hora de la cita" });
+    expect(database.transaction).not.toHaveBeenCalled();
+  });
+
+  it("still answers 400 for a vehicle it names that is not the customer's", async () => {
+    const database = { transaction: vi.fn() };
+
+    const response = await handleCreateOrdenServicio(requestWith({ ...BOOKED, vehiculoId: "not-owned" }), {
+      getClienteById: async () => clienteDetail as never,
+      db: database as never,
+    });
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).errors).toHaveProperty("vehiculoId");
+    expect(database.transaction).not.toHaveBeenCalled();
   });
 });
 
@@ -273,8 +332,9 @@ describe("POST /api/service-orders — the form's payload, round-tripped through
     const database = {
       transaction: async (cb: (tx: unknown) => unknown) =>
         cb({
-          insert: () => ({
+          insert: (table: unknown) => ({
             values: (values: unknown) => {
+              if (table === ordenEstadoHistorial) return Promise.resolve(undefined); // the history row is not the order insert
               inserts.push(values);
               // An `ordenServicioItem` insert passes an ARRAY and never calls
               // `.returning()`, so both shapes have to survive here — a fake
@@ -400,8 +460,9 @@ describe("POST /api/service-orders — intake fields", () => {
     const database = {
       transaction: vi.fn(async (cb: (tx: unknown) => unknown) =>
         cb({
-          insert: () => ({
+          insert: (table: unknown) => ({
             values: (values: Record<string, unknown>) => {
+              if (table === ordenEstadoHistorial) return Promise.resolve(undefined); // the history row is not the order insert
               captured.values = values;
               return { returning: async () => [{ id: "o1", status: "open", ...values }] };
             },
@@ -413,6 +474,23 @@ describe("POST /api/service-orders — intake fields", () => {
   }
   const base = { clienteId: "cli-1", vehiculoId: "v1", categoria: "revisado" };
   const depsFor = (database: unknown) => ({ getClienteById: async () => clienteDetail as never, db: database as never });
+
+  it("passes an Agendada status through to the insert", async () => {
+    const { captured, database } = capturingDb();
+    const response = await handleCreateOrdenServicio(requestWith({ ...base, status: "booked", appointmentAt: "2026-11-02T09:00" }), depsFor(database));
+
+    expect(response.status).toBe(201);
+    expect(captured.values).toMatchObject({ status: "booked" });
+  });
+
+  it("answers 400 in Spanish for an initial status other than Agendada or Recibida, creating nothing", async () => {
+    const { captured, database } = capturingDb();
+    const response = await handleCreateOrdenServicio(requestWith({ ...base, status: "in_progress" }), depsFor(database));
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).errors.status).toContain("Agendada");
+    expect(captured.values).toBeNull();
+  });
 
   it("persists valid kilometraje, nivelCombustible and bateriaPct", async () => {
     const { captured, database } = capturingDb();
@@ -455,8 +533,11 @@ describe("POST /api/service-orders — create is service-orders.create, with tec
     const inserted: unknown[] = [];
     const tx = {
       select: () => ({ from: () => ({ where: async () => [{ id: "t1", deactivatedAt: null }] }) }),
-      insert: () => ({
+      // The walk-in with a technician moves to diagnosing: `setStatus` updates the order row.
+      update: () => ({ set: (patch: object) => ({ where: () => ({ returning: async () => [{ id: "o1", ...patch }] }) }) }),
+      insert: (table: unknown) => ({
         values: (values: unknown) => {
+          if (table === ordenEstadoHistorial) return Promise.resolve(undefined); // the history row is not the order insert
           inserted.push(values);
           return Array.isArray(values)
             ? Promise.resolve()

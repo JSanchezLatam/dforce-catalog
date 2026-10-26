@@ -9,11 +9,11 @@ import type { OrderStatus } from "./transitions";
 
 /**
  * Answers by statement order, as `work-lines.test.ts` does: the Nth awaited
- * statement gets the Nth queued result. Records every `.set(...)`; the tx has
- * no `delete` or `insert`, so either would be a TypeError here.
+ * statement gets the Nth queued result. Records every `.set(...)` and `.values(...)`
+ * (the only insert is a history row); the tx has no `delete`, so one would be a TypeError here.
  */
 function fakeDb(results: unknown[]) {
-  const log = { sets: [] as { parteListaAt?: unknown; status?: string }[], statements: 0 };
+  const log = { sets: [] as { parteListaAt?: unknown; status?: string }[], values: [] as unknown[], statements: 0 };
   let next = 0;
   const statement = () => {
     const chain: unknown = new Proxy(function () {}, {
@@ -26,13 +26,14 @@ function fakeDb(results: unknown[]) {
         }
         return (...args: unknown[]) => {
           if (prop === "set") log.sets.push(args[0] as never);
+          if (prop === "values") log.values.push(args[0]);
           return chain;
         };
       },
     });
     return chain;
   };
-  const tx = { select: statement, update: statement };
+  const tx = { select: statement, update: statement, insert: statement };
   return {
     database: { transaction: async (fn: (tx: unknown) => unknown) => fn(tx) } as unknown as typeof db,
     log,
@@ -54,6 +55,10 @@ describe("markParteLista", () => {
 
     expect(log.sets[0]).toEqual({ parteListaAt: expect.any(Date) });
     expect(log.sets[1]).toMatchObject({ status: "ready_for_review" });
+    // attributed to the marker, not to nobody
+    expect(log.values).toEqual([
+      expect.objectContaining({ fromStatus: "in_progress", toStatus: "ready_for_review", changedBy: "user-t" }),
+    ]);
   });
 
   it("leaves the order in_progress while another active assignee is pending", async () => {
@@ -62,6 +67,7 @@ describe("markParteLista", () => {
     await expect(markParteLista(input, { db: database })).resolves.toEqual({ status: "in_progress" });
 
     expect(log.sets).toHaveLength(1);
+    expect(log.values).toEqual([]); // no status change, no history row
   });
 
   it("requires no work line: it never reads one", async () => {
@@ -100,7 +106,7 @@ describe("markParteLista", () => {
     expect(log.sets).toEqual([]);
   });
 
-  it.each<OrderStatus>(["open", "ready_for_review"])("refuses marking on a %s order, writing nothing", async (status) => {
+  it.each<OrderStatus>(["booked", "open", "diagnosing", "on_hold", "ready_for_review"])("refuses marking on a %s order, writing nothing", async (status) => {
     const { database, log } = fakeDb([order(status)]);
     await expect(markParteLista(input, { db: database })).rejects.toBeInstanceOf(OrderEditForbiddenError);
     expect(log.sets).toEqual([]);
@@ -126,6 +132,9 @@ describe("unmarkParteLista", () => {
 
     expect(log.sets[0]).toEqual({ parteListaAt: null });
     expect(log.sets[1]).toMatchObject({ status: "in_progress" });
+    expect(log.values).toEqual([
+      expect.objectContaining({ fromStatus: "ready_for_review", toStatus: "in_progress", changedBy: "user-t" }),
+    ]);
   });
 
   it("clears the mark on an in_progress order without a status write", async () => {
@@ -154,8 +163,8 @@ describe("unmarkParteLista", () => {
     await expect(unmarkParteLista(input, { db: database })).rejects.toBeInstanceOf(OrderClosedError);
   });
 
-  it("refuses an open order", async () => {
-    const { database } = fakeDb([order("open")]);
+  it.each<OrderStatus>(["booked", "open", "diagnosing", "on_hold"])("refuses a %s order", async (status) => {
+    const { database } = fakeDb([order(status)]);
     await expect(unmarkParteLista(input, { db: database })).rejects.toBeInstanceOf(OrderEditForbiddenError);
   });
 });

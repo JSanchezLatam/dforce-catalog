@@ -9,6 +9,7 @@ import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db } from "@/shared/db/client";
+import { purgeHistory } from "./purge-history";
 import { cliente, ordenServicio, ordenServicioFoto, ordenTecnico, tecnico, users, vehiculo } from "@/shared/db/schema";
 import { getClienteById } from "../modules/customers/queries";
 import { findOrderPhoto, listOrderPhotos } from "../modules/service-orders/photos";
@@ -78,6 +79,7 @@ describe("técnico order scope (E2E)", () => {
     const orders = [mine, theirs, historic];
     await db.delete(ordenServicioFoto).where(inArray(ordenServicioFoto.ordenId, orders));
     await db.delete(ordenTecnico).where(inArray(ordenTecnico.ordenId, orders));
+    await purgeHistory([clienteId]);
     await db.delete(ordenServicio).where(eq(ordenServicio.clienteId, clienteId));
     await db.delete(vehiculo).where(eq(vehiculo.clienteId, clienteId));
     await db.delete(cliente).where(eq(cliente.id, clienteId));

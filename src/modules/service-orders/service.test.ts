@@ -3,14 +3,18 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ClienteDeactivatedError } from "@/modules/customers/service";
 
-import { ordenCategoriaEnum, ordenServicioCorreccion, type Vehiculo } from "@/shared/db/schema";
+import { ordenCategoriaEnum, ordenEstadoHistorial, ordenServicioCorreccion, type Vehiculo } from "@/shared/db/schema";
 import { OrderClosedError, OrderEditForbiddenError } from "./order-lock";
 import { orderScope, SYSTEM_SCOPE } from "./scope";
 import { InvalidTecnicoError } from "./assignments";
 import { OrderTransitionError, TransitionForbiddenError } from "./transitions";
 import {
+  AppointmentRequiredError,
   createOrder,
+  EsperaMotivoError,
   InvalidCategoriaError,
+  InvalidInitialStatusError,
+  OrderIncompleteError,
   InvalidVehiculoError,
   OrdenServicioNotFoundError,
   transitionOrder,
@@ -45,25 +49,37 @@ function fakeVehiculo(overrides: Partial<Vehiculo> = {}): Vehiculo {
 function makeFakeTx() {
   const insertedOrders: unknown[] = [];
   const insertedItems: unknown[][] = [];
+  const history: Record<string, unknown>[] = [];
   const updateSpy = vi.fn();
 
   const tx = {
-    insert: () => ({
+    insert: (table: unknown) => ({
       values: (values: unknown) => {
+        if (table === ordenEstadoHistorial) {
+          history.push(values as Record<string, unknown>);
+          return Promise.resolve(undefined);
+        }
         if (Array.isArray(values)) {
           insertedItems.push(values as unknown[]);
           return Promise.resolve(undefined);
         }
         insertedOrders.push(values);
         return {
-          returning: async () => [{ id: "o1", status: "open", ...(values as Record<string, unknown>) }],
+          returning: async () => [{ id: "o1", ...(values as Record<string, unknown>) }],
         };
       },
     }),
-    update: updateSpy,
+    update: (...args: unknown[]) => {
+      updateSpy(...args);
+      return {
+        set: (patch: Record<string, unknown>) => ({
+          where: () => ({ returning: async () => [{ ...(insertedOrders[0] as object), id: "o1", ...patch }] }),
+        }),
+      };
+    },
   };
 
-  return { tx, insertedOrders, insertedItems, updateSpy };
+  return { tx, insertedOrders, insertedItems, history, updateSpy };
 }
 
 describe("createOrder (R20)", () => {
@@ -252,7 +268,9 @@ describe("createOrder (R20)", () => {
 const OPEN_ROW = {
   id: "o1",
   clienteId: "c1",
+  vehiculoId: "v1",
   status: "open",
+  esperaMotivo: null,
   categoria: "mant_preventivo",
   description: null,
   appointmentAt: null,
@@ -271,8 +289,10 @@ const OPEN_ROW = {
  * commit?". `auditOutside` catches an audit row written through the pool
  * instead of the transaction.
  */
-function lockedDb(order: Record<string, unknown> | null) {
+/** `reads` is what any unlocked select resolves with: the assignments on a receive, the vehicle on a booked edit. */
+function lockedDb(order: Record<string, unknown> | null, reads: unknown[] = []) {
   const log = {
+    history: [] as Record<string, unknown>[],
     locks: [] as unknown[],
     wheres: [] as unknown[],
     sets: [] as Record<string, unknown>[],
@@ -290,6 +310,8 @@ function lockedDb(order: Record<string, unknown> | null) {
               log.locks.push(mode);
               return Promise.resolve(order ? [order] : []);
             },
+            // The assignments read (receive): `select().from(ordenTecnico).where()` is awaited with no `.for()`.
+            then: (resolve: (v: unknown) => unknown) => resolve(reads),
           };
         },
       }),
@@ -300,9 +322,9 @@ function lockedDb(order: Record<string, unknown> | null) {
         return { where: () => ({ returning: async () => [{ ...order, ...patch }] }) };
       },
     }),
-    insert: () => ({
+    insert: (table: unknown) => ({
       values: async (rows: Record<string, unknown> | Record<string, unknown>[]) => {
-        log.audit.push(...[rows].flat());
+        (table === ordenEstadoHistorial ? log.history : log.audit).push(...[rows].flat());
       },
     }),
   };
@@ -426,6 +448,83 @@ describe("updateOrder", () => {
     expect(log.audit).toEqual([]);
   });
 
+  describe("a booked order (R20, Vehicle and Category Set While Booked)", () => {
+    const BOOKED = { ...OPEN_ROW, status: "booked", vehiculoId: null, categoria: null, appointmentAt: new Date("2026-11-02T15:00:00Z") };
+    const admin = { scope: SYSTEM_SCOPE, role: "administrador" as const };
+
+    it("completes the vehicle and category while the status stays booked", async () => {
+      const { database, log } = lockedDb(BOOKED, [{ id: "v2" }]);
+
+      const orden = await updateOrder("o1", { vehiculoId: "v2", categoria: "revisado" }, { ...admin, db: database });
+
+      expect(log.sets).toEqual([{ vehiculoId: "v2", categoria: "revisado" }]);
+      expect(orden).toMatchObject({ status: "booked", vehiculoId: "v2", categoria: "revisado" });
+    });
+
+    it("refuses a vehicle that is not an active one of this customer, in Spanish, writing nothing", async () => {
+      const { database, log } = lockedDb(BOOKED, []);
+
+      const refused = updateOrder("o1", { vehiculoId: "v-foreign" }, { ...admin, db: database });
+
+      await expect(refused).rejects.toBeInstanceOf(InvalidVehiculoError);
+      await expect(refused).rejects.toMatchObject({ errors: { vehiculoId: "Seleccioná un vehículo válido de este cliente" } });
+      expect(log.sets).toEqual([]);
+    });
+
+    it("scopes the vehicle lookup to the order's customer and to active vehicles", async () => {
+      const { database, log } = lockedDb(BOOKED, [{ id: "v2" }]);
+
+      await updateOrder("o1", { vehiculoId: "v2" }, { ...admin, db: database });
+
+      const lookup = new PgDialect().sqlToQuery(log.wheres[1] as never);
+      expect(lookup.sql).toContain('"vehiculo"."cliente_id" = $');
+      expect(lookup.sql).toContain('"vehiculo"."deactivated_at" is null');
+      expect(lookup.params).toEqual(expect.arrayContaining(["v2", "c1"]));
+    });
+
+    it("refuses a técnico setting the vehicle: the edit gate refuses booked for them", async () => {
+      const { database, log } = lockedDb(BOOKED, [{ id: "v2" }]);
+
+      await expect(updateOrder("o1", { vehiculoId: "v2" }, { scope: SYSTEM_SCOPE, role: "tecnico", db: database })).rejects.toBeInstanceOf(
+        OrderEditForbiddenError,
+      );
+      expect(log.sets).toEqual([]);
+    });
+
+    it("refuses clearing the date, and still accepts moving it", async () => {
+      const cleared = lockedDb(BOOKED);
+      const refused = updateOrder("o1", { appointmentAt: null }, { ...admin, db: cleared.database });
+      await expect(refused).rejects.toBeInstanceOf(AppointmentRequiredError);
+      await expect(refused).rejects.toMatchObject({ errors: { appointmentAt: "Una orden agendada necesita su fecha y hora" } });
+      expect(cleared.log.sets).toEqual([]);
+
+      const moved = lockedDb(BOOKED);
+      const later = new Date("2026-11-09T15:00:00Z");
+      await updateOrder("o1", { appointmentAt: later }, { ...admin, db: moved.database, getClienteById: async () => null, cancelRemindersForOrder: async () => {} });
+      expect(moved.log.sets).toEqual([{ appointmentAt: later }]);
+    });
+  });
+
+  // Vehicle frozen after booked: from `open` on, the vehicle is what the car's history hangs on.
+  describe.each(["open", "diagnosing", "in_progress", "on_hold", "ready_for_review"])("an order that is %s", (status) => {
+    it("refuses a vehiculoId in the patch and keeps the stored vehicle", async () => {
+      const { database, log } = lockedDb({ ...OPEN_ROW, status }, [{ id: "v2" }]);
+
+      await expect(updateOrder("o1", { vehiculoId: "v2" }, { db: database, scope: SYSTEM_SCOPE, role: "administrador" })).rejects.toBeInstanceOf(
+        InvalidVehiculoError,
+      );
+      expect(log.sets).toEqual([]);
+    });
+  });
+
+  it("lets a cleared date through on an order that is not booked", async () => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, appointmentAt: new Date("2026-11-02T15:00:00Z") });
+
+    await updateOrder("o1", { appointmentAt: null }, { db: database, scope: SYSTEM_SCOPE, role: "administrador", getClienteById: async () => null, cancelRemindersForOrder: async () => {} });
+
+    expect(log.sets).toEqual([{ appointmentAt: null }]);
+  });
+
   it("cannot be handed status or completedAt: the patch type excludes them", () => {
     // @ts-expect-error status is not patchable; a correction never reopens an order
     const status: UpdateOrdenServicioPatch = { status: "open" };
@@ -436,28 +535,48 @@ describe("updateOrder", () => {
 });
 
 describe("transitionOrder (R21)", () => {
-  const rowAt = (status: "open" | "in_progress") => ({ ...OPEN_ROW, status });
+  const rowAt = (status: "diagnosing" | "in_progress") => ({ ...OPEN_ROW, status });
+  const staff = { scope: SYSTEM_SCOPE, canAssign: true, actorId: "jefe-1" };
 
   it("throws OrdenServicioNotFoundError for a missing order", async () => {
     const { database } = lockedDb(null);
-    await expect(transitionOrder("missing", "in_progress", { scope: SYSTEM_SCOPE, canAssign: true, db: database })).rejects.toBeInstanceOf(
+    await expect(transitionOrder("missing", "in_progress", { ...staff, db: database })).rejects.toBeInstanceOf(
       OrdenServicioNotFoundError,
     );
   });
 
-  it("takes the row lock (FOR UPDATE) before writing, in one transaction", async () => {
-    const { database, log } = lockedDb(rowAt("open"));
+  it("takes the row lock (FOR UPDATE) before writing, and writes the status and its history row in one transaction", async () => {
+    const { database, log } = lockedDb(rowAt("diagnosing"));
 
-    await transitionOrder("o1", "in_progress", { scope: SYSTEM_SCOPE, canAssign: true, db: database });
+    await transitionOrder("o1", "in_progress", { ...staff, db: database });
 
     expect(log.locks).toEqual(["update"]);
-    expect(log.sets).toEqual([{ status: "in_progress" }]);
+    expect(log.sets).toEqual([{ status: "in_progress", esperaMotivo: null, updatedAt: expect.any(Date) }]);
+    expect(log.history).toEqual([
+      { ordenId: "o1", fromStatus: "diagnosing", toStatus: "in_progress", esperaMotivo: null, changedBy: "jefe-1" },
+    ]);
   });
 
-  it("rejects an invalid transition (open -> done) without writing to the DB", async () => {
-    const { database, log } = lockedDb(rowAt("open"));
+  it.each([
+    ["open", "in_progress"],
+    ["open", "done"],
+    ["diagnosing", "done"],
+  ] as const)("rejects the invalid transition %s -> %s without writing", async (from, to) => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: from });
 
-    await expect(transitionOrder("o1", "done", { scope: SYSTEM_SCOPE, canAssign: true, db: database })).rejects.toBeInstanceOf(OrderTransitionError);
+    await expect(transitionOrder("o1", to, { ...staff, db: database })).rejects.toBeInstanceOf(OrderTransitionError);
+    expect(log.sets).toEqual([]);
+    expect(log.history).toEqual([]);
+  });
+
+  // Automatic targets are written by their own paths (assignment, readiness), never by the route.
+  it.each([
+    ["open", "diagnosing"],
+    ["in_progress", "ready_for_review"],
+  ] as const)("refuses the automatic target %s -> %s with OrderTransitionError and no write", async (from, to) => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: from });
+
+    await expect(transitionOrder("o1", to, { ...staff, db: database })).rejects.toBeInstanceOf(OrderTransitionError);
     expect(log.sets).toEqual([]);
   });
 
@@ -466,26 +585,17 @@ describe("transitionOrder (R21)", () => {
     async (status) => {
       const { database, log } = lockedDb({ ...OPEN_ROW, status });
 
-      await expect(transitionOrder("o1", "in_progress", { scope: SYSTEM_SCOPE, canAssign: true, db: database })).rejects.toBeInstanceOf(OrderTransitionError);
+      await expect(transitionOrder("o1", "in_progress", { ...staff, db: database })).rejects.toBeInstanceOf(OrderTransitionError);
       expect(log.locks).toEqual(["update"]);
       expect(log.sets).toEqual([]);
     },
   );
 
-  it("open -> in_progress updates status without touching completedAt", async () => {
-    const { database, log } = lockedDb(rowAt("open"));
-
-    const result = await transitionOrder("o1", "in_progress", { scope: SYSTEM_SCOPE, canAssign: true, db: database });
-
-    expect(result.status).toBe("in_progress");
-    expect(log.sets[0]).not.toHaveProperty("completedAt");
-  });
-
   it("in_progress -> done sets completedAt", async () => {
     const { database } = lockedDb(rowAt("in_progress"));
     const fixedNow = new Date("2026-07-26T12:00:00Z");
 
-    const result = await transitionOrder("o1", "done", { scope: SYSTEM_SCOPE, canAssign: true,
+    const result = await transitionOrder("o1", "done", { ...staff,
       db: database,
       now: () => fixedNow,
       // No cliente found: the service_due wiring no-ops; this test only asserts completedAt.
@@ -496,12 +606,18 @@ describe("transitionOrder (R21)", () => {
     expect(result.completedAt).toEqual(fixedNow);
   });
 
+  it("diagnosing -> in_progress leaves completedAt untouched", async () => {
+    const { database, log } = lockedDb(rowAt("diagnosing"));
+    await transitionOrder("o1", "in_progress", { ...staff, db: database });
+    expect(log.sets[0]).not.toHaveProperty("completedAt");
+  });
+
   it("calls the onTransitioned seam after persisting (Phase 4 hook point)", async () => {
     const { database } = lockedDb(rowAt("in_progress"));
     const onTransitioned = vi.fn();
     const cancelRemindersForOrder = vi.fn().mockResolvedValue(undefined);
 
-    await transitionOrder("o1", "cancelled", { scope: SYSTEM_SCOPE, canAssign: true, db: database, onTransitioned, cancelRemindersForOrder });
+    await transitionOrder("o1", "cancelled", { ...staff, db: database, onTransitioned, cancelRemindersForOrder });
 
     expect(onTransitioned).toHaveBeenCalledWith(expect.objectContaining({ status: "cancelled" }), "in_progress", "cancelled");
   });
@@ -513,10 +629,99 @@ describe("transitionOrder (R21)", () => {
       committedWhenCancelled = log.committed;
     });
 
-    await transitionOrder("o1", "cancelled", { scope: SYSTEM_SCOPE, canAssign: true, db: database, cancelRemindersForOrder });
+    await transitionOrder("o1", "cancelled", { ...staff, db: database, cancelRemindersForOrder });
 
     expect(committedWhenCancelled).toBe(true);
   });
+});
+
+describe("transitionOrder — the on-hold reason (R21)", () => {
+  const staff = { scope: SYSTEM_SCOPE, canAssign: true, actorId: "jefe-1" };
+
+  it.each(["repuesto", "aprobacion_cliente"] as const)("stores the reason %s on a hold and copies it to the history row", async (motivo) => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: "in_progress" });
+
+    await transitionOrder("o1", "on_hold", { ...staff, db: database, esperaMotivo: motivo });
+
+    expect(log.sets).toEqual([{ status: "on_hold", esperaMotivo: motivo, updatedAt: expect.any(Date) }]);
+    expect(log.history).toEqual([expect.objectContaining({ fromStatus: "in_progress", toStatus: "on_hold", esperaMotivo: motivo })]);
+  });
+
+  it.each([undefined, null, "otro", ""])("refuses a hold with the reason %j, in Spanish, writing nothing", async (motivo) => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: "in_progress" });
+
+    const refused = transitionOrder("o1", "on_hold", { ...staff, db: database, esperaMotivo: motivo as never });
+
+    await expect(refused).rejects.toBeInstanceOf(EsperaMotivoError);
+    await expect(refused).rejects.toMatchObject({ message: expect.stringContaining("motivo") });
+    expect(log.sets).toEqual([]);
+  });
+
+  // The reason is checked after the lock, so a hold on an order that does not exist (or that the caller cannot see) is a 404, not a 400 that leaks which orders exist.
+  it("answers a hold on a missing order with not found, whatever reason it carries", async () => {
+    const { database } = lockedDb(null);
+
+    await expect(transitionOrder("nope", "on_hold", { ...staff, db: database })).rejects.toBeInstanceOf(OrdenServicioNotFoundError);
+    await expect(transitionOrder("nope", "done", { ...staff, db: database, esperaMotivo: "repuesto" })).rejects.toBeInstanceOf(
+      OrdenServicioNotFoundError,
+    );
+  });
+
+  it("refuses a reason that rides another target, writing nothing", async () => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: "in_progress" });
+
+    await expect(transitionOrder("o1", "done", { ...staff, db: database, esperaMotivo: "repuesto" })).rejects.toBeInstanceOf(
+      EsperaMotivoError,
+    );
+    expect(log.sets).toEqual([]);
+  });
+
+  it("clears the reason when the order is resumed, and leaves every part-ready mark alone", async () => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: "on_hold", esperaMotivo: "repuesto" });
+
+    await transitionOrder("o1", "in_progress", { ...staff, db: database });
+
+    expect(log.sets).toEqual([{ status: "in_progress", esperaMotivo: null, updatedAt: expect.any(Date) }]);
+    expect(log.history[0]).toMatchObject({ fromStatus: "on_hold", toStatus: "in_progress", esperaMotivo: null });
+  });
+});
+
+describe("transitionOrder — receiving a booked order (R21)", () => {
+  const staff = { scope: SYSTEM_SCOPE, canAssign: true, actorId: "jefe-1" };
+
+  it("moves booked -> open and stops there when nobody is assigned", async () => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: "booked" });
+
+    const orden = await transitionOrder("o1", "open", { ...staff, db: database });
+
+    expect(orden.status).toBe("open");
+    expect(log.history.map((h) => [h.fromStatus, h.toStatus])).toEqual([["booked", "open"]]);
+  });
+
+  it("continues to diagnosing, in the same transaction, when a technician is already assigned", async () => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: "booked" }, [{ tecnicoId: "t1" }]);
+
+    const orden = await transitionOrder("o1", "open", { ...staff, db: database });
+
+    expect(orden.status).toBe("diagnosing");
+    expect(log.history.map((h) => [h.fromStatus, h.toStatus, h.changedBy])).toEqual([
+      ["booked", "open", "jefe-1"],
+      ["open", "diagnosing", "jefe-1"],
+    ]);
+  });
+
+  it.each([{ vehiculoId: null }, { categoria: null }])(
+    "refuses to receive an order with %j, in Spanish, leaving it booked (never a CHECK 500)",
+    async (missing) => {
+      const { database, log } = lockedDb({ ...OPEN_ROW, status: "booked", ...missing });
+
+      const refused = transitionOrder("o1", "open", { ...staff, db: database });
+
+      await expect(refused).rejects.toBeInstanceOf(OrderIncompleteError);
+      await expect(refused).rejects.toMatchObject({ message: expect.stringContaining("vehículo") });
+      expect(log.sets).toEqual([]);
+    },
+  );
 });
 
 describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no real DB/pg-boss", () => {
@@ -568,7 +773,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
   });
 
   /**
-   * `categoria` is spelled out because it is `.notNull()` and the gate reads
+   * `categoria` is spelled out because it is nullable (0034) and the gate reads
    * it: the fixture used to omit it and the cast hid that, which is the "a
    * mock more convenient than reality tests the mock" case AGENTS.md names.
    * Omitted, `order.categoria` is `undefined` and no reminder is scheduled —
@@ -578,7 +783,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
     const { database } = lockedDb({ ...OPEN_ROW, clienteId: "c1", status: "in_progress", categoria: "mant_preventivo" });
     const scheduleReminder = vi.fn().mockResolvedValue("job-2");
 
-    await transitionOrder("o1", "done", { scope: SYSTEM_SCOPE, canAssign: true,
+    await transitionOrder("o1", "done", { scope: SYSTEM_SCOPE, canAssign: true, actorId: "u1",
       db: database,
       now: () => new Date("2026-07-26T12:00:00.000Z"),
       getClienteById: async () => ({ cliente: clienteRow, orders: [], vehicles: [] }),
@@ -601,7 +806,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
     const { database } = lockedDb({ ...OPEN_ROW, clienteId: "c1", status: "in_progress", categoria: "instalacion" });
     const scheduleReminder = vi.fn().mockResolvedValue("job-2");
 
-    await transitionOrder("o1", "done", { scope: SYSTEM_SCOPE, canAssign: true,
+    await transitionOrder("o1", "done", { scope: SYSTEM_SCOPE, canAssign: true, actorId: "u1",
       db: database,
       now: () => new Date("2026-07-26T12:00:00.000Z"),
       getClienteById: async () => ({ cliente: clienteRow, orders: [], vehicles: [] }),
@@ -615,7 +820,7 @@ describe("reminder wiring (R23, Phase 4 task 4.5) — via injected fakes, no rea
     const { database } = lockedDb({ ...OPEN_ROW, clienteId: "c1", status: "open" });
     const cancelRemindersForOrder = vi.fn().mockResolvedValue(undefined);
 
-    await transitionOrder("o1", "cancelled", { scope: SYSTEM_SCOPE, canAssign: true,
+    await transitionOrder("o1", "cancelled", { scope: SYSTEM_SCOPE, canAssign: true, actorId: "u1",
       db: database,
       cancelRemindersForOrder,
     });
@@ -867,7 +1072,7 @@ describe("createOrder — assigned technicians (R20)", () => {
 
     const orden = await createOrder({ ...base, createdBy: ACTOR, tecnicoIds: ["t1", "t2"] }, deps);
 
-    expect(orden.status).toBe("open");
+    expect(orden.status).toBe("diagnosing");
     expect(insertedOrders).toHaveLength(1);
     expect(insertedItems).toEqual([
       [
@@ -920,44 +1125,176 @@ describe("createOrder — assigned technicians (R20)", () => {
   });
 });
 
-describe("transitionOrder — who may transition, and the lock's scope (R21)", () => {
-  const at = (status: "open" | "in_progress" | "ready_for_review") => ({ ...OPEN_ROW, status });
+describe("createOrder — initial status and history (R20)", () => {
+  const ACTOR = "admin-1";
+  const base = { clienteId: "c1", vehiculoId: "v1", categoria: "revisado" as const, createdBy: ACTOR };
+  const APPOINTMENT = new Date("2026-11-02T15:00:00Z");
 
-  it("lets a caller without service-orders.assign start work: open -> in_progress", async () => {
-    const { database, log } = lockedDb(at("open"));
-    await transitionOrder("o1", "in_progress", { db: database, scope: SYSTEM_SCOPE, canAssign: false });
-    expect(log.sets).toEqual([{ status: "in_progress" }]);
+  function setup() {
+    const fake = makeFakeTx();
+    const tx = {
+      ...fake.tx,
+      select: () => ({ from: () => ({ where: async () => [{ id: "t1", deactivatedAt: null }] }) }),
+    };
+    const database = { transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(tx) };
+    const deps = {
+      getClienteById: async () => ({ cliente: { id: "c1" }, orders: [], vehicles: [fakeVehiculo()] }) as never,
+      db: database as unknown as typeof import("@/shared/db/client").db,
+    };
+    return { ...fake, deps };
+  }
+  const trail = (history: Record<string, unknown>[]) => history.map((h) => [h.fromStatus, h.toStatus, h.changedBy]);
+
+  it("defaults to open and writes the null -> open row", async () => {
+    const { deps, insertedOrders, history } = setup();
+    const orden = await createOrder(base, deps);
+
+    expect(insertedOrders[0]).toMatchObject({ status: "open" });
+    expect(orden.status).toBe("open");
+    expect(trail(history)).toEqual([[null, "open", ACTOR]]);
   });
 
+  it("creates a booked order with the null -> booked row", async () => {
+    const { deps, history } = setup();
+    const orden = await createOrder({ ...base, status: "booked", appointmentAt: APPOINTMENT }, deps);
+
+    expect(orden.status).toBe("booked");
+    expect(trail(history)).toEqual([[null, "booked", ACTOR]]);
+  });
+
+  describe("an Agendada order may lack its vehicle and category, but never its date", () => {
+    const booked = { clienteId: "c1", createdBy: ACTOR, status: "booked" as const };
+
+    it("persists null vehiculoId and categoria, with the null -> booked row", async () => {
+      const { deps, insertedOrders, history } = setup();
+
+      const orden = await createOrder({ ...booked, appointmentAt: APPOINTMENT }, deps);
+
+      expect(insertedOrders[0]).toMatchObject({ status: "booked", vehiculoId: null, categoria: null, appointmentAt: APPOINTMENT });
+      expect(orden.status).toBe("booked");
+      expect(trail(history)).toEqual([[null, "booked", ACTOR]]);
+    });
+
+    it("refuses a missing date in Spanish and creates nothing", async () => {
+      const { deps, insertedOrders, history } = setup();
+
+      const refused = createOrder(booked, deps);
+
+      await expect(refused).rejects.toBeInstanceOf(AppointmentRequiredError);
+      await expect(refused).rejects.toMatchObject({ errors: { appointmentAt: "Indicá la fecha y hora de la cita" } });
+      expect(insertedOrders).toEqual([]);
+      expect(history).toEqual([]);
+    });
+
+    it("still checks a vehicle it is given: another customer's is refused", async () => {
+      const { deps, insertedOrders } = setup();
+
+      await expect(createOrder({ ...booked, appointmentAt: APPOINTMENT, vehiculoId: "v-of-someone-else" }, deps)).rejects.toBeInstanceOf(
+        InvalidVehiculoError,
+      );
+      expect(insertedOrders).toEqual([]);
+    });
+
+    it("still checks a category it is given", async () => {
+      const { deps, insertedOrders } = setup();
+
+      await expect(createOrder({ ...booked, appointmentAt: APPOINTMENT, categoria: "bogus" as never }, deps)).rejects.toBeInstanceOf(
+        InvalidCategoriaError,
+      );
+      expect(insertedOrders).toEqual([]);
+    });
+
+    it("keeps a vehicle and category it is given", async () => {
+      const { deps, insertedOrders } = setup();
+
+      await createOrder({ ...booked, appointmentAt: APPOINTMENT, vehiculoId: "v1", categoria: "revisado" }, deps);
+
+      expect(insertedOrders[0]).toMatchObject({ vehiculoId: "v1", categoria: "revisado" });
+    });
+  });
+
+  describe("a Recibida order still needs both", () => {
+    it("refuses a missing vehiculoId", async () => {
+      const { deps, insertedOrders } = setup();
+      await expect(createOrder({ clienteId: "c1", categoria: "revisado", createdBy: ACTOR }, deps)).rejects.toBeInstanceOf(InvalidVehiculoError);
+      expect(insertedOrders).toEqual([]);
+    });
+
+    it("refuses a missing categoria", async () => {
+      const { deps, insertedOrders } = setup();
+      await expect(createOrder({ clienteId: "c1", vehiculoId: "v1", createdBy: ACTOR }, deps)).rejects.toBeInstanceOf(InvalidCategoriaError);
+      expect(insertedOrders).toEqual([]);
+    });
+  });
+
+  it("a walk-in with a technician lands in diagnosing with two rows, in order", async () => {
+    const { deps, history } = setup();
+    const orden = await createOrder({ ...base, tecnicoIds: ["t1"] }, deps);
+
+    expect(orden.status).toBe("diagnosing");
+    expect(trail(history)).toEqual([
+      [null, "open", ACTOR],
+      ["open", "diagnosing", ACTOR],
+    ]);
+  });
+
+  it("an Agendada order with a technician stays booked, with no diagnosing row", async () => {
+    const { deps, history, updateSpy } = setup();
+    const orden = await createOrder({ ...base, status: "booked", appointmentAt: APPOINTMENT, tecnicoIds: ["t1"] }, deps);
+
+    expect(orden.status).toBe("booked");
+    expect(trail(history)).toEqual([[null, "booked", ACTOR]]);
+    expect(updateSpy).not.toHaveBeenCalled();
+  });
+
+  it.each(["in_progress", "done", "diagnosing", "cancelled", "bogus"])("refuses the initial status %s and creates nothing", async (status) => {
+    const { deps, insertedOrders, history } = setup();
+
+    await expect(createOrder({ ...base, status: status as never }, deps)).rejects.toBeInstanceOf(InvalidInitialStatusError);
+
+    expect(insertedOrders).toEqual([]);
+    expect(history).toEqual([]);
+  });
+});
+
+describe("transitionOrder — who may transition, and the lock's scope (R21)", () => {
+  const at = (status: "diagnosing" | "in_progress" | "ready_for_review") => ({ ...OPEN_ROW, status });
+  const deps = { scope: SYSTEM_SCOPE, actorId: "u1" };
+
   it.each([
+    ["diagnosing", "in_progress"],
     ["in_progress", "done"],
     ["in_progress", "cancelled"],
     ["ready_for_review", "in_progress"],
   ] as const)("refuses %s -> %s for a caller without service-orders.assign, writing nothing", async (from, to) => {
     const { database, log } = lockedDb(at(from));
     await expect(
-      transitionOrder("o1", to, { db: database, scope: SYSTEM_SCOPE, canAssign: false }),
+      transitionOrder("o1", to, { ...deps, db: database, canAssign: false }),
     ).rejects.toBeInstanceOf(TransitionForbiddenError);
     expect(log.sets).toEqual([]);
+    expect(log.history).toEqual([]);
   });
 
   it("clears every part-ready mark when staff send a ready_for_review order back, in the same transaction", async () => {
     const { database, log } = lockedDb(at("ready_for_review"));
-    await transitionOrder("o1", "in_progress", { db: database, scope: SYSTEM_SCOPE, canAssign: true });
-    expect(log.sets).toEqual([{ status: "in_progress" }, { parteListaAt: null }]);
+    await transitionOrder("o1", "in_progress", { ...deps, db: database, canAssign: true });
+    expect(log.sets).toEqual([
+      { status: "in_progress", esperaMotivo: null, updatedAt: expect.any(Date) },
+      { parteListaAt: null },
+    ]);
     expect(log.committed).toBe(true);
   });
 
   it.each([
-    ["open", "in_progress"],
+    ["diagnosing", "in_progress"],
     ["in_progress", "cancelled"],
     ["ready_for_review", "done"],
     ["ready_for_review", "cancelled"],
   ] as const)("leaves the marks alone on %s -> %s", async (from, to) => {
     const { database, log } = lockedDb(at(from));
     await transitionOrder("o1", to, {
+      ...deps,
       db: database,
-      scope: SYSTEM_SCOPE,
       canAssign: true,
       getClienteById: async () => null,
       cancelRemindersForOrder: async () => {},
@@ -973,8 +1310,8 @@ describe("transitionOrder — who may transition, and the lock's scope (R21)", (
   ] as const)("lets service-orders.assign close or return %s -> %s", async (from, to) => {
     const { database, log } = lockedDb(at(from));
     await transitionOrder("o1", to, {
+      ...deps,
       db: database,
-      scope: SYSTEM_SCOPE,
       canAssign: true,
       getClienteById: async () => null,
       cancelRemindersForOrder: async () => {},
@@ -983,19 +1320,22 @@ describe("transitionOrder — who may transition, and the lock's scope (R21)", (
   });
 
   it("answers an illegal edge as the state machine's error even for a caller who could not make a legal one", async () => {
-    const { database } = lockedDb(at("open"));
+    const { database } = lockedDb({ ...OPEN_ROW, status: "open" });
     await expect(
-      transitionOrder("o1", "done", { db: database, scope: SYSTEM_SCOPE, canAssign: false }),
+      transitionOrder("o1", "done", { ...deps, db: database, canAssign: false }),
     ).rejects.toBeInstanceOf(OrderTransitionError);
   });
 
   it("locks through the caller's scope: a técnico's condition reaches the SELECT ... FOR UPDATE", async () => {
-    const { database, log } = lockedDb(at("open"));
-    await transitionOrder("o1", "in_progress", {
-      db: database,
-      scope: orderScope({ id: "tec-user", role: "tecnico" }),
-      canAssign: false,
-    });
+    const { database, log } = lockedDb(at("diagnosing"));
+    await expect(
+      transitionOrder("o1", "in_progress", {
+        ...deps,
+        db: database,
+        scope: orderScope({ id: "tec-user", role: "tecnico" }),
+        canAssign: false,
+      }),
+    ).rejects.toBeInstanceOf(TransitionForbiddenError);
     const { sql, params } = new PgDialect().sqlToQuery(log.wheres[0] as never);
     expect(sql).toContain('"orden_tecnico"."orden_id" = "orden_servicio"."id"');
     expect(params).toContain("tec-user");
@@ -1071,10 +1411,22 @@ describe("portal sync triggers", () => {
   });
 
   it("transitionOrder enqueues the order's customer once, after the commit", async () => {
-    const { database, log } = lockedDb({ ...OPEN_ROW, status: "open" });
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: "diagnosing" });
     const { calls, enqueuePortalSync } = observed(log);
-    await transitionOrder("o1", "in_progress", { db: database, scope: SYSTEM_SCOPE, canAssign: true, enqueuePortalSync });
+    await transitionOrder("o1", "in_progress", { db: database, scope: SYSTEM_SCOPE, canAssign: true, actorId: "u1", enqueuePortalSync });
     expect(calls).toEqual([{ clienteId: "c1", committed: true }]);
+  });
+
+  it("receiving a booked order enqueues once, after the commit, whether or not it continues to diagnosing", async () => {
+    const plain = lockedDb({ ...OPEN_ROW, status: "booked" });
+    const a = observed(plain.log);
+    await transitionOrder("o1", "open", { db: plain.database, scope: SYSTEM_SCOPE, canAssign: true, actorId: "u1", enqueuePortalSync: a.enqueuePortalSync });
+    expect(a.calls).toEqual([{ clienteId: "c1", committed: true }]);
+
+    const continued = lockedDb({ ...OPEN_ROW, status: "booked" }, [{ tecnicoId: "t1" }]);
+    const b = observed(continued.log);
+    await transitionOrder("o1", "open", { db: continued.database, scope: SYSTEM_SCOPE, canAssign: true, actorId: "u1", enqueuePortalSync: b.enqueuePortalSync });
+    expect(b.calls).toEqual([{ clienteId: "c1", committed: true }]);
   });
 
   it("enqueues before the reminder wiring, so a reminder failure cannot lose the sync", async () => {
@@ -1084,7 +1436,7 @@ describe("portal sync triggers", () => {
       transitionOrder("o1", "done", {
         db: database,
         scope: SYSTEM_SCOPE,
-        canAssign: true,
+        canAssign: true, actorId: "u1",
         enqueuePortalSync,
         getClienteById: async () => {
           throw new Error("reminder wiring blew up");
@@ -1101,11 +1453,11 @@ describe("portal sync triggers", () => {
       updateOrder("o1", { hallazgos: "x" }, { db: closed.database, scope: SYSTEM_SCOPE, role: "administrador", enqueuePortalSync }),
     ).rejects.toBeInstanceOf(OrderClosedError);
     await expect(
-      transitionOrder("o1", "in_progress", { db: closed.database, scope: SYSTEM_SCOPE, canAssign: true, enqueuePortalSync }),
+      transitionOrder("o1", "in_progress", { db: closed.database, scope: SYSTEM_SCOPE, canAssign: true, actorId: "u1", enqueuePortalSync }),
     ).rejects.toBeInstanceOf(OrderTransitionError);
     const missing = lockedDb(null);
     await expect(
-      transitionOrder("nope", "in_progress", { db: missing.database, scope: SYSTEM_SCOPE, canAssign: true, enqueuePortalSync }),
+      transitionOrder("nope", "in_progress", { db: missing.database, scope: SYSTEM_SCOPE, canAssign: true, actorId: "u1", enqueuePortalSync }),
     ).rejects.toBeInstanceOf(OrdenServicioNotFoundError);
     expect(enqueuePortalSync).not.toHaveBeenCalled();
   });

@@ -10,6 +10,7 @@ import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db } from "@/shared/db/client";
+import { purgeHistory } from "./purge-history";
 import { cliente, ordenLineaTrabajo, ordenServicio, ordenTecnico, tecnico, users, vehiculo } from "@/shared/db/schema";
 import { findTecnicoByUserId } from "../modules/technicians/queries";
 import { backlogByStatus, closedByMonth, closedByTecnicoMonth, minutesByTecnicoMonth, receivedByMonth } from "../modules/metrics/queries";
@@ -25,13 +26,15 @@ describe("metrics queries (E2E)", () => {
   let vehiculoId: string;
   const FROM = "2031-01";
 
-  const newOrder = async (o: { status: typeof ordenServicio.$inferInsert.status; createdAt: string; completedAt?: string; assign?: string[] }) => {
+  const newOrder = async (o: { status: typeof ordenServicio.$inferInsert.status; createdAt: string; completedAt?: string; assign?: string[]; esperaMotivo?: "repuesto"; noVehicle?: boolean }) => {
     const [row] = await db
       .insert(ordenServicio)
       .values({
         clienteId,
-        vehiculoId,
-        categoria: "revisado",
+        // An Agendada order may have neither (CHECK `orden_vehiculo_categoria_required`).
+        vehiculoId: o.noVehicle ? null : vehiculoId,
+        categoria: o.noVehicle ? null : "revisado",
+        esperaMotivo: o.esperaMotivo,
         status: o.status,
         createdAt: new Date(o.createdAt),
         completedAt: o.completedAt ? new Date(o.completedAt) : null,
@@ -68,6 +71,7 @@ describe("metrics queries (E2E)", () => {
       await db.delete(ordenLineaTrabajo).where(inArray(ordenLineaTrabajo.ordenId, orders));
       await db.delete(ordenTecnico).where(inArray(ordenTecnico.ordenId, orders));
     }
+    await purgeHistory([clienteId]);
     await db.delete(ordenServicio).where(eq(ordenServicio.clienteId, clienteId));
     await db.delete(vehiculo).where(eq(vehiculo.clienteId, clienteId));
     await db.delete(cliente).where(eq(cliente.id, clienteId));
@@ -160,7 +164,7 @@ describe("metrics queries (E2E)", () => {
     expect(await findTecnicoByUserId(loginUnlinked)).toBeNull();
   });
 
-  it("backlog counts open, in_progress and ready_for_review as integers, never done or cancelled", async () => {
+  it("backlog counts the six non-terminal statuses as integers, never done or cancelled", async () => {
     const before = Object.fromEntries((await backlogByStatus()).map((r) => [r.status, r.n]));
     await newOrder({ status: "open", createdAt: "2031-10-01T12:00:00Z" });
     await newOrder({ status: "in_progress", createdAt: "2031-10-01T12:00:00Z" });
@@ -170,9 +174,31 @@ describe("metrics queries (E2E)", () => {
 
     const after = await backlogByStatus();
     expect(after.every((r) => typeof r.n === "number")).toBe(true);
-    expect(after.map((r) => r.status).every((s) => ["open", "in_progress", "ready_for_review"].includes(s))).toBe(true);
+    expect(after.map((r) => r.status).every((s) => ["booked", "open", "diagnosing", "in_progress", "on_hold", "ready_for_review"].includes(s))).toBe(true);
     const delta = (s: string) => (after.find((r) => r.status === s)?.n ?? 0) - (before[s] ?? 0);
     expect(delta("open")).toBe(1);
     expect(delta("in_progress")).toBe(2);
+  });
+
+  // task 4.6 — the three states added by this change must each have a counter,
+  // and the counters must cover every non-terminal order exactly once.
+  it("counts every non-terminal order under exactly one of the six statuses", async () => {
+    const before = Object.fromEntries((await backlogByStatus()).map((r) => [r.status, r.n]));
+    const at = "2031-11-01T12:00:00Z";
+    await newOrder({ status: "booked", createdAt: at, noVehicle: true });
+    for (let i = 0; i < 2; i++) await newOrder({ status: "open", createdAt: at });
+    for (let i = 0; i < 3; i++) await newOrder({ status: "diagnosing", createdAt: at });
+    await newOrder({ status: "in_progress", createdAt: at });
+    for (let i = 0; i < 2; i++) await newOrder({ status: "on_hold", createdAt: at, esperaMotivo: "repuesto" });
+    for (let i = 0; i < 4; i++) await newOrder({ status: "ready_for_review", createdAt: at });
+    for (let i = 0; i < 9; i++) await newOrder({ status: "done", createdAt: at, completedAt: "2031-11-02T12:00:00Z" });
+    for (let i = 0; i < 2; i++) await newOrder({ status: "cancelled", createdAt: at, noVehicle: i === 0 });
+
+    const after = await backlogByStatus();
+    const delta = (s: string) => (after.find((r) => r.status === s)?.n ?? 0) - (before[s] ?? 0);
+    expect(["booked", "open", "diagnosing", "in_progress", "on_hold", "ready_for_review"].map(delta)).toEqual([1, 2, 3, 1, 2, 4]);
+    expect(after.reduce((sum, r) => sum + r.n, 0) - Object.values(before).reduce((sum, n) => sum + n, 0)).toBe(13);
+    expect(after.map((r) => r.status)).not.toContain("done");
+    expect(after.map((r) => r.status)).not.toContain("cancelled");
   });
 });

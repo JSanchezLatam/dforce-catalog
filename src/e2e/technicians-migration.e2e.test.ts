@@ -123,7 +123,8 @@ describe("migrations 0026-0029 in one run (E2E)", () => {
       const { rows } = await fresh.query(
         `SELECT unnest(enum_range(NULL::order_status))::text AS v`,
       );
-      expect(rows.map((r) => r.v)).toEqual(["open", "in_progress", "ready_for_review", "done", "cancelled"]);
+      // All migrations are applied here, so 0033's three states are in the list too.
+      expect(rows.map((r) => r.v)).toEqual(["booked", "open", "diagnosing", "in_progress", "on_hold", "ready_for_review", "done", "cancelled"]);
     });
   });
 

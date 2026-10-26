@@ -7,7 +7,11 @@ import { authorizeCorrection, CorrectionRefusedError } from "@/modules/service-o
 import { parseIntake } from "@/modules/service-orders/intake";
 import { OrderClosedError, OrderEditForbiddenError, type CorrectionGrant } from "@/modules/service-orders/order-lock";
 import {
+  AppointmentRequiredError,
+  EsperaMotivoError,
+  InvalidVehiculoError,
   OrdenServicioNotFoundError,
+  OrderIncompleteError,
   updateOrder,
   transitionOrder,
   type TransitionOrdenServicioDeps,
@@ -24,7 +28,7 @@ const NULLABLE_TEXT_FIELDS = ["description", "hallazgos", "recomendaciones", "ob
 const MAX_TEXT_LENGTH = 5000;
 
 export type UpdateOrdenServicioRouteDeps = Omit<UpdateOrdenServicioDeps, "role" | "correction" | "scope"> &
-  Omit<TransitionOrdenServicioDeps, "scope" | "canAssign"> & {
+  Omit<TransitionOrdenServicioDeps, "scope" | "canAssign" | "actorId" | "esperaMotivo"> & {
     /** Injected so a test never runs bcrypt; defaults to the real re-authentication. */
     authorize?: (userId: string, password: string) => Promise<CorrectionGrant>;
   };
@@ -59,6 +63,8 @@ export async function handleUpdateOrdenServicio(
         ...serviceDeps,
         scope,
         canAssign: can(user, "service-orders.assign"),
+        actorId: user.id,
+        esperaMotivo: body.esperaMotivo,
       });
       return NextResponse.json({ orden });
     }
@@ -102,6 +108,14 @@ export async function handleUpdateOrdenServicio(
         return NextResponse.json({ errors: { categoria: "Elegí un tipo de servicio válido" } }, { status: 400 }); // C4
       }
       patch.categoria = body.categoria;
+    }
+
+    // Only a booked order takes it (`updateOrder` decides under the lock); here it is just a string claim about the body.
+    if (body.vehiculoId !== undefined) {
+      if (typeof body.vehiculoId !== "string" || body.vehiculoId === "") {
+        return NextResponse.json({ errors: { vehiculoId: "Valor inválido" } }, { status: 400 });
+      }
+      patch.vehiculoId = body.vehiculoId;
     }
 
     const intake = parseIntake(body);
@@ -166,6 +180,15 @@ export async function handleUpdateOrdenServicio(
     }
     if (err instanceof OrderTransitionError) {
       return NextResponse.json({ error: "invalid_transition", from: err.from, to: err.to }, { status: 400 }); // R21
+    }
+    if (err instanceof EsperaMotivoError) {
+      return NextResponse.json({ errors: { esperaMotivo: err.message } }, { status: 400 });
+    }
+    if (err instanceof InvalidVehiculoError || err instanceof AppointmentRequiredError) {
+      return NextResponse.json({ errors: err.errors }, { status: 400 });
+    }
+    if (err instanceof OrderIncompleteError) {
+      return NextResponse.json({ errors: { form: err.message } }, { status: 400 });
     }
     if (err instanceof OrdenServicioNotFoundError) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });

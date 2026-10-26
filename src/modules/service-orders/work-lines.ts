@@ -4,8 +4,9 @@
  * Every write takes the order lock first (`lockOrderForMutation`), so the status
  * gate reads the LOCKED row and a concurrent close cannot slip between check and
  * write. Staff (`canManageAll`) write any assigned technician's line while the
- * order is `in_progress` or `ready_for_review`; a técnico only their own, only
- * `in_progress`, and not after marking "Mi parte lista". Nobody writes on `open`.
+ * order is `diagnosing`, `in_progress` or `ready_for_review`; a técnico only their own,
+ * only `diagnosing` or `in_progress`, and not after marking "Mi parte lista". Nobody
+ * writes on `booked`, `open` or `on_hold` (`canWriteFor`).
  *
  * A closed order is writable only with an administrator `CorrectionGrant`, and
  * then each change gets its audit row(s) in the SAME transaction. A jefe never
@@ -102,7 +103,7 @@ async function ownTecnicoId(tx: Tx, userId: string): Promise<string | null> {
 
 /** Statuses a line may be written in; the lock refuses (and, when closed, offers correction for) the rest. */
 const canWriteFor = (actor: WorkLineActor) => (status: string) =>
-  status === "in_progress" || (actor.canManageAll && status === "ready_for_review");
+  status === "diagnosing" || status === "in_progress" || (actor.canManageAll && status === "ready_for_review");
 
 export async function addWorkLine(
   input: {

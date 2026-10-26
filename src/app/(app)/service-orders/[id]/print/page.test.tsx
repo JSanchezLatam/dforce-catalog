@@ -101,6 +101,7 @@ const ORDEN: OrdenServicio = {
   nivelCombustible: null,
   bateriaPct: null,
   createdAt: new Date("2026-05-01T14:00:00Z"), updatedAt: new Date("2026-05-01T14:00:00Z"),
+  esperaMotivo: null,
   createdBy: null,
 };
 
@@ -176,6 +177,22 @@ beforeEach(() => {
   envMock.PORTAL_INGEST_URL = "http://localhost:3001/api/ingest";
   envMock.PORTAL_INGEST_SECRET = "secret";
   renderQrSvg.mockClear();
+});
+
+describe("ServiceOrderPrintPage — an Agendada order with no vehicle or category", () => {
+  beforeEach(() => {
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status: "booked", vehiculoId: null, categoria: null }, items: [] });
+  });
+
+  it.each([
+    ["the workshop copy", undefined],
+    ["the customer copy", "cliente"],
+  ])("prints Sin vehículo and Sin categoría on %s", async (_name, copia) => {
+    render(await renderPage(copia));
+
+    expect(valueFor("Placa")).toBe("Sin vehículo");
+    expect(valueFor("Categoría")).toBe("Sin categoría");
+  });
 });
 
 describe("ServiceOrderPrintPage — vehicle descriptive fields", () => {

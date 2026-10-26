@@ -58,6 +58,7 @@ const ORDEN: OrdenServicio = {
   hallazgos: null, recomendaciones: null, observaciones: null,
   kilometraje: null, nivelCombustible: null, bateriaPct: null,
   createdAt: new Date("2026-05-01T14:00:00Z"), updatedAt: new Date("2026-05-01T14:00:00Z"),
+  esperaMotivo: null,
   createdBy: null,
 };
 
@@ -133,6 +134,33 @@ describe("ServiceOrderDetailPage", () => {
     // The label a technician reads, not the enum slug stored in Postgres.
     expect(screen.getByText("REVISADO")).toBeInTheDocument();
     expect(screen.queryByText("revisado")).not.toBeInTheDocument();
+  });
+
+  it("renders an Agendada order with no vehicle or category as placeholders, with no vehicle link", async () => {
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status: "booked", vehiculoId: null, categoria: null }, items: [] });
+
+    render(await renderPage());
+
+    expect(screen.getByText("Sin vehículo")).toBeInTheDocument();
+    expect(screen.getByText("Sin categoría")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "ABC123" })).not.toBeInTheDocument();
+    expect(screen.queryByText("null")).not.toBeInTheDocument();
+  });
+
+  it("shows the hold reason beside the En espera badge", async () => {
+    requireSessionFromHeaders.mockResolvedValue({ id: "u1", role: "administrador" });
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status: "on_hold", esperaMotivo: "aprobacion_cliente" }, items: [] });
+
+    render(await renderPage());
+
+    expect(screen.getByText("En espera")).toBeInTheDocument();
+    expect(screen.getByText("Motivo: Aprobación del cliente")).toBeInTheDocument();
+  });
+
+  it("shows no hold reason on an order that is not on hold", async () => {
+    render(await renderPage());
+
+    expect(screen.queryByText(/Motivo:/)).not.toBeInTheDocument();
   });
 
   // customer-portal WU5b — these three fields reach the customer's portal page.
@@ -325,6 +353,9 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
 
   it.each<[Role, OrderStatus]>([
     ["administrador", "open"],
+    ["administrador", "booked"],
+    ["jefe_taller", "booked"],
+    ["administrador", "on_hold"],
     ["administrador", "in_progress"],
     ["administrador", "ready_for_review"],
     ["jefe_taller", "ready_for_review"],
@@ -337,6 +368,8 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
 
   it.each<[Role, OrderStatus]>([
     ["tecnico", "open"],
+    ["tecnico", "booked"],
+    ["tecnico", "on_hold"],
     ["tecnico", "ready_for_review"],
     ["administrador", "done"],
     ["tecnico", "done"],
@@ -674,6 +707,19 @@ describe("ServiceOrderDetailPage — reception photos card", () => {
     expect(
       within(card()).getByText("Las fotos de una orden lista para revisión las agrega el administrador o el jefe de taller."),
     ).toBeInTheDocument();
+  });
+
+  it("offers a técnico no add control on an on_hold order, and says who may instead of calling it closed", async () => {
+    roleCan(["service-orders.read", "service-orders.write"]);
+    asOrder("on_hold");
+
+    render(await renderPage());
+
+    expect(within(card()).queryByLabelText("Agregar fotos")).not.toBeInTheDocument();
+    expect(
+      within(card()).getByText("Las fotos de una orden en espera las agrega el administrador o el jefe de taller."),
+    ).toBeInTheDocument();
+    expect(within(card()).queryByText(/terminada o cancelada/)).not.toBeInTheDocument();
   });
 
   it("offers staff (service-orders.assign) the add control on a ready_for_review order", async () => {

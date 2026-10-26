@@ -24,7 +24,8 @@ export type OrdenServicioDetail = { orden: OrdenServicio; items: OrdenServicioIt
 /** Mirrors ClienteListItem: a Pick plus the joined fields, nothing wider (D9). */
 export type OrdenServicioListItem = Pick<OrdenServicio, "id" | "status" | "appointmentAt"> & {
   clienteName: string;
-  vehiculoPlate: string;
+  /** Null while an Agendada order has no vehicle yet (the `vehiculo` join is a left join). */
+  vehiculoPlate: string | null;
   vehiculoMake: string | null;
   vehiculoModel: string | null;
 };
@@ -63,8 +64,8 @@ export function buildOrdenServicioWhere(filters: OrdenServicioFilters, scope: Or
  * that reason; it does not apply here).
  *
  * `status` is a Postgres ENUM (`order_status`), so Postgres orders it by
- * DECLARATION order, not alphabetically: asc is open -> in_progress -> done
- * -> cancelled. That is the order the workshop reads the board in, so it is
+ * DECLARATION order, not alphabetically: asc is booked -> open -> diagnosing ->
+ * in_progress -> on_hold -> ready_for_review -> done -> cancelled. That is the order the workshop reads the board in, so it is
  * the better behaviour — but it is not what "sort by Estado" looks like from
  * the outside, and changing the enum's declaration order would silently
  * change this column's sort. Verified against a seeded database, not inferred.
@@ -101,7 +102,7 @@ export function parseOrdenSort(searchParams: RawSearchParams): OrdenSort | undef
 }
 
 /**
- * Always TWO order expressions — `status` has only four values, so a single
+ * Always TWO order expressions — `status` has only a handful of values, so a single
  * non-unique key would make paging unstable (Postgres gives no ordering
  * guarantee among ties; a row can appear on two pages and another on none).
  * `createdAt` is near-unique and is today's own default order, so it is the
@@ -136,16 +137,16 @@ export function buildOrdenServicioOrderBy(sort?: OrdenSort) {
  * D7/D9 — the query behind `listOrdenesServicio`'s default `queryFn`, exposed
  * for `.toSQL()` the same way `catalog-builder/queries.ts`'s
  * `productsInCategoriesQuery` is (never executed by a test, only compiled).
- * Both FKs (`clienteId`, `vehiculoId`) are `.notNull()` with
- * `onDelete: "restrict"`, so an INNER join cannot silently drop a row — no
- * order can exist without a live `cliente` and `vehiculo`, and neither
- * parent can be deleted while an order references it.
+ * `clienteId` is `.notNull()` with `onDelete: "restrict"`, so an INNER join to
+ * `cliente` cannot drop a row. `vehiculoId` is NOT: an Agendada order has none
+ * until it is completed (0034), so `vehiculo` is a LEFT join here and in the
+ * count. The list and the count change together or the pager lies (D9).
  *
  * Task 2.17's check, recorded: with all three tables' own `id` columns in
  * scope, `.select({...})` over typed Column objects (not an interpolated raw
  * `sql` fragment) renders every identifier table-qualified —
  * `select "orden_servicio"."id", ... from "orden_servicio" inner join
- * "cliente" on "orden_servicio"."cliente_id" = "cliente"."id" inner join
+ * "cliente" on "orden_servicio"."cliente_id" = "cliente"."id" left join
  * "vehiculo" on "orden_servicio"."vehiculo_id" = "vehiculo"."id" ...` —
  * verified against the actual rendered `.toSQL()` output, not assumed.
  * `vehicles.ts:platesSubquery()`'s qualifier-elision trap is a DIFFERENT
@@ -170,7 +171,7 @@ export function ordenServicioListQuery(
     })
     .from(ordenServicio)
     .innerJoin(cliente, eq(ordenServicio.clienteId, cliente.id))
-    .innerJoin(vehiculo, eq(ordenServicio.vehiculoId, vehiculo.id))
+    .leftJoin(vehiculo, eq(ordenServicio.vehiculoId, vehiculo.id))
     .where(buildOrdenServicioWhere(filters, scope))
     .orderBy(...buildOrdenServicioOrderBy(sort))
     .limit(window.limit)
@@ -198,7 +199,7 @@ export function ordenServicioCountQuery(filters: OrdenServicioFilters, scope: Or
     .select({ value: count() })
     .from(ordenServicio)
     .innerJoin(cliente, eq(ordenServicio.clienteId, cliente.id))
-    .innerJoin(vehiculo, eq(ordenServicio.vehiculoId, vehiculo.id))
+    .leftJoin(vehiculo, eq(ordenServicio.vehiculoId, vehiculo.id))
     .where(buildOrdenServicioWhere(filters, scope));
 }
 

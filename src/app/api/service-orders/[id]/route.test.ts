@@ -47,6 +47,7 @@ function ordenWith(status: OrderStatus): OrdenServicio {
     kilometraje: null,
     nivelCombustible: null,
     bateriaPct: null,
+    esperaMotivo: null,
     createdBy: null,
     createdAt: new Date("2026-05-01T14:00:00Z"),
     updatedAt: new Date("2026-05-01T14:00:00Z"),
@@ -66,10 +67,19 @@ function lockedDb(
   setSpy: (...args: never[]) => unknown = vi.fn(() => ({
     where: () => ({ returning: async () => [ordenWith(status ?? "open")] }),
   })),
+  /** What an unlocked select resolves with: the vehicle lookup of a booked edit. */
+  reads: unknown[] = [],
 ) {
   const audit: Record<string, unknown>[] = [];
   const tx = {
-    select: () => ({ from: () => ({ where: () => ({ for: async () => (status ? [ordenWith(status)] : []) }) }) }),
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          for: async () => (status ? [ordenWith(status)] : []),
+          then: (resolve: (v: unknown) => unknown) => resolve(reads),
+        }),
+      }),
+    }),
     update: () => ({ set: setSpy }),
     insert: () => ({
       values: async (rows: Record<string, unknown> | Record<string, unknown>[]) => {
@@ -91,7 +101,7 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
 
   it("drives a valid status transition and returns 200", async () => {
     const response = await handleUpdateOrdenServicio(requestWith({ status: "in_progress" }), "o1", {
-      db: lockedDb("open", vi.fn(() => ({ where: () => ({ returning: async () => [ordenWith("in_progress")] }) }))).db,
+      db: lockedDb("diagnosing", vi.fn(() => ({ where: () => ({ returning: async () => [ordenWith("in_progress")] }) }))).db,
     });
 
     expect(response.status).toBe(200);
@@ -180,13 +190,13 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
   // cancel/reschedule entirely. Asserting `.set()` was called with EXACTLY
   // the whitelisted fields is what proves it; a separate test for the same
   // mutation would have been a second name for this assertion.
-  it("whitelists exactly description/appointmentAt/categoria/3 notes — a stray field is ignored", async () => {
+  it("whitelists exactly description/appointmentAt/categoria/vehiculoId/3 notes — a stray field is ignored", async () => {
     const setSpy = vi.fn(() => ({
       where: () => ({ returning: async () => [{ ...current.orden, categoria: "revisado" }] }),
     }));
 
     const response = await handleUpdateOrdenServicio(
-      requestWith({ categoria: "revisado", vehiculoId: "sneaky-vehicle-swap" }),
+      requestWith({ categoria: "revisado", clienteId: "sneaky-customer-swap" }),
       "o1",
       {
         db: lockedDb("open", setSpy).db,
@@ -691,9 +701,10 @@ describe("PATCH /api/service-orders/[id] — who may transition (R21)", () => {
     };
   };
 
-  it("lets a tecnico start work: open -> in_progress answers 200", async () => {
-    const { run } = transition("in_progress", "open", "tecnico");
-    expect((await run()).status).toBe(200);
+  it("refuses a tecnico starting work: diagnosing -> in_progress answers 403 and writes nothing", async () => {
+    const { run, setSpy } = transition("in_progress", "diagnosing", "tecnico");
+    expect((await run()).status).toBe(403);
+    expect(setSpy).not.toHaveBeenCalled();
   });
 
   it.each(["done", "cancelled"] as const)("refuses a tecnico closing an in_progress order as %s with 403 and no write", async (to) => {
@@ -786,6 +797,113 @@ describe("PATCH /api/service-orders/[id] — who may transition (R21)", () => {
       db: { transaction: async (fn: (tx: unknown) => unknown) => fn(tx) } as never,
     });
     expect(new PgDialect().sqlToQuery(wheres[0] as never).sql).not.toContain("orden_tecnico");
+  });
+});
+
+describe("PATCH /api/service-orders/[id] — on-hold reason and receiving (R21)", () => {
+  const hold = (body: object) => {
+    const setSpy = vi.fn(() => ({ where: () => ({ returning: async () => [ordenWith("on_hold")] }) }));
+    return { setSpy, response: handleUpdateOrdenServicio(requestWith(body), "o1", { db: lockedDb("in_progress", setSpy).db }) };
+  };
+
+  it("stores the reason of a hold and answers 200", async () => {
+    const { response, setSpy } = hold({ status: "on_hold", esperaMotivo: "repuesto" });
+    expect((await response).status).toBe(200);
+    expect(setSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "on_hold", esperaMotivo: "repuesto" }));
+  });
+
+  it.each([{}, { esperaMotivo: "otro" }])("answers 400 in Spanish for a hold with %j, writing nothing", async (extra) => {
+    const { response, setSpy } = hold({ status: "on_hold", ...extra });
+    const answer = await response;
+    expect(answer.status).toBe(400);
+    expect((await answer.json()).errors.esperaMotivo).toContain("motivo");
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
+  it("answers 400 for a reason that rides another target", async () => {
+    const { setSpy } = hold({});
+    const answer = await handleUpdateOrdenServicio(requestWith({ status: "done", esperaMotivo: "repuesto" }), "o1", {
+      db: lockedDb("in_progress", setSpy).db,
+    });
+    expect(answer.status).toBe(400);
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
+  it("answers 400 in Spanish, not 500, when receiving a booked order without its vehicle", async () => {
+    const setSpy = vi.fn();
+    const tx = {
+      select: () => ({ from: () => ({ where: () => ({ for: async () => [{ ...ordenWith("booked"), vehiculoId: null }] }) }) }),
+      update: () => ({ set: setSpy }),
+    };
+    const answer = await handleUpdateOrdenServicio(requestWith({ status: "open" }), "o1", {
+      db: { transaction: async (fn: (tx: unknown) => unknown) => fn(tx) } as never,
+    });
+    expect(answer.status).toBe(400);
+    expect((await answer.json()).errors.form).toContain("vehículo");
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("PATCH /api/service-orders/[id] — the vehicle of a booked order (R20)", () => {
+  const patch = (body: object, status: OrderStatus | null, reads: unknown[] = [], role: Role = "administrador") => {
+    const setSpy = vi.fn(() => ({ where: () => ({ returning: async () => [{ ...ordenWith(status ?? "open"), ...body }] }) }));
+    return { setSpy, response: handleUpdateOrdenServicio(requestWith(body, role), "o1", { db: lockedDb(status, setSpy, reads).db }) };
+  };
+
+  it("completes the vehicle and category of a booked order and answers 200", async () => {
+    const { response, setSpy } = patch({ vehiculoId: "veh-2", categoria: "revisado" }, "booked", [{ id: "veh-2" }]);
+
+    expect((await response).status).toBe(200);
+    expect(setSpy).toHaveBeenCalledWith({ vehiculoId: "veh-2", categoria: "revisado" });
+  });
+
+  it("answers 400 under errors.vehiculoId for a vehicle that is not the customer's active one, writing nothing", async () => {
+    const { response, setSpy } = patch({ vehiculoId: "veh-foreign" }, "booked", []);
+
+    const answer = await response;
+    expect(answer.status).toBe(400);
+    expect((await answer.json()).errors.vehiculoId).toBe("Seleccioná un vehículo válido de este cliente");
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
+  it("answers 400 and keeps the stored vehicle once the order is no longer booked", async () => {
+    const { response, setSpy } = patch({ vehiculoId: "veh-2" }, "open", [{ id: "veh-2" }]);
+
+    const answer = await response;
+    expect(answer.status).toBe(400);
+    expect((await answer.json()).errors).toHaveProperty("vehiculoId");
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
+  it.each([null, 7, "", { id: "veh-2" }])("answers 400 without reaching the update for a vehiculoId of %j", async (vehiculoId) => {
+    const { response, setSpy } = patch({ vehiculoId }, "booked", [{ id: "veh-2" }]);
+
+    const answer = await response;
+    expect(answer.status).toBe(400);
+    expect((await answer.json()).errors).toEqual({ vehiculoId: "Valor inválido" });
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
+  it("answers 403 to a técnico, who may not edit a booked order", async () => {
+    const { response, setSpy } = patch({ vehiculoId: "veh-2" }, "booked", [{ id: "veh-2" }], "tecnico");
+
+    expect((await response).status).toBe(403);
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
+  it("answers 400 under errors.appointmentAt when the date of a booked order is cleared", async () => {
+    const { response, setSpy } = patch({ appointmentAt: null }, "booked");
+
+    const answer = await response;
+    expect(answer.status).toBe(400);
+    expect((await answer.json()).errors.appointmentAt).toContain("fecha");
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
+  it("answers 404, not 400, for a hold on an order that does not exist", async () => {
+    const answer = await handleUpdateOrdenServicio(requestWith({ status: "on_hold" }), "nope", { db: lockedDb(null).db });
+
+    expect(answer.status).toBe(404);
   });
 });
 

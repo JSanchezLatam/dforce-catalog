@@ -11,11 +11,13 @@
 import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
+import { enqueuePortalSync, type PortalSyncDeps } from "@/modules/portal-sync/enqueue";
 import { ordenTecnico, tecnico } from "@/shared/db/schema";
 import { isClosedStatus } from "./edit-policy";
 import { lockOrderForMutation, type Tx } from "./order-lock";
 import { applyReadiness } from "./readiness";
 import type { OrderScope } from "./scope";
+import { setStatus } from "./set-status";
 
 /** An id that is unknown or deactivated: one error for both, so the roster is not probed. */
 export class InvalidTecnicoError extends Error {
@@ -41,19 +43,20 @@ export async function assertActiveTecnicos(tx: Tx, ids: readonly string[]): Prom
   }
 }
 
-export type AssignDeps = { db?: typeof db };
+export type AssignDeps = { db?: typeof db } & PortalSyncDeps;
 
 /**
  * Assigns one technician. Returns `created: false` for a technician already on
- * the order (a no-op, not an error). A NEW assignment on a `ready_for_review`
- * order returns it to `in_progress` in the same transaction: the new assignee
- * has not marked, so the order is no longer ready.
+ * the order (a no-op, not an error). A NEW assignment on an `open` order moves it to
+ * `diagnosing`, and on a `ready_for_review` order returns it to `in_progress`, in the same
+ * transaction (the new assignee has not marked, so the order is no longer ready). When the
+ * status moved, the customer's portal sync is enqueued after the commit, as for a manual change.
  */
 export async function assignTecnico(
   input: { ordenId: string; tecnicoId: string; assignedBy: string; scope: OrderScope },
   deps: AssignDeps = {},
 ): Promise<{ created: boolean }> {
-  return (deps.db ?? db).transaction(async (tx) => {
+  const { created, syncClienteId } = await (deps.db ?? db).transaction(async (tx): Promise<{ created: boolean; syncClienteId?: string }> => {
     const { order } = await lockOrderForMutation(tx, input.ordenId, {
       scope: input.scope,
       canWrite: (status) => !isClosedStatus(status),
@@ -78,8 +81,18 @@ export async function assignTecnico(
       .returning({ tecnicoId: ordenTecnico.tecnicoId });
     if (inserted.length === 0) return { created: false };
 
-    // The new assignee has not marked, so a ready order is no longer ready: readiness owns that write.
-    await applyReadiness(tx, order);
-    return { created: true };
+    // The first technician on a Recibida order starts diagnosing. Otherwise the new assignee has not marked, so a
+    // ready order is no longer ready: readiness owns that write. Booked, on-hold and diagnosing orders stay put.
+    let moved = false;
+    if (order.status === "open") {
+      await setStatus(tx, order, "diagnosing", input.assignedBy);
+      moved = true;
+    } else {
+      moved = (await applyReadiness(tx, order, input.assignedBy)) !== order.status;
+    }
+    return { created: true, syncClienteId: moved ? order.clienteId : undefined };
   });
+
+  if (syncClienteId) await (deps.enqueuePortalSync ?? enqueuePortalSync)(syncClienteId);
+  return { created };
 }

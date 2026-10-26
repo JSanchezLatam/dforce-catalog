@@ -15,10 +15,9 @@ function makeOrden(overrides: Partial<OrdenServicio> = {}): OrdenServicio {
     appointmentAt: null,
     completedAt: null,
     createdBy: null,
-    // `orden_servicio.categoria` is `.notNull()`, so the fixture cannot leave
-    // it out. Defaulted to a category that DOES get a `service_due` reminder,
-    // so every pre-existing test keeps the behaviour it was written for unless
-    // it opts into another one.
+    // Defaulted to a category that DOES get a `service_due` reminder, so every
+    // pre-existing test keeps the behaviour it was written for unless it opts
+    // into another one (`categoria` is nullable since 0034; see the null case below).
     categoria: "mant_preventivo",
     createdAt: NOW,
     updatedAt: NOW,
@@ -196,6 +195,22 @@ describe("planReminders — service_due is restricted by category", () => {
     const plans = planReminders(orden, makeCliente(), NOW);
 
     expect(plans.filter((p) => p.type === "appointment")).toHaveLength(2);
+  });
+
+  // An Agendada order may have no category yet (0034). Pins the runtime: the appointment
+  // reminders still plan, and no service_due is invented for a category nobody chose.
+  it("plans the appointment reminders for a booked order with no category, and no service_due", () => {
+    const orden = makeOrden({
+      status: "booked",
+      categoria: null,
+      appointmentAt: new Date(NOW.getTime() + 48 * 60 * 60 * 1000),
+      completedAt: new Date("2026-07-01T00:00:00.000Z"),
+    });
+
+    const plans = planReminders(orden, makeCliente(), NOW);
+
+    expect(plans.filter((p) => p.type === "appointment")).toHaveLength(2);
+    expect(plans.filter((p) => p.type === "service_due")).toHaveLength(0);
   });
 
   /**

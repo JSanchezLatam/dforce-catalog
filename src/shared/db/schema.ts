@@ -236,7 +236,19 @@ export type Catalog = typeof catalogs.$inferSelect;
  * the full rationale (ADR-5 opt-out re-check, ADR-6 inline vehicle + FK
  * restrict, ADR-7 line-item snapshot, ADR-8 retry idempotency).
  */
-export const orderStatusEnum = pgEnum("order_status", ["open", "in_progress", "ready_for_review", "done", "cancelled"]);
+// Lifecycle order: the Estado sort follows enum order (`service-orders/queries.ts`).
+export const orderStatusEnum = pgEnum("order_status", [
+  "booked",
+  "open",
+  "diagnosing",
+  "in_progress",
+  "on_hold",
+  "ready_for_review",
+  "done",
+  "cancelled",
+]);
+/** Why an order is `on_hold`; non-null exactly while it is (CHECK `orden_espera_motivo_on_hold`). */
+export const esperaMotivoEnum = pgEnum("espera_motivo", ["repuesto", "aprobacion_cliente"]);
 /**
  * `orden_categoria` — service type vocabulary (C4, design.md D3). Unaccented
  * Spanish slugs, same convention `roleEnum` already established
@@ -518,8 +530,8 @@ export type VehiculoContacto = typeof vehiculoContacto.$inferSelect;
 /**
  * `orden_servicio` — service order. `vehiculoId`/`categoria`/the three note
  * columns land in C4 (design.md D5, migration `0015`) — added once `orden_servicio`
- * held 0 rows, which is why `vehiculoId`/`categoria` can be NOT NULL with no
- * backfill.
+ * held 0 rows, which is why they were NOT NULL with no backfill. Migration `0034`
+ * relaxes the two to nullable for an Agendada order that is not yet complete.
  */
 export const ordenServicio = pgTable(
   "orden_servicio",
@@ -530,16 +542,17 @@ export const ordenServicio = pgTable(
     clienteId: text("cliente_id")
       .notNull()
       .references(() => cliente.id, { onDelete: "restrict" }), // protect history (ADR-6)
-    // C4 — every order names exactly one vehicle of its customer's; RESTRICT
+    // C4 — an order names exactly one vehicle of its customer's; RESTRICT
     // is the backstop, `customers/vehicles.ts#applyVehiculoPlan`'s SEAM is
     // what turns a blocked delete into Spanish copy instead of a raw 500.
+    // Null only while `booked` (or `cancelled` from it): CHECK `orden_vehiculo_categoria_required`.
     vehiculoId: text("vehiculo_id")
-      .notNull()
       .references(() => vehiculo.id, { onDelete: "restrict" }),
     status: orderStatusEnum("status").notNull().default("open"),
+    esperaMotivo: esperaMotivoEnum("espera_motivo"),
     // C4 — no default: silently mis-filing an order under a guessed category
-    // is worse than forcing staff to choose one (design.md D5).
-    categoria: ordenCategoriaEnum("categoria").notNull(),
+    // is worse than forcing staff to choose one (design.md D5). Nullable on the same terms as `vehiculoId`.
+    categoria: ordenCategoriaEnum("categoria"),
     description: text("description"),
     appointmentAt: timestamp("appointment_at", { withTimezone: true }), // basis for "appointment" reminders
     completedAt: timestamp("completed_at", { withTimezone: true }), // set on -> done; basis for "service_due"
@@ -561,6 +574,14 @@ export const ordenServicio = pgTable(
     check("orden_kilometraje_range", sql`${table.kilometraje} between 0 and 2000000`),
     check("orden_nivel_combustible_range", sql`${table.nivelCombustible} between 0 and 4`),
     check("orden_bateria_pct_range", sql`${table.bateriaPct} between 0 and 100`),
+    // `::text`: migrate() runs every pending file in ONE transaction, and a literal comparison against an
+    // enum value added in that same transaction fails with "unsafe use of new value".
+    check("orden_espera_motivo_on_hold", sql`(${table.esperaMotivo} IS NOT NULL) = (${table.status}::text = 'on_hold')`),
+    // `::text` for the same reason as above: 0033 and 0034 share one migrate() transaction.
+    check(
+      "orden_vehiculo_categoria_required",
+      sql`${table.status}::text IN ('booked', 'cancelled') OR (${table.vehiculoId} IS NOT NULL AND ${table.categoria} IS NOT NULL)`,
+    ),
     // per-customer history, mirrors catalogs_user_created_idx
     index("orden_cliente_created_idx").on(table.clienteId, table.createdAt),
     index("orden_status_idx").on(table.status),
@@ -571,6 +592,31 @@ export const ordenServicio = pgTable(
 );
 
 export type OrdenServicio = typeof ordenServicio.$inferSelect;
+
+/**
+ * `orden_estado_historial` — append-only status history (service-order-workflow-states).
+ * Nothing updates or deletes a row. `changed_at` is `clock_timestamp()`, not `now()`:
+ * `now()` is constant inside a transaction, so the two rows one request writes would tie.
+ * `from_status` is null on creation; `changed_by` survives its user (SET NULL) and the
+ * order FK is `restrict`, so history outlives neither.
+ */
+export const ordenEstadoHistorial = pgTable(
+  "orden_estado_historial",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    ordenId: text("orden_id")
+      .notNull()
+      .references(() => ordenServicio.id, { onDelete: "restrict" }),
+    fromStatus: orderStatusEnum("from_status"),
+    toStatus: orderStatusEnum("to_status").notNull(),
+    esperaMotivo: esperaMotivoEnum("espera_motivo"),
+    changedBy: text("changed_by").references(() => users.id, { onDelete: "set null" }),
+    changedAt: timestamp("changed_at", { withTimezone: true }).notNull().default(sql`clock_timestamp()`),
+  },
+  (table) => [index("orden_estado_historial_orden_changed_idx").on(table.ordenId, table.changedAt)],
+);
+
+export type OrdenEstadoHistorial = typeof ordenEstadoHistorial.$inferSelect;
 
 /**
  * `orden_servicio_foto` — reception photos (service-order-reception). The id is

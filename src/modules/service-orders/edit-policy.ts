@@ -35,9 +35,9 @@ import type { OrderStatus } from "./transitions";
  * here instead of a silent default at two call sites.
  */
 const EDITABLE: Record<Role, Record<OrderStatus, boolean>> = {
-  administrador: { open: true, in_progress: true, ready_for_review: true, done: false, cancelled: false },
-  jefe_taller: { open: true, in_progress: true, ready_for_review: true, done: false, cancelled: false },
-  tecnico: { open: false, in_progress: true, ready_for_review: false, done: false, cancelled: false },
+  administrador: { booked: true, open: true, diagnosing: true, in_progress: true, on_hold: true, ready_for_review: true, done: false, cancelled: false },
+  jefe_taller: { booked: true, open: true, diagnosing: true, in_progress: true, on_hold: true, ready_for_review: true, done: false, cancelled: false },
+  tecnico: { booked: false, open: false, diagnosing: true, in_progress: true, on_hold: false, ready_for_review: false, done: false, cancelled: false },
 };
 
 /** D11 — true only for a `(role, status)` pair the table above permits. */
@@ -51,15 +51,18 @@ export function canEditOrderFields(role: Role, status: OrderStatus): boolean {
 
 /**
  * Reception photos follow the ORDER's status: a técnico must photograph an
- * `open` order even though D11 refuses them its field edits. The one role split
- * is review: `ready_for_review` takes photos from staff only (`"staff"` = the
+ * `open` order even though D11 refuses them its field edits. The role splits
+ * are review and hold: `ready_for_review` and `on_hold` take photos from staff only (`"staff"` = the
  * caller holds `service-orders.assign`). Who may DELETE is a role question and
  * lives in `policy.ts` (`service-orders.deletePhoto`). Exhaustive, so a new
  * status is a tsc error here.
  */
 const PHOTOS_CHANGEABLE: Record<OrderStatus, "all" | "staff" | "none"> = {
+  booked: "all",
   open: "all",
+  diagnosing: "all",
   in_progress: "all",
+  on_hold: "staff",
   ready_for_review: "staff",
   done: "none",
   cancelled: "none",
@@ -73,8 +76,11 @@ export function canChangeOrderPhotos(status: OrderStatus, staff: boolean): boole
 
 /** Closed orders are locked: only an authenticated administrator correction (closed-order-lock) may change them. Exhaustive, so a new status is a tsc error here. */
 const CLOSED: Record<OrderStatus, boolean> = {
+  booked: false,
   open: false,
+  diagnosing: false,
   in_progress: false,
+  on_hold: false,
   ready_for_review: false,
   done: true,
   cancelled: true,
@@ -101,8 +107,8 @@ export function orderEditMode(role: Role, status: OrderStatus): "edit" | "correc
 
 /**
  * Who may write a work line, by role and status — the same split the work-line
- * routes enforce (`work-lines.ts`): staff while `in_progress` or
- * `ready_for_review`, a técnico only `in_progress`, nobody on `open`, and on a
+ * routes enforce (`work-lines.ts`): staff while `diagnosing`, `in_progress` or
+ * `ready_for_review`, a técnico only `diagnosing`/`in_progress`, nobody on `booked`, `open` or `on_hold`, and on a
  * closed order only an administrador's password-backed correction (a jefe never
  * holds a grant). A técnico's own-line and not-yet-marked conditions are data
  * the page does not have here; the card checks them and the server stays the gate.
@@ -110,6 +116,6 @@ export function orderEditMode(role: Role, status: OrderStatus): "edit" | "correc
 export function workLineMode(role: Role, status: OrderStatus): "write" | "correction" | "refused" {
   const staff = role === "administrador" || role === "jefe_taller";
   if (isClosedStatus(status)) return role === "administrador" ? "correction" : "refused";
-  if (status === "in_progress") return staff || role === "tecnico" ? "write" : "refused";
+  if (status === "diagnosing" || status === "in_progress") return staff || role === "tecnico" ? "write" : "refused";
   return staff && status === "ready_for_review" ? "write" : "refused";
 }

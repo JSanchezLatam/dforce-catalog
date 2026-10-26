@@ -193,9 +193,9 @@ function buildDefaultSendViaChannel(kapsoTemplates?: KapsoTemplateNames): SendVi
  *    `scheduled` — this is what makes a pg-boss retry after a PARTIAL
  *    failure (provider send succeeded, the `sent` write didn't) safe against
  *    re-sending the same message.
- * 2. ADR-5/R23/R26: re-check order-cancelled / stale-timing / per-channel
+ * 2. ADR-5/R23/R26: re-check order-cancelled / appointment-no-longer-booked / stale-timing / per-channel
  *    opt-out AT FIRE TIME (not schedule time) — mark `skipped` (cancelled
- *    order, stale timing) or `opted_out` (per-channel opt-out, R26 — a
+ *    order, received order, stale timing) or `opted_out` (per-channel opt-out, R26 — a
  *    distinct outcome so it is never conflated with an operational skip or
  *    a delivery `failed`) and stop if any apply.
  * 3. Dispatch via the injectable `sendViaChannel` seam; mark `sent` on
@@ -232,6 +232,14 @@ export async function runReminder(reminderId: string, deps: RunReminderDeps = {}
   // after the orders and their reminders already exist, so a schedule-time
   // check would miss the only case that actually occurs.
   if (ctx.cliente.deactivatedAt) {
+    await markSkipped();
+    return;
+  }
+  // D10 — "we expect you on <date>" is true only while the order is still
+  // Agendada. Once it is received (or closed) the message would be false, so it
+  // is judged here from the current row, like every guard in this function.
+  // Other reminder types are unaffected.
+  if (ctx.reminder.type === "appointment" && ctx.orden.status !== "booked") {
     await markSkipped();
     return;
   }

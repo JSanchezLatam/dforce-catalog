@@ -11,6 +11,7 @@ import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db } from "@/shared/db/client";
+import { purgeHistory } from "./purge-history";
 import { cliente, ordenServicio, users, vehiculo } from "@/shared/db/schema";
 import { PATCH } from "../app/api/service-orders/[id]/route";
 import { POST } from "../app/api/service-orders/route";
@@ -55,6 +56,7 @@ describe("orden_servicio intake columns (E2E)", () => {
   }, 60_000);
 
   afterAll(async () => {
+    await purgeHistory([clienteId]);
     if (orderIds.length) await db.delete(ordenServicio).where(inArray(ordenServicio.id, orderIds));
     await db.delete(ordenServicio).where(eq(ordenServicio.clienteId, clienteId));
     await db.delete(vehiculo).where(eq(vehiculo.clienteId, clienteId));

@@ -10,6 +10,7 @@ import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db } from "@/shared/db/client";
+import { purgeHistory } from "./purge-history";
 import { cliente, ordenServicio, ordenTecnico, tecnico, users, vehiculo } from "@/shared/db/schema";
 import { lockOrderForMutation, OrderClosedError } from "../modules/service-orders/order-lock";
 import { markParteLista, ParteListaForbiddenError, unmarkParteLista } from "../modules/service-orders/parte-lista";
@@ -61,6 +62,7 @@ describe("Mi parte lista and readiness (E2E)", () => {
   afterAll(async () => {
     const orders = (await db.select({ id: ordenServicio.id }).from(ordenServicio).where(eq(ordenServicio.clienteId, clienteId))).map((o) => o.id);
     if (orders.length) await db.delete(ordenTecnico).where(inArray(ordenTecnico.ordenId, orders));
+    await purgeHistory([clienteId]);
     await db.delete(ordenServicio).where(eq(ordenServicio.clienteId, clienteId));
     await db.delete(vehiculo).where(eq(vehiculo.clienteId, clienteId));
     await db.delete(cliente).where(eq(cliente.id, clienteId));
@@ -148,7 +150,7 @@ describe("Mi parte lista and readiness (E2E)", () => {
     await assign(ordenId, a.tecnicoId, markedAt);
     await assign(ordenId, b.tecnicoId, markedAt);
 
-    await transitionOrder(ordenId, "in_progress", { scope: SYSTEM_SCOPE, canAssign: true });
+    await transitionOrder(ordenId, "in_progress", { scope: SYSTEM_SCOPE, canAssign: true, actorId: admin });
 
     expect(await statusOf(ordenId)).toBe("in_progress");
     expect(await markOf(ordenId, a.tecnicoId)).toBeNull();

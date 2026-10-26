@@ -109,6 +109,7 @@ const EXISTING_ORDER: OrdenServicio = {
   kilometraje: null,
   nivelCombustible: null,
   bateriaPct: null,
+  esperaMotivo: null,
   createdBy: "u1",
   createdAt: new Date("2026-09-01T10:00:00Z"),
   updatedAt: new Date("2026-09-01T10:00:00Z"),
@@ -178,6 +179,50 @@ describe("ServiceOrderFormTrigger — a save that only refreshes the page is a s
     // An edit stays where it is and repaints; it never navigates.
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(push).not.toHaveBeenCalled();
+  });
+
+  /**
+   * "Vehículo y categoría guardados" is what the operator did, not "Orden
+   * actualizada": completing an Agendada order is the reason that edit exists.
+   * Judged from the row the server returned, so an edit of a note on the same
+   * booked order does not claim it.
+   */
+  it("announces the vehicle and category saved on an Agendada order", async () => {
+    const booked: OrdenServicio = { ...EXISTING_ORDER, status: "booked", vehiculoId: null, categoria: null };
+    const fetchMock = mockApi();
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === "PATCH") {
+        const orden = { ...booked, vehiculoId: "v-a", categoria: "revisado" };
+        return { ok: true, status: 200, json: async () => ({ orden }) } as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({ vehicles: [VEHICLE] }) } as Response;
+    });
+    renderTrigger(booked);
+
+    fireEvent.click(screen.getByRole("button", { name: /editar orden/i }));
+    await flush();
+    fireEvent.change(screen.getByLabelText(/vehículo/i), { target: { value: "v-a" } });
+    fireEvent.change(screen.getByLabelText(/categoría/i), { target: { value: "revisado" } });
+    await save();
+
+    expect(await screen.findByText("Vehículo y categoría guardados")).toBeInTheDocument();
+    expect(screen.queryByText("Orden actualizada")).not.toBeInTheDocument();
+  });
+
+  it("keeps 'Orden actualizada' for an edit of an Agendada order that left vehicle and category alone", async () => {
+    const booked: OrdenServicio = { ...EXISTING_ORDER, status: "booked", vehiculoId: "v-a", categoria: "revisado" };
+    const fetchMock = mockApi();
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === "PATCH") return { ok: true, status: 200, json: async () => ({ orden: booked }) } as Response;
+      return { ok: true, status: 200, json: async () => ({ vehicles: [VEHICLE] }) } as Response;
+    });
+    renderTrigger(booked);
+
+    fireEvent.click(screen.getByRole("button", { name: /editar orden/i }));
+    await flush();
+    await save();
+
+    expect(await screen.findByText("Orden actualizada")).toBeInTheDocument();
   });
 
   it("hands the vehicle's motor to the edit form, so only the matching intake inputs show", async () => {

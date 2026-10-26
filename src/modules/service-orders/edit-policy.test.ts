@@ -7,24 +7,33 @@ import { canChangeOrderPhotos, canEditOrderFields, isClosedStatus, orderEditMode
 import type { OrderStatus } from "./transitions";
 
 /**
- * D11 — all fifteen `(role, status)` combinations, spelled out one per row so a
+ * D11 — all twenty-four `(role, status)` combinations, spelled out one per row so a
  * flipped cell in `edit-policy.ts` fails by a name that says which cell moved.
  * A parametrised expectation derived from the same shape as the source would
  * only re-state the implementation.
  */
 const TRUTH_TABLE: ReadonlyArray<[Role, OrderStatus, boolean]> = [
+  ["administrador", "booked", true],
   ["administrador", "open", true],
+  ["administrador", "diagnosing", true],
   ["administrador", "in_progress", true],
+  ["administrador", "on_hold", true],
   ["administrador", "ready_for_review", true],
   ["administrador", "done", false],
   ["administrador", "cancelled", false],
+  ["jefe_taller", "booked", true],
   ["jefe_taller", "open", true],
+  ["jefe_taller", "diagnosing", true],
   ["jefe_taller", "in_progress", true],
+  ["jefe_taller", "on_hold", true],
   ["jefe_taller", "ready_for_review", true],
   ["jefe_taller", "done", false],
   ["jefe_taller", "cancelled", false],
+  ["tecnico", "booked", false],
   ["tecnico", "open", false],
+  ["tecnico", "diagnosing", true],
   ["tecnico", "in_progress", true],
+  ["tecnico", "on_hold", false],
   ["tecnico", "ready_for_review", false],
   ["tecnico", "done", false],
   ["tecnico", "cancelled", false],
@@ -60,10 +69,16 @@ describe("canEditOrderFields (D11)", () => {
 describe("canChangeOrderPhotos", () => {
   it.each<[OrderStatus, boolean, boolean]>([
     // status, staff, expected
+    ["booked", false, true],
+    ["booked", true, true],
     ["open", false, true],
     ["open", true, true],
+    ["diagnosing", false, true],
+    ["diagnosing", true, true],
     ["in_progress", false, true],
     ["in_progress", true, true],
+    ["on_hold", false, false],
+    ["on_hold", true, true],
     ["ready_for_review", false, false],
     ["ready_for_review", true, true],
     ["done", false, false],
@@ -84,8 +99,11 @@ describe("canChangeOrderPhotos", () => {
 
 describe("isClosedStatus", () => {
   it.each<[OrderStatus, boolean]>([
+    ["booked", false],
     ["open", false],
+    ["diagnosing", false],
     ["in_progress", false],
+    ["on_hold", false],
     ["ready_for_review", false],
     ["done", true],
     ["cancelled", true],
@@ -107,17 +125,25 @@ describe("isClosedStatus", () => {
  */
 describe("orderEditMode", () => {
   it.each<[Role, OrderStatus, "edit" | "correction" | "refused"]>([
+    ["administrador", "booked", "edit"],
     ["administrador", "open", "edit"],
+    ["administrador", "diagnosing", "edit"],
     ["administrador", "in_progress", "edit"],
+    ["administrador", "on_hold", "edit"],
     ["administrador", "ready_for_review", "edit"],
     ["administrador", "done", "correction"],
     ["administrador", "cancelled", "correction"],
+    ["jefe_taller", "booked", "edit"],
     ["jefe_taller", "open", "edit"],
+    ["jefe_taller", "on_hold", "edit"],
     ["jefe_taller", "ready_for_review", "edit"],
     ["jefe_taller", "done", "refused"],
     ["jefe_taller", "cancelled", "refused"],
+    ["tecnico", "booked", "refused"],
     ["tecnico", "open", "refused"],
+    ["tecnico", "diagnosing", "edit"],
     ["tecnico", "in_progress", "edit"],
+    ["tecnico", "on_hold", "refused"],
     ["tecnico", "ready_for_review", "refused"],
     ["tecnico", "done", "refused"],
     ["tecnico", "cancelled", "refused"],
@@ -140,18 +166,27 @@ describe("orderEditMode", () => {
 /** The status/role half of who writes work lines; the técnico's own-line and un-marked conditions are the card's. */
 describe("workLineMode (order-work-lines, who writes lines)", () => {
   it.each<[Role, OrderStatus, "write" | "correction" | "refused"]>([
+    ["administrador", "booked", "refused"],
     ["administrador", "open", "refused"],
+    ["administrador", "diagnosing", "write"],
     ["administrador", "in_progress", "write"],
+    ["administrador", "on_hold", "refused"],
     ["administrador", "ready_for_review", "write"],
     ["administrador", "done", "correction"],
     ["administrador", "cancelled", "correction"],
+    ["jefe_taller", "booked", "refused"],
     ["jefe_taller", "open", "refused"],
+    ["jefe_taller", "diagnosing", "write"],
     ["jefe_taller", "in_progress", "write"],
+    ["jefe_taller", "on_hold", "refused"],
     ["jefe_taller", "ready_for_review", "write"],
     ["jefe_taller", "done", "refused"],
     ["jefe_taller", "cancelled", "refused"],
+    ["tecnico", "booked", "refused"],
     ["tecnico", "open", "refused"],
+    ["tecnico", "diagnosing", "write"],
     ["tecnico", "in_progress", "write"],
+    ["tecnico", "on_hold", "refused"],
     ["tecnico", "ready_for_review", "refused"],
     ["tecnico", "done", "refused"],
     ["tecnico", "cancelled", "refused"],

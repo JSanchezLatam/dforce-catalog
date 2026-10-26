@@ -225,7 +225,7 @@ describe("VehicleDetailPage — order history cards (WU6)", () => {
 
     const link = cards.getByRole("link");
     expect(link).toHaveAttribute("href", "/service-orders/o1");
-    expect(within(link).getByText("Abierta")).toBeInTheDocument();
+    expect(within(link).getByText("Recibida")).toBeInTheDocument();
     expect(link).toHaveTextContent("Reparación");
     expect(link).toHaveTextContent("Cambio de correa");
   });
@@ -247,5 +247,20 @@ describe("VehicleDetailPage — order scope", () => {
     expect(orderScope).toHaveBeenCalledWith({ id: "u1", role: "tecnico" });
     expect(getClienteById.mock.calls[0][1]).toBe(SCOPE);
     expect(listOrdenesByVehiculo).toHaveBeenCalledWith("v1", SCOPE);
+  });
+});
+
+describe("VehicleDetailPage — a history row whose order has no category yet", () => {
+  it("reads Sin categoría in the table and the cards", async () => {
+    getClienteById.mockResolvedValue({ cliente: { id: "c1", name: "Ana Gómez" }, orders: [], vehicles: [vehiculo()] });
+    listOrdenesByVehiculo.mockResolvedValue([
+      { id: "o1", status: "booked", categoria: null, description: null,
+        appointmentAt: null, createdAt: new Date("2026-05-01T14:00:00Z") } as OrdenServicio,
+    ]);
+
+    render(await renderPage());
+
+    expect(within(screen.getByTestId("history-table")).getByText("Sin categoría")).toBeInTheDocument();
+    expect(within(screen.getByTestId("history-cards")).getByText("Sin categoría")).toBeInTheDocument();
   });
 });

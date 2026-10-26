@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { db } from "@/shared/db/client";
 import * as assignments from "./assignments";
@@ -43,32 +43,105 @@ function fakeDb(results: unknown[][]) {
   };
 }
 
-const order = (status: OrderStatus) => [{ id: "o1", status }];
+const order = (status: OrderStatus) => [{ id: "o1", clienteId: "c1", status }];
 const ACTIVE = [{ id: "t1", deactivatedAt: null }];
 const input = { ordenId: "o1", tecnicoId: "t1", assignedBy: "admin-1", scope: SYSTEM_SCOPE };
 const NEW_ROW = [{ tecnicoId: "t1" }];
 
 describe("assignTecnico", () => {
-  it.each<OrderStatus>(["open", "in_progress"])(
+  it.each<OrderStatus>(["booked", "diagnosing", "on_hold", "in_progress"])(
     "inserts the assignment on a %s order and leaves its status alone",
     async (status) => {
       const { database, log } = fakeDb([order(status), ACTIVE, NEW_ROW]);
 
       await expect(assignTecnico(input, { db: database })).resolves.toEqual({ created: true });
 
-      // no `parteListaAt` key: the mark starts null
+      // no `parteListaAt` key: the mark starts null, and no history row: the status did not change
       expect(log.values).toEqual([{ ordenId: "o1", tecnicoId: "t1", assignedBy: "admin-1" }]);
       expect(log.sets).toEqual([]);
     },
   );
 
-  it("returns a ready_for_review order to in_progress when the assignment is new", async () => {
-    // the fourth statement is `applyReadiness`'s read: the new assignee has not marked
-    const { database, log } = fakeDb([order("ready_for_review"), ACTIVE, NEW_ROW, [{ parteListaAt: null, deactivatedAt: null }], []]);
+  it("moves an open order to diagnosing on its first technician, with a history row for the assigner", async () => {
+    const { database, log } = fakeDb([order("open"), ACTIVE, NEW_ROW, [], []]);
 
     await assignTecnico(input, { db: database });
 
-    expect(log.sets).toEqual([{ status: "in_progress", updatedAt: expect.any(Date) }]);
+    expect(log.sets).toEqual([{ status: "diagnosing", esperaMotivo: null, updatedAt: expect.any(Date) }]);
+    expect(log.values).toEqual([
+      { ordenId: "o1", tecnicoId: "t1", assignedBy: "admin-1" },
+      { ordenId: "o1", fromStatus: "open", toStatus: "diagnosing", esperaMotivo: null, changedBy: "admin-1" },
+    ]);
+  });
+
+  it("returns a ready_for_review order to in_progress when the assignment is new, with a history row", async () => {
+    // the fourth statement is `applyReadiness`'s read: the new assignee has not marked
+    const { database, log } = fakeDb([order("ready_for_review"), ACTIVE, NEW_ROW, [{ parteListaAt: null, deactivatedAt: null }], [], []]);
+
+    await assignTecnico(input, { db: database });
+
+    expect(log.sets).toEqual([{ status: "in_progress", esperaMotivo: null, updatedAt: expect.any(Date) }]);
+    expect(log.values[1]).toMatchObject({ fromStatus: "ready_for_review", toStatus: "in_progress", changedBy: "admin-1" });
+  });
+
+  describe("portal sync (an automatic status change must reach the portal like a manual one)", () => {
+    /** Records whether the transaction had committed when the enqueue ran. */
+    function observed(results: unknown[][]) {
+      const { database, log } = fakeDb(results);
+      let committed = false;
+      const wrapped = {
+        transaction: async (fn: (tx: unknown) => unknown) => {
+          const result = await (database as unknown as { transaction: (fn: (tx: unknown) => unknown) => Promise<unknown> }).transaction(fn);
+          committed = true;
+          return result;
+        },
+      } as unknown as typeof db;
+      const calls: { clienteId: string; committed: boolean }[] = [];
+      const enqueuePortalSync = vi.fn(async (clienteId: string) => void calls.push({ clienteId, committed }));
+      return { database: wrapped, log, calls, enqueuePortalSync };
+    }
+
+    it("enqueues the customer once, after the commit, when the first technician moves an open order to diagnosing", async () => {
+      const { database, calls, enqueuePortalSync } = observed([order("open"), ACTIVE, NEW_ROW, [], []]);
+
+      await assignTecnico(input, { db: database, enqueuePortalSync });
+
+      expect(calls).toEqual([{ clienteId: "c1", committed: true }]);
+    });
+
+    it("enqueues when a new technician sends a ready_for_review order back to in_progress", async () => {
+      const { database, calls, enqueuePortalSync } = observed([
+        order("ready_for_review"),
+        ACTIVE,
+        NEW_ROW,
+        [{ parteListaAt: null, deactivatedAt: null }],
+        [],
+        [],
+      ]);
+
+      await assignTecnico(input, { db: database, enqueuePortalSync });
+
+      expect(calls).toEqual([{ clienteId: "c1", committed: true }]);
+    });
+
+    it.each<OrderStatus>(["booked", "diagnosing", "on_hold", "in_progress"])(
+      "enqueues nothing when the %s order keeps its status",
+      async (status) => {
+        const { database, enqueuePortalSync } = observed([order(status), ACTIVE, NEW_ROW]);
+
+        await assignTecnico(input, { db: database, enqueuePortalSync });
+
+        expect(enqueuePortalSync).not.toHaveBeenCalled();
+      },
+    );
+
+    it("enqueues nothing for a technician who is already assigned", async () => {
+      const { database, enqueuePortalSync } = observed([order("open"), ACTIVE, []]);
+
+      await assignTecnico(input, { db: database, enqueuePortalSync });
+
+      expect(enqueuePortalSync).not.toHaveBeenCalled();
+    });
   });
 
   it("is a no-op for a technician already assigned: no error, and a ready_for_review order stays ready", async () => {

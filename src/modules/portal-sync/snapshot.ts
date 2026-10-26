@@ -15,10 +15,15 @@ import { CATEGORIA_LABEL } from "@/modules/service-orders/categories";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import type { Cliente, OrdenServicio, Vehiculo } from "@/shared/db/schema";
 
-/** Typed `Record<OrderStatus, …>`: a sixth internal status is a compile error, not a leaked string. */
-const CUSTOMER_STATUS: Record<OrderStatus, PortalOrder["status"]> = {
+/**
+ * Typed `Record<Exclude<OrderStatus, "booked">, …>`: a new internal status is a compile error, not a leaked
+ * string. `booked` has no customer label because it never leaves: `buildSnapshot` filters it out first.
+ */
+const CUSTOMER_STATUS: Record<Exclude<OrderStatus, "booked">, PortalOrder["status"]> = {
   open: "Recibida",
+  diagnosing: "En proceso",
   in_progress: "En proceso",
+  on_hold: "En proceso",
   ready_for_review: "En proceso",
   done: "Terminada",
   cancelled: "Cancelada",
@@ -60,7 +65,13 @@ export function buildSnapshot(input: SnapshotInput, version: number, now: Date):
       model: v.model,
       year: v.year,
       orders: input.orders
-        .filter((o) => o.vehiculoId === v.id)
+        // An appointment is internal until the car is received. A cancelled no-show can still have no category
+        // (0034 lets a booked order lack one, and cancelling keeps it): the portal has no label for that, so it is
+        // withheld. A null `vehiculoId` never equals `v.id`, so the vehicle needs no guard of its own.
+        .filter(
+          (o): o is typeof o & { status: Exclude<OrderStatus, "booked">; categoria: NonNullable<typeof o.categoria> } =>
+            o.status !== "booked" && o.categoria !== null && o.vehiculoId === v.id,
+        )
         .map((o) => ({
           id: o.id,
           status: CUSTOMER_STATUS[o.status],

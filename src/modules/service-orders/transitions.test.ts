@@ -1,20 +1,81 @@
 import { describe, expect, it } from "vitest";
 
+import { orderStatusEnum } from "@/shared/db/schema";
 import {
   allowedTransitionsForAll,
+  AUTOMATIC_TARGETS,
   assertTransition,
   assertTransitionPermitted,
-  getAllowedTransitions,
-  isTransitionPermitted,
+  getManualTransitions,
   OrderTransitionError,
   TransitionForbiddenError,
   type OrderStatus,
 } from "./transitions";
 
-describe("assertTransition (R21)", () => {
-  it("allows open -> in_progress", () => {
-    expect(() => assertTransition("open", "in_progress")).not.toThrow();
+/** The R21 pairs, written out by hand so the table cannot be read back from itself. */
+const R21_PAIRS: [OrderStatus, OrderStatus][] = [
+  ["booked", "open"],
+  ["open", "diagnosing"],
+  ["diagnosing", "in_progress"],
+  ["in_progress", "on_hold"],
+  ["on_hold", "in_progress"],
+  ["in_progress", "ready_for_review"],
+  ["ready_for_review", "in_progress"],
+  ["in_progress", "done"],
+  ["ready_for_review", "done"],
+  ...(["booked", "open", "diagnosing", "in_progress", "on_hold", "ready_for_review"] as const).map(
+    (from): [OrderStatus, OrderStatus] => [from, "cancelled"],
+  ),
+];
+
+describe("the full transition table (R21)", () => {
+  it("accepts exactly the R21 pairs and rejects every other pair", () => {
+    const all = orderStatusEnum.enumValues;
+    for (const from of all) {
+      for (const to of all) {
+        const legal = R21_PAIRS.some(([f, t]) => f === from && t === to);
+        const accepted = (() => {
+          try {
+            assertTransition(from, to);
+            return true;
+          } catch (err) {
+            if (err instanceof OrderTransitionError) return false;
+            throw err;
+          }
+        })();
+        expect(accepted, `${from} -> ${to}`).toBe(legal);
+      }
+    }
   });
+
+  it("rejects open -> in_progress: the flow always passes diagnosing", () => {
+    expect(() => assertTransition("open", "in_progress")).toThrow(OrderTransitionError);
+  });
+
+  it("lets nothing transition into booked", () => {
+    for (const from of orderStatusEnum.enumValues) {
+      expect(() => assertTransition(from, "booked")).toThrow(OrderTransitionError);
+    }
+  });
+});
+
+describe("AUTOMATIC_TARGETS and getManualTransitions", () => {
+  it("holds exactly diagnosing and ready_for_review", () => {
+    expect([...AUTOMATIC_TARGETS].sort()).toEqual(["diagnosing", "ready_for_review"]);
+  });
+
+  it("filters the automatic targets out of every status's manual transitions", () => {
+    expect(getManualTransitions("open")).toEqual(["cancelled"]);
+    expect(getManualTransitions("in_progress")).toEqual(["on_hold", "done", "cancelled"]);
+    expect(getManualTransitions("diagnosing")).toEqual(["in_progress", "cancelled"]);
+    expect(getManualTransitions("booked")).toEqual(["open", "cancelled"]);
+    for (const from of orderStatusEnum.enumValues) {
+      for (const to of getManualTransitions(from)) expect(AUTOMATIC_TARGETS.has(to)).toBe(false);
+    }
+  });
+});
+
+describe("assertTransition (R21)", () => {
 
   it("allows in_progress -> done", () => {
     expect(() => assertTransition("in_progress", "done")).not.toThrow();
@@ -63,37 +124,37 @@ describe("assertTransition (R21)", () => {
 
 describe("ready_for_review edges", () => {
   it("leaves ready_for_review to in_progress, done and cancelled", () => {
-    expect(getAllowedTransitions("ready_for_review")).toEqual(["in_progress", "done", "cancelled"]);
+    expect(getManualTransitions("ready_for_review")).toEqual(["in_progress", "done", "cancelled"]);
   });
 
   // Readiness is derived (applyReadiness), never chosen: no manual edge leads in.
-  it.each(["open", "in_progress", "ready_for_review", "done", "cancelled"] as const)(
-    "rejects %s -> ready_for_review as a manual transition",
+  it.each(["booked", "open", "diagnosing", "on_hold", "ready_for_review", "done", "cancelled"] as const)(
+    "rejects %s -> ready_for_review",
     (from) => {
       expect(() => assertTransition(from, "ready_for_review")).toThrow(OrderTransitionError);
     },
   );
 });
 
-describe("getAllowedTransitions (R21 — Phase 6 status-transition controls)", () => {
-  it("returns the two legal next states for open", () => {
-    expect(getAllowedTransitions("open")).toEqual(["in_progress", "cancelled"]);
+describe("getManualTransitions as the status controls use it (R21)", () => {
+  it("returns only cancelled for open: the start is automatic (diagnosing), not a button", () => {
+    expect(getManualTransitions("open")).toEqual(["cancelled"]);
   });
 
-  it("returns the two legal next states for in_progress", () => {
-    expect(getAllowedTransitions("in_progress")).toEqual(["done", "cancelled"]);
+  it("offers on_hold from in_progress: the single-order controls carry its reason", () => {
+    expect(getManualTransitions("in_progress")).toEqual(["on_hold", "done", "cancelled"]);
   });
 
   it("returns an empty array for the terminal states (done, cancelled)", () => {
-    expect(getAllowedTransitions("done")).toEqual([]);
-    expect(getAllowedTransitions("cancelled")).toEqual([]);
+    expect(getManualTransitions("done")).toEqual([]);
+    expect(getManualTransitions("cancelled")).toEqual([]);
   });
 });
 
 /**
  * Design D9 — what the bulk status menu is allowed to offer.
  *
- * The rule is the INTERSECTION of every selected row's `getAllowedTransitions`,
+ * The rule is the INTERSECTION of every selected row's manual transitions minus `on_hold`,
  * never the union and never the four statuses unconditionally: a menu built
  * from the union offers `done` over a selection holding one `open` row, and
  * every one of those rows comes back an `invalid_transition` the operator had
@@ -104,8 +165,8 @@ describe("allowedTransitionsForAll (D9 — the bulk status menu's intersection)"
     expect(allowedTransitionsForAll(["open", "open", "open", "in_progress"])).toEqual(["cancelled"]);
   });
 
-  it("keeps both of open's next states when every selected row is open", () => {
-    expect(allowedTransitionsForAll(["open", "open"])).toEqual(["in_progress", "cancelled"]);
+  it("keeps diagnosing's next states when every selected row is diagnosing", () => {
+    expect(allowedTransitionsForAll(["diagnosing", "diagnosing"])).toEqual(["in_progress", "cancelled"]);
   });
 
   /**
@@ -115,9 +176,19 @@ describe("allowedTransitionsForAll (D9 — the bulk status menu's intersection)"
    * from both.
    */
   it("offers no status that is legal for only some of the selected rows", () => {
-    const common = allowedTransitionsForAll(["open", "in_progress"]);
+    const common = allowedTransitionsForAll(["diagnosing", "in_progress"]);
+    expect(common).toEqual(["cancelled"]);
     expect(common).not.toContain("in_progress");
     expect(common).not.toContain("done");
+  });
+
+  // on_hold needs a reason chosen per order, so the bulk menu never carries it.
+  it("never offers on_hold, even when every selected row could go on hold", () => {
+    expect(allowedTransitionsForAll(["in_progress", "in_progress"])).toEqual(["done", "cancelled"]);
+  });
+
+  it("never offers receiving (booked -> open): each booked order needs its own vehicle and category check", () => {
+    expect(allowedTransitionsForAll(["booked", "booked"])).toEqual(["cancelled"]);
   });
 
   it("is empty once a terminal row is in the selection", () => {
@@ -133,32 +204,14 @@ describe("allowedTransitionsForAll (D9 — the bulk status menu's intersection)"
   it("offers nothing for an empty selection", () => {
     expect(allowedTransitionsForAll([])).toEqual([]);
   });
-
-  /**
-   * `getAllowedTransitions` hands back the live `ALLOWED_TRANSITIONS` row, so a
-   * single-row selection must not become a writable alias to the state machine
-   * itself.
-   */
-  it("never returns the transition table's own array", () => {
-    const common = allowedTransitionsForAll(["open"]);
-    common.pop();
-    expect(getAllowedTransitions("open")).toEqual(["in_progress", "cancelled"]);
-  });
-});
-
-describe("ready_for_review is never a manual target (R21)", () => {
-  it.each<OrderStatus>(["open", "in_progress", "ready_for_review", "done", "cancelled"])(
-    "rejects %s -> ready_for_review",
-    (from) => {
-      expect(() => assertTransition(from, "ready_for_review")).toThrow(OrderTransitionError);
-    },
-  );
 });
 
 describe("assertTransitionPermitted (R21, who may transition)", () => {
   const LEGAL_EDGES: [OrderStatus, OrderStatus][] = [
-    ["open", "in_progress"],
     ["open", "cancelled"],
+    ["diagnosing", "in_progress"],
+    ["on_hold", "in_progress"],
+    ["booked", "open"],
     ["in_progress", "done"],
     ["in_progress", "cancelled"],
     ["ready_for_review", "in_progress"],
@@ -170,28 +223,10 @@ describe("assertTransitionPermitted (R21, who may transition)", () => {
     expect(() => assertTransitionPermitted(true, from, to)).not.toThrow();
   });
 
-  it("lets everyone start work: open -> in_progress", () => {
-    expect(() => assertTransitionPermitted(false, "open", "in_progress")).not.toThrow();
-  });
-
-  it.each(LEGAL_EDGES.filter(([from, to]) => !(from === "open" && to === "in_progress")))(
+  it.each(LEGAL_EDGES)(
     "refuses %s -> %s for a caller without service-orders.assign",
     (from, to) => {
       expect(() => assertTransitionPermitted(false, from, to)).toThrow(TransitionForbiddenError);
     },
   );
-});
-
-describe("isTransitionPermitted (the boolean the controls filter by)", () => {
-  it("lets a holder of service-orders.assign pick any legal edge", () => {
-    expect(isTransitionPermitted(true, "in_progress", "done")).toBe(true);
-    expect(isTransitionPermitted(true, "ready_for_review", "in_progress")).toBe(true);
-  });
-
-  it("lets a caller without it start work and nothing else", () => {
-    expect(isTransitionPermitted(false, "open", "in_progress")).toBe(true);
-    expect(isTransitionPermitted(false, "open", "cancelled")).toBe(false);
-    expect(isTransitionPermitted(false, "in_progress", "done")).toBe(false);
-    expect(isTransitionPermitted(false, "ready_for_review", "in_progress")).toBe(false);
-  });
 });

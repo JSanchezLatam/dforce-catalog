@@ -191,8 +191,11 @@ describe("ServiceOrderFilters — typing a search drops page (D5)", () => {
  */
 describe("ServiceOrderFilters — the status trigger shows the Spanish label", () => {
   it.each([
-    ["open", "Abierta"],
+    ["booked", "Agendada"],
+    ["open", "Recibida"],
+    ["diagnosing", "En diagnóstico"],
     ["in_progress", "En progreso"],
+    ["on_hold", "En espera"],
     ["ready_for_review", "Lista para revisión"],
     ["done", "Completada"],
     ["cancelled", "Cancelada"],
@@ -201,5 +204,26 @@ describe("ServiceOrderFilters — the status trigger shows the Spanish label", (
     render(<ServiceOrderFilters selected={{ status: value }} pageSize={10} />);
 
     expect(screen.getAllByRole("combobox")[0].querySelector('[data-slot="select-value"]')).toHaveTextContent(new RegExp(`^${label}$`));
+  });
+});
+
+describe("ServiceOrderFilters — the status options", () => {
+  it("lists the eight statuses in workflow order, with Recibida and Cancelada", async () => {
+    const user = userEvent.setup();
+    render(<ServiceOrderFilters selected={{}} pageSize={10} />);
+    await user.click(screen.getAllByRole("combobox")[0]);
+
+    const labels = (await screen.findAllByRole("option")).map((o) => o.textContent);
+    expect(labels.slice(-8)).toEqual([
+      "Agendada",
+      "Recibida",
+      "En diagnóstico",
+      "En progreso",
+      "En espera",
+      "Lista para revisión",
+      "Completada",
+      "Cancelada",
+    ]);
+    expect(labels).not.toContain("Abierta");
   });
 });

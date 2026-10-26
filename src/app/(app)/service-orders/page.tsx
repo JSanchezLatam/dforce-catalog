@@ -22,6 +22,7 @@ import {
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import { listTecnicos } from "@/modules/technicians/queries";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
+import { orderStatusEnum } from "@/shared/db/schema";
 import { formatDateTime } from "@/shared/datetime";
 import { Pagination } from "@/shared/ui/Pagination";
 import { RecordCard, RecordCardList } from "@/shared/ui/RecordCard";
@@ -38,7 +39,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-const VALID_STATUS = new Set<OrderStatus>(["open", "in_progress", "ready_for_review", "done", "cancelled"]);
+const VALID_STATUS: ReadonlySet<string> = new Set(orderStatusEnum.enumValues);
 
 function firstValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
@@ -55,7 +56,7 @@ function normalizeOrdenFilters(searchParams: SearchParams): OrdenServicioFilters
   // asserting something the query did not do.
   const search = firstValue(searchParams.search)?.trim();
   return {
-    ...(status && VALID_STATUS.has(status as OrderStatus) ? { status: status as OrderStatus } : {}),
+    ...(status && VALID_STATUS.has(status) ? { status: status as OrderStatus } : {}),
     ...(search ? { search } : {}),
   };
 }
@@ -286,7 +287,7 @@ export default async function ServiceOrdersPage({
                   />
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <span className="font-mono font-medium">{orden.vehiculoPlate}</span>
+                  <span className="font-mono font-medium">{orden.vehiculoPlate ?? "Sin vehículo"}</span>
                   {[orden.vehiculoMake, orden.vehiculoModel].filter(Boolean).join(" ")}
                 </div>
                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -350,7 +351,7 @@ const ORDER_REFUSAL_MESSAGES: Record<string, string> = {
  *
  * `search` goes LAST (D11, mirrors `customers/page.tsx:392-397`): it is free
  * text and can contain anything, `|` included, while `status` is a closed
- * four-value enum that cannot be confused with part of a search term.
+ * enum that cannot be confused with part of a search term.
  */
 function buildFilterKey(filters: OrdenServicioFilters): string {
   return `status=${filters.status ?? "all"}|search=${filters.search ?? ""}`;
@@ -395,7 +396,9 @@ const COLUMNS: readonly { label: string; hideBelowXl?: boolean; sort?: keyof typ
  */
 function vehiculoLabel(orden: Pick<OrdenServicioListItem, "vehiculoPlate" | "vehiculoMake" | "vehiculoModel">): string {
   const makeModel = [orden.vehiculoMake, orden.vehiculoModel].filter(Boolean).join(" ");
-  return makeModel ? `${orden.vehiculoPlate} ${makeModel}` : orden.vehiculoPlate;
+  // Null plate = no vehicle yet (an Agendada order); its make/model are null with it.
+  const plate = orden.vehiculoPlate ?? "Sin vehículo";
+  return makeModel ? `${plate} ${makeModel}` : plate;
 }
 
 /**

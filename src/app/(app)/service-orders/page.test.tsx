@@ -188,6 +188,21 @@ describe("ServiceOrdersPage — column sorting", () => {
     expect(listOrdenesServicio.mock.calls[0][3]).toEqual({ key: "status", dir: "asc" });
   });
 
+  it.each(["booked", "open", "diagnosing", "in_progress", "on_hold", "ready_for_review", "done", "cancelled"])(
+    "passes ?status=%s to the query",
+    async (status) => {
+      render(await renderPage({ status }));
+
+      expect(listOrdenesServicio.mock.calls[0][0]).toEqual({ status });
+    },
+  );
+
+  it("ignores an unknown ?status= instead of filtering by it", async () => {
+    render(await renderPage({ status: "archived" }));
+
+    expect(listOrdenesServicio.mock.calls[0][0]).toEqual({});
+  });
+
   it("keeps the sort on every pagination link, like the status filter beside it", async () => {
     render(await renderPage({ sort: "id", dir: "asc", status: "open" }));
 
@@ -303,6 +318,8 @@ describe("ServiceOrdersPage — bulk status change (WU6)", () => {
    * the real one — it portals into `document.body`, which is what `screen`
    * queries.
    */
+  const DIAGNOSING_PAGE = OPEN_PAGE.map((o) => ({ ...o, status: "diagnosing" }));
+
   async function renderAt(items = OPEN_PAGE, params: Record<string, string> = {}) {
     listOrdenesServicio.mockResolvedValue(items);
     countOrdenesServicio.mockResolvedValue(40);
@@ -376,9 +393,9 @@ describe("ServiceOrdersPage — bulk status change (WU6)", () => {
     expect(within(menu).queryByRole("menuitem", { name: "Marcar como Completada" })).not.toBeInTheDocument();
   });
 
-  it("offers both of open's next states when every selected order is open", async () => {
+  it("offers both of diagnosing's next states when every selected order is diagnosing", async () => {
     const user = userEvent.setup();
-    render(await renderAt());
+    render(await renderAt(DIAGNOSING_PAGE));
 
     await select(user, "o1", "o2");
     await openStatusMenu(user);
@@ -438,7 +455,7 @@ describe("ServiceOrdersPage — bulk status change (WU6)", () => {
   it("sends one PATCH per selected order with {status}, in selection order", async () => {
     const user = userEvent.setup();
     const fetchMock = mockOrdersApi();
-    render(await renderAt());
+    render(await renderAt(DIAGNOSING_PAGE));
 
     await select(user, "o1", "o2");
     await openStatusMenu(user);
@@ -542,7 +559,7 @@ describe("ServiceOrdersPage — bulk status change (WU6)", () => {
   it("does not call a non-terminal move irreversible", async () => {
     const user = userEvent.setup();
     mockOrdersApi();
-    render(await renderAt());
+    render(await renderAt(DIAGNOSING_PAGE));
 
     await select(user, "o1");
     await openStatusMenu(user);
@@ -595,7 +612,7 @@ describe("ServiceOrdersPage — phone cards (WU5)", () => {
     const link = cards.getByRole("link");
     expect(within(link).getByText("AB1234")).toHaveClass("font-mono");
     expect(link).toHaveTextContent("Toyota Hilux");
-    const chip = within(link).getByText("Abierta");
+    const chip = within(link).getByText("Recibida");
     expect(chip).toHaveClass("rounded-full", "bg-zinc-100");
     expect(chip.querySelector("svg")).not.toBeNull();
     expect(link).toHaveTextContent(/Cita/);
@@ -874,5 +891,22 @@ describe("ServiceOrdersPage — technicians and ready_for_review", () => {
     await user.click(screen.getByRole("checkbox", { name: "Seleccionar orden o1" }));
 
     expect(screen.getByRole("button", { name: "Cambiar estado" })).toBeDisabled();
+  });
+});
+
+describe("ServiceOrdersPage — an Agendada order with no vehicle yet", () => {
+  it("reads Sin vehículo in the table row and in the phone card, with no 'null' and no stray make/model", async () => {
+    listOrdenesServicio.mockResolvedValue([
+      orden({ status: "booked", vehiculoPlate: null, vehiculoMake: null, vehiculoModel: null }),
+    ]);
+    countOrdenesServicio.mockResolvedValue(1);
+    render(<ToastProvider>{await ServiceOrdersPage({ searchParams: Promise.resolve({}) })}</ToastProvider>);
+
+    const table = within(screen.getByTestId("service-orders-table"));
+    const cards = within(screen.getByTestId("service-orders-cards"));
+    expect(table.getByText("Sin vehículo")).toHaveTextContent(/^Sin vehículo$/);
+    expect(cards.getByText("Sin vehículo")).toBeInTheDocument();
+    expect(screen.getByTestId("service-orders-table")).not.toHaveTextContent("null");
+    expect(screen.getByTestId("service-orders-cards")).not.toHaveTextContent("null");
   });
 });
