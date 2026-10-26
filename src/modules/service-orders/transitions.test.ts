@@ -187,6 +187,10 @@ describe("allowedTransitionsForAll (D9 — the bulk status menu's intersection)"
     expect(allowedTransitionsForAll(["in_progress", "in_progress"])).toEqual(["done", "cancelled"]);
   });
 
+  it("never offers receiving (booked -> open): each booked order needs its own vehicle and category check", () => {
+    expect(allowedTransitionsForAll(["booked", "booked"])).toEqual(["cancelled"]);
+  });
+
   it("is empty once a terminal row is in the selection", () => {
     expect(allowedTransitionsForAll(["open", "done"])).toEqual([]);
     expect(allowedTransitionsForAll(["in_progress", "cancelled"])).toEqual([]);

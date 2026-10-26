@@ -299,14 +299,14 @@ describe("OrderStatusControls — hold, resume, receive", () => {
       vi.fn().mockResolvedValue({
         ok: false,
         status: 400,
-        json: async () => ({ errors: { form: "Falta el vehículo o la categoría para recibir la orden." } }),
+        json: async () => ({ errors: { form: "Completá el vehículo y la categoría antes de recibir la orden" } }),
       }),
     );
 
     renderControls("booked");
     await user.click(screen.getByRole("button", { name: "Recibir" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Falta el vehículo o la categoría para recibir la orden.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Completá el vehículo y la categoría antes de recibir la orden");
     expect(screen.queryByText("Orden recibida")).not.toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
   });
@@ -318,14 +318,14 @@ describe("OrderStatusControls — hold, resume, receive", () => {
       vi.fn().mockResolvedValue({
         ok: false,
         status: 400,
-        json: async () => ({ errors: { esperaMotivo: "Elegí el motivo de la espera." } }),
+        json: async () => ({ errors: { esperaMotivo: "Indicá el motivo de la espera: repuesto o aprobación del cliente" } }),
       }),
     );
 
     renderControls("in_progress");
     await user.click(screen.getByRole("button", { name: "Marcar como En espera (repuesto)" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Elegí el motivo de la espera.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Indicá el motivo de la espera: repuesto o aprobación del cliente");
     expect(screen.queryByText("Orden puesta en espera")).not.toBeInTheDocument();
   });
 

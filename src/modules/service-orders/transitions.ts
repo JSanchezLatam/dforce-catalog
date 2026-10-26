@@ -76,8 +76,11 @@ export function assertTransitionPermitted(canAssign: boolean, from: OrderStatus,
   if (!canAssign) throw new TransitionForbiddenError(from, to);
 }
 
-/** `on_hold` needs a reason chosen per order, so only the single-order controls carry it. */
-const BULK_EXCLUDED: ReadonlySet<OrderStatus> = new Set<OrderStatus>(["on_hold"]);
+/**
+ * Single-order only: `on_hold` needs a reason chosen per order, and receiving (`open`) is refused for
+ * each booked order still missing its vehicle or category, which a bulk refusal could not explain.
+ */
+const BULK_EXCLUDED: ReadonlySet<OrderStatus> = new Set<OrderStatus>(["on_hold", "open"]);
 
 function getBulkTransitions(from: OrderStatus): OrderStatus[] {
   return getManualTransitions(from).filter((to) => !BULK_EXCLUDED.has(to));
