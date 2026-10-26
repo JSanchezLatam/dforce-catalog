@@ -10,6 +10,18 @@ import { isClosedStatus } from "./edit-policy";
 import { ServiceOrderForm, type ServiceOrderCustomerOption } from "./ServiceOrderForm";
 
 /**
+ * What the operator just did, judged from the row the server returned: completing
+ * an Agendada order (its vehicle or category changed) is the reason that edit
+ * exists, so it gets its own copy.
+ */
+function savedMessage(order: OrdenServicio | null | undefined, saved: OrdenServicio): string {
+  if (!order) return "Orden creada";
+  if (isClosedStatus(order.status)) return "Orden corregida";
+  const completed = order.status === "booked" && saved.vehiculoId && saved.categoria && (order.vehiculoId !== saved.vehiculoId || order.categoria !== saved.categoria);
+  return completed ? "Vehículo y categoría guardados" : "Orden actualizada";
+}
+
+/**
  * Thin client wrapper around `ServiceOrderForm` for use from server-component
  * pages (Phase 6, design.md §8) — same `router.refresh()`-on-save pattern as
  * `CustomerFormTrigger.tsx`, for the same RSC function-prop reason.
@@ -51,7 +63,7 @@ export function ServiceOrderFormTrigger({
         // for the mirror-image case: a refresh or push that throws must not
         // take the only evidence the save happened with it. The dialog has
         // already closed by here, so the toast is all the operator gets.
-        addToast("success", isEdit ? (isClosedStatus(order!.status) ? "Orden corregida" : "Orden actualizada") : "Orden creada");
+        addToast("success", savedMessage(order, saved));
         // A created order lands on its own detail page (server-rendered, so
         // fresh); an edit stays put and repaints. A failed save never reaches
         // here — `ServiceOrderForm` only calls `onSaved` after the server said ok.

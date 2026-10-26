@@ -12,12 +12,13 @@
  *
  * See `.claude/skills/component-testing/SKILL.md` for why this is `.test.tsx`.
  */
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ToastProvider } from "@/shared/ui/ToastProvider";
 import { OrderStatusControls } from "./OrderStatusControls";
+import type { OrderStatus } from "./transitions";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
@@ -28,10 +29,10 @@ afterEach(() => {
 });
 
 /** The real provider, not a fake: it portals into `document.body`, which is what `screen` queries. */
-function renderControls() {
+function renderControls(status: OrderStatus = "diagnosing") {
   return render(
     <ToastProvider>
-      <OrderStatusControls orderId="o1" status="diagnosing" canAssign />
+      <OrderStatusControls orderId="o1" status={status} canAssign />
     </ToastProvider>,
   );
 }
@@ -161,7 +162,7 @@ it("lets the status controls wrap onto a second line", () => {
 describe("OrderStatusControls — only what the role may do", () => {
   const labels = () => screen.queryAllByRole("button").map((b) => b.textContent);
 
-  function renderFor(status: "diagnosing" | "in_progress" | "ready_for_review", canAssign: boolean) {
+  function renderFor(status: OrderStatus, canAssign: boolean) {
     return render(
       <ToastProvider>
         <OrderStatusControls orderId="o1" status={status} canAssign={canAssign} />
@@ -184,13 +185,201 @@ describe("OrderStatusControls — only what the role may do", () => {
     expect(labels()).toEqual([]);
   });
 
-  it("offers staff every legal next state on an in_progress order", () => {
+  it("offers staff one hold button per reason, then close and cancel, on an in_progress order", () => {
     renderFor("in_progress", true);
-    expect(labels()).toEqual(["Marcar como Completada", "Marcar como Cancelada"]);
+    expect(labels()).toEqual([
+      "Marcar como En espera (repuesto)",
+      "Marcar como En espera (aprobación del cliente)",
+      "Marcar como Completada",
+      "Marcar como Cancelada",
+    ]);
+  });
+
+  it("offers staff resume and cancel on an on_hold order", () => {
+    renderFor("on_hold", true);
+    expect(labels()).toEqual(["Reanudar", "Marcar como Cancelada"]);
+  });
+
+  it("offers staff receive and cancel on a booked order", () => {
+    renderFor("booked", true);
+    expect(labels()).toEqual(["Recibir", "Marcar como Cancelada"]);
+  });
+
+  it("offers a técnico nothing on a booked or an on_hold order", () => {
+    renderFor("booked", false);
+    expect(labels()).toEqual([]);
+    cleanup();
+    renderFor("on_hold", false);
+    expect(labels()).toEqual([]);
   });
 
   it("offers staff the send-back, the close and the cancel on a ready_for_review order", () => {
     renderFor("ready_for_review", true);
     expect(labels()).toEqual(["Marcar como En progreso", "Marcar como Completada", "Marcar como Cancelada"]);
+  });
+});
+
+/**
+ * D7 and the "Status Actions Confirm With a Toast" requirement: two hold
+ * buttons carry the reason, every success toasts with the spec's copy, and a
+ * refusal stays inline with no success toast.
+ */
+describe("OrderStatusControls — hold, resume, receive", () => {
+  function okFetch() {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  function sentBody(fetchMock: ReturnType<typeof okFetch>) {
+    return JSON.parse(fetchMock.mock.calls[0][1].body);
+  }
+
+  it.each([
+    ["Marcar como En espera (repuesto)", "repuesto"],
+    ["Marcar como En espera (aprobación del cliente)", "aprobacion_cliente"],
+  ])("sends the reason of the button pressed: %s", async (name, esperaMotivo) => {
+    const user = userEvent.setup();
+    const fetchMock = okFetch();
+
+    renderControls("in_progress");
+    await user.click(screen.getByRole("button", { name }));
+
+    expect(sentBody(fetchMock)).toEqual({ status: "on_hold", esperaMotivo });
+    expect(await screen.findByText("Orden puesta en espera")).toBeInTheDocument();
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+  });
+
+  it("resumes with no reason on the wire and says so", async () => {
+    const user = userEvent.setup();
+    const fetchMock = okFetch();
+
+    renderControls("on_hold");
+    await user.click(screen.getByRole("button", { name: "Reanudar" }));
+
+    expect(sentBody(fetchMock)).toEqual({ status: "in_progress" });
+    expect(await screen.findByText("Orden reanudada")).toBeInTheDocument();
+  });
+
+  it("receives a booked order and says so", async () => {
+    const user = userEvent.setup();
+    const fetchMock = okFetch();
+
+    renderControls("booked");
+    await user.click(screen.getByRole("button", { name: "Recibir" }));
+
+    expect(sentBody(fetchMock)).toEqual({ status: "open" });
+    expect(await screen.findByText("Orden recibida")).toBeInTheDocument();
+  });
+
+  it("confirms diagnosing -> in progress with its own copy", async () => {
+    const user = userEvent.setup();
+    okFetch();
+
+    renderControls("diagnosing");
+    await user.click(screen.getByRole("button", { name: "Marcar como En progreso" }));
+
+    expect(await screen.findByText("Orden pasada a En progreso")).toBeInTheDocument();
+  });
+
+  it("confirms a cancellation", async () => {
+    const user = userEvent.setup();
+    okFetch();
+
+    renderControls("in_progress");
+    await user.click(screen.getByRole("button", { name: "Marcar como Cancelada" }));
+
+    expect(await screen.findByText("Orden cancelada")).toBeInTheDocument();
+  });
+
+  it("shows the server's Spanish refusal inline and no success toast", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ errors: { form: "Completá el vehículo y la categoría antes de recibir la orden" } }),
+      }),
+    );
+
+    renderControls("booked");
+    await user.click(screen.getByRole("button", { name: "Recibir" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Completá el vehículo y la categoría antes de recibir la orden");
+    expect(screen.queryByText("Orden recibida")).not.toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("shows a refused hold's reason message inline", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({ errors: { esperaMotivo: "Indicá el motivo de la espera: repuesto o aprobación del cliente" } }),
+      }),
+    );
+
+    renderControls("in_progress");
+    await user.click(screen.getByRole("button", { name: "Marcar como En espera (repuesto)" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Indicá el motivo de la espera: repuesto o aprobación del cliente");
+    expect(screen.queryByText("Orden puesta en espera")).not.toBeInTheDocument();
+  });
+
+  it("clears the inline error when the next attempt starts", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false, status: 500 })
+        .mockResolvedValueOnce({ ok: true, status: 200 }),
+    );
+
+    renderControls("booked");
+    await user.click(screen.getByRole("button", { name: "Recibir" }));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Recibir" }));
+    await screen.findByText("Orden recibida");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  // The throw ESCAPES `run` (that is the property), so it surfaces as an unhandled rejection.
+  it("keeps the success toast when the refresh throws after an accepted hold", async () => {
+    const user = userEvent.setup();
+    okFetch();
+    const boom = new Error("refresh blew up");
+    refresh.mockImplementationOnce(() => {
+      throw boom;
+    });
+    const escaped: unknown[] = [];
+    const capture = (reason: unknown) => escaped.push(reason);
+    process.on("unhandledRejection", capture);
+    try {
+      renderControls("in_progress");
+      await user.click(screen.getByRole("button", { name: "Marcar como En espera (repuesto)" }));
+      await vi.waitFor(() => expect(escaped).toContain(boom));
+    } finally {
+      process.off("unhandledRejection", capture);
+    }
+
+    expect(screen.getByText("Orden puesta en espera")).toBeInTheDocument();
+  });
+
+  it("keeps the hold, resume and receive buttons at the 44x44 floor", () => {
+    for (const status of ["in_progress", "on_hold", "booked"] as const) {
+      const { unmount } = renderControls(status);
+      const buttons = screen.getAllByRole("button");
+      expect(buttons.length).toBeGreaterThan(0);
+      for (const button of buttons) {
+        expect(button.className).toContain("min-h-11");
+        expect(button.className).toContain("min-w-11");
+      }
+      unmount();
+    }
   });
 });

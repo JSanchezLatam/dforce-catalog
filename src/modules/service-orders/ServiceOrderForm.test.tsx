@@ -1435,3 +1435,185 @@ describe("ServiceOrderForm — assigning technicians at creation", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Elegí técnicos activos");
   });
 });
+
+/**
+ * service-order-workflow-states WU4 — the Agendada / Recibida toggle at creation
+ * and the vehicle + category fields of an Agendada order. The wire is the
+ * contract: `POST` reads `vehiculoId: ""` as a (failing) claim and `PATCH`
+ * answers 400 to `categoria: ""`, so an unset field must be OMITTED.
+ */
+describe("ServiceOrderForm — Agendada and Recibida", () => {
+  const BOOKED_ORDER: OrdenServicio = {
+    id: "o1",
+    clienteId: "c-a",
+    vehiculoId: null,
+    status: "booked",
+    categoria: null,
+    description: null,
+    appointmentAt: new Date("2026-11-03T15:00:00Z"),
+    completedAt: null,
+    hallazgos: null,
+    recomendaciones: null,
+    observaciones: null,
+    kilometraje: null,
+    nivelCombustible: null,
+    bateriaPct: null,
+    esperaMotivo: null,
+    createdBy: "u1",
+    createdAt: new Date("2026-11-01T10:00:00Z"),
+    updatedAt: new Date("2026-11-01T10:00:00Z"),
+  };
+
+  function stubFetch(vehicles: Vehiculo[] = [vehiculoRow()]) {
+    const fetchMock = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/vehicles")) return Promise.resolve(jsonResponse({ vehicles }));
+      return Promise.resolve(jsonResponse({ orden: { id: "o1" } }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  function sentBody(fetchMock: ReturnType<typeof vi.fn>, method: "POST" | "PATCH") {
+    const [, init] = fetchMock.mock.calls.find(([, i]) => (i as RequestInit | undefined)?.method === method)!;
+    return JSON.parse((init as RequestInit).body as string);
+  }
+
+  const guardar = () => screen.getByRole("button", { name: "Guardar" }) as HTMLButtonElement;
+  const setAppointment = () => fireEvent.change(screen.getByLabelText(/fecha y hora de inicio/i), { target: { value: "2026-11-03T10:00" } });
+
+  async function openCreate(vehicles?: Vehiculo[]) {
+    const fetchMock = stubFetch(vehicles);
+    render(<ServiceOrderForm selectedCustomer={CUSTOMER} canCreateCustomer={false} />);
+    openDialog();
+    await flush();
+    return fetchMock;
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("defaults to Recibida and still needs a vehicle and a category", async () => {
+    await openCreate();
+
+    expect(screen.getByRole("radio", { name: "Recibida" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Agendada" })).not.toBeChecked();
+    expect(guardar()).toBeDisabled();
+  });
+
+  it("sends status open with the vehicle and category for a Recibida order", async () => {
+    const fetchMock = await openCreate();
+    fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+    fireEvent.change(categorySelect(), { target: { value: "revisado" } });
+    fireEvent.click(guardar());
+    await flush();
+
+    expect(sentBody(fetchMock, "POST")).toMatchObject({ status: "open", vehiculoId: "v-a", categoria: "revisado" });
+  });
+
+  it("lets an Agendada order submit once it has a date, with no vehicle and no category", async () => {
+    const fetchMock = await openCreate();
+    fireEvent.click(screen.getByRole("radio", { name: "Agendada" }));
+
+    expect(guardar()).toBeDisabled();
+    setAppointment();
+    expect(guardar()).toBeEnabled();
+    fireEvent.click(guardar());
+    await flush();
+
+    const body = sentBody(fetchMock, "POST");
+    expect(body).toMatchObject({ status: "booked", clienteId: "c-preseleccionado" });
+    expect(body.appointmentAt).toEqual(expect.any(String));
+    expect(body).not.toHaveProperty("vehiculoId");
+    expect(body).not.toHaveProperty("categoria");
+  });
+
+  it("lets an Agendada order for a customer with no active vehicle submit, which Recibida cannot", async () => {
+    await openCreate([]);
+
+    expect(guardar()).toBeDisabled();
+    fireEvent.click(screen.getByRole("radio", { name: "Agendada" }));
+    setAppointment();
+    expect(guardar()).toBeEnabled();
+  });
+
+  it("sends the vehicle and category an Agendada order was given", async () => {
+    const fetchMock = await openCreate();
+    fireEvent.click(screen.getByRole("radio", { name: "Agendada" }));
+    setAppointment();
+    fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+    fireEvent.change(categorySelect(), { target: { value: "revisado" } });
+    fireEvent.click(guardar());
+    await flush();
+
+    expect(sentBody(fetchMock, "POST")).toMatchObject({ status: "booked", vehiculoId: "v-a", categoria: "revisado" });
+  });
+
+  it("keeps the toggle options at the 44x44 floor", async () => {
+    await openCreate();
+
+    for (const name of ["Agendada", "Recibida"]) {
+      const label = screen.getByRole("radio", { name }).closest("label")!;
+      expect(label.className).toContain("min-h-11");
+      expect(label.className).toContain("min-w-11");
+    }
+  });
+
+  describe("editing an Agendada order that has no vehicle or category yet", () => {
+    async function openBookedEdit(order: OrdenServicio = BOOKED_ORDER) {
+      const fetchMock = stubFetch();
+      render(<ServiceOrderForm order={order} canCreateCustomer={false} />);
+      openEditDialog();
+      await flush();
+      return fetchMock;
+    }
+
+    it("starts the category at the placeholder and does not send it, or the vehicle, when neither was set", async () => {
+      const fetchMock = await openBookedEdit();
+
+      expect(categorySelect().value).toBe("");
+      fireEvent.change(screen.getByLabelText(/descripción/i), { target: { value: "Ruido al frenar" } });
+      fireEvent.click(guardar());
+      await flush();
+
+      const body = sentBody(fetchMock, "PATCH");
+      expect(body).toMatchObject({ description: "Ruido al frenar" });
+      expect(body).not.toHaveProperty("categoria");
+      expect(body).not.toHaveProperty("vehiculoId");
+    });
+
+    it("offers the customer's active vehicles and sends the chosen vehicle with the category", async () => {
+      const fetchMock = await openBookedEdit();
+
+      expect(fetchMock).toHaveBeenCalledWith("/api/customers/c-a/vehicles");
+      fireEvent.change(vehicleSelect(), { target: { value: "v-a" } });
+      fireEvent.change(categorySelect(), { target: { value: "revisado" } });
+      fireEvent.click(guardar());
+      await flush();
+
+      expect(sentBody(fetchMock, "PATCH")).toMatchObject({ vehiculoId: "v-a", categoria: "revisado" });
+    });
+
+    it("does not resend a vehicle that did not change", async () => {
+      const fetchMock = await openBookedEdit({ ...BOOKED_ORDER, vehiculoId: "v-a", categoria: "revisado" });
+
+      expect(vehicleSelect().value).toBe("v-a");
+      fireEvent.change(screen.getByLabelText(/descripción/i), { target: { value: "x" } });
+      fireEvent.click(guardar());
+      await flush();
+
+      expect(sentBody(fetchMock, "PATCH")).not.toHaveProperty("vehiculoId");
+    });
+  });
+
+  it("neither lists vehicles nor sends one when editing an order that is no longer Agendada", async () => {
+    const fetchMock = stubFetch();
+    render(<ServiceOrderForm order={{ ...BOOKED_ORDER, status: "open", vehiculoId: "v-a", categoria: "revisado" }} canCreateCustomer={false} />);
+    openEditDialog();
+    await flush();
+    fireEvent.click(guardar());
+    await flush();
+
+    expect(screen.queryByLabelText(/vehículo/i)).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/vehicles"))).toBe(false);
+    expect(sentBody(fetchMock, "PATCH")).not.toHaveProperty("vehiculoId");
+  });
+});

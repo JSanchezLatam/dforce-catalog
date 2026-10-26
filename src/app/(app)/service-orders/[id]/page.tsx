@@ -35,7 +35,7 @@ import { vehicleDescriptiveRows } from "@/modules/service-orders/vehicle-rows";
 import { ServiceOrderFormTrigger } from "@/modules/service-orders/ServiceOrderFormTrigger";
 import { listOrderPhotos } from "@/modules/service-orders/photos";
 import { getOrdenServicioById } from "@/modules/service-orders/queries";
-import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
+import { ESPERA_MOTIVO_LABEL, ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import { findTecnicoByUserId, listTecnicos } from "@/modules/technicians/queries";
 import { formatDateTime } from "@/shared/datetime";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
@@ -166,6 +166,9 @@ export default async function ServiceOrderDetailPage({
           <CardTitle className="flex items-center gap-3 sm:flex-1">
             <span title={orden.id}>Orden {shortId}</span>
             <StatusBadge status={orden.status} label={ORDER_STATUS_LABEL[orden.status]} />
+            {orden.esperaMotivo && (
+              <span className="text-sm font-normal text-muted-foreground">Motivo: {ESPERA_MOTIVO_LABEL[orden.esperaMotivo]}</span>
+            )}
           </CardTitle>
           <div className="flex flex-wrap items-center gap-2">
             {/* D11 — the same predicate the PATCH route enforces, so the
@@ -343,7 +346,9 @@ export default async function ServiceOrderDetailPage({
             <p className="text-sm text-muted-foreground">
               {orden.status === "ready_for_review"
                 ? "Las fotos de una orden lista para revisión las agrega el administrador o el jefe de taller."
-                : "Las fotos no se pueden agregar ni borrar cuando la orden está terminada o cancelada."}
+                : orden.status === "on_hold"
+                  ? "Las fotos de una orden en espera las agrega el administrador o el jefe de taller."
+                  : "Las fotos no se pueden agregar ni borrar cuando la orden está terminada o cancelada."}
             </p>
           )}
         </CardContent>
