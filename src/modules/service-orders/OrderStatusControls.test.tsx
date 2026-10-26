@@ -31,7 +31,7 @@ afterEach(() => {
 function renderControls() {
   return render(
     <ToastProvider>
-      <OrderStatusControls orderId="o1" status="open" canAssign={false} />
+      <OrderStatusControls orderId="o1" status="diagnosing" canAssign />
     </ToastProvider>,
   );
 }
@@ -161,7 +161,7 @@ it("lets the status controls wrap onto a second line", () => {
 describe("OrderStatusControls — only what the role may do", () => {
   const labels = () => screen.queryAllByRole("button").map((b) => b.textContent);
 
-  function renderFor(status: "open" | "in_progress" | "ready_for_review", canAssign: boolean) {
+  function renderFor(status: "diagnosing" | "in_progress" | "ready_for_review", canAssign: boolean) {
     return render(
       <ToastProvider>
         <OrderStatusControls orderId="o1" status={status} canAssign={canAssign} />
@@ -169,9 +169,9 @@ describe("OrderStatusControls — only what the role may do", () => {
     );
   }
 
-  it("offers a técnico only 'En progreso' on an open order", () => {
-    renderFor("open", false);
-    expect(labels()).toEqual(["Marcar como En progreso"]);
+  it("offers a técnico nothing on a diagnosing order: every manual transition is staff-only", () => {
+    renderFor("diagnosing", false);
+    expect(labels()).toEqual([]);
   });
 
   it("offers a técnico nothing on an in_progress order", () => {

@@ -13,7 +13,7 @@ import type { OrderStatus } from "./transitions";
  * the whole write log.
  */
 function fakeTx(rows: unknown[]) {
-  const log = { sets: [] as { status?: string; updatedAt?: unknown }[], selects: 0 };
+  const log = { sets: [] as { status?: string; updatedAt?: unknown }[], selects: 0, history: [] as unknown[] };
   const chain = (result: unknown): unknown =>
     new Proxy(function () {}, {
       get(_, prop) {
@@ -33,6 +33,11 @@ function fakeTx(rows: unknown[]) {
       return chain(rows);
     },
     update: () => chain([]),
+    insert: () => ({
+      values: async (row: unknown) => {
+        log.history.push(row);
+      },
+    }),
   };
   return { tx: tx as unknown as Tx, log };
 }
@@ -42,52 +47,61 @@ const marked = { parteListaAt: MARK, deactivatedAt: null };
 const pending = { parteListaAt: null, deactivatedAt: null };
 const offUnmarked = { parteListaAt: null, deactivatedAt: new Date("2026-09-01") };
 const order = (status: OrderStatus) => ({ id: "o1", status });
+const ACTOR = "user-1";
 
 describe("applyReadiness truth table", () => {
   it("never makes an order with zero assignees ready", async () => {
     const { tx, log } = fakeTx([]);
-    await expect(applyReadiness(tx, order("in_progress"))).resolves.toBe("in_progress");
+    await expect(applyReadiness(tx, order("in_progress"), ACTOR)).resolves.toBe("in_progress");
     expect(log.sets).toEqual([]);
+    expect(log.history).toEqual([]);
   });
 
   it("never makes an order whose only assignee is deactivated ready", async () => {
     const { tx, log } = fakeTx([{ parteListaAt: MARK, deactivatedAt: new Date("2026-09-01") }]);
-    await expect(applyReadiness(tx, order("in_progress"))).resolves.toBe("in_progress");
+    await expect(applyReadiness(tx, order("in_progress"), ACTOR)).resolves.toBe("in_progress");
     expect(log.sets).toEqual([]);
   });
 
   it("moves an in_progress order to ready_for_review, with a timestamp, once every active assignee has marked", async () => {
     const { tx, log } = fakeTx([marked, marked]);
-    await expect(applyReadiness(tx, order("in_progress"))).resolves.toBe("ready_for_review");
-    expect(log.sets).toEqual([{ status: "ready_for_review", updatedAt: expect.any(Date) }]);
+    await expect(applyReadiness(tx, order("in_progress"), ACTOR)).resolves.toBe("ready_for_review");
+    expect(log.sets).toEqual([{ status: "ready_for_review", esperaMotivo: null, updatedAt: expect.any(Date) }]);
+    expect(log.history).toEqual([
+      { ordenId: "o1", fromStatus: "in_progress", toStatus: "ready_for_review", esperaMotivo: null, changedBy: ACTOR },
+    ]);
   });
 
   it("leaves an in_progress order alone while one active assignee is pending", async () => {
     const { tx, log } = fakeTx([marked, pending]);
-    await expect(applyReadiness(tx, order("in_progress"))).resolves.toBe("in_progress");
+    await expect(applyReadiness(tx, order("in_progress"), ACTOR)).resolves.toBe("in_progress");
     expect(log.sets).toEqual([]);
+    expect(log.history).toEqual([]);
   });
 
   it("ignores a deactivated assignee who never marked", async () => {
     const { tx } = fakeTx([marked, offUnmarked]);
-    await expect(applyReadiness(tx, order("in_progress"))).resolves.toBe("ready_for_review");
+    await expect(applyReadiness(tx, order("in_progress"), ACTOR)).resolves.toBe("ready_for_review");
   });
 
   it("returns a ready_for_review order to in_progress when a mark is removed", async () => {
     const { tx, log } = fakeTx([marked, pending]);
-    await expect(applyReadiness(tx, order("ready_for_review"))).resolves.toBe("in_progress");
-    expect(log.sets).toEqual([{ status: "in_progress", updatedAt: expect.any(Date) }]);
+    await expect(applyReadiness(tx, order("ready_for_review"), ACTOR)).resolves.toBe("in_progress");
+    expect(log.sets).toEqual([{ status: "in_progress", esperaMotivo: null, updatedAt: expect.any(Date) }]);
+    expect(log.history).toEqual([
+      { ordenId: "o1", fromStatus: "ready_for_review", toStatus: "in_progress", esperaMotivo: null, changedBy: ACTOR },
+    ]);
   });
 
   it("keeps a ready_for_review order ready while every active assignee is still marked, writing nothing", async () => {
     const { tx, log } = fakeTx([marked, marked]);
-    await expect(applyReadiness(tx, order("ready_for_review"))).resolves.toBe("ready_for_review");
+    await expect(applyReadiness(tx, order("ready_for_review"), ACTOR)).resolves.toBe("ready_for_review");
     expect(log.sets).toEqual([]);
   });
 
   it.each<OrderStatus>(["open", "done", "cancelled"])("does nothing on a %s order, not even a read", async (status) => {
     const { tx, log } = fakeTx([marked]);
-    await expect(applyReadiness(tx, order(status))).resolves.toBe(status);
+    await expect(applyReadiness(tx, order(status), ACTOR)).resolves.toBe(status);
     expect(log.selects).toBe(0);
     expect(log.sets).toEqual([]);
   });
@@ -96,7 +110,7 @@ describe("applyReadiness truth table", () => {
 describe("applyReadiness and the customer portal (WU5b)", () => {
   it("never enqueues a portal sync: in_progress and ready_for_review both read 'En proceso'", async () => {
     const { tx, log } = fakeTx([marked]);
-    await expect(applyReadiness(tx, order("in_progress"))).resolves.toBe("ready_for_review");
+    await expect(applyReadiness(tx, order("in_progress"), ACTOR)).resolves.toBe("ready_for_review");
     expect(log.sets).toHaveLength(1); // the status really flipped, so the absence below is not vacuous
     expect(enqueuePortalSync).not.toHaveBeenCalled();
   });

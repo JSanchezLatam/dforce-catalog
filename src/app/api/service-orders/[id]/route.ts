@@ -7,7 +7,9 @@ import { authorizeCorrection, CorrectionRefusedError } from "@/modules/service-o
 import { parseIntake } from "@/modules/service-orders/intake";
 import { OrderClosedError, OrderEditForbiddenError, type CorrectionGrant } from "@/modules/service-orders/order-lock";
 import {
+  EsperaMotivoError,
   OrdenServicioNotFoundError,
+  OrderIncompleteError,
   updateOrder,
   transitionOrder,
   type TransitionOrdenServicioDeps,
@@ -24,7 +26,7 @@ const NULLABLE_TEXT_FIELDS = ["description", "hallazgos", "recomendaciones", "ob
 const MAX_TEXT_LENGTH = 5000;
 
 export type UpdateOrdenServicioRouteDeps = Omit<UpdateOrdenServicioDeps, "role" | "correction" | "scope"> &
-  Omit<TransitionOrdenServicioDeps, "scope" | "canAssign"> & {
+  Omit<TransitionOrdenServicioDeps, "scope" | "canAssign" | "actorId" | "esperaMotivo"> & {
     /** Injected so a test never runs bcrypt; defaults to the real re-authentication. */
     authorize?: (userId: string, password: string) => Promise<CorrectionGrant>;
   };
@@ -59,6 +61,8 @@ export async function handleUpdateOrdenServicio(
         ...serviceDeps,
         scope,
         canAssign: can(user, "service-orders.assign"),
+        actorId: user.id,
+        esperaMotivo: body.esperaMotivo,
       });
       return NextResponse.json({ orden });
     }
@@ -166,6 +170,12 @@ export async function handleUpdateOrdenServicio(
     }
     if (err instanceof OrderTransitionError) {
       return NextResponse.json({ error: "invalid_transition", from: err.from, to: err.to }, { status: 400 }); // R21
+    }
+    if (err instanceof EsperaMotivoError) {
+      return NextResponse.json({ errors: { esperaMotivo: err.message } }, { status: 400 });
+    }
+    if (err instanceof OrderIncompleteError) {
+      return NextResponse.json({ errors: { form: err.message } }, { status: 400 });
     }
     if (err instanceof OrdenServicioNotFoundError) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });

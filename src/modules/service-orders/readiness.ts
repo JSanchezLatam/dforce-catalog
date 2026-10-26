@@ -2,8 +2,8 @@
  * service-orders/readiness.ts — "Lista para revisión" is DERIVED, never chosen.
  *
  * `applyReadiness` recomputes an order's status from its assignments and writes
- * `in_progress <-> ready_for_review` WITHOUT `assertTransition`: no manual edge
- * leads into `ready_for_review`. It runs inside the caller's transaction, which
+ * `in_progress <-> ready_for_review` through `setStatus` (table check plus history row,
+ * attributed to `actorId`, the user whose action caused it). It runs inside the caller's transaction, which
  * must already hold the order's `FOR UPDATE` lock (`lockOrderForMutation`): that
  * lock is what makes two last marks serialize, so the second counts the first.
  *
@@ -12,12 +12,17 @@
  */
 import { eq } from "drizzle-orm";
 
-import { ordenServicio, ordenTecnico, tecnico } from "@/shared/db/schema";
+import { ordenTecnico, tecnico } from "@/shared/db/schema";
 import type { Tx } from "./order-lock";
+import { setStatus } from "./set-status";
 import type { OrderStatus } from "./transitions";
 
 /** Returns the order's status after the recomputation; any other status is returned untouched, unread. */
-export async function applyReadiness(tx: Tx, order: { id: string; status: OrderStatus }): Promise<OrderStatus> {
+export async function applyReadiness(
+  tx: Tx,
+  order: { id: string; status: OrderStatus },
+  actorId: string,
+): Promise<OrderStatus> {
   if (order.status !== "in_progress" && order.status !== "ready_for_review") return order.status;
 
   const rows = await tx
@@ -29,9 +34,6 @@ export async function applyReadiness(tx: Tx, order: { id: string; status: OrderS
   const next: OrderStatus =
     active.length > 0 && active.every((row) => row.parteListaAt !== null) ? "ready_for_review" : "in_progress";
 
-  // `updatedAt` is the only timestamp a derived transition has: the table keeps no per-status history.
-  if (next !== order.status) {
-    await tx.update(ordenServicio).set({ status: next, updatedAt: new Date() }).where(eq(ordenServicio.id, order.id));
-  }
+  if (next !== order.status) await setStatus(tx, order, next, actorId);
   return next;
 }

@@ -92,7 +92,7 @@ describe("PATCH /api/service-orders/[id] (R21)", () => {
 
   it("drives a valid status transition and returns 200", async () => {
     const response = await handleUpdateOrdenServicio(requestWith({ status: "in_progress" }), "o1", {
-      db: lockedDb("open", vi.fn(() => ({ where: () => ({ returning: async () => [ordenWith("in_progress")] }) }))).db,
+      db: lockedDb("diagnosing", vi.fn(() => ({ where: () => ({ returning: async () => [ordenWith("in_progress")] }) }))).db,
     });
 
     expect(response.status).toBe(200);
@@ -692,9 +692,10 @@ describe("PATCH /api/service-orders/[id] — who may transition (R21)", () => {
     };
   };
 
-  it("lets a tecnico start work: open -> in_progress answers 200", async () => {
-    const { run } = transition("in_progress", "open", "tecnico");
-    expect((await run()).status).toBe(200);
+  it("refuses a tecnico starting work: diagnosing -> in_progress answers 403 and writes nothing", async () => {
+    const { run, setSpy } = transition("in_progress", "diagnosing", "tecnico");
+    expect((await run()).status).toBe(403);
+    expect(setSpy).not.toHaveBeenCalled();
   });
 
   it.each(["done", "cancelled"] as const)("refuses a tecnico closing an in_progress order as %s with 403 and no write", async (to) => {
@@ -787,6 +788,50 @@ describe("PATCH /api/service-orders/[id] — who may transition (R21)", () => {
       db: { transaction: async (fn: (tx: unknown) => unknown) => fn(tx) } as never,
     });
     expect(new PgDialect().sqlToQuery(wheres[0] as never).sql).not.toContain("orden_tecnico");
+  });
+});
+
+describe("PATCH /api/service-orders/[id] — on-hold reason and receiving (R21)", () => {
+  const hold = (body: object) => {
+    const setSpy = vi.fn(() => ({ where: () => ({ returning: async () => [ordenWith("on_hold")] }) }));
+    return { setSpy, response: handleUpdateOrdenServicio(requestWith(body), "o1", { db: lockedDb("in_progress", setSpy).db }) };
+  };
+
+  it("stores the reason of a hold and answers 200", async () => {
+    const { response, setSpy } = hold({ status: "on_hold", esperaMotivo: "repuesto" });
+    expect((await response).status).toBe(200);
+    expect(setSpy).toHaveBeenCalledWith(expect.objectContaining({ status: "on_hold", esperaMotivo: "repuesto" }));
+  });
+
+  it.each([{}, { esperaMotivo: "otro" }])("answers 400 in Spanish for a hold with %j, writing nothing", async (extra) => {
+    const { response, setSpy } = hold({ status: "on_hold", ...extra });
+    const answer = await response;
+    expect(answer.status).toBe(400);
+    expect((await answer.json()).errors.esperaMotivo).toContain("motivo");
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
+  it("answers 400 for a reason that rides another target", async () => {
+    const { setSpy } = hold({});
+    const answer = await handleUpdateOrdenServicio(requestWith({ status: "done", esperaMotivo: "repuesto" }), "o1", {
+      db: lockedDb("in_progress", setSpy).db,
+    });
+    expect(answer.status).toBe(400);
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
+  it("answers 400 in Spanish, not 500, when receiving a booked order without its vehicle", async () => {
+    const setSpy = vi.fn();
+    const tx = {
+      select: () => ({ from: () => ({ where: () => ({ for: async () => [{ ...ordenWith("booked"), vehiculoId: null }] }) }) }),
+      update: () => ({ set: setSpy }),
+    };
+    const answer = await handleUpdateOrdenServicio(requestWith({ status: "open" }), "o1", {
+      db: { transaction: async (fn: (tx: unknown) => unknown) => fn(tx) } as never,
+    });
+    expect(answer.status).toBe(400);
+    expect((await answer.json()).errors.form).toContain("vehículo");
+    expect(setSpy).not.toHaveBeenCalled();
   });
 });
 

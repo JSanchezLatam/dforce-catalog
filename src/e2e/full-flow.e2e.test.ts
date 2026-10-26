@@ -69,6 +69,7 @@ import {
 } from "@/modules/pdf-generation/enqueue";
 import { proxy } from "@/proxy";
 import { db } from "@/shared/db/client";
+import { purgeHistory } from "./purge-history";
 import { catalogs, cliente, customerImportRuns, ordenServicio, users, vehiculo } from "@/shared/db/schema";
 import { getBoss } from "@/shared/jobs/boss";
 
@@ -364,6 +365,7 @@ describe("vehicle search (E2E)", () => {
     // `ordenServicio.clienteId` is RESTRICT (ADR-6, protect history) — the
     // cliente delete below would itself be blocked by the very constraint
     // this describe exists to prove, unless the order row goes first.
+    await purgeHistory(seeded);
     await db.delete(ordenServicio).where(inArray(ordenServicio.clienteId, seeded));
     await db.delete(cliente).where(inArray(cliente.id, seeded));
   });
@@ -1533,6 +1535,7 @@ describe("order search (E2E)", () => {
   afterAll(async () => {
     const clienteIds = [owner?.id, deactivatedOwner?.id].filter((id): id is string => Boolean(id));
     if (clienteIds.length === 0) return;
+    await purgeHistory(clienteIds);
     await db.delete(ordenServicio).where(inArray(ordenServicio.clienteId, clienteIds));
     await db.delete(cliente).where(inArray(cliente.id, clienteIds)); // `vehiculo` cascades
   });

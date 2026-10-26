@@ -10,6 +10,7 @@ import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db } from "@/shared/db/client";
+import { purgeHistory } from "./purge-history";
 import { cliente, ordenServicio, ordenServicioCorreccion, users, vehiculo } from "@/shared/db/schema";
 import {
   lockOrderForMutation,
@@ -52,6 +53,7 @@ describe("orden_servicio_correccion (E2E)", () => {
   afterAll(async () => {
     const orders = await db.select({ id: ordenServicio.id }).from(ordenServicio).where(eq(ordenServicio.clienteId, clienteId));
     for (const { id } of orders) await db.delete(ordenServicioCorreccion).where(eq(ordenServicioCorreccion.ordenId, id));
+    await purgeHistory([clienteId]);
     await db.delete(ordenServicio).where(eq(ordenServicio.clienteId, clienteId));
     await db.delete(vehiculo).where(eq(vehiculo.clienteId, clienteId));
     await db.delete(cliente).where(eq(cliente.id, clienteId));
@@ -154,7 +156,7 @@ describe("orden_servicio_correccion (E2E)", () => {
   it("a concurrent done and cancelled on one order cannot both win: the loser finds it closed", async () => {
     const ordenId = await newOrder("in_progress");
     // The reminder side effects are not under test (they are no-ops here); the status write is.
-    const deps = { scope: SYSTEM_SCOPE, canAssign: true, getClienteById: async () => null, cancelRemindersForOrder: async () => {} };
+    const deps = { scope: SYSTEM_SCOPE, canAssign: true, actorId: userId, getClienteById: async () => null, cancelRemindersForOrder: async () => {} };
     const results = await Promise.allSettled([
       transitionOrder(ordenId, "done", deps),
       transitionOrder(ordenId, "cancelled", deps),

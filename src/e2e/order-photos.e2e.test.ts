@@ -11,6 +11,7 @@ import { asc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db } from "@/shared/db/client";
+import { purgeHistory } from "./purge-history";
 import { catalogs, cliente, ordenServicio, ordenServicioFoto, users, vehiculo } from "@/shared/db/schema";
 import { runRetentionForUser } from "../modules/catalog-storage/retention";
 import { addOrderPhoto, deleteOrderPhoto, findOrderPhoto, listOrderPhotos, MAX_PHOTOS, OrderClosedError, PhotoLimitError, type PhotoDeps } from "../modules/service-orders/photos";
@@ -65,6 +66,7 @@ describe("orden_servicio_foto (E2E)", () => {
   }, 60_000);
 
   afterAll(async () => {
+    await purgeHistory([clienteId]);
     await db.delete(ordenServicio).where(eq(ordenServicio.clienteId, clienteId));
     await db.delete(vehiculo).where(eq(vehiculo.clienteId, clienteId));
     await db.delete(cliente).where(eq(cliente.id, clienteId));

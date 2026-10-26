@@ -67,30 +67,22 @@ export class TransitionForbiddenError extends Error {
 }
 
 /**
- * R21 — who may make a legal transition. Starting work (`open -> in_progress`)
- * is open to everyone who reaches the order; every other edge (close, cancel,
- * return from review) needs `service-orders.assign`, which the CALLER evaluates
- * with `can()` and passes in. Run AFTER `assertTransition`: an illegal edge is a
- * 400 whoever asks, and only a legal one can be forbidden.
+ * R21 — who may make a legal transition: ONLY the holders of `service-orders.assign`
+ * (administrador, jefe_taller), which the CALLER evaluates with `can()` and passes in.
+ * A técnico's only status effect is the readiness mark. Run AFTER `assertTransition`:
+ * an illegal edge is a 400 whoever asks, and only a legal one can be forbidden.
  */
 export function assertTransitionPermitted(canAssign: boolean, from: OrderStatus, to: OrderStatus): void {
-  if (!isTransitionPermitted(canAssign, from, to)) throw new TransitionForbiddenError(from, to);
-}
-
-/** The same rule as a boolean, so the UI offers only what the route would not answer 403. */
-export function isTransitionPermitted(canAssign: boolean, from: OrderStatus, to: OrderStatus): boolean {
-  return canAssign || (from === "open" && to === "in_progress");
+  if (!canAssign) throw new TransitionForbiddenError(from, to);
 }
 
 /**
- * What the status controls and the bulk menu offer today: the manual
- * transitions, without `on_hold` (its reason UI lands in WU4; offering it now
- * would send a hold with no reason) and with the legacy `open -> in_progress`
- * start. WU2 removes that leftover; WU4 switches the UI to `getManualTransitions`.
+ * What the status controls and the bulk menu offer today: the manual transitions
+ * without `on_hold` (its reason UI lands in WU4; offering it now would send a hold
+ * with no reason). WU4 switches the UI to `getManualTransitions`.
  */
 export function getAllowedTransitions(from: OrderStatus): OrderStatus[] {
-  const next = getManualTransitions(from).filter((to) => to !== "on_hold");
-  return from === "open" ? ["in_progress", ...next] : next;
+  return getManualTransitions(from).filter((to) => to !== "on_hold");
 }
 
 /**

@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Role } from "@/modules/auth/roles";
 import { db } from "@/shared/db/client";
+import { purgeHistory } from "./purge-history";
 import { cliente, ordenServicio, ordenServicioFoto, ordenTecnico, tecnico, users, vehiculo } from "@/shared/db/schema";
 import { handleUpdateOrdenServicio } from "../app/api/service-orders/[id]/route";
 import { handleAssign } from "../app/api/service-orders/[id]/assignments/route";
@@ -77,6 +78,7 @@ describe("order assignments and lock scope (E2E)", () => {
       await db.delete(ordenServicioFoto).where(inArray(ordenServicioFoto.ordenId, orders));
       await db.delete(ordenTecnico).where(inArray(ordenTecnico.ordenId, orders));
     }
+    await purgeHistory([clienteId]);
     await db.delete(ordenServicio).where(eq(ordenServicio.clienteId, clienteId));
     await db.delete(vehiculo).where(eq(vehiculo.clienteId, clienteId));
     await db.delete(cliente).where(eq(cliente.id, clienteId));
@@ -109,13 +111,14 @@ describe("order assignments and lock scope (E2E)", () => {
       expect((await orderRow(ordenId)).hallazgos).toBe("si");
     });
 
-    it("transition: an unassigned técnico gets 404 and the status is unchanged; the assigned one starts work", async () => {
-      const ordenId = await newOrder("open");
+    it("transition: an unassigned técnico gets 404, the assigned one 403, and an administrador starts work", async () => {
+      const ordenId = await newOrder("diagnosing");
       await assignDirect(ordenId, rosterA);
 
       expect((await patch(ordenId, tecB, { status: "in_progress" })).status).toBe(404);
-      expect((await orderRow(ordenId)).status).toBe("open");
-      expect((await patch(ordenId, tecA, { status: "in_progress" })).status).toBe(200);
+      expect((await patch(ordenId, tecA, { status: "in_progress" })).status).toBe(403);
+      expect((await orderRow(ordenId)).status).toBe("diagnosing");
+      expect((await patch(ordenId, admin, { status: "in_progress" })).status).toBe(200);
       expect((await orderRow(ordenId)).status).toBe("in_progress");
     });
 
@@ -158,10 +161,10 @@ describe("order assignments and lock scope (E2E)", () => {
     const base = () => ({ clienteId, vehiculoId, categoria: "revisado" as const, createdBy: admin.id });
     const orderCount = async () => (await db.select({ id: ordenServicio.id }).from(ordenServicio).where(eq(ordenServicio.clienteId, clienteId))).length;
 
-    it("writes the order and its assignments together, open, with a null mark", async () => {
+    it("writes the order and its assignments together, diagnosing, with a null mark", async () => {
       const orden = await createOrder({ ...base(), tecnicoIds: [rosterA, rosterB, rosterA] });
 
-      expect(orden.status).toBe("open");
+      expect(orden.status).toBe("diagnosing");
       const rows = await assignmentsOf(orden.id);
       expect(rows.map((r) => r.tecnicoId).sort()).toEqual([rosterA, rosterB].sort());
       expect(rows.every((r) => r.parteListaAt === null && r.assignedBy === admin.id)).toBe(true);
@@ -197,7 +200,7 @@ describe("order assignments and lock scope (E2E)", () => {
       expect(await assign(ordenId, rosterA)).toEqual({ created: false });
 
       expect(await assignmentsOf(ordenId)).toHaveLength(1);
-      expect((await orderRow(ordenId)).status).toBe("open");
+      expect((await orderRow(ordenId)).status).toBe("diagnosing");
     });
 
     it("assigning during review returns the order to in_progress; the new mark is null and the old one stays", async () => {
