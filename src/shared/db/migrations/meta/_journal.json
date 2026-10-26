@@ -232,6 +232,13 @@
       "when": 1791372104639,
       "tag": "0032_portal_sync_version_seq",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793027137750,
+      "tag": "0033_order_workflow_states",
+      "breakpoints": true
     }
   ]
 }

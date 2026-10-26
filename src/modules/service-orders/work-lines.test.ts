@@ -116,13 +116,13 @@ describe("addWorkLine: validation", () => {
 });
 
 describe("addWorkLine: who and when", () => {
-  it.each<OrderStatus>(["in_progress", "ready_for_review"])("lets staff write on a %s order", async (status) => {
+  it.each<OrderStatus>(["diagnosing", "in_progress", "ready_for_review"])("lets staff write on a %s order", async (status) => {
     const { database } = fakeDb([order(status), ASSIGNED, [{ id: "l1" }]]);
     await expect(addWorkLine({ ...base, actor: staff }, { db: database })).resolves.toEqual({ id: "l1" });
   });
 
-  it("lets a técnico write their own line on an in_progress order", async () => {
-    const { database } = fakeDb([order("in_progress"), OWN, ASSIGNED, [{ id: "l1" }]]);
+  it.each<OrderStatus>(["diagnosing", "in_progress"])("lets a técnico write their own line on a %s order", async (status) => {
+    const { database } = fakeDb([order(status), OWN, ASSIGNED, [{ id: "l1" }]]);
     await expect(addWorkLine({ ...base, actor: tecnicoUser }, { db: database })).resolves.toEqual({ id: "l1" });
   });
 
@@ -143,8 +143,10 @@ describe("addWorkLine: who and when", () => {
     expect(log.values).toEqual([]);
   });
 
-  it.each([staff, tecnicoUser])("refuses an open order for every role", async (actor) => {
-    const { database, log } = fakeDb([order("open")]);
+  it.each(
+    (["booked", "open", "on_hold"] as const).flatMap((status) => [staff, tecnicoUser].map((actor) => [status, actor] as const)),
+  )("refuses a %s order for every role", async (status, actor) => {
+    const { database, log } = fakeDb([order(status)]);
     await expect(addWorkLine({ ...base, actor }, { db: database })).rejects.toBeInstanceOf(OrderEditForbiddenError);
     expect(log.values).toEqual([]);
   });

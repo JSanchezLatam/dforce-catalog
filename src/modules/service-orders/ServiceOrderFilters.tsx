@@ -5,15 +5,19 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchFilterInput } from "@/shared/ui/filters/SearchFilterInput";
 import { useUrlFilters } from "@/shared/ui/filters/useUrlFilters";
+import { ORDER_STATUS_LABEL } from "./statuses";
 import type { OrderStatus } from "./transitions";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
-  { value: "open", label: "Abierta" },
-  { value: "in_progress", label: "En progreso" },
-  { value: "ready_for_review", label: "Lista para revisión" },
-  { value: "done", label: "Completada" },
-  { value: "cancelled", label: "Cancelada" },
+  { value: "booked", label: ORDER_STATUS_LABEL.booked },
+  { value: "open", label: ORDER_STATUS_LABEL.open },
+  { value: "diagnosing", label: ORDER_STATUS_LABEL.diagnosing },
+  { value: "in_progress", label: ORDER_STATUS_LABEL.in_progress },
+  { value: "on_hold", label: ORDER_STATUS_LABEL.on_hold },
+  { value: "ready_for_review", label: ORDER_STATUS_LABEL.ready_for_review },
+  { value: "done", label: ORDER_STATUS_LABEL.done },
+  { value: "cancelled", label: ORDER_STATUS_LABEL.cancelled },
 ];
 
 /**

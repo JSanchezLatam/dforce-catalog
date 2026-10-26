@@ -63,8 +63,8 @@ export function buildOrdenServicioWhere(filters: OrdenServicioFilters, scope: Or
  * that reason; it does not apply here).
  *
  * `status` is a Postgres ENUM (`order_status`), so Postgres orders it by
- * DECLARATION order, not alphabetically: asc is open -> in_progress -> done
- * -> cancelled. That is the order the workshop reads the board in, so it is
+ * DECLARATION order, not alphabetically: asc is booked -> open -> diagnosing ->
+ * in_progress -> on_hold -> ready_for_review -> done -> cancelled. That is the order the workshop reads the board in, so it is
  * the better behaviour — but it is not what "sort by Estado" looks like from
  * the outside, and changing the enum's declaration order would silently
  * change this column's sort. Verified against a seeded database, not inferred.

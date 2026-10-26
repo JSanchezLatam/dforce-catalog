@@ -87,8 +87,17 @@ describe("schema — workshop_config singleton table", () => {
 });
 
 describe("schema — crm-workshop-management enums (Phase 1, task 1.1)", () => {
-  it("order_status enum has exactly the 5 lifecycle values, ready_for_review before done", () => {
-    expect(orderStatusEnum.enumValues).toEqual(["open", "in_progress", "ready_for_review", "done", "cancelled"]);
+  it("order_status enum has exactly the 8 lifecycle values, in workflow order", () => {
+    expect(orderStatusEnum.enumValues).toEqual([
+      "booked",
+      "open",
+      "diagnosing",
+      "in_progress",
+      "on_hold",
+      "ready_for_review",
+      "done",
+      "cancelled",
+    ]);
   });
 
   it("reminder_type enum has exactly the 2 milestone values", () => {

@@ -4,7 +4,7 @@ export type MonthCount = { mes: string; n: number };
 export type TecnicoMonthCount = { tecnicoId: string; mes: string; n: number };
 export type StatusCount = { status: string; n: number };
 
-export const BACKLOG_STATUSES = ["open", "in_progress", "ready_for_review"] as const;
+export const BACKLOG_STATUSES = ["booked", "open", "diagnosing", "in_progress", "on_hold", "ready_for_review"] as const;
 export type BacklogStatus = (typeof BACKLOG_STATUSES)[number];
 
 export function fillMonths(keys: string[], rows: MonthCount[]): { key: string; value: number }[] {
@@ -18,7 +18,7 @@ export function minutesToHours(minutes: number): number {
 
 export function fillBacklog(rows: StatusCount[]): Record<BacklogStatus, number> {
   const byStatus = new Map(rows.map((r) => [r.status, r.n]));
-  return { open: byStatus.get("open") ?? 0, in_progress: byStatus.get("in_progress") ?? 0, ready_for_review: byStatus.get("ready_for_review") ?? 0 };
+  return Object.fromEntries(BACKLOG_STATUSES.map((status) => [status, byStatus.get(status) ?? 0])) as Record<BacklogStatus, number>;
 }
 
 export type TecnicoMonthRow = { tecnicoId: string; nombre: string; closed: number; hours: number };

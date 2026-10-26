@@ -21,19 +21,33 @@ export class OrderTransitionError extends Error {
 }
 
 /**
- * R21 — the ONLY valid transitions. `done` and `cancelled` have no outgoing
- * edges (terminal states); direct `open -> done` is intentionally absent
- * (skipping `in_progress` is rejected).
+ * R21 — the ONLY valid transitions. `done` and `cancelled` are terminal (no
+ * outgoing edges), nothing leads INTO `booked`, and `cancelled` is reachable
+ * from every non-terminal status. `open -> in_progress` is intentionally
+ * absent: the flow always passes `diagnosing`.
  */
 const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  open: ["in_progress", "cancelled"],
-  in_progress: ["done", "cancelled"],
-  // No manual edge leads INTO ready_for_review: readiness is derived and
-  // written by `applyReadiness`, never through `assertTransition`.
+  booked: ["open", "cancelled"],
+  open: ["diagnosing", "cancelled"],
+  diagnosing: ["in_progress", "cancelled"],
+  in_progress: ["on_hold", "ready_for_review", "done", "cancelled"],
+  on_hold: ["in_progress", "cancelled"],
   ready_for_review: ["in_progress", "done", "cancelled"],
   done: [],
   cancelled: [],
 };
+
+/**
+ * Targets the manual transition route must refuse: `diagnosing` is written when
+ * a technician is assigned, `ready_for_review` by the last "Mi parte lista"
+ * mark. They stay in the table so the writers that DO produce them can assert it.
+ */
+export const AUTOMATIC_TARGETS: ReadonlySet<OrderStatus> = new Set<OrderStatus>(["diagnosing", "ready_for_review"]);
+
+/** The legal next states a person can pick: the table minus the automatic targets. */
+export function getManualTransitions(from: OrderStatus): OrderStatus[] {
+  return ALLOWED_TRANSITIONS[from].filter((next) => !AUTOMATIC_TARGETS.has(next));
+}
 
 /** R21 — throws OrderTransitionError for any transition not in ALLOWED_TRANSITIONS. */
 export function assertTransition(from: OrderStatus, to: OrderStatus): void {
@@ -69,13 +83,14 @@ export function isTransitionPermitted(canAssign: boolean, from: OrderStatus, to:
 }
 
 /**
- * Phase 6 — read-only lookup of the legal next states for `from`, so the
- * order-detail page's status-transition controls can render only the
- * buttons/options that would actually pass `assertTransition` (no duplicated
- * transition table on the UI side; terminal states return `[]`).
+ * What the status controls and the bulk menu offer today: the manual
+ * transitions, without `on_hold` (its reason UI lands in WU4; offering it now
+ * would send a hold with no reason) and with the legacy `open -> in_progress`
+ * start. WU2 removes that leftover; WU4 switches the UI to `getManualTransitions`.
  */
 export function getAllowedTransitions(from: OrderStatus): OrderStatus[] {
-  return ALLOWED_TRANSITIONS[from];
+  const next = getManualTransitions(from).filter((to) => to !== "on_hold");
+  return from === "open" ? ["in_progress", ...next] : next;
 }
 
 /**

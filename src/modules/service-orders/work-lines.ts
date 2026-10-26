@@ -102,7 +102,7 @@ async function ownTecnicoId(tx: Tx, userId: string): Promise<string | null> {
 
 /** Statuses a line may be written in; the lock refuses (and, when closed, offers correction for) the rest. */
 const canWriteFor = (actor: WorkLineActor) => (status: string) =>
-  status === "in_progress" || (actor.canManageAll && status === "ready_for_review");
+  status === "diagnosing" || status === "in_progress" || (actor.canManageAll && status === "ready_for_review");
 
 export async function addWorkLine(
   input: {

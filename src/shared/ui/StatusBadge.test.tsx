@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { StatusBadge } from "./StatusBadge";
+import { StatusBadge, type BadgeStatus } from "./StatusBadge";
 
 /**
  * H2 — `StatusBadge` is 20px tall (`text-xs` line box + `py-0.5`), matching the
@@ -39,5 +39,36 @@ describe("StatusBadge — className passthrough (H2)", () => {
 
     expect(badge).toHaveClass("py-0.5");
     expect(badge.className).not.toContain("min-h-");
+  });
+});
+
+describe("StatusBadge — the eight order statuses", () => {
+  const ORDER_STATUSES: BadgeStatus[] = [
+    "booked",
+    "open",
+    "diagnosing",
+    "in_progress",
+    "on_hold",
+    "ready_for_review",
+    "done",
+    "cancelled",
+  ];
+
+  /** A chip's look is its tone classes plus its icon; two statuses sharing both read as one. */
+  const lookOf = (status: BadgeStatus): string => {
+    const { container, unmount } = render(<StatusBadge status={status} label={status} />);
+    const chip = container.firstElementChild as HTMLElement;
+    const look = `${chip.className}|${chip.querySelector("svg")?.getAttribute("class")}`;
+    unmount();
+    return look;
+  };
+
+  it("gives all eight order statuses a distinct look", () => {
+    const looks = ORDER_STATUSES.map(lookOf);
+    expect(new Set(looks).size).toBe(8);
+  });
+
+  it("does not render booked like the reminder state scheduled", () => {
+    expect(lookOf("booked")).not.toBe(lookOf("scheduled"));
   });
 });
