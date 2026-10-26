@@ -168,7 +168,6 @@ The schema migration that introduces `vehiculo` MUST preserve existing data: for
 ### Requirement: Vehicle Detail Screen with Service History
 
 The system MUST provide a vehicle detail screen at `/customers/[id]/vehicles/[vehicleId]`, reachable by clicking a vehicle card on the customer detail view. The screen MUST show that vehicle's identity fields (plate, make, model, year, plus any set chasis, colors, estilo, motor and unit number) and a list of its own `orden_servicio` history, ordered most-recent-first. The renewal month and insurance expiry MUST appear only for a session with `vencimientos.read`. Each history row MUST offer a detail affordance that navigates to the existing `/service-orders/[id]` page rather than duplicating that page's content. A vehicle with zero service orders MUST show an explicit empty-state message instead of an empty table.
-(Previously: identity fields were plate, make, model, year only.)
 
 #### Scenarios
 

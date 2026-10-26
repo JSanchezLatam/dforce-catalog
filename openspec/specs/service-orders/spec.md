@@ -1,22 +1,56 @@
 # Spec: service-orders
 
-This spec consolidates R20–R22 from `crm-workshop-management` (baseline), adds access-control requirements from `crm-shell-settings-rbac`, incorporates R23 from `customer-search-and-picker` (async customer selection), and layers in the mandatory vehicle/category link and completion notes from `service-history-per-vehicle` (C4).
+This spec consolidates R20–R22 from `crm-workshop-management` (baseline), adds access-control requirements from `crm-shell-settings-rbac`, incorporates R23 from `customer-search-and-picker` (async customer selection), and layers in the mandatory vehicle/category link and completion notes from `service-history-per-vehicle` (C4), and moves the order onto the eight-status workflow of `service-order-workflow-states`. Every status change is recorded by `service-order-status-history`.
+
+Status labels (the "labels above" and "list above" referred to by the requirements below): `booked` "Agendada", `open` "Recibida", `diagnosing` "En diagnóstico", `in_progress` "En progreso", `on_hold` "En espera", `ready_for_review` "Lista para revisión", `done` "Completada", `cancelled` "Cancelada".
+
+Tags used below: **[e2e]** = the value is SQL (CHECKs, history rows, auto-transitions, joins/count parity, locking) and MUST be proven against a real Postgres; **[unit]** = pure; **[LAN]** = browser check at the LAN IP.
 
 ## REQUIREMENTS
 
 ### Requirement: Service Order Creation (R20)
 
-The system MUST allow an `administrador` or a `jefe_taller` to create an `orden_servicio` that references exactly one existing `cliente`, exactly one existing `vehiculo` belonging to that same `cliente`, a `categoria`, ZERO or more assigned technicians (active roster rows; reception happens before assignment, so none is required), and an optional `observaciones` string. A `tecnico` MUST NOT create orders: the create route MUST refuse them with 403 and the create control MUST NOT render for them. Creation MUST NOT accept `producto` line items. `orden_servicio.vehiculoId` MUST be NOT NULL and MUST be a foreign key to `vehiculo` with `ON DELETE RESTRICT`. A new order MUST be created in `open` status, with any supplied assignments written in the same transaction. An order with no assignment is visible to administrador and jefe only until one of them assigns it later. A deactivated or unknown technician MUST be refused. `hallazgos` and `recomendaciones` MUST NOT be settable at creation — see the Category and Completion Notes Editing requirement. `ordenServicioItem` has no writer once this requirement ships: no code path inserts a line item for any order, so every order's "Piezas utilizadas" detail card renders its empty state permanently. The table and the card both remain in place, for existing rows and a future recording-parts-used flow.
+The system MUST allow an `administrador` or a `jefe_taller` to create an `orden_servicio` that references exactly one existing `cliente`, ZERO or more assigned technicians (active roster rows; reception happens before assignment, so none is required), and an optional `observaciones` string. The creator MUST choose the initial status: Agendada (`booked`) or Recibida (`open`, the default, for a walk-in); any other initial status MUST be refused. A Recibida order MUST also reference exactly one existing `vehiculo` belonging to that same `cliente` and a `categoria`. An Agendada order MUST require `appointmentAt` and MAY omit `vehiculo` and `categoria` (see Booked Order Without Vehicle or Category); when it names them, the same ownership rules apply. A `tecnico` MUST NOT create orders: the create route MUST refuse them with 403 and the create control MUST NOT render for them. Creation MUST NOT accept `producto` line items. `orden_servicio.vehiculoId` MUST be a foreign key to `vehiculo` with `ON DELETE RESTRICT`. Any supplied assignments MUST be written in the same transaction as the order; a Recibida order created with at least one technician MUST end that transaction in `diagnosing`, with a history row for each step (see `service-order-status-history`), while an Agendada order stays `booked`. An order with no assignment is visible to administrador and jefe only until one of them assigns it later. A deactivated or unknown technician MUST be refused. `hallazgos` and `recomendaciones` MUST NOT be settable at creation — see the Category and Completion Notes Editing requirement. `ordenServicioItem` has no writer once this requirement ships: no code path inserts a line item for any order, so every order's "Piezas utilizadas" detail card renders its empty state permanently. The table and the card both remain in place, for existing rows and a future recording-parts-used flow.
 
 #### Scenario: Order created with no parts, an optional categoria and observaciones
 - GIVEN an existing `cliente` with an active `vehiculo` and an active technician
 - WHEN an administrador or jefe creates a service order naming that vehicle, a `categoria` and that technician
-- THEN the system MUST create the order in `open` status, referencing that vehicle and category, with no line items and one assignment
+- THEN the system MUST create the order referencing that vehicle and category, with no line items and one assignment (its status follows the scenarios below)
 
-#### Scenario: Order may be created with no technician
-- GIVEN a create payload with no technician
+#### Scenario: Walk-in with a technician lands in diagnosing **[e2e]**
+- GIVEN a Recibida create payload naming an active technician
 - WHEN an administrador or jefe submits it
-- THEN the system MUST create the order in `open` status with zero assignments, and a later assignment MUST be possible
+- THEN the order MUST end in `diagnosing` with one assignment and two history rows (null → `open`, `open` → `diagnosing`)
+
+#### Scenario: Order may be created with no technician **[e2e]**
+- GIVEN a Recibida create payload with no technician
+- WHEN an administrador or jefe submits it
+- THEN the system MUST create the order in `open` with zero assignments and one history row, and a later assignment MUST be possible
+
+#### Scenario: Agendada created without vehicle or category **[e2e]**
+- GIVEN an `appointmentAt`, a `cliente`, and no vehicle or category
+- WHEN an administrador or jefe creates the order as Agendada
+- THEN the order MUST persist in `booked` with null vehicle and category and one history row (null → `booked`)
+
+#### Scenario: Agendada with a technician stays booked **[e2e]**
+- GIVEN an Agendada payload naming an active technician
+- WHEN it is submitted
+- THEN the order MUST be `booked` with one assignment and no `diagnosing` row
+
+#### Scenario: Agendada requires a date
+- GIVEN an Agendada payload with no `appointmentAt`
+- WHEN it is submitted
+- THEN the system MUST reject it with a Spanish validation error and create nothing
+
+#### Scenario: Recibida without vehicle or category rejected
+- GIVEN a Recibida payload with no `vehiculoId`, or no `categoria`
+- WHEN it is submitted
+- THEN the system MUST reject it with a Spanish validation error and create nothing
+
+#### Scenario: Other initial statuses refused
+- GIVEN a create payload whose initial status is `in_progress`, `done` or `diagnosing`
+- WHEN it is submitted
+- THEN the system MUST reject it and create nothing
 
 #### Scenario: Deactivated technician refused
 - GIVEN a deactivated technician
@@ -43,10 +77,10 @@ The system MUST allow an `administrador` or a `jefe_taller` to create an `orden_
 - WHEN staff attempts to create an order with `clienteId` set to customer A and that vehicle
 - THEN the system MUST reject creation with a Spanish validation error
 
-#### Scenario: Customer with zero active vehicles blocks submission
+#### Scenario: Customer with zero active vehicles blocks Recibida only
 - GIVEN a `cliente` with zero active vehicles
 - WHEN staff opens the order-creation form for that customer
-- THEN the vehicle picker MUST offer no selectable vehicle and submission MUST be prevented
+- THEN the vehicle picker MUST offer no selectable vehicle and submitting as Recibida MUST be prevented, while submitting as Agendada MUST remain possible
 
 #### Scenario: Observaciones persists from creation
 - GIVEN a create payload with `observaciones = "trae ruido al frenar"`
@@ -60,7 +94,7 @@ The system MUST allow an `administrador` or a `jefe_taller` to create an `orden_
 
 ### Requirement: Service Category Vocabulary
 
-The system MUST classify every order under exactly one of five `categoria` values: Instalación, Mant. Preventivo, Mant. Correctivo, Reparación, and REVISADO. REVISADO — Panama's mandatory annual ATTT technical inspection, a legal prerequisite for renewing the vehicle's plate — MUST be modeled as a peer service type alongside the other four, not as an order status. It is independent of `orderStatusEnum` (`open`/`in_progress`/`done`/`cancelled`).
+The system MUST classify every order under exactly one of five `categoria` values: Instalación, Mant. Preventivo, Mant. Correctivo, Reparación, and REVISADO. REVISADO — Panama's mandatory annual ATTT technical inspection, a legal prerequisite for renewing the vehicle's plate — MUST be modeled as a peer service type alongside the other four, not as an order status. It is independent of `orderStatusEnum` (its eight statuses; see Status Lifecycle Transitions (R21)).
 
 #### Scenarios
 
@@ -112,7 +146,7 @@ After a successful "Crear", the system MUST navigate to the new order's detail p
 
 ### Requirement: Reception Photos
 
-An order MUST hold up to 12 reception photos, stored as JPEG in object storage under `service-orders/<ordenId>/<photoId>.jpg` with a server-generated id, listed by `position` ascending. The server MUST accept a file only if its leading bytes are a JPEG signature (the declared content type MUST NOT be trusted) and its size is at most 3 MB. Photo bytes MUST be served only through an authenticated same-origin route to sessions holding `service-orders.read`; a `tecnico` MUST be served photos only of orders assigned to them (any other order answers 404). Adding MUST be allowed while the order is `open` or `in_progress` to any role holding `service-orders.write` (a `tecnico` only on an order assigned to them), while `ready_for_review` only to an `administrador` or `jefe_taller`, and refused when `done` or `cancelled` unless it is an authorized administrator correction (see `service-order-corrections`). Deleting MUST be allowed only to `administrador` while `open`, `in_progress` or `ready_for_review`, or while `done` or `cancelled` under an authorized administrator correction; any other role (including `jefe_taller`) MUST receive 403, and a closed-order delete without an authorized correction MUST be refused. Photos MUST never be removed by retention. The order detail MUST show a "Fotos de recepción" card.
+An order MUST hold up to 12 reception photos, stored as JPEG in object storage under `service-orders/<ordenId>/<photoId>.jpg` with a server-generated id, listed by `position` ascending. The server MUST accept a file only if its leading bytes are a JPEG signature (the declared content type MUST NOT be trusted) and its size is at most 3 MB. Photo bytes MUST be served only through an authenticated same-origin route to sessions holding `service-orders.read`; a `tecnico` MUST be served photos only of orders assigned to them (any other order answers 404). Adding MUST be allowed while the order is `booked`, `open`, `diagnosing` or `in_progress` to any role holding `service-orders.write` (a `tecnico` only on an order assigned to them), while `on_hold` or `ready_for_review` only to an `administrador` or `jefe_taller`, and refused when `done` or `cancelled` unless it is an authorized administrator correction (see `service-order-corrections`). Deleting MUST be allowed only to `administrador` while `booked`, `open`, `diagnosing`, `in_progress`, `on_hold` or `ready_for_review`, or while `done` or `cancelled` under an authorized administrator correction; any other role (including `jefe_taller`) MUST receive 403, and a closed-order delete without an authorized correction MUST be refused. Photos MUST never be removed by retention. The order detail MUST show a "Fotos de recepción" card.
 
 #### Scenario: Valid JPEG added
 - GIVEN an `open` order with 0 photos and a session with `service-orders.write`
@@ -142,15 +176,15 @@ An order MUST hold up to 12 reception photos, stored as JPEG in object storage u
 #### Scenario: Add gated by status
 - GIVEN an assigned `tecnico` and orders in each status
 - WHEN the técnico uploads a photo
-- THEN it MUST succeed for `open` and `in_progress` and be refused for `ready_for_review`, `done` and `cancelled`
+- THEN it MUST succeed for `booked`, `open`, `diagnosing` and `in_progress` and be refused for `on_hold`, `ready_for_review`, `done` and `cancelled`
 
 #### Scenario: Unassigned técnico cannot add or read photos
 - GIVEN an `in_progress` order not assigned to técnico T
 - WHEN T uploads a photo or requests a photo's bytes
 - THEN the system MUST answer 404 and store or return nothing
 
-#### Scenario: Jefe adds during review
-- GIVEN a `ready_for_review` order
+#### Scenario: Jefe adds during review or hold
+- GIVEN a `ready_for_review` or `on_hold` order
 - WHEN a `jefe_taller` uploads a valid JPEG
 - THEN the system MUST store it
 
@@ -204,8 +238,7 @@ The system MUST allow staff to patch an existing order's `categoria`, `hallazgos
 
 ### Requirement: Service Order Detail Displays Vehicle, Category, and Notes
 
-The order detail view MUST display the order's vehicle (identified at minimum by plate) as a link to that vehicle's detail screen, with any set chasis, colors, estilo, motor and unit number, its `categoria`, and its `hallazgos`/`recomendaciones`/`observaciones` fields. The unit number MUST render only when filled. The plate renewal month and insurance expiry MUST NEVER render, for any role. A field not yet set MUST render an explicit empty-state placeholder, never a blank row. An order whose vehicle has been deactivated (soft-deleted) MUST still render its vehicle identity and link, exactly as for an active vehicle. The view MUST also show the order's `kilometraje`, with the visible text "Sin kilometraje" when null, and its fuel level and battery percentage when set.
-(Previously: no intake fields on the detail view.)
+The order detail view MUST display the order's vehicle (identified at minimum by plate) as a link to that vehicle's detail screen, with any set chasis, colors, estilo, motor and unit number, its `categoria`, and its `hallazgos`/`recomendaciones`/`observaciones` fields. The unit number MUST render only when filled. The plate renewal month and insurance expiry MUST NEVER render, for any role. A field not yet set MUST render an explicit empty-state placeholder, never a blank row. An order whose vehicle has been deactivated (soft-deleted) MUST still render its vehicle identity and link, exactly as for an active vehicle. The view MUST also show the order's `kilometraje`, with the visible text "Sin kilometraje" when null, and its fuel level and battery percentage when set. A `booked` order MAY have no vehicle or category; it renders the "Sin vehículo" and "Sin categoría" placeholders defined in Booked Order Without Vehicle or Category instead of the vehicle link and category.
 
 #### Scenarios
 
@@ -220,25 +253,40 @@ The order detail view MUST display the order's vehicle (identified at minimum by
 
 ### Requirement: Status Lifecycle Transitions (R21)
 
-An `orden_servicio` MUST have a status of `open`, `in_progress`, `ready_for_review` (shown "Lista para revisión"), `done`, or `cancelled`. The ONLY valid transitions are: `open → in_progress`, `in_progress → ready_for_review`, `ready_for_review → in_progress`, `in_progress → done`, `ready_for_review → done`, `open → cancelled`, `in_progress → cancelled` and `ready_for_review → cancelled`. `done` and `cancelled` MUST be terminal states — no transition out of either is valid. Direct `open → done` and `open → ready_for_review` MUST be rejected. `in_progress → ready_for_review` happens ONLY as the consequence of the last "Mi parte lista" mark (see `order-work-lines`); the manual transition route MUST reject `ready_for_review` as a target. `ready_for_review → in_progress` happens when a técnico un-marks, when a technician is assigned to the order (see Order Assignment), or by an administrador or jefe through the transition route ("devolver"). Sending an order back through the transition route MUST clear `parte_lista_at` on every one of its assignments in the same transaction, so each technician marks again after the rework; an un-mark or an assignment clears only what its own rule says. Who may transition: an assigned `tecnico` may perform `open → in_progress` only; `done` and `cancelled` targets MUST be performed only by an `administrador` or `jefe_taller`, from `in_progress` or `ready_for_review`, regardless of marks. Every transition MUST record the timestamp at which it occurred.
+An `orden_servicio` MUST have one of eight statuses (labels above). The ONLY valid transitions are: `booked → open`, `open → diagnosing`, `diagnosing → in_progress`, `in_progress → on_hold`, `on_hold → in_progress`, `in_progress → ready_for_review`, `ready_for_review → in_progress`, `in_progress → done`, `ready_for_review → done`, and `cancelled` from every non-terminal status (`booked`, `open`, `diagnosing`, `in_progress`, `on_hold`, `ready_for_review`). `done` and `cancelled` MUST be terminal — no transition out of either is valid. Nothing MUST transition INTO `booked`. Every other pair MUST be rejected, in particular `open → in_progress`, `open → done`, `open → ready_for_review`, `diagnosing → done`, `diagnosing → ready_for_review`, `on_hold → done` and `on_hold → ready_for_review`: the flow always passes diagnosing.
+
+Two transitions are automatic and the manual transition route MUST reject them as targets: `open → diagnosing` happens ONLY when the first technician is assigned to a Recibida order, or when a Recibida order is created with one (see Order Assignment); `in_progress → ready_for_review` happens ONLY as the consequence of the last "Mi parte lista" mark (see `order-work-lines`). `ready_for_review → in_progress` happens when a técnico un-marks, when a technician is assigned to the order, or by an administrador or jefe through the transition route ("devolver"). Sending an order back through the transition route MUST clear `parte_lista_at` on every one of its assignments in the same transaction, so each technician marks again after the rework; an un-mark or an assignment clears only what its own rule says. Putting an order on hold and resuming it MUST NOT clear any `parte_lista_at`.
+
+`booked → open` ("Recibir") MUST be refused while the order lacks a vehicle or a `categoria`. When it succeeds on an order that already has at least one technician assigned, the same transaction MUST continue `open → diagnosing`.
+
+Who may transition manually: ONLY an `administrador` or `jefe_taller` (the holders of `service-orders.assign`), for every target, including `diagnosing → in_progress`, entering and leaving `on_hold`, `done` and `cancelled`. A `tecnico` MUST NOT perform any manual transition, including the former `open → in_progress`; the technician's only status effects are the readiness marks. `done` is reachable only from `in_progress` and `ready_for_review`, regardless of marks. Every transition MUST record the timestamp at which it occurred, and `done` MUST also set `completedAt`.
 
 #### Scenarios
 
-- GIVEN an order in `open` WHEN staff transitions it to `in_progress` THEN the system MUST update its status and record the transition timestamp
-- GIVEN an order in `in_progress` WHEN an administrador or jefe transitions it to `done` THEN the system MUST update its status and record the transition timestamp
+- GIVEN an order in `booked` with a vehicle and category WHEN an administrador or jefe receives it THEN the status MUST become `open` and the transition timestamp MUST be recorded **[e2e]**
+- GIVEN a `booked` order with no vehicle or no `categoria` WHEN an administrador receives it THEN the system MUST refuse with a Spanish message, MUST NOT answer 500 and the status MUST stay `booked` **[e2e]**
+- GIVEN a `booked` order with a vehicle, a category and one technician assigned WHEN an administrador receives it THEN the order MUST end in `diagnosing` with history rows `booked → open` and `open → diagnosing` **[e2e]**
+- GIVEN an order in `open` WHEN anyone transitions it to `in_progress`, `done` or `ready_for_review` THEN the system MUST reject it as an invalid transition
+- GIVEN an order in `open` or any other status WHEN anyone calls the transition route with target `diagnosing` THEN the system MUST reject it
+- GIVEN an order in `diagnosing` WHEN an administrador or jefe transitions it to `in_progress` THEN the system MUST accept it and write a history row **[e2e]**
+- GIVEN an order in `diagnosing` WHEN a `tecnico` assigned to it transitions it to `in_progress` THEN the system MUST refuse with 403 and the status MUST stay `diagnosing`
+- GIVEN an order in `diagnosing` WHEN anyone transitions it to `done` or `ready_for_review` THEN the system MUST reject it
+- GIVEN an order in `in_progress` WHEN an administrador or jefe puts it on hold with a reason THEN the status MUST become `on_hold` (reason rules: see On-Hold Reason)
+- GIVEN an order in `on_hold` WHEN an administrador or jefe resumes it THEN the status MUST become `in_progress` with every `parte_lista_at` unchanged **[e2e]**
+- GIVEN an order in `on_hold` WHEN anyone transitions it to `done` or `ready_for_review` THEN the system MUST reject it
+- GIVEN an assigned `tecnico` WHEN they put an order on hold or resume it THEN the system MUST refuse with 403 and change nothing
+- GIVEN an order in `in_progress` WHEN an administrador or jefe transitions it to `done` THEN the system MUST update its status, set `completedAt` and record the transition timestamp
 - GIVEN an order in `ready_for_review` WHEN an administrador or jefe transitions it to `done` THEN the system MUST accept it
 - GIVEN an order in `in_progress` or `ready_for_review` with unmarked technicians WHEN an administrador or jefe closes it THEN the system MUST accept it
 - GIVEN an order in `in_progress` WHEN anyone calls the transition route with target `ready_for_review` THEN the system MUST reject it as an invalid transition
-- GIVEN an order in `open` WHEN staff attempts to transition it directly to `done` or `ready_for_review` THEN the system MUST reject the transition
-- GIVEN an order in `ready_for_review` WHEN an administrador or jefe transitions it to `in_progress` THEN the system MUST accept it AND every assignment's `parte_lista_at` MUST be null afterwards
+- GIVEN an order in `ready_for_review` WHEN an administrador or jefe transitions it to `in_progress` THEN the system MUST accept it AND every assignment's `parte_lista_at` MUST be null afterwards **[e2e]**
 - GIVEN an order sent back to `in_progress` WHEN every active assignee marks "Mi parte lista" again THEN the order MUST become `ready_for_review` again
 - GIVEN an assigned `tecnico` WHEN they transition an order to `done` or `cancelled` THEN the system MUST refuse with 403 and change nothing
-- GIVEN an assigned `tecnico` and an `open` order WHEN they transition it to `in_progress` THEN the system MUST accept it
-- GIVEN an order in `open` WHEN an administrador or jefe cancels it THEN the system MUST set its status to `cancelled`
-- GIVEN an order in `in_progress` or `ready_for_review` WHEN an administrador or jefe cancels it THEN the system MUST set its status to `cancelled`
-- GIVEN an order in `done` WHEN staff attempts any further transition THEN the system MUST reject it because `done` is terminal
-- GIVEN an order in `cancelled` WHEN staff attempts any further transition THEN the system MUST reject it because `cancelled` is terminal
-- GIVEN the `/service-orders` list WHEN it renders THEN it MUST show a "Lista para revisión" badge for `ready_for_review` orders and offer that status in the status filter
+- GIVEN an order in `booked`, `open`, `diagnosing`, `in_progress`, `on_hold` or `ready_for_review` WHEN an administrador or jefe cancels it THEN the system MUST set its status to `cancelled` and write a history row **[e2e]**
+- GIVEN a `booked` order with no vehicle and no category WHEN an administrador or jefe cancels it (a no-show) THEN the system MUST accept it **[e2e]**
+- GIVEN an order in `done` or `cancelled` WHEN staff attempts any further transition THEN the system MUST reject it because the status is terminal
+- GIVEN any order WHEN anyone transitions it to `booked` THEN the system MUST reject it
+- GIVEN the full status list **[unit]** WHEN the allowed-transition table is read THEN it MUST equal exactly the pairs above, each non-listed pair MUST be rejected
 
 ### Requirement: Parts Usage Recording — No Automatic Stock Deduction (R22)
 
@@ -272,12 +320,20 @@ When creating or editing an `orden_servicio`, the customer picker MUST query cus
 Staff MUST be able to select service orders in the list view (per
 `table-bulk-actions`) and change their status in bulk. The status-change
 menu MUST offer only the target statuses that are legal, via
-`getAllowedTransitions`, for EVERY row in the current selection — the
+`getManualTransitions` intersected over the whole selection by
+`allowedTransitionsForAll`, for EVERY row in the current selection — the
 intersection of each selected row's legal next states, not the union, and
-not every status unconditionally. The bulk action MUST apply
-`assertTransition` per row against that row's CURRENT status, looping the
-existing single-order transition call sequentially; it MUST NOT read every
-row's status once and apply a single batched update.
+not every status unconditionally. Only targets that can be reached by hand
+are candidates: the automatic targets `diagnosing` and `ready_for_review` and
+the initial-only `booked` MUST NOT be offered. Two manual targets are also
+single-order only and MUST NEVER be offered in bulk (`BULK_EXCLUDED` =
+`on_hold`, `open`): `on_hold` because it needs a reason chosen per order (it is
+set from the single-order controls), and receiving (`booked → open`) because
+each booked order needs its own vehicle and category check, which a bulk
+refusal could not explain (it is set from the single-order "Recibir" control). The bulk action MUST apply `assertTransition` per row
+against that row's CURRENT status, looping the existing single-order
+transition call sequentially; it MUST NOT read every row's status once and
+apply a single batched update. Each applied row writes its own history row.
 
 Because a bulk transition to `done` or `cancelled` is terminal and cannot be
 undone through the UI, the confirmation step MUST say so before the action
@@ -289,6 +345,18 @@ runs.
 - WHEN staff opens the bulk status menu
 - THEN it MUST offer only `cancelled` — the one status legal from every selected row's current status — and MUST NOT offer `in_progress` or `done`
 
+- GIVEN a selection of 3 `diagnosing` orders
+- WHEN staff opens the bulk status menu
+- THEN it MUST offer `in_progress` and `cancelled` and nothing else
+
+- GIVEN a selection of 2 `booked` orders
+- WHEN staff opens the bulk status menu
+- THEN it MUST offer only `cancelled` and MUST NOT offer receiving (`open`)
+
+- GIVEN a selection of 2 `in_progress` orders
+- WHEN staff opens the bulk status menu
+- THEN it MUST offer `done` and `cancelled` and MUST NOT offer `on_hold`, `ready_for_review` or `diagnosing`
+
 - GIVEN a selection of 3 `open` orders, one of which another session transitions to `done` before the bulk action runs
 - WHEN staff applies "Cancelar" to the original selection
 - THEN the system MUST cancel the 2 orders still `open` and report the third by id with the reason its current status no longer allows that transition
@@ -296,6 +364,10 @@ runs.
 - GIVEN a bulk transition targeting `done` or `cancelled`
 - WHEN staff confirms the action
 - THEN the confirmation copy MUST state that the change cannot be undone through the UI
+
+- GIVEN a bulk cancel of 3 orders **[e2e]**
+- WHEN it completes
+- THEN exactly 3 history rows `→ cancelled` MUST exist
 
 ### Requirement: Customer Selection Clear and Explicit Deselect (Create Mode Only)
 
@@ -342,7 +414,6 @@ The order-creation `CustomerPicker` MUST clear its search term, result list, and
 The system MUST provide a print view for an existing `orden_servicio`, reachable via an "Imprimir" action on that order's detail page, gated by `service-orders.read`. The view MUST NOT auto-open on order creation. Printing it (`@media print` + `window.print()`) MUST produce a first page carrying: cliente (nombre, teléfono, and Cédula / RUC beside them when set), vehículo (placa, marca, modelo, año, plus any set chasis, colores, estilo and motor, and the unit number only when filled), the intake rows (kilometraje, and fuel and battery when set), categoría, fecha y hora de inicio, descripción, and observaciones. The sheet MUST NEVER carry the plate renewal month or insurance expiry. The first page MUST also reserve blank ruled space under a "Trabajo realizado / Hallazgos" heading, with a signature line — layout only, with no backing database column. The top-right of the first page MUST hold a square slot of about 25 mm, with no border and no text. On this workshop copy the slot MUST stay blank; the QR code prints only on the customer copy (see Customer Copy With Portal QR). Reception photos MUST print 4 per sheet starting on page 2, in position order; an order with no photos MUST print exactly one page.
 
 WHEN the order's customer holds a current consent (see `customer-management`), the first page MUST also carry the provisional consent clause, beginning with the banner "Texto provisorio — pendiente de revisión legal", followed by a ruled line labelled "Firma del cliente" for the customer to sign. WHEN the customer holds no current consent, neither the clause nor the "Firma del cliente" line MUST print. The clause and signature line MUST NOT push the existing signature line off the first page: a photo-less order MUST still print exactly one page.
-(Previously: the top-right slot was reserved for a future QR code on every print, and the sheet carried no consent clause or customer signature line.)
 
 *(Amended 2026-09-09 by `fix/printed-order-polish` — five owner-reported
 defects on one surface, judged too small for a change folder. Recorded here
@@ -445,37 +516,40 @@ The permitted combinations are exactly:
 
 | Status | `administrador` | `jefe_taller` | `tecnico` (assigned) |
 |---|---|---|---|
+| `booked` | MUST be allowed | MUST be allowed | MUST be refused |
 | `open` | MUST be allowed | MUST be allowed | MUST be refused |
+| `diagnosing` | MUST be allowed | MUST be allowed | MUST be allowed |
 | `in_progress` | MUST be allowed | MUST be allowed | MUST be allowed |
+| `on_hold` | MUST be allowed | MUST be allowed | MUST be refused |
 | `ready_for_review` | MUST be allowed | MUST be allowed | MUST be refused |
 | `done` | MUST be refused, except as an audited correction with password re-entry | MUST be refused | MUST be refused |
 | `cancelled` | MUST be refused, except as an audited correction with password re-entry | MUST be refused | MUST be refused |
 
 A `tecnico` not assigned to the order MUST be refused in every status (answered as the order not existing, 404).
 
-The gate covers the fields the form and the patch path already carry — `categoria`, `description`, `appointmentAt`, `hallazgos`, `recomendaciones`, `observaciones`. It does not introduce parts anywhere: `producto` line items are absent from creation and from editing alike (see Service Order Creation (R20)).
+The gate covers the fields the form and the patch path already carry — `categoria`, `description`, `appointmentAt`, `hallazgos`, `recomendaciones`, `observaciones` — and, while the order is `booked`, `vehiculoId` (see Vehicle and Category Set While Booked). It does not introduce parts anywhere: `producto` line items are absent from creation and from editing alike (see Service Order Creation (R20)).
 
 `done` and `cancelled` are terminal: `assertTransition` gives them no outgoing edges, so a closed order cannot be reopened through the UI, and a correction never changes `status` or `completedAt`. Closed orders refuse `tecnico` and `jefe_taller` always and `administrador` by default; the only way through is the administrator correction defined by `service-order-corrections` (the administrator's own password re-typed in the saving request, every changed field audited). That keeps closure from being reversible through a side door: the status keeps reading `Completada` or `Cancelada`, and every rewrite is attributable.
 
 The presence of the control and the acceptance of the write MUST be decided by one shared pure predicate over role, status and assignment, so the two cannot drift apart; for a closed status the predicate MUST report "correction required" for `administrador` (control shown as "Corregir") and "refused" for every other role. The UI deciding alone is not sufficient: `PATCH /api/service-orders/[id]` is the trust boundary, and the decision MUST be enforced in the service under a row lock (see `service-order-corrections`), evaluated against the order's status **as read from the database**, never a status supplied in the request body. A refusal MUST answer with a Spanish message and an accurate status code, never a 500.
 
-#### Scenario: Administrador and jefe see the edit control on an open order
-- GIVEN an order in `open` status
+#### Scenario: Administrador and jefe see the edit control on a booked or open order
+- GIVEN an order in `booked` or `open` status
 - WHEN an `administrador` or a `jefe_taller` opens its detail page
 - THEN the page MUST offer a control that opens the order form in edit mode
 
-#### Scenario: Tecnico sees no edit control on an open order
-- GIVEN an order in `open` status assigned to a `tecnico`
+#### Scenario: Tecnico sees no edit control on a booked or open order
+- GIVEN an order in `booked` or `open` status assigned to a `tecnico`
 - WHEN that `tecnico` opens its detail page
 - THEN the page MUST NOT offer any control that opens the order form in edit mode
 
-#### Scenario: Assigned técnico and admin and jefe see the edit control on an in_progress order
-- GIVEN an order in `in_progress` status assigned to a `tecnico`
+#### Scenario: Assigned técnico and admin and jefe see the edit control on a diagnosing or in_progress order
+- GIVEN an order in `diagnosing` or `in_progress` status assigned to a `tecnico`
 - WHEN that `tecnico`, an `administrador` or a `jefe_taller` opens its detail page
 - THEN the page MUST offer the edit control to all three
 
-#### Scenario: Técnico sees no edit control in review
-- GIVEN an order in `ready_for_review` status assigned to a `tecnico`
+#### Scenario: Técnico sees no edit control on hold or in review
+- GIVEN an order in `on_hold` or `ready_for_review` status assigned to a `tecnico`
 - WHEN that `tecnico` opens its detail page
 - THEN the page MUST NOT offer the edit control, while an `administrador` or `jefe_taller` MUST see it
 
@@ -489,7 +563,7 @@ The presence of the control and the acceptance of the write MUST be decided by o
 - THEN the system MUST answer 404 and MUST NOT write the field
 
 #### Scenario: The route refuses a patch the UI would not have offered
-- GIVEN an order in `open` status assigned to a `tecnico`
+- GIVEN an order in `open` or `on_hold` status assigned to a `tecnico`
 - WHEN that `tecnico` sends `PATCH /api/service-orders/[id]` with `hallazgos`
 - THEN the system MUST refuse the patch with a Spanish message, MUST NOT write the field, and MUST NOT answer 500
 
@@ -514,14 +588,14 @@ The presence of the control and the acceptance of the write MUST be decided by o
 - THEN the gate MUST be evaluated against the stored `done`: without a verified administrator correction the patch MUST be refused, and with one the stored status MUST remain `done`
 
 #### Scenario: A permitted patch still saves
-- GIVEN an order in `in_progress` status assigned to a `tecnico`
+- GIVEN an order in `in_progress` or `diagnosing` status assigned to a `tecnico`
 - WHEN that `tecnico` patches `hallazgos` and `recomendaciones`
 - THEN the system MUST persist both values
 
 #### Scenario: The edit control meets the hit-target floor
 - GIVEN a detail page that offers the edit control
 - WHEN it renders
-- THEN that control MUST measure at least 44x44
+- THEN that control MUST measure at least 44x44 **[LAN]**
 
 ### Requirement: Order List Search Matches Customer, Vehicle, and Phone
 
@@ -558,7 +632,7 @@ controlled-input contract.
 The `/service-orders` list MUST render columns: a truncated `ID`, `Cliente`
 (customer name), `Vehículo`, `Estado`, `Cita`, and `Acciones`. The `Vehículo`
 cell MUST identify the car, not merely its registration: the plate AND the
-make/model the workshop knows it by. The owner asked for "el auto con su
+make/model the workshop knows it by (a `booked` order with no vehicle shows "Sin vehículo" in that cell). The owner asked for "el auto con su
 placa" and selected a mockup reading `AB-1234 Hilux`; a plate alone does not
 tell a technician which car is on the lift. Make and model are nullable, so
 the cell MUST degrade to the plate alone when they are absent rather than
@@ -678,17 +752,37 @@ reminder by default in either direction.
 
 ### Requirement: Order Assignment
 
-An order MUST be assigned to one or more technicians through `orden_tecnico` rows (order, `tecnico`, nullable `parte_lista_at`), unique per order and technician, with foreign keys `ON DELETE RESTRICT`. Only an `administrador` or `jefe_taller` MUST assign, at creation or afterwards, on orders in `open`, `in_progress` or `ready_for_review`; assigning on a `done` or `cancelled` order MUST be refused for every role and is not correctable. Assigning requires an active technician; assigning one already assigned MUST be a no-op, not an error. No code path MUST remove an assignment (un-assigning is out of scope). Assignment MUST run through `lockOrderForMutation`. Assigning a new technician to a `ready_for_review` order MUST return it to `in_progress` in the same transaction; assigning to an `open` or `in_progress` order MUST NOT change its status. Existing orders carry no assignment until an administrador or jefe assigns them. The order detail MUST show the assignees and, for administrador and jefe, an assignment control that meets 44x44, shows a Spanish success toast and lists only active technicians.
+An order MUST be assigned to one or more technicians through `orden_tecnico` rows (order, `tecnico`, nullable `parte_lista_at`), unique per order and technician, with foreign keys `ON DELETE RESTRICT`. Only an `administrador` or `jefe_taller` MUST assign, at creation or afterwards, on orders in `booked`, `open`, `diagnosing`, `in_progress`, `on_hold` or `ready_for_review`; assigning on a `done` or `cancelled` order MUST be refused for every role and is not correctable. Assigning requires an active technician; assigning one already assigned MUST be a no-op, not an error. No code path MUST remove an assignment (un-assigning is out of scope). Assignment MUST run through `lockOrderForMutation`. The status effects of assigning are exactly: the first technician assigned to a Recibida (`open`) order MUST move it to `diagnosing` in the same transaction; assigning a new technician to a `ready_for_review` order MUST return it to `in_progress` in the same transaction; assigning to an order in any other status (`booked`, `diagnosing`, `in_progress`, `on_hold`), or a further technician on any order, MUST NOT change its status. No change to a technician roster or assignment set MUST ever move an order out of `diagnosing`: an order whose only technician is deactivated stays `diagnosing`. Existing orders carry no assignment until an administrador or jefe assigns them. The order detail MUST show the assignees and, for administrador and jefe, an assignment control that meets 44x44, shows a Spanish success toast and lists only active technicians.
 
-#### Scenario: Admin or jefe assigns an open order
+#### Scenario: First technician on a Recibida order starts diagnosing **[e2e]**
 - GIVEN an `open` order with no assignments
 - WHEN an `administrador` or `jefe_taller` assigns technician T
-- THEN one `orden_tecnico` row MUST exist with a null `parte_lista_at` and the status MUST stay `open`
+- THEN one `orden_tecnico` row MUST exist with a null `parte_lista_at`, the status MUST be `diagnosing` and one `open → diagnosing` history row MUST exist
 
-#### Scenario: Assigning during review reopens the order
+#### Scenario: Second technician does not change status **[e2e]**
+- GIVEN a `diagnosing` order assigned to T
+- WHEN an administrador assigns U
+- THEN the status MUST stay `diagnosing` and no history row MUST be written
+
+#### Scenario: Assigning to a booked order keeps it booked **[e2e]**
+- GIVEN a `booked` order
+- WHEN a jefe assigns technician T
+- THEN the assignment MUST persist, the status MUST stay `booked`, and no history row MUST be written
+
+#### Scenario: Assigning on hold or in progress does not change status **[e2e]**
+- GIVEN an `in_progress` order and an `on_hold` order
+- WHEN an administrador assigns a technician to each
+- THEN both statuses MUST be unchanged
+
+#### Scenario: Assigning during review reopens the order **[e2e]**
 - GIVEN a `ready_for_review` order where all assigned have marked
 - WHEN an administrador assigns another technician U
 - THEN the order MUST return to `in_progress` and U's `parte_lista_at` MUST be null
+
+#### Scenario: Deactivating the only technician leaves diagnosing **[e2e]**
+- GIVEN a `diagnosing` order whose only technician is then deactivated
+- WHEN the order is read
+- THEN its status MUST still be `diagnosing`
 
 #### Scenario: Assigning on a closed order is refused
 - GIVEN a `done` order
@@ -814,3 +908,167 @@ Wherever staff edit or read an order's `description`, `hallazgos` or `recomendac
 - GIVEN the create-order dialog
 - WHEN it renders
 - THEN the `description` field MUST show the hint and no hallazgos or recomendaciones field MUST appear
+
+### Requirement: Booked Order Without Vehicle or Category
+
+`orden_servicio.vehiculo_id` and `categoria` MUST be nullable ONLY for an order that is `booked`, or `cancelled` (a booked order cancelled as a no-show keeps its nulls). Any other status MUST require both, enforced by the database independently of the service. Every surface that reads an order MUST tolerate the nulls: the list and its count MUST still include such orders (same total, same pagination), the detail page MUST render "Sin vehículo" and "Sin categoría" in place of the vehicle link and category, the print view and the customer copy MUST render without error with those same placeholders, and the search MUST still match such an order by customer name or phone. Appointment-reminder scheduling for a booked order with no category MUST succeed.
+
+#### Scenario: Database rejects a null vehicle outside booked/cancelled **[e2e]**
+- GIVEN an order insert or update with null `vehiculo_id` or null `categoria` and a status other than `booked` or `cancelled`
+- WHEN it executes
+- THEN the database MUST reject it
+
+#### Scenario: Database accepts the nulls while booked **[e2e]**
+- GIVEN a `booked` order with null vehicle and category
+- WHEN it is inserted
+- THEN the database MUST accept it
+
+#### Scenario: Leaving booked without them is refused by the database **[e2e]**
+- GIVEN a `booked` order with a null vehicle
+- WHEN a direct update sets its status to `open`
+- THEN the database MUST reject it
+
+#### Scenario: List and count agree **[e2e]**
+- GIVEN 3 orders of which 1 is `booked` with no vehicle
+- WHEN the list renders unfiltered, and again filtered by status "Agendada"
+- THEN the unfiltered list MUST show 3 rows and count 3, and the filtered one MUST show 1 row and count 1
+
+#### Scenario: Search still finds a vehicle-less order **[e2e]**
+- GIVEN a `booked` order with no vehicle for customer "Pérez"
+- WHEN staff searches "perez"
+- THEN that order MUST appear, and searching a plate MUST NOT error
+
+#### Scenario: Detail and print render placeholders
+- GIVEN a `booked` order with null vehicle and category
+- WHEN staff opens its detail page and its print view
+- THEN each MUST show "Sin vehículo" and "Sin categoría", offer no vehicle link, and not error; the workshop copy MUST still print exactly one page
+
+#### Scenario: Reminder scheduling tolerates a null category **[unit]**
+- GIVEN a booked order with `appointmentAt` and no `categoria`
+- WHEN the appointment reminder is scheduled
+- THEN scheduling MUST succeed
+
+### Requirement: Vehicle and Category Set While Booked
+
+While an order is `booked`, an `administrador` or `jefe_taller` MUST be able to set or change its `vehiculoId` and `categoria` through the order edit path. A supplied vehicle MUST belong to the order's `cliente` and MUST be active. Once the order is no longer `booked`, `vehiculoId` MUST NOT be patchable (unchanged behavior) while `categoria` stays patchable per Category and Completion Notes Editing.
+
+#### Scenario: Complete a booked order **[e2e]**
+- GIVEN a `booked` order with null vehicle and category
+- WHEN an administrador patches a vehicle of that customer and a `categoria`
+- THEN both MUST persist and the status MUST stay `booked`
+
+#### Scenario: Foreign or inactive vehicle refused
+- GIVEN a `booked` order of customer A
+- WHEN a patch names customer B's vehicle, or a deactivated vehicle of A
+- THEN the system MUST reject it with a Spanish message and change nothing
+
+#### Scenario: Vehicle frozen after booked **[e2e]**
+- GIVEN an `open` order
+- WHEN a patch includes `vehiculoId`
+- THEN the system MUST ignore or refuse it and the stored vehicle MUST be unchanged
+
+#### Scenario: Técnico cannot set the vehicle
+- GIVEN a `tecnico` assigned to a `booked` order
+- WHEN it patches `vehiculoId`
+- THEN the system MUST refuse it (the edit gate refuses `booked` for a técnico)
+
+### Requirement: On-Hold Reason
+
+Putting an order on hold MUST require exactly one reason: `repuesto` ("Repuesto") or `aprobacion_cliente` ("Aprobación del cliente"). The order MUST store the reason while it is `on_hold` and MUST hold no reason in every other status, enforced by the database independently of the service. The transition route MUST refuse `on_hold` without a valid reason, and MUST refuse a reason supplied with any other target, with a Spanish message. Leaving `on_hold` clears the reason. The detail page MUST show the reason while the order is on hold, and the single-order status controls MUST ask for the reason before putting an order on hold.
+
+#### Scenario: Reason required
+- GIVEN an `in_progress` order
+- WHEN a jefe puts it on hold with no reason, or with `otro`
+- THEN the system MUST refuse with a Spanish message and the status MUST stay `in_progress`
+
+#### Scenario: Reason stored and cleared **[e2e]**
+- GIVEN an `in_progress` order put on hold with `aprobacion_cliente`
+- WHEN it is read, then resumed and read again
+- THEN the first read MUST show the reason and the second MUST show none
+
+#### Scenario: Reason on another target refused
+- GIVEN an `in_progress` order
+- WHEN a transition to `done` carries a reason
+- THEN the system MUST refuse it and change nothing
+
+#### Scenario: Database ties reason to on_hold **[e2e]**
+- GIVEN a direct write of an `on_hold` row with no reason, or an `in_progress` row with a reason
+- WHEN it executes
+- THEN the database MUST reject it
+
+### Requirement: Appointment Reminder Fires Only While Booked
+
+The `appointment` reminder MUST be sent only if, at the moment it fires, the order is still `booked`, judged from the current database state. For any other status the reminder MUST NOT be sent and MUST NOT fail the job; the existing skip behavior of reminders applies. Other reminder types are unaffected.
+
+#### Scenario: Still booked sends **[e2e]**
+- GIVEN a scheduled `appointment` reminder for a `booked` order
+- WHEN it fires
+- THEN it MUST be sent
+
+#### Scenario: Received early is skipped **[e2e]**
+- GIVEN a scheduled `appointment` reminder for an order that was received (`open`, `diagnosing` or later)
+- WHEN it fires
+- THEN nothing MUST be sent and the job MUST complete without error
+
+#### Scenario: Cancelled is skipped **[e2e]**
+- GIVEN a scheduled `appointment` reminder for a `cancelled` order
+- WHEN it fires
+- THEN nothing MUST be sent
+
+#### Scenario: Retry stays idempotent **[unit]**
+- GIVEN a reminder already sent for a `booked` order
+- WHEN the job is retried
+- THEN it MUST NOT send twice
+
+### Requirement: Status Labels, Badge and List Filter
+
+Every status MUST render with its Spanish label (list above) through `StatusBadge` on the list, the cards, and the detail page, each visually distinguishable; `open` MUST read "Recibida", never "Abierta". The `/service-orders` status filter MUST offer all eight statuses, `cancelled` included. A `status` URL parameter outside the eight MUST be ignored. Sorting by status MUST order `booked`, `open`, `diagnosing`, `in_progress`, `on_hold`, `ready_for_review`, `done`, `cancelled` ascending. The detail page for an `on_hold` order MUST show the badge with its reason.
+
+#### Scenario: Each label renders **[unit]**
+- GIVEN one order in each of the eight statuses
+- WHEN the list renders
+- THEN the badges MUST read "Agendada", "Recibida", "En diagnóstico", "En progreso", "En espera", "Lista para revisión", "Completada", "Cancelada" and none MUST read "Abierta"
+
+#### Scenario: Filter by each new status **[e2e]**
+- GIVEN one order in each status
+- WHEN staff filters by `diagnosing`, `on_hold`, `booked` and `cancelled` in turn
+- THEN each filter MUST return exactly that order and count 1
+
+#### Scenario: Unknown status parameter ignored
+- GIVEN `?status=garbage`
+- WHEN the list renders
+- THEN it MUST behave as unfiltered and not error
+
+#### Scenario: Sort order **[e2e]**
+- GIVEN one order in each status, sorted by status ascending
+- WHEN the list renders
+- THEN the order MUST be the lifecycle sequence stated above
+
+### Requirement: Status Actions Confirm With a Toast
+
+Each successful status action on the order detail MUST show a Spanish success toast above `router.refresh()` and below the `try/catch` (per AGENTS.md), subject first, verb in the past, no exclamation marks. Copy: putting on hold "Orden puesta en espera"; resuming "Orden reanudada"; receiving a booked order "Orden recibida"; completing "Orden completada"; cancelling "Orden cancelada"; any other target "Orden pasada a <label>", so diagnosing → in progress reads "Orden pasada a En progreso"; setting vehicle and category on a booked order "Vehículo y categoría guardados". Failures MUST stay inline, with no toast. Bulk results keep reporting rows that actually applied, singular when one ("1 orden cancelada").
+
+#### Scenario: Hold toast
+- GIVEN an `in_progress` order and a jefe who picks a reason
+- WHEN the hold succeeds
+- THEN the toast "Orden puesta en espera" MUST show and the page MUST refresh
+
+#### Scenario: Resume and receive toasts
+- GIVEN an `on_hold` order and a `booked` order
+- WHEN each action succeeds
+- THEN "Orden reanudada" and "Orden recibida" MUST show respectively
+
+#### Scenario: Complete and cancel toasts
+- GIVEN two `in_progress` orders
+- WHEN a jefe completes one and cancels the other
+- THEN "Orden completada" and "Orden cancelada" MUST show respectively
+
+#### Scenario: Refused action shows no toast
+- GIVEN a hold attempt the server refuses
+- WHEN the response arrives
+- THEN no success toast MUST show and the Spanish error MUST appear inline
+
+#### Scenario: Refresh failure does not retract the toast
+- GIVEN a hold the server accepted but whose `router.refresh()` throws
+- WHEN it settles
+- THEN the success toast MUST already have shown

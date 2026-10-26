@@ -21,6 +21,9 @@ active work. New changes go in `openspec/changes/<name>/`, not here.
 | `table-redesign-bulk-actions` | 2026-09-08 | 77/83 | — | shaded headers, row kebabs, cross-page selection, three bulk actions (PRs #88–#96); **created `openspec/specs/user-management/spec.md` from its own delta, preamble and merge header included** |
 | `service-order-intake-and-print` | 2026-09-09 | 75/75 | ADDED single-vehicle insert | intake UX, inline vehicle creation, edit gate by role+status, printed work order (PRs #99–#102) |
 | `service-orders-search-and-vehicle-catalog` | 2026-09-09 | 84/84 | ADDED shared make/model control | order-list search + legible rows, controlled filter input across three screens, 90-day reminder restricted to preventive/corrective, curated vehicle catalog (PRs #104–#107); **created `openspec/specs/list-search-filters/` and `openspec/specs/vehicle-catalog/`** |
+| `service-order-workflow-states` | 2026-10-26 | 38/39 ‡ | — (service-orders and five other capabilities, below) | eight-status order workflow (Agendada, Recibida, En diagnóstico, En progreso, En espera, Lista para revisión, Completada, Cancelada), status history, nullable vehicle/category while booked, hold reasons, appointment reminder only while booked (PRs #245–#249); **created `openspec/specs/service-order-status-history/`**; MODIFIED `service-orders`, `order-work-lines`, `portal-sync`, `metrics-dashboard`, `table-bulk-actions` |
+
+‡ Task 4.9 (pre-deploy counts on the workshop database) is open by design: it is a deploy-time check, not code. Run it before deploying `main`.
 
 † One of C1's 41 is the duplicate-pair merge the owner **dropped**, struck
 through and marked in that `tasks.md` rather than deleted. It counts as closed

@@ -66,3 +66,13 @@ Revert the chain. Enum values cannot be dropped in PG; they stay unused. History
 - [ ] Illegal transitions and técnico diagnosing → in_progress refused.
 - [ ] Booked order without vehicle saves; leaving booked without one is refused by DB.
 - [ ] Portal ingest accepts every snapshot; appointment reminder skipped once received.
+
+## Follow-ups open at archive (2026-10-26)
+
+Carried from the verify report (PASS WITH WARNINGS, merged to `main` @ `07a34d3`, PRs #245–#249). None blocks the archive.
+
+- Stale 403 copy in `src/app/api/service-orders/[id]/route.ts`: the body says "cerrar, cancelar o devolver" but the refusal now also covers hold, resume and start. Update it to name them.
+- Two `[e2e]`-tagged scenarios have no real-SQL test: "Assigning on hold or in progress does not change status" (unit only, `assignments.test.ts`) and "Deactivating the only technician leaves diagnosing" (no test; holds because nothing on the deactivation path writes status). Add the e2e tests or retag them `[unit]`.
+- Marking or un-marking "parte lista" enqueues no portal sync.
+- Pre-existing `npm run test:portal-sync` failure, also failing on `main`: "shows no plate and no order before the terms are accepted". Unrelated to this change.
+- Task 4.9 (pre-deploy counts on the workshop database) is still open: run it before deploying `main`.
