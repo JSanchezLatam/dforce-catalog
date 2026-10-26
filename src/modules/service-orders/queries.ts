@@ -101,7 +101,7 @@ export function parseOrdenSort(searchParams: RawSearchParams): OrdenSort | undef
 }
 
 /**
- * Always TWO order expressions — `status` has only four values, so a single
+ * Always TWO order expressions — `status` has only a handful of values, so a single
  * non-unique key would make paging unstable (Postgres gives no ordering
  * guarantee among ties; a row can appear on two pages and another on none).
  * `createdAt` is near-unique and is today's own default order, so it is the
