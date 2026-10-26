@@ -76,18 +76,16 @@ export function assertTransitionPermitted(canAssign: boolean, from: OrderStatus,
   if (!canAssign) throw new TransitionForbiddenError(from, to);
 }
 
-/**
- * What the status controls and the bulk menu offer today: the manual transitions
- * without `on_hold` (its reason UI lands in WU4; offering it now would send a hold
- * with no reason). WU4 switches the UI to `getManualTransitions`.
- */
-export function getAllowedTransitions(from: OrderStatus): OrderStatus[] {
-  return getManualTransitions(from).filter((to) => to !== "on_hold");
+/** `on_hold` needs a reason chosen per order, so only the single-order controls carry it. */
+const BULK_EXCLUDED: ReadonlySet<OrderStatus> = new Set<OrderStatus>(["on_hold"]);
+
+function getBulkTransitions(from: OrderStatus): OrderStatus[] {
+  return getManualTransitions(from).filter((to) => !BULK_EXCLUDED.has(to));
 }
 
 /**
  * D9 — the target statuses legal from EVERY status in `froms`: the
- * INTERSECTION of each selected row's `getAllowedTransitions`, which is what
+ * INTERSECTION of each selected row's bulk transitions (manual, minus `on_hold`), which is what
  * the bulk status menu is allowed to offer.
  *
  * Never the union, and never the four statuses unconditionally. A menu built
@@ -99,16 +97,12 @@ export function getAllowedTransitions(from: OrderStatus): OrderStatus[] {
  *
  * An empty selection returns `[]` rather than the identity of an intersection
  * (the universe): nothing is selected, so no bulk action is legal.
- *
- * The accumulator is a COPY — `getAllowedTransitions` hands back the live
- * `ALLOWED_TRANSITIONS` row, and a one-row selection would otherwise return a
- * writable alias to the state machine itself.
  */
 export function allowedTransitionsForAll(froms: readonly OrderStatus[]): OrderStatus[] {
   const [first, ...rest] = froms;
   if (first === undefined) return [];
   return rest.reduce<OrderStatus[]>(
-    (common, from) => common.filter((next) => getAllowedTransitions(from).includes(next)),
-    [...getAllowedTransitions(first)],
+    (common, from) => common.filter((next) => getBulkTransitions(from).includes(next)),
+    getBulkTransitions(first),
   );
 }

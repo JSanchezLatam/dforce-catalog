@@ -147,6 +147,22 @@ describe("ServiceOrderDetailPage", () => {
     expect(screen.queryByText("null")).not.toBeInTheDocument();
   });
 
+  it("shows the hold reason beside the En espera badge", async () => {
+    requireSessionFromHeaders.mockResolvedValue({ id: "u1", role: "administrador" });
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status: "on_hold", esperaMotivo: "aprobacion_cliente" }, items: [] });
+
+    render(await renderPage());
+
+    expect(screen.getByText("En espera")).toBeInTheDocument();
+    expect(screen.getByText("Motivo: Aprobación del cliente")).toBeInTheDocument();
+  });
+
+  it("shows no hold reason on an order that is not on hold", async () => {
+    render(await renderPage());
+
+    expect(screen.queryByText(/Motivo:/)).not.toBeInTheDocument();
+  });
+
   // customer-portal WU5b — these three fields reach the customer's portal page.
   it("marks Descripción, Hallazgos and Recomendaciones as visible to the customer, and never Observaciones", async () => {
     getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, description: "Instalar parlantes" }, items: [] });
@@ -337,6 +353,9 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
 
   it.each<[Role, OrderStatus]>([
     ["administrador", "open"],
+    ["administrador", "booked"],
+    ["jefe_taller", "booked"],
+    ["administrador", "on_hold"],
     ["administrador", "in_progress"],
     ["administrador", "ready_for_review"],
     ["jefe_taller", "ready_for_review"],
@@ -349,6 +368,8 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
 
   it.each<[Role, OrderStatus]>([
     ["tecnico", "open"],
+    ["tecnico", "booked"],
+    ["tecnico", "on_hold"],
     ["tecnico", "ready_for_review"],
     ["administrador", "done"],
     ["tecnico", "done"],

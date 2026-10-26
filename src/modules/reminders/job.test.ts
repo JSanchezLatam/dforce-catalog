@@ -56,7 +56,8 @@ function makeOrden(overrides: Partial<OrdenServicio> = {}): OrdenServicio {
   return {
     id: "orden-1",
     clienteId: "cliente-1",
-    status: "open",
+    // An appointment reminder only fires while the order is still Agendada.
+    status: "booked",
     description: null,
     appointmentAt: new Date("2026-07-27T10:00:00.000Z"),
     completedAt: null,
@@ -205,6 +206,73 @@ describe("runReminder — R23/R26 re-check at fire time", () => {
 
     expect(sendViaChannel).not.toHaveBeenCalled();
     expect(state.reminder.status).toBe("skipped");
+  });
+
+  // The customer was told "we expect you on <date>"; once the car is in the shop (or the order is
+  // otherwise past Agendada) that message is false, so it is skipped AT FIRE TIME.
+  it.each(["open", "diagnosing", "in_progress", "on_hold", "ready_for_review", "done"] as const)(
+    "skips an appointment reminder whose order is already %s, and dispatches nothing",
+    async (status) => {
+      const state = {
+        reminder: makeReminder({ status: "scheduled", type: "appointment" }),
+        orden: makeOrden({ status }),
+        cliente: makeCliente(),
+      };
+      const { fakeDb, refillSelectQueue } = makeFakeDb(state);
+      const sendViaChannel = vi.fn();
+
+      refillSelectQueue();
+      await runReminder("reminder-1", { db: fakeDb as unknown as typeof db, now: () => NOW, sendViaChannel });
+
+      expect(sendViaChannel).not.toHaveBeenCalled();
+      expect(state.reminder.status).toBe("skipped");
+    },
+  );
+
+  it("still sends an appointment reminder while the order is booked", async () => {
+    const state = {
+      reminder: makeReminder({ status: "scheduled", type: "appointment" }),
+      orden: makeOrden({ status: "booked" }),
+      cliente: makeCliente(),
+    };
+    const { fakeDb, refillSelectQueue } = makeFakeDb(state);
+    const sendViaChannel = vi.fn();
+
+    refillSelectQueue();
+    await runReminder("reminder-1", { db: fakeDb as unknown as typeof db, now: () => NOW, sendViaChannel });
+
+    expect(sendViaChannel).toHaveBeenCalledTimes(1);
+    expect(state.reminder.status).toBe("sent");
+  });
+
+  it("leaves other reminder types alone: a service_due reminder on a non-booked order still sends", async () => {
+    const state = {
+      reminder: makeReminder({ status: "scheduled", type: "service_due" }),
+      orden: makeOrden({ status: "done" }),
+      cliente: makeCliente(),
+    };
+    const { fakeDb, refillSelectQueue } = makeFakeDb(state);
+    const sendViaChannel = vi.fn();
+
+    refillSelectQueue();
+    await runReminder("reminder-1", { db: fakeDb as unknown as typeof db, now: () => NOW, sendViaChannel });
+
+    expect(sendViaChannel).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not resend an appointment reminder already sent for a booked order (retry)", async () => {
+    const state = {
+      reminder: makeReminder({ status: "sent", type: "appointment" }),
+      orden: makeOrden({ status: "booked" }),
+      cliente: makeCliente(),
+    };
+    const { fakeDb, refillSelectQueue } = makeFakeDb(state);
+    const sendViaChannel = vi.fn();
+
+    refillSelectQueue();
+    await runReminder("reminder-1", { db: fakeDb as unknown as typeof db, now: () => NOW, sendViaChannel });
+
+    expect(sendViaChannel).not.toHaveBeenCalled();
   });
 
   it("skips when the appointment reminder's order no longer has a future appointmentAt (stale)", async () => {

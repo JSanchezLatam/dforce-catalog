@@ -66,10 +66,12 @@ function toDatetimeLocal(value?: Date | string | null): string {
 }
 
 /**
- * R20 — creates an `orden_servicio`; also patches `categoria`, `description`,
- * `appointmentAt`, `hallazgos`, `recomendaciones` and `observaciones` on an
- * existing one (`cliente` and `vehiculo` are immutable after creation —
- * `updateOrder` does not accept either). "use client", Dialog+Input+Label+
+ * R20 — creates an `orden_servicio` as Agendada (`booked`, may omit vehicle and
+ * category) or Recibida (`open`, the default); also patches `categoria`,
+ * `description`, `appointmentAt`, `hallazgos`, `recomendaciones` and
+ * `observaciones` on an existing one. `cliente` is immutable after creation and
+ * `vehiculo` is patchable only while the order is Agendada (`updateOrder`
+ * refuses it otherwise), so only that order gets the vehicle picker in edit mode. "use client", Dialog+Input+Label+
  * Button, `FIELD_ERROR` — mirrors `CustomerForm.tsx`; the customer field is
  * `CustomerPicker` (async, debounced `GET /api/customers`,
  * `customer-search-and-picker` change). POSTs to `/api/service-orders`
@@ -118,12 +120,17 @@ export function ServiceOrderForm({
   onSaved?: (orden: OrdenServicio) => void;
 }) {
   const isEdit = Boolean(order);
+  // The one edit-mode order whose vehicle may still be set (`updateOrder` refuses it otherwise).
+  const isBooked = order?.status === "booked";
+  const vehiclePickable = !isEdit || isBooked;
   // closed-order-lock: a done/cancelled order reaches this form only through an
   // administrator's "Corregir", which re-authenticates with their password.
   const isCorrection = Boolean(order && isClosedStatus(order.status));
   const [open, setOpen] = useState(false);
   const [clienteId, setClienteId] = useState(order?.clienteId ?? selectedCustomer?.id ?? "");
-  const [vehiculoId, setVehiculoId] = useState("");
+  const [vehiculoId, setVehiculoId] = useState(order?.vehiculoId ?? "");
+  const [initialStatus, setInitialStatus] = useState<"open" | "booked">("open");
+  const creatingBooked = !isEdit && initialStatus === "booked";
   const [vehiclesRetry, setVehiclesRetry] = useState(0);
   const [fetchedVehicles, setFetchedVehicles] = useState<{ key: string; vehicles: PublicVehiculo[]; failed: boolean }>({
     key: "",
@@ -151,8 +158,8 @@ export function ServiceOrderForm({
   /**
    * D2 — fetches the chosen customer's ACTIVE vehicles (never seeded alongside
    * the customer: `ClienteListItem.plates` is plate strings with no vehicle
-   * ids). Create mode only — the vehicle is immutable post-creation, like
-   * customer and parts, so an edit-mode order never needs this list.
+   * ids). Create mode and Agendada edit only — once the order is received the
+   * vehicle is immutable, so no other edit-mode order needs this list.
    *
    * The list is stored KEYED by what it was fetched for, and loading/empty/
    * error are derived from that key rather than mirrored into their own
@@ -178,7 +185,7 @@ export function ServiceOrderForm({
    * selected from repainting over a faster later one.
    */
   useEffect(() => {
-    if (isEdit || !open || !clienteId) return;
+    if (!vehiclePickable || !open || !clienteId) return;
     let cancelled = false;
     const key = `${clienteId}:${vehiclesRetry}`;
     fetch(`/api/customers/${clienteId}/vehicles`)
@@ -201,14 +208,14 @@ export function ServiceOrderForm({
     return () => {
       cancelled = true;
     };
-  }, [clienteId, isEdit, open, vehiclesRetry]);
+  }, [clienteId, vehiclePickable, open, vehiclesRetry]);
 
   const vehiclesKey = `${clienteId}:${vehiclesRetry}`;
   const vehiclesSettled = fetchedVehicles.key === vehiclesKey;
   const vehicles = vehiclesSettled ? fetchedVehicles.vehicles : [];
   const vehiclesError = vehiclesSettled && fetchedVehicles.failed;
-  const vehiclesLoading = !isEdit && Boolean(clienteId) && !vehiclesSettled;
-  const effectiveMotor = isEdit ? (motor ?? null) : (vehicles.find((v) => v.id === vehiculoId)?.motor ?? null);
+  const vehiclesLoading = vehiclePickable && Boolean(clienteId) && !vehiclesSettled;
+  const effectiveMotor = (vehiclePickable ? vehicles.find((v) => v.id === vehiculoId)?.motor : undefined) ?? motor ?? null;
   const intakeInputs = intakeInputsFor(effectiveMotor);
   const showVehiclesEmptyHint = Boolean(clienteId) && !vehiclesLoading && !vehiclesError && vehicles.length === 0;
 
@@ -236,7 +243,8 @@ export function ServiceOrderForm({
   function resetForm() {
     const nextClienteId = order?.clienteId ?? selectedCustomer?.id ?? "";
     setClienteId(nextClienteId);
-    setVehiculoId("");
+    setVehiculoId(order?.vehiculoId ?? "");
+    setInitialStatus("open");
     setCategoria(order?.categoria ?? "");
     setHallazgos(order?.hallazgos ?? "");
     setRecomendaciones(order?.recomendaciones ?? "");
@@ -296,7 +304,11 @@ export function ServiceOrderForm({
               ...(appointmentAt !== originalAppointmentAt
                 ? { appointmentAt: appointmentAt ? new Date(appointmentAt).toISOString() : null }
                 : {}),
-              categoria,
+              // Omitted while unset: an Agendada order can have no category yet,
+              // and the route answers 400 to `categoria: ""`.
+              ...(categoria ? { categoria } : {}),
+              // Only the Agendada picker can change it, and only a change is sent.
+              ...(vehiculoId && vehiculoId !== order?.vehiculoId ? { vehiculoId } : {}),
               hallazgos: hallazgos.trim() || null,
               recomendaciones: recomendaciones.trim() || null,
               observaciones: observaciones.trim() || null,
@@ -309,8 +321,11 @@ export function ServiceOrderForm({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               clienteId,
-              vehiculoId,
-              categoria,
+              status: initialStatus,
+              // Unset is OMITTED, not "": the route reads `vehiculoId: ""` as a
+              // (failing) claim about a vehicle, and an Agendada order may have none.
+              ...(vehiculoId ? { vehiculoId } : {}),
+              ...(categoria ? { categoria } : {}),
               description: description.trim() || undefined,
               // D7 — what the CUSTOMER said at booking. `hallazgos` and
               // `recomendaciones` are findings and stay off the create wire.
@@ -428,6 +443,34 @@ export function ServiceOrderForm({
             )}
 
             {!isEdit && (
+              <fieldset className="grid gap-2 border-0 p-0">
+                <legend className="mb-1 text-sm font-medium">Tipo de orden</legend>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      ["open", "Recibida"],
+                      ["booked", "Agendada"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <label
+                      key={value}
+                      className="flex min-h-11 min-w-11 cursor-pointer items-center gap-2 rounded-lg border border-input px-3 text-sm has-[:checked]:border-ring has-[:checked]:bg-muted"
+                    >
+                      <input
+                        type="radio"
+                        name="orden-tipo"
+                        value={value}
+                        checked={initialStatus === value}
+                        onChange={() => setInitialStatus(value)}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
+
+            {vehiclePickable && (
               <div className="grid gap-2">
                 <Label htmlFor="orden-vehiculo">Vehículo</Label>
                 {/* Native <select>, not the base-ui Select this repo otherwise
@@ -463,7 +506,9 @@ export function ServiceOrderForm({
                 {showVehiclesEmptyHint && (
                   <>
                     <p id={VEHICLES_EMPTY_HINT_ID} className="text-sm text-muted-foreground">
-                      Este cliente no tiene vehículos activos. Agregá uno primero.
+                      {creatingBooked
+                        ? "Este cliente no tiene vehículos activos. Podés agendar sin vehículo y completarlo después."
+                        : "Este cliente no tiene vehículos activos. Agregá uno primero."}
                     </p>
                     {/*
                      * D1/D4 — "agregá uno primero" used to be a dead end: 368
@@ -521,9 +566,11 @@ export function ServiceOrderForm({
                 {/* Create mode opens unfilled, like the vehicle field above.
                     A missing category is visible — the submit is blocked. A
                     wrong one is invisible forever, and this feature exists to
-                    make the vehicle's history true. Edit mode needs no
-                    placeholder: the order already has one. */}
-                {!isEdit && <option value="">Seleccioná un tipo de servicio</option>}
+                    make the vehicle's history true. Edit mode needs one only
+                    for an order that has none yet (Agendada, or a cancelled
+                    no-show): without a matching option the select would sit
+                    at "" and a save would send `categoria: ""`. */}
+                {(!isEdit || !order?.categoria) && <option value="">Seleccioná un tipo de servicio</option>}
                 {CATEGORIA_OPTIONS.map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
@@ -554,6 +601,7 @@ export function ServiceOrderForm({
               <Input
                 id="orden-appointment"
                 type="datetime-local"
+                required={creatingBooked}
                 value={appointmentAt}
                 onChange={(e) => setAppointmentAt(e.target.value)}
               />
@@ -709,7 +757,7 @@ export function ServiceOrderForm({
             <DialogClose render={<Button type="button" variant="outline" disabled={isSubmitting} />}>
               Cancelar
             </DialogClose>
-            <Button type="submit" disabled={isSubmitting || (!isEdit && (!vehiculoId || !categoria)) || (isCorrection && password === "")}>
+            <Button type="submit" disabled={isSubmitting || (!isEdit && (creatingBooked ? !appointmentAt : !vehiculoId || !categoria)) || (isCorrection && password === "")}>
               {isSubmitting ? "Guardando…" : "Guardar"}
             </Button>
           </DialogFooter>

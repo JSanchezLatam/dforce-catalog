@@ -11,6 +11,7 @@
  * as `Record<string, string>` in `customers/[id]/page.tsx`, and WU3 was about to
  * make that a third copy (GGA round 1 on PR #60).
  */
+import type { esperaMotivoEnum } from "@/shared/db/schema";
 import type { OrderStatus } from "./transitions";
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
@@ -22,4 +23,10 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   ready_for_review: "Lista para revisión",
   done: "Completada",
   cancelled: "Cancelada",
+};
+
+/** Why an order is `on_hold`; typed against the enum so a third reason is a `tsc` error here. */
+export const ESPERA_MOTIVO_LABEL: Record<(typeof esperaMotivoEnum.enumValues)[number], string> = {
+  repuesto: "Repuesto",
+  aprobacion_cliente: "Aprobación del cliente",
 };

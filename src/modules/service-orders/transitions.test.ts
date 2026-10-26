@@ -6,7 +6,6 @@ import {
   AUTOMATIC_TARGETS,
   assertTransition,
   assertTransitionPermitted,
-  getAllowedTransitions,
   getManualTransitions,
   OrderTransitionError,
   TransitionForbiddenError,
@@ -125,7 +124,7 @@ describe("assertTransition (R21)", () => {
 
 describe("ready_for_review edges", () => {
   it("leaves ready_for_review to in_progress, done and cancelled", () => {
-    expect(getAllowedTransitions("ready_for_review")).toEqual(["in_progress", "done", "cancelled"]);
+    expect(getManualTransitions("ready_for_review")).toEqual(["in_progress", "done", "cancelled"]);
   });
 
   // Readiness is derived (applyReadiness), never chosen: no manual edge leads in.
@@ -137,26 +136,25 @@ describe("ready_for_review edges", () => {
   );
 });
 
-describe("getAllowedTransitions (R21 — Phase 6 status-transition controls)", () => {
+describe("getManualTransitions as the status controls use it (R21)", () => {
   it("returns only cancelled for open: the start is automatic (diagnosing), not a button", () => {
-    expect(getAllowedTransitions("open")).toEqual(["cancelled"]);
+    expect(getManualTransitions("open")).toEqual(["cancelled"]);
   });
 
-  // WU4 adds on_hold to the controls with its reason UI.
-  it("returns the legal next states for in_progress the controls can send today (no on_hold yet)", () => {
-    expect(getAllowedTransitions("in_progress")).toEqual(["done", "cancelled"]);
+  it("offers on_hold from in_progress: the single-order controls carry its reason", () => {
+    expect(getManualTransitions("in_progress")).toEqual(["on_hold", "done", "cancelled"]);
   });
 
   it("returns an empty array for the terminal states (done, cancelled)", () => {
-    expect(getAllowedTransitions("done")).toEqual([]);
-    expect(getAllowedTransitions("cancelled")).toEqual([]);
+    expect(getManualTransitions("done")).toEqual([]);
+    expect(getManualTransitions("cancelled")).toEqual([]);
   });
 });
 
 /**
  * Design D9 — what the bulk status menu is allowed to offer.
  *
- * The rule is the INTERSECTION of every selected row's `getAllowedTransitions`,
+ * The rule is the INTERSECTION of every selected row's manual transitions minus `on_hold`,
  * never the union and never the four statuses unconditionally: a menu built
  * from the union offers `done` over a selection holding one `open` row, and
  * every one of those rows comes back an `invalid_transition` the operator had
@@ -184,6 +182,11 @@ describe("allowedTransitionsForAll (D9 — the bulk status menu's intersection)"
     expect(common).not.toContain("done");
   });
 
+  // on_hold needs a reason chosen per order, so the bulk menu never carries it.
+  it("never offers on_hold, even when every selected row could go on hold", () => {
+    expect(allowedTransitionsForAll(["in_progress", "in_progress"])).toEqual(["done", "cancelled"]);
+  });
+
   it("is empty once a terminal row is in the selection", () => {
     expect(allowedTransitionsForAll(["open", "done"])).toEqual([]);
     expect(allowedTransitionsForAll(["in_progress", "cancelled"])).toEqual([]);
@@ -196,17 +199,6 @@ describe("allowedTransitionsForAll (D9 — the bulk status menu's intersection)"
    */
   it("offers nothing for an empty selection", () => {
     expect(allowedTransitionsForAll([])).toEqual([]);
-  });
-
-  /**
-   * `getAllowedTransitions` hands back the live `ALLOWED_TRANSITIONS` row, so a
-   * single-row selection must not become a writable alias to the state machine
-   * itself.
-   */
-  it("never returns the transition table's own array", () => {
-    const common = allowedTransitionsForAll(["open"]);
-    common.pop();
-    expect(getAllowedTransitions("open")).toEqual(["cancelled"]);
   });
 });
 

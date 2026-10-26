@@ -193,4 +193,18 @@ describe("OrderBulkStatusActions — only what the role may do", () => {
       "Marcar como Cancelada",
     ]);
   });
+
+  it("offers close and cancel over in_progress rows, and no hold: it needs a reason per order", async () => {
+    const user = userEvent.setup();
+    const ids = renderWith({ a: "in_progress", b: "in_progress" }, true);
+
+    expect(await openMenu(user, ids)).toEqual(["Marcar como Completada", "Marcar como Cancelada"]);
+  });
+
+  it("offers only cancel over a mix of Recibida and in_progress rows", async () => {
+    const user = userEvent.setup();
+    const ids = renderWith({ a: "open", b: "open", c: "open", d: "in_progress" }, true);
+
+    expect(await openMenu(user, ids)).toEqual(["Marcar como Cancelada"]);
+  });
 });
