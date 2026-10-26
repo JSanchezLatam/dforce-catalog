@@ -8,7 +8,6 @@ import {
   assertTransitionPermitted,
   getAllowedTransitions,
   getManualTransitions,
-  isTransitionPermitted,
   OrderTransitionError,
   TransitionForbiddenError,
   type OrderStatus,
@@ -139,11 +138,11 @@ describe("ready_for_review edges", () => {
 });
 
 describe("getAllowedTransitions (R21 — Phase 6 status-transition controls)", () => {
-  it("returns the two legal next states for open", () => {
-    expect(getAllowedTransitions("open")).toEqual(["in_progress", "cancelled"]);
+  it("returns only cancelled for open: the start is automatic (diagnosing), not a button", () => {
+    expect(getAllowedTransitions("open")).toEqual(["cancelled"]);
   });
 
-  // WU2 removes the `open -> in_progress` leftover; WU4 adds on_hold to the controls with its reason UI.
+  // WU4 adds on_hold to the controls with its reason UI.
   it("returns the legal next states for in_progress the controls can send today (no on_hold yet)", () => {
     expect(getAllowedTransitions("in_progress")).toEqual(["done", "cancelled"]);
   });
@@ -168,8 +167,8 @@ describe("allowedTransitionsForAll (D9 — the bulk status menu's intersection)"
     expect(allowedTransitionsForAll(["open", "open", "open", "in_progress"])).toEqual(["cancelled"]);
   });
 
-  it("keeps both of open's next states when every selected row is open", () => {
-    expect(allowedTransitionsForAll(["open", "open"])).toEqual(["in_progress", "cancelled"]);
+  it("keeps diagnosing's next states when every selected row is diagnosing", () => {
+    expect(allowedTransitionsForAll(["diagnosing", "diagnosing"])).toEqual(["in_progress", "cancelled"]);
   });
 
   /**
@@ -179,7 +178,8 @@ describe("allowedTransitionsForAll (D9 — the bulk status menu's intersection)"
    * from both.
    */
   it("offers no status that is legal for only some of the selected rows", () => {
-    const common = allowedTransitionsForAll(["open", "in_progress"]);
+    const common = allowedTransitionsForAll(["diagnosing", "in_progress"]);
+    expect(common).toEqual(["cancelled"]);
     expect(common).not.toContain("in_progress");
     expect(common).not.toContain("done");
   });
@@ -206,14 +206,16 @@ describe("allowedTransitionsForAll (D9 — the bulk status menu's intersection)"
   it("never returns the transition table's own array", () => {
     const common = allowedTransitionsForAll(["open"]);
     common.pop();
-    expect(getAllowedTransitions("open")).toEqual(["in_progress", "cancelled"]);
+    expect(getAllowedTransitions("open")).toEqual(["cancelled"]);
   });
 });
 
 describe("assertTransitionPermitted (R21, who may transition)", () => {
   const LEGAL_EDGES: [OrderStatus, OrderStatus][] = [
-    ["open", "in_progress"], // WU2 removes: the temporary leftover
     ["open", "cancelled"],
+    ["diagnosing", "in_progress"],
+    ["on_hold", "in_progress"],
+    ["booked", "open"],
     ["in_progress", "done"],
     ["in_progress", "cancelled"],
     ["ready_for_review", "in_progress"],
@@ -225,28 +227,10 @@ describe("assertTransitionPermitted (R21, who may transition)", () => {
     expect(() => assertTransitionPermitted(true, from, to)).not.toThrow();
   });
 
-  it("lets everyone start work: open -> in_progress", () => {
-    expect(() => assertTransitionPermitted(false, "open", "in_progress")).not.toThrow();
-  });
-
-  it.each(LEGAL_EDGES.filter(([from, to]) => !(from === "open" && to === "in_progress")))(
+  it.each(LEGAL_EDGES)(
     "refuses %s -> %s for a caller without service-orders.assign",
     (from, to) => {
       expect(() => assertTransitionPermitted(false, from, to)).toThrow(TransitionForbiddenError);
     },
   );
-});
-
-describe("isTransitionPermitted (the boolean the controls filter by)", () => {
-  it("lets a holder of service-orders.assign pick any legal edge", () => {
-    expect(isTransitionPermitted(true, "in_progress", "done")).toBe(true);
-    expect(isTransitionPermitted(true, "ready_for_review", "in_progress")).toBe(true);
-  });
-
-  it("lets a caller without it start work and nothing else", () => {
-    expect(isTransitionPermitted(false, "open", "in_progress")).toBe(true);
-    expect(isTransitionPermitted(false, "open", "cancelled")).toBe(false);
-    expect(isTransitionPermitted(false, "in_progress", "done")).toBe(false);
-    expect(isTransitionPermitted(false, "ready_for_review", "in_progress")).toBe(false);
-  });
 });

@@ -16,6 +16,7 @@ import { isClosedStatus } from "./edit-policy";
 import { lockOrderForMutation, type Tx } from "./order-lock";
 import { applyReadiness } from "./readiness";
 import type { OrderScope } from "./scope";
+import { setStatus } from "./set-status";
 
 /** An id that is unknown or deactivated: one error for both, so the roster is not probed. */
 export class InvalidTecnicoError extends Error {
@@ -45,9 +46,9 @@ export type AssignDeps = { db?: typeof db };
 
 /**
  * Assigns one technician. Returns `created: false` for a technician already on
- * the order (a no-op, not an error). A NEW assignment on a `ready_for_review`
- * order returns it to `in_progress` in the same transaction: the new assignee
- * has not marked, so the order is no longer ready.
+ * the order (a no-op, not an error). A NEW assignment on an `open` order moves it to
+ * `diagnosing`, and on a `ready_for_review` order returns it to `in_progress`, in the same
+ * transaction (the new assignee has not marked, so the order is no longer ready).
  */
 export async function assignTecnico(
   input: { ordenId: string; tecnicoId: string; assignedBy: string; scope: OrderScope },
@@ -78,8 +79,10 @@ export async function assignTecnico(
       .returning({ tecnicoId: ordenTecnico.tecnicoId });
     if (inserted.length === 0) return { created: false };
 
-    // The new assignee has not marked, so a ready order is no longer ready: readiness owns that write.
-    await applyReadiness(tx, order);
+    // The first technician on a Recibida order starts diagnosing. Otherwise the new assignee has not marked, so a
+    // ready order is no longer ready: readiness owns that write. Booked, on-hold and diagnosing orders stay put.
+    if (order.status === "open") await setStatus(tx, order, "diagnosing", input.assignedBy);
+    else await applyReadiness(tx, order, input.assignedBy);
     return { created: true };
   });
 }

@@ -19,3 +19,20 @@ Tasks 1.1-1.11 done (1.11 minus the closing GGA/PR step).
 - `npm test` 218 files / 3427 tests passed; `npx tsc --noEmit` clean; `npm run lint` 0 errors / 13 warnings.
 - e2e (throwaway DB `dforce_e2e`, recreated): 20 files / 248 tests passed, 0 skipped.
 - Mutation-verify (each reverted, named test red): see the apply report.
+
+## WU2 (branch `feat/order-workflow-states-wu2`) - code complete, GGA/PR pending (orchestrator)
+
+Tasks 2.1-2.8 done (2.9 closing GGA/PR is the orchestrator's).
+
+- `set-status.ts`: `recordStatus` (insert only) and `setStatus` (asserts the table, always writes `espera_motivo` + `updated_at`, then records). Every writer goes through it: `createOrder` (null -> initial row; walk-in + technician -> second row `open -> diagnosing`), `transitionOrder`, `applyReadiness(tx, order, actorId)`, `assignTecnico` (first technician on `open` -> `diagnosing`), `markParteLista`/`unmarkParteLista` (actor = the marker).
+- WU1 leftovers removed: `open -> in_progress` bypass, legacy start in `getAllowedTransitions`, the tecnico exception (`isTransitionPermitted` deleted; the two UI callers use `canAssign ? ... : []`), the blanket `on_hold` refusal (now the `EsperaMotivoError` contract -> 400 Spanish).
+- `OrderIncompleteError` (400) on `booked -> open` with a null vehicle/category; receiving continues to `diagnosing` when a technician is assigned. The null-vehicle row itself needs 0034 (WU3), so this is unit-tested only here.
+- `createOrder` accepts `status: "booked" | "open"` (default open); anything else -> `InvalidInitialStatusError` -> 400. Booked still needs vehicle/category until WU3 (columns NOT NULL); `appointmentAt` required for booked is WU3 (3.5).
+- e2e: `status-history.e2e.test.ts` (20 tests, real SQL) plus `src/e2e/purge-history.ts` (teardown helper: the history FK is `restrict`, so every suite that deletes orders purges history first). `order-assignments`, `order-lock`, `order-readiness`, `portal-sync` setups adjusted (no `open -> in_progress`).
+- Concurrency tests hold the order's `FOR UPDATE` on a second connection while the callers start (`whileLocked`): without that, the first writer finished before the second connected and the test passed with the lock removed.
+
+## WU2 verification
+- `npm test` 219 files / 3465 tests; `npx tsc --noEmit` clean; `npm run lint` 0 errors / 13 warnings.
+- e2e (throwaway DB `dforce_e2e`, recreated): 21 files / 268 tests passed, 0 skipped.
+- Mutation-verify (each reverted, named test red): drop `recordStatus` from `setStatus` -> "history per writer" describe (8 tests) + set-status unit tests; remove `.for("update")` in `lockOrderForMutation` -> "concurrent first assignments transition once" (the "two simultaneous last marks" e2e stays green without the lock, so it is not a lock proof); `assertTransitionPermitted` made a no-op -> the four "refuses ... without service-orders.assign" tests + the scope test; delete `OrderIncompleteError` throw -> the two receive-refusal tests; skip the receive continuation -> "continues to diagnosing"; skip `open -> diagnosing` in `assignTecnico` / `createOrder` -> their named tests.
+- Size: 1014 added / 205 deleted across 35 files (about 170 production lines; tests ~843, of which e2e ~385 added). Over the 400 budget; the e2e files can split off as a sub-PR on the same base.

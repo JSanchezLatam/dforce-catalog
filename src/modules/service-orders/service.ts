@@ -26,7 +26,7 @@
 import { eq } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
-import { ordenServicio, ordenTecnico, reminder, type Cliente, type OrdenServicio } from "@/shared/db/schema";
+import { esperaMotivoEnum, ordenServicio, ordenTecnico, reminder, type Cliente, type OrdenServicio } from "@/shared/db/schema";
 import { getClienteById } from "@/modules/customers/queries";
 import { ClienteDeactivatedError } from "@/modules/customers/service";
 import { cancelRemindersForOrder, scheduleReminder } from "@/modules/reminders/job";
@@ -39,7 +39,10 @@ import { canEditOrderFields } from "./edit-policy";
 import { assertActiveTecnicos } from "./assignments";
 import { SYSTEM_SCOPE, type OrderScope } from "./scope";
 import { lockOrderForMutation, recordCorrections, type CorrectionGrant } from "./order-lock";
+import { recordStatus, setStatus } from "./set-status";
 import { assertTransition, assertTransitionPermitted, AUTOMATIC_TARGETS, OrderTransitionError, type OrderStatus } from "./transitions";
+
+export type EsperaMotivo = (typeof esperaMotivoEnum.enumValues)[number];
 
 /**
  * Shared by createOrder/transitionOrder/updateOrder (R23) — plans reminders
@@ -116,7 +119,26 @@ export class InvalidCategoriaError extends Error {
   }
 }
 
+/** Thrown when a create asks for an initial status other than Agendada or Recibida. */
+export class InvalidInitialStatusError extends Error {
+  constructor(readonly errors: { status: string }) {
+    super("Invalid initial status");
+  }
+}
+
+/** The on-hold reason contract broken: required exactly when the target is `on_hold`. The message is Spanish UI copy. */
+export class EsperaMotivoError extends Error {}
+
+/** Receiving a booked order that still lacks its vehicle or category. The message is Spanish UI copy. */
+export class OrderIncompleteError extends Error {
+  constructor() {
+    super("Completá el vehículo y la categoría antes de recibir la orden");
+  }
+}
+
 export type CreateOrdenServicioInput = {
+  /** Agendada (`booked`) or Recibida (`open`, the default); nothing else is a valid start. */
+  status?: "booked" | "open";
   clienteId: string;
   vehiculoId: string;
   categoria: ServiceCategory;
@@ -154,6 +176,11 @@ export async function createOrder(
   input: CreateOrdenServicioInput,
   deps: CreateOrdenServicioDeps = {},
 ): Promise<OrdenServicio> {
+  const status = input.status ?? "open";
+  if (status !== "booked" && status !== "open") {
+    throw new InvalidInitialStatusError({ status: "La orden solo puede crearse como Agendada o Recibida" });
+  }
+
   const findCliente = deps.getClienteById ?? getClienteById;
   // SYSTEM_SCOPE: this reads the customer row and vehicles; the order history it also returns is unused here.
   const clienteDetail = await findCliente(input.clienteId, SYSTEM_SCOPE);
@@ -204,6 +231,7 @@ export async function createOrder(
         clienteId: input.clienteId,
         vehiculoId: input.vehiculoId,
         categoria: input.categoria,
+        status,
         description: input.description ?? null,
         observaciones: input.observaciones ?? null,
         appointmentAt: input.appointmentAt ?? null,
@@ -213,11 +241,14 @@ export async function createOrder(
         createdBy: input.createdBy ?? null,
       })
       .returning();
+    await recordStatus(tx, { ordenId: inserted.id, from: null, to: status, actor: input.createdBy ?? null });
 
     if (tecnicoIds.length > 0) {
       await tx
         .insert(ordenTecnico)
         .values(tecnicoIds.map((tecnicoId) => ({ ordenId: inserted.id, tecnicoId, assignedBy: input.createdBy! })));
+      // A walk-in with a technician starts diagnosing; an Agendada order waits to be received.
+      if (status === "open") return setStatus(tx, inserted, "diagnosing", input.createdBy!);
     }
 
     return inserted;
@@ -355,8 +386,12 @@ export type TransitionOrdenServicioDeps = {
   onTransitioned?: (order: OrdenServicio, from: OrderStatus, to: OrderStatus) => Promise<void> | void;
   /** The caller's `orderScope(user)`: an order outside it is "not found", never a 403. */
   scope: OrderScope;
-  /** `can(user, "service-orders.assign")`: without it only `open -> in_progress` is allowed. */
+  /** `can(user, "service-orders.assign")`: without it no manual transition is allowed. */
   canAssign: boolean;
+  /** The user whose request this is: recorded on every history row the transition writes. */
+  actorId: string;
+  /** Required exactly when `to` is `on_hold`; refused with any other target. Unchecked at the type level: it comes from a body. */
+  esperaMotivo?: EsperaMotivo | null;
 } & ReminderWiringDeps &
   PortalSyncDeps;
 
@@ -374,21 +409,36 @@ export async function transitionOrder(
   const now = deps.now ?? (() => new Date());
   const database = deps.db ?? db;
 
+  const esperaMotivo = deps.esperaMotivo ?? null;
+  if (to === "on_hold" ? !esperaMotivoEnum.enumValues.includes(esperaMotivo as EsperaMotivo) : esperaMotivo !== null) {
+    throw new EsperaMotivoError(
+      to === "on_hold" ? "Indicá el motivo de la espera: repuesto o aprobación del cliente" : "Solo una orden en espera lleva motivo",
+    );
+  }
+
   // Lock, read the status from the LOCKED row, validate and write in one transaction: a
   // concurrent done-vs-cancel (or a correction) waits on the lock, then fails the state
   // machine instead of both winning. `canWrite: () => true` because every status may
   // TRY a transition; `assertTransition` is the rule, and it has no edge out of a closed one.
   const { from, updated } = await database.transaction(async (tx) => {
     const { order } = await lockOrderForMutation(tx, id, { scope: deps.scope, canWrite: () => true });
-    // Automatic targets are written by their own paths. `on_hold` needs its reason, which WU2 adds; until
-    // then a hold would violate `orden_espera_motivo_on_hold` and answer 500.
-    if (AUTOMATIC_TARGETS.has(to) || to === "on_hold") throw new OrderTransitionError(order.status, to);
-    // WU2 removes: `open -> in_progress` is no longer in the table, but the técnico start stays until diagnosing is wired.
-    if (!(order.status === "open" && to === "in_progress")) assertTransition(order.status, to);
+    // Automatic targets are written by their own paths (assignment, readiness).
+    if (AUTOMATIC_TARGETS.has(to)) throw new OrderTransitionError(order.status, to);
+    assertTransition(order.status, to);
     assertTransitionPermitted(deps.canAssign, order.status, to);
-    const patch: Partial<OrdenServicio> = { status: to };
-    if (to === "done") patch.completedAt = now();
-    const [row] = await tx.update(ordenServicio).set(patch).where(eq(ordenServicio.id, id)).returning();
+    // Refused here so the CHECK `orden_vehiculo_categoria_required` (0034) never surfaces as a 500.
+    if (order.status === "booked" && to === "open" && (order.vehiculoId === null || order.categoria === null)) {
+      throw new OrderIncompleteError();
+    }
+    let row = await setStatus(tx, order, to, deps.actorId, {
+      esperaMotivo: esperaMotivo ?? undefined,
+      completedAt: to === "done" ? now() : undefined,
+    });
+    // Receiving an order that already has a technician continues straight to diagnosing.
+    if (order.status === "booked" && to === "open") {
+      const assigned = await tx.select({ id: ordenTecnico.tecnicoId }).from(ordenTecnico).where(eq(ordenTecnico.ordenId, id));
+      if (assigned.length > 0) row = await setStatus(tx, row, "diagnosing", deps.actorId);
+    }
     // Sending a ready order back for rework reopens every part: the old marks describe work that is being redone,
     // and while they persisted nobody could mark again, so readiness could never recur.
     if (order.status === "ready_for_review" && to === "in_progress") {

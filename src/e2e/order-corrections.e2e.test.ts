@@ -15,6 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashPassword } from "@/modules/auth/password";
 import type { Role } from "@/modules/auth/roles";
 import { db } from "@/shared/db/client";
+import { purgeHistory } from "./purge-history";
 import { cliente, ordenServicio, ordenServicioCorreccion, ordenServicioFoto, ordenTecnico, tecnico, users, vehiculo } from "@/shared/db/schema";
 import { handleUpdateOrdenServicio } from "../app/api/service-orders/[id]/route";
 import { OrderClosedError } from "../modules/service-orders/order-lock";
@@ -94,6 +95,7 @@ describe("order corrections (E2E)", () => {
     const orders = await db.select({ id: ordenServicio.id }).from(ordenServicio).where(eq(ordenServicio.clienteId, clienteId));
     for (const { id } of orders) await db.delete(ordenServicioCorreccion).where(eq(ordenServicioCorreccion.ordenId, id));
     for (const { id } of orders) await db.delete(ordenTecnico).where(eq(ordenTecnico.ordenId, id));
+    await purgeHistory([clienteId]);
     await db.delete(ordenServicio).where(eq(ordenServicio.clienteId, clienteId));
     await db.delete(vehiculo).where(eq(vehiculo.clienteId, clienteId));
     await db.delete(cliente).where(eq(cliente.id, clienteId));

@@ -318,6 +318,8 @@ describe("ServiceOrdersPage — bulk status change (WU6)", () => {
    * the real one — it portals into `document.body`, which is what `screen`
    * queries.
    */
+  const DIAGNOSING_PAGE = OPEN_PAGE.map((o) => ({ ...o, status: "diagnosing" }));
+
   async function renderAt(items = OPEN_PAGE, params: Record<string, string> = {}) {
     listOrdenesServicio.mockResolvedValue(items);
     countOrdenesServicio.mockResolvedValue(40);
@@ -391,9 +393,9 @@ describe("ServiceOrdersPage — bulk status change (WU6)", () => {
     expect(within(menu).queryByRole("menuitem", { name: "Marcar como Completada" })).not.toBeInTheDocument();
   });
 
-  it("offers both of open's next states when every selected order is open", async () => {
+  it("offers both of diagnosing's next states when every selected order is diagnosing", async () => {
     const user = userEvent.setup();
-    render(await renderAt());
+    render(await renderAt(DIAGNOSING_PAGE));
 
     await select(user, "o1", "o2");
     await openStatusMenu(user);
@@ -453,7 +455,7 @@ describe("ServiceOrdersPage — bulk status change (WU6)", () => {
   it("sends one PATCH per selected order with {status}, in selection order", async () => {
     const user = userEvent.setup();
     const fetchMock = mockOrdersApi();
-    render(await renderAt());
+    render(await renderAt(DIAGNOSING_PAGE));
 
     await select(user, "o1", "o2");
     await openStatusMenu(user);
@@ -557,7 +559,7 @@ describe("ServiceOrdersPage — bulk status change (WU6)", () => {
   it("does not call a non-terminal move irreversible", async () => {
     const user = userEvent.setup();
     mockOrdersApi();
-    render(await renderAt());
+    render(await renderAt(DIAGNOSING_PAGE));
 
     await select(user, "o1");
     await openStatusMenu(user);

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Role } from "@/modules/auth/roles";
 import { InvalidTecnicoError } from "@/modules/service-orders/assignments";
+import { ordenEstadoHistorial } from "@/shared/db/schema";
 import { handleCreateOrdenServicio, POST } from "./route";
 
 /** Defaults to `jefe_taller`: creating is `service-orders.create`, which a técnico does not hold. */
@@ -129,8 +130,9 @@ describe("POST /api/service-orders (service-orders R20)", () => {
     const database = {
       transaction: async (cb: (tx: unknown) => unknown) =>
         cb({
-          insert: () => ({
+          insert: (table: unknown) => ({
             values: (values: Record<string, unknown>) => {
+              if (table === ordenEstadoHistorial) return Promise.resolve(undefined); // the history row is not the order insert
               inserted = values;
               return { returning: async () => [{ id: "o1", status: "open", ...values }] };
             },
@@ -273,8 +275,9 @@ describe("POST /api/service-orders — the form's payload, round-tripped through
     const database = {
       transaction: async (cb: (tx: unknown) => unknown) =>
         cb({
-          insert: () => ({
+          insert: (table: unknown) => ({
             values: (values: unknown) => {
+              if (table === ordenEstadoHistorial) return Promise.resolve(undefined); // the history row is not the order insert
               inserts.push(values);
               // An `ordenServicioItem` insert passes an ARRAY and never calls
               // `.returning()`, so both shapes have to survive here — a fake
@@ -400,8 +403,9 @@ describe("POST /api/service-orders — intake fields", () => {
     const database = {
       transaction: vi.fn(async (cb: (tx: unknown) => unknown) =>
         cb({
-          insert: () => ({
+          insert: (table: unknown) => ({
             values: (values: Record<string, unknown>) => {
+              if (table === ordenEstadoHistorial) return Promise.resolve(undefined); // the history row is not the order insert
               captured.values = values;
               return { returning: async () => [{ id: "o1", status: "open", ...values }] };
             },
@@ -413,6 +417,23 @@ describe("POST /api/service-orders — intake fields", () => {
   }
   const base = { clienteId: "cli-1", vehiculoId: "v1", categoria: "revisado" };
   const depsFor = (database: unknown) => ({ getClienteById: async () => clienteDetail as never, db: database as never });
+
+  it("passes an Agendada status through to the insert", async () => {
+    const { captured, database } = capturingDb();
+    const response = await handleCreateOrdenServicio(requestWith({ ...base, status: "booked" }), depsFor(database));
+
+    expect(response.status).toBe(201);
+    expect(captured.values).toMatchObject({ status: "booked" });
+  });
+
+  it("answers 400 in Spanish for an initial status other than Agendada or Recibida, creating nothing", async () => {
+    const { captured, database } = capturingDb();
+    const response = await handleCreateOrdenServicio(requestWith({ ...base, status: "in_progress" }), depsFor(database));
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).errors.status).toContain("Agendada");
+    expect(captured.values).toBeNull();
+  });
 
   it("persists valid kilometraje, nivelCombustible and bateriaPct", async () => {
     const { captured, database } = capturingDb();
@@ -455,8 +476,11 @@ describe("POST /api/service-orders — create is service-orders.create, with tec
     const inserted: unknown[] = [];
     const tx = {
       select: () => ({ from: () => ({ where: async () => [{ id: "t1", deactivatedAt: null }] }) }),
-      insert: () => ({
+      // The walk-in with a technician moves to diagnosing: `setStatus` updates the order row.
+      update: () => ({ set: (patch: object) => ({ where: () => ({ returning: async () => [{ id: "o1", ...patch }] }) }) }),
+      insert: (table: unknown) => ({
         values: (values: unknown) => {
+          if (table === ordenEstadoHistorial) return Promise.resolve(undefined); // the history row is not the order insert
           inserted.push(values);
           return Array.isArray(values)
             ? Promise.resolve()

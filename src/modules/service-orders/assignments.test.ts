@@ -49,26 +49,39 @@ const input = { ordenId: "o1", tecnicoId: "t1", assignedBy: "admin-1", scope: SY
 const NEW_ROW = [{ tecnicoId: "t1" }];
 
 describe("assignTecnico", () => {
-  it.each<OrderStatus>(["open", "in_progress"])(
+  it.each<OrderStatus>(["booked", "diagnosing", "on_hold", "in_progress"])(
     "inserts the assignment on a %s order and leaves its status alone",
     async (status) => {
       const { database, log } = fakeDb([order(status), ACTIVE, NEW_ROW]);
 
       await expect(assignTecnico(input, { db: database })).resolves.toEqual({ created: true });
 
-      // no `parteListaAt` key: the mark starts null
+      // no `parteListaAt` key: the mark starts null, and no history row: the status did not change
       expect(log.values).toEqual([{ ordenId: "o1", tecnicoId: "t1", assignedBy: "admin-1" }]);
       expect(log.sets).toEqual([]);
     },
   );
 
-  it("returns a ready_for_review order to in_progress when the assignment is new", async () => {
-    // the fourth statement is `applyReadiness`'s read: the new assignee has not marked
-    const { database, log } = fakeDb([order("ready_for_review"), ACTIVE, NEW_ROW, [{ parteListaAt: null, deactivatedAt: null }], []]);
+  it("moves an open order to diagnosing on its first technician, with a history row for the assigner", async () => {
+    const { database, log } = fakeDb([order("open"), ACTIVE, NEW_ROW, [], []]);
 
     await assignTecnico(input, { db: database });
 
-    expect(log.sets).toEqual([{ status: "in_progress", updatedAt: expect.any(Date) }]);
+    expect(log.sets).toEqual([{ status: "diagnosing", esperaMotivo: null, updatedAt: expect.any(Date) }]);
+    expect(log.values).toEqual([
+      { ordenId: "o1", tecnicoId: "t1", assignedBy: "admin-1" },
+      { ordenId: "o1", fromStatus: "open", toStatus: "diagnosing", esperaMotivo: null, changedBy: "admin-1" },
+    ]);
+  });
+
+  it("returns a ready_for_review order to in_progress when the assignment is new, with a history row", async () => {
+    // the fourth statement is `applyReadiness`'s read: the new assignee has not marked
+    const { database, log } = fakeDb([order("ready_for_review"), ACTIVE, NEW_ROW, [{ parteListaAt: null, deactivatedAt: null }], [], []]);
+
+    await assignTecnico(input, { db: database });
+
+    expect(log.sets).toEqual([{ status: "in_progress", esperaMotivo: null, updatedAt: expect.any(Date) }]);
+    expect(log.values[1]).toMatchObject({ fromStatus: "ready_for_review", toStatus: "in_progress", changedBy: "admin-1" });
   });
 
   it("is a no-op for a technician already assigned: no error, and a ready_for_review order stays ready", async () => {

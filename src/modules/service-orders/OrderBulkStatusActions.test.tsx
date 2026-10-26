@@ -34,7 +34,7 @@ afterEach(() => {
 });
 
 const PAGE_IDS = ["o1", "o2", "o3"];
-const STATUSES: Record<string, OrderStatus | undefined> = { o1: "open", o2: "open", o3: "open" };
+const STATUSES: Record<string, OrderStatus | undefined> = { o1: "diagnosing", o2: "diagnosing", o3: "diagnosing" };
 
 /** Keyed by id, so a per-row answer is declared rather than ordered — `page.test.tsx`'s idiom. */
 function mockOrdersApi(byId: Record<string, { status: number; body?: unknown }> = {}) {
@@ -146,8 +146,8 @@ describe("OrderBulkStatusActions — the run ends by emptying the bar, so it has
 });
 
 /**
- * The menu is the role's menu: a técnico who selects `open` rows is offered the
- * start and nothing the route would answer 403, and one whose selection holds no
+ * The menu is the role's menu: a técnico is offered nothing (the route answers 403
+ * to every manual transition), and one whose selection holds no
  * permitted edge gets the same "no common action" stand-down as any other empty
  * intersection.
  */
@@ -174,16 +174,9 @@ describe("OrderBulkStatusActions — only what the role may do", () => {
     return screen.getAllByRole("menuitem").map((item) => item.textContent);
   }
 
-  it("offers a técnico only the start over open rows", async () => {
+  it("offers a técnico no action over diagnosing rows and says so", async () => {
     const user = userEvent.setup();
-    const ids = renderWith({ a: "open", b: "open" }, false);
-
-    expect(await openMenu(user, ids)).toEqual(["Marcar como En progreso"]);
-  });
-
-  it("offers a técnico no action over in_progress rows and says so", async () => {
-    const user = userEvent.setup();
-    const ids = renderWith({ a: "in_progress" }, false);
+    const ids = renderWith({ a: "diagnosing" }, false);
     await user.click(screen.getByRole("checkbox", { name: `Seleccionar orden ${ids[0]}` }));
 
     expect(screen.getByRole("button", { name: "Cambiar estado" })).toBeDisabled();

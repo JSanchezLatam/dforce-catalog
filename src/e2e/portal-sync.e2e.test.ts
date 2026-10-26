@@ -19,6 +19,7 @@ import { runPortalReconcile } from "@/modules/portal-sync/reconcile";
 import { createOrder, transitionOrder, updateOrder } from "@/modules/service-orders/service";
 import { SYSTEM_SCOPE } from "@/modules/service-orders/scope";
 import { db } from "@/shared/db/client";
+import { purgeHistory } from "./purge-history";
 import { getBoss } from "@/shared/jobs/boss";
 import { cliente, clienteConsentimiento, ordenServicio, users, vehiculo } from "@/shared/db/schema";
 import { handleCreateVehiculo } from "../app/api/customers/[id]/vehicles/route";
@@ -53,6 +54,7 @@ describe("portal-sync (E2E)", () => {
 
   afterAll(async () => {
     if (created.length === 0) return;
+    await purgeHistory(created);
     await db.delete(ordenServicio).where(inArray(ordenServicio.clienteId, created));
     await db.delete(cliente).where(inArray(cliente.id, created)); // vehicles and consent cascade
   });
@@ -213,6 +215,7 @@ describe("portal-sync triggers (E2E)", () => {
   afterAll(async () => {
     if (created.length > 0) {
       await db.execute(sql`DELETE FROM pgboss.job WHERE name = 'portal-sync' AND data->>'clienteId' IN (${sql.join(created.map((c) => sql`${c}`), sql`, `)})`);
+      await purgeHistory(created);
       await db.delete(ordenServicio).where(inArray(ordenServicio.clienteId, created));
       await db.delete(cliente).where(inArray(cliente.id, created));
     }
@@ -222,11 +225,13 @@ describe("portal-sync triggers (E2E)", () => {
 
   it("enqueues exactly one job per trigger, each for the customer it changed", async () => {
     const c = await seed();
+    // `open -> in_progress` is not an edge any more: the transition trigger starts from diagnosing.
+    await db.update(ordenServicio).set({ status: "diagnosing" }).where(eq(ordenServicio.id, c.orderId));
     const orderDeps = { enqueuePortalSync: enqueue, role: "administrador" as const, scope: SYSTEM_SCOPE };
     const triggers: [string, () => Promise<unknown>][] = [
       ["createOrder", () => createOrder({ clienteId: c.id, vehiculoId: c.vehicleId, categoria: "reparacion" }, { enqueuePortalSync: enqueue })],
       ["updateOrder", () => updateOrder(c.orderId, { hallazgos: "x" }, orderDeps)],
-      ["transitionOrder", () => transitionOrder(c.orderId, "in_progress", { ...orderDeps, canAssign: true })],
+      ["transitionOrder", () => transitionOrder(c.orderId, "in_progress", { ...orderDeps, canAssign: true, actorId: ADMIN })],
       ["updateCliente (vehicle plan)", () => updateCliente(c.id, { vehicles: [{ id: c.vehicleId, plate: "TRG-1" }, { plate: "TRG-2" }] }, { enqueuePortalSync: enqueue })],
       [
         "createVehiculo route",

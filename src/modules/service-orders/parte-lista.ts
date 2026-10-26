@@ -59,7 +59,7 @@ async function setMark(input: Input, marking: boolean, deps: ParteListaDeps): Pr
       .update(ordenTecnico)
       .set({ parteListaAt: marking ? new Date() : null })
       .where(and(eq(ordenTecnico.ordenId, input.ordenId), eq(ordenTecnico.tecnicoId, own.id)));
-    return { status: await applyReadiness(tx, order) };
+    return { status: await applyReadiness(tx, order, input.userId) };
   });
 }
 

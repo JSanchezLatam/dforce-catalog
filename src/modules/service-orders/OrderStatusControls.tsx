@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { useToast } from "@/shared/ui/ToastProvider";
 import { ORDER_STATUS_LABEL } from "./statuses";
-import { getAllowedTransitions, isTransitionPermitted, type OrderStatus } from "./transitions";
+import { getAllowedTransitions, type OrderStatus } from "./transitions";
 
 /**
  * R21 — status-transition controls for the order-detail page. Renders one
@@ -30,7 +30,7 @@ export function OrderStatusControls({
   const router = useRouter();
   const { addToast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const nextStates = getAllowedTransitions(status).filter((next) => isTransitionPermitted(canAssign, status, next));
+  const nextStates = canAssign ? getAllowedTransitions(status) : [];
 
   async function transitionTo(next: OrderStatus) {
     setIsSubmitting(true);

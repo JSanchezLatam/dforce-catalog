@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { Role } from "@/modules/auth/roles";
 import { db } from "@/shared/db/client";
+import { purgeHistory } from "./purge-history";
 import { cliente, ordenLineaTrabajo, ordenServicio, ordenServicioCorreccion, ordenTecnico, tecnico, users, vehiculo } from "@/shared/db/schema";
 import { OrderClosedError } from "../modules/service-orders/order-lock";
 import { orderScope, SYSTEM_SCOPE } from "../modules/service-orders/scope";
@@ -80,6 +81,7 @@ describe("order work lines (E2E)", () => {
       await db.delete(ordenLineaTrabajo).where(inArray(ordenLineaTrabajo.ordenId, orders));
       await db.delete(ordenTecnico).where(inArray(ordenTecnico.ordenId, orders));
     }
+    await purgeHistory([clienteId]);
     await db.delete(ordenServicio).where(eq(ordenServicio.clienteId, clienteId));
     await db.delete(vehiculo).where(eq(vehiculo.clienteId, clienteId));
     await db.delete(cliente).where(eq(cliente.id, clienteId));
