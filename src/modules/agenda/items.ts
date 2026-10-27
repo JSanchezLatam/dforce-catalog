@@ -83,6 +83,33 @@ export function sortItems(items: readonly AgendaItem[]): AgendaItem[] {
   return [...items].sort((a, b) => a.time.localeCompare(b.time) || a.id.localeCompare(b.id));
 }
 
+/** A card's place in a day grid: `lane` of `lanes` equal columns. */
+export type LaidOut = { item: AgendaItem; lane: number; lanes: number };
+
+/** Greedy one-hour intervals in (time, id) order: a card takes the first free lane, and a run of overlapping cards shares its widest lane count. */
+export function layoutDay(items: readonly AgendaItem[]): LaidOut[] {
+  const out: { item: AgendaItem; lane: number }[] = [];
+  const laneEnds: number[] = [];
+  const results: LaidOut[] = [];
+  let cluster = 0;
+  const flush = () => {
+    for (const o of out) results.push({ ...o, lanes: laneEnds.length });
+    out.length = 0;
+    laneEnds.length = 0;
+  };
+  for (const item of sortItems(items)) {
+    const start = item.minuteOfDay;
+    if (laneEnds.length > 0 && start >= cluster) flush();
+    let lane = laneEnds.findIndex((end) => end <= start);
+    if (lane === -1) lane = laneEnds.length;
+    laneEnds[lane] = start + 60;
+    cluster = Math.max(cluster, start + 60);
+    out.push({ item, lane });
+  }
+  flush();
+  return results;
+}
+
 export function groupByDay(items: readonly AgendaItem[]): Map<string, AgendaItem[]> {
   const days = new Map<string, AgendaItem[]>();
   for (const item of sortItems(items)) days.set(item.dayKey, [...(days.get(item.dayKey) ?? []), item]);
