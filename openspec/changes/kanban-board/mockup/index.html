@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Kanban Board Mockup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          background: "var(--background)", foreground: "var(--foreground)",
+          card: "var(--card)", primary: "var(--primary)", "primary-foreground": "var(--primary-foreground)",
+          muted: "var(--muted)", "muted-foreground": "var(--muted-foreground)",
+          border: "var(--border)", destructive: "var(--destructive)", warning: "var(--warning)", success: "var(--success)",
+          sidebar: "var(--sidebar)",
+        },
+      },
+    },
+  };
+</script>
+<style>
+  /* Tokens copied verbatim from src/app/globals.css (:root and .dark).
+     --canvas, --col and --tile are mockup-only surfaces for the board (page, column, card). */
+  .theme-light {
+    --background: hsl(0 0% 100%); --foreground: hsl(240 10% 3.9%);
+    --card: hsl(0 0% 100%); --primary: hsl(240 5.9% 10%); --primary-foreground: hsl(0 0% 98%);
+    --muted: hsl(240 4.8% 95.9%); --muted-foreground: hsl(240 3.8% 46.1%);
+    --destructive: hsl(0 84.2% 60.2%); --warning: hsl(32 95% 44%); --success: hsl(142 71% 45%);
+    --border: hsl(240 5.9% 90%); --sidebar: hsl(0 0% 98%);
+    --canvas: hsl(240 5% 97.5%); --col: hsl(240 6% 94%); --tile: hsl(0 0% 100%);
+    --tile-shadow: 0 1px 2px rgb(16 16 24 / .06), 0 2px 8px rgb(16 16 24 / .05);
+    --urgent: hsl(0 72% 51%);
+    --warn-bg: hsl(43 96% 94%); --warn-border: hsl(40 90% 78%); --warn-fg: hsl(28 80% 30%);
+  }
+  .theme-dark {
+    --background: hsl(240 10% 3.9%); --foreground: hsl(0 0% 98%);
+    --card: hsl(240 10% 5.9%); --primary: hsl(0 0% 98%); --primary-foreground: hsl(240 5.9% 10%);
+    --muted: hsl(240 3.7% 15.9%); --muted-foreground: hsl(240 5% 64.9%);
+    --destructive: hsl(0 62.8% 30.6%); --warning: hsl(32 95% 44%); --success: hsl(142 71% 45%);
+    --border: hsl(240 3.7% 15.9%); --sidebar: hsl(240 5.9% 10%);
+    --canvas: hsl(240 8% 5.5%); --col: hsl(240 6% 9.5%); --tile: hsl(240 5% 13%);
+    --tile-shadow: 0 1px 0 rgb(255 255 255 / .03) inset, 0 2px 6px rgb(0 0 0 / .35);
+    --urgent: hsl(0 72% 51%);
+    --warn-bg: hsl(38 70% 14%); --warn-border: hsl(38 60% 26%); --warn-fg: hsl(42 95% 72%);
+  }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .frame { background: var(--background); color: var(--foreground); }
+  .canvas { background: var(--canvas); }
+  .note { font: 600 11px/1.4 ui-monospace, Menlo, monospace; }
+
+  .col { background: var(--col); }
+  .tile { background: var(--tile); box-shadow: var(--tile-shadow); border: 1px solid var(--border); }
+  .theme-light .tile { border-color: hsl(240 6% 91%); }
+  .tile.urgent { border-color: color-mix(in srgb, var(--urgent) 45%, transparent); }
+  .plate { font-weight: 800; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+
+  /* Status hue drives only the column accent and its icon; never red or amber, those carry meaning. */
+  .hue-tile { background: hsl(var(--h) var(--s) 92%); color: hsl(var(--h) var(--s) 32%); }
+  .theme-dark .hue-tile { background: hsl(var(--h) calc(var(--s) * .5) 18%); color: hsl(var(--h) var(--s) 78%); }
+  .hue-bar { background: hsl(var(--h) var(--s) 55%); }
+  .hue-ring { box-shadow: 0 0 0 2px hsl(var(--h) var(--s) 55%); background: hsl(var(--h) var(--s) 55% / .08); }
+  .hue-drop { border: 2px dashed hsl(var(--h) var(--s) 55%); color: hsl(var(--h) var(--s) 40%); background: hsl(var(--h) var(--s) 55% / .08); }
+  .theme-dark .hue-drop { color: hsl(var(--h) var(--s) 75%); }
+
+  .av { background: hsl(var(--h) 70% 90%); color: hsl(var(--h) 55% 28%); box-shadow: 0 0 0 2px var(--tile); }
+  .theme-dark .av { background: hsl(var(--h) 35% 26%); color: hsl(var(--h) 80% 86%); }
+
+  .warn { background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn-fg); }
+  .dimmed { opacity: .42; filter: grayscale(.8); }
+  .lifted { transform: rotate(2.5deg) scale(1.03); box-shadow: 0 24px 48px -12px rgb(0 0 0 / .45), 0 0 0 2px hsl(var(--h) var(--s) 55%); cursor: grabbing; }
+  .ghost { border: 2px dashed var(--border); background: transparent; }
+
+  .seg button[aria-pressed="true"] { background: var(--background); box-shadow: 0 1px 2px rgb(0 0 0 / .15); color: var(--foreground); }
+  .scroll-x { scrollbar-width: none; } .scroll-x::-webkit-scrollbar { display: none; }
+  .board { display: flex; gap: 12px; overflow-x: auto; scrollbar-width: thin; scroll-snap-type: x mandatory; }
+  .board > * { flex-shrink: 0; }
+  .board > * { scroll-snap-align: start; }
+  .fade-r { background: linear-gradient(to right, transparent, var(--canvas)); }
+  .wrap { max-width: 100%; overflow-x: auto; }
+</style>
+</head>
+<body class="bg-zinc-300 text-zinc-900">
+<header class="sticky top-0 z-50 flex flex-wrap items-center gap-x-4 gap-y-2 bg-zinc-900 px-4 py-3 text-zinc-100 md:px-8">
+  <strong>Kanban — mockup</strong>
+  <span class="text-sm text-zinc-400">Órdenes de servicio por estado, con arrastrar y soltar (referencia: "Patient Flow")</span>
+  <div class="ml-auto flex gap-1 rounded-lg bg-zinc-800 p-1 text-sm">
+    <button id="t-dark" class="min-h-11 rounded-md px-3">Oscuro</button>
+    <button id="t-light" class="min-h-11 rounded-md px-3">Claro</button>
+  </div>
+</header>
+<main id="root" class="mx-auto flex max-w-full flex-col gap-14 px-4 py-10 md:px-8"></main>
+
+<script>
+const ic = (d, s = 16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const P = {
+  cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  wrench: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/>',
+  pause: '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  checkC: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  car: '<path d="M5 17h14M6 17v2M18 17v2M4 13l2-5h12l2 5v4H4z"/><circle cx="8" cy="14" r="1"/><circle cx="16" cy="14" r="1"/>',
+  dots: '<circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/>',
+  grip: '<circle cx="9" cy="6" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="18" r="1.3"/>',
+  flame: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.4-.5-2-1-3-1.1-2.1-.2-4 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.2.4-2.3 1-3.3.5 1.3 1.6 2.8 2.5 2.8z"/>',
+  alert: '<path d="m10.3 3.9-8.2 14A2 2 0 0 0 3.8 21h16.4a2 2 0 0 0 1.7-3.1l-8.2-14a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  userPlus: '<circle cx="10" cy="8" r="4"/><path d="M2 21a8 8 0 0 1 13-6.2M19 15v6M16 18h6"/>',
+  ext: '<path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  right: '<path d="m9 18 6-6-6-6"/>', left: '<path d="m15 18-6-6 6-6"/>',
+  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>', xC: '<circle cx="12" cy="12" r="9"/><path d="m15 9-6 6M9 9l6 6"/>',
+  lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  flag: '<path d="M4 22V4M4 4h13l-2 4 2 4H4"/>', flagOff: '<path d="M4 22V4M4 4h13l-2 4 2 4H4M2 2l20 20"/>',
+  trash: '<path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/>',
+  menu: '<path d="M3 6h18M3 12h18M3 18h18"/>', tag: '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
+  tv: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>', kanban: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7v7M12 7v4M16 7v10"/>',
+  chart: '<path d="M3 3v18h18M7 15l4-4 3 3 5-6"/>', users: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M16 4a4 4 0 0 1 0 8M22 21a7 7 0 0 0-4-6.3"/>',
+  doc: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>',
+  box: '<path d="M21 8 12 3 3 8v8l9 5 9-5zM3 8l9 5 9-5M12 13v8"/>', bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/>',
+  refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/>', hand: '<path d="M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.4l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15"/>',
+};
+const I = (k, s) => ic(P[k], s);
+
+/* ---------- domain (labels from service-orders/statuses.ts, moves from transitions.ts getManualTransitions) ---------- */
+const ST = {
+  booked: { l: "Agendada", h: 188, s: "70%", i: "cal" },
+  open: { l: "Recibida", h: 221, s: "70%", i: "inbox" },
+  diagnosing: { l: "En diagnóstico", h: 262, s: "60%", i: "search" },
+  in_progress: { l: "En progreso", h: 290, s: "50%", i: "wrench" },
+  on_hold: { l: "En espera", h: 220, s: "14%", i: "pause" },
+  ready_for_review: { l: "Lista para revisión", h: 168, s: "60%", i: "eye" },
+  done: { l: "Completada", h: 142, s: "55%", i: "checkC" },
+};
+const COLS = Object.keys(ST);
+// `cancelled` has no column (menu only); `diagnosing` / `ready_for_review` are automatic targets, never a drop.
+const MOVES = { booked: ["open"], open: [], diagnosing: ["in_progress"], in_progress: ["on_hold", "done"], on_hold: ["in_progress"], ready_for_review: ["in_progress", "done"], done: [] };
+const hueVars = (st) => `--h:${ST[st].h};--s:${ST[st].s}`;
+
+const TECH = { CR: ["Carlos Rivas", 205], MP: ["Marta Pinzón", 330], JR: ["Julio Rangel", 160], LS: ["Leo Salas", 262] };
+
+const ORDERS = [
+  { id: 1, st: "booked", plate: "BF2210", veh: "Hyundai Tucson 2021", cat: "Mant. preventivo", tech: [], appt: "Hoy 08:30", alert: ["clock", "Cita vencida · hace 1 h 10 min"] },
+  { id: 2, st: "booked", plate: "AC5521", veh: "Toyota Corolla 2018", cat: "Revisado", tech: ["JR"], appt: "Hoy 11:00" },
+  { id: 3, st: "booked", plate: null, veh: null, cat: null, tech: [], appt: "Hoy 14:30", alert: ["alert", "Falta vehículo y categoría"] },
+  { id: 4, st: "open", plate: "CC6612", veh: "Ford Explorer 2020", cat: "Revisado", tech: [], since: "hace 15 min" },
+  { id: 5, st: "open", plate: "AG1290", veh: "Jeep Wrangler 2022", cat: "Instalación", tech: [], since: "hace 40 min" },
+  { id: 6, st: "diagnosing", plate: "AE2231", veh: "Nissan Frontier 2017", cat: "Mant. correctivo", tech: ["MP"], since: "hace 2 h" },
+  { id: 7, st: "diagnosing", plate: "AB1234", veh: "Toyota Hilux 2019", cat: "Reparación", tech: ["CR"], since: "hace 50 min", urgent: true },
+  { id: 8, st: "in_progress", plate: "CA7743", veh: "Ford Ranger 2020", cat: "Mant. correctivo", tech: ["LS"], since: "hace 5 h" },
+  { id: 9, st: "in_progress", plate: "BD7720", veh: "Toyota Prado 2016", cat: "Reparación", tech: ["CR", "LS"], since: "hace 1 día", urgent: true },
+  { id: 10, st: "in_progress", plate: "AF9001", veh: "Mitsubishi L200 2015", cat: "Reparación", tech: ["JR", "MP", "LS"], since: "hace 3 h" },
+  { id: 11, st: "on_hold", plate: "CF0034", veh: "Kia Soluto 2022", cat: "Reparación", tech: ["LS"], alert: ["pause", "Repuesto · hace 3 días"] },
+  { id: 12, st: "on_hold", plate: "BC2457", veh: "Kia Sportage 2019", cat: "Instalación", tech: ["CR"], alert: ["pause", "Aprobación del cliente · hace 6 h"] },
+  { id: 13, st: "ready_for_review", plate: "AB9981", veh: "Honda Civic 2021", cat: "Instalación", tech: ["MP", "JR"], since: "hace 35 min" },
+  { id: 14, st: "done", plate: "CE1185", veh: "Toyota RAV4 2023", cat: "Mant. preventivo", tech: ["MP"], since: "hoy 10:15" },
+  { id: 15, st: "done", plate: "AD3390", veh: "Honda CR-V 2018", cat: "Revisado", tech: ["JR"], since: "hoy 09:40" },
+];
+const byId = (id) => ORDERS.find((o) => o.id === id);
+// Urgent first, then the board's own order.
+const inCol = (st, list = ORDERS) => list.filter((o) => o.st === st).sort((a, b) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0));
+
+/* ---------- atoms ---------- */
+function avatars(list, size = 28, max = 3) {
+  if (!list.length) return `<span class="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]"><span class="grid place-items-center rounded-full border border-dashed border-[var(--muted-foreground)]/60" style="width:${size}px;height:${size}px">${I("userPlus", size * .5)}</span>Sin técnico</span>`;
+  const shown = list.slice(0, max);
+  return `<span class="flex -space-x-1" aria-label="Técnicos: ${list.map((t) => TECH[t][0]).join(", ")}">${shown.map((t) => `<span title="${TECH[t][0]}" class="av grid shrink-0 place-items-center rounded-full font-bold" style="--h:${TECH[t][1]};width:${size}px;height:${size}px;font-size:${Math.round(size * .38)}px">${t}</span>`).join("")}</span>`;
+}
+const timeChip = (txt, icon = "clock", big = false) => `<span class="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-[var(--muted)] ${big ? "px-3 py-1 text-base" : "px-2 py-0.5 text-[11px]"} font-medium text-[var(--muted-foreground)]">${I(icon, big ? 16 : 12)}${txt}</span>`;
+const urgentBadge = (big = false) => `<span class="inline-flex items-center gap-1 rounded-full bg-[var(--urgent)] ${big ? "px-3 py-1 text-base" : "px-2 py-0.5 text-[11px]"} font-bold uppercase tracking-wide text-white">${I("flame", big ? 16 : 12)}Urgente</span>`;
+const catTag = (c) => c ? `<span class="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--muted-foreground)]">${I("tag", 11)}${c}</span>` : "";
+const mineChip = `<span class="inline-flex items-center gap-1 rounded-md bg-[var(--foreground)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--background)]">${I("user", 11)}Asignada a vos</span>`;
+const alertStrip = ([icon, txt], big = false) => `<div class="warn flex items-center gap-2 rounded-lg ${big ? "px-3 py-2 text-base" : "px-2.5 py-1.5 text-xs"} font-semibold"><span class="shrink-0">${I(icon, big ? 18 : 14)}</span><span>${txt}</span></div>`;
+const menuBtn = (on = false) => `<button aria-label="Acciones de la orden" class="-mr-1.5 -mt-1.5 grid h-11 w-11 shrink-0 place-items-center rounded-lg text-[var(--muted-foreground)] ${on ? "bg-[var(--muted)] text-[var(--foreground)]" : "hover:bg-[var(--muted)]"}">${I("dots", 18)}</button>`;
+
+/* One card. `viewer` decides the "Asignada a vos" marker; `movable` the grip; `actions` the ⋯ button. */
+function card(o, { viewer = "CR", movable = true, actions = true, menuOn = false, extra = "", cls = "", style = "" } = {}) {
+  const mine = viewer && o.tech.includes(viewer);
+  const chip = o.st === "booked" ? timeChip(o.appt, "cal") : o.since ? timeChip(o.since) : "";
+  return `<article class="tile relative rounded-xl p-3 ${o.urgent ? "urgent" : ""} ${cls}" style="${style}">
+    ${o.urgent ? `<span class="absolute inset-y-3 left-0 w-1 rounded-r-full bg-[var(--urgent)]"></span>` : ""}
+    <div class="flex items-start gap-1.5">
+      ${movable ? `<span class="-ml-1 mt-0.5 shrink-0 cursor-grab text-[var(--muted-foreground)]/60" title="Arrastrar">${I("grip", 16)}</span>` : ""}
+      <div class="min-w-0 flex-1">
+        <div class="plate truncate text-[15px] leading-5">${o.plate ?? `<span class="font-semibold italic tracking-normal text-[var(--muted-foreground)]">Sin placa</span>`}</div>
+        <div class="mt-0.5 flex items-center gap-1 truncate text-xs text-[var(--muted-foreground)]">${I("car", 13)}<span class="truncate">${o.veh ?? "Sin vehículo"}</span></div>
+      </div>
+      ${actions ? menuBtn(menuOn) : ""}
+    </div>
+    ${o.urgent || o.cat || mine ? `<div class="mt-2 flex flex-wrap gap-1.5">${o.urgent ? urgentBadge() : ""}${catTag(o.cat)}${mine ? mineChip : ""}</div>` : ""}
+    ${o.alert ? `<div class="mt-2">${alertStrip(o.alert)}</div>` : ""}
+    <div class="mt-2.5 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">${avatars(o.tech, 26)}${chip}</div>
+    ${extra}
+  </article>`;
+}
+
+function colHead(st, n, big = false) {
+  return `<div class="flex items-center gap-2 px-1 ${big ? "pb-1" : ""}">
+    <span class="hue-tile grid ${big ? "h-10 w-10" : "h-8 w-8"} shrink-0 place-items-center rounded-lg" style="${hueVars(st)}">${I(ST[st].i, big ? 20 : 16)}</span>
+    <h2 class="${big ? "text-xl leading-6" : "text-sm truncate"} min-w-0 flex-1 font-bold">${ST[st].l}</h2>
+    <span class="rounded-full bg-[var(--background)] ${big ? "px-3 text-xl" : "px-2 text-xs"} py-0.5 font-bold tabular-nums ring-1 ring-[var(--border)]">${n}</span>
+  </div>`;
+}
+
+/* A column. `state`: "legal" | "illegal" | undefined (during a drag). */
+function column(st, { list = ORDERS, opts = {}, state, w = 272, body } = {}) {
+  const cards = inCol(st, list);
+  const inner = body ?? (cards.length
+    ? cards.map((o) => card(o, opts)).join("")
+    : `<div class="grid min-h-[96px] place-items-center rounded-xl border border-dashed border-[var(--border)] px-3 text-center text-xs text-[var(--muted-foreground)]">${opts.emptyText ?? "Sin órdenes"}</div>`);
+  return `<section aria-label="${ST[st].l}" class="col relative flex shrink-0 flex-col gap-2.5 overflow-hidden rounded-2xl p-2.5 pt-3.5 ${state === "legal" ? "hue-ring" : ""}" style="width:${w}px;${hueVars(st)}">
+    <span class="hue-bar absolute inset-x-0 top-0 h-1"></span>
+    <div class="${state === "illegal" ? "dimmed" : ""} flex flex-col gap-2.5">${colHead(st, cards.length)}${inner}</div>
+    ${state === "illegal" ? `<div class="absolute inset-x-3 top-16 z-10 flex items-center justify-center gap-1.5 rounded-lg bg-[var(--foreground)] px-3 py-2 text-xs font-semibold text-[var(--background)] shadow-lg">${I("lock", 14)} No se puede mover acá</div>` : ""}
+  </section>`;
+}
+
+function kpis(cls = "grid-cols-6", compact = false) {
+  const k = [
+    ["En el taller", 10, "wrench", "en 5 estados", ""],
+    ["Urgentes", 2, "flame", "marcadas a mano", "urgent"],
+    ["En espera", 2, "pause", "repuesto y aprobación", ""],
+    ["Completadas hoy", 2, "checkC", "última 10:15", "ok"],
+    ["Agendadas hoy", 3, "cal", "próxima 11:00", ""],
+    ["Citas vencidas", 1, "clock", "desde 08:30", "warn"],
+  ];
+  const tone = { urgent: "bg-[var(--urgent)] text-white", warn: "warn", ok: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", "": "bg-[var(--muted)] text-[var(--foreground)]" };
+  return `<div class="grid ${cls} gap-3">${k.map(([l, n, i, sub, t]) => `
+    <div class="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] ${compact ? "p-2.5" : "p-3.5"}">
+      <span class="grid ${compact ? "h-9 w-9" : "h-11 w-11"} shrink-0 place-items-center rounded-xl ${tone[t]}">${I(i, compact ? 17 : 20)}</span>
+      <div class="min-w-0"><div class="text-xs font-medium leading-tight text-[var(--muted-foreground)]">${l}</div>
+        <div class="${compact ? "text-xl" : "text-[26px] leading-8"} font-bold tabular-nums ${t === "urgent" ? "text-[var(--urgent)]" : ""}">${n}</div>${compact ? "" : `<div class="text-[11px] leading-tight text-[var(--muted-foreground)]">${sub}</div>`}</div>
+    </div>`).join("")}</div>`;
+}
+
+function chips(active = "Todas", { mine = 3, scroll = false } = {}) {
+  const c = [["Todas", 15, ""], ["Mis órdenes", mine, "user"], ["Urgentes", 2, "flame"], ["En espera", 2, "pause"]];
+  return `<div class="${scroll ? "scroll-x -mx-4 overflow-x-auto px-4" : ""} flex gap-2">${c.map(([l, n, i]) => {
+    const on = l === active;
+    return `<button aria-pressed="${on}" class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium ${on ? "border-[var(--foreground)] bg-[var(--foreground)] text-[var(--background)]" : "border-[var(--border)] bg-[var(--card)]"}">
+      ${i ? I(i, 15) : ""}${l}<span class="rounded-full px-1.5 text-xs font-bold tabular-nums ${on ? "bg-[var(--background)]/20" : l === "Urgentes" ? "bg-[var(--urgent)] text-white" : "bg-[var(--muted)]"}">${n}</span></button>`;
+  }).join("")}</div>`;
+}
+
+const liveDot = `<span class="inline-flex items-center gap-2 text-xs text-[var(--muted-foreground)]"><span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span></span>Actualizado hace 12 s</span>`;
+const scrollBtns = `<div class="flex rounded-lg border border-[var(--border)] bg-[var(--card)]"><button aria-label="Columnas anteriores" class="grid h-11 w-11 place-items-center">${I("left", 18)}</button><button aria-label="Columnas siguientes" class="grid h-11 w-11 place-items-center border-l border-[var(--border)]">${I("right", 18)}</button></div>`;
+
+function pageHead({ sub = "Arrastrá una tarjeta a otra columna para cambiar su estado.", readonly = false } = {}) {
+  return `<div class="flex flex-wrap items-end justify-between gap-3">
+    <div><div class="text-xs text-[var(--muted-foreground)]">Taller / <span class="text-[var(--foreground)]">Kanban</span></div>
+      <h1 class="mt-1 flex items-center gap-3 text-2xl font-bold">Kanban ${readonly ? `<span class="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-2.5 py-0.5 text-xs font-semibold text-[var(--muted-foreground)]">${I("eye", 13)} Solo lectura</span>` : ""}</h1>
+      <p class="text-sm text-[var(--muted-foreground)]">${sub}</p></div>
+    <div class="flex items-center gap-3">${liveDot}${scrollBtns}</div>
+  </div>`;
+}
+
+function board(cols, { list, opts, w = 272, states = {}, scroll = 0, bodies = {} } = {}) {
+  return `<div class="relative"><div class="board flex gap-3 overflow-x-auto pb-3" data-scroll="${scroll}">
+    ${cols.map((st) => column(st, { list, opts, w, state: states[st], body: bodies[st] })).join("")}
+  </div><div class="fade-r pointer-events-none absolute inset-y-0 right-0 w-12"></div></div>`;
+}
+
+function sidebar(role = "jefe") {
+  const tecnico = role === "tecnico";
+  const g = [
+    ["Taller", tecnico ? [["Tablero", "tv"], ["Kanban", "kanban"], ["Mis números", "chart"]] : [["Tablero", "tv"], ["Kanban", "kanban"], ["Agenda", "cal"], ["Métricas", "chart"]]],
+    ["CRM", tecnico ? [["Clientes", "users"], ["Órdenes de servicio", "doc"], ["Inventario", "box"]] : [["Clientes", "users"], ["Órdenes de servicio", "doc"], ["Vencimientos", "bell"], ["Inventario", "box"]]],
+    ["Catálogo", tecnico ? [["Catálogos Generados", "doc"]] : [["Generar Catálogos", "doc"], ["Catálogos Generados", "doc"]]],
+  ];
+  const who = tecnico ? ["LS", "Leo Salas", "Técnico"] : ["CR", "Carlos Rivas", "Jefe de taller"];
+  return `<aside class="flex w-60 shrink-0 flex-col gap-5 border-r border-[var(--border)] bg-[var(--sidebar)] p-4 text-sm">
+    <div class="flex items-center gap-2 font-bold"><span class="grid h-8 w-8 place-items-center rounded-lg bg-[var(--foreground)] text-[var(--background)]">D</span>Dforce</div>
+    ${g.map(([h, items]) => `<div><div class="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">${h}</div>
+      ${items.map(([i, icon]) => `<div class="flex min-h-9 items-center gap-2.5 rounded-md px-2 ${i === "Kanban" ? "bg-[var(--muted)] font-semibold" : "text-[var(--muted-foreground)]"}">${I(icon, 16)}${i}</div>`).join("")}</div>`).join("")}
+    <div class="mt-auto flex items-center gap-2 rounded-lg border border-[var(--border)] p-2">${avatars([who[0]], 32)}<div class="min-w-0"><div class="truncate font-semibold">${who[1]}</div><div class="text-xs text-[var(--muted-foreground)]">${who[2]}</div></div></div>
+  </aside>`;
+}
+function rail() {
+  return `<aside class="flex w-16 shrink-0 flex-col items-center gap-3 border-r border-[var(--border)] bg-[var(--sidebar)] py-4">
+    <span class="grid h-9 w-9 place-items-center rounded-lg bg-[var(--foreground)] font-bold text-[var(--background)]">D</span>
+    ${["tv", "kanban", "cal", "chart", "users", "doc"].map((g) => `<span class="grid h-11 w-11 place-items-center rounded-lg ${g === "kanban" ? "bg-[var(--muted)] text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}">${I(g, 18)}</span>`).join("")}
+  </aside>`;
+}
+
+/* ---------- frame chrome ---------- */
+function frame(title, notes, width, inner) {
+  return `<section class="flex max-w-full flex-col gap-3">
+    <div><h3 class="text-lg font-bold text-zinc-900">${title}</h3>
+    <ul class="note mt-1 flex max-w-[1200px] flex-col gap-0.5 text-zinc-600">${notes.map((n) => `<li>• ${n}</li>`).join("")}</ul></div>
+    <div class="wrap rounded-2xl"><div class="frame themed overflow-hidden rounded-2xl shadow-xl ring-1 ring-black/10" style="width:${width}px">${inner}</div></div>
+  </section>`;
+}
+
+/* 1 — desktop */
+const f1 = frame("1 · Escritorio (1440) — jefe de taller", [
+  "Nuevo ítem 'Kanban' en el grupo Taller, debajo de 'Tablero' (la pantalla de TV). Visible para administrador, jefe de taller y técnico; nunca para la cuenta 'pantalla'.",
+  "Arriba: 6 indicadores. Debajo: filtros con conteo. 'Mis órdenes' aparece solo si quien mira es técnico en el plantel (acá Carlos también trabaja en órdenes).",
+  "Una columna por estado (Cancelada no tiene columna: se cancela desde el menú). Completada muestra solo las de hoy, igual que el Tablero. Las columnas se desplazan de costado con las flechas o la rueda.",
+  "Tarjeta: placa, vehículo, categoría, técnicos (iniciales), tiempo en el estado. Sin nombre ni teléfono del cliente. Urgente va primera en su columna, con insignia roja y franja roja a la izquierda.",
+  "Aviso ámbar solo por un motivo concreto: cita vencida, En espera (motivo + cuánto lleva), falta vehículo/categoría. El tiempo en el estado es neutro: nunca se pone rojo solo.",
+], 1440, `<div class="flex min-h-[980px]">${sidebar()}
+  <div class="canvas flex min-w-0 flex-1 flex-col gap-5 p-6">${pageHead()}${kpis()}${chips()}${board(COLS)}</div></div>`);
+
+/* 2 — drag */
+const DRAG = byId(8);
+const f2 = frame("2 · Arrastrando una tarjeta", [
+  "Carlos arrastra CA7743 desde En progreso. Se iluminan solo las columnas a las que la orden puede ir (En espera, Completada); el resto se apaga con 'No se puede mover acá'.",
+  "En diagnóstico y Lista para revisión nunca reciben una tarjeta a mano: las pone el sistema al asignar técnico y al marcar 'Mi parte lista'.",
+  "Soltar en En espera abre la pregunta del motivo; en Completada, una confirmación (frame 4). En tablet el arrastre arranca manteniendo apretado ~0,2 s, para no pelear con el desplazamiento.",
+  "Vista desplazada a la derecha (Agendada y Recibida quedan a la izquierda, fuera de cuadro).",
+], 1440, `<div class="canvas flex flex-col gap-5 p-6">${pageHead()}
+  <div class="relative">${board(["diagnosing", "in_progress", "on_hold", "ready_for_review", "done"], {
+    states: { diagnosing: "illegal", ready_for_review: "illegal", on_hold: "legal", done: "legal" },
+    bodies: {
+      in_progress: `<div class="ghost grid h-[154px] place-items-center rounded-xl text-xs text-[var(--muted-foreground)]">CA7743 estaba acá</div>` + inCol("in_progress").filter((o) => o.id !== 8).map((o) => card(o)).join(""),
+      on_hold: `<div class="hue-drop grid h-[120px] place-items-center rounded-xl px-4 text-center text-sm font-semibold">${I("arrow", 18)}<span>Soltá para pasar a <b>En espera</b></span></div>` + inCol("on_hold").map((o) => card(o)).join(""),
+      done: `<div class="hue-drop grid h-[72px] place-items-center rounded-xl px-4 text-center text-xs font-semibold">Soltá para completar</div>` + inCol("done").map((o) => card(o)).join(""),
+    },
+  })}
+    <div class="pointer-events-none absolute z-30" style="left:${(272 + 12) * 2 + 26}px;top:84px;width:272px">${card(DRAG, { cls: "lifted", style: hueVars("on_hold") })}
+      <span class="absolute -bottom-3 -right-3 grid h-10 w-10 place-items-center rounded-full bg-[var(--foreground)] text-[var(--background)] shadow-lg">${I("hand", 18)}</span></div>
+  </div></div>`);
+
+/* 3 — menu */
+function menuPanel(items, w = 248) {
+  return `<div role="menu" class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-1.5 text-sm shadow-2xl" style="width:${w}px">${items.map((it) => it === "-" ? `<div class="my-1 h-px bg-[var(--border)]"></div>` : it.head
+    ? `<div class="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">${it.head}</div>`
+    : `<div role="menuitem" tabindex="-1" class="relative flex min-h-11 w-full items-center gap-2.5 rounded-lg px-3 text-left ${it.on ? "bg-[var(--muted)] font-semibold" : ""} ${it.danger ? "text-red-600 dark:text-red-400" : ""}">
+        ${it.hue ? `<span class="hue-tile grid h-7 w-7 place-items-center rounded-md" style="${hueVars(it.hue)}">${I(ST[it.hue].i, 14)}</span>` : I(it.i, 16)}
+        <span class="flex-1">${it.l}</span>${it.sub ? I("right", 15) : ""}${it.kbd ? `<span class="text-[11px] text-[var(--muted-foreground)]">${it.kbd}</span>` : ""}${it.child ?? ""}</div>`).join("")}</div>`;
+}
+const subMove = `<div class="absolute left-full top-[-6px] ml-2">${menuPanel([{ head: "Mover CA7743 a…" }, { l: "En espera", hue: "on_hold" }, { l: "Completada", hue: "done" }], 220)}</div>`;
+const mainMenu = menuPanel([{ l: "Mover a…", i: "arrow", sub: true, on: true, child: subMove }, { l: "Marcar como urgente", i: "flag" }, "-", { l: "Ver orden", i: "ext" }, "-", { l: "Cancelar orden", i: "trash", danger: true }]);
+const urgentMenu = menuPanel([{ l: "Mover a…", i: "arrow", sub: true }, { l: "Quitar urgente", i: "flagOff" }, "-", { l: "Ver orden", i: "ext" }, "-", { l: "Cancelar orden", i: "trash", danger: true }]);
+const f3 = frame("3 · Menú de la tarjeta (⋯) — el camino para tablet, teclado y lector de pantalla", [
+  "Todo lo que hace el arrastre también se hace desde el menú. 'Mover a…' lista solo los estados permitidos para esa orden; si no hay ninguno (Recibida espera que se asigne técnico), el ítem no aparece.",
+  "'Marcar como urgente' / 'Quitar urgente' lo ven solo administrador y jefe de taller. Queda guardado quién y cuándo la marcó.",
+  "'Cancelar orden' pide confirmación. Botón ⋯ de 44×44.",
+], 1100, `<div class="canvas flex gap-10 p-6" style="min-height:520px">
+  <div class="relative" style="width:272px">${column("in_progress", { opts: { menuOn: false } , body: inCol("in_progress").map((o) => o.id === 8 ? card(o, { menuOn: true, extra: `<div class="absolute right-2 top-12 z-30">${mainMenu}</div>` }).replace("overflow-hidden", "") : card(o)).join("") }).replace("overflow-hidden rounded-2xl", "rounded-2xl")}</div>
+  <div class="ml-[260px] flex flex-col gap-3"><div class="note text-[var(--muted-foreground)]">En una tarjeta ya urgente:</div>${urgentMenu}</div>
+</div>`);
+
+/* 4 — dialogs */
+const dlgShell = (inner, w = 440) => `<div class="relative grid min-h-[440px] place-items-center overflow-hidden rounded-xl bg-[var(--canvas)] p-6">
+  <div class="absolute inset-0 bg-black/50"></div>
+  <div role="dialog" class="relative rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-2xl" style="width:${w}px">${inner}</div></div>`;
+const btn = (l, kind = "outline", icon = "") => `<button class="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold ${kind === "primary" ? "bg-[var(--primary)] text-[var(--primary-foreground)]" : "border border-[var(--border)]"}">${icon}${l}</button>`;
+const orderLine = (o) => `<div class="mt-3 flex items-center gap-2 rounded-lg bg-[var(--muted)] px-3 py-2 text-sm">${I("car", 15)}<b class="plate">${o.plate}</b><span class="text-[var(--muted-foreground)]">· ${o.veh}</span></div>`;
+const dEspera = dlgShell(`<h4 class="text-lg font-bold">¿Por qué queda en espera?</h4>
+  <p class="mt-1 text-sm text-[var(--muted-foreground)]">El motivo se ve en la tarjeta y en el Tablero, junto con cuánto lleva esperando.</p>${orderLine(DRAG)}
+  <div class="mt-4 grid gap-2">
+    <button aria-pressed="true" class="flex min-h-14 items-center gap-3 rounded-xl border-2 border-[var(--foreground)] px-4 text-left"><span class="grid h-5 w-5 place-items-center rounded-full bg-[var(--foreground)] text-[var(--background)]">${I("check", 12)}</span><span><b class="block text-sm">Repuesto</b><span class="text-xs text-[var(--muted-foreground)]">Falta que llegue una pieza</span></span></button>
+    <button aria-pressed="false" class="flex min-h-14 items-center gap-3 rounded-xl border border-[var(--border)] px-4 text-left"><span class="h-5 w-5 rounded-full border-2 border-[var(--border)]"></span><span><b class="block text-sm">Aprobación del cliente</b><span class="text-xs text-[var(--muted-foreground)]">El cliente tiene que aprobar el trabajo</span></span></button>
+  </div>
+  <div class="mt-5 flex justify-end gap-2">${btn("Cancelar")}${btn("Pasar a En espera", "primary")}</div>`);
+const dDone = dlgShell(`<div class="flex items-start gap-3"><span class="hue-tile grid h-11 w-11 shrink-0 place-items-center rounded-xl" style="${hueVars("done")}">${I("checkC", 20)}</span>
+  <div><h4 class="text-lg font-bold">¿Marcar la orden como Completada?</h4>
+  <p class="mt-1 text-sm text-[var(--muted-foreground)]">La orden se cierra y deja de poder editarse. Para corregirla después hace falta un administrador.</p></div></div>${orderLine(byId(13))}
+  <div class="mt-5 flex justify-end gap-2">${btn("Cancelar")}${btn("Sí, completar", "primary")}</div>`);
+const dRefuse = dlgShell(`<div class="flex items-start gap-3"><span class="warn grid h-11 w-11 shrink-0 place-items-center rounded-xl">${I("alert", 20)}</span>
+  <div><h4 class="text-lg font-bold">Todavía no se puede recibir</h4>
+  <p class="mt-1 text-sm">Completá el vehículo y la categoría antes de recibir la orden.</p></div></div>
+  <ul class="mt-4 grid gap-2 text-sm">
+    <li class="flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2">${I("xC", 16)}<span class="flex-1">Vehículo</span><span class="text-xs text-[var(--muted-foreground)]">sin cargar</span></li>
+    <li class="flex items-center gap-2 rounded-lg border border-[var(--border)] px-3 py-2">${I("xC", 16)}<span class="flex-1">Categoría</span><span class="text-xs text-[var(--muted-foreground)]">sin cargar</span></li>
+  </ul>
+  <div class="mt-5 flex justify-end gap-2">${btn("Cerrar")}${btn("Editar orden", "primary", I("ext", 15))}</div>`);
+const toast = (type, msg) => {
+  const c = type === "ok" ? "border border-green-300 bg-green-50 text-green-800 dark:border-green-400/30 dark:bg-green-950 dark:text-green-300" : "border border-red-300 bg-red-50 text-red-800 dark:border-red-400/30 dark:bg-red-950 dark:text-red-300";
+  return `<div role="status" class="flex items-center gap-2 rounded-lg py-1 pl-4 pr-1 text-sm shadow-md ${c}">${I(type === "ok" ? "checkC" : "xC", 18)}<span class="flex-1">${msg}</span><button aria-label="Cerrar" class="grid h-11 w-11 place-items-center rounded hover:opacity-70">${I("x", 16)}</button></div>`;
+};
+const dToasts = `<div class="relative min-h-[440px] overflow-hidden rounded-xl bg-[var(--canvas)] p-6">
+  <div class="note mb-3 text-[var(--muted-foreground)]">Abajo a la derecha, el sistema de avisos que ya usa la app:</div>
+  <div class="absolute bottom-6 right-6 flex w-[380px] flex-col gap-2">
+    ${toast("ok", "Orden movida a En progreso")}${toast("ok", "Orden marcada como urgente")}${toast("err", "La orden cambió mientras la mirabas. Actualizá el tablero.")}
+  </div></div>`;
+const f4 = frame("4 · Diálogos y avisos", [
+  "En espera: el motivo es obligatorio. Dos opciones grandes (56 px de alto), el botón confirma recién cuando hay una elegida.",
+  "Completada pide confirmación porque cierra la orden. Recibida sin vehículo o categoría se rechaza antes de llamar al servidor, con un atajo a 'Editar orden'.",
+  "Avisos: verde al confirmarse cada cambio. Si otra persona movió la orden antes, la tarjeta vuelve a su lugar y sale el aviso de error.",
+], 1000, `<div class="canvas grid grid-cols-2 gap-4 p-5">${dEspera}${dDone}${dRefuse}${dToasts}</div>`);
+
+/* 5 — técnico */
+const MINE_LS = ORDERS.filter((o) => o.tech.includes("LS"));
+const roMenu = `<div class="absolute right-2 top-12 z-30">${menuPanel([{ l: "Ver orden", i: "ext" }], 200)}</div>`;
+const f5 = frame("5 · Técnico — solo lectura", [
+  "Leo Salas (técnico) ve el mismo tablero, filtrado acá con 'Mis órdenes'. No hay agarradera ni arrastre, y el menú ⋯ ofrece solo 'Ver orden'.",
+  "Ve la insignia Urgente pero no la puede poner ni sacar. Sin indicadores de cambio: los KPI son los mismos para todos.",
+  "Vista desplazada: Agendada y Recibida quedan a la izquierda, fuera de cuadro.",
+], 1440, `<div class="flex min-h-[900px]">${sidebar("tecnico")}
+  <div class="canvas flex min-w-0 flex-1 flex-col gap-5 p-6">${pageHead({ sub: "Estado de las órdenes del taller. Los cambios de estado los hace el jefe de taller.", readonly: true })}${kpis()}${chips("Mis órdenes", { mine: 4 })}
+  ${board(COLS, { list: MINE_LS, scroll: 2 * 284, opts: { viewer: "LS", movable: false, emptyText: "Ninguna orden tuya en este estado" }, bodies: {
+    in_progress: inCol("in_progress", MINE_LS).map((o) => o.id === 8 ? card(o, { viewer: "LS", movable: false, menuOn: true, extra: roMenu }) : card(o, { viewer: "LS", movable: false })).join(""),
+  } }).replace('class="board flex', 'class="board flex min-h-[520px]')}</div></div>`);
+
+/* 6 — tablet */
+const f6a = frame("6a · Tablet horizontal (1024)", [
+  "Menú lateral en riel. Indicadores en 3 × 2. Las columnas encajan al soltar el desplazamiento (scroll-snap), así nunca queda una tarjeta cortada al medio.",
+], 1024, `<div class="flex min-h-[860px]">${rail()}
+  <div class="canvas flex min-w-0 flex-1 flex-col gap-4 p-5">${pageHead({ sub: "Mantené apretada una tarjeta para arrastrarla, o usá ⋯." })}${kpis("grid-cols-3")}${chips()}${board(COLS, { w: 280 })}</div></div>`);
+const f6b = frame("6b · Tablet vertical (768)", [
+  "Barra superior con menú. Indicadores compactos en 3 × 2 (solo número). Se ven dos columnas y media: la media avisa que hay más a la derecha.",
+], 768, `<div class="canvas min-h-[900px]">
+  <div class="flex items-center justify-between border-b border-[var(--border)] bg-[var(--card)] px-3 py-1"><button aria-label="Menú" class="grid h-11 w-11 place-items-center">${I("menu", 20)}</button><strong>Kanban</strong>${liveDot.replace("Actualizado hace 12 s", "hace 12 s")}</div>
+  <div class="flex flex-col gap-4 p-4">${kpis("grid-cols-3", true)}${chips()}${board(COLS, { w: 280 })}</div></div>`);
+
+/* 7 — phone */
+function phoneTabs(active) {
+  return `<div class="scroll-x -mx-4 flex gap-1 overflow-x-auto border-b border-[var(--border)] px-4">${COLS.map((st) => {
+    const on = st === active, n = inCol(st).length;
+    return `<button aria-pressed="${on}" class="-mb-px flex min-h-11 shrink-0 items-center gap-1.5 border-b-2 px-2.5 text-sm ${on ? "border-[var(--foreground)] font-semibold" : "border-transparent text-[var(--muted-foreground)]"}">
+      <span class="hue-tile grid h-6 w-6 place-items-center rounded-md" style="${hueVars(st)}">${I(ST[st].i, 13)}</span>${ST[st].l}<span class="rounded-full bg-[var(--muted)] px-1.5 text-xs font-bold">${n}</span></button>`;
+  }).join("")}</div>`;
+}
+const phoneTop = `<div class="flex items-center justify-between border-b border-[var(--border)] bg-[var(--card)] px-2 py-1"><button aria-label="Menú" class="grid h-11 w-11 place-items-center">${I("menu", 20)}</button><strong>Kanban</strong><button aria-label="Actualizar" class="grid h-11 w-11 place-items-center">${I("refresh", 18)}</button></div>`;
+const phoneKpis = `<div class="scroll-x -mx-4 flex gap-2 overflow-x-auto px-4">${[["En el taller", 10, ""], ["Urgentes", 2, "u"], ["En espera", 2, ""], ["Completadas hoy", 2, ""], ["Agendadas hoy", 3, ""], ["Citas vencidas", 1, "w"]].map(([l, n, t]) => `
+  <div class="shrink-0 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-2 ${t === "w" ? "warn" : ""}"><div class="text-[11px] font-medium ${t === "w" ? "" : "text-[var(--muted-foreground)]"}">${l}</div><div class="text-lg font-bold tabular-nums ${t === "u" ? "text-[var(--urgent)]" : ""}">${n}</div></div>`).join("")}</div>`;
+function phoneBoard() {
+  return `<div class="canvas flex h-[844px] flex-col overflow-hidden">${phoneTop}
+    <div class="flex flex-col gap-3 bg-[var(--card)] px-4 pt-3">${phoneKpis}${chips("Todas", { scroll: true })}${phoneTabs("in_progress")}</div>
+    <div class="flex flex-1 flex-col gap-2.5 overflow-hidden px-4 py-3">
+      <div class="flex items-center justify-between text-xs text-[var(--muted-foreground)]"><span>4 de 7 · deslizá para cambiar de estado</span><span class="flex gap-1">${COLS.map((st, i) => `<span class="h-1.5 rounded-full ${i === 3 ? "w-4 bg-[var(--foreground)]" : "w-1.5 bg-[var(--border)]"}"></span>`).join("")}</span></div>
+      ${inCol("in_progress").map((o) => card(o, { movable: false })).join("")}
+    </div></div>`;
+}
+function phoneSheet() {
+  const o = byId(9);
+  const row = (icon, l, extra = "") => `<button class="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-[15px] ${extra}">${icon}<span class="flex-1">${l}</span></button>`;
+  return `<div class="relative h-[844px] overflow-hidden">
+    <div class="absolute inset-0">${phoneBoard()}</div><div class="absolute inset-0 bg-black/55"></div>
+    <div class="absolute inset-x-0 bottom-0 rounded-t-3xl bg-[var(--card)] px-4 pb-6 pt-2 shadow-2xl">
+      <div class="mx-auto mb-3 h-1.5 w-10 rounded-full bg-[var(--muted)]"></div>
+      <div class="flex items-center gap-3 px-1"><div class="min-w-0 flex-1"><div class="flex items-center gap-2"><span class="plate text-lg">${o.plate}</span>${urgentBadge()}</div><div class="text-sm text-[var(--muted-foreground)]">${o.veh} · En progreso</div></div><button aria-label="Cerrar" class="grid h-11 w-11 place-items-center rounded-full bg-[var(--muted)]">${I("x", 18)}</button></div>
+      <div class="mt-4 px-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">Mover a</div>
+      <div class="mt-1 grid gap-1">${["on_hold", "done"].map((st) => row(`<span class="hue-tile grid h-8 w-8 place-items-center rounded-lg" style="${hueVars(st)}">${I(ST[st].i, 16)}</span>`, ST[st].l, "border border-[var(--border)]")).join("")}</div>
+      <div class="my-3 h-px bg-[var(--border)]"></div>
+      ${row(I("flagOff", 18), "Quitar urgente")}${row(I("ext", 18), "Ver orden")}${row(I("trash", 18), "Cancelar orden", "text-red-600 dark:text-red-400")}
+    </div></div>`;
+}
+const f7 = `<section class="flex max-w-full flex-col gap-3">
+  <div><h3 class="text-lg font-bold text-zinc-900">7 · Celular (390) — una columna por vez</h3>
+  <ul class="note mt-1 flex max-w-[1200px] flex-col gap-0.5 text-zinc-600">
+    <li>• Pestañas de estado con conteo, deslizables; también se cambia de estado deslizando la lista de costado. Indicadores en una fila que se desliza.</li>
+    <li>• En celular no hay arrastre: con una sola columna a la vista no hay adónde soltar. Se mueve desde ⋯, que abre una hoja desde abajo con los estados permitidos.</li>
+    <li>• La página nunca se desplaza de costado: solo las filas de pestañas, filtros e indicadores.</li>
+  </ul></div>
+  <div class="flex flex-wrap gap-8">
+    <div class="wrap"><div class="frame themed phone overflow-hidden rounded-[2.2rem] shadow-xl ring-8 ring-zinc-900" style="width:390px">${phoneBoard()}</div></div>
+    <div class="wrap"><div class="frame themed phone overflow-hidden rounded-[2.2rem] shadow-xl ring-8 ring-zinc-900" style="width:390px">${phoneSheet()}</div></div>
+  </div></section>`;
+
+/* 8 — TV */
+function tvCard(o) {
+  const chip = o.st === "booked" ? timeChip(o.appt, "cal", true) : o.since ? timeChip(o.since, "clock", true) : "";
+  return `<li class="tile relative flex flex-col gap-2 rounded-2xl p-4 ${o.urgent ? "urgent" : ""}">
+    ${o.urgent ? `<span class="absolute inset-y-4 left-0 w-1.5 rounded-r-full bg-[var(--urgent)]"></span>` : ""}
+    ${o.urgent ? `<div>${urgentBadge(true)}</div>` : ""}
+    <div class="plate text-[28px] leading-8">${o.plate ?? `<span class="text-xl font-semibold italic tracking-normal text-[var(--muted-foreground)]">Sin placa</span>`}</div>
+    <div class="text-lg leading-6 text-[var(--muted-foreground)]">${o.veh ?? "Sin vehículo"}</div>
+    ${o.alert ? alertStrip(o.alert, true) : ""}
+    <div class="mt-1 flex flex-wrap items-center justify-between gap-2">${o.tech.length ? avatars(o.tech, 40) : `<span class="text-base text-[var(--muted-foreground)]">Sin técnico</span>`}${chip}</div>
+  </li>`;
+}
+const f8 = frame("8 · Tablero de TV (/tablero) con la misma estética", [
+  "Solo lectura, sin botones ni menú, letra grande para leer de lejos. Mismas columnas, mismos avisos ámbar e insignia Urgente.",
+  "Los nombres de los técnicos pasan a iniciales (con el nombre completo para lector de pantalla). Sigue sin datos del cliente.",
+  "La pantalla de clientes (/tablero/clientes) toma las mismas tarjetas, con placa, vehículo y estado.",
+], 1920, `<div class="canvas flex min-h-[900px] flex-col gap-6 p-8">
+  <div class="flex items-center justify-between"><div class="flex items-center gap-4"><span class="grid h-14 w-14 place-items-center rounded-2xl bg-[var(--foreground)] text-2xl font-bold text-[var(--background)]">D</span><div><div class="text-3xl font-bold">Estado del taller</div><div class="text-lg text-[var(--muted-foreground)]">Martes 27 de octubre</div></div></div>
+    <div class="text-right"><div class="text-5xl font-bold tabular-nums">10:42</div><div class="mt-1">${liveDot}</div></div></div>
+  <div class="grid grid-cols-7 gap-4">${COLS.map((st) => `<section aria-label="${ST[st].l}" class="col relative flex flex-col gap-3 overflow-hidden rounded-2xl p-3 pt-4" style="${hueVars(st)}"><span class="hue-bar absolute inset-x-0 top-0 h-1.5"></span>
+    ${colHead(st, inCol(st).length, true)}<ul class="flex flex-col gap-3">${inCol(st).map(tvCard).join("")}</ul></section>`).join("")}</div>
+</div>`);
+
+/* Legend */
+const lg = (vis, txt) => `<div class="flex items-start gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] p-3"><div class="flex min-w-[150px] shrink-0 flex-wrap gap-1.5">${vis}</div><div class="text-sm">${txt}</div></div>`;
+const legend = frame("Leyenda", [
+  "Ningún estado depende solo del color: todo lleva ícono y texto. Probado en claro y oscuro.",
+], 1100, `<div class="canvas grid grid-cols-2 gap-3 p-5">
+  ${lg(urgentBadge(), "<b>Rojo = Urgente, y nada más.</b> Lo pone a mano el administrador o el jefe de taller (queda quién y cuándo). La tarjeta va primera en su columna. El tiempo nunca pone nada en rojo.")}
+  ${lg(alertStrip(["clock", "Cita vencida"]), "<b>Ámbar = hay un motivo concreto:</b> la cita ya pasó, la orden está En espera (motivo y cuánto lleva) o le falta vehículo o categoría.")}
+  ${lg(alertStrip(["pause", "Repuesto · hace 3 días"]) + alertStrip(["alert", "Falta vehículo y categoría"]), "Las tres variantes del aviso ámbar, cada una con su ícono.")}
+  ${lg(timeChip("hace 5 h") + timeChip("Hoy 11:00", "cal"), "<b>Tiempo en el estado, neutro.</b> Es información, no alarma. En Agendada muestra la hora de la cita.")}
+  ${lg(avatars(["CR", "LS"], 28) + avatars([], 28), "Técnicos por iniciales, cada uno con su color (nombre completo al pasar el mouse y para lector de pantalla). 'Sin técnico' cuando no hay nadie.")}
+  ${lg(mineChip + catTag("Reparación"), "<b>Asignada a vos</b> marca las órdenes de quien mira. La categoría va en gris, sin color, para no competir con rojo y ámbar.")}
+  ${lg(`<span class="inline-flex items-center gap-1.5 rounded-lg bg-[var(--foreground)] px-2 py-1 text-xs font-semibold text-[var(--background)]">${I("lock", 13)} No se puede mover acá</span>`, "Al arrastrar: la columna permitida se ilumina con su color; las demás se apagan y lo dicen en texto.")}
+  ${lg(`<span class="grid h-11 w-11 place-items-center rounded-lg border border-dashed border-[var(--muted-foreground)] text-[var(--muted-foreground)]">${I("dots", 18)}</span>`, "<b>44 × 44 mínimo</b> en todo control de acción: botón ⋯, filtros, pestañas, flechas, botones de diálogo y de la hoja del celular.")}
+</div>`);
+
+document.getElementById("root").innerHTML = f1 + f2 + f3 + f4 + f5 + f6a + f6b + f7 + f8 + legend;
+// Tailwind CDN styles land after this script, so scroll once layout is real.
+const applyScroll = () => document.querySelectorAll("[data-scroll]").forEach((el) => { el.scrollLeft = Number(el.dataset.scroll); });
+window.addEventListener("load", () => setTimeout(applyScroll, 300));
+
+function setTheme(t) {
+  document.querySelectorAll(".themed").forEach((el) => { el.classList.toggle("theme-dark", t === "dark"); el.classList.toggle("theme-light", t === "light"); el.classList.toggle("dark", t === "dark"); });
+  document.getElementById("t-dark").className = `min-h-11 rounded-md px-3 ${t === "dark" ? "bg-zinc-100 text-zinc-900" : ""}`;
+  document.getElementById("t-light").className = `min-h-11 rounded-md px-3 ${t === "light" ? "bg-zinc-100 text-zinc-900" : ""}`;
+}
+document.getElementById("t-dark").onclick = () => setTheme("dark");
+document.getElementById("t-light").onclick = () => setTheme("light");
+setTheme(new URLSearchParams(location.search).get("theme") === "light" ? "light" : "dark");
+</script>
+</body>
+</html>
