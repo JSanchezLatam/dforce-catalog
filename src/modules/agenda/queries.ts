@@ -7,9 +7,10 @@
  * more than `cap` back means "truncated", and the extra row is dropped before returning.
  * `count(*)` is never selected raw: pg returns bigint as a string, drizzle's `count()` maps it to a number.
  */
-import { and, asc, count, eq, gte, lt, ne } from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray, lt, ne } from "drizzle-orm";
 
 import { OVERDUE_MARGIN_MINUTES } from "@/modules/agenda/dates";
+import { BACKLOG_STATUSES } from "@/modules/metrics/shape";
 import type { OrderScope } from "@/modules/service-orders/scope";
 import { db } from "@/shared/db/client";
 import { cliente, ordenServicio, vehiculo } from "@/shared/db/schema";
@@ -70,4 +71,37 @@ export async function agendaOverdue(scope: OrderScope, now: Date, cap = AGENDA_R
     db.select({ total: count() }).from(ordenServicio).where(overdue),
   ]);
   return { rows: rows.slice(0, cap), truncated: rows.length > cap, total };
+}
+
+/** Orders on the shop floor now: every backlog status but `booked` (an appointment, not a car in the workshop). */
+export const IN_WORKSHOP_STATUSES = BACKLOG_STATUSES.filter((s) => s !== "booked");
+
+export type WorkshopRow = {
+  id: string;
+  status: AgendaRow["status"];
+  /** Set only while `on_hold`. */
+  esperaMotivo: (typeof ordenServicio.$inferSelect)["esperaMotivo"];
+  customerName: string;
+  customerPhone: string;
+  vehiclePlate: string | null;
+};
+
+/** Every in-workshop order whatever its appointment date, oldest first. Lives here, not in `board/`, because it joins `cliente`. */
+export async function agendaInWorkshop(scope: OrderScope, cap = AGENDA_ROW_CAP): Promise<{ rows: WorkshopRow[]; truncated: boolean }> {
+  const rows = await db
+    .select({
+      id: ordenServicio.id,
+      status: ordenServicio.status,
+      esperaMotivo: ordenServicio.esperaMotivo,
+      customerName: cliente.name,
+      customerPhone: cliente.phone,
+      vehiclePlate: vehiculo.plate,
+    })
+    .from(ordenServicio)
+    .innerJoin(cliente, eq(ordenServicio.clienteId, cliente.id))
+    .leftJoin(vehiculo, eq(ordenServicio.vehiculoId, vehiculo.id))
+    .where(and(inArray(ordenServicio.status, IN_WORKSHOP_STATUSES), scope.where))
+    .orderBy(asc(ordenServicio.createdAt), asc(ordenServicio.id))
+    .limit(cap + 1);
+  return { rows: rows.slice(0, cap), truncated: rows.length > cap };
 }

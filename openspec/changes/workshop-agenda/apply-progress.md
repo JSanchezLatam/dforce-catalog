@@ -144,3 +144,41 @@ Gates: see WU3 (single tree run covers both).
 Decisions: on a phone (below `md`) each cell shows the day number (a link to the day view, 44x44) and a count (`aria-label` "N citas"/"1 cita"); the chips and the "+N más" link render from `md` up. The grid is 7 columns at every width, with no horizontal page scroll by construction, but chip legibility at 768 px (about 100 px per cell) is unproven. `monthGrid` rows come from WU1's `dates.ts`; the range already covered the drawn weeks.
 
 Unverified: legibility of chips in 100 px cells at 768 px and the 390 px count layout (browser, WU9); no empty-state text in the month grid (the spec only requires it for the day view).
+
+## WU5: in-workshop query, combined view, Vencidas panel (tasks 5.1-5.6 done; 5.7 closing steps left to the orchestrator)
+
+Branch `feat/workshop-agenda-wu5` (off `feat/workshop-agenda-wu3-page`). Nothing staged or committed.
+
+Files (changed lines vs `feat/workshop-agenda-wu3-page`, untracked included; production + unit ~387, e2e 175 in its own file):
+- Modified: `queries.ts` (+35: `IN_WORKSHOP_STATUSES`, `WorkshopRow`, `agendaInWorkshop`), `queries.test.ts` (+23/-3), `items.ts` (+22: `WorkshopItem`, `toWorkshopItem`), `items.test.ts` (+36), `items.fixture.ts` (+16: `makeWorkshopItem`), `src/app/(app)/agenda/page.tsx` (+16/-3), `page.test.tsx` (+57/-1)
+- New: `CombinedView.tsx` (44), `CombinedView.test.tsx` (56), `VencidasPanel.tsx` (32), `VencidasPanel.test.tsx` (49), `src/e2e/agenda-combined.e2e.test.ts` (175)
+
+Behaviour: `agendaInWorkshop(scope, cap = 500)` lives in `agenda/queries.ts` (board untouched), status list = `BACKLOG_STATUSES` minus `booked`, ordered by `created_at, id`, `limit(cap + 1)`, scope required. The page runs `Promise.all([range, overdue, view === "combined" ? inWorkshop : null])` with one `now`; `VencidasPanel` renders under every view (heading uses the true `total`; list capped, notice when truncated; "Sin citas vencidas" at 0). The panel row shows `DD/MM/YYYY HH:mm` (from `dayKey`/`time`, digits only) above the shared `AgendaChip` (which carries "Vencida" and the order link). Row actions: `VencidasPanel` takes an optional `actions?: (item) => ReactNode` prop, the named slot for WU8; nothing renders there now (tested: no button without it). CombinedView: `grid-cols-1 lg:grid-cols-2`, so side by side from `lg` (1024 px), stacked below (phone and tablet portrait), appointments first.
+
+TDD: all unit test files written first and run RED (5 files failing: missing modules and exports) before production code. The e2e file was written after the code; its value is the mutations below.
+
+Mutation-verify (per-file backup, restored each time; final `git diff` shows only the WU5 changes, no stacked mutations):
+
+| Mutation | Test that went red |
+|---|---|
+| `IN_WORKSHOP_STATUSES` keeps `booked` | unit "In-workshop set: the five working statuses ..."; e2e "In-workshop set: eight statuses ..." and "Selected day and live orders together ..." |
+| drop `scope.where` from `agendaInWorkshop` | unit "applies the caller's scope in the range, the in-workshop read and ..."; e2e "Scope: a técnico reads only the in-workshop orders assigned to them" |
+| `.limit(cap + 1)` -> `.limit(cap)` in `agendaInWorkshop` | e2e "Row cap is disclosed: the in-workshop read returns cap rows and truncated ..." |
+| drop the `on_hold` guard on the hold label (`toWorkshopItem`) | "Hold reason shown only while on hold: the label for on_hold, none for in_progress" |
+| panel heading uses `items.length` instead of `total` | "Count is the true count: the heading shows total, not the rows shown" |
+| panel not rendered on `month` | page "Panel on every view: month shows Vencidas (1)" |
+| in-workshop read on every view | page "day/week/month does not run the in-workshop read" |
+| `lg:grid-cols-2` -> `lg:grid-cols-1` | "Side by side and stacked: one column on phone and tablet portrait, two from lg" |
+| `cliente` mentioned in `board/queries.ts` | `queries.privacy.test.ts` "never mentions the cliente table ..." and agenda "the board query file still never names cliente" |
+| overdue predicate `status = 'booked'` -> `'open'` | e2e "Count is the true count: three Vencidas ..." |
+
+Gates: `npm test` 245 files / 3806 passed; `npx tsc --noEmit` clean; `npm run lint` 0 errors / 13 warnings. Full e2e on a recreated `dforce_e2e` (`DATABASE_URL=...:5433/dforce_e2e npm run test:e2e`): 28 files / 354 passed, 0 skipped (before a one-line type fix in the e2e file; that file re-run alone: 6/6). `dforce_catalog` and `dforce_catalog_wu4` untouched.
+
+Deviations and findings:
+- The DB check `orden_vehiculo_categoria_required` forbids a non-booked order without a vehicle, so an in-workshop row can never be "Sin vehículo" in real data; the code still maps a null plate (spec text) and a unit test covers it, but the e2e cannot seed one.
+- Copy not fixed by the spec, chosen here: "Citas del día", "En el taller" (section headings), "Sin órdenes en el taller", "Se muestran las primeras 500 órdenes en el taller.", "Se muestran las primeras 500 citas vencidas.".
+- Overdue and in-workshop caps are 500 (spec), not 200 (design D5).
+- The overdue read now runs on every request (the WU3 deferral note is resolved).
+- Board privacy e2e is an absence test: anchored with `toContain(plate)` and with the agenda read returning the sentinel, but NOT mutation-verified at the route level; the source-text privacy test was.
+
+Unverified: side-by-side from `lg` versus stacked, 44px on the new links and chip legibility are class assertions in jsdom only (browser, WU9); no browser or LAN-IP check; the Vencidas panel look at 390 px is unseen. Query plan and speed at volume not measured.
