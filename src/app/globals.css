@@ -200,6 +200,9 @@
   .agenda-dot {
     background: hsl(var(--h, 240) var(--s, 80%) 55%);
   }
+  .agenda-hatch {
+    background-image: repeating-linear-gradient(135deg, transparent 0 7px, var(--border) 7px 8px);
+  }
   [data-categoria="instalacion"] { --h: 262; }
   [data-categoria="mant_preventivo"] { --h: 205; }
   [data-categoria="mant_correctivo"] { --h: 35; }
