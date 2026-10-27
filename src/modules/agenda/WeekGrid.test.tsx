@@ -136,4 +136,15 @@ describe("WeekGrid", () => {
     await userEvent.click(card);
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "a" }), card);
   });
+
+  it("Phone: with selectedDay only that day's header and column stay below md (CSS only); without it nothing is gated", () => {
+    const { container, rerender } = render(<WeekGrid days={DAYS} items={[at("a", TUE, 9)]} selectedDay={TUE} />);
+    const gated = (attr: string) => [...container.querySelectorAll(`[${attr}]`)].filter((e) => e.className.includes("max-md:hidden")).map((e) => e.getAttribute(attr));
+    expect(gated("data-day-column")).toEqual(DAYS.filter((d) => d !== TUE));
+    expect(gated("data-day-header")).toEqual(DAYS.filter((d) => d !== TUE));
+    expect(container.querySelector(`[data-day-column="${TUE}"]`)!.className).not.toContain("max-md:hidden");
+    expect(container.innerHTML).toContain("max-md:grid-cols-[3.5rem_minmax(0,1fr)]");
+    rerender(<WeekGrid days={DAYS} items={[at("a", TUE, 9)]} />);
+    expect(container.innerHTML).not.toContain("max-md:hidden");
+  });
 });

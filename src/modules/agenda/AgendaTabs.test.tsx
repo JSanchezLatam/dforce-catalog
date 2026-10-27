@@ -33,4 +33,14 @@ describe("AgendaTabs", () => {
     render(<AgendaTabs {...base} />);
     for (const t of screen.getAllByRole("tab")) expect(t.className).toContain("min-h-11");
   });
+
+  it("Phone chips: below md the tabs are rounded bordered chips that scroll inside their row", () => {
+    render(<AgendaTabs {...base} />);
+    expect(screen.getByRole("tablist").className).toContain("max-md:overflow-x-auto");
+    for (const t of screen.getAllByRole("tab")) {
+      expect(t.className).toContain("max-md:rounded-full");
+      expect(t.className).toContain("max-md:border");
+      expect(t.className).toContain("shrink-0");
+    }
+  });
 });

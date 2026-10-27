@@ -15,7 +15,7 @@ const BAR: Record<string, string> = { Agendadas: "bg-sky-500", Recibidas: "bg-em
  * The left column: calendar and Próxima cita (slots, later units), the Categoría filter, "Esta semana". From `xl` it is
  * always shown; below it, it hides behind a "Filtros" disclosure button. CSS decides, so no width is read in render.
  */
-export function AgendaSidebar({ counts, hidden, summary, onToggle, onAll, calendar, next }: {
+export function AgendaSidebar({ counts, hidden, summary, onToggle, onAll, calendar, next, open: controlledOpen, onOpenChange }: {
   counts: Record<TypeKey, number>;
   hidden: readonly TypeKey[];
   summary: readonly { label: string; count: number }[];
@@ -23,17 +23,24 @@ export function AgendaSidebar({ counts, hidden, summary, onToggle, onAll, calend
   onAll: () => void;
   calendar?: ReactNode;
   next?: ReactNode;
+  /** The shell owns the disclosure when it renders a second "Filtros" control on the phone header row. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [innerOpen, setInnerOpen] = useState(false);
+  const open = controlledOpen ?? innerOpen;
+  const setOpen = onOpenChange ?? setInnerOpen;
   const max = Math.max(0, ...summary.map((r) => r.count));
   return (
     <div className="flex flex-col gap-3 xl:w-[21rem] xl:shrink-0">
-      <button type="button" aria-expanded={open} aria-controls="agenda-sidebar" onClick={() => setOpen(!open)} className="inline-flex min-h-11 min-w-11 items-center justify-center self-start rounded-md border px-3 text-sm hover:bg-muted xl:hidden">
+      <button type="button" aria-expanded={open} aria-controls="agenda-sidebar" onClick={() => setOpen(!open)} className="inline-flex min-h-11 min-w-11 items-center justify-center self-start rounded-md border px-3 text-sm hover:bg-muted max-md:hidden xl:hidden">
         Filtros
       </button>
       <div id="agenda-sidebar" className={cn("flex-col gap-3", open ? "flex" : "hidden xl:flex")}>
-        {calendar}
-        {next}
+        <div className="flex flex-col gap-3 max-md:hidden">
+          {calendar}
+          {next}
+        </div>
         <section aria-labelledby="agenda-categoria" className={CARD}>
           <div className="mb-2 flex items-center justify-between">
             <h2 id="agenda-categoria" className="text-sm font-semibold">Categoría</h2>

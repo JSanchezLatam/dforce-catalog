@@ -476,7 +476,7 @@ describe("AgendaShell", () => {
     it("the header button opens the dialog on the selected date with an empty time", async () => {
       render(<AgendaShell {...base} date="2026-11-05" view="week" items={[]} />);
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-      await userEvent.click(screen.getByRole("button", { name: "Nueva cita" }));
+      await userEvent.click(screen.getAllByRole("button", { name: "Nueva cita" })[0]);
       expect(screen.getByRole("dialog")).toBeInTheDocument();
       expect(field("Día").value).toBe("2026-11-05");
       expect(field("Hora").value).toBe("");
@@ -494,8 +494,69 @@ describe("AgendaShell", () => {
       await userEvent.click(screen.getByRole("button", { name: "Nueva cita 29/10/2026 11:00" }));
       await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-      await userEvent.click(screen.getByRole("button", { name: "Nueva cita" }));
+      await userEvent.click(screen.getAllByRole("button", { name: "Nueva cita" })[0]);
       expect(field("Hora").value).toBe("");
+    });
+  });
+
+  describe("phone", () => {
+    const fab = () => screen.getAllByRole("button", { name: "Nueva cita" }).find((b) => b.className.includes("fixed"))!;
+
+    it("Header and floating button defaults: the floating button is >= 44px, md:hidden, and opens on the selected day with an empty time", async () => {
+      render(<AgendaShell {...base} date="2026-11-05" view="day" items={[]} />);
+      expect(fab().className).toMatch(/(^|\s)min-h-(11|12|14)(\s|$)/);
+      expect(fab().className).toContain("md:hidden");
+      await userEvent.click(fab());
+      expect((screen.getByLabelText("Día") as HTMLInputElement).value).toBe("2026-11-05");
+      expect((screen.getByLabelText("Hora") as HTMLInputElement).value).toBe("");
+    });
+
+    it.each(["day", "week", "combined"] as const)("%s has the day strip on the selected week; month has none", (view) => {
+      render(<AgendaShell {...base} view={view} date="2026-10-28" busyDays={["2026-10-29"]} items={[at("a")]} />);
+      const strip = screen.getByRole("navigation", { name: "Días de la semana" });
+      expect(within(strip).getAllByRole("link")).toHaveLength(7);
+      expect(within(strip).getAllByRole("link").filter((l) => l.querySelector("[data-busy-dot]"))).toHaveLength(2);
+    });
+
+    it("the Vencidas tab is a list, not a day: no strip over it", async () => {
+      render(<AgendaShell {...base} view="week" overdueTotal={1} overdue={[at("v", { overdue: true })]} items={[]} />);
+      expect(screen.getByRole("navigation", { name: "Días de la semana" })).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("tab", { name: /Vencidas/ }));
+      expect(screen.queryByRole("navigation", { name: "Días de la semana" })).not.toBeInTheDocument();
+    });
+
+    it("month has no day strip", () => {
+      render(<AgendaShell {...base} view="month" items={[at("a")]} />);
+      expect(screen.queryByRole("navigation", { name: "Días de la semana" })).not.toBeInTheDocument();
+    });
+
+    it("the week view shows the selected day's column below md (the others are CSS-gated)", () => {
+      const { container } = render(<AgendaShell {...base} view="week" date="2026-10-28" items={[at("a")]} />);
+      const hiddenCols = [...container.querySelectorAll("[data-day-column]")].filter((c) => c.className.includes("max-md:hidden"));
+      expect(hiddenCols).toHaveLength(6);
+      expect(container.querySelector('[data-day-column="2026-10-28"]')!.className).not.toContain("max-md:hidden");
+    });
+
+    it("Filtros on the header row opens the side column below md, and closes it again", async () => {
+      render(<AgendaShell {...base} view="day" items={[]} />);
+      const column = () => document.getElementById("agenda-sidebar")!;
+      expect(column().className).toContain("hidden xl:flex");
+      const toggle = screen.getAllByRole("button", { name: "Filtros" }).find((b) => b.className.includes("md:hidden") && !b.className.includes("max-md:hidden"))!;
+      expect(toggle.className).toMatch(/(^|\s)min-h-11(\s|$)/);
+      await userEvent.click(toggle);
+      expect(column().className).not.toContain("hidden xl:flex");
+      expect(toggle).toHaveAttribute("aria-expanded", "true");
+      await userEvent.click(toggle);
+      expect(column().className).toContain("hidden xl:flex");
+    });
+
+    it("the search control reveals the search field and focuses it", async () => {
+      render(<AgendaShell {...base} view="day" items={[]} />);
+      const field = screen.getByPlaceholderText("Buscar placa o cliente…");
+      expect(field.className).toContain("max-md:hidden");
+      await userEvent.click(screen.getByRole("button", { name: "Mostrar búsqueda" }));
+      expect(field.className).not.toContain("max-md:hidden");
+      expect(field).toHaveFocus();
     });
   });
 });

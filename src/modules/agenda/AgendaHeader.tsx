@@ -26,19 +26,19 @@ function rangeLabel(view: AgendaView, date: string): string {
 }
 
 /** Links for the URL state; "Nueva cita" hands the opening to the shell (`onNew`). `search` and `tabs` are slots for the shell's client state. */
-export function AgendaHeader({ view, date, today, truncated, onNew, search, tabs }: { view: AgendaView; date: string; today: string; truncated: boolean; onNew: () => void; search?: ReactNode; tabs?: ReactNode }) {
+export function AgendaHeader({ view, date, today, truncated, onNew, search, tabs, filters }: { view: AgendaView; date: string; today: string; truncated: boolean; onNew: () => void; search?: ReactNode; tabs?: ReactNode; filters?: ReactNode }) {
   const to = (v: AgendaView, d: string) => `/agenda?view=${v}&date=${d}`;
   return (
     <div className="mb-4 flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <nav aria-label="Ruta" className="text-xs text-muted-foreground">Taller / <span className="text-foreground">Agenda</span></nav>
+          <nav aria-label="Ruta" className="text-xs text-muted-foreground max-md:hidden">Taller / <span className="text-foreground">Agenda</span></nav>
           <h1 className={cn("mt-1", PAGE_HEADING)}>Agenda</h1>
-          <p className="text-sm text-muted-foreground">Citas del taller y órdenes en curso</p>
+          <p className="text-sm text-muted-foreground max-md:hidden">Citas del taller y órdenes en curso</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {search}
-          <Button type="button" className="min-h-11" onClick={onNew}>Nueva cita</Button>
+          <Button type="button" className="min-h-11 max-md:hidden" onClick={onNew}>Nueva cita</Button>
         </div>
       </div>
       {tabs}
@@ -52,13 +52,14 @@ export function AgendaHeader({ view, date, today, truncated, onNew, search, tabs
         <div className="flex flex-wrap items-center gap-2">
           <nav aria-label="Vista" className="flex gap-1 rounded-lg bg-muted p-1">
             {VIEWS.map((v) => (
-              <Link key={v.view} href={to(v.view, date)} aria-current={v.view === view ? "page" : undefined} className={cn(NAV, "border-0", v.view === view && "bg-background font-semibold shadow-sm")}>
+              <Link key={v.view} href={to(v.view, date)} aria-current={v.view === view ? "page" : undefined} className={cn(NAV, "border-0 max-md:px-2", v.view === view && "bg-background font-semibold shadow-sm")}>
                 {v.label}
               </Link>
             ))}
           </nav>
-          <span className="inline-flex min-h-11 items-center rounded-lg border px-3 text-sm tabular-nums">{rangeLabel(view, date)}</span>
-          <RefreshListButton />
+          <span className="inline-flex min-h-11 items-center rounded-lg border px-3 text-sm tabular-nums max-md:hidden">{rangeLabel(view, date)}</span>
+          <RefreshListButton compact />
+          {filters}
         </div>
       </div>
       {truncated ? <p role="status" className="text-sm text-amber-700 dark:text-amber-300">Se muestran las primeras 500 citas; acotá el rango.</p> : null}

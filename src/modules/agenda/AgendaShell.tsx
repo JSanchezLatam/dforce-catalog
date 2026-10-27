@@ -5,8 +5,10 @@
  * view and the selected appointment's Detail. The page hands it plain data only (no function, no `Date`); the card
  * callbacks are created here, so no function ever crosses the Server Component boundary.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Plus, Search, SlidersHorizontal } from "lucide-react";
 
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -20,6 +22,7 @@ import { AgendaTabs, type TabKey } from "@/modules/agenda/AgendaTabs";
 
 import { CombinedView } from "@/modules/agenda/CombinedView";
 import { addDays, weekStart, type AgendaView } from "@/modules/agenda/dates";
+import { DayStrip } from "@/modules/agenda/DayStrip";
 import { DayGrid } from "@/modules/agenda/DayGrid";
 import { filterItems, typeCounts, type AgendaItem, type TypeKey, type WorkshopItem } from "@/modules/agenda/items";
 import { VencidasList } from "@/modules/agenda/VencidasList";
@@ -60,6 +63,13 @@ export function AgendaShell({ view, date, today, nowMinute, items, workshop, wor
   // The one "Nueva cita" dialog: the header button opens it on the selected date, an empty slot on its day and hour.
   const [booking, setBooking] = useState<{ day: string; time: string } | null>(null);
   const openBooking = (day: string, time = "") => setBooking({ day, time });
+  // Below md the search field hides behind a 44px control; CSS decides, so no width is read in render.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (searchOpen) searchRef.current?.focus();
+  }, [searchOpen]);
   const scope = `${view}|${date}`;
   const [open, setOpen] = useState<{ id: string; anchor: HTMLElement; wide: boolean; scope: string } | null>(null);
   // The width is read here, in the click, never while rendering: a render-time read differs between the server and
@@ -86,11 +96,25 @@ export function AgendaShell({ view, date, today, nowMinute, items, workshop, wor
         today={today}
         truncated={truncated}
         onNew={() => openBooking(date)}
-        search={<Input type="search" aria-label="Buscar" placeholder="Buscar placa o cliente…" value={search} onChange={(e) => setSearch(e.target.value)} className="min-h-11 sm:w-64" />}
+        search={
+          <>
+            <button type="button" aria-label="Mostrar búsqueda" aria-expanded={searchOpen} onClick={() => setSearchOpen(true)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border md:hidden">
+              <Search aria-hidden className="size-4" />
+            </button>
+            <Input ref={searchRef} type="search" aria-label="Buscar" placeholder="Buscar placa o cliente…" value={search} onChange={(e) => setSearch(e.target.value)} className={cn("min-h-11 sm:w-64", !searchOpen && "max-md:hidden")} />
+          </>
+        }
+        filters={
+          <button type="button" aria-label="Filtros" aria-expanded={filtersOpen} aria-controls="agenda-sidebar" onClick={() => setFiltersOpen(!filtersOpen)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border md:hidden">
+            <SlidersHorizontal aria-hidden className="size-4" />
+          </button>
+        }
         tabs={<AgendaTabs tab={tab} agendadas={filterItems(items, "agendadas", search, hidden).length} vencidas={overdueTotal} onTab={setTab} />}
       />
       <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
         <AgendaSidebar
+          open={filtersOpen}
+          onOpenChange={setFiltersOpen}
           counts={typeCounts(items)}
           hidden={hidden}
           summary={weekSummary}
@@ -100,13 +124,14 @@ export function AgendaShell({ view, date, today, nowMinute, items, workshop, wor
           onAll={() => setHidden([])}
         />
         <div className="flex min-w-0 flex-1 flex-col gap-3">
+            {!onVencidas && view !== "month" ? <DayStrip view={view} date={date} today={today} busyDays={[...new Set([...busyDays, ...items.map((i) => i.dayKey)])]} /> : null}
             {noMatch && !onVencidas && (view === "week" || view === "month") ? <p role="status" className="text-sm text-muted-foreground">Sin resultados</p> : null}
             {onVencidas ? (
               <VencidasList items={overdueVisible} empty={overdue.length === 0 ? "Sin citas vencidas" : "Sin resultados"} truncated={overdueTruncated} selectedId={selected?.id ?? null} onSelect={select} />
             ) : view === "month" ? (
               <MonthView date={date} today={today} items={visible} selectedId={grid.selectedId} onSelect={select} onSlot={openBooking} />
             ) : view === "week" ? (
-              <WeekGrid days={Array.from({ length: 7 }, (_, i) => addDays(weekStart(date), i))} items={visible} {...grid} />
+              <WeekGrid days={Array.from({ length: 7 }, (_, i) => addDays(weekStart(date), i))} items={visible} selectedDay={date} {...grid} />
             ) : view === "combined" ? (
               <CombinedView date={date} items={visible} workshop={workshop ?? []} workshopTruncated={workshopTruncated} emptyText={emptyText} {...grid} />
             ) : (
@@ -114,6 +139,10 @@ export function AgendaShell({ view, date, today, nowMinute, items, workshop, wor
             )}
         </div>
       </div>
+      <button type="button" onClick={() => openBooking(date)} className="fixed right-5 bottom-5 z-40 inline-flex min-h-14 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-xl md:hidden">
+        <Plus aria-hidden className="size-4" />
+        Nueva cita
+      </button>
       <AgendaBookingForm open={booking !== null} onOpenChange={(next) => !next && setBooking(null)} day={booking?.day ?? date} time={booking?.time} />
       {selected && open?.wide ? (
         <Popover open onOpenChange={(next) => !next && close()}>
