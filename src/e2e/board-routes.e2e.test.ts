@@ -1,6 +1,6 @@
 /**
- * Real-SQL, real-session proof for workshop-status-board WU3: the customer view's
- * page and poll route behind the real `proxy.ts`. The unit tests inject the session and
+ * Real-SQL, real-session proof for workshop-status-board WU3 (the customer view) and
+ * WU4 (the full board): pages and poll routes behind the real `proxy.ts`. The unit tests inject the session and
  * the query; here the session rows, the revocation and the board query are the real
  * ones. Run against the THROWAWAY `dforce_e2e` database only.
  */
@@ -16,10 +16,13 @@ import { NextRequest, type NextResponse } from "next/server";
 import { authenticateUser } from "@/modules/auth/authenticate";
 import { SESSION_COOKIE } from "@/modules/auth/session";
 import { CustomerBoard } from "@/modules/board/CustomerBoard";
+import { WorkshopBoard } from "@/modules/board/WorkshopBoard";
 import { db } from "@/shared/db/client";
 import { cliente, ordenServicio, sessions, tecnico, users, vehiculo } from "@/shared/db/schema";
 import { PermissionDenied } from "@/shared/ui/PermissionDenied";
+import { GET as fullBoardGET } from "../app/api/board/route";
 import { GET as boardGET } from "../app/api/board/clientes/route";
+import BoardPage from "../app/tablero/page";
 import CustomerBoardPage from "../app/tablero/clientes/page";
 import { changePassword, createUser, updateUser } from "../modules/account/service";
 import { handleProxy } from "../proxy";
@@ -29,7 +32,7 @@ const PASSWORD = "temporal-123";
 const SENTINEL_NAME = "SENTINEL_ROUTE_CUSTOMER_NAME";
 const SENTINEL_PHONE = "50769990002";
 
-describe("customer board routes (E2E)", () => {
+describe("board routes (E2E)", () => {
   const stamp = Date.now();
   const made: string[] = [];
   let actorId: string;
@@ -53,12 +56,13 @@ describe("customer board routes (E2E)", () => {
   const request = (pathname: string, token?: string) =>
     new NextRequest(`http://localhost${pathname}`, { headers: token ? { cookie: `${SESSION_COOKIE}=${token}` } : {} });
   /** What the platform does: proxy first, then the route with the identity headers the proxy forwarded. */
-  const poll = async (token?: string): Promise<NextResponse | Response> => {
-    const res = await handleProxy(request("/api/board/clientes", token));
+  const poll = async (token?: string, full = false): Promise<NextResponse | Response> => {
+    const path = full ? "/api/board" : "/api/board/clientes";
+    const res = await handleProxy(request(path, token));
     if (res.headers.get("x-middleware-next") !== "1") return res;
     const headers: Record<string, string> = {};
     for (const [k, v] of res.headers) if (k.startsWith("x-middleware-request-")) headers[k.replace("x-middleware-request-", "")] = v;
-    return boardGET(new NextRequest("http://localhost/api/board/clientes", { headers }));
+    return (full ? fullBoardGET : boardGET)(new NextRequest(`http://localhost${path}`, { headers }));
   };
   const asUser = (u: { id: string; role: string }) => {
     forged.headers = { "x-user-id": u.id, "x-user-role": u.role };
@@ -155,5 +159,53 @@ describe("customer board routes (E2E)", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+
+  // ---- WU4: the full board ----
+
+  it("Técnico reads the full board: /tablero and GET /api/board show an order nobody assigned to them", async () => {
+    const tech = await loggedIn("fulltech", "tecnico");
+
+    const res = await poll(tech.token, true);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.rows.map((r: { plate: string }) => r.plate)).toContain(plate);
+
+    asUser(tech);
+    const element = await BoardPage();
+    expect(element.type).toBe(WorkshopBoard);
+    expect(element.props.initial.rows.map((r: { plate: string }) => r.plate)).toContain(plate);
+  });
+
+  it("Pantalla is denied the full board: the page renders PermissionDenied and the route answers 403 JSON", async () => {
+    const tv = await loggedIn("fulltv", "pantalla");
+
+    const res = await poll(tv.token, true);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Forbidden" });
+
+    asUser(tv);
+    expect((await BoardPage()).type).toBe(PermissionDenied);
+  });
+
+  it("Customer data seeded, board payload clean: the administrador's /api/board body has neither the name nor the phone", async () => {
+    const admin = await loggedIn("fulladmin", "jefe_taller");
+
+    const text = await (await poll(admin.token, true)).text();
+
+    expect(text).toContain(plate); // the seeded order is in the body, so the absences below mean something
+    expect(text).not.toContain(SENTINEL_NAME);
+    expect(text).not.toContain(SENTINEL_PHONE);
+  });
+
+  it("Unauthenticated: /tablero redirects to /login and /api/board answers 401 JSON", async () => {
+    const page = await handleProxy(request("/tablero"));
+    expect(page.status).toBe(307);
+    expect(page.headers.get("location")).toBe("http://localhost/login");
+
+    const api = await poll(undefined, true);
+    expect(api.status).toBe(401);
+    expect(api.headers.get("content-type")).toContain("application/json");
+    expect(await api.json()).toEqual({ error: "Unauthorized" });
   });
 });

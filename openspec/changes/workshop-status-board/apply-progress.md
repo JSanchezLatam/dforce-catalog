@@ -106,3 +106,38 @@
 - e2e drives `handleProxy` then the route by forwarding the proxy's `x-middleware-request-*` headers by hand; the real Next runtime was not involved.
 - `error.tsx` is not reachable when `proxy.ts` throws (known follow-up).
 - 3.9 (GGA, push, PR) not done.
+
+## WU4 (branch `feat/workshop-status-board-wu4`) - 4.1-4.7 and F1 done; 4.8-4.10 left to the orchestrator
+
+### Files
+- Production: `auth/policy.ts` (`board.read`: administrador, jefe_taller, tecnico true; pantalla false), `app/api/board/route.ts` (`handleBoard`, same shape as the customer route: `requireSession` -> `can` -> `workshopBoardData` -> `toBoardSnapshot`; JSON 403/500; GET only; `no-store`), `app/tablero/page.tsx`, `board/WorkshopBoard.tsx` (7 columns in spec order, empty ones kept; ages via `formatAge(statusSince, snapshot.generatedAt)`; appointment time via the existing `formatDateTime` helper, fixed to `America/Panama`; hold reason only when `status === "on_hold"`, appointment only when `status === "booked"`; no control), `layout/nav-items.ts` ("Tablero" -> `/tablero`, icon key `board`, action `board.read`, in CRM), `components/app-sidebar.tsx` (`board: LayoutDashboard`), `board/queries.ts` (F1: `isNull(tecnico.deactivatedAt)` in the technician query).
+- Tests: `policy.test.ts`, `route-guards.test.ts` (`/tablero`, `/api/board`), `app/api/board/route.test.ts`, `app/tablero/page.test.tsx`, `board/WorkshopBoard.test.tsx` (includes poller URL and the insecure-context / types-only-import source test), `layout/nav-items.test.ts` (new test + totals 5->6, 11->12 + CRM list), `components/app-sidebar.test.tsx` (icon), e2e: `board-routes.e2e.test.ts` (+4 tests: técnico sees an unassigned order via page and route, pantalla denied, sentinel clean, unauthenticated; describe renamed `board routes (E2E)`) and `board.e2e.test.ts` (+1: F1).
+
+### Behaviour notes / deviations
+- RED seen first for all unit tests (policy x5, nav, route-guards, sidebar icon; page/route/component failed to resolve) and for F1 (deactivated technician returned). The 4 new routes e2e were written after the production code, so their RED is the mutation below, not a pre-code failure.
+- The page and nav test fixtures that counted items were updated (técnico 5->6, admin 11->12).
+- Cells of 7 columns at `grid-cols-7` with `text-lg`/`text-2xl`: legibility on the TV is a browser check (4.8), not proven.
+- `/tablero` shares WU3's chrome-less layout, so a técnico or admin reaching it from the sidebar has no sidebar on that page (no way back except the browser). Not changed here; flag for 4.8.
+- The vite plugin rewrites a literal `new URL("File.tsx", import.meta.url)` into an asset URL; the source test uses a variable (as CustomerBoard.test does via it.each).
+
+### Mutation-verify (fix reverted, named test red, restored)
+- `pantalla` granted `board.read`: "Pantalla is denied the full board: board.read is for administrador, jefe_taller and tecnico, never pantalla", "Matrix row: pantalla is true for board.customer ...", route "Pantalla is denied the full board: 403 JSON, and nothing is queried", page "Pantalla is denied the full board: PermissionDenied, and the query seam is never called".
+- `can()` removed from `/api/board`: route "Pantalla is denied the full board: 403 JSON, and nothing is queried". `can()` removed from the page: page "Pantalla is denied the full board: PermissionDenied, ...".
+- Route scoped to the técnico's own orders (rows without a technician dropped): e2e "Técnico reads the full board: /tablero and GET /api/board show an order nobody assigned to them".
+- `appointmentAt` removed from the booked row (`shape.ts`): "Booked order without a vehicle: Sin vehículo, Agendada, technician and appointment, no throw" and "appointmentAt only while booked" (WU2 shape tests); component: appointment render removed -> "Booked order without a vehicle shows Sin vehículo, Agendada, the technician and the appointment time in Panama".
+- "Tablero" handed to pantalla (action `board.customer`): "Nav link by role: Tablero (/tablero) for administrador, jefe_taller and técnico, and for no other role" (+ the técnico total).
+- Component: age from the live clock -> "shows technicians and ages computed from generatedAt, not the live clock"; hold reason on any status -> "shows the hold reason only on an on_hold row"; appointment on any status -> "non-booked rows show no appointment time"; appointment formatted in UTC -> the Panama booked test; wrong poll URL -> "polls /api/board and shows the new rows"; icon unmapped -> "renders the `board` key as LayoutDashboard, not the Package fallback".
+- F1 (`isNull(tecnico.deactivatedAt)` reverted): e2e "F1: a deactivated technician assigned to an order does not appear on the board, the active one does".
+- NOT mutated: the `ROUTE_GUARDS` entries for the two new keys (same mechanism mutation-verified in WU3), the sentinel-clean e2e (the privacy property lives in WU2's mapper, mutated there), the unauthenticated e2e (same `proxy.ts` path as WU3's).
+
+### Gates
+- `npm test`: 233 files, 3680 tests passed. `npx tsc --noEmit`: clean. `npm run lint`: 0 errors, 13 warnings.
+- e2e, fresh `dforce_e2e`, full suite: 26 files, 337 tests passed (board-routes.e2e: 10, board.e2e: 7).
+
+### Size
+- vs `feat/workshop-status-board-wu3-e2e`, untracked included, openspec excluded: 488 added / 19 deleted = 507 changed. e2e files are 69 added / 7 deleted of that; without them 419 added / 12 deleted = 431. Over 400 either way; splitting off the e2e (and still ~31 over) is the orchestrator's call.
+
+### Unchecked
+- No browser check (4.8): RSC serialization of the page props, hydration of the Panama-formatted appointment (ICU differences between Node and the browser are possible), 7-column layout and TV legibility on a real screen, the chrome-less layout for staff.
+- `formatDateTime` renders `es-PA` date + time with seconds; the exact look was not reviewed against a mockup.
+- Engram `mem_save` of apply-progress NOT done (no memory tool in this executor); file store only.
