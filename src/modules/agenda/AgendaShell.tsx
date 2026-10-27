@@ -10,6 +10,7 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { AgendaBookingForm } from "@/modules/agenda/AgendaBookingForm";
 import { AgendaDetail } from "@/modules/agenda/AgendaDetail";
 import { AgendaHeader } from "@/modules/agenda/AgendaHeader";
 import { MiniCalendar } from "@/modules/agenda/MiniCalendar";
@@ -56,6 +57,9 @@ export function AgendaShell({ view, date, today, nowMinute, items, workshop, wor
   const [tab, setTab] = useState<TabKey>("todas");
   const [search, setSearch] = useState("");
   const [hidden, setHidden] = useState<readonly TypeKey[]>([]);
+  // The one "Nueva cita" dialog: the header button opens it on the selected date, an empty slot on its day and hour.
+  const [booking, setBooking] = useState<{ day: string; time: string } | null>(null);
+  const openBooking = (day: string, time = "") => setBooking({ day, time });
   const scope = `${view}|${date}`;
   const [open, setOpen] = useState<{ id: string; anchor: HTMLElement; wide: boolean; scope: string } | null>(null);
   // The width is read here, in the click, never while rendering: a render-time read differs between the server and
@@ -71,7 +75,7 @@ export function AgendaShell({ view, date, today, nowMinute, items, workshop, wor
   const selected = open?.scope === scope ? (onVencidas ? overdueVisible : visible).find((i) => i.id === open.id) : undefined;
   if (open && !selected) setOpen(null);
   const noMatch = visible.length === 0 && (items.length > 0 || search !== "");
-  const grid = { todayKey: today, nowMinute, selectedId: selected?.id ?? null, onSelect: select };
+  const grid = { todayKey: today, nowMinute, selectedId: selected?.id ?? null, onSelect: select, onSlot: openBooking };
   // The day grid and the combined view say it themselves; week and month get the paragraph, so a hidden day shows one message, never two.
   const emptyText = noMatch ? "Sin resultados" : undefined;
   return (
@@ -81,6 +85,7 @@ export function AgendaShell({ view, date, today, nowMinute, items, workshop, wor
         date={date}
         today={today}
         truncated={truncated}
+        onNew={() => openBooking(date)}
         search={<Input type="search" aria-label="Buscar" placeholder="Buscar placa o cliente…" value={search} onChange={(e) => setSearch(e.target.value)} className="min-h-11 sm:w-64" />}
         tabs={<AgendaTabs tab={tab} agendadas={filterItems(items, "agendadas", search, hidden).length} vencidas={overdueTotal} onTab={setTab} />}
       />
@@ -109,6 +114,7 @@ export function AgendaShell({ view, date, today, nowMinute, items, workshop, wor
             )}
         </div>
       </div>
+      <AgendaBookingForm open={booking !== null} onOpenChange={(next) => !next && setBooking(null)} day={booking?.day ?? date} time={booking?.time} />
       {selected && open?.wide ? (
         <Popover open onOpenChange={(next) => !next && close()}>
           <PopoverContent anchor={open.anchor} aria-label="Detalle de la cita">

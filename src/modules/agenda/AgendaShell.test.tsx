@@ -78,14 +78,17 @@ describe("AgendaShell", () => {
   it("a new card gets a fresh Detail: the previous appointment's refusal does not follow it", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "stale_status", message: "La orden cambió mientras la mirabas. Actualizá la agenda." }), { status: 409 }));
     vi.stubGlobal("fetch", fetchMock);
-    render(<AgendaShell {...base} view="week" items={[at("a", { status: "booked", categoria: null }), at("b", { status: "booked", time: "11:00", minuteOfDay: 11 * 60 })]} />);
-    await userEvent.click(card(/Cliente a/));
-    await userEvent.click(within(popover()!).getByRole("button", { name: "Reparación" }));
-    expect(await within(popover()!).findByRole("alert")).toHaveTextContent("La orden cambió");
-    await userEvent.click(card(/Cliente b/));
-    expect(within(popover()!).getByText("Cliente b")).toBeInTheDocument();
-    expect(within(popover()!).queryByRole("alert")).not.toBeInTheDocument();
-    vi.unstubAllGlobals();
+    try {
+      render(<AgendaShell {...base} view="week" items={[at("a", { status: "booked", categoria: null }), at("b", { status: "booked", time: "11:00", minuteOfDay: 11 * 60 })]} />);
+      await userEvent.click(card(/Cliente a/));
+      await userEvent.click(within(popover()!).getByRole("button", { name: "Reparación" }));
+      expect(await within(popover()!).findByRole("alert")).toHaveTextContent("La orden cambió");
+      await userEvent.click(card(/Cliente b/));
+      expect(within(popover()!).getByText("Cliente b")).toBeInTheDocument();
+      expect(within(popover()!).queryByRole("alert")).not.toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("activating the open card again keeps its Detail (it closes by Escape, outside press or Cerrar)", async () => {
@@ -458,6 +461,35 @@ describe("AgendaShell", () => {
       await userEvent.click(card(/Cliente a/));
       fireEvent.click(box(/REVISADO/));
       expect(popover()).toBeNull();
+    });
+  });
+
+  describe("Nueva cita", () => {
+    const field = (name: string) => screen.getByLabelText(name) as HTMLInputElement;
+
+    it("the header button opens the dialog on the selected date with an empty time", async () => {
+      render(<AgendaShell {...base} date="2026-11-05" view="week" items={[]} />);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Nueva cita" }));
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(field("Día").value).toBe("2026-11-05");
+      expect(field("Hora").value).toBe("");
+    });
+
+    it.each(["day", "week", "combined"] as const)("an empty %s slot opens the dialog with its day and hour", async (view) => {
+      render(<AgendaShell {...base} date="2026-10-29" view={view} items={[at("a", { dayKey: "2026-10-29" })]} />);
+      await userEvent.click(screen.getAllByRole("button", { name: "Nueva cita 29/10/2026 11:00" })[0]);
+      expect(field("Día").value).toBe("2026-10-29");
+      expect(field("Hora").value).toBe("11:00");
+    });
+
+    it("a second opening starts clean: the day and time of the new opening, not the previous one", async () => {
+      render(<AgendaShell {...base} date="2026-10-29" view="day" items={[]} />);
+      await userEvent.click(screen.getByRole("button", { name: "Nueva cita 29/10/2026 11:00" }));
+      await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      await userEvent.click(screen.getByRole("button", { name: "Nueva cita" }));
+      expect(field("Hora").value).toBe("");
     });
   });
 });

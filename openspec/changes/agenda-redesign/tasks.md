@@ -185,12 +185,12 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU16: Nueva cita (branch `feat/agenda-redesign-wu16-nueva-cita`) [~360]
 
-- [ ] 16.1 RED e2e `agenda-booking.e2e.test.ts`: POST with `vehiculoId` + `categoria` persists a `booked` order with both; a `vehiculoId` of another customer is refused with a Spanish message and nothing inserted. (Persists vehicle and type; Server rejection)
-- [ ] 16.2 RED `AgendaBookingForm.test.tsx` (non-Panama `TZ`): body without optionals has no `vehiculoId`/`categoria`/`tecnicoIds`; with them it carries both; vehicles fetched from `GET /api/customers/[id]/vehicles` after selection, listed as `plate · make model`, cleared on customer change, no-vehicles note, a fetch FAILURE is not "no vehicles"; chips clearable; slot prefill (day + `:00` hour); header default = selected `date`, time empty; required fields rejected client-side; toast "Cita agendada" above `router.refresh()`; server rejection inline; submit disabled in flight.
-- [ ] 16.3 RED grid tests: `onSlot(day, time)` fires from `DayGrid` and `WeekGrid` slot buttons.
-- [ ] 16.4 GREEN `AgendaBookingForm.tsx` (controlled, `initialDay`, `initialTime`, vehicle, type), shell-owned `Dialog` with `openBooking(day, time?)`, header button wiring, grids receive `onSlot`.
-- [ ] 16.5 Mutation-verify: send `tecnicoIds` -> "Request body" red; build the instant with `new Date().toISOString()` -> red under the non-Panama `TZ`; keep the vehicle on customer change -> "Vehicle choices follow the customer" red; treat a failed fetch as empty -> its test red.
-- [ ] 16.6 Close: C (+ e2e) + B: book from the header and from an empty slot; the new card appears without reload; works over plain HTTP from a second machine, no `crypto.randomUUID`.
+- [x] 16.1 RED e2e `agenda-booking.e2e.test.ts`: POST with `vehiculoId` + `categoria` persists a `booked` order with both; a `vehiculoId` of another customer is refused with a Spanish message and nothing inserted. (Persists vehicle and type; Server rejection)
+- [x] 16.2 RED `AgendaBookingForm.test.tsx` (non-Panama `TZ`): body without optionals has no `vehiculoId`/`categoria`/`tecnicoIds`; with them it carries both; vehicles fetched from `GET /api/customers/[id]/vehicles` after selection, listed as `plate · make model`, cleared on customer change, no-vehicles note, a fetch FAILURE is not "no vehicles"; chips clearable; slot prefill (day + `:00` hour); header default = selected `date`, time empty; required fields rejected client-side; toast "Cita agendada" above `router.refresh()`; server rejection inline; submit disabled in flight.
+- [x] 16.3 RED grid tests: `onSlot(day, time)` fires from `DayGrid` and `WeekGrid` slot buttons.
+- [x] 16.4 GREEN `AgendaBookingForm.tsx` (controlled, `initialDay`, `initialTime`, vehicle, type), shell-owned `Dialog` with `openBooking(day, time?)`, header button wiring, grids receive `onSlot`.
+- [x] 16.5 Mutation-verify: send `tecnicoIds` -> "Request body" red; build the instant with `new Date().toISOString()` -> red under the non-Panama `TZ`; keep the vehicle on customer change -> "Vehicle choices follow the customer" red; treat a failed fetch as empty -> its test red.
+- [x] 16.6 Close: C (+ e2e) + B: book from the header and from an empty slot; the new card appears without reload; works over plain HTTP from a second machine, no `crypto.randomUUID`.
 
 ## WU17: month (branch `feat/agenda-redesign-wu17-month`) [~370]
 
