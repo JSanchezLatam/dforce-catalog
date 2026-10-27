@@ -70,7 +70,8 @@ Conventions for every WU: Strict TDD (RED confirmed failing by name, then GREEN)
 - [x] 3b.2 GREEN `kanban/KanbanBoard.tsx` + `KanbanCard.tsx` (read-only; ⋯ button 44x44 may be a stub linking "Ver orden"); poll via `useBoardSnapshot("/api/kanban")`; phone tabs `md:hidden` with `scrollTo`, `max-md:w-full` scroll-snap columns.
 - [x] 3b.3 RED then GREEN `src/app/(app)/kanban/page.tsx` (+test, `assertPlain` copied from agenda `page.test.tsx:83-90`): pantalla → `PermissionDenied` without querying; serializable props only; `canMove` from `service-orders.assign`.
 - [x] 3b.4 RED then GREEN `kanban/kanban-safety.test.ts` (copy `agenda-safety.test.ts:28-39`; timer ban exempts the poller file).
-- [ ] 3b.5 Verify: browser at http://192.168.0.7:3000, 1440/1024/768/390, light+dark; console free of hydration errors; no page horizontal scroll; 44x44.
+- [x] 3b.5 Verified by the orchestrator 2026-10-27 on a :3001 dev server over the `dforce_catalog_kb` copy: jefe at 1440/1024/768/390 light+dark and técnico at 1440 render all seven columns, no console errors or hydration warnings, no page horizontal scroll, no visible control under 44x44; pantalla is redirected away.
+- [ ] 3b.6 Restore the approved-mockup details WU3b cut for size, before WU8 sign-off: KPI sub-captions, right-edge scroller fade, coloured tile on phone tabs, phone "Actualizar" button (needs `refresh` from 4a.4), a ticking "Actualizado hace N s", time chip "hace 1 día" (not "hace 1 d"), and the "Arrastrá una tarjeta…" subtitle once WU6 ships drag.
 
 ## WU4a: Move rules and client state
 
