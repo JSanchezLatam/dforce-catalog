@@ -60,11 +60,12 @@ export async function handleUpdateOrdenServicio(
   // Every lock below is scoped to the caller: an order a técnico is not assigned to is a 404.
   const scope = orderScope(user);
   try {
+    // The status the screen saw; guards a transition and a field edit alike, compared under the row lock.
+    const { expectedStatus } = body;
+    if (expectedStatus !== undefined && !orderStatusEnum.enumValues.includes(expectedStatus)) {
+      return NextResponse.json({ errors: { expectedStatus: "Estado esperado inválido" } }, { status: 400 });
+    }
     if (typeof body.status === "string") {
-      const { expectedStatus } = body;
-      if (expectedStatus !== undefined && !orderStatusEnum.enumValues.includes(expectedStatus)) {
-        return NextResponse.json({ errors: { expectedStatus: "Estado esperado inválido" } }, { status: 400 });
-      }
       const orden = await transitionOrder(id, body.status as OrderStatus, {
         ...serviceDeps,
         scope,
@@ -147,7 +148,7 @@ export async function handleUpdateOrdenServicio(
     // never reopens, so the retry cannot find it writable without the grant.
     const password = typeof body.password === "string" ? body.password : undefined;
     try {
-      const orden = await updateOrder(id, patch, { ...serviceDeps, role: user.role, scope });
+      const orden = await updateOrder(id, patch, { ...serviceDeps, role: user.role, scope, expectedStatus });
       return NextResponse.json({ orden });
     } catch (err) {
       if (!(err instanceof OrderClosedError) || password === undefined || !can(user, "service-orders.correct")) {
@@ -155,7 +156,7 @@ export async function handleUpdateOrdenServicio(
       }
     }
     const correction = await authorize(user.id, password);
-    const orden = await updateOrder(id, patch, { ...serviceDeps, role: user.role, scope, correction });
+    const orden = await updateOrder(id, patch, { ...serviceDeps, role: user.role, scope, correction, expectedStatus });
     return NextResponse.json({ orden });
   } catch (err) {
     if (err instanceof CorrectionRefusedError) {

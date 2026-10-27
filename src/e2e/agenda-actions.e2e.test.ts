@@ -75,7 +75,7 @@ describe("agenda actions (E2E)", () => {
     const id = await book("2031-03-20T09:00:00-05:00");
     expect(await reminders(id, "scheduled")).not.toHaveLength(0);
 
-    const res = await patch(id, { appointmentAt: "2031-03-25T15:30:00-05:00" });
+    const res = await patch(id, { appointmentAt: "2031-03-25T15:30:00-05:00", expectedStatus: "booked" });
 
     expect(res.status).toBe(200);
     expect((await rowOf(id)).appointmentAt?.toISOString()).toBe("2031-03-25T20:30:00.000Z");
@@ -123,5 +123,33 @@ describe("agenda actions (E2E)", () => {
     expect(res.status).toBe(200);
     expect((await rowOf(id)).status).toBe("cancelled");
     expect((await trail(id)).at(-1)).toEqual(["open", "cancelled"]);
+  });
+
+  it("Stale reprogram is refused: received meanwhile, the guarded reprogram answers 409, appointment_at is unchanged and the reminders are untouched", async () => {
+    const id = await book("2031-03-24T09:00:00-05:00");
+    expect((await patch(id, { vehiculoId, categoria: "revisado" })).status).toBe(200);
+    expect((await patch(id, { status: "open" })).status).toBe(200);
+    const at = (await rowOf(id)).appointmentAt?.toISOString();
+    const pendingBefore = (await reminders(id, "scheduled")).map((r) => r.id).sort();
+    const cancelledBefore = await reminders(id, "cancelled");
+
+    const res = await patch(id, { appointmentAt: "2031-03-28T15:30:00-05:00", expectedStatus: "booked" });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual(STALE);
+    expect((await rowOf(id)).appointmentAt?.toISOString()).toBe(at);
+    expect((await reminders(id, "scheduled")).map((r) => r.id).sort()).toEqual(pendingBefore);
+    expect(await reminders(id, "cancelled")).toHaveLength(cancelledBefore.length);
+  });
+
+  it("Reprogram without expectedStatus is unchanged: the same edit without the guard still moves an open order's appointment", async () => {
+    const id = await book("2031-03-26T09:00:00-05:00");
+    await patch(id, { vehiculoId, categoria: "revisado" });
+    await patch(id, { status: "open" });
+
+    const res = await patch(id, { appointmentAt: "2031-03-29T15:30:00-05:00" });
+
+    expect(res.status).toBe(200);
+    expect((await rowOf(id)).appointmentAt?.toISOString()).toBe("2031-03-29T20:30:00.000Z");
   });
 });

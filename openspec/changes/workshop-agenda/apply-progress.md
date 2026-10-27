@@ -254,3 +254,45 @@ Gates: `npm test` 250 files / 3876 passed; `npx tsc --noEmit` clean; `npm run li
 Lines vs `feat/workshop-agenda-wu7-e2e` (tracked + untracked): production about 227 (server ~20, client ~207); unit tests about 385 (server 75, client ~310); e2e 127 in its own file. Production + unit ~610, over 400: split server-first (service.ts, route.ts, their tests, the e2e file ~95 + 127) then the client.
 
 Unverified: no browser or LAN-IP check (dialog focus/scroll, 44x44 on Reprogramar / No se presentó, the month-cell crowding with up to 3 chips x 2 buttons are 9.x). The e2e "received meanwhile" goes through the real route (vehicle + category, then `status: open`), but the two-tab race itself is sequential, not concurrent. Actions show on every non-muted chip in Day/Week/Month; the Vencida-only rule applies to No se presentó. Role gating is the route's (403 text is shown inline); the buttons render for any role that can open /agenda.
+
+## Fix round (browser checks) (branch `feat/workshop-agenda-fixes`; nothing committed)
+
+Tasks 9.10-9.14 done (WU9 fix tasks). Defects from the LAN-IP checks:
+
+1. Tablet overflow: week/month chips render no action buttons (day view, combined day list and Vencidas panel keep them; the panel is on every view). Chip link `min-w-0`, name/phone/vehicle `[overflow-wrap:anywhere]`. Spec text updated.
+2. Header "Agendar cita" primary: new `triggerVariant` prop (default `default`), `DayBooking` passes `ghost`.
+3. Booking dialog on phone: footer outside the `<form>` with `form={formId}`; order is fields, quick-form slot, footer; picker wrapper `w-full min-w-0`. `CustomerPicker` untouched.
+4. MonthView count: aria-hidden number + `sr-only` text.
+
+Mutation-verify (one file each, restored from an in-memory original; final diff holds none): week/month re-adding `ItemActions` -> the two "Narrow columns" tests red; `aria-label` span back -> "Count is visible text plus sr-only text" red; drop `min-w-0` or the overflow-wrap class -> AgendaChip test red; `triggerVariant` default `ghost` -> header test red; drop `form={formId}` -> "Dialog layout: the submit is tied..." red (plus 11 booking tests that submit); slot after the footer -> same layout test red; drop `w-full min-w-0` -> "picker wrapper can shrink" red.
+
+Existing `ItemActions.test` Week/Month "renders the actions" cases inverted (now DayView and CombinedView).
+
+Gates: `npm test` 251 files / 3886 passed; `npx tsc --noEmit` clean; `npm run lint` 0 errors / 13 warnings. No SQL touched, e2e not run.
+
+Unverified: no browser re-check. 44x44 of the footer buttons, that wrapped chips fit at 768/390, the quick-form slot height on a 390 phone (it is `shrink-0` between form and footer, so a tall quick form still squeezes the scrolling fields), and the `form=` submit across browsers are 9.x browser items.
+
+## Fix round 2 (GGA defect, browser checks, owner request) (branch `feat/workshop-agenda-fixes`; nothing committed)
+
+Tasks 9.15-9.20 done; 9.21 (browser re-check) open.
+
+1. GGA defect: `expectedStatus` now guards the field-PATCH path. Route validates it once before both paths; `updateOrder` compares it right after `lockOrderForMutation` (before any write, portal sync or reminder work); mismatch -> `StaleOrderStatusError` -> the same 409 `stale_status`. `ReprogramDialog` sends `expectedStatus: "booked"`. The dialog test already stubbed the real stale body; the 403/409 `errors.form` rows are real shapes too (`OrderEditForbiddenError`, `OrderClosedError`). A closed order still answers its own 409 (`OrderClosedError` comes from the lock before the stale check).
+2. Muted chip badge: `max-w-full min-w-0 whitespace-normal [overflow-wrap:anywhere]` passed through the className prop; StatusBadge untouched. The icon can shrink slightly when wrapped.
+3. Phone dialog: `grid-cols-[minmax(0,1fr)]` on the picker wrapper (auto track stretched by the table's min-content). `CustomerPicker` not touched; its table is already in an `overflow-x-auto` container.
+4. `useExisting` -> `pickExisting`.
+5. "Taller" group first. Found along the way: `NAV_COLLAPSE_KEYS` is a closed list, so the new id had to be added or the group could not persist collapse.
+
+Mutation-verify (one file each, restored from a backup copy; final diff holds none): drop the `updateOrder` comparison -> service "Stale reprogram is refused" red AND e2e "Stale reprogram is refused" red; route drops `expectedStatus` from the first `updateOrder` call -> route 409 field-PATCH test red; validate only when `body.status` is a string -> the four field-PATCH 400 tests red; dialog stops sending `expectedStatus` -> "Request body" red; drop each of `max-w-full`, `whitespace-normal`, `[overflow-wrap:anywhere]` -> the AgendaChip badge test red (each); Taller placed after CRM -> four nav-items tests red. The picker-track class, `pickExisting` rename and the `"taller"` collapse key were verified RED before the fix (class absent / key absent), not by a separate revert.
+
+Spec: delta spec Reprogramar requirement (body and guard), "Request body", "Order no longer booked" rewritten, new scenario "Reprogram without expectedStatus is unchanged", and the sidebar sentence (Agenda is in "Taller"). Design D3 updated. Main specs naming where links live: none state the group (`metrics-dashboard` "Navigation Entries" and `workshop-status-board` only say who sees the link), so nothing to change at archive for item 5; at archive the Reprogramar requirement merges into the main workshop-agenda spec as written.
+
+## Browser checks (WU9), 2026-10-26
+
+Three passes at http://192.168.0.7:3000, browser zone Asia/Tokyo, against a copy of the dev DB seeded with ~30 `agendacheck-*` orders.
+
+- Pass 1: 8/9. Defect: Reprogramar / No se presentó buttons overflowed week and month columns at 768 px; phone dialog put the quick form below the footer. Fixed (round 1).
+- Pass 2: GGA found Reprogramar had no stale guard (fixed with `expectedStatus` on the field path); muted-chip badges overflowed the month chip at 768; the customer search overflowed the phone dialog. Fixed (round 2) plus the owner-requested "Taller" sidebar group.
+- Pass 3: badges inside their chips (max −5 px), stale Reprogramar refused and normal Reprogramar works, "Taller" group per role with persisted collapse, 15 full loads without hydration/RSC errors. Remaining: the customer picker table still pushed "Seleccionar" to 441 px at 390 px; fixed in `CustomerPicker` (identifier stacked under the name in one wrapping cell, short "Cliente" header) and re-measured: table right 349 ≤ dialog body 354, button right 341, page scrollWidth 390, no console errors. The same fix applies to the order form picker.
+- Earlier passes: every control ≥ 44×44 at 768 and 390; booking from header and from a day; quick create with Enter creating no order; duplicate phone choices; deactivated duplicate disables "Usar ese cliente"; No se presentó with stale 409 through two tabs; técnico PermissionDenied, pantalla redirected.
+
+Not checked: reminders delivery, the 500-row notice, a second machine.

@@ -407,6 +407,36 @@ describe("updateOrder", () => {
     expect(result).toMatchObject({ id: "o1", description: "Original", categoria: "instalacion" });
   });
 
+  // Agenda Reprogramar: a screen that loaded the order as booked must not reschedule one received since.
+  it("Stale reprogram is refused: expectedStatus differing from the LOCKED status throws StaleOrderStatusError and writes nothing", async () => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: "open" });
+    const cancelRemindersForOrder = vi.fn().mockResolvedValue(undefined);
+    const enqueuePortalSync = vi.fn();
+
+    await expect(
+      updateOrder(
+        "o1",
+        { appointmentAt: new Date("2026-10-30T20:30:00Z") },
+        { db: database, scope: SYSTEM_SCOPE, role: "administrador", expectedStatus: "booked", cancelRemindersForOrder, enqueuePortalSync },
+      ),
+    ).rejects.toBeInstanceOf(StaleOrderStatusError);
+
+    expect(log.locks).toEqual(["update"]);
+    expect(log.sets).toEqual([]);
+    expect(cancelRemindersForOrder).not.toHaveBeenCalled();
+    expect(enqueuePortalSync).not.toHaveBeenCalled();
+  });
+
+  it("a field edit proceeds when expectedStatus matches the LOCKED status, and without expectedStatus it is unchanged", async () => {
+    const withGuard = lockedDb({ ...OPEN_ROW, status: "open" });
+    await updateOrder("o1", { description: "a" }, { db: withGuard.database, scope: SYSTEM_SCOPE, role: "administrador", expectedStatus: "open" });
+    expect(withGuard.log.sets).toEqual([{ description: "a" }]);
+
+    const without = lockedDb({ ...OPEN_ROW, status: "open" });
+    await updateOrder("o1", { description: "b" }, { db: without.database, scope: SYSTEM_SCOPE, role: "administrador" });
+    expect(without.log.sets).toEqual([{ description: "b" }]);
+  });
+
   it("refuses a closed order read from the LOCKED row when no correction is granted, writing nothing", async () => {
     // The status is whatever the lock returned: there is no earlier read to go stale.
     const { database, log } = lockedDb({ ...OPEN_ROW, status: "done" });

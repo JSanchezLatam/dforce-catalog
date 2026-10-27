@@ -10,7 +10,7 @@ Terms. "Panama day" = calendar day in `America/Panama` (UTC-5, no DST). "Appoint
 
 ### Requirement: Agenda Access
 
-The system MUST define the action `agenda.manage`, allowed for `administrador` and `jefe_taller` and denied for `tecnico` and `pantalla`. `/agenda` MUST check `can(user, "agenda.manage")` in the page itself and MUST have a `ROUTE_GUARDS` entry. A denied authenticated request MUST render `PermissionDenied` (not a redirect) and MUST NOT query agenda data. A request with no valid session MUST redirect to `/login`. For `pantalla` the application layout MUST redirect to `/tablero/clientes` before the page renders (existing behaviour of the `(app)` shell; the page function itself still answers `PermissionDenied` if reached). The sidebar MUST show an "Agenda" link to `/agenda` only to roles holding `agenda.manage`. The agenda MUST add no new API route: its writes go through `PATCH /api/service-orders/[id]`, `POST /api/service-orders` and `POST /api/customers`, whose own permission checks are unchanged.
+The system MUST define the action `agenda.manage`, allowed for `administrador` and `jefe_taller` and denied for `tecnico` and `pantalla`. `/agenda` MUST check `can(user, "agenda.manage")` in the page itself and MUST have a `ROUTE_GUARDS` entry. A denied authenticated request MUST render `PermissionDenied` (not a redirect) and MUST NOT query agenda data. A request with no valid session MUST redirect to `/login`. For `pantalla` the application layout MUST redirect to `/tablero/clientes` before the page renders (existing behaviour of the `(app)` shell; the page function itself still answers `PermissionDenied` if reached). The sidebar MUST show an "Agenda" link to `/agenda`, in the "Taller" group, only to roles holding `agenda.manage`. The agenda MUST add no new API route: its writes go through `PATCH /api/service-orders/[id]`, `POST /api/service-orders` and `POST /api/customers`, whose own permission checks are unchanged.
 
 #### Scenario: Matrix row per role
 - GIVEN the permission matrix
@@ -117,7 +117,7 @@ An order MUST appear on the agenda only when `appointment_at` is non-null and fa
 
 ### Requirement: Chip Content
 
-Every appointment chip MUST show, in this order: the time as `HH:mm` (24-hour, Panama time, digits and a colon only), the customer name, the customer phone, and the vehicle plate or, when the order has no vehicle, the text "Sin vehículo". Chips MUST NOT show the description or any excerpt of it (decision: it is free text, unbounded in length and unnecessary to place a car on the calendar; it stays on the order detail). A chip MUST be a link to `/service-orders/<id>`. Chips within a day MUST be ordered by start time ascending; appointments at the same or overlapping times MUST all render, stacked, none hidden or overwritten. There is no duration, capacity or technician concept.
+Every appointment chip MUST show, in this order: the time as `HH:mm` (24-hour, Panama time, digits and a colon only), the customer name, the customer phone, and the vehicle plate or, when the order has no vehicle, the text "Sin vehículo". Chips MUST NOT show the description or any excerpt of it (decision: it is free text, unbounded in length and unnecessary to place a car on the calendar; it stays on the order detail). A chip MUST be a link to `/service-orders/<id>`. Chip text MUST wrap rather than clip in narrow columns (long names and phone numbers such as `+50761234567`). Chips within a day MUST be ordered by start time ascending; appointments at the same or overlapping times MUST all render, stacked, none hidden or overwritten. There is no duration, capacity or technician concept.
 
 #### Scenario: Chip fields
 - GIVEN a booked order for customer "Pérez", phone "61234567", plate "AB1234" at 14:05 Panama
@@ -254,12 +254,12 @@ On every view (`day`, `week`, `month`, `combined`) the page MUST render a panel 
 
 ### Requirement: Reprogramar
 
-A `booked` appointment (including a Vencida one) MUST offer "Reprogramar", opening a dialog with a day field and an `HH:mm` time field prefilled from the current appointment (in Panama time, from server-provided digit-only text). On submit the client MUST send `PATCH /api/service-orders/[id]` with `{ appointmentAt }` as an ISO-8601 string built from the chosen day and time with the explicit offset `-05:00`; it MUST NOT use the browser's local time zone, `datetime-local`, or `Date` parsing of the local zone. The system MUST rely on the existing reminder behaviour: the pending `appointment` reminder is cancelled and a new one planned for the new time. On success the dialog MUST close, the toast "Cita reprogramada" MUST be added above `router.refresh()` and both MUST sit below the `try/catch`. A refusal (403/409/400) MUST show the route's Spanish message inline in the dialog and MUST NOT toast success or close the dialog. The submit button MUST be disabled while the request is in flight. A day or time left empty MUST be rejected client-side with a Spanish message, without a request.
+The actions of this requirement and of "No se presentó" MUST render on the chips of the `day` view, on the `combined` view's day list and on every row of the Vencidas panel, and MUST NOT render on `week` or `month` chips: those columns are about 90 px wide at tablet width and the buttons spill into the neighbouring day (browser check, 2026-10). The panel is on every view, so every Vencida order stays actionable from any view. A `booked` appointment (including a Vencida one) MUST offer "Reprogramar", opening a dialog with a day field and an `HH:mm` time field prefilled from the current appointment (in Panama time, from server-provided digit-only text). On submit the client MUST send `PATCH /api/service-orders/[id]` with `{ appointmentAt, expectedStatus: "booked" }`, `appointmentAt` being an ISO-8601 string built from the chosen day and time with the explicit offset `-05:00`; it MUST NOT use the browser's local time zone, `datetime-local`, or `Date` parsing of the local zone. The system MUST rely on the existing reminder behaviour: the pending `appointment` reminder is cancelled and a new one planned for the new time. On success the dialog MUST close, the toast "Cita reprogramada" MUST be added above `router.refresh()` and both MUST sit below the `try/catch`. The route MUST accept the optional `expectedStatus` on a field PATCH exactly as on a status PATCH: validated like the status path (a value outside `OrderStatus` is a 400 with `{ errors: { expectedStatus: "Estado esperado inválido" } }`), compared with the status read under the row lock BEFORE any write, and a mismatch MUST answer the same 409 `{ error: "stale_status", message: "La orden cambió mientras la mirabas. Actualizá la agenda." }` with nothing written and no reminder changed; a field PATCH without `expectedStatus` MUST behave exactly as before. A refusal (403/409/400) MUST show the route's Spanish message inline in the dialog and MUST NOT toast success or close the dialog. The submit button MUST be disabled while the request is in flight. A day or time left empty MUST be rejected client-side with a Spanish message, without a request.
 
 #### Scenario: Request body
 - GIVEN the dialog with day 2026-10-30 and time 15:30
 - WHEN staff submits
-- THEN the PATCH body MUST be `{ "appointmentAt": "2026-10-30T15:30:00-05:00" }` from a browser in any time zone **[unit]**
+- THEN the PATCH body MUST be `{ "appointmentAt": "2026-10-30T15:30:00-05:00", "expectedStatus": "booked" }` from a browser in any time zone **[unit]**
 
 #### Scenario: Reschedule persists and replans the reminder
 - GIVEN a booked order with a pending `appointment` reminder
@@ -274,7 +274,17 @@ A `booked` appointment (including a Vencida one) MUST offer "Reprogramar", openi
 #### Scenario: Order no longer booked
 - GIVEN the order was received in another session after the page loaded
 - WHEN staff submits the dialog
-- THEN the route's refusal message MUST appear inline, no success toast MUST show and the dialog MUST stay open **[unit]**
+- THEN the route MUST answer 409 `stale_status` **[unit]**, `appointment_at` MUST be unchanged and no reminder MUST change **[e2e]**, and the dialog MUST show the route's message inline, show no success toast and stay open **[unit]**
+
+#### Scenario: Reprogram without expectedStatus is unchanged
+- GIVEN a field PATCH `{ appointmentAt }` with no `expectedStatus` on an order the caller may edit
+- WHEN the route handles it
+- THEN it MUST apply as before **[unit][e2e]**
+
+#### Scenario: Week and month chips carry no actions
+- GIVEN booked and Vencida appointments in the week and month views
+- WHEN the chips render
+- THEN no Reprogramar or "No se presentó" control MUST render on them, and the Vencidas panel MUST still offer both for each Vencida order **[unit]**
 
 #### Scenario: Reprogramar not offered to a muted chip
 - GIVEN an `open` appointment

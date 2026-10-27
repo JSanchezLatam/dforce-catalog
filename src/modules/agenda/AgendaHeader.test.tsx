@@ -33,6 +33,13 @@ describe("AgendaHeader", () => {
     }
   });
 
+  it("Header trigger: 'Agendar cita' stays the primary variant and keeps the 44px class", () => {
+    render(<AgendaHeader {...base} />);
+    const button = screen.getByRole("button", { name: "Agendar cita" });
+    expect(button.className).toContain("bg-primary");
+    expect(button.className).toContain("min-h-11");
+  });
+
   it("Manual refresh: the existing RefreshListButton is there", () => {
     render(<AgendaHeader {...base} />);
     expect(screen.getByRole("button", { name: "Actualizar" })).toBeInTheDocument();

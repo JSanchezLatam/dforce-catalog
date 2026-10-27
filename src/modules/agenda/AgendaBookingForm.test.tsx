@@ -243,5 +243,32 @@ describe("AgendaBookingForm quick customer create", () => {
     expect(quick).not.toBe(booking);
     expect(booking.contains(quick)).toBe(false);
   });
-});
 
+  it("Dialog layout: the submit is tied to the booking form by the form attribute and the quick-form slot precedes the footer", async () => {
+    stubQuickFetch();
+    const user = await open();
+    await searchNobody(user);
+
+    const booking = screen.getByLabelText("Hora").closest("form")!;
+    const button = submit();
+    expect(booking.contains(button)).toBe(false);
+    expect(booking.id).not.toBe("");
+    expect(button).toHaveAttribute("form", booking.id);
+    const quick = screen.getByLabelText("Nombre").closest("form")!;
+    const footer = button.parentElement!;
+    expect(quick.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(booking.compareDocumentPosition(quick) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("Dialog layout: the picker wrapper can shrink to the dialog width", async () => {
+    stubQuickFetch();
+    await open();
+    expect(screen.getByRole("textbox", { name: /buscar cliente/i }).closest("div.grid")!.className).toMatch(/min-w-0.*w-full|w-full.*min-w-0/);
+  });
+
+  it("Dialog layout: the picker track is minmax(0,1fr) so a wide results table cannot stretch it past the dialog", async () => {
+    stubQuickFetch();
+    await open();
+    expect(screen.getByRole("textbox", { name: /buscar cliente/i }).closest("div.grid")!.className).toContain("grid-cols-[minmax(0,1fr)]");
+  });
+});

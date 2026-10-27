@@ -465,6 +465,51 @@ describe("PATCH /api/service-orders/[id] — the edit gate (D11)", () => {
     expect(setSpy).not.toHaveBeenCalled();
   });
 
+  describe("expectedStatus on a field PATCH (Reprogramar)", () => {
+    const AT = "2026-10-30T15:30:00-05:00";
+
+    it("answers a stale expectedStatus with 409 stale_status, the Spanish message and no write", async () => {
+      const setSpy = vi.fn();
+      const { db } = lockedDb("open", setSpy);
+
+      const response = await handleUpdateOrdenServicio(requestWith({ appointmentAt: AT, expectedStatus: "booked" }), "o1", { db });
+
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({ error: "stale_status", message: "La orden cambió mientras la mirabas. Actualizá la agenda." });
+      expect(setSpy).not.toHaveBeenCalled();
+    });
+
+    it("a matching expectedStatus edits as usual", async () => {
+      const response = await handleUpdateOrdenServicio(requestWith({ appointmentAt: AT, expectedStatus: "booked" }), "o1", {
+        db: lockedDb("booked", vi.fn(() => ({ where: () => ({ returning: async () => [ordenWith("booked")] }) }))).db,
+        enqueuePortalSync: async () => {},
+        cancelRemindersForOrder: async () => {},
+        getClienteById: async () => null,
+      });
+
+      expect(response.status).toBe(200);
+    });
+
+    it.each([[5], [["booked"]], ["archived"], [""]])("rejects expectedStatus %j with 400 and no write", async (expectedStatus) => {
+      const setSpy = vi.fn();
+
+      const response = await handleUpdateOrdenServicio(requestWith({ appointmentAt: AT, expectedStatus }), "o1", { db: lockedDb("booked", setSpy).db });
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ errors: { expectedStatus: "Estado esperado inválido" } });
+      expect(setSpy).not.toHaveBeenCalled();
+    });
+
+    it("a field PATCH without expectedStatus is not guarded (200 on an open order)", async () => {
+      const response = await handleUpdateOrdenServicio(requestWith({ description: "x" }), "o1", {
+        db: lockedDb("open", vi.fn(() => ({ where: () => ({ returning: async () => [ordenWith("open")] }) }))).db,
+        enqueuePortalSync: async () => {},
+      });
+
+      expect(response.status).toBe(200);
+    });
+  });
+
   it("answers a status PATCH without expectedStatus exactly as before (200, no stale check)", async () => {
     const response = await handleUpdateOrdenServicio(requestWith({ status: "cancelled" }), "o1", {
       db: lockedDb("open", vi.fn(() => ({ where: () => ({ returning: async () => [ordenWith("cancelled")] }) }))).db,

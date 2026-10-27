@@ -3,7 +3,6 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { DayBooking } from "@/modules/agenda/AgendaBookingForm";
 import { AgendaChip } from "@/modules/agenda/AgendaChip";
-import { ItemActions } from "@/modules/agenda/ItemActions";
 import { monthGrid, WEEKDAY_SHORT } from "@/modules/agenda/dates";
 import { groupByDay, type AgendaItem } from "@/modules/agenda/items";
 
@@ -41,15 +40,15 @@ export function MonthView({ date, today, items }: { date: string; today: string;
               </Link>
               <DayBooking day={key} />
               {dayItems.length > 0 ? (
-                <span aria-label={`${dayItems.length} ${dayItems.length === 1 ? "cita" : "citas"}`} className="text-xs text-muted-foreground md:hidden">
-                  {dayItems.length}
+                <span className="text-xs text-muted-foreground md:hidden">
+                  <span aria-hidden="true">{dayItems.length}</span>
+                  <span className="sr-only">{dayItems.length} {dayItems.length === 1 ? "cita" : "citas"}</span>
                 </span>
               ) : null}
               <ul className="flex flex-col gap-1 max-md:hidden">
                 {dayItems.slice(0, CHIPS_PER_CELL).map((item) => (
                   <li key={item.id} className="flex flex-col gap-1">
                     <AgendaChip item={item} />
-                    <ItemActions item={item} />
                   </li>
                 ))}
               </ul>

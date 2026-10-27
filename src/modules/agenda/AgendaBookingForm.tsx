@@ -23,11 +23,11 @@ import { useToast } from "@/shared/ui/ToastProvider";
  * month of cells costs one button each and every opening starts from a clean form. The moment is
  * built from two strings with the explicit Panama offset, so the browser's zone never enters.
  */
-export function AgendaBookingForm({ day, triggerLabel = "Agendar cita", triggerClassName, ariaLabel, canCreateCustomer = true }: { day: string; triggerLabel?: string; triggerClassName?: string; ariaLabel?: string; canCreateCustomer?: boolean }) {
+export function AgendaBookingForm({ day, triggerLabel = "Agendar cita", triggerClassName, triggerVariant = "default", ariaLabel, canCreateCustomer = true }: { day: string; triggerLabel?: string; triggerClassName?: string; triggerVariant?: "default" | "ghost"; ariaLabel?: string; canCreateCustomer?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button type="button" variant={triggerClassName ? "ghost" : "default"} className={triggerClassName} aria-label={ariaLabel} />}>{triggerLabel}</DialogTrigger>
+      <DialogTrigger render={<Button type="button" variant={triggerVariant} className={triggerClassName} aria-label={ariaLabel} />}>{triggerLabel}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Agendar cita</DialogTitle>
@@ -40,7 +40,7 @@ export function AgendaBookingForm({ day, triggerLabel = "Agendar cita", triggerC
 
 /** The per-day "+" control of the views: 44px, named by its day so the cells stay distinguishable. */
 export function DayBooking({ day }: { day: string }) {
-  return <AgendaBookingForm day={day} triggerLabel="+" ariaLabel={`Agendar cita el ${day.slice(8)}/${day.slice(5, 7)}`} triggerClassName="min-h-11 min-w-11" />;
+  return <AgendaBookingForm day={day} triggerLabel="+" ariaLabel={`Agendar cita el ${day.slice(8)}/${day.slice(5, 7)}`} triggerClassName="min-h-11 min-w-11" triggerVariant="ghost" />;
 }
 
 /** Server refusals worth their own Spanish line; anything else shows the route's own `errors` text. */
@@ -54,6 +54,7 @@ function BookingFields({ initialDay, canCreateCustomer, onBooked }: { initialDay
   const router = useRouter();
   const { addToast } = useToast();
   const id = useId();
+  const formId = `${id}-form`;
   const [clienteId, setClienteId] = useState("");
   const [day, setDay] = useState(initialDay);
   const [time, setTime] = useState("");
@@ -99,9 +100,9 @@ function BookingFields({ initialDay, canCreateCustomer, onBooked }: { initialDay
 
   return (
     <>
-    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col gap-4">
+    <form id={formId} onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col gap-4">
       <DialogBody className="flex flex-col gap-4">
-        <div className="grid gap-2">
+        <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
           <Label>Cliente</Label>
           <CustomerPicker selectedCustomer={null} canCreateCustomer={canCreateCustomer}
             onSelect={(c) => setClienteId(c.id)}
@@ -130,14 +131,16 @@ function BookingFields({ initialDay, canCreateCustomer, onBooked }: { initialDay
           </p>
         )}
       </DialogBody>
-      <DialogFooter>
-        <DialogClose render={<Button type="button" variant="outline" disabled={isSubmitting} />}>Cancelar</DialogClose>
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Guardando…" : "Guardar cita"}
-        </Button>
-      </DialogFooter>
     </form>
+    {/* Fields, then the quick customer form, then the footer. The footer sits outside the <form> (the
+        submit points back at it with `form`) so the quick form can sit between them as a sibling. */}
     <div ref={setQuickSlot} className="shrink-0" />
+    <DialogFooter>
+      <DialogClose render={<Button type="button" variant="outline" disabled={isSubmitting} />}>Cancelar</DialogClose>
+      <Button type="submit" form={formId} disabled={isSubmitting}>
+        {isSubmitting ? "Guardando…" : "Guardar cita"}
+      </Button>
+    </DialogFooter>
     </>
   );
 }

@@ -35,6 +35,13 @@ describe("WeekView", () => {
     expect(within(tuesday).queryByText("Alfa")).not.toBeInTheDocument();
   });
 
+  it("Narrow columns: chips carry no Reprogramar / No se presentó buttons, even a Vencida one", () => {
+    const items = [makeItem({ id: "a", dayKey: "2026-10-26" }), makeItem({ id: "b", dayKey: "2026-10-27", overdue: true })];
+    render(<WeekView date="2026-10-26" today="2026-10-28" items={items} />);
+    expect(screen.queryByRole("button", { name: "Reprogramar" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "No se presentó" })).not.toBeInTheDocument();
+  });
+
   it("marks today's Panama day", () => {
     render(<WeekView date="2026-10-26" today="2026-10-28" items={[]} />);
     expect(screen.getByTestId("day-2026-10-28").querySelector("[aria-current='date']")).not.toBeNull();

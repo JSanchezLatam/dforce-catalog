@@ -212,17 +212,17 @@ export function CustomerPicker({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Placa / teléfono / email</TableHead>
+                  <TableHead>Cliente</TableHead>
                   <TableHead className="w-24" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {results.map((customer) => (
                   <TableRow key={customer.id}>
-                    <TableCell className="font-medium">{customer.name}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {identifierFor(customer)}
+                    {/* One wrapping cell: a third column pushed "Seleccionar" off a 390 px phone. */}
+                    <TableCell className="whitespace-normal [overflow-wrap:anywhere]">
+                      <div className="font-medium">{customer.name}</div>
+                      <div className="text-muted-foreground">{identifierFor(customer)}</div>
                     </TableCell>
                     <TableCell>
                       <Button

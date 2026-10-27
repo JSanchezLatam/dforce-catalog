@@ -2,7 +2,7 @@
  * /agenda is a Server Component: authorize, resolve the params, read the range with the caller's
  * scope, render server views. The queries module is mocked with the real row shape.
  */
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const session = vi.hoisted(() => vi.fn());
@@ -150,6 +150,18 @@ describe("AgendaPage Vencidas and combined", () => {
 
     expect(screen.getByRole("heading", { name: "Vencidas (1)" })).toBeInTheDocument();
     expect(screen.getByText(/16\/09\/2026 08:30/)).toBeInTheDocument();
+  });
+
+  it.each(["day", "week", "month", "combined"])("Every Vencida stays actionable from %s, and only the panel offers the buttons on week and month", async (view) => {
+    agendaRange.mockResolvedValue({ truncated: false, rows: [{ ...OVERDUE_ROW, id: "r1", appointmentAt: new Date("2026-10-26T15:00:00Z") }] });
+
+    render(await AgendaPage(params({ view, date: "2026-10-26" })));
+
+    const panel = screen.getByRole("heading", { name: "Vencidas (1)" }).closest("section")!;
+    expect(within(panel).getByRole("button", { name: "Reprogramar" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "No se presentó" })).toBeInTheDocument();
+    const outside = screen.queryAllByRole("button", { name: "Reprogramar" }).filter((b) => !panel.contains(b));
+    expect(outside).toHaveLength(view === "week" || view === "month" ? 0 : 1);
   });
 
   it("reads the overdue list with orderScope(user) and the same now the chips use", async () => {

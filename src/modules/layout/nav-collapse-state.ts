@@ -18,7 +18,7 @@ export const NAV_COLLAPSE_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
  * removed from this list becomes a "stale key" that `decodeNavCollapseState`
  * silently ignores instead of crashing or blanking the nav.
  */
-export const NAV_COLLAPSE_KEYS = ["crm", "catalogo", "configuracion", "config-catalogos"] as const;
+export const NAV_COLLAPSE_KEYS = ["taller", "crm", "catalogo", "configuracion", "config-catalogos"] as const;
 
 export type NavCollapseKey = (typeof NAV_COLLAPSE_KEYS)[number];
 
@@ -28,6 +28,7 @@ const KEY_SET: ReadonlySet<string> = new Set(NAV_COLLAPSE_KEYS);
 
 /** Requirement: default on first visit is "all expanded" (today's behavior). */
 export const DEFAULT_NAV_COLLAPSE_STATE: NavCollapseState = {
+  taller: true,
   crm: true,
   catalogo: true,
   configuracion: true,

@@ -101,7 +101,7 @@ describe("encodeNavCollapseState() — compact cookie encode", () => {
   });
 
   it("round-trips through decode for every key closed", () => {
-    const allClosed = { crm: false, catalogo: false, configuracion: false, "config-catalogos": false } as const;
+    const allClosed = { taller: false, crm: false, catalogo: false, configuracion: false, "config-catalogos": false } as const;
     const encoded = encodeNavCollapseState(allClosed);
     expect(decodeNavCollapseState(encoded)).toEqual(allClosed);
   });
@@ -150,7 +150,7 @@ describe("extractCookieValue() — pure document.cookie-style parser", () => {
 
 describe("isNavCollapseKey() — key guard used by UI lookups", () => {
   it("returns true for every known key", () => {
-    for (const key of ["crm", "catalogo", "configuracion", "config-catalogos"]) {
+    for (const key of ["taller", "crm", "catalogo", "configuracion", "config-catalogos"]) {
       expect(isNavCollapseKey(key)).toBe(true);
     }
   });
@@ -168,6 +168,11 @@ describe("getGroupOpen() — resilient per-id lookup for the UI layer", () => {
   it("returns the stored value for a known, closed key", () => {
     const state = { ...DEFAULT_NAV_COLLAPSE_STATE, crm: false };
     expect(getGroupOpen(state, "crm")).toBe(false);
+  });
+
+  it("a collapsed Taller group survives an encode/decode round trip", () => {
+    const state = decodeNavCollapseState(encodeNavCollapseState({ taller: false }));
+    expect(getGroupOpen(state, "taller")).toBe(false);
   });
 
   it("returns the stored value for a known, open key", () => {
