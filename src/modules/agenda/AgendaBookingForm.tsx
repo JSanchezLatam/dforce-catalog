@@ -102,7 +102,7 @@ function BookingFields({ initialDay, canCreateCustomer, onBooked }: { initialDay
     <>
     <form id={formId} onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col gap-4">
       <DialogBody className="flex flex-col gap-4">
-        <div className="grid w-full min-w-0 gap-2">
+        <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
           <Label>Cliente</Label>
           <CustomerPicker selectedCustomer={null} canCreateCustomer={canCreateCustomer}
             onSelect={(c) => setClienteId(c.id)}

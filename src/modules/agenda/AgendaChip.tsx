@@ -19,7 +19,7 @@ export function AgendaChip({ item }: { item: AgendaItem }) {
       <span className="[overflow-wrap:anywhere]">{item.customerName}</span>
       <span className="text-muted-foreground [overflow-wrap:anywhere]">{item.customerPhone}</span>
       <span className="text-muted-foreground [overflow-wrap:anywhere]">{item.vehicleLabel}</span>
-      {item.muted ? <StatusBadge status={item.status} label={item.statusLabel} className="self-start" /> : null}
+      {item.muted ? <StatusBadge status={item.status} label={item.statusLabel} className="max-w-full min-w-0 self-start whitespace-normal [overflow-wrap:anywhere]" /> : null}
       {item.overdue ? <span className="self-start text-xs font-semibold text-red-700 dark:text-red-300">Vencida</span> : null}
     </Link>
   );

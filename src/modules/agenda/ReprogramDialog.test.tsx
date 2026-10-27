@@ -67,7 +67,7 @@ describe("ReprogramDialog", () => {
     await vi.waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0].url).toBe("/api/service-orders/o1");
     expect(calls[0].init.method).toBe("PATCH");
-    expect(JSON.parse(calls[0].init.body as string)).toEqual({ appointmentAt: "2026-10-30T15:30:00-05:00" });
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({ appointmentAt: "2026-10-30T15:30:00-05:00", expectedStatus: "booked" });
   });
 
   it.each([["day", "Elegí el día"], ["time", "Elegí la hora"]])("an empty %s shows its Spanish message and sends nothing", async (field, message) => {

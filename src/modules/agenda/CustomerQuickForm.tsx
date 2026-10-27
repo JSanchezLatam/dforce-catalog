@@ -88,7 +88,7 @@ export function CustomerQuickForm({ canWrite, onSaved }: { canWrite: boolean; on
     }
   }
 
-  async function useExisting() {
+  async function pickExisting() {
     const match = await lookup();
     if (match && !match.deactivatedAt) onSaved(match);
   }
@@ -155,7 +155,7 @@ export function CustomerQuickForm({ canWrite, onSaved }: { canWrite: boolean; on
             <Button type="button" variant="outline" className="min-h-11 min-w-11" disabled={busy} onClick={lookup}>
               Ver el cliente existente
             </Button>
-            <Button type="button" variant="outline" className="min-h-11 min-w-11" disabled={busy || unusable} onClick={useExisting}>
+            <Button type="button" variant="outline" className="min-h-11 min-w-11" disabled={busy || unusable} onClick={pickExisting}>
               Usar ese cliente
             </Button>
             <Button type="button" variant="outline" className="min-h-11 min-w-11" disabled={busy} onClick={() => submit(true)}>

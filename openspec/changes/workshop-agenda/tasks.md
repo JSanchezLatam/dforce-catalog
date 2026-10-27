@@ -144,6 +144,16 @@ No test can cover these (AGENTS.md known limits 2 and 3). Use `http://192.168.0.
 - [x] 9.13 RED/GREEN MonthView count: visible `aria-hidden` number plus `sr-only` "N cita(s)" instead of `aria-label` on a plain span. Test: MonthView "Count is visible text plus sr-only text...".
 - [x] 9.14 Mutation-verify each by name (see apply-progress "Fix round").
 
+## WU9 fix round 2 (GGA defect, browser checks, owner request; branch `feat/workshop-agenda-fixes`)
+
+- [x] 9.15 RED/GREEN stale guard on the FIELD-PATCH path: `updateOrder` takes optional `expectedStatus`, compared under `lockOrderForMutation` before any write (`StaleOrderStatusError`); the route validates `expectedStatus` before both paths (400 for an unknown status) and passes it to both `updateOrder` calls; `ReprogramDialog` sends `expectedStatus: "booked"`. Tests: service.test "Stale reprogram is refused: ...", "a field edit proceeds when expectedStatus matches ...", route.test "expectedStatus on a field PATCH (Reprogramar)" (409, match, 400 x4, unguarded), ReprogramDialog "Request body" (now with `expectedStatus`), e2e "Stale reprogram is refused ..." and "Reprogram without expectedStatus is unchanged ...". Spec: Reprogramar requirement and "Order no longer booked" updated, scenario "Reprogram without expectedStatus is unchanged" added.
+- [x] 9.16 RED/GREEN muted-chip badge: `AgendaChip` gives the StatusBadge `max-w-full min-w-0 whitespace-normal [overflow-wrap:anywhere]` (StatusBadge default untouched). Test: AgendaChip "Muted chip: the status badge can shrink and wrap ...".
+- [x] 9.17 RED/GREEN phone dialog: the picker wrapper in `AgendaBookingForm` gets `grid-cols-[minmax(0,1fr)]`; `CustomerPicker` untouched (its table already sits in `overflow-x-auto`). Test: AgendaBookingForm "Dialog layout: the picker track is minmax(0,1fr) ...".
+- [x] 9.18 `useExisting` renamed `pickExisting` in `CustomerQuickForm.tsx`.
+- [x] 9.19 RED/GREEN new first sidebar group "Taller" (`id: "taller"`): Tablero, Agenda, Métricas, Mis números, removed from `CRM_ITEMS`; `"taller"` added to `NAV_COLLAPSE_KEYS`/defaults (without it the group could not remember its collapse state). Tests: nav-items "Taller group holds ...", updated group/count/id tests; nav-collapse-state key list, "a collapsed Taller group survives an encode/decode round trip".
+- [x] 9.20 Mutation-verify each by name (see apply-progress "Fix round 2").
+- [ ] 9.21 Browser re-check at the LAN IP: month chip with "Completada" at 768, week column, phone 390 dialog with search results showing, the new sidebar group.
+
 ## Follow-ups (out of scope)
 
 - Bookings made less than 24 h ahead get no reminder (`reminders/schedule.ts:79,89-91`); existing behavior, owner awareness.

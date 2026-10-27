@@ -12,4 +12,10 @@ describe("AgendaChip", () => {
       expect(screen.getByText(text).className).toContain("[overflow-wrap:anywhere]");
     }
   });
+
+  it("Muted chip: the status badge can shrink and wrap inside a narrow column", () => {
+    render(<AgendaChip item={makeItem({ muted: true, status: "done", statusLabel: "Completada" })} />);
+    const cls = screen.getByText("Completada").className;
+    for (const c of ["max-w-full", "min-w-0", "whitespace-normal", "[overflow-wrap:anywhere]"]) expect(cls).toContain(c);
+  });
 });

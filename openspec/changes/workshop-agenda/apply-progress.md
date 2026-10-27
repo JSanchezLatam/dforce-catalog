@@ -271,3 +271,17 @@ Existing `ItemActions.test` Week/Month "renders the actions" cases inverted (now
 Gates: `npm test` 251 files / 3886 passed; `npx tsc --noEmit` clean; `npm run lint` 0 errors / 13 warnings. No SQL touched, e2e not run.
 
 Unverified: no browser re-check. 44x44 of the footer buttons, that wrapped chips fit at 768/390, the quick-form slot height on a 390 phone (it is `shrink-0` between form and footer, so a tall quick form still squeezes the scrolling fields), and the `form=` submit across browsers are 9.x browser items.
+
+## Fix round 2 (GGA defect, browser checks, owner request) (branch `feat/workshop-agenda-fixes`; nothing committed)
+
+Tasks 9.15-9.20 done; 9.21 (browser re-check) open.
+
+1. GGA defect: `expectedStatus` now guards the field-PATCH path. Route validates it once before both paths; `updateOrder` compares it right after `lockOrderForMutation` (before any write, portal sync or reminder work); mismatch -> `StaleOrderStatusError` -> the same 409 `stale_status`. `ReprogramDialog` sends `expectedStatus: "booked"`. The dialog test already stubbed the real stale body; the 403/409 `errors.form` rows are real shapes too (`OrderEditForbiddenError`, `OrderClosedError`). A closed order still answers its own 409 (`OrderClosedError` comes from the lock before the stale check).
+2. Muted chip badge: `max-w-full min-w-0 whitespace-normal [overflow-wrap:anywhere]` passed through the className prop; StatusBadge untouched. The icon can shrink slightly when wrapped.
+3. Phone dialog: `grid-cols-[minmax(0,1fr)]` on the picker wrapper (auto track stretched by the table's min-content). `CustomerPicker` not touched; its table is already in an `overflow-x-auto` container.
+4. `useExisting` -> `pickExisting`.
+5. "Taller" group first. Found along the way: `NAV_COLLAPSE_KEYS` is a closed list, so the new id had to be added or the group could not persist collapse.
+
+Mutation-verify (one file each, restored from a backup copy; final diff holds none): drop the `updateOrder` comparison -> service "Stale reprogram is refused" red AND e2e "Stale reprogram is refused" red; route drops `expectedStatus` from the first `updateOrder` call -> route 409 field-PATCH test red; validate only when `body.status` is a string -> the four field-PATCH 400 tests red; dialog stops sending `expectedStatus` -> "Request body" red; drop each of `max-w-full`, `whitespace-normal`, `[overflow-wrap:anywhere]` -> the AgendaChip badge test red (each); Taller placed after CRM -> four nav-items tests red. The picker-track class, `pickExisting` rename and the `"taller"` collapse key were verified RED before the fix (class absent / key absent), not by a separate revert.
+
+Spec: delta spec Reprogramar requirement (body and guard), "Request body", "Order no longer booked" rewritten, new scenario "Reprogram without expectedStatus is unchanged", and the sidebar sentence (Agenda is in "Taller"). Design D3 updated. Main specs naming where links live: none state the group (`metrics-dashboard` "Navigation Entries" and `workshop-status-board` only say who sees the link), so nothing to change at archive for item 5; at archive the Reprogramar requirement merges into the main workshop-agenda spec as written.

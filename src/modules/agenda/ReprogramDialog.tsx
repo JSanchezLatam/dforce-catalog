@@ -48,7 +48,7 @@ function ReprogramFields({ item, onDone }: { item: AgendaItem; onDone: () => voi
     setIsSubmitting(true);
     setError(null);
     // Built from two strings with the explicit Panama offset: the browser's zone never enters.
-    const failure = await patchOrder(item.id, { appointmentAt: `${day}T${time}:00-05:00` });
+    const failure = await patchOrder(item.id, { appointmentAt: `${day}T${time}:00-05:00`, expectedStatus: "booked" });
     setIsSubmitting(false);
     if (failure) {
       setError(failure);

@@ -14,16 +14,19 @@ export type NavGroup = {
   pinBottom?: boolean;
 };
 
-const CRM_ITEMS: (NavLink | NavParent)[] = [
-  { kind: "link", href: "/customers", label: "Clientes", icon: "customers", action: "customers.read" },
-  { kind: "link", href: "/service-orders", label: "Órdenes de servicio", icon: "service-orders", action: "service-orders.read" },
+const TALLER_ITEMS: (NavLink | NavParent)[] = [
+  { kind: "link", href: "/tablero", label: "Tablero", icon: "board", action: "board.read" },
   { kind: "link", href: "/agenda", label: "Agenda", icon: "agenda", action: "agenda.manage" },
-  { kind: "link", href: "/vencimientos", label: "Vencimientos", icon: "vencimientos", action: "vencimientos.read" },
-  { kind: "link", href: "/inventory", label: "Inventario", icon: "inventory", action: "inventory.read" },
   // One entry per viewer: `metrics.read` is admin/jefe, `metrics.self` the técnico only.
   { kind: "link", href: "/metrics", label: "Métricas", icon: "metrics", action: "metrics.read" },
   { kind: "link", href: "/mis-numeros", label: "Mis números", icon: "my-metrics", action: "metrics.self" },
-  { kind: "link", href: "/tablero", label: "Tablero", icon: "board", action: "board.read" },
+];
+
+const CRM_ITEMS: (NavLink | NavParent)[] = [
+  { kind: "link", href: "/customers", label: "Clientes", icon: "customers", action: "customers.read" },
+  { kind: "link", href: "/service-orders", label: "Órdenes de servicio", icon: "service-orders", action: "service-orders.read" },
+  { kind: "link", href: "/vencimientos", label: "Vencimientos", icon: "vencimientos", action: "vencimientos.read" },
+  { kind: "link", href: "/inventory", label: "Inventario", icon: "inventory", action: "inventory.read" },
 ];
 
 const CATALOGO_ITEMS: (NavLink | NavParent)[] = [
@@ -54,6 +57,7 @@ const CONFIGURACION_ITEMS: (NavLink | NavParent)[] = [
 ];
 
 const GROUPS: NavGroup[] = [
+  { id: "taller", label: "Taller", items: TALLER_ITEMS },
   { id: "crm", label: "CRM", items: CRM_ITEMS },
   { id: "catalogo", label: "Catálogo", items: CATALOGO_ITEMS },
   { id: "configuracion", label: "Configuración", items: CONFIGURACION_ITEMS, pinBottom: true },

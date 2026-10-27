@@ -305,6 +305,8 @@ export type UpdateOrdenServicioDeps = {
   scope: OrderScope;
   /** Issued by `authorizeCorrection` after the password check; the only way to write a closed order. */
   correction?: CorrectionGrant;
+  /** Optional guard: the status the caller saw. Compared with the LOCKED row before anything is written; absent = no check. */
+  expectedStatus?: OrderStatus;
 } & ReminderWiringDeps &
   PortalSyncDeps;
 
@@ -352,6 +354,7 @@ export async function updateOrder(
       canWrite: (status) => canEditOrderFields(deps.role, status),
       correction: deps.correction,
     });
+    if (deps.expectedStatus !== undefined && deps.expectedStatus !== order.status) throw new StaleOrderStatusError();
     if (patch.vehiculoId !== undefined) await assertVehicleSettable(tx, order, patch.vehiculoId);
     if (order.status === "booked" && patch.appointmentAt === null) {
       throw new AppointmentRequiredError({ appointmentAt: "Una orden agendada necesita su fecha y hora" });

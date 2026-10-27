@@ -265,4 +265,10 @@ describe("AgendaBookingForm quick customer create", () => {
     await open();
     expect(screen.getByRole("textbox", { name: /buscar cliente/i }).closest("div.grid")!.className).toMatch(/min-w-0.*w-full|w-full.*min-w-0/);
   });
+
+  it("Dialog layout: the picker track is minmax(0,1fr) so a wide results table cannot stretch it past the dialog", async () => {
+    stubQuickFetch();
+    await open();
+    expect(screen.getByRole("textbox", { name: /buscar cliente/i }).closest("div.grid")!.className).toContain("grid-cols-[minmax(0,1fr)]");
+  });
 });
