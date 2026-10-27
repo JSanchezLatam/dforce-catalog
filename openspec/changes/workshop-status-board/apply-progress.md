@@ -26,3 +26,43 @@
 - Task 1.3 "order scoping" test passes without code change (pantalla already falls through the technician EXISTS path); it is a regression guard, not a RED.
 
 - WU3 must write the `pantalla` MATRIX row literally when `board.customer` arrives (GGA WU1 note: the `Object.fromEntries` cast disables the missing-grant tsc check).
+
+## WU2 (branch `feat/workshop-status-board-wu2`) - 2.1-2.9 done, 2.10 left to the orchestrator
+
+### Files
+- New: `src/modules/board/{format,shape,queries}.ts`, `format.test.ts`, `shape.test.ts`, `queries.privacy.test.ts`, `src/e2e/board.e2e.test.ts`.
+- Modified: `src/modules/portal-sync/snapshot.ts` (`export` on `CUSTOMER_STATUS`, one keyword).
+- No route, no Action, no UI.
+
+### Behaviour notes
+- `formatAge(sinceIso, nowIso)` takes ISO strings (the wire shape). Output follows the task text literally: "hace 12 min" under an hour, then "3 h", then "2 d" (no "hace" on hours/days). Mixed prefix is a copy question for the owner.
+- Full-board row keys: `status`, `statusLabel`, `plate`, `make`, `model`, `holdReason` (null unless `on_hold`), `technicians`, `statusSince`; `appointmentAt` exists ONLY while `booked` (null if booked has no appointment). No-vehicle: `plate` = "Sin vehículo", make/model null. Hold-reason label is `ESPERA_MOTIVO_LABEL` ("Repuesto").
+- Customer rows: `plate`, `make`, `model`, `status` only; vehicle-less, `booked` and `cancelled` rows are dropped by the mapper as well as by the query.
+- Done-today boundary: `toWorkshopDateKey(now)::timestamp AT TIME ZONE 'America/Panama'`, as in metrics/queries.ts. `max(changed_at)` comes back as a `Date` (verified in e2e via `.toISOString()`), so `since as BoardSinceRow[]` only drops the nullable type.
+- `queries.ts` avoids the word "cliente" even in comments, because the privacy test is a text match.
+- `shape.ts` imports `portal-sync/snapshot` (node:crypto): server-only. WU3 client components must import TYPES from it only.
+
+### Mutation-verify (fix reverted, named test red, restored)
+- Panama -> 'UTC' in boundary: e2e "Done yesterday is dropped at Panama midnight: ..."
+- `max` -> `min` history: e2e "Latest history row wins, the fallback is updated_at, ..."
+- leftJoin -> innerJoin vehiculo: e2e "Booked order without a vehicle is on the full board, ..."
+- customer query includes booked: e2e "Statuses included and excluded: ..." and "Booked order without a vehicle ..."
+- spread source row in mapper: "Sentinel poison never leaks: ...", "row keys equal the whitelist exactly", "appointmentAt only while booked"
+- drop booked-only guard on appointmentAt: "appointmentAt only while booked" and "row keys equal the whitelist exactly"
+- drop on_hold guard on hold reason: "Hold reason only while on hold: ..."
+- local status map in customer mapper: "the board holds no status map of its own: ..." (source test)
+- `import { cliente }` appended to queries.ts: "never mentions the cliente table, its schema export or its columns"
+- drop `plate === null` filter: "drops orders with no vehicle"; drop status ordering: "Ordering is stable: ..."
+
+### Gates
+- `npm test`: 224 files, 3620 tests passed. `npx tsc --noEmit`: clean. `npm run lint`: 0 errors, 13 warnings.
+- e2e, fresh `dforce_e2e`, full suite: 25 files, 326 tests passed, 0 skipped (board.e2e: 6 tests).
+
+### Size
+- vs `feat/workshop-status-board-wu1` (untracked included): 513 lines (production 142, tests 371; e2e file alone 155). Over 400: pre-agreed escape is shipping `src/e2e/board.e2e.test.ts` as a sub-PR (then 358).
+
+### Unchecked
+- The e2e DB zone is UTC (`show timezone`); a non-UTC server/DB zone was not exercised (the boundary is explicit Panama SQL and an Intl date key, so it should not matter, but it was not run).
+- "History rows of another order are not counted" is asserted (neighbour with a later row does not change the other order's start) but has no mutation: `groupBy ordenId` cannot be removed without a SQL error.
+- Technician batching has no mutation-verify.
+- 2.10 (GGA, push, PR) not done.
