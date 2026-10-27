@@ -207,3 +207,34 @@ Gates: `npm test` 246 files / 3821 passed; `npx tsc --noEmit` clean; `npm run li
 Lines vs `feat/workshop-agenda-wu5-e2e` (tracked diff +58/-11, plus untracked): production 128 (form) + 14 edits; unit tests 174 (form) + 37 in the view tests; about 360 added in total, e2e 74 in its own file.
 
 Unverified: no browser or LAN-IP check (dialog look, 44px, focus handling inside the base-ui Dialog, the "+" placement in cells and columns) - WU9; the e2e was not mutation-verified (reminder window, history row); description is a single-line input, not the order form's textarea; `Date` zone test relies on `process.env.TZ` taking effect at runtime in Node.
+
+## WU7: quick customer create (branch `feat/workshop-agenda-wu7`, off `feat/workshop-agenda-wu6-e2e`)
+
+Tasks 7.1-7.5 done; 7.6 (GGA, PR) left to the orchestrator. Nothing committed.
+
+Files: new `agenda/CustomerQuickForm.tsx` (+ `.test.tsx`), `src/e2e/agenda-quick-customer.e2e.test.ts`; edited `service-orders/CustomerPicker.tsx` (+ test, two tests appended, existing ones untouched), `agenda/AgendaBookingForm.tsx` (+ test, three tests appended).
+
+Behaviour: `CustomerPicker` gets an optional `renderCreate(select)`; absent = the `CustomerForm` branch exactly as before, present = it replaces that branch (called from a tiny `RenderSlot` component, because calling it during the picker's render tripped the React-compiler "refs during render" lint). `CustomerQuickForm({canWrite, onSaved})`: name + phone, POST `{name, phone}` (+ `allowDuplicatePhone: true` on "Guardar igual"); 400 errors inline per field; 403/other -> form-level line; 201 -> toast "Cliente creado" (below the try/catch) then `onSaved({...cliente, plates: []})`. 409 `duplicate_phone` replaces the create button with "Ver el cliente existente" / "Usar ese cliente" / "Guardar igual" (all `busy`-disabled); editing the phone disarms them. Nesting: `AgendaBookingForm` portals the quick form into a `<div>` that is a DOM sibling of the booking `<form>` (callback-ref state, so no `document` guard); the submit handler also does `preventDefault` + `stopPropagation` because React bubbles through the portal. `canCreateCustomer` prop on `AgendaBookingForm` defaults to true.
+
+Finding on the deactivated lookup: `findClienteByPhone` has no `deactivatedAt` filter, so POST answers 409 `duplicate_phone` for a deactivated customer; but `GET /api/customers` defaults to `status=active` and the list item carries `deactivatedAt` only for `inactive`/`all`. With the default URL a deactivated match is never returned, so the spec's "lookup shows deactivated" could not occur. The lookup therefore adds `&status=all` (`?search=<normalizePhone(phone)>&pageSize=50&status=all`, a deviation from the URL in task 7.2/D11, which relied on the default hiding it): the match is found, `deactivatedAt` is non-null, "Usar ese cliente" is disabled with "Ese cliente está desactivado y no se puede usar para una cita. Podés guardar igual para crear uno nuevo." If the id is not in the result (should not happen), the same disabled button with "No se encontró al cliente existente para usarlo.". "Usar ese cliente" without a prior "Ver" does the lookup first, then selects only an active match. e2e proves: deactivated phone still 409s, default list hides it, `status=all` shows it with `deactivatedAt`, `allowDuplicatePhone` creates (201).
+
+TDD: picker, quick-form and booking tests written first and run RED (render-prop missing; module missing; 3 booking tests red) before the code. The e2e was written after the code.
+
+Mutation-verify (one file backed up and restored each time):
+
+| Mutation | Test that went red |
+|---|---|
+| drop `event.stopPropagation()` in the quick form | "Nested submit does not submit the booking: Enter in a quick-form field posts the customer and never the order" (first version of that test was a PLACEBO under this mutation: with no customer picked, a leaked submit stops at the booking's own validation and posts nothing; added the `Elegí un cliente` absence assertion, then it went red) |
+| render the quick form inline (no portal) | "Nested submit: the quick form is not a DOM descendant of the booking form" |
+| drop `allowDuplicatePhone` from the re-POST | "Guardar igual resubmits with allowDuplicatePhone: true" |
+| enable "Usar ese cliente" when deactivated | "Deactivated duplicate cannot be reused: Usar ese cliente is disabled with the note, Guardar igual stays enabled" (+ the "without looking first" one) |
+| select a deactivated match | "Usar ese cliente without looking first does the lookup, and a deactivated match is not selected" |
+| render `CustomerForm` branch even with `renderCreate` | "With renderCreate it replaces that branch and the callback selects the customer" |
+
+Not mutation-verified: the e2e file, "Create requires customers.write", the 400/connection tests.
+
+Gates: `npm test` 247 files / 3839 passed; `npx tsc --noEmit` clean; `npm run lint` 0 errors / 13 warnings. Full e2e on a recreated `dforce_e2e`: 30 files / 358 passed. `dforce_catalog` and `dforce_catalog_wu4` untouched.
+
+Lines vs `feat/workshop-agenda-wu6-e2e` (tracked +140/-6, plus untracked): production 173 (quick form) + about 33 in picker and booking form = ~206; unit tests 205 (quick form) + 73 (booking) + 33 (picker) = 311; e2e 81 in its own file. Production + unit tests ~517, OVER the 400 budget; 7.4 is already its own file/sub-PR candidate per 7.6.
+
+Unverified: no browser or LAN-IP check (the quick form sits in the DOM BELOW the booking footer, as a sibling of the form, so its placement and the dialog's scroll/focus-trap behaviour with the portalled target are unseen; 44px classes only); `canCreateCustomer` is not plumbed from the page (defaults true; both `agenda.manage` roles hold `customers.write`; the server still 403s); the `Cliente seleccionado` picker row for a just-created customer shows no plate by design (plates: []).
