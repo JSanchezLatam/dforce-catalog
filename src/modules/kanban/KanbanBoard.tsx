@@ -17,7 +17,7 @@ import { ConfirmMoveDialog } from "./ConfirmMoveDialog";
 import { EsperaDialog } from "./EsperaDialog";
 import { IncompleteDialog } from "./IncompleteDialog";
 import { KanbanCardView } from "./KanbanCard";
-import { moveOrder } from "./mutations";
+import { moveOrder, setUrgent } from "./mutations";
 import { applyOverrides, type Override } from "./overrides";
 import { planMove } from "./plan";
 import type { KanbanCard, KanbanSnapshot } from "./shape";
@@ -87,6 +87,22 @@ export function KanbanBoard({ initial, canMove }: { initial: KanbanSnapshot; can
     // Toast above the refresh; moveOrder never throws, so both sit below its failure handling. The hook's
     // refresh(), not router.refresh(): the board is a client poller that ignores a re-rendered `initial`.
     addToast("success", r.status === "cancelled" ? "Orden cancelada" : `Orden movida a ${ORDER_STATUS_LABEL[r.status]}`);
+    refresh();
+  }
+
+  // Merges with the card's existing override (a confirmed move still being waited out), so only `urgent` changes.
+  async function sendUrgent(card: KanbanCard, on: boolean) {
+    const prev = overrides.get(card.id);
+    if (prev?.seq === null) return; // its previous change is still in flight
+    setOverride(card.id, { ...prev, urgent: on, seq: null });
+    const r = await setUrgent(card.id, on);
+    if (!r.ok) {
+      setOverride(card.id, prev ?? null);
+      addToast("error", r.error);
+      return;
+    }
+    setOverride(card.id, { ...prev, urgent: on, seq: seqNow.current });
+    addToast("success", on ? "Orden marcada como urgente" : "Orden desmarcada como urgente");
     refresh();
   }
 
@@ -178,7 +194,7 @@ export function KanbanBoard({ initial, canMove }: { initial: KanbanSnapshot; can
           return (
             <ColumnShell key={s} status={s} label={ORDER_STATUS_LABEL[s]} count={cards.length} className="w-70 shrink-0 snap-start max-md:w-full"
               empty={filter === "mine" ? "Ninguna orden tuya en este estado" : "Sin órdenes"}>
-              {cards.map((c) => <KanbanCardView key={c.id} card={c} generatedAt={snapshot.generatedAt} canMove={canMove} onMove={onMove} />)}
+              {cards.map((c) => <KanbanCardView key={c.id} card={c} generatedAt={snapshot.generatedAt} canMove={canMove} onMove={onMove} onUrgent={(c, on) => void sendUrgent(c, on)} />)}
             </ColumnShell>
           );
         })}

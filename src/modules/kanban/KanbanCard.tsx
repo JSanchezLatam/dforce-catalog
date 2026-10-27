@@ -7,7 +7,7 @@ import type { OrderStatus } from "@/modules/service-orders/transitions";
 import { CardMenu } from "./CardMenu";
 import type { KanbanCard } from "./shape";
 
-export function KanbanCardView({ card, generatedAt, canMove, onMove }: { card: KanbanCard; generatedAt: string; canMove: boolean; onMove: (card: KanbanCard, target: OrderStatus) => void }) {
+export function KanbanCardView({ card, generatedAt, canMove, onMove, onUrgent }: { card: KanbanCard; generatedAt: string; canMove: boolean; onMove: (card: KanbanCard, target: OrderStatus) => void; onUrgent: (card: KanbanCard, on: boolean) => void }) {
   const alert = cardAlert(card, generatedAt, card.missing);
   // `BoardRow.plate` holds the TV's "Sin vehículo"; the card wants null so it reads "Sin placa".
   const noVehicle = card.missing.includes("vehiculo");
@@ -18,7 +18,7 @@ export function KanbanCardView({ card, generatedAt, canMove, onMove }: { card: K
       make={card.make}
       model={card.model}
       urgent={card.urgent}
-      action={<CardMenu card={card} canMove={canMove} onMove={(target) => onMove(card, target)} />}
+      action={<CardMenu card={card} canMove={canMove} onMove={(target) => onMove(card, target)} onUrgent={(on) => onUrgent(card, on)} />}
       tags={
         hasTags ? (
           <>

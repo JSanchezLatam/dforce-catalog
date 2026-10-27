@@ -90,8 +90,8 @@ Conventions for every WU: Strict TDD (RED confirmed failing by name, then GREEN)
 
 ## WU5: Urgent item and phone sheet
 
-- [ ] 5.1 RED then GREEN "Marcar como urgente"/"Quitar urgente" in `CardMenu.tsx` (gated by `canMove`): optimistic badge, sort first, toasts "Orden marcada como urgente" / "Orden desmarcada como urgente", rollback with error toast.
-- [ ] 5.2 RED `kanban/MoveSheet.test.tsx`: narrow viewport opens `Sheet side="bottom"` headed by plate and status; "Mover a" group of legal targets, urgent toggle, "Ver orden", "Cancelar orden"; rows 44x44; no draggable on phone. GREEN `kanban/MoveSheet.tsx`, sharing `menuItems`.
+- [x] 5.1 RED then GREEN "Marcar como urgente"/"Quitar urgente" in `CardMenu.tsx` (gated by `canMove`): optimistic badge, sort first, toasts "Orden marcada como urgente" / "Orden desmarcada como urgente", rollback with error toast.
+- [x] 5.2 RED `kanban/MoveSheet.test.tsx`: narrow viewport opens `Sheet side="bottom"` headed by plate and status; "Mover a" group of legal targets, urgent toggle, "Ver orden", "Cancelar orden"; rows 44x44; no draggable on phone. GREEN `kanban/MoveSheet.tsx`, sharing `menuItems`.
 - [ ] 5.3 Verify: unit; mutation-verify gating; browser at 390 (sheet, no drag), 768 (menu), light+dark, sheet console clean.
 
 ## WU6: Drag and drop
