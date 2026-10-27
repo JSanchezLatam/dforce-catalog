@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -12,7 +12,7 @@ const DAY = "2026-10-27";
 const at = (id: string, over: Parameters<typeof makeItem>[0] = {}) =>
   makeItem({ id, dayKey: DAY, customerName: `Cliente ${id}`, time: "09:00", minuteOfDay: 9 * 60, ...over });
 
-const base = { date: DAY, today: DAY, nowMinute: 10 * 60 + 40, workshop: null, workshopTruncated: false, roster: null } as const;
+const base = { date: DAY, today: DAY, nowMinute: 10 * 60 + 40, workshop: null, workshopTruncated: false, roster: null, overdueTotal: 0 } as const;
 
 /** jsdom matches no media query: the width is whatever the test says, and the query is recorded. */
 function setWidth(wide: boolean) {
@@ -229,5 +229,78 @@ describe("AgendaShell", () => {
     render(<AgendaShell {...base} view="month" items={[at("a")]} />);
     expect(popover()).toBeNull();
     expect(sheet()).toBeNull();
+  });
+
+  describe("search and tabs", () => {
+    const search = () => screen.getByPlaceholderText("Buscar placa o cliente…");
+    const items = [
+      at("a", { customerName: "Sofía Herrera", vehicleLabel: "AB1234 · Toyota Hilux" }),
+      at("b", { customerName: "Pedro Sánchez", vehicleLabel: "CP8812 · Kia Rio", time: "11:00", minuteOfDay: 11 * 60 }),
+      at("v", { customerName: "Vera Late", overdue: true, time: "12:00", minuteOfDay: 12 * 60 }),
+    ];
+    const names = () => screen.getAllByRole("button", { name: /Cliente|Sofía|Pedro|Vera/ }).map((b) => b.textContent);
+
+    it("Tabs on every view: Todas, Agendadas and Vencidas with the true Vencidas count", () => {
+      for (const view of ["day", "week", "month", "combined"] as const) {
+        const { unmount } = render(<AgendaShell {...base} overdueTotal={1} view={view} items={[]} />);
+        expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Todas", "Agendadas", "Vencidas1"]);
+        unmount();
+      }
+    });
+
+    it("Agendadas keeps the booked, not Vencida cards and its badge counts the cards left visible", async () => {
+      render(<AgendaShell {...base} view="day" items={items} />);
+      expect(screen.getByRole("tab", { name: /Agendadas/ })).toHaveTextContent("2");
+      await userEvent.click(screen.getByRole("tab", { name: /Agendadas/ }));
+      expect(screen.queryByRole("button", { name: /Vera Late/ })).not.toBeInTheDocument();
+      await userEvent.type(search(), "pedro");
+      expect(screen.getByRole("tab", { name: /Agendadas/ })).toHaveTextContent("1");
+      expect(screen.getByRole("button", { name: /Pedro/ })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Sofía/ })).not.toBeInTheDocument();
+    });
+
+    it("the Vencidas badge stays the true total whatever the search", async () => {
+      render(<AgendaShell {...base} overdueTotal={7} view="day" items={items} />);
+      await userEvent.type(search(), "pedro");
+      expect(screen.getByRole("tab", { name: /Vencidas/ })).toHaveTextContent("7");
+    });
+
+    it("Search by plate: ab1234 shows only that card; a match outside the loaded range shows nothing and sends no request", async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      render(<AgendaShell {...base} view="day" items={items} />);
+      await userEvent.type(search(), "ab 1234");
+      expect(names().join()).toMatch(/Sofía/);
+      expect(names().join()).not.toMatch(/Pedro/);
+      await userEvent.clear(search());
+      await userEvent.type(search(), "ZZ9999");
+      expect(screen.getByText("Sin resultados")).toBeInTheDocument();
+      expect(fetchMock).not.toHaveBeenCalled();
+      vi.unstubAllGlobals();
+    });
+
+    it("the search text survives a tab switch and back", async () => {
+      render(<AgendaShell {...base} view="week" items={items} />);
+      await userEvent.type(search(), "sofia");
+      await userEvent.click(screen.getByRole("tab", { name: /Vencidas/ }));
+      await userEvent.click(screen.getByRole("tab", { name: /Agendadas/ }));
+      expect(search()).toHaveValue("sofia");
+    });
+
+    it("Shop list is unaffected: a search that matches nothing leaves 'En el taller ahora' whole", async () => {
+      render(<AgendaShell {...base} view="combined" items={items} workshop={[makeWorkshopItem({ customerName: "Taller Uno" })]} />);
+      await userEvent.type(search(), "zzzz");
+      expect(screen.getByText("Sin resultados")).toBeInTheDocument();
+      expect(within(screen.getByRole("region", { name: "En el taller" })).getByText("Taller Uno")).toBeInTheDocument();
+    });
+
+    it("an open Detail goes away when the search hides its card", async () => {
+      render(<AgendaShell {...base} view="day" items={items} />);
+      await userEvent.click(card(/Sofía/));
+      expect(popover()).not.toBeNull();
+      // fireEvent, not a click into the field: a pointer press outside would close the popover by itself.
+      fireEvent.change(search(), { target: { value: "pedro" } });
+      expect(popover()).toBeNull();
+    });
   });
 });

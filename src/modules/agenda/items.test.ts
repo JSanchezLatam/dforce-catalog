@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { groupByDay, layoutDay, nextLabel, toAgendaItem, toWeekSummary, toWorkshopItem, type AgendaItem } from "./items";
+import { filterItems, groupByDay, layoutDay, matchesSearch, nextLabel, toAgendaItem, toWeekSummary, toWorkshopItem, type AgendaItem } from "./items";
 import { makeItem } from "./items.fixture";
 import type { AgendaRow, WorkshopRow } from "./queries";
 
@@ -291,5 +291,54 @@ describe("layoutDay", () => {
 
   it("an empty day lays out nothing", () => {
     expect(layoutDay([])).toEqual([]);
+  });
+});
+
+describe("matchesSearch", () => {
+  const sofia = makeItem({ vehicleLabel: "AB 1234 · Toyota Hilux", customerName: "Sofía Herrera" });
+  const pedro = makeItem({ vehicleLabel: "CP-8812 · Kia Rio", customerName: "Pedro Sánchez" });
+
+  it("Search by plate: ignores case, spaces and hyphens on both sides", () => {
+    expect(matchesSearch(sofia, "ab1234")).toBe(true);
+    expect(matchesSearch(pedro, "cp 8812")).toBe(true);
+    expect(matchesSearch(pedro, "ab1234")).toBe(false);
+  });
+
+  it("Search by customer ignoring accents and case", () => {
+    expect(matchesSearch(sofia, "sofia")).toBe(true);
+    expect(matchesSearch(pedro, "SANCHEZ")).toBe(true);
+    expect(matchesSearch(sofia, "pedro")).toBe(false);
+  });
+
+  it("an empty or blank search matches everything, and the make or model is not searched", () => {
+    expect(matchesSearch(sofia, "")).toBe(true);
+    expect(matchesSearch(sofia, "  ")).toBe(true);
+    expect(matchesSearch(sofia, "toyota")).toBe(false);
+  });
+
+  it("a no-vehicle card does not match the placeholder text", () => {
+    expect(matchesSearch(makeItem({ vehicleLabel: "Sin vehículo" }), "vehiculo")).toBe(false);
+  });
+});
+
+describe("filterItems", () => {
+  const future = makeItem({ id: "f" });
+  const late = makeItem({ id: "v", overdue: true });
+  const open = makeItem({ id: "o", status: "open", muted: true });
+  const noShow = makeItem({ id: "n", status: "cancelled", muted: true, noShow: true });
+  const all = [future, late, open, noShow];
+
+  it("Agendadas excludes Vencida and muted", () => {
+    expect(filterItems(all, "agendadas", "").map((i) => i.id)).toEqual(["f"]);
+  });
+
+  it("Todas shows every card, no-show included", () => {
+    expect(filterItems(all, "todas", "").map((i) => i.id)).toEqual(["f", "v", "o", "n"]);
+  });
+
+  it("the search narrows whichever tab is selected", () => {
+    const other = makeItem({ id: "x", customerName: "Pedro" });
+    expect(filterItems([future, other], "todas", "pedro").map((i) => i.id)).toEqual(["x"]);
+    expect(filterItems([future, other], "agendadas", "pedro").map((i) => i.id)).toEqual(["x"]);
   });
 });

@@ -239,6 +239,11 @@ describe("AgendaPage Vencidas and combined", () => {
     expect(screen.queryAllByRole("button", { name: "Reprogramar" }).filter((b) => !panel.contains(b))).toHaveLength(1);
   });
 
+  it("the shell gets the true Vencida total, not the rows it loaded", async () => {
+    agendaOverdue.mockResolvedValue({ rows: [OVERDUE_ROW], truncated: true, total: 501 });
+    expect(shellProps(await AgendaPage(params({ view: "day", date: "2026-10-26" })))?.overdueTotal).toBe(501);
+  });
+
   it("reads the overdue list with orderScope(user) and the same now the chips use", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-10-26T20:00:00Z"));

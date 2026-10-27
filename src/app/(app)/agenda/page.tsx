@@ -46,6 +46,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
         workshop={workshop ? workshop.rows.map((r) => toWorkshopItem(r, now)) : null}
         workshopTruncated={workshop?.truncated ?? false}
         roster={tecnicos ? tecnicos.map(({ id, nombre }) => ({ id, nombre })) : null}
+        overdueTotal={overdue.total}
       />
       <VencidasPanel items={overdue.rows.map((row) => toAgendaItem(row, now))} total={overdue.total} truncated={overdue.truncated} actions={(item) => <ItemActions item={item} />} />
     </div>

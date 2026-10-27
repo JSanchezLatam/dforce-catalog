@@ -174,3 +174,22 @@ export function toWeekSummary(counts: WeekCounts): { label: string; count: numbe
     { label: "No se presentó", count: counts.noShow },
   ];
 }
+
+/** Lower-case with accents folded: "Sofía" -> "sofia". */
+const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+const plateKey = (s: string) => fold(s).replace(/[\s-]/g, "");
+
+/** Plate or customer name, over the loaded cards only. A blank search matches everything. */
+export function matchesSearch(item: AgendaItem, search: string): boolean {
+  const q = fold(search).trim();
+  if (!q) return true;
+  const plate = item.vehicleLabel === "Sin vehículo" ? "" : plateKey(item.vehicleLabel.split(" · ")[0]);
+  return fold(item.customerName).includes(q) || (plateKey(q) !== "" && plate.includes(plateKey(q)));
+}
+
+export type AgendaTab = "todas" | "agendadas";
+
+/** "Agendadas" keeps the booked cards that are not Vencida; "Todas" keeps all. */
+export function filterItems(items: readonly AgendaItem[], tab: AgendaTab, search: string): AgendaItem[] {
+  return items.filter((i) => matchesSearch(i, search) && (tab === "todas" || (i.status === "booked" && !i.overdue)));
+}
