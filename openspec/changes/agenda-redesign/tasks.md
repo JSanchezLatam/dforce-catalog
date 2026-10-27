@@ -152,12 +152,12 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU12: search, tabs, header (branch `feat/agenda-redesign-wu12-search-tabs`) [~390; fallback: header layout moves to WU13]
 
-- [ ] 12.1 RED `items.test.ts`: `matchesSearch` ignores case, accents (NFD) and plate spaces/hyphens ("ab1234" -> "AB 1234", "sofia" -> "Sofía Herrera"); empty matches all; `filterItems("agendadas")` keeps only booked, non-Vencida; "todas" keeps every card incl. no-show. (Search by plate / by customer; Agendadas excludes Vencida and muted; Todas shows every card)
-- [ ] 12.2 RED `AgendaTabs.test.tsx`: three tabs with badges, Agendadas badge counts the cards left visible, Vencidas badge shows the true N; client state, no navigation; pills >= 44px. (Tabs on every view; Tab survives a filter)
-- [ ] 12.3 RED `AgendaHeader.test.tsx` and shell test: placeholder "Buscar placa o cliente…"; nothing matches -> "Sin resultados"; a match outside the loaded range shows nothing and sends no request; search text survives a tab switch; the combined "En el taller ahora" list is unaffected.
-- [ ] 12.4 GREEN `items.ts`, `AgendaTabs.tsx`, `AgendaHeader.tsx` (search, mockup layout), `AgendaShell.tsx` state.
-- [ ] 12.5 Mutation-verify: skip NFD -> "by customer ignoring accents" red; count the unfiltered cards in the badge -> its test red; filter the workshop list -> "Shop list is unaffected" red.
-- [ ] 12.6 Close: C + B.
+- [x] 12.1 RED `items.test.ts`: `matchesSearch` ignores case, accents (NFD) and plate spaces/hyphens ("ab1234" -> "AB 1234", "sofia" -> "Sofía Herrera"); empty matches all; `filterItems("agendadas")` keeps only booked, non-Vencida; "todas" keeps every card incl. no-show. (Search by plate / by customer; Agendadas excludes Vencida and muted; Todas shows every card)
+- [x] 12.2 RED `AgendaTabs.test.tsx`: three tabs with badges, Agendadas badge counts the cards left visible, Vencidas badge shows the true N; client state, no navigation; pills >= 44px. (Tabs on every view; Tab survives a filter)
+- [x] 12.3 RED `AgendaHeader.test.tsx` and shell test: placeholder "Buscar placa o cliente…"; nothing matches -> "Sin resultados"; a match outside the loaded range shows nothing and sends no request; search text survives a tab switch; the combined "En el taller ahora" list is unaffected.
+- [x] 12.4 GREEN `items.ts`, `AgendaTabs.tsx`, `AgendaShell.tsx` state + search field. The `AgendaHeader.tsx` mockup layout (and the search placed in it) moved to WU13 per the fallback: the header is a server component and the search state lives in the shell.
+- [x] 12.5 Mutation-verify: skip NFD -> "by customer ignoring accents" red; count the unfiltered cards in the badge -> its test red; filter the workshop list -> "Shop list is unaffected" red.
+- [x] 12.6 Close: C + B.
 
 ## WU13: Vencidas tab (branch `feat/agenda-redesign-wu13-vencidas-tab`) [~355]
 
