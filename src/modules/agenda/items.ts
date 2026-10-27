@@ -1,10 +1,10 @@
 /**
- * agenda/items.ts - one query row to the plain data the views render. Strings and booleans only:
- * no `Date` crosses a Server Component boundary, and `overdue` is decided here, on the server, from
+ * agenda/items.ts - one query row to the plain data the views render. Plain JSON values only:
+ * no `Date` and no function crosses a Server Component boundary, and `overdue` is decided here, on the server, from
  * the one `now` the page captured (the client never sees a clock).
  */
 import { formatAgendaTime, isOverdue, panamaDay } from "@/modules/agenda/dates";
-import type { AgendaRow, WorkshopRow } from "@/modules/agenda/queries";
+import type { AgendaRow, WeekCounts, WorkshopRow } from "@/modules/agenda/queries";
 import { categoriaLabel, type ServiceCategory } from "@/modules/service-orders/categories";
 import { ESPERA_MOTIVO_LABEL, ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 
@@ -105,4 +105,23 @@ export function toWorkshopItem(row: WorkshopRow): WorkshopItem {
     statusLabel: ORDER_STATUS_LABEL[row.status],
     holdReason: row.status === "on_hold" && row.esperaMotivo ? ESPERA_MOTIVO_LABEL[row.esperaMotivo] : null,
   };
+}
+
+/** "en 20 min" (under an hour), "en 1 h 20 min" (under a day), else the Panama date as `DD/MM/YYYY`. Digits only: safe to render on the client. */
+export function nextLabel(appointmentAt: Date, now: Date): string {
+  const minutes = Math.max(0, Math.floor((appointmentAt.getTime() - now.getTime()) / 60_000));
+  if (minutes < 60) return `en ${minutes} min`;
+  if (minutes < 24 * 60) return minutes % 60 ? `en ${Math.floor(minutes / 60)} h ${minutes % 60} min` : `en ${minutes / 60} h`;
+  const [y, m, d] = panamaDay(appointmentAt).split("-");
+  return `${d}/${m}/${y}`;
+}
+
+/** The "Esta semana" rows in column order. */
+export function toWeekSummary(counts: WeekCounts): { label: string; count: number }[] {
+  return [
+    { label: "Agendadas", count: counts.agendadas },
+    { label: "Recibidas", count: counts.recibidas },
+    { label: "Vencidas", count: counts.vencidas },
+    { label: "No se presentó", count: counts.noShow },
+  ];
 }

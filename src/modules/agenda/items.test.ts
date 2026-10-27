@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { groupByDay, toAgendaItem, toWorkshopItem, type AgendaItem } from "./items";
+import { groupByDay, nextLabel, toAgendaItem, toWeekSummary, toWorkshopItem, type AgendaItem } from "./items";
 import type { AgendaRow, WorkshopRow } from "./queries";
 
 const NOW = new Date("2026-10-26T20:00:00Z"); // 15:00 Panama
@@ -172,5 +172,34 @@ describe("toWorkshopItem", () => {
       holdReason: null,
     });
     expect(JSON.parse(JSON.stringify(item))).toEqual(item);
+  });
+});
+
+describe("nextLabel", () => {
+  const at = (iso: string) => new Date(iso);
+  const now = at("2026-10-27T15:40:00Z"); // 10:40 Panama
+
+  it("Próxima cita text: minutes under an hour, hours and minutes under a day, digits after", () => {
+    expect(nextLabel(at("2026-10-27T16:00:00Z"), now)).toBe("en 20 min");
+    expect(nextLabel(at("2026-10-27T16:40:00Z"), now)).toBe("en 1 h");
+    expect(nextLabel(at("2026-10-27T17:00:00Z"), now)).toBe("en 1 h 20 min");
+    expect(nextLabel(at("2026-10-28T15:39:00Z"), now)).toBe("en 23 h 59 min");
+    expect(nextLabel(at("2026-10-28T15:40:00Z"), now)).toBe("28/10/2026");
+  });
+
+  it("the later date is the PANAMA day: 23:30 Panama is already the next UTC day", () => {
+    expect(nextLabel(at("2026-11-03T04:30:00Z"), now)).toBe("02/11/2026");
+  });
+});
+
+describe("toWeekSummary", () => {
+  it("lists the four counts in the order the column shows them, as plain data", () => {
+    const summary = toWeekSummary({ agendadas: 5, recibidas: 3, vencidas: 2, noShow: 1 });
+    expect(summary).toEqual([
+      { label: "Agendadas", count: 5 },
+      { label: "Recibidas", count: 3 },
+      { label: "Vencidas", count: 2 },
+      { label: "No se presentó", count: 1 },
+    ]);
   });
 });

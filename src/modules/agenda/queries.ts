@@ -3,13 +3,13 @@
  * `OrderScope`, which is REQUIRED so a forgotten scope is a tsc error, not a leak.
  *
  * Every instant is a bound parameter computed by `dates.ts` (Panama midnights), so neither the
- * database session zone nor the server zone can move a boundary. Each read fetches `cap + 1` rows:
- * more than `cap` back means "truncated", and the extra row is dropped before returning.
+ * database session zone nor the server zone can move a boundary. The row lists (range, overdue,
+ * in-workshop) fetch `cap + 1` rows: more than `cap` back means "truncated", and the extra row is dropped.
  * `count(*)` is never selected raw: pg returns bigint as a string, drizzle's `count()` maps it to a number.
  */
-import { and, asc, count, eq, gte, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
 
-import { OVERDUE_MARGIN_MINUTES } from "@/modules/agenda/dates";
+import { OVERDUE_MARGIN_MINUTES, panamaDay, panamaMidnight, stepDate } from "@/modules/agenda/dates";
 import { BACKLOG_STATUSES } from "@/modules/metrics/shape";
 import type { OrderScope } from "@/modules/service-orders/scope";
 import { db } from "@/shared/db/client";
@@ -60,6 +60,9 @@ const NO_SHOW = sql`EXISTS (
   WHERE h.orden_id = ${ordenServicio.id} AND h.from_status = 'booked' AND h.to_status = 'cancelled' AND h.changed_at > ${ordenServicio.appointmentAt}
 )`;
 
+/** Which orders the agenda shows at all: not cancelled, unless cancelled as a no-show. */
+const SHOWN = or(ne(ordenServicio.status, "cancelled"), NO_SHOW);
+
 /** Active technicians per order, by name. A second query, not a join: a join would multiply the order rows. */
 async function techniciansByOrder(ids: string[]): Promise<Map<string, AgendaRow["technicians"]>> {
   const byOrder = new Map<string, AgendaRow["technicians"]>();
@@ -89,10 +92,51 @@ export async function agendaRange(scope: OrderScope, range: { from: Date; to: Da
     .from(ordenServicio)
     .innerJoin(cliente, eq(ordenServicio.clienteId, cliente.id))
     .leftJoin(vehiculo, eq(ordenServicio.vehiculoId, vehiculo.id))
-    .where(and(gte(ordenServicio.appointmentAt, range.from), lt(ordenServicio.appointmentAt, range.to), or(ne(ordenServicio.status, "cancelled"), NO_SHOW), scope.where))
+    .where(and(gte(ordenServicio.appointmentAt, range.from), lt(ordenServicio.appointmentAt, range.to), SHOWN, scope.where))
     .orderBy(asc(ordenServicio.appointmentAt), asc(ordenServicio.id))
     .limit(cap + 1);
   return { rows: await withExtras(rows.slice(0, cap)), truncated: rows.length > cap };
+}
+
+/** Panama days (`YYYY-MM-DD`, ascending, deduped) of the month holding `monthKey` that have a shown appointment. The day is derived in TS from the instant: no zone logic in SQL. */
+export async function agendaBusyDays(scope: OrderScope, monthKey: string): Promise<string[]> {
+  const first = `${monthKey.slice(0, 7)}-01`;
+  const rows = await db
+    .select({ appointmentAt: ordenServicio.appointmentAt })
+    .from(ordenServicio)
+    .where(and(gte(ordenServicio.appointmentAt, panamaMidnight(first)), lt(ordenServicio.appointmentAt, panamaMidnight(stepDate("month", first, 1))), SHOWN, scope.where));
+  return [...new Set(rows.map((r) => panamaDay(r.appointmentAt!)))].sort();
+}
+
+/** The earliest booked appointment at or after `now`, whatever the visible range; null when there is none. */
+export async function agendaNext(scope: OrderScope, now: Date): Promise<AgendaRow | null> {
+  const rows = await db
+    .select(COLUMNS)
+    .from(ordenServicio)
+    .innerJoin(cliente, eq(ordenServicio.clienteId, cliente.id))
+    .leftJoin(vehiculo, eq(ordenServicio.vehiculoId, vehiculo.id))
+    .where(and(eq(ordenServicio.status, "booked"), gte(ordenServicio.appointmentAt, now), scope.where))
+    .orderBy(asc(ordenServicio.appointmentAt), asc(ordenServicio.id))
+    .limit(1);
+  return (await withExtras(rows))[0] ?? null;
+}
+
+export type WeekCounts = { agendadas: number; recibidas: number; vencidas: number; noShow: number };
+
+/** The "Esta semana" counts over the half-open `week` range, independent of the visible range. One aggregate query; each count is a number, not a bigint string. */
+export async function agendaWeekCounts(scope: OrderScope, week: { from: Date; to: Date }, now: Date): Promise<WeekCounts> {
+  const cutoff = new Date(now.getTime() - OVERDUE_MARGIN_MINUTES * 60_000);
+  const filtered = (cond: SQL) => sql<number>`count(*) filter (where ${cond})`.mapWith(Number);
+  const [counts] = await db
+    .select({
+      agendadas: filtered(and(eq(ordenServicio.status, "booked"), gte(ordenServicio.appointmentAt, cutoff))!),
+      vencidas: filtered(and(eq(ordenServicio.status, "booked"), lt(ordenServicio.appointmentAt, cutoff))!),
+      recibidas: filtered(inArray(ordenServicio.status, [...IN_WORKSHOP_STATUSES, "done"])),
+      noShow: filtered(eq(ordenServicio.status, "cancelled")),
+    })
+    .from(ordenServicio)
+    .where(and(gte(ordenServicio.appointmentAt, week.from), lt(ordenServicio.appointmentAt, week.to), SHOWN, scope.where));
+  return counts;
 }
 
 /** Booked orders whose appointment is more than the margin in the past, whatever the visible range; `total` is the true count. */
