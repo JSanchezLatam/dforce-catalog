@@ -104,7 +104,7 @@ export function AgendaShell({ view, date, today, nowMinute, items, workshop, wor
             {onVencidas ? (
               <VencidasList items={overdueVisible} empty={overdue.length === 0 ? "Sin citas vencidas" : "Sin resultados"} truncated={overdueTruncated} selectedId={selected?.id ?? null} onSelect={select} />
             ) : view === "month" ? (
-              <MonthView date={date} today={today} items={visible} />
+              <MonthView date={date} today={today} items={visible} selectedId={grid.selectedId} onSelect={select} onSlot={openBooking} />
             ) : view === "week" ? (
               <WeekGrid days={Array.from({ length: 7 }, (_, i) => addDays(weekStart(date), i))} items={visible} {...grid} />
             ) : view === "combined" ? (

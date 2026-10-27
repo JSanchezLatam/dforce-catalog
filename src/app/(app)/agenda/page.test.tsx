@@ -242,11 +242,9 @@ describe("AgendaPage Vencidas and combined", () => {
     render(await AgendaPage(params({ view, date: "2026-10-26" })));
 
     expect(screen.queryByRole("button", { name: "Reprogramar" })).not.toBeInTheDocument();
-    if (view !== "month") {
-      await userEvent.click(screen.getByRole("button", { name: /Vieja/ }));
-      expect(screen.getByRole("button", { name: "Reprogramar", hidden: true })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "No se presentó", hidden: true })).toBeInTheDocument();
-    }
+    await userEvent.click(screen.getByRole("button", { name: /Vieja|Vencida/ }));
+    expect(screen.getByRole("button", { name: "Reprogramar", hidden: true })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "No se presentó", hidden: true })).toBeInTheDocument();
     // `hidden`: the open sheet marks the page behind it aria-hidden.
     fireEvent.click(screen.getByRole("tab", { name: /Vencidas/, hidden: true }));
     await userEvent.click(screen.getByRole("button", { name: /Vieja/, hidden: true }));

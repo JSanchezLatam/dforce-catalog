@@ -9,14 +9,14 @@ import { cn } from "@/lib/utils";
 import type { AgendaItem } from "@/modules/agenda/items";
 
 /** The status text a card shows: none for a plain booked card. */
-function statusText(item: AgendaItem): string | null {
+export function statusText(item: AgendaItem): string | null {
   if (item.noShow) return item.statusLabel;
   if (item.overdue) return "Vencida";
   return item.muted ? item.statusLabel : null;
 }
 
 /** Decoration only: the status is already the pill's text. */
-function StatusIcon({ item }: { item: AgendaItem }) {
+export function StatusIcon({ item }: { item: AgendaItem }) {
   const Icon = item.noShow ? X : item.overdue ? Clock : Check;
   return <Icon aria-hidden className="size-3" />;
 }
