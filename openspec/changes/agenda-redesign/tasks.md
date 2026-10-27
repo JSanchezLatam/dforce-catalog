@@ -73,9 +73,9 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU2: item fields (branch `feat/agenda-redesign-wu2-item-fields`) [~210]
 
-- [ ] 2.1 RED `items.test.ts`: `toAgendaItem` returns plain data (no `Date`/function): `minuteOfDay`, `vehicleLabel` ("AC 5521 · Toyota Corolla" / "Sin vehículo"), `vehicleDetail` (+ year), `categoria`, `categoriaLabel` (`CATEGORIA_LABEL`, "Sin tipo"), `description`, `technicians[{id,nombre,initials}]` (initials "Julio Rangel" -> "JR", "Marta" -> "M"), `noShow`; `noShow` => `statusLabel` "No se presentó" and `muted`; description present on the item (flips the old "not in the item" test). (Technician initials; Card fields; Status is text as well as colour)
-- [ ] 2.2 GREEN `items.ts`, `items.fixture.ts` (builder gains the new fields; every existing test file compiles).
-- [ ] 2.3 Mutation-verify: initials from the first word only -> "Technician initials" red; drop `noShow` -> "No se presentó" text test red; `Date` left in the item -> the serializability test red.
+- [x] 2.1 RED `items.test.ts`: `toAgendaItem` returns plain data (no `Date`/function): `minuteOfDay`, `vehicleLabel` ("AC 5521 · Toyota Corolla" / "Sin vehículo"), `vehicleDetail` (+ year), `categoria`, `categoriaLabel` (`CATEGORIA_LABEL`, "Sin categoría"), `description`, `technicians[{id,nombre,initials}]` (initials "Julio Rangel" -> "JR", "Marta" -> "M"), `noShow`; `noShow` => `statusLabel` "No se presentó" and `muted`; description present on the item (flips the old "not in the item" test). (Technician initials; Card fields; Status is text as well as colour)
+- [x] 2.2 GREEN `items.ts`, `items.fixture.ts` (builder gains the new fields; every existing test file compiles).
+- [x] 2.3 Mutation-verify: initials from the first word only -> "Technician initials" red; drop `noShow` -> "No se presentó" text test red; `Date` left in the item -> the serializability test red.
 - [ ] 2.4 Close: C.
 
 ## WU3: side reads (branch `feat/agenda-redesign-wu3-side-reads`) [~240]
@@ -106,7 +106,7 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU6: card and day grid (branch `feat/agenda-redesign-wu6-card-day-grid`) [~330]
 
-- [ ] 6.1 RED `AgendaCard.test.tsx` (component-testing skill): the strip reads "11:00 · Revisado"; name; "AC 5521 · Toyota Corolla"; "JR"; NO status label for a plain booked card; NO phone, NO description; "Sin tipo" / "Sin vehículo" / "Sin técnico" when null; status text for Recibida, Completada, Vencida, No se presentó (struck-through name); a `<button>` with `data-categoria`, `aria-pressed` when selected, `min-h-11`; five typed cards carry five distinct hooks. (Card fields; No vehicle, no type...; Colour follows the type; Status is text as well as colour)
+- [ ] 6.1 RED `AgendaCard.test.tsx` (component-testing skill): the strip reads "11:00 · Revisado"; name; "AC 5521 · Toyota Corolla"; "JR"; NO status label for a plain booked card; NO phone, NO description; "Sin categoría" / "Sin vehículo" / "Sin técnico" when null; status text for Recibida, Completada, Vencida, No se presentó (struck-through name); a `<button>` with `data-categoria`, `aria-pressed` when selected, `min-h-11`; five typed cards carry five distinct hooks. (Card fields; No vehicle, no type...; Colour follows the type; Status is text as well as colour)
 - [ ] 6.2 RED `DayGrid.test.tsx`: hour rows 08:00-17:00 with labels; a 14:30 block offset; three 09:00 cards all present; "Sin citas para este día" on an empty day; the now-line labelled `HH:mm` only on today; with `onSlot` each free hour is a focusable button named with day and hour, without it none render. (Empty day; Empty slot is a labelled control)
 - [ ] 6.3 GREEN `AgendaCard.tsx`, `DayGrid.tsx` (plain components, no `"use client"`, no server imports, `HH:mm` digits only).
 - [ ] 6.4 Mutation-verify: render the description -> "Card fields" red; remove `data-categoria` -> "Colour follows the type" red; drop the guard on the now-line -> "Now-line" red.
@@ -170,7 +170,7 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 ## WU14: side column, type filter, week summary (branch `feat/agenda-redesign-wu14-sidebar-filter`) [~380; fallback: "Esta semana" moves to WU15]
 
 - [ ] 14.1 RED `items.test.ts`: `typeCounts` (4 revisado, 2 reparacion, 2 sin tipo -> 4/2/2, others 0) is independent of search and checkboxes; `filterItems` honours the unchecked set.
-- [ ] 14.2 RED `AgendaSidebar.test.tsx`: order mini calendar slot, "Próxima cita" slot, "Tipo de servicio", "Esta semana"; six checkboxes with dot and count, all checked, unchecking hides the cards, counts unchanged, "Todos" re-checks all six; summary shows Agendadas / Recibidas / Vencidas / No se presentó from `toWeekSummary`; below `lg` hidden behind a "Filtros" button (`min-h-11 min-w-11`). (Type counts; Unchecking hides a type; Todos resets; Column collapses behind Filtros)
+- [ ] 14.2 RED `AgendaSidebar.test.tsx`: order mini calendar slot, "Próxima cita" slot, "Categoría", "Esta semana"; six checkboxes with dot and count, all checked, unchecking hides the cards, counts unchanged, "Todos" re-checks all six; summary shows Agendadas / Recibidas / Vencidas / No se presentó from `toWeekSummary`; below `lg` hidden behind a "Filtros" button (`min-h-11 min-w-11`). (Type counts; Unchecking hides a type; Todos resets; Column collapses behind Filtros)
 - [ ] 14.3 GREEN `AgendaSidebar.tsx`, shell filter state, `page.tsx` (`agendaWeekCounts`).
 - [ ] 14.4 Mutation-verify: counts from the filtered list -> "Type counts" red; "Todos" leaves one unchecked -> "Todos resets" red.
 - [ ] 14.5 Close: C + B (the "Filtros" button at 768).

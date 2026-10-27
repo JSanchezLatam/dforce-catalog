@@ -34,13 +34,74 @@ describe("toAgendaItem", () => {
       time: "14:05",
       customerName: "Pérez",
       customerPhone: "61234567",
-      vehicleLabel: "AB1234",
+      minuteOfDay: 14 * 60 + 5,
+      vehicleLabel: "AB1234 · Toyota Corolla",
+      vehicleDetail: "AB1234 · Toyota Corolla 2019",
+      categoria: "revisado",
+      categoriaLabel: "REVISADO",
+      description: null,
+      technicians: [],
       status: "booked",
       statusLabel: "Agendada",
       muted: false,
       overdue: false,
+      noShow: false,
     });
-    expect(Object.keys(item)).not.toContain("description");
+  });
+
+  it("Card fields: the description is on the item (the Detail shows it, the card hides it)", () => {
+    expect(toAgendaItem(row({ description: "Cambio de aceite" }), NOW).description).toBe("Cambio de aceite");
+  });
+
+  it("Card fields: no Date and no function anywhere in the item, so it crosses the Server Component boundary", () => {
+    const item = toAgendaItem(row({ technicians: [{ id: "t1", nombre: "Julio Rangel" }] }), NOW);
+    const walk = (v: unknown): void => {
+      expect(v instanceof Date).toBe(false);
+      expect(typeof v).not.toBe("function");
+      if (v && typeof v === "object") Object.values(v).forEach(walk);
+    };
+    walk(item);
+    expect(JSON.parse(JSON.stringify(item))).toEqual(item);
+  });
+
+  it("Technician initials: the first letters of the first two words, upper-case", () => {
+    const item = toAgendaItem(
+      row({
+        technicians: [
+          { id: "t1", nombre: "Julio Rangel" },
+          { id: "t2", nombre: "marta" },
+          { id: "t3", nombre: "Ana María de la Cruz" },
+        ],
+      }),
+      NOW,
+    );
+    expect(item.technicians).toEqual([
+      { id: "t1", nombre: "Julio Rangel", initials: "JR" },
+      { id: "t2", nombre: "marta", initials: "M" },
+      { id: "t3", nombre: "Ana María de la Cruz", initials: "AM" },
+    ]);
+  });
+
+  it("No vehicle, no type: placeholders instead of nulls", () => {
+    const item = toAgendaItem(row({ vehiclePlate: null, vehicleMake: null, vehicleModel: null, vehicleYear: null, categoria: null }), NOW);
+    expect(item.vehicleLabel).toBe("Sin vehículo");
+    expect(item.vehicleDetail).toBe("Sin vehículo");
+    expect(item.categoria).toBeNull();
+    expect(item.categoriaLabel).toBe("Sin categoría");
+  });
+
+  it("a plate with no make or model is the plate alone, never a dangling separator", () => {
+    const item = toAgendaItem(row({ vehicleMake: null, vehicleModel: null, vehicleYear: null }), NOW);
+    expect(item.vehicleLabel).toBe("AB1234");
+    expect(item.vehicleDetail).toBe("AB1234");
+  });
+
+  it("Status is text as well as colour: a no-show says 'No se presentó' and is muted", () => {
+    const item = toAgendaItem(row({ status: "cancelled", noShow: true }), NOW);
+    expect(item.noShow).toBe(true);
+    expect(item.statusLabel).toBe("No se presentó");
+    expect(item.muted).toBe(true);
+    expect(item.overdue).toBe(false);
   });
 
   it("Flag is a server-computed boolean: the item survives a JSON round trip unchanged", () => {
@@ -57,7 +118,7 @@ describe("toAgendaItem", () => {
   });
 
   it("Booked order without a vehicle: 'Sin vehículo'", () => {
-    expect(toAgendaItem(row({ vehiclePlate: null }), NOW).vehicleLabel).toBe("Sin vehículo");
+    expect(toAgendaItem(row({ vehiclePlate: null, vehicleMake: null, vehicleModel: null }), NOW).vehicleLabel).toBe("Sin vehículo");
   });
 
   it("Only booked orders are Vencida: an open order three hours late is muted, not overdue", () => {
