@@ -1,16 +1,15 @@
 /**
  * agenda/WeekGrid.tsx - seven Monday-first day columns over one shared hour window. A plain component (no
- * "use client", no server imports), like DayGrid. Lanes cap at 2 per day: cards beyond that are not drawn and
- * the day gets a single "+N" link to its day view.
+ * "use client", no server imports), like DayGrid. A column is narrow, so overlap never splits it into lanes: an
+ * overlapping cluster shows its first card (time, id) and a "+N" link to the day view for the rest.
  */
+import { Fragment } from "react";
 import Link from "next/link";
 
 import { AgendaCard } from "@/modules/agenda/AgendaCard";
 import { WEEKDAY_SHORT } from "@/modules/agenda/dates";
 import { clockLabel, hourWindow, nowLineTop, ROW, slotLabel, top } from "@/modules/agenda/grid";
 import { layoutDay, type AgendaItem } from "@/modules/agenda/items";
-
-const MAX_LANES = 2;
 
 type Props = {
   /** The seven Panama day keys, Monday first. */
@@ -54,8 +53,9 @@ export function WeekGrid({ days, items, todayKey, nowMinute, selectedId = null, 
         {days.map((day, i) => {
           const dayItems = items.filter((it) => it.dayKey === day);
           const taken = new Set(dayItems.map((it) => Math.floor(it.minuteOfDay / 60)));
-          const laid = layoutDay(dayItems);
-          const hidden = laid.filter((l) => l.lane >= MAX_LANES);
+          // Plain loop, not Object.groupBy: the workshop tablets may run an older Safari.
+          const clusters: ReturnType<typeof layoutDay>[] = [];
+          for (const l of layoutDay(dayItems)) (clusters[l.cluster] ??= []).push(l);
           const now = nowMinute === undefined ? null : nowLineTop(nowMinute, day === todayKey, [start, end]);
           return (
             <div
@@ -75,27 +75,28 @@ export function WeekGrid({ days, items, todayKey, nowMinute, selectedId = null, 
                   </div>
                 );
               })}
-              {laid
-                .filter((l) => l.lane < MAX_LANES)
-                .map(({ item, lane, lanes }) => {
-                  const shown = Math.min(lanes, MAX_LANES);
-                  return (
-                    <div key={item.id} className="absolute p-1" style={{ top: top(item.minuteOfDay, start), height: ROW, left: `${(lane / shown) * 100}%`, width: `${100 / shown}%` }}>
+              {clusters.map((cluster) => {
+                const [{ item }, ...rest] = cluster;
+                const y = top(item.minuteOfDay, start);
+                return (
+                  <Fragment key={item.id}>
+                    <div className={`absolute left-0 p-1 ${rest.length > 0 ? "w-[calc(100%-2.75rem)]" : "w-full"}`} style={{ top: y, height: ROW }}>
                       <AgendaCard item={item} selected={item.id === selectedId} onSelect={onSelect} />
                     </div>
-                  );
-                })}
-              {/* shortcut: one link per day, placed at its first hidden card, even when two separate clusters overflow; split per cluster if that ever shows up in real data */}
-              {hidden.length > 0 ? (
-                <Link
-                  href={`/agenda?view=day&date=${day}`}
-                  aria-label={`+${hidden.length} más`}
-                  className="absolute right-1 z-10 grid min-h-11 min-w-11 place-items-center rounded-lg border border-border bg-card text-xs font-semibold shadow-sm"
-                  style={{ top: top(hidden[0].item.minuteOfDay, start) + 4 }}
-                >
-                  +{hidden.length}
-                </Link>
-              ) : null}
+                    {/* The "+N" has its own gutter beside the card, so it never covers card text. */}
+                    {rest.length > 0 ? (
+                      <Link
+                        href={`/agenda?view=day&date=${day}`}
+                        aria-label={`+${rest.length} más`}
+                        className="absolute right-0 z-10 grid min-h-11 min-w-11 place-items-center rounded-lg border border-border bg-card text-xs font-semibold shadow-sm"
+                        style={{ top: y + 4 }}
+                      >
+                        +{rest.length}
+                      </Link>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
               {now !== null ? (
                 <div data-now-line className="absolute inset-x-0 z-10 flex items-center" style={{ top: now }}>
                   <span className="absolute left-0 rounded bg-red-500 px-1 text-[10px] font-semibold text-white">{clockLabel(nowMinute!)}</span>

@@ -123,3 +123,9 @@ export function formatAgendaTime(iso: string): string {
   const p = Object.fromEntries(TIME_PARTS.formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
   return `${p.hour}:${p.minute}`;
 }
+
+/** Minutes since Panama midnight at `now`; the grids place the now-line from it. */
+export function panamaMinute(now: Date): number {
+  const [h, m] = formatAgendaTime(now.toISOString()).split(":").map(Number);
+  return h * 60 + m;
+}

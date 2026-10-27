@@ -24,7 +24,7 @@ function StatusIcon({ item }: { item: AgendaItem }) {
 export function AgendaCard({ item, selected = false, onSelect }: { item: AgendaItem; selected?: boolean; onSelect?: (item: AgendaItem) => void }) {
   const status = statusText(item);
   const names = item.technicians.map((t) => t.nombre).join(", ");
-  const name = [`${item.time} ${item.customerName}`, item.vehicleLabel, status, names].filter(Boolean).join(", ");
+  const name = [`${item.time} ${item.customerName}`, item.categoriaLabel, item.vehicleLabel, status, names].filter(Boolean).join(", ");
   return (
     <button
       type="button"
@@ -33,7 +33,7 @@ export function AgendaCard({ item, selected = false, onSelect }: { item: AgendaI
       aria-label={name}
       onClick={() => onSelect?.(item)}
       className={cn(
-        "agenda-ev flex h-full min-h-11 w-full flex-col overflow-hidden rounded-lg text-left",
+        "agenda-ev flex h-full min-h-11 w-full min-w-11 flex-col overflow-hidden rounded-lg text-left",
         item.noShow ? "opacity-45" : item.muted && "opacity-60",
         selected ? "ring-2 ring-foreground" : item.overdue && "ring-2 ring-destructive",
       )}

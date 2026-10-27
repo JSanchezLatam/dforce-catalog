@@ -3,6 +3,7 @@
  * scope, render server views. The queries module is mocked with the real row shape.
  */
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const session = vi.hoisted(() => vi.fn());
@@ -16,6 +17,7 @@ vi.mock("@/modules/service-orders/scope", () => ({ orderScope }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 import AgendaPage from "./page";
+import { AgendaShell } from "@/modules/agenda/AgendaShell";
 import type { AgendaRow, WorkshopRow } from "@/modules/agenda/queries";
 
 // The wire shape of a query row; a test overrides only what it is about.
@@ -51,6 +53,27 @@ const workshopRow = (over: Partial<WorkshopRow>): WorkshopRow => ({
   holdSinceAt: null,
   ...over,
 });
+
+/**
+ * The RSC trap: whatever the page hands a client component must serialize. Walk the element tree for the shell
+ * and refuse a function, a Date or any class instance in its props (jsdom renders them happily; Next refuses).
+ */
+function shellProps(node: unknown): Record<string, unknown> | null {
+  if (Array.isArray(node)) return node.map(shellProps).find(Boolean) ?? null;
+  if (!node || typeof node !== "object" || !("props" in node)) return null;
+  const el = node as { type: unknown; props: { children?: unknown } & Record<string, unknown> };
+  if (el.type === AgendaShell) return el.props;
+  return shellProps(el.props.children);
+}
+
+function assertPlain(value: unknown, path = "props"): void {
+  if (value === null || ["string", "number", "boolean", "undefined"].includes(typeof value)) return;
+  if (typeof value === "function") throw new Error(`${path} is a function`);
+  const proto = Object.getPrototypeOf(value);
+  if (Array.isArray(value)) return value.forEach((v, i) => assertPlain(v, `${path}[${i}]`));
+  if (proto !== Object.prototype) throw new Error(`${path} is a ${proto?.constructor?.name ?? "non-plain object"}`);
+  for (const [k, v] of Object.entries(value as object)) assertPlain(v, `${path}.${k}`);
+}
 
 const params = (q: Record<string, string | string[]> = {}) => ({ searchParams: Promise.resolve(q) });
 const SCOPE = { where: undefined };
@@ -126,7 +149,7 @@ describe("AgendaPage data", () => {
     expect(range.to.toISOString()).toBe("2026-10-27T05:00:00.000Z");
   });
 
-  it("renders the rows as chips and discloses a truncated range", async () => {
+  it("renders the rows as cards and discloses a truncated range", async () => {
     agendaRange.mockResolvedValue({
       truncated: true,
       rows: [
@@ -136,7 +159,7 @@ describe("AgendaPage data", () => {
 
     render(await AgendaPage(params({ view: "day", date: "2026-10-26" })));
 
-    expect(screen.getByRole("link", { name: /Pérez/ })).toHaveAttribute("href", "/service-orders/o1");
+    expect(screen.getByRole("button", { name: /Pérez/ })).toBeInTheDocument();
     expect(screen.getByText("Sin vehículo")).toBeInTheDocument();
     expect(screen.getByText("Se muestran las primeras 500 citas; acotá el rango.")).toBeInTheDocument();
   });
@@ -156,7 +179,7 @@ describe("AgendaPage data", () => {
       render(await AgendaPage(params({ view: "day", date: "2026-10-26" })));
 
       expect(screen.getAllByText("Vencida")).toHaveLength(1);
-      expect(screen.getByRole("link", { name: /Tarde/ }).textContent).toContain("Vencida");
+      expect(screen.getByRole("button", { name: /Tarde/ }).textContent).toContain("Vencida");
     } finally {
       vi.useRealTimers();
     }
@@ -187,7 +210,7 @@ describe("AgendaPage Vencidas and combined", () => {
     expect(screen.getByText(/16\/09\/2026 08:30/)).toBeInTheDocument();
   });
 
-  it.each(["day", "week", "month", "combined"])("Every Vencida stays actionable from %s, and only the panel offers the buttons on week and month", async (view) => {
+  it.each(["day", "week", "month", "combined"])("Every Vencida stays actionable from the panel on %s; the grid offers the buttons only after a card is selected", async (view) => {
     agendaRange.mockResolvedValue({ truncated: false, rows: [{ ...OVERDUE_ROW, id: "r1", appointmentAt: new Date("2026-10-26T15:00:00Z") }] });
 
     render(await AgendaPage(params({ view, date: "2026-10-26" })));
@@ -195,8 +218,10 @@ describe("AgendaPage Vencidas and combined", () => {
     const panel = screen.getByRole("heading", { name: "Vencidas (1)" }).closest("section")!;
     expect(within(panel).getByRole("button", { name: "Reprogramar" })).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "No se presentó" })).toBeInTheDocument();
-    const outside = screen.queryAllByRole("button", { name: "Reprogramar" }).filter((b) => !panel.contains(b));
-    expect(outside).toHaveLength(view === "week" || view === "month" ? 0 : 1);
+    expect(screen.queryAllByRole("button", { name: "Reprogramar" }).filter((b) => !panel.contains(b))).toHaveLength(0);
+    if (view === "month") return;
+    await userEvent.click(screen.getByRole("button", { name: /Vieja/ }));
+    expect(screen.queryAllByRole("button", { name: "Reprogramar" }).filter((b) => !panel.contains(b))).toHaveLength(1);
   });
 
   it("reads the overdue list with orderScope(user) and the same now the chips use", async () => {
@@ -228,5 +253,45 @@ describe("AgendaPage Vencidas and combined", () => {
     render(await AgendaPage(params({ view, date: "2026-10-26" })));
 
     expect(agendaInWorkshop).not.toHaveBeenCalled();
+  });
+});
+
+describe("AgendaPage shell wiring", () => {
+  beforeEach(() => {
+    session.mockResolvedValue({ id: "a", role: "administrador" });
+    agendaRange.mockResolvedValue({ truncated: false, rows: [agendaRow({ id: "o1", technicians: [{ id: "t1", nombre: "Julio Rangel" }] })] });
+    agendaInWorkshop.mockResolvedValue({ truncated: false, rows: [workshopRow({ id: "w1" })] });
+  });
+
+  it.each(["day", "week", "combined"])("%s goes through the shell with plain props only", async (view) => {
+    const props = shellProps(await AgendaPage(params({ view, date: "2026-10-26" })));
+    expect(props).not.toBeNull();
+    expect(props).toMatchObject({ view, date: "2026-10-26" });
+    expect(() => assertPlain(props)).not.toThrow();
+  });
+
+  it("the plain-props check catches a function and a Date", () => {
+    expect(() => assertPlain({ onSelect: () => {} })).toThrow("props.onSelect is a function");
+    expect(() => assertPlain({ items: [{ at: new Date() }] })).toThrow("props.items[0].at is a Date");
+  });
+
+  it("now is captured once: the same instant decides Vencida, the Vencidas read and the now-line minute", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-26T20:00:00Z")); // 15:00 Panama
+    try {
+      const props = shellProps(await AgendaPage(params({ view: "day", date: "2026-10-26" })));
+      expect(props).toMatchObject({ today: "2026-10-26", nowMinute: 15 * 60 });
+      expect(agendaOverdue.mock.calls[0][1].toISOString()).toBe("2026-10-26T20:00:00.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("only the combined view hands the shell the workshop list", async () => {
+    const day = shellProps(await AgendaPage(params({ view: "day", date: "2026-10-26" })));
+    expect(day?.workshop).toBeNull();
+    const combined = shellProps(await AgendaPage(params({ view: "combined", date: "2026-10-26" })));
+    expect(combined?.workshop).toHaveLength(1);
+    expect(combined?.workshopTruncated).toBe(false);
   });
 });

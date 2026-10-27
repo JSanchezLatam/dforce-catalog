@@ -86,9 +86,10 @@ describe("AgendaCard", () => {
   it("is a button named by time and customer, 44px tall, pressed only when selected", () => {
     const { rerender } = render(<AgendaCard item={jorge()} />);
     const button = screen.getByRole("button", { name: /11:00.*Jorge Vega/ });
-    expect(button).toHaveClass("min-h-11");
+    expect(button).toHaveClass("min-h-11", "min-w-11");
     expect(button).toHaveAttribute("aria-pressed", "false");
     expect(button).toHaveAccessibleName(expect.stringContaining("Julio Rangel"));
+    expect(button).toHaveAccessibleName(expect.stringContaining("REVISADO"));
     rerender(<AgendaCard item={jorge()} selected />);
     expect(screen.getByRole("button")).toHaveAttribute("aria-pressed", "true");
   });

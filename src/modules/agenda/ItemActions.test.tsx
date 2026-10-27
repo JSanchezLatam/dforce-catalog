@@ -1,7 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { CombinedView } from "./CombinedView";
 import { DayView } from "./DayView";
 import { makeItem } from "./items.fixture";
 import { ItemActions } from "./ItemActions";
@@ -20,11 +19,8 @@ describe("ItemActions", () => {
     expect(names()).toEqual([]);
   });
 
-  it.each([
-    ["DayView", () => <DayView items={[makeItem()]} />],
-    ["CombinedView", () => <CombinedView items={[makeItem()]} workshop={[]} workshopTruncated={false} />],
-  ])("%s renders the actions on a booked chip", (_name, view) => {
-    render(view());
+  it("DayView renders the actions on a booked chip", () => {
+    render(<DayView items={[makeItem()]} />);
     expect(screen.getByRole("button", { name: "Reprogramar" })).toBeInTheDocument();
   });
 

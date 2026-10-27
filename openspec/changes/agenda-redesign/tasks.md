@@ -114,7 +114,7 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU7: week grid and popover (branch `feat/agenda-redesign-wu7-week-grid-popover`) [~320]
 
-- [x] 7.1 RED `WeekGrid.test.tsx`: seven Monday-first columns with weekday, day number and per-day count; today's header carries "Hoy"; Saturday and Sunday carry the weekend mark; exactly one now-line, in today's column; none for a week without today; lanes cap at 2 with a 44px "+N" link to `/agenda?view=day&date=<day>`; each free hour a labelled button when `onSlot` is given. (Today and weekends are marked; Now-line only on today; Empty slot is a labelled control)
+- [x] 7.1 RED `WeekGrid.test.tsx`: seven Monday-first columns with weekday, day number and per-day count; today's header carries "Hoy"; Saturday and Sunday carry the weekend mark; exactly one now-line, in today's column; none for a week without today; an overlapping run shows its first card at full width (no lanes in the week) plus a 44px "+N más" link (N = hidden cards) to `/agenda?view=day&date=<day>`; each free hour a labelled button when `onSlot` is given. (Today and weekends are marked; Now-line only on today; Empty slot is a labelled control)
 - [x] 7.2 RED `components/ui/popover.test.tsx`: controlled `open`; non-modal; `Positioner anchor` is the given element; closes on Escape and outside press; renders no portal while closed.
 - [x] 7.3 GREEN `WeekGrid.tsx`, `src/components/ui/popover.tsx` (Base UI wrapper).
 - [x] 7.4 Mutation-verify: render the now-line in every column -> "Now-line only on today" red; mark only Sunday -> "Today and weekends are marked" red; open the popover while `open=false` -> its test red.
@@ -122,10 +122,10 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU8: shell wire (branch `feat/agenda-redesign-wu8-shell-wire`) [~260]
 
-- [ ] 8.1 RED `AgendaShell.test.tsx`: renders `DayGrid` for day, `WeekGrid` for week, the legacy `MonthView` for month; activating a card marks it `aria-pressed`; props are plain (no function or `Date`) so the page output serializes.
-- [ ] 8.2 RED `page.test.tsx`: day/week/combined render through the shell; queries still called with `orderScope(user)`; `now` captured once and passed through; Técnico still denied.
-- [ ] 8.3 GREEN `AgendaShell.tsx` (`"use client"`, selection state only), `page.tsx` swap, `CombinedView.tsx` uses `DayGrid`.
-- [ ] 8.4 Mutation-verify: pass a function prop from the page -> the serializability test red; remove `can()` -> "Técnico is denied" red.
+- [x] 8.1 RED `AgendaShell.test.tsx`: renders `DayGrid` for day, `WeekGrid` for week, the legacy `MonthView` for month; activating a card marks it `aria-pressed`; props are plain (no function or `Date`) so the page output serializes.
+- [x] 8.2 RED `page.test.tsx`: day/week/combined render through the shell; queries still called with `orderScope(user)`; `now` captured once and passed through; Técnico still denied.
+- [x] 8.3 GREEN `AgendaShell.tsx` (`"use client"`, selection state only), `page.tsx` swap, `CombinedView.tsx` uses `DayGrid`.
+- [x] 8.4 Mutation-verify: pass a function prop from the page -> the serializability test red; remove `can()` -> "Técnico is denied" red.
 - [ ] 8.5 Close: C + B. This is the RSC-boundary check: open week and combined with real data (the Pagination trap: one row hides it; seed enough).
 
 ## WU9: retire the old day/week views (branch `feat/agenda-redesign-wu9-retire-day-week`) [~195, deletions only]

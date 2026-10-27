@@ -64,25 +64,46 @@ describe("WeekGrid", () => {
     expect(late.container.querySelector("[data-now-line]")).toBeNull();
   });
 
-  it("lanes cap at 2: the third overlapping card becomes a 44px '+1' link to the day view", () => {
-    const items = [at("a", TUE, 9), at("b", TUE, 9), at("c", TUE, 9)];
+  it("Overlap in the week is one lane: the first card (time, id) at full width plus a 44px '+N' link to the day view", () => {
+    const items = [at("c", TUE, 9), at("a", TUE, 9), at("b", TUE, 9)];
     const { container } = render(<WeekGrid days={DAYS} items={items} />);
     const col = column(container, TUE);
     const cards = within(col).getAllByRole("button").filter((b) => b.hasAttribute("aria-pressed"));
-    expect(cards.map((b) => within(b).getByText(/^Cliente/).textContent)).toEqual(["Cliente a", "Cliente b"]);
-    expect(cards.map((b) => Number.parseFloat(b.parentElement!.style.width))).toEqual([50, 50]);
-    const more = within(col).getByRole("link", { name: "+1 más" });
-    expect(more).toHaveTextContent("+1");
+    expect(cards.map((b) => within(b).getByText(/^Cliente/).textContent)).toEqual(["Cliente a"]);
+    const more = within(col).getByRole("link", { name: "+2 más" });
+    expect(more).toHaveTextContent("+2");
     expect(more).toHaveAttribute("href", `/agenda?view=day&date=${TUE}`);
-    expect(more).toHaveClass("min-h-11", "min-w-11");
+    expect(more).toHaveClass("min-h-11", "min-w-11", "right-0");
   });
 
-  it("two overlapping cards show no '+N' link; the count is the hidden ones", () => {
-    const two = render(<WeekGrid days={DAYS} items={[at("a", TUE, 9), at("b", TUE, 9)]} />);
-    expect(screen.queryByRole("link", { name: /más/ })).not.toBeInTheDocument();
-    two.unmount();
-    render(<WeekGrid days={DAYS} items={[at("a", TUE, 9), at("b", TUE, 9), at("c", TUE, 9), at("d", TUE, 9, 30)]} />);
+  it("two overlapping cards already overflow: one card and '+1 más'", () => {
+    render(<WeekGrid days={DAYS} items={[at("a", TUE, 9), at("b", TUE, 9, 30)]} />);
+    expect(screen.getAllByRole("button").filter((b) => b.hasAttribute("aria-pressed"))).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "+1 más" })).toBeInTheDocument();
+  });
+
+  it("a cluster that chains by overlap hides all but its first card", () => {
+    render(<WeekGrid days={DAYS} items={[at("a", TUE, 9), at("b", TUE, 9, 30), at("c", TUE, 10)]} />);
+    expect(screen.getAllByRole("button").filter((b) => b.hasAttribute("aria-pressed"))).toHaveLength(1);
     expect(screen.getByRole("link", { name: "+2 más" })).toBeInTheDocument();
+  });
+
+  it("a cluster without overlap is unchanged: full width, no link", () => {
+    const { container } = render(<WeekGrid days={DAYS} items={[at("a", TUE, 9), at("b", TUE, 11)]} />);
+    const cards = within(column(container, TUE)).getAllByRole("button").filter((b) => b.hasAttribute("aria-pressed"));
+    expect(cards).toHaveLength(2);
+    for (const c of cards) expect(c.parentElement).toHaveClass("w-full");
+    expect(screen.queryByRole("link", { name: /más/ })).not.toBeInTheDocument();
+  });
+
+  it("each overlapping cluster has its own gutter and its own count; other cards keep the full width", () => {
+    const items = [at("a", TUE, 9), at("b", TUE, 9), at("c", TUE, 12), at("d", TUE, 14), at("e", TUE, 14), at("f", TUE, 14)];
+    const { container } = render(<WeekGrid days={DAYS} items={items} />);
+    const col = column(container, TUE);
+    expect(within(col).getAllByRole("link").map((l) => l.getAttribute("aria-label"))).toEqual(["+1 más", "+2 más"]);
+    expect(within(col).getByRole("button", { name: /Cliente a/ }).parentElement).toHaveClass("w-[calc(100%-2.75rem)]");
+    expect(within(col).getByRole("button", { name: /Cliente c/ }).parentElement).toHaveClass("w-full");
+    expect(within(col).getByRole("button", { name: /Cliente d/ }).parentElement).toHaveClass("w-[calc(100%-2.75rem)]");
   });
 
   it("Empty slot is a labelled control: each free hour of each day, only with onSlot", async () => {

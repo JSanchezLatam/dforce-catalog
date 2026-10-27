@@ -4,6 +4,7 @@ import {
   OVERDUE_MARGIN_MINUTES,
   addDays,
   formatAgendaTime,
+  panamaMinute,
   isOverdue,
   monthGrid,
   panamaMidnight,
@@ -147,5 +148,13 @@ describe("Time text identical on server and client", () => {
 
   it("emits ASCII digits and a colon only", () => {
     expect(formatAgendaTime("2026-10-26T17:07:00Z")).toMatch(/^[0-9]{2}:[0-9]{2}$/);
+  });
+});
+
+describe("panamaMinute", () => {
+  it("is the Panama minute of day, not the server's", () => {
+    expect(panamaMinute(new Date("2026-10-26T19:05:00Z"))).toBe(14 * 60 + 5);
+    expect(panamaMinute(new Date("2026-10-26T05:00:00Z"))).toBe(0);
+    expect(panamaMinute(new Date("2026-10-27T04:59:00Z"))).toBe(23 * 60 + 59);
   });
 });

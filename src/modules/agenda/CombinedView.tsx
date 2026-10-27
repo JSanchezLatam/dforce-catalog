@@ -1,6 +1,7 @@
+import type { ComponentProps } from "react";
 import Link from "next/link";
 
-import { DayView } from "@/modules/agenda/DayView";
+import { DayGrid } from "@/modules/agenda/DayGrid";
 import type { AgendaItem, WorkshopItem } from "@/modules/agenda/items";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 
@@ -16,13 +17,22 @@ function WorkshopRow({ item }: { item: WorkshopItem }) {
   );
 }
 
-/** The selected day's appointments beside every order in the workshop; one column (appointments first) below `lg`. */
-export function CombinedView({ items, workshop, workshopTruncated }: { items: readonly AgendaItem[]; workshop: readonly WorkshopItem[]; workshopTruncated: boolean }) {
+/** The selected day's hour grid beside every order in the workshop; one column (appointments first) below `lg`. */
+export function CombinedView({
+  date,
+  items,
+  workshop,
+  workshopTruncated,
+  ...grid
+}: { date: string; items: readonly AgendaItem[]; workshop: readonly WorkshopItem[]; workshopTruncated: boolean } & Pick<
+  ComponentProps<typeof DayGrid>,
+  "todayKey" | "nowMinute" | "selectedId" | "onSelect"
+>) {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <section aria-labelledby="combined-day" className="flex min-w-0 flex-col gap-2">
         <h2 id="combined-day" className="text-base font-semibold">Citas del día</h2>
-        <DayView items={items} />
+        <DayGrid date={date} items={items} {...grid} />
       </section>
       <section aria-labelledby="combined-shop" className="flex min-w-0 flex-col gap-2">
         <h2 id="combined-shop" className="text-base font-semibold">En el taller</h2>
