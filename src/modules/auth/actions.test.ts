@@ -39,6 +39,17 @@ describe("loginAction", () => {
     expect(redirect).toHaveBeenCalledWith(path);
   });
 
+  // Cookie follows expiry: a pantalla screen keeps its cookie as long as its 180-day session row.
+  it("Cookie follows expiry: the session cookie expires with the issued session", async () => {
+    const expiresAt = new Date("2027-04-24T15:00:00.000Z");
+    authenticateUser.mockResolvedValue({ ok: true, token: "t", expiresAt, role: "pantalla" });
+    set.mockClear();
+
+    await loginAction(null, new FormData());
+
+    expect(set).toHaveBeenCalledWith("session", "t", expect.objectContaining({ expires: expiresAt }));
+  });
+
   // The no-enumeration property (R9.1/9.2) is NOT tested here. It lives in
   // `authenticateUser`, which has three failure causes to keep identical —
   // unknown username, wrong password, deactivated account — and
