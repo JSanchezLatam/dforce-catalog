@@ -5,6 +5,7 @@ import { panamaDay, parseAgendaParams, rangeFor } from "@/modules/agenda/dates";
 import { toAgendaItem, toWorkshopItem } from "@/modules/agenda/items";
 import { MonthView } from "@/modules/agenda/MonthView";
 import { agendaInWorkshop, agendaOverdue, agendaRange } from "@/modules/agenda/queries";
+import { ItemActions } from "@/modules/agenda/ItemActions";
 import { VencidasPanel } from "@/modules/agenda/VencidasPanel";
 import { WeekView } from "@/modules/agenda/WeekView";
 import { can } from "@/modules/auth/policy";
@@ -46,7 +47,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
       ) : (
         <DayView items={items} date={date} />
       )}
-      <VencidasPanel items={overdue.rows.map((row) => toAgendaItem(row, now))} total={overdue.total} truncated={overdue.truncated} />
+      <VencidasPanel items={overdue.rows.map((row) => toAgendaItem(row, now))} total={overdue.total} truncated={overdue.truncated} actions={(item) => <ItemActions item={item} />} />
     </div>
   );
 }
