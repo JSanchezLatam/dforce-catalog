@@ -68,10 +68,9 @@ describe("CustomerQuickForm", () => {
 
   it("Create requires customers.write: renders nothing without it", async () => {
     stubFetch([() => json({ cliente: CREATED }, 201)]);
-    const { user } = await fill(vi.fn(), false);
+    await fill(vi.fn(), false);
     expect(screen.queryByLabelText("Nombre")).not.toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
-    expect(user).toBeTruthy();
   });
 
   it("Successful create selects: exact payload, toast, and the new customer handed back", async () => {

@@ -302,7 +302,7 @@ Attaching a `producto` to a service order MUST be a record-only action: it captu
 
 ### Requirement: Async Customer Selection in Order Creation (R23)
 
-When creating or editing an `orden_servicio`, the customer picker MUST query customer search asynchronously (debounced, as staff types) instead of preloading the full customer list. A customer already selected on an order being edited MUST be resolved and rendered by id, even when it matches no current search term. WHEN a search yields zero exact matches, the picker MUST render near matches as the primary content, above any inline "create customer" affordance. The create affordance MUST appear only as a secondary action after the near matches, and MUST require `customers.write`; a user with only `customers.read` MUST see near matches with no create option. Every route (list, create, detail, status transition) MUST call `can()` for `service-orders.read`/`service-orders.write` after `requireSession()`, enforcing default-deny policy.
+When creating or editing an `orden_servicio`, the customer picker MUST query customer search asynchronously (debounced, as staff types) instead of preloading the full customer list. A customer already selected on an order being edited MUST be resolved and rendered by id, even when it matches no current search term. WHEN a search yields zero exact matches, the picker MUST render near matches as the primary content, above any inline "create customer" affordance. The create affordance MUST appear only as a secondary action after the near matches, and MUST require `customers.write`; a user with only `customers.read` MUST see near matches with no create option. Every route (list, create, detail, status transition) MUST call `can()` for `service-orders.read`/`service-orders.write` after `requireSession()`, enforcing default-deny policy. Each result row MUST put the customer's identifier under the name in one wrapping cell (header "Cliente") beside a "Seleccionar" button, so the button stays on screen at a 390 px phone width.
 
 #### Scenarios
 
@@ -533,6 +533,8 @@ The gate covers the fields the form and the patch path already carry — `catego
 
 The presence of the control and the acceptance of the write MUST be decided by one shared pure predicate over role, status and assignment, so the two cannot drift apart; for a closed status the predicate MUST report "correction required" for `administrador` (control shown as "Corregir") and "refused" for every other role. The UI deciding alone is not sufficient: `PATCH /api/service-orders/[id]` is the trust boundary, and the decision MUST be enforced in the service under a row lock (see `service-order-corrections`), evaluated against the order's status **as read from the database**, never a status supplied in the request body. A refusal MUST answer with a Spanish message and an accurate status code, never a 500.
 
+`PATCH /api/service-orders/[id]` MUST accept an optional `expectedStatus` on both the status path and the field path, so a client acting on a stale screen can refuse to write. A value outside `OrderStatus` MUST answer 400 `{ errors: { expectedStatus: "Estado esperado inválido" } }`. When present, it MUST be compared with the status read under `lockOrderForMutation`, before any write, and a mismatch MUST answer 409 `{ error: "stale_status", message: "La orden cambió mientras la mirabas. Actualizá la agenda." }` with nothing written and no reminder changed. A closed order keeps its own 409 first (the lock's edit gate runs before the comparison). Absent `expectedStatus`, behaviour MUST be exactly as before.
+
 #### Scenario: Administrador and jefe see the edit control on a booked or open order
 - GIVEN an order in `booked` or `open` status
 - WHEN an `administrador` or a `jefe_taller` opens its detail page
@@ -596,6 +598,21 @@ The presence of the control and the acceptance of the write MUST be decided by o
 - GIVEN a detail page that offers the edit control
 - WHEN it renders
 - THEN that control MUST measure at least 44x44 **[LAN]**
+
+#### Scenario: Stale cancel is refused by expectedStatus
+- GIVEN a `booked` order that another session has already moved to `open`
+- WHEN `PATCH { status: "cancelled", expectedStatus: "booked" }` is sent
+- THEN the answer MUST be 409 `stale_status`, the order MUST stay `open`, and no history row MUST be written **[e2e]**
+
+#### Scenario: Stale reprogram is refused by expectedStatus
+- GIVEN a `booked` order that another session has already moved to `open`
+- WHEN `PATCH { appointmentAt, expectedStatus: "booked" }` is sent
+- THEN the answer MUST be 409 `stale_status`, `appointment_at` MUST be unchanged and no reminder MUST change **[e2e]**
+
+#### Scenario: Absent expectedStatus leaves behaviour unchanged
+- GIVEN a status or field PATCH without `expectedStatus`
+- WHEN the route handles it
+- THEN it MUST behave exactly as before this guard existed **[unit]**
 
 ### Requirement: Order List Search Matches Customer, Vehicle, and Phone
 
