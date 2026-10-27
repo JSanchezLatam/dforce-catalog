@@ -34,8 +34,8 @@ describe("CustomerBoard", () => {
     render(<CustomerBoard initial={many} />);
 
     const col = within(screen.getByRole("region", { name: "En proceso" }));
-    expect(col.getAllByRole("listitem")).toHaveLength(12);
-    expect(col.getByText("+3 más")).toBeInTheDocument();
+    expect(col.getAllByRole("listitem")).toHaveLength(8);
+    expect(col.getByText("+7 más")).toBeInTheDocument();
   });
 
   describe("live polling", () => {
@@ -72,6 +72,23 @@ describe("CustomerBoard", () => {
 
       expect(screen.getByRole("status").textContent).toBe("Sin conexión · actualizado hace 1 min");
       expect(screen.getByText("AB1234")).toBeInTheDocument();
+    });
+
+    it("the banner appears 70 s after the last GOOD snapshot even when the failed polls land just short of a minute (59.6 s)", async () => {
+      // Good snapshot lands at t+30.4 s (400 ms latency); polls at 60 and 90 s fail, 59.6 s after it.
+      fetchMock.mockImplementationOnce(async () => {
+        await new Promise((r) => setTimeout(r, 400));
+        return new Response(JSON.stringify({ generatedAt: "2026-10-26T15:00:30.000Z", rows: [row("AB1234", "Recibida")] }), { status: 200 });
+      });
+      fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+      render(<CustomerBoard initial={SNAPSHOT} />);
+
+      await act(() => vi.advanceTimersByTimeAsync(90_000));
+      expect(screen.queryByRole("status")).not.toBeInTheDocument(); // 59.6 s since the good snapshot
+      await act(() => vi.advanceTimersByTimeAsync(11_000)); // t+101 s = 70.6 s since it
+      expect(screen.getByRole("status").textContent).toBe("Sin conexión · actualizado hace 1 min");
+      await act(() => vi.advanceTimersByTimeAsync(60_000)); // 130.6 s since it
+      expect(screen.getByRole("status").textContent).toBe("Sin conexión · actualizado hace 2 min");
     });
   });
 });

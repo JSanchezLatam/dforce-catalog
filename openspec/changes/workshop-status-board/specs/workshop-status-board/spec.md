@@ -146,12 +146,12 @@ The time in status of an order MUST be `now` minus the `changed_at` of the order
 
 ### Requirement: Resilient Polling
 
-Both views MUST paint the first snapshot from the server, then a client poller MUST fetch its JSON route every 30 seconds, without pausing for a hidden tab (a TV is always visible), with no overlapping requests. On a failed poll (network error, 5xx, malformed body) the poller MUST keep the last good snapshot on screen and MUST NOT blank, clear or replace it with an error page. While the last poll failed it MUST show a banner reading exactly `Sin conexión · actualizado hace N min`, where N is the whole minutes since the last good snapshot (minimum 1, singular and plural unchanged, with `·` U+00B7). The banner MUST disappear on the next successful poll. A 401 response MUST navigate to `/login`. A 403 response MUST navigate to `/`, whose role-aware landing decides where the user belongs, and MUST NOT navigate to `/login`. Polling code MUST NOT use any secure-context-only API (`crypto.randomUUID`, `crypto.subtle`, wake lock, service workers, clipboard) because the app is served over plain HTTP on the LAN.
+Both views MUST paint the first snapshot from the server, then a client poller MUST fetch its JSON route every 30 seconds, without pausing for a hidden tab (a TV is always visible), with no overlapping requests. On a failed poll (network error, 5xx, malformed body) the poller MUST keep the last good snapshot on screen and MUST NOT blank, clear or replace it with an error page. While the last poll failed it MUST show a banner reading exactly `Sin conexión · actualizado hace N min`, where N is the whole minutes between the last good snapshot and the LIVE clock (re-evaluated at least every 10 seconds while a failure is current, not only at poll time; minimum 1, singular and plural unchanged, with `·` U+00B7). The banner MUST disappear on the next successful poll. A 401 response MUST navigate to `/login`. A 403 response MUST navigate to `/`, whose role-aware landing decides where the user belongs, and MUST NOT navigate to `/login`. Polling code MUST NOT use any secure-context-only API (`crypto.randomUUID`, `crypto.subtle`, wake lock, service workers, clipboard) because the app is served over plain HTTP on the LAN.
 
 #### Scenario: Failure keeps the snapshot
 - GIVEN a rendered snapshot and a poll that rejects
 - WHEN the poll fails
-- THEN every row MUST remain and the banner `Sin conexión · actualizado hace 1 min` MUST appear once a minute has elapsed since the last good snapshot **[unit]**
+- THEN every row MUST remain and the banner `Sin conexión · actualizado hace 1 min` MUST appear once a minute has elapsed since the last good snapshot, at the next clock tick even when the failed polls landed just short of a minute **[unit]**
 
 #### Scenario: Recovery clears the banner
 - GIVEN the banner is shown
@@ -218,7 +218,7 @@ After login, after the forced password change, and when an authenticated user re
 
 ### Requirement: Pantalla Has No Application Access
 
-The role `pantalla` MUST be denied every action except `board.customer`: it MUST NOT hold `account.self`, `users.manage`, or any inventory, catalog, customer, vehicle, service-order, technician, metrics or settings action. Every route, page and API other than the customer view and its poll route MUST therefore answer `PermissionDenied` / 403 for `pantalla`, and it MUST NOT see the application sidebar (the board layout is chrome-less). `can()` MUST fail closed, and order scoping MUST give `pantalla` no orders. The nav MUST offer a link to `/tablero` only to roles holding `board.read`.
+The role `pantalla` MUST be denied every action except `board.customer`: it MUST NOT hold `account.self`, `users.manage`, or any inventory, catalog, customer, vehicle, service-order, technician, metrics or settings action. Every API route other than the customer poll route MUST therefore answer 403 for `pantalla`, every page inside the application shell MUST redirect `pantalla` to `/tablero/clientes` before the shell renders, and `/tablero` MUST render `PermissionDenied` inside the chrome-less board layout. `pantalla` MUST NOT see the application sidebar on any page. `can()` MUST fail closed, and order scoping MUST give `pantalla` no orders. The nav MUST offer a link to `/tablero` only to roles holding `board.read`.
 
 #### Scenario: Matrix row is all-false but one
 - GIVEN the permission matrix
@@ -228,7 +228,7 @@ The role `pantalla` MUST be denied every action except `board.customer`: it MUST
 #### Scenario: Other routes denied
 - GIVEN a `pantalla` session
 - WHEN it requests `/inventory`, `/service-orders`, `/users`, `/account` or `GET /api/users`
-- THEN pages MUST render `PermissionDenied` and APIs MUST answer 403 **[e2e]**
+- THEN the application layout MUST redirect pages to `/tablero/clientes` before rendering the sidebar shell **[unit]**, the page functions themselves MUST still answer `PermissionDenied` if reached, and APIs MUST answer 403 **[e2e]**
 
 #### Scenario: No chrome on the board
 - GIVEN a `pantalla` session on `/tablero/clientes`
@@ -262,6 +262,11 @@ The boards MUST render from a chrome-less layout under `src/app/tablero/**`, rea
 - GIVEN each view open on the real TV (or a 1080p display) at the LAN IP
 - WHEN viewed from the room's distance
 - THEN plate, vehicle and status MUST be readable and no row clipped with a realistic number of orders **[browser]**
+
+#### Scenario: Fixed height and phone width
+- GIVEN the customer view with more than 8 orders in a column, or the full board on a 390 px phone
+- WHEN rendered
+- THEN each customer column MUST show at most 8 rows plus `+N más` so the page fits 1080 px, appointment times MUST render as digits only (`DD/MM HH:mm`, Panama time, identical in Node and browsers), and the full board grid MUST scroll horizontally inside its own container, never the page **[unit]**
 
 #### Scenario: No hydration or RSC errors
 - GIVEN each view opened at the LAN IP with real data

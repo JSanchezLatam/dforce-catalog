@@ -188,7 +188,7 @@ describe("board routes (E2E)", () => {
     expect((await BoardPage()).type).toBe(PermissionDenied);
   });
 
-  it("Customer data seeded, board payload clean: the administrador's /api/board body has neither the name nor the phone", async () => {
+  it("Customer data seeded, board payload clean: the jefe_taller's /api/board body has neither the name nor the phone", async () => {
     const admin = await loggedIn("fulladmin", "jefe_taller");
 
     const text = await (await poll(admin.token, true)).text();

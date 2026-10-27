@@ -169,3 +169,41 @@ describe("handleProxy() — valid session", () => {
     expect(response.headers.get("x-middleware-request-x-user-role")).toBe("administrador");
   });
 });
+
+describe("handleProxy() - session validation throws (database down)", () => {
+  const boom = () => vi.fn().mockRejectedValue(new Error("connect ECONNREFUSED"));
+  const quiet = () => vi.spyOn(console, "error").mockImplementation(() => {});
+
+  it("answers an API route 503 JSON, never 401 and never a redirect", async () => {
+    const spy = quiet();
+    const response = await handleProxy(apiRequest("/api/board", "tok"), { validateSession: boom() });
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "Service unavailable" });
+    expect(response.headers.get("location")).toBeNull();
+    spy.mockRestore();
+  });
+
+  it("answers a page 503 with a self-refreshing Spanish HTML page, never a redirect to /login and no cookie cleared", async () => {
+    const spy = quiet();
+    const response = await handleProxy(pageRequest("/tablero/clientes", "tok"), { validateSession: boom() });
+    const html = await response.text();
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("content-type")).toMatch(/text\/html/);
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(html).toContain('<html lang="es">');
+    expect(html).toContain('<meta http-equiv="refresh" content="30">');
+    expect(html).toContain("Sin conexión, reintentando…");
+    spy.mockRestore();
+  });
+
+  it("logs the error with console.error", async () => {
+    const spy = quiet();
+    await handleProxy(pageRequest("/inventory", "tok"), { validateSession: boom() });
+
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+});

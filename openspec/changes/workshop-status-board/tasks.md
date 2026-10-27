@@ -97,6 +97,13 @@ Closing steps for every unit (last task of each): gates → `gga config` → `GG
   - Console clean: no hydration mismatch and no Server Component serialization error on either view (data volume matters: seed enough rows).
 - [ ] 4.9 Document in the PR (docs only, no code): create the screen account at `/users`, kiosk OS setup (wake, auto-start). Follow-ups to list, not build: `proxy.ts:50` has no try/catch (a TV loading during a DB outage never reaches `error.tsx`); "+N más" vs auto-scroll; "Terminada" copy confirmation.
 - [ ] 4.10 Closing steps (gates, GGA `PR_BASE_BRANCH=feat/workshop-status-board-wu3`, PR → wu3). Then: all four PRs landed → tracker out of draft → merge to `main` (state branch/pushed/merged).
+- [x] 4.11 Fix round (browser checks) D1: `formatBoardTime` replaces `formatDateTime` in `WorkshopBoard` (hydration mismatch, NBSP vs space). Exact-string + regex tests.
+- [x] 4.12 D2: stale banner measured against a live clock (`now`, 10 s ticker only while failing, cleared on success/unmount).
+- [x] 4.13 D3: customer `MAX_ROWS` 12 -> 8.
+- [x] 4.14 D4: `proxy.ts` catches session-validation errors: 503 JSON for `/api/*`, 503 self-refreshing HTML for pages. (Closes the 4.9 follow-up and the first "Follow-ups" bullet.)
+- [x] 4.15 D5: `(app)/layout.tsx` redirects `pantalla` to its landing before the shell. Spec scenario "Other routes denied" updated.
+- [x] 4.16 D6: full board grid inside an `overflow-x-auto` wrapper.
+- [x] 4.17 GGA: dropped the "no control" claim from `tablero/page.test.tsx`; renamed the jefe_taller e2e test that said administrador.
 
 ## Follow-ups (out of scope)
 

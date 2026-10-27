@@ -141,3 +141,23 @@
 - No browser check (4.8): RSC serialization of the page props, hydration of the Panama-formatted appointment (ICU differences between Node and the browser are possible), 7-column layout and TV legibility on a real screen, the chrome-less layout for staff.
 - `formatDateTime` renders `es-PA` date + time with seconds; the exact look was not reviewed against a mockup.
 - Engram `mem_save` of apply-progress NOT done (no memory tool in this executor); file store only.
+
+## Fix round (browser checks)
+
+Branch `feat/workshop-status-board-fixes`. RED seen first for every fix; mutation-verified by name.
+
+| # | Fix | Test | Mutation result |
+|---|---|---|---|
+| 1 | `formatBoardTime` (`board/format.ts`, parts of `Intl.DateTimeFormat` Panama, h23) used by `WorkshopBoard` | format.test "renders a known instant in Panama time (UTC-5), exact string", "crosses the Panama day boundary", "is digits and separators only"; WorkshopBoard "Booked order without a vehicle ..." asserts `27/10 10:00` | UTC zone -> first two red; `hour12` -> exact-string red; `toLocaleString` back in component -> Booked order test red |
+| 2 | `useBoardSnapshot` returns `now` (10 s ticker only while `failedAt !== null`); `StaleBanner({lastOkAt, now})` | useBoardSnapshot "exposes a live `now` ...", "a success clears `now` ...", "unmounting during a failure clears the ticker too"; CustomerBoard "the banner appears 70 s after the last GOOD snapshot ... (59.6 s)"; StaleBanner tests | ticker no-op -> the 59.6 s test and "exposes a live now" red; clearInterval removed -> the two timer-count tests red; banner threshold 2 -> "reads exactly ... hace 1 min" red |
+| 3 | `MAX_ROWS` 8 | CustomerBoard "clips a long column with `+N más`" | back to 12 -> red |
+| 4 | `proxy.ts` `unavailable()` on a throwing validator, logged with `console.error` | proxy.test "session validation throws (database down)": API 503 JSON, page 503 HTML + refresh meta + no redirect/cookie, logs | `denyAccess` instead -> API and page tests red |
+| 5 | `(app)/layout.tsx` redirects `pantalla` | layout.test "redirects a pantalla session to its landing ..." | line removed -> red |
+| 6 | `overflow-x-auto` wrapper + `min-w-[72rem]` grid | WorkshopBoard "the 7-column grid scrolls inside its own container ..." | wrapper plain div -> red |
+
+Also: GGA (a) and (b) done. Errors from the proxy go to `console.error` only; the repo's other server catch blocks swallow errors and Sentry is wired through `instrumentation.ts` `onRequestError` (uncaught only), so this is not sent to Sentry.
+
+### Unchecked
+- Nothing re-verified in a browser: hydration, the 1080 px height at 8 rows (row height ~112 px is the orchestrator's measurement, not mine), the 390 px phone, the 503 page on a real DB outage, the redirect for `pantalla` on a real `/inventory`.
+- `min-w-[72rem]` (1152 px) is my choice for the grid; a TV is wider so it is a no-op there.
+- e2e (g) in `pantalla-role.e2e.test.ts` calls pages as functions, so it still passes; its wording was not changed.

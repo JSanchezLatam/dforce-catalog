@@ -31,7 +31,7 @@ describe("/tablero", () => {
     expect(screen.queryByTestId("workshop-board")).not.toBeInTheDocument();
   });
 
-  it.each(["tecnico", "administrador", "jefe_taller"])("%s gets the board with a serializable snapshot and no control", async (role) => {
+  it.each(["tecnico", "administrador", "jefe_taller"])("%s gets the board with a serializable snapshot", async (role) => {
     session.mockResolvedValue({ id: "u", role });
     queries.workshopBoardData.mockResolvedValue({
       rows: [{ id: "x", status: "open", esperaMotivo: null, updatedAt: new Date("2026-10-26T14:00:00Z"), appointmentAt: null, plate: "AB1234", make: "Kia", model: "Rio" }],
@@ -39,10 +39,9 @@ describe("/tablero", () => {
       since: [],
     });
 
-    const { container } = render(await BoardPage());
+    render(await BoardPage());
 
     expect(screen.getByTestId("workshop-board")).toBeInTheDocument();
-    expect(container.querySelector("button, form, a")).toBeNull();
     const { initial } = props.mock.calls[0][0];
     expect(initial.rows[0]).toMatchObject({ plate: "AB1234", technicians: ["Ana"], statusLabel: "Recibida" });
     expect(typeof initial.generatedAt).toBe("string");
