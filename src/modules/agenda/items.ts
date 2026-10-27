@@ -189,7 +189,19 @@ export function matchesSearch(item: AgendaItem, search: string): boolean {
 
 export type AgendaTab = "todas" | "agendadas";
 
-/** "Agendadas" keeps the booked cards that are not Vencida; "Todas" keeps all. */
-export function filterItems(items: readonly AgendaItem[], tab: AgendaTab, search: string): AgendaItem[] {
-  return items.filter((i) => matchesSearch(i, search) && (tab === "todas" || (i.status === "booked" && !i.overdue)));
+/** The five types plus "none" (no category): also the `data-categoria` hook of the colour dot. */
+export type TypeKey = ServiceCategory | "none";
+export const TYPE_KEYS: readonly TypeKey[] = ["instalacion", "mant_preventivo", "mant_correctivo", "reparacion", "revisado", "none"];
+const typeKey = (i: AgendaItem): TypeKey => i.categoria ?? "none";
+
+/** Cards per type over the loaded cards: independent of the search, the tab and the checkboxes. */
+export function typeCounts(items: readonly AgendaItem[]): Record<TypeKey, number> {
+  const counts = Object.fromEntries(TYPE_KEYS.map((k) => [k, 0])) as Record<TypeKey, number>;
+  for (const i of items) counts[typeKey(i)]++;
+  return counts;
+}
+
+/** "Agendadas" keeps the booked cards that are not Vencida, "Todas" keeps all; `hidden` are the unchecked types. */
+export function filterItems(items: readonly AgendaItem[], tab: AgendaTab, search: string, hidden: readonly TypeKey[] = []): AgendaItem[] {
+  return items.filter((i) => matchesSearch(i, search) && !hidden.includes(typeKey(i)) && (tab === "todas" || (i.status === "booked" && !i.overdue)));
 }

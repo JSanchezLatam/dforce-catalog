@@ -12,7 +12,7 @@ const DAY = "2026-10-27";
 const at = (id: string, over: Parameters<typeof makeItem>[0] = {}) =>
   makeItem({ id, dayKey: DAY, customerName: `Cliente ${id}`, time: "09:00", minuteOfDay: 9 * 60, ...over });
 
-const base = { date: DAY, today: DAY, nowMinute: 10 * 60 + 40, workshop: null, workshopTruncated: false, roster: null, overdueTotal: 0, overdue: [], overdueTruncated: false, truncated: false } as const;
+const base = { date: DAY, today: DAY, nowMinute: 10 * 60 + 40, workshop: null, workshopTruncated: false, roster: null, overdueTotal: 0, overdue: [], overdueTruncated: false, truncated: false, weekSummary: [] } as const;
 
 /** jsdom matches no media query: the width is whatever the test says, and the query is recorded. */
 function setWidth(wide: boolean) {
@@ -376,5 +376,72 @@ describe("AgendaShell", () => {
     fireEvent.change(screen.getByPlaceholderText("Buscar placa o cliente…"), { target: { value: "zzzz" } });
     expect(screen.getAllByText("Sin resultados")).toHaveLength(1);
     expect(screen.queryByText("Sin citas para este día")).not.toBeInTheDocument();
+  });
+
+  describe("side column", () => {
+    const items = [
+      at("a", { categoria: "revisado" }),
+      at("b", { categoria: "reparacion", time: "11:00", minuteOfDay: 11 * 60 }),
+      at("c", { categoria: null, time: "12:00", minuteOfDay: 12 * 60 }),
+    ];
+    const box = (name: RegExp) => screen.getByRole("checkbox", { name });
+
+    it("Esta semana shows the summary the page computed", () => {
+      render(<AgendaShell {...base} view="day" items={[]} weekSummary={[{ label: "Agendadas", count: 5 }, { label: "Vencidas", count: 2 }]} />);
+      const week = within(screen.getByRole("region", { name: "Esta semana" }));
+      expect(week.getByText("Agendadas").parentElement).toHaveTextContent("Agendadas5");
+      expect(week.getByText("Vencidas").parentElement).toHaveTextContent("Vencidas2");
+    });
+
+    it("Unchecking hides a type: its cards go, the counts and the other cards stay", async () => {
+      render(<AgendaShell {...base} view="week" items={items} />);
+      await userEvent.click(box(/REVISADO/));
+      expect(screen.queryByRole("button", { name: /Cliente a/ })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Cliente b/ })).toBeInTheDocument();
+      expect(box(/REVISADO/)).not.toBeChecked();
+      expect(box(/REVISADO/)).toHaveAccessibleName("REVISADO 1");
+      await userEvent.click(box(/REVISADO/));
+      expect(box(/REVISADO/)).toBeChecked();
+      expect(screen.getByRole("button", { name: /Cliente a/ })).toBeInTheDocument();
+    });
+
+    it("Type counts do not follow the search", () => {
+      render(<AgendaShell {...base} view="day" items={items} />);
+      fireEvent.change(screen.getByPlaceholderText("Buscar placa o cliente…"), { target: { value: "Cliente b" } });
+      expect(box(/REVISADO/)).toHaveAccessibleName("REVISADO 1");
+      expect(box(/Sin categoría/)).toHaveAccessibleName("Sin categoría 1");
+    });
+
+    it("the Agendadas badge counts the cards the filter leaves", async () => {
+      render(<AgendaShell {...base} view="day" items={items} />);
+      expect(screen.getByRole("tab", { name: /Agendadas/ })).toHaveTextContent("3");
+      await userEvent.click(box(/REVISADO/));
+      expect(screen.getByRole("tab", { name: /Agendadas/ })).toHaveTextContent("2");
+    });
+
+    it("Todos resets: every type is checked again and the cards return", async () => {
+      render(<AgendaShell {...base} view="day" items={items} />);
+      await userEvent.click(box(/REVISADO/));
+      await userEvent.click(box(/Reparación/));
+      await userEvent.click(screen.getByRole("button", { name: "Todos" }));
+      for (const b of screen.getAllByRole("checkbox")) expect(b).toBeChecked();
+      expect(screen.getAllByRole("button", { name: /Cliente/ })).toHaveLength(3);
+    });
+
+    it("the filter covers the Vencidas list too", async () => {
+      const late = (id: string, categoria: "revisado" | "reparacion") => makeItem({ id, customerName: `Tarde ${id}`, categoria, overdue: true });
+      render(<AgendaShell {...base} overdueTotal={2} overdue={[late("x", "revisado"), late("y", "reparacion")]} view="day" items={[]} />);
+      await userEvent.click(screen.getByRole("tab", { name: /Vencidas/ }));
+      await userEvent.click(box(/REVISADO/));
+      expect(screen.getAllByRole("listitem")).toHaveLength(1);
+      expect(screen.getByRole("tab", { name: /Vencidas/ })).toHaveTextContent("2");
+    });
+
+    it("a card hidden by the filter closes its Detail", async () => {
+      render(<AgendaShell {...base} view="day" items={items} />);
+      await userEvent.click(card(/Cliente a/));
+      fireEvent.click(box(/REVISADO/));
+      expect(popover()).toBeNull();
+    });
   });
 });

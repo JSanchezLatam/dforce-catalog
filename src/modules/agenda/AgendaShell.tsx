@@ -12,12 +12,13 @@ import { Popover, PopoverContent } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { AgendaDetail } from "@/modules/agenda/AgendaDetail";
 import { AgendaHeader } from "@/modules/agenda/AgendaHeader";
+import { AgendaSidebar } from "@/modules/agenda/AgendaSidebar";
 import { AgendaTabs, type TabKey } from "@/modules/agenda/AgendaTabs";
 
 import { CombinedView } from "@/modules/agenda/CombinedView";
 import { addDays, weekStart, type AgendaView } from "@/modules/agenda/dates";
 import { DayGrid } from "@/modules/agenda/DayGrid";
-import { filterItems, type AgendaItem, type WorkshopItem } from "@/modules/agenda/items";
+import { filterItems, typeCounts, type AgendaItem, type TypeKey, type WorkshopItem } from "@/modules/agenda/items";
 import { VencidasList } from "@/modules/agenda/VencidasList";
 import { MonthView } from "@/modules/agenda/MonthView";
 import { WeekGrid } from "@/modules/agenda/WeekGrid";
@@ -41,11 +42,14 @@ type Props = {
   overdueTruncated: boolean;
   /** The range query hit its row cap: the header says so. */
   truncated: boolean;
+  /** "Esta semana", from the page's own count query. */
+  weekSummary: readonly { label: string; count: number }[];
 };
 
-export function AgendaShell({ view, date, today, nowMinute, items, workshop, workshopTruncated, roster, overdueTotal, overdue, overdueTruncated, truncated }: Props) {
+export function AgendaShell({ view, date, today, nowMinute, items, workshop, workshopTruncated, roster, overdueTotal, overdue, overdueTruncated, truncated, weekSummary }: Props) {
   const [tab, setTab] = useState<TabKey>("todas");
   const [search, setSearch] = useState("");
+  const [hidden, setHidden] = useState<readonly TypeKey[]>([]);
   const scope = `${view}|${date}`;
   const [open, setOpen] = useState<{ id: string; anchor: HTMLElement; wide: boolean; scope: string } | null>(null);
   // The width is read here, in the click, never while rendering: a render-time read differs between the server and
@@ -54,8 +58,8 @@ export function AgendaShell({ view, date, today, nowMinute, items, workshop, wor
     setOpen({ id: item.id, anchor, wide: window.matchMedia("(min-width: 768px)").matches, scope });
   const close = () => setOpen(null);
   const onVencidas = tab === "vencidas";
-  const visible = filterItems(items, tab === "agendadas" ? "agendadas" : "todas", search);
-  const overdueVisible = filterItems(overdue, "todas", search);
+  const visible = filterItems(items, tab === "agendadas" ? "agendadas" : "todas", search, hidden);
+  const overdueVisible = filterItems(overdue, "todas", search, hidden);
   // The Detail belongs to the view and date it opened in (`scope`): its anchor is a card element of that render, so
   // on any other the element is gone. Dropped in render (React's derived-state pattern) so coming back never reopens it.
   const selected = open?.scope === scope ? (onVencidas ? overdueVisible : visible).find((i) => i.id === open.id) : undefined;
@@ -72,20 +76,31 @@ export function AgendaShell({ view, date, today, nowMinute, items, workshop, wor
         today={today}
         truncated={truncated}
         search={<Input type="search" aria-label="Buscar" placeholder="Buscar placa o cliente…" value={search} onChange={(e) => setSearch(e.target.value)} className="min-h-11 sm:w-64" />}
-        tabs={<AgendaTabs tab={tab} agendadas={filterItems(items, "agendadas", search).length} vencidas={overdueTotal} onTab={setTab} />}
+        tabs={<AgendaTabs tab={tab} agendadas={filterItems(items, "agendadas", search, hidden).length} vencidas={overdueTotal} onTab={setTab} />}
       />
-      {noMatch && !onVencidas && (view === "week" || view === "month") ? <p role="status" className="text-sm text-muted-foreground">Sin resultados</p> : null}
-      {onVencidas ? (
-        <VencidasList items={overdueVisible} empty={overdue.length === 0 ? "Sin citas vencidas" : "Sin resultados"} truncated={overdueTruncated} selectedId={selected?.id ?? null} onSelect={select} />
-      ) : view === "month" ? (
-        <MonthView date={date} today={today} items={visible} />
-      ) : view === "week" ? (
-        <WeekGrid days={Array.from({ length: 7 }, (_, i) => addDays(weekStart(date), i))} items={visible} {...grid} />
-      ) : view === "combined" ? (
-        <CombinedView date={date} items={visible} workshop={workshop ?? []} workshopTruncated={workshopTruncated} emptyText={emptyText} {...grid} />
-      ) : (
-        <DayGrid date={date} items={visible} emptyText={emptyText} {...grid} />
-      )}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+        <AgendaSidebar
+          counts={typeCounts(items)}
+          hidden={hidden}
+          summary={weekSummary}
+          onToggle={(key) => setHidden((h) => (h.includes(key) ? h.filter((k) => k !== key) : [...h, key]))}
+          onAll={() => setHidden([])}
+        />
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+            {noMatch && !onVencidas && (view === "week" || view === "month") ? <p role="status" className="text-sm text-muted-foreground">Sin resultados</p> : null}
+            {onVencidas ? (
+              <VencidasList items={overdueVisible} empty={overdue.length === 0 ? "Sin citas vencidas" : "Sin resultados"} truncated={overdueTruncated} selectedId={selected?.id ?? null} onSelect={select} />
+            ) : view === "month" ? (
+              <MonthView date={date} today={today} items={visible} />
+            ) : view === "week" ? (
+              <WeekGrid days={Array.from({ length: 7 }, (_, i) => addDays(weekStart(date), i))} items={visible} {...grid} />
+            ) : view === "combined" ? (
+              <CombinedView date={date} items={visible} workshop={workshop ?? []} workshopTruncated={workshopTruncated} emptyText={emptyText} {...grid} />
+            ) : (
+              <DayGrid date={date} items={visible} emptyText={emptyText} {...grid} />
+            )}
+        </div>
+      </div>
       {selected && open?.wide ? (
         <Popover open onOpenChange={(next) => !next && close()}>
           <PopoverContent anchor={open.anchor} aria-label="Detalle de la cita">

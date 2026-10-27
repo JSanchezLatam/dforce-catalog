@@ -1,7 +1,7 @@
 import { AgendaShell } from "@/modules/agenda/AgendaShell";
 import { panamaDay, panamaMinute, parseAgendaParams, rangeFor } from "@/modules/agenda/dates";
-import { toAgendaItem, toWorkshopItem } from "@/modules/agenda/items";
-import { agendaInWorkshop, agendaOverdue, agendaRange } from "@/modules/agenda/queries";
+import { toAgendaItem, toWeekSummary, toWorkshopItem } from "@/modules/agenda/items";
+import { agendaInWorkshop, agendaOverdue, agendaRange, agendaWeekCounts } from "@/modules/agenda/queries";
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { listTecnicos } from "@/modules/technicians/queries";
@@ -20,11 +20,12 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
   const now = new Date();
   const { view, date } = parseAgendaParams(await searchParams, now);
   const scope = orderScope(user);
-  const [{ rows, truncated }, overdue, workshop, tecnicos] = await Promise.all([
+  const [{ rows, truncated }, overdue, workshop, tecnicos, weekCounts] = await Promise.all([
     agendaRange(scope, rangeFor(view, date)),
     agendaOverdue(scope, now),
     view === "combined" ? agendaInWorkshop(scope) : null,
     can(user, "service-orders.assign") ? listTecnicos() : null,
+    agendaWeekCounts(scope, rangeFor("week", date), now),
   ]);
   const items = rows.map((row) => toAgendaItem(row, now));
   const today = panamaDay(now);
@@ -41,6 +42,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
         workshopTruncated={workshop?.truncated ?? false}
         roster={tecnicos ? tecnicos.map(({ id, nombre }) => ({ id, nombre })) : null}
         truncated={truncated}
+        weekSummary={toWeekSummary(weekCounts)}
         overdueTotal={overdue.total}
         overdue={overdue.rows.map((row) => toAgendaItem(row, now))}
         overdueTruncated={overdue.truncated}
