@@ -34,10 +34,10 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     expect(configGroup.pinBottom).toBe(true);
   });
 
-  it("admin sees all CRM items, Vencimientos right after Órdenes de servicio (Clientes, Órdenes de servicio, Vencimientos, Inventario, Métricas, Tablero)", () => {
+  it("admin sees all CRM items, Agenda and Vencimientos right after Órdenes de servicio (Clientes, Órdenes de servicio, Agenda, Vencimientos, Inventario, Métricas, Tablero)", () => {
     const groups = getNavGroups(admin);
     const crm = groups.find((g) => g.label === "CRM")!;
-    expect(crm.items.map((i) => i.label)).toEqual(["Clientes", "Órdenes de servicio", "Vencimientos", "Inventario", "Métricas", "Tablero"]);
+    expect(crm.items.map((i) => i.label)).toEqual(["Clientes", "Órdenes de servicio", "Agenda", "Vencimientos", "Inventario", "Métricas", "Tablero"]);
   });
 
   // metrics-dashboard WU2: one entry per viewer, never two. `getNavGroups` filters on a
@@ -62,6 +62,19 @@ describe("getNavGroups() — grouped sidebar nav", () => {
       const crm = getNavGroups(user).find((g) => g.label === "CRM")!;
       expect(crm.items.find((i) => i.label === "Tablero")).toMatchObject({ href: "/tablero", icon: "board", action: "board.read" });
     }
+    expect(getNavGroups({ id: "p", role: "pantalla" } as SessionUser)).toEqual([]);
+  });
+
+  // workshop-agenda WU1: "Agenda" follows `agenda.manage`; the glyph is its own (CalendarDays).
+  it("Nav link by role: Agenda (/agenda) right after Órdenes de servicio for administrador and jefe_taller, and for no other role", () => {
+    for (const user of [admin, jefe]) {
+      const crm = getNavGroups(user).find((g) => g.label === "CRM")!;
+      expect(crm.items.find((i) => i.label === "Agenda")).toMatchObject({ href: "/agenda", icon: "agenda", action: "agenda.manage" });
+      const labels = crm.items.map((i) => i.label);
+      expect(labels.indexOf("Agenda")).toBe(labels.indexOf("Órdenes de servicio") + 1);
+    }
+    const crm = getNavGroups(tecnico).find((g) => g.label === "CRM")!;
+    expect(crm.items.map((i) => i.label)).not.toContain("Agenda");
     expect(getNavGroups({ id: "p", role: "pantalla" } as SessionUser)).toEqual([]);
   });
 
@@ -148,10 +161,10 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     expect(totalItems).toBe(6);
   });
 
-  it("admin sees 12 total items across 3 groups", () => {
+  it("admin sees 13 total items across 3 groups", () => {
     const groups = getNavGroups(admin);
     const totalItems = groups.reduce((s, g) => s + g.items.length, 0);
-    expect(totalItems).toBe(12);
+    expect(totalItems).toBe(13);
   });
 
   // Stable ids decouple sidebar-group-collapse cookie state from display
