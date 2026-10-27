@@ -36,6 +36,7 @@ const adminGrants: Grants = {
   "metrics.self": false,
   "board.customer": true,
   "board.read": true,
+  "agenda.manage": true,
 };
 
 // Every administrador grant except the four the owner keeps for himself, and
@@ -81,6 +82,7 @@ const tecnicoGrants: Grants = {
   "metrics.self": true,
   "board.customer": false,
   "board.read": true,
+  "agenda.manage": false,
 };
 
 // The big-screen account holds `board.customer` and nothing else.
@@ -121,6 +123,13 @@ describe("can() — role × action permission matrix", () => {
     for (const action of ACTIONS) {
       expect(can(user, action)).toBe(action === "board.customer");
     }
+  });
+
+  it("Matrix row per role: agenda.manage is true for administrador and jefe_taller, false for tecnico and pantalla", () => {
+    expect(can({ role: "administrador" }, "agenda.manage")).toBe(true);
+    expect(can({ role: "jefe_taller" }, "agenda.manage")).toBe(true);
+    expect(can({ role: "tecnico" }, "agenda.manage")).toBe(false);
+    expect(can({ role: "pantalla" }, "agenda.manage")).toBe(false);
   });
 
   it("Access Matrix: board.customer is for administrador, jefe_taller and pantalla, never tecnico", () => {

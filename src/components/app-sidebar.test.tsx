@@ -241,3 +241,22 @@ describe("AppSidebar — Tablero icon", () => {
     expect(svg).toHaveClass("lucide-layout-dashboard");
   });
 });
+
+describe("AppSidebar — Agenda icon", () => {
+  it("renders the `agenda` key as CalendarDays, not the Package fallback", () => {
+    render(
+      <SidebarProvider defaultOpen>
+        <AppSidebar
+          navGroups={[{ id: "crm", label: "CRM", items: [{ kind: "link", href: "/agenda", label: "Agenda", icon: "agenda" }] }]}
+          user={{ id: "u1", role: "administrador", name: "Jorge" }}
+          workshopName="Taller Demo"
+          logoR2Key={null}
+          initialCollapseState={DEFAULT_NAV_COLLAPSE_STATE}
+        />
+      </SidebarProvider>,
+    );
+
+    const svg = screen.getByRole("link", { name: "Agenda" }).querySelector("svg");
+    expect(svg).toHaveClass("lucide-calendar-days");
+  });
+});
