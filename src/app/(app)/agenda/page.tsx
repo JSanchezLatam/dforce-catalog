@@ -7,6 +7,7 @@ import { ItemActions } from "@/modules/agenda/ItemActions";
 import { VencidasPanel } from "@/modules/agenda/VencidasPanel";
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
+import { listTecnicos } from "@/modules/technicians/queries";
 import { orderScope } from "@/modules/service-orders/scope";
 import { PageHeader } from "@/shared/ui/PageHeader";
 import { PermissionDenied } from "@/shared/ui/PermissionDenied";
@@ -23,10 +24,11 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
   const now = new Date();
   const { view, date } = parseAgendaParams(await searchParams, now);
   const scope = orderScope(user);
-  const [{ rows, truncated }, overdue, workshop] = await Promise.all([
+  const [{ rows, truncated }, overdue, workshop, tecnicos] = await Promise.all([
     agendaRange(scope, rangeFor(view, date)),
     agendaOverdue(scope, now),
     view === "combined" ? agendaInWorkshop(scope) : null,
+    can(user, "service-orders.assign") ? listTecnicos() : null,
   ]);
   const items = rows.map((row) => toAgendaItem(row, now));
   const today = panamaDay(now);
@@ -43,6 +45,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
         items={items}
         workshop={workshop ? workshop.rows.map((r) => toWorkshopItem(r, now)) : null}
         workshopTruncated={workshop?.truncated ?? false}
+        roster={tecnicos ? tecnicos.map(({ id, nombre }) => ({ id, nombre })) : null}
       />
       <VencidasPanel items={overdue.rows.map((row) => toAgendaItem(row, now))} total={overdue.total} truncated={overdue.truncated} actions={(item) => <ItemActions item={item} />} />
     </div>

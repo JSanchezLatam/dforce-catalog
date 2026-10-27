@@ -2,8 +2,8 @@
  * agenda/AgendaDetail.tsx - the content of an appointment's Detail. The shell puts it in a popover (md and up) or a
  * bottom sheet (below md); this component knows neither. A client component: the close is reported through
  * `onClose`, every text comes from the item (the day text from static tables, so server and browser agree), and a
- * booked Detail edits the category through `patchOrder`. The shell keys it by order id, so its pending and error
- * state never follow the selection to another appointment.
+ * booked Detail edits the category through `patchOrder` and assigns a technician through the existing control. The
+ * shell keys it by order id, so its pending and error state never follow the selection to another appointment.
  */
 "use client";
 
@@ -18,6 +18,7 @@ import { ItemActions } from "@/modules/agenda/ItemActions";
 import type { AgendaItem } from "@/modules/agenda/items";
 import { patchOrder } from "@/modules/agenda/patchOrder";
 import { CATEGORIA_LABEL, type ServiceCategory } from "@/modules/service-orders/categories";
+import { AssignTecnicoControl } from "@/modules/service-orders/AssignTecnicoControl";
 import { FIELD_ERROR } from "@/shared/ui/styles";
 import { useToast } from "@/shared/ui/ToastProvider";
 
@@ -28,7 +29,21 @@ const statusTitle = (item: AgendaItem) => (item.overdue ? "Vencida" : item.statu
 
 const CHIP = "agenda-ev min-h-11 rounded-full px-3 text-xs font-semibold";
 
-export function AgendaDetail({ item, onClose }: { item: AgendaItem; onClose: () => void }) {
+/** "+ Asignar técnico" opens the existing control; it lists the active roster minus whoever is already on the order. */
+function AssignSection({ item, roster }: { item: AgendaItem; roster: { id: string; nombre: string }[] }) {
+  const [open, setOpen] = useState(false);
+  if (!open) {
+    return (
+      <Button type="button" variant="outline" className="min-h-11 min-w-11 self-start" onClick={() => setOpen(true)}>
+        + Asignar técnico
+      </Button>
+    );
+  }
+  return <AssignTecnicoControl orderId={item.id} available={roster.filter((t) => !item.technicians.some((x) => x.id === t.id))} />;
+}
+
+/** `roster` is the active technicians, present only for a user who may assign; absent means no assign control. */
+export function AgendaDetail({ item, roster = null, onClose }: { item: AgendaItem; roster?: { id: string; nombre: string }[] | null; onClose: () => void }) {
   const router = useRouter();
   const { addToast } = useToast();
   const [pending, setPending] = useState(false);
@@ -119,6 +134,7 @@ export function AgendaDetail({ item, onClose }: { item: AgendaItem; onClose: () 
           ))
         )}
       </ul>
+      {editable && roster ? <AssignSection item={item} roster={roster} /> : null}
       <div className="flex flex-wrap items-center gap-2">
         <Link href={item.href} className={`${LINK} bg-primary px-4 text-primary-foreground hover:bg-primary/90`}>
           Abrir orden

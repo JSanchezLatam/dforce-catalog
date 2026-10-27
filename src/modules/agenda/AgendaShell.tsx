@@ -28,9 +28,11 @@ type Props = {
   /** Only the combined view reads the workshop. */
   workshop: readonly WorkshopItem[] | null;
   workshopTruncated: boolean;
+  /** Active technicians for "+ Asignar técnico"; null when the user may not assign. */
+  roster: { id: string; nombre: string }[] | null;
 };
 
-export function AgendaShell({ view, date, today, nowMinute, items, workshop, workshopTruncated }: Props) {
+export function AgendaShell({ view, date, today, nowMinute, items, workshop, workshopTruncated, roster }: Props) {
   const [open, setOpen] = useState<{ id: string; anchor: HTMLElement; wide: boolean } | null>(null);
   // The width is read here, in the click, never while rendering: a render-time read differs between the server and
   // the browser (hydration), and the Detail only ever opens from a click.
@@ -53,14 +55,14 @@ export function AgendaShell({ view, date, today, nowMinute, items, workshop, wor
       {selected && open?.wide ? (
         <Popover open onOpenChange={(next) => !next && close()}>
           <PopoverContent anchor={open.anchor} aria-label="Detalle de la cita">
-            <AgendaDetail key={selected.id} item={selected} onClose={close} />
+            <AgendaDetail key={selected.id} item={selected} roster={roster} onClose={close} />
           </PopoverContent>
         </Popover>
       ) : null}
       {selected && !open?.wide ? (
         <Sheet open onOpenChange={(next) => !next && close()}>
           <SheetContent side="bottom" showCloseButton={false} aria-label="Detalle de la cita" className="p-4">
-            <AgendaDetail key={selected.id} item={selected} onClose={close} />
+            <AgendaDetail key={selected.id} item={selected} roster={roster} onClose={close} />
           </SheetContent>
         </Sheet>
       ) : null}

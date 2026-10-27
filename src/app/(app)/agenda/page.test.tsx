@@ -11,9 +11,17 @@ const agendaRange = vi.hoisted(() => vi.fn());
 const agendaOverdue = vi.hoisted(() => vi.fn());
 const agendaInWorkshop = vi.hoisted(() => vi.fn());
 const orderScope = vi.hoisted(() => vi.fn());
+const listTecnicos = vi.hoisted(() => vi.fn());
+const canMock = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders: session }));
 vi.mock("@/modules/agenda/queries", () => ({ agendaRange, agendaOverdue, agendaInWorkshop }));
 vi.mock("@/modules/service-orders/scope", () => ({ orderScope }));
+vi.mock("@/modules/technicians/queries", () => ({ listTecnicos }));
+vi.mock("@/modules/auth/policy", async (original) => {
+  const real = await original<typeof import("@/modules/auth/policy")>();
+  canMock.mockImplementation(real.can);
+  return { ...real, can: canMock };
+});
 vi.mock("@/shared/ui/ToastProvider", () => ({ useToast: () => ({ addToast: vi.fn() }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
@@ -85,6 +93,11 @@ beforeEach(() => {
   agendaRange.mockResolvedValue({ rows: [], truncated: false });
   agendaOverdue.mockResolvedValue({ rows: [], truncated: false, total: 0 });
   agendaInWorkshop.mockResolvedValue({ rows: [], truncated: false });
+  // The real roster rows carry more than the Detail needs, and a Date among it.
+  listTecnicos.mockResolvedValue([
+    { id: "t1", nombre: "Julio Rangel", userId: "u1", deactivatedAt: null, createdAt: new Date("2026-01-01T00:00:00Z") },
+    { id: "t2", nombre: "Marta Pérez", userId: null, deactivatedAt: null, createdAt: new Date("2026-01-02T00:00:00Z") },
+  ]);
 });
 
 describe("AgendaPage access", () => {
@@ -98,6 +111,7 @@ describe("AgendaPage access", () => {
     expect(agendaRange).not.toHaveBeenCalled();
     expect(agendaOverdue).not.toHaveBeenCalled();
     expect(agendaInWorkshop).not.toHaveBeenCalled();
+    expect(listTecnicos).not.toHaveBeenCalled();
   });
 
   it("Pantalla never sees the agenda: invoked directly it is denied too", async () => {
@@ -286,6 +300,23 @@ describe("AgendaPage shell wiring", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("Assign roster: a user who may assign gets the active roster as { id, nombre } only, plain props", async () => {
+    const props = shellProps(await AgendaPage(params({ view: "week", date: "2026-10-26" })));
+    expect(listTecnicos).toHaveBeenCalledTimes(1);
+    expect(props?.roster).toEqual([
+      { id: "t1", nombre: "Julio Rangel" },
+      { id: "t2", nombre: "Marta Pérez" },
+    ]);
+    expect(() => assertPlain(props)).not.toThrow();
+  });
+
+  it("Assign control follows the permission: without service-orders.assign the roster is never read and the shell gets null", async () => {
+    canMock.mockImplementation((_user: unknown, permission: string) => permission !== "service-orders.assign");
+    const props = shellProps(await AgendaPage(params({ view: "week", date: "2026-10-26" })));
+    expect(listTecnicos).not.toHaveBeenCalled();
+    expect(props?.roster).toBeNull();
   });
 
   it("only the combined view hands the shell the workshop list", async () => {
