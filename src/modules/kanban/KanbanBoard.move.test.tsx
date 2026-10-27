@@ -102,7 +102,7 @@ describe("KanbanBoard moves", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Sí, cancelar orden" }));
     expect(bodyOf()).toEqual({ status: "cancelled", expectedStatus: "in_progress" });
-    await waitFor(() => expect(addToast).toHaveBeenCalledWith("success", "Orden movida a Cancelada"));
+    await waitFor(() => expect(addToast).toHaveBeenCalledWith("success", "Orden cancelada"));
     expect(screen.queryByText("IP")).toBeNull();
   });
 

@@ -86,7 +86,7 @@ export function KanbanBoard({ initial, canMove }: { initial: KanbanSnapshot; can
     setOverride(card.id, { status: r.status, seq: seqNow.current });
     // Toast above the refresh; moveOrder never throws, so both sit below its failure handling. The hook's
     // refresh(), not router.refresh(): the board is a client poller that ignores a re-rendered `initial`.
-    addToast("success", `Orden movida a ${ORDER_STATUS_LABEL[r.status]}`);
+    addToast("success", r.status === "cancelled" ? "Orden cancelada" : `Orden movida a ${ORDER_STATUS_LABEL[r.status]}`);
     refresh();
   }
 
