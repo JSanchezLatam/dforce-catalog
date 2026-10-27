@@ -59,6 +59,8 @@ export const ROUTE_GUARDS: Record<
   "/api/service-orders/[id]": { PATCH: ["service-orders.write", "service-orders.correct", "service-orders.assign"] },
   // Assigning a technician: admin and jefe only; a closed order is never assignable, so no `correct`.
   "/api/service-orders/[id]/assignments": { POST: "service-orders.assign" },
+  // The manual "Urgente" flag (kanban-board): staff only, like assignment. A closed order is refused by the service.
+  "/api/service-orders/[id]/urgent": { POST: "service-orders.assign", DELETE: "service-orders.assign" },
   // Work lines (order-work-lines): `write` is the coarse gate (técnico included), `assign` marks staff
   // who may write any assigned technician's line, `correct` decides whether a password is verified.
   "/api/service-orders/[id]/work-lines": { POST: ["service-orders.write", "service-orders.assign", "service-orders.correct"] },

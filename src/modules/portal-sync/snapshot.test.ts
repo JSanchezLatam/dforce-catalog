@@ -59,7 +59,7 @@ const orderRow = (id: string, vehiculoId: string | null, extra: Partial<OrdenSer
   observaciones: "SENTINEL_OBSERVACIONES",
   kilometraje: 918273,
   nivelCombustible: 3,
-  bateriaPct: 77,
+  bateriaPct: 77, urgenteAt: null, urgenteBy: null,
   esperaMotivo: null,
   createdBy: "SENTINEL_CREATED_BY",
   createdAt: new Date("2026-09-30T15:00:00.000Z"),

@@ -37,13 +37,13 @@ Conventions for every WU: Strict TDD (RED confirmed failing by name, then GREEN)
 
 ## WU1: Urgent flag (service-orders)
 
-- [ ] 1.1 RED e2e `src/e2e/order-urgent.e2e.test.ts`: migration columns exist; CHECK rejects the pair violation; user delete sets `urgente_by` NULL; spec scenarios Jefe sets/clears, Técnico 403, Idempotent set, Survives leaving the board (done and cancelled), Closed order 409.
+- [x] 1.1 RED e2e `src/e2e/order-urgent.e2e.test.ts`: migration columns exist; CHECK rejects the pair violation; user delete sets `urgente_by` NULL; spec scenarios Jefe sets/clears, Técnico 403, Idempotent set, Survives leaving the board (done and cancelled), Closed order 409.
 - [x] 1.2 Reconciled (orchestrator, 2026-10-27): D1 stands; the spec scenario now rejects `urgente_by` set with `urgente_at` NULL, so `ON DELETE SET NULL` keeps the flag.
-- [ ] 1.3 `src/shared/db/schema.ts`: add both columns and CHECK `orden_urgente_by_needs_at`; `npm run db:generate -- --name order_urgent` → `migrations/0036_order_urgent.sql` (+meta). Check the generated SQL by hand.
-- [ ] 1.4 RED `src/modules/service-orders/urgent.test.ts` (injected deps): set, clear, idempotent POST (single `urgente_by`), closed → conflict, no `updatedAt` write.
-- [ ] 1.5 GREEN `src/modules/service-orders/urgent.ts`: `setUrgent(id, on, {scope, actorId, db})` via `lockOrderForMutation` with `canWrite: s => !isClosedStatus(s)`; writes only the two columns.
-- [ ] 1.6 RED then GREEN `src/app/api/service-orders/[id]/urgent/route.ts` (+test): POST/DELETE gated by `service-orders.assign`; 401, 403 (técnico, pantalla), 404, 409; `ROUTE_GUARDS` entry in `src/modules/auth/route-guards.test.ts`.
-- [ ] 1.7 Verify: recreate `dforce_e2e`, run the e2e file, mutation-verify 1.5 (drop the closed guard, drop idempotence).
+- [x] 1.3 `src/shared/db/schema.ts`: add both columns and CHECK `orden_urgente_by_needs_at`; `npm run db:generate -- --name order_urgent` → `migrations/0036_order_urgent.sql` (+meta). Check the generated SQL by hand.
+- [x] 1.4 RED `src/modules/service-orders/urgent.test.ts` (injected deps): set, clear, idempotent POST (single `urgente_by`), closed → conflict, no `updatedAt` write.
+- [x] 1.5 GREEN `src/modules/service-orders/urgent.ts`: `setUrgent(id, on, {scope, actorId, db})` via `lockOrderForMutation` with `canWrite: s => !isClosedStatus(s)`; writes only the two columns.
+- [x] 1.6 RED then GREEN `src/app/api/service-orders/[id]/urgent/route.ts` (+test): POST/DELETE gated by `service-orders.assign`; 401, 403 (técnico, pantalla), 404, 409; `ROUTE_GUARDS` entry in `src/modules/auth/route-guards.test.ts`.
+- [x] 1.7 Verify: recreate `dforce_e2e`, run the e2e file, mutation-verify 1.5 (drop the closed guard, drop idempotence).
 
 ## WU2: Read model, API, guards, nav
 

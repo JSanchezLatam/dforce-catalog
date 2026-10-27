@@ -99,7 +99,7 @@ const ORDEN: OrdenServicio = {
   observaciones: "El cliente espera en el taller",
   kilometraje: null,
   nivelCombustible: null,
-  bateriaPct: null,
+  bateriaPct: null, urgenteAt: null, urgenteBy: null,
   createdAt: new Date("2026-05-01T14:00:00Z"), updatedAt: new Date("2026-05-01T14:00:00Z"),
   esperaMotivo: null,
   createdBy: null,

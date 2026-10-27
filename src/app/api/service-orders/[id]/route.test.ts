@@ -46,7 +46,7 @@ function ordenWith(status: OrderStatus): OrdenServicio {
     observaciones: null,
     kilometraje: null,
     nivelCombustible: null,
-    bateriaPct: null,
+    bateriaPct: null, urgenteAt: null, urgenteBy: null,
     esperaMotivo: null,
     createdBy: null,
     createdAt: new Date("2026-05-01T14:00:00Z"),
