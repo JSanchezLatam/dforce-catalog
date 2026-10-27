@@ -29,6 +29,7 @@ describe("workshop board queries (E2E)", () => {
   let vehiculoId: string;
   let techA: string;
   let techB: string;
+  let techGone: string;
   const mine = new Set<string>();
 
   const newOrder = async (o: { status: Status; completedAt?: string; updatedAt?: string; noVehicle?: boolean; assign?: string[]; appointmentAt?: string }) => {
@@ -68,6 +69,7 @@ describe("workshop board queries (E2E)", () => {
     const roster = async (nombre: string) => (await db.insert(tecnico).values({ nombre }).returning({ id: tecnico.id }))[0].id;
     techA = await roster(`Board Ana ${stamp}`);
     techB = await roster(`Board Beto ${stamp}`);
+    techGone = (await db.insert(tecnico).values({ nombre: `Board Baja ${stamp}`, deactivatedAt: new Date() }).returning({ id: tecnico.id }))[0].id;
   }, 60_000);
 
   afterAll(async () => {
@@ -76,7 +78,7 @@ describe("workshop board queries (E2E)", () => {
     await db.delete(ordenServicio).where(eq(ordenServicio.clienteId, clienteId));
     await db.delete(vehiculo).where(eq(vehiculo.clienteId, clienteId));
     await db.delete(cliente).where(eq(cliente.id, clienteId));
-    await db.delete(tecnico).where(inArray(tecnico.id, [techA, techB]));
+    await db.delete(tecnico).where(inArray(tecnico.id, [techA, techB, techGone]));
     await db.delete(users).where(eq(users.id, adminId));
     await db.$client.end();
   });
@@ -132,6 +134,14 @@ describe("workshop board queries (E2E)", () => {
 
     expect(techs.filter((t) => t.ordenId === two).map((t) => t.nombre)).toEqual([`Board Ana ${stamp}`, `Board Beto ${stamp}`]);
     expect(techs.filter((t) => t.ordenId === one).map((t) => t.nombre)).toEqual([`Board Beto ${stamp}`]);
+  });
+
+  it("F1: a deactivated technician assigned to an order does not appear on the board, the active one does", async () => {
+    const id = await newOrder({ status: "in_progress", assign: [techA, techGone] });
+
+    const { techs } = await fullBoard();
+
+    expect(techs.filter((t) => t.ordenId === id).map((t) => t.nombre)).toEqual([`Board Ana ${stamp}`]);
   });
 
   it("Booked order without a vehicle is on the full board, absent from the customer query", async () => {
