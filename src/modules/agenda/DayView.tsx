@@ -1,5 +1,6 @@
 import { DayBooking } from "@/modules/agenda/AgendaBookingForm";
 import { AgendaChip } from "@/modules/agenda/AgendaChip";
+import { ItemActions } from "@/modules/agenda/ItemActions";
 import { sortItems, type AgendaItem } from "@/modules/agenda/items";
 
 /** One column of chips. The range query already holds exactly the selected day. */
@@ -12,8 +13,9 @@ export function DayView({ items, date }: { items: readonly AgendaItem[]; date?: 
       ) : (
         <ul className="flex flex-col gap-2">
           {sortItems(items).map((item) => (
-            <li key={item.id}>
+            <li key={item.id} className="flex flex-col gap-1">
               <AgendaChip item={item} />
+              <ItemActions item={item} />
             </li>
           ))}
         </ul>
