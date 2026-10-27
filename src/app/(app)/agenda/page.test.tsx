@@ -16,7 +16,7 @@ vi.mock("@/modules/service-orders/scope", () => ({ orderScope }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 import AgendaPage from "./page";
-import type { AgendaRow } from "@/modules/agenda/queries";
+import type { AgendaRow, WorkshopRow } from "@/modules/agenda/queries";
 
 // The wire shape of a query row; a test overrides only what it is about.
 const agendaRow = (over: Partial<AgendaRow>): AgendaRow => ({
@@ -33,6 +33,22 @@ const agendaRow = (over: Partial<AgendaRow>): AgendaRow => ({
   description: null,
   noShow: false,
   technicians: [],
+  ...over,
+});
+
+const workshopRow = (over: Partial<WorkshopRow>): WorkshopRow => ({
+  id: "w",
+  status: "in_progress",
+  esperaMotivo: null,
+  customerName: "Taller",
+  customerPhone: "9",
+  vehiclePlate: null,
+  vehicleMake: null,
+  vehicleModel: null,
+  categoria: null,
+  technicians: [],
+  sinceAt: new Date("2026-10-26T18:00:00Z"),
+  holdSinceAt: null,
   ...over,
 });
 
@@ -198,7 +214,7 @@ describe("AgendaPage Vencidas and combined", () => {
   });
 
   it("combined: the selected day's range plus the in-workshop read, both scoped", async () => {
-    agendaInWorkshop.mockResolvedValue({ truncated: false, rows: [{ id: "w1", status: "on_hold", esperaMotivo: "repuesto", customerName: "Taller", customerPhone: "9", vehiclePlate: null }] });
+    agendaInWorkshop.mockResolvedValue({ truncated: false, rows: [workshopRow({ id: "w1", status: "on_hold", esperaMotivo: "repuesto", holdSinceAt: new Date("2026-10-26T18:00:00Z") })] });
 
     render(await AgendaPage(params({ view: "combined", date: "2026-10-26" })));
 

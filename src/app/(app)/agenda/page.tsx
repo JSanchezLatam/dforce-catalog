@@ -43,7 +43,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
       ) : view === "week" ? (
         <WeekView date={date} today={today} items={items} />
       ) : view === "combined" && workshop ? (
-        <CombinedView items={items} workshop={workshop.rows.map(toWorkshopItem)} workshopTruncated={workshop.truncated} />
+        <CombinedView items={items} workshop={workshop.rows.map((r) => toWorkshopItem(r, now))} workshopTruncated={workshop.truncated} />
       ) : (
         <DayView items={items} date={date} />
       )}
