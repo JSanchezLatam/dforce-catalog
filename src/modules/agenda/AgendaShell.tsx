@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * agenda/AgendaShell.tsx - the one client component of the agenda page: it owns the selected card and renders the
+ * agenda/AgendaShell.tsx - the one client component of the agenda page: it renders the header and owns the selected card and renders the
  * view and the selected appointment's Detail. The page hands it plain data only (no function, no `Date`); the card
  * callbacks are created here, so no function ever crosses the Server Component boundary.
  */
@@ -11,12 +11,14 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { AgendaDetail } from "@/modules/agenda/AgendaDetail";
+import { AgendaHeader } from "@/modules/agenda/AgendaHeader";
 import { AgendaTabs, type TabKey } from "@/modules/agenda/AgendaTabs";
 
 import { CombinedView } from "@/modules/agenda/CombinedView";
 import { addDays, weekStart, type AgendaView } from "@/modules/agenda/dates";
 import { DayGrid } from "@/modules/agenda/DayGrid";
 import { filterItems, type AgendaItem, type WorkshopItem } from "@/modules/agenda/items";
+import { VencidasList } from "@/modules/agenda/VencidasList";
 import { MonthView } from "@/modules/agenda/MonthView";
 import { WeekGrid } from "@/modules/agenda/WeekGrid";
 
@@ -34,34 +36,55 @@ type Props = {
   roster: { id: string; nombre: string }[] | null;
   /** The true number of Vencida orders, whatever the range or the search. */
   overdueTotal: number;
+  /** The capped Vencida list, oldest first. */
+  overdue: readonly AgendaItem[];
+  overdueTruncated: boolean;
+  /** The range query hit its row cap: the header says so. */
+  truncated: boolean;
 };
 
-export function AgendaShell({ view, date, today, nowMinute, items, workshop, workshopTruncated, roster, overdueTotal }: Props) {
+export function AgendaShell({ view, date, today, nowMinute, items, workshop, workshopTruncated, roster, overdueTotal, overdue, overdueTruncated, truncated }: Props) {
   const [tab, setTab] = useState<TabKey>("todas");
   const [search, setSearch] = useState("");
-  const [open, setOpen] = useState<{ id: string; anchor: HTMLElement; wide: boolean } | null>(null);
+  const scope = `${view}|${date}`;
+  const [open, setOpen] = useState<{ id: string; anchor: HTMLElement; wide: boolean; scope: string } | null>(null);
   // The width is read here, in the click, never while rendering: a render-time read differs between the server and
   // the browser (hydration), and the Detail only ever opens from a click.
   const select = (item: AgendaItem, anchor: HTMLElement) =>
-    setOpen({ id: item.id, anchor, wide: window.matchMedia("(min-width: 768px)").matches });
+    setOpen({ id: item.id, anchor, wide: window.matchMedia("(min-width: 768px)").matches, scope });
   const close = () => setOpen(null);
-  // Shortcut: until the Vencidas list (its own unit) lands, that tab shows the calendar like "Todas".
+  const onVencidas = tab === "vencidas";
   const visible = filterItems(items, tab === "agendadas" ? "agendadas" : "todas", search);
-  const selected = view === "month" || !open ? undefined : visible.find((i) => i.id === open.id);
+  const overdueVisible = filterItems(overdue, "todas", search);
+  // The Detail belongs to the view and date it opened in (`scope`): its anchor is a card element of that render, so
+  // on any other the element is gone. Dropped in render (React's derived-state pattern) so coming back never reopens it.
+  const selected = open?.scope === scope ? (onVencidas ? overdueVisible : visible).find((i) => i.id === open.id) : undefined;
+  if (open && !selected) setOpen(null);
+  const noMatch = visible.length === 0 && (items.length > 0 || search !== "");
   const grid = { todayKey: today, nowMinute, selectedId: selected?.id ?? null, onSelect: select };
+  // The day grid and the combined view say it themselves; week and month get the paragraph, so a hidden day shows one message, never two.
+  const emptyText = noMatch ? "Sin resultados" : undefined;
   return (
     <div className="flex flex-col gap-3">
-      <Input type="search" aria-label="Buscar" placeholder="Buscar placa o cliente…" value={search} onChange={(e) => setSearch(e.target.value)} className="sm:max-w-64" />
-      <AgendaTabs tab={tab} agendadas={filterItems(items, "agendadas", search).length} vencidas={overdueTotal} onTab={setTab} />
-      {visible.length === 0 && (items.length > 0 || search !== "") ? <p role="status" className="text-sm text-muted-foreground">Sin resultados</p> : null}
-      {view === "month" ? (
+      <AgendaHeader
+        view={view}
+        date={date}
+        today={today}
+        truncated={truncated}
+        search={<Input type="search" aria-label="Buscar" placeholder="Buscar placa o cliente…" value={search} onChange={(e) => setSearch(e.target.value)} className="min-h-11 sm:w-64" />}
+        tabs={<AgendaTabs tab={tab} agendadas={filterItems(items, "agendadas", search).length} vencidas={overdueTotal} onTab={setTab} />}
+      />
+      {noMatch && !onVencidas && (view === "week" || view === "month") ? <p role="status" className="text-sm text-muted-foreground">Sin resultados</p> : null}
+      {onVencidas ? (
+        <VencidasList items={overdueVisible} empty={overdue.length === 0 ? "Sin citas vencidas" : "Sin resultados"} truncated={overdueTruncated} selectedId={selected?.id ?? null} onSelect={select} />
+      ) : view === "month" ? (
         <MonthView date={date} today={today} items={visible} />
       ) : view === "week" ? (
         <WeekGrid days={Array.from({ length: 7 }, (_, i) => addDays(weekStart(date), i))} items={visible} {...grid} />
       ) : view === "combined" ? (
-        <CombinedView date={date} items={visible} workshop={workshop ?? []} workshopTruncated={workshopTruncated} {...grid} />
+        <CombinedView date={date} items={visible} workshop={workshop ?? []} workshopTruncated={workshopTruncated} emptyText={emptyText} {...grid} />
       ) : (
-        <DayGrid date={date} items={visible} {...grid} />
+        <DayGrid date={date} items={visible} emptyText={emptyText} {...grid} />
       )}
       {selected && open?.wide ? (
         <Popover open onOpenChange={(next) => !next && close()}>

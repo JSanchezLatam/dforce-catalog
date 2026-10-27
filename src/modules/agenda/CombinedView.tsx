@@ -26,7 +26,7 @@ export function CombinedView({
   ...grid
 }: { date: string; items: readonly AgendaItem[]; workshop: readonly WorkshopItem[]; workshopTruncated: boolean } & Pick<
   ComponentProps<typeof DayGrid>,
-  "todayKey" | "nowMinute" | "selectedId" | "onSelect"
+  "todayKey" | "nowMinute" | "selectedId" | "onSelect" | "emptyText"
 >) {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

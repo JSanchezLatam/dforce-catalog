@@ -3,7 +3,6 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { makeItem } from "./items.fixture";
 import { ItemActions } from "./ItemActions";
-import { VencidasPanel } from "./VencidasPanel";
 
 afterEach(cleanup);
 const names = () => screen.queryAllByRole("button").map((b) => b.textContent);
@@ -16,10 +15,5 @@ describe("ItemActions", () => {
     expect(names()).toEqual(["Reprogramar"]);
     rerender(<ItemActions item={makeItem({ muted: true, status: "open" })} />);
     expect(names()).toEqual([]);
-  });
-
-  it("VencidasPanel renders what the actions slot returns", () => {
-    render(<VencidasPanel items={[makeItem({ overdue: true })]} total={1} truncated={false} actions={(item) => <ItemActions item={item} />} />);
-    expect(screen.getByRole("button", { name: "No se presentó" })).toBeInTheDocument();
   });
 });

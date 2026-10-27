@@ -17,16 +17,18 @@ type Props = {
   selectedId?: string | null;
   onSelect?: (item: AgendaItem, anchor: HTMLElement) => void;
   onSlot?: (day: string, time: string) => void;
+  /** The text for a day with no cards. */
+  emptyText?: string;
 };
 
-export function DayGrid({ date, items, todayKey, nowMinute, selectedId = null, onSelect, onSlot }: Props) {
+export function DayGrid({ date, items, todayKey, nowMinute, selectedId = null, onSelect, onSlot, emptyText = "Sin citas para este día" }: Props) {
   const [start, end] = hourWindow(items);
   const hours = Array.from({ length: end - start }, (_, i) => start + i);
   const taken = new Set(items.map((i) => Math.floor(i.minuteOfDay / 60)));
   const now = nowMinute === undefined ? null : nowLineTop(nowMinute, todayKey === date, [start, end]);
   return (
     <div className="flex flex-col gap-2">
-      {items.length === 0 ? <p className="text-sm text-muted-foreground">Sin citas para este día</p> : null}
+      {items.length === 0 ? <p className="text-sm text-muted-foreground">{emptyText}</p> : null}
       <div className="relative ml-14" style={{ height: hours.length * ROW }}>
         {hours.map((h) => {
           const label = clockLabel(h * 60);
