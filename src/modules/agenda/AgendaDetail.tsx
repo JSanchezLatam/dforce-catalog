@@ -1,8 +1,9 @@
 /**
  * agenda/AgendaDetail.tsx - the content of an appointment's Detail. The shell puts it in a popover (md and up) or a
- * bottom sheet (below md); this component knows neither. A plain component: the close is reported through
- * `onClose`, and every text comes from the item (the day text from static tables, so server and browser agree).
- * The booked Detail edits the type through the existing PATCH route.
+ * bottom sheet (below md); this component knows neither. A client component: the close is reported through
+ * `onClose`, every text comes from the item (the day text from static tables, so server and browser agree), and a
+ * booked Detail edits the category through `patchOrder`. The shell keys it by order id, so its pending and error
+ * state never follow the selection to another appointment.
  */
 "use client";
 

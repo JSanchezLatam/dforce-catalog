@@ -53,14 +53,14 @@ export function AgendaShell({ view, date, today, nowMinute, items, workshop, wor
       {selected && open?.wide ? (
         <Popover open onOpenChange={(next) => !next && close()}>
           <PopoverContent anchor={open.anchor} aria-label="Detalle de la cita">
-            <AgendaDetail item={selected} onClose={close} />
+            <AgendaDetail key={selected.id} item={selected} onClose={close} />
           </PopoverContent>
         </Popover>
       ) : null}
       {selected && !open?.wide ? (
         <Sheet open onOpenChange={(next) => !next && close()}>
           <SheetContent side="bottom" showCloseButton={false} aria-label="Detalle de la cita" className="p-4">
-            <AgendaDetail item={selected} onClose={close} />
+            <AgendaDetail key={selected.id} item={selected} onClose={close} />
           </SheetContent>
         </Sheet>
       ) : null}
