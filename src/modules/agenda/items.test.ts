@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { groupByDay, nextLabel, toAgendaItem, toWeekSummary, toWorkshopItem, type AgendaItem } from "./items";
+import { groupByDay, layoutDay, nextLabel, toAgendaItem, toWeekSummary, toWorkshopItem, type AgendaItem } from "./items";
+import { makeItem } from "./items.fixture";
 import type { AgendaRow, WorkshopRow } from "./queries";
 
 const NOW = new Date("2026-10-26T20:00:00Z"); // 15:00 Panama
@@ -239,5 +240,51 @@ describe("toWeekSummary", () => {
       { label: "Vencidas", count: 2 },
       { label: "No se presentó", count: 1 },
     ]);
+  });
+});
+
+describe("layoutDay", () => {
+  const at = (id: string, h: number, m = 0) =>
+    makeItem({ id, time: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`, minuteOfDay: h * 60 + m });
+
+  it("Overlap shares the width: 11:00, 11:00 and 11:30 take three equal lanes", () => {
+    const out = layoutDay([at("a", 11), at("b", 11), at("c", 11, 30)]);
+    expect(out.map((l) => [l.item.id, l.lane, l.lanes])).toEqual([
+      ["a", 0, 3],
+      ["b", 1, 3],
+      ["c", 2, 3],
+    ]);
+  });
+
+  it("non-overlapping items share lane 0, each at full width", () => {
+    const out = layoutDay([at("a", 9), at("b", 10), at("c", 14)]);
+    expect(out.map((l) => [l.item.id, l.lane, l.lanes])).toEqual([
+      ["a", 0, 1],
+      ["b", 0, 1],
+      ["c", 0, 1],
+    ]);
+  });
+
+  it("a freed lane is reused, and the cluster width is its widest overlap", () => {
+    // 09:00-10:00, 09:30-10:30, 10:00-11:00 -> the third reuses lane 0; 14:00 starts a new cluster
+    const out = layoutDay([at("a", 9), at("b", 9, 30), at("c", 10), at("d", 14)]);
+    expect(out.map((l) => [l.item.id, l.lane, l.lanes])).toEqual([
+      ["a", 0, 2],
+      ["b", 1, 2],
+      ["c", 0, 2],
+      ["d", 0, 1],
+    ]);
+  });
+
+  it("Overlap is deterministic: time first, then id, whatever the input order", () => {
+    const out = layoutDay([at("z", 9), at("b", 10), at("a", 10), at("m", 9)]);
+    expect(out.map((l) => l.item.id)).toEqual(["m", "z", "a", "b"]);
+    expect(layoutDay([at("a", 10), at("m", 9), at("b", 10), at("z", 9)]).map((l) => [l.item.id, l.lane])).toEqual(
+      out.map((l) => [l.item.id, l.lane]),
+    );
+  });
+
+  it("an empty day lays out nothing", () => {
+    expect(layoutDay([])).toEqual([]);
   });
 });

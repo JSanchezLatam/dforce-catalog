@@ -97,11 +97,11 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU5: grid core (branch `feat/agenda-redesign-wu5-grid-core`) [~295]
 
-- [ ] 5.1 RED `grid.test.ts`: `hourWindow` = [8,18] default; items at 07:15 and 18:45 -> [7,20]; `top()` of 14:30 is half a row below 14:00 (`ROW=104`); the now-line is visible only when today is shown and inside the window (10:40 yes, 19:30 no). (Grid hours; Outside the window; Now-line only on today / outside the grid)
-- [ ] 5.2 RED `items.test.ts`: `layoutDay`: 11:00, 11:00 and 11:30 -> three equal lanes; stable (time, id) order; non-overlapping items share one lane. (Overlap shares the width; Overlap is deterministic)
-- [ ] 5.3 RED `agenda-colour.test.ts` (source text of `globals.css`): `.agenda-ev`, `.agenda-ev-strip`, `.agenda-dot` with the six `[data-categoria=...]` hues (262/205/35/350/152/240) and a `.dark .agenda-ev` variant.
-- [ ] 5.4 GREEN `grid.ts`, `layoutDay` in `items.ts`, `globals.css` `@layer components` (formula from mockup lines 47-56).
-- [ ] 5.5 Mutation-verify: window clamp to 8-18 only -> "Outside the window" red; off-by-one in `top` -> "Grid hours" red; id-only sort -> "Overlap is deterministic" red.
+- [x] 5.1 RED `grid.test.ts`: `hourWindow` = [8,18] default; items at 07:15 and 18:45 -> [7,20]; `top()` of 14:30 is half a row below 14:00 (`ROW=104`); the now-line is visible only when today is shown and inside the window (10:40 yes, 19:30 no). (Grid hours; Outside the window; Now-line only on today / outside the grid)
+- [x] 5.2 RED `items.test.ts`: `layoutDay`: 11:00, 11:00 and 11:30 -> three equal lanes; stable (time, id) order; non-overlapping items share one lane. (Overlap shares the width; Overlap is deterministic)
+- [x] 5.3 RED `agenda-colour.test.ts` (source text of `globals.css`): `.agenda-ev`, `.agenda-ev-strip`, `.agenda-dot` with the six `[data-categoria=...]` hues (262/205/35/350/152/240) and a `.dark .agenda-ev` variant.
+- [x] 5.4 GREEN `grid.ts`, `layoutDay` in `items.ts`, `globals.css` `@layer components` (formula from mockup lines 47-56).
+- [x] 5.5 Mutation-verify: window clamp to 8-18 only -> "Outside the window" red; off-by-one in `top` -> "Grid hours" red; id-only sort -> "Overlap is deterministic" red.
 - [ ] 5.6 Close: C (no browser: nothing mounted).
 
 ## WU6: card and day grid (branch `feat/agenda-redesign-wu6-card-day-grid`) [~330]
