@@ -66,10 +66,10 @@ Conventions for every WU: Strict TDD (RED confirmed failing by name, then GREEN)
 
 ## WU3b: Read-only board and page
 
-- [ ] 3b.1 RED `kanban/KanbanBoard.test.tsx`: seven columns in order, no Cancelada, "Completada" via snapshot, urgent first, "Sin órdenes" and "Ninguna orden tuya en este estado", "Columnas anteriores"/"Columnas siguientes", six KPIs, chips with `aria-pressed`, "Mis órdenes" absent without roster, "Asignada a vos", "Solo lectura" for técnico, "Actualizado hace N s", "Sin conexión · actualizado hace N min", phone tabs with counts.
-- [ ] 3b.2 GREEN `kanban/KanbanBoard.tsx` + `KanbanCard.tsx` (read-only; ⋯ button 44x44 may be a stub linking "Ver orden"); poll via `useBoardSnapshot("/api/kanban")`; phone tabs `md:hidden` with `scrollTo`, `max-md:w-full` scroll-snap columns.
-- [ ] 3b.3 RED then GREEN `src/app/(app)/kanban/page.tsx` (+test, `assertPlain` copied from agenda `page.test.tsx:83-90`): pantalla → `PermissionDenied` without querying; serializable props only; `canMove` from `service-orders.assign`.
-- [ ] 3b.4 RED then GREEN `kanban/kanban-safety.test.ts` (copy `agenda-safety.test.ts:28-39`; timer ban exempts the poller file).
+- [x] 3b.1 RED `kanban/KanbanBoard.test.tsx`: seven columns in order, no Cancelada, "Completada" via snapshot, urgent first, "Sin órdenes" and "Ninguna orden tuya en este estado", "Columnas anteriores"/"Columnas siguientes", six KPIs, chips with `aria-pressed`, "Mis órdenes" absent without roster, "Asignada a vos", "Solo lectura" for técnico, "Actualizado hace N s", "Sin conexión · actualizado hace N min", phone tabs with counts.
+- [x] 3b.2 GREEN `kanban/KanbanBoard.tsx` + `KanbanCard.tsx` (read-only; ⋯ button 44x44 may be a stub linking "Ver orden"); poll via `useBoardSnapshot("/api/kanban")`; phone tabs `md:hidden` with `scrollTo`, `max-md:w-full` scroll-snap columns.
+- [x] 3b.3 RED then GREEN `src/app/(app)/kanban/page.tsx` (+test, `assertPlain` copied from agenda `page.test.tsx:83-90`): pantalla → `PermissionDenied` without querying; serializable props only; `canMove` from `service-orders.assign`.
+- [x] 3b.4 RED then GREEN `kanban/kanban-safety.test.ts` (copy `agenda-safety.test.ts:28-39`; timer ban exempts the poller file).
 - [ ] 3b.5 Verify: browser at http://192.168.0.7:3000, 1440/1024/768/390, light+dark; console free of hydration errors; no page horizontal scroll; 44x44.
 
 ## WU4a: Move rules and client state
