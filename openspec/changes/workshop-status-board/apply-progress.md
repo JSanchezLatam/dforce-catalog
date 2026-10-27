@@ -66,3 +66,43 @@
 - "History rows of another order are not counted" is asserted (neighbour with a later row does not change the other order's start) but has no mutation: `groupBy ordenId` cannot be removed without a SQL error.
 - Technician batching has no mutation-verify.
 - 2.10 (GGA, push, PR) not done.
+
+## WU3 (branch `feat/workshop-status-board-wu3`) - 3.1-3.8 done, 3.9 left to the orchestrator
+
+### Files
+- Production: `auth/policy.ts` (`board.customer` in `ACTIONS`; the `pantalla` MATRIX row is now written literally, every action spelled out, so a missing grant is a tsc error again; tecnico false, jefe/admin true), `app/api/board/clientes/route.ts` (`handleCustomerBoard`: `requireSession` -> `can` -> query -> `toCustomerSnapshot`; JSON 500 on any error; GET only; `Cache-Control: no-store`), `app/tablero/{layout,error}.tsx`, `app/tablero/clientes/page.tsx`, `board/{useBoardSnapshot.ts,StaleBanner.tsx,CustomerBoard.tsx}`.
+- Tests: `policy.test.ts`, `route-guards.test.ts` (two `ROUTE_GUARDS` keys), `board/{useBoardSnapshot,StaleBanner,CustomerBoard}.test.tsx` (CustomerBoard.test also holds the insecure-context and types-only-import source tests), `app/api/board/clientes/route.test.ts`, `app/tablero/clientes/page.test.tsx`, `app/tablero/error.test.tsx`, `src/e2e/board-routes.e2e.test.ts` (6 tests, separable).
+
+### Behaviour notes / deviations
+- Hook returns `{ snapshot, lastOkAt, failedAt }`. The banner is a pure function of those two numbers (no clock of its own) and renders only when `failedAt - lastOkAt >= 60 s`, so the text is never "0 min" and "min 1" holds. With a 30 s poll the first failed poll never shows it; the second does.
+- Customer rows carry no instant, so "ages against generatedAt" has nothing to apply to in `CustomerBoard` (it applies to WU4's full board). `formatAge` is unused here.
+- Overflow: 12 rows per column, then `+N más`.
+- A 2xx whose body is not `{generatedAt: string, rows: array}` is a failed poll (`looksLikeSnapshot`); row contents are not validated.
+- No `usePollWhileActive`, no `router.refresh`.
+- Page passes only `{ initial: CustomerSnapshot }` (ISO strings, plain objects); the page test asserts a JSON round trip equals it.
+- Client bundle: `CustomerBoard.tsx`, `StaleBanner.tsx`, `useBoardSnapshot.ts`, `error.tsx` import only react, `StatusBadge` and `import type` from `./shape` (grepped, and a source test enforces `import type` for shape/snapshot/queries/node:crypto/portal-sync). `next build` NOT run (it would overwrite `.next` under the dev server on :3000).
+
+### Mutation-verify (fix reverted, named test red, restored)
+- `can()` neutralised in route: unit "Técnico is denied the customer view: 403 JSON, and nothing is queried"; e2e "tecnico is refused by the route (403 JSON) and by the page".
+- `can()` neutralised in page: "renders PermissionDenied for a técnico and never calls the query".
+- poller skips on `document.hidden`: "a hidden tab still polls" (jsdom reports `hidden` true by default, so the other poll tests also go red; the named one is the intended signal).
+- 403 sent to /login: "403 navigates to / and NOT /login". `{ cache: "no-store" }` dropped: "polls every 30 s with cache no-store, and not before". In-flight guard removed: "never overlaps requests: a slow poll holds the next ticks back". `clearInterval` on 401/403 removed: "401 navigates to /login and keeps no further timers" and the 403 one. Shape check removed: "Failure keeps the snapshot: a 200 of the wrong shape" (and "a 500").
+- banner `minutes < 1` guard removed: "is hidden while less than a minute has elapsed..." and CustomerBoard "keeps every row and shows the banner once a minute...". U+00B7 -> "-": "reads exactly `Sin conexión · actualizado hace 1 min` (U+00B7) once a minute elapsed".
+- error.tsx `clearTimeout` removed: "does not reload after it is unmounted"; 60 s -> 5 s: "says it is retrying and reloads the page after 60 s, not before".
+- `pantalla`/jefe cell flipped: "Matrix row: pantalla is true for board.customer ..." / "Access Matrix: board.customer is for administrador, jefe_taller and pantalla, never tecnico".
+- `ROUTE_GUARDS` entry deleted (each of the two): "every existing API route and page has a ROUTE_GUARDS entry"; both entries set to session-only: "every Action with a route in v1 is reachable". Extra exported POST: "declares every method the route exports" and "exports GET only".
+- route `catch` removed: unit "a database error is a JSON 5xx, never an HTML page" and e2e "a database failure on the real path is a JSON 5xx, not an HTML page". `.slice(0, MAX_ROWS)` removed: "clips a long column with `+N más`". Value import from `./shape` / `navigator.clipboard` added to client files: the two insecure-context source tests.
+- NOT run: "Labels equal the portal's" (WU2 test, `shape.ts` untouched here; mutation-verified in WU2).
+
+### Gates
+- `npm test`: 230 files, 3659 tests passed. `npx tsc --noEmit`: clean. `npm run lint`: 0 errors, 13 warnings.
+- e2e, fresh `dforce_e2e`, full suite: 26 files, 332 tests passed, 0 skipped (board-routes.e2e: 6).
+
+### Size
+- vs `feat/workshop-status-board-wu2-e2e`, untracked included, openspec excluded: 786 added / 7 deleted. Production 213 (the literal pantalla row is 29 of it), tests 573, of which `src/e2e/board-routes.e2e.test.ts` is 159. Without the e2e file: 627. Over 400 either way; the pre-agreed split is the e2e file as its own sub-PR, and the component tests could be a second.
+
+### Unchecked
+- No browser check (WU4): RSC serialization of the page props, hydration, the banner text on a real stop/restart, 401 on a real revoked session, TV legibility, chrome-less look. jsdom cannot see any of these.
+- e2e drives `handleProxy` then the route by forwarding the proxy's `x-middleware-request-*` headers by hand; the real Next runtime was not involved.
+- `error.tsx` is not reachable when `proxy.ts` throws (known follow-up).
+- 3.9 (GGA, push, PR) not done.
