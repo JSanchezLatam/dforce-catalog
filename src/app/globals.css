@@ -26,6 +26,13 @@
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
+  --color-board-canvas: var(--board-canvas);
+  --color-board-col: var(--board-col);
+  --color-board-tile: var(--board-tile);
+  --color-board-warn-bg: var(--board-warn-bg);
+  --color-board-warn-border: var(--board-warn-border);
+  --color-board-warn-fg: var(--board-warn-fg);
+  --color-urgent: var(--urgent);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -115,6 +122,14 @@
   --sidebar-accent-foreground: hsl(240 5.9% 10%);
   --sidebar-border: hsl(220 13% 91%);
   --sidebar-ring: hsl(240 5.9% 10%);
+  --board-canvas: hsl(240 5% 97.5%);
+  --board-col: hsl(240 6% 94%);
+  --board-tile: hsl(0 0% 100%);
+  --board-tile-shadow: 0 1px 2px rgb(16 16 24 / .06), 0 2px 8px rgb(16 16 24 / .05);
+  --urgent: hsl(0 72% 51%);
+  --board-warn-bg: hsl(43 96% 94%);
+  --board-warn-border: hsl(40 90% 78%);
+  --board-warn-fg: hsl(28 80% 30%);
 }
 /*
  ---break---
@@ -156,6 +171,14 @@
   --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
   --sidebar-border: hsl(240 3.7% 15.9%);
   --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --board-canvas: hsl(240 8% 5.5%);
+  --board-col: hsl(240 6% 9.5%);
+  --board-tile: hsl(240 5% 13%);
+  --board-tile-shadow: 0 1px 0 rgb(255 255 255 / .03) inset, 0 2px 6px rgb(0 0 0 / .35);
+  --urgent: hsl(0 72% 51%);
+  --board-warn-bg: hsl(38 70% 14%);
+  --board-warn-border: hsl(38 60% 26%);
+  --board-warn-fg: hsl(42 95% 72%);
 }
 /*
  ---break---
@@ -170,6 +193,23 @@
   html {
     @apply font-sans;
   }
+}
+
+/*
+ * Board status hues (kanban and the TV boards). Each element sets `--h` and `--s` inline from
+ * `STATUS_HUE`; red (`--urgent`) and amber (`--board-warn-*`) stay outside the hues because they
+ * carry meaning. Values are the approved mockup's.
+ */
+@layer components {
+  .board-hue-tile { background: hsl(var(--h) var(--s) 92%); color: hsl(var(--h) var(--s) 32%); }
+  .dark .board-hue-tile { background: hsl(var(--h) calc(var(--s) * .5) 18%); color: hsl(var(--h) var(--s) 78%); }
+  .board-hue-bar { background: hsl(var(--h) var(--s) 55%); }
+  .board-hue-ring { box-shadow: 0 0 0 2px hsl(var(--h) var(--s) 55%); background: hsl(var(--h) var(--s) 55% / .08); }
+  .board-hue-drop { border: 2px dashed hsl(var(--h) var(--s) 55%); color: hsl(var(--h) var(--s) 40%); background: hsl(var(--h) var(--s) 55% / .08); }
+  .dark .board-hue-drop { color: hsl(var(--h) var(--s) 75%); }
+  /* Technician avatar: only `--h` is set inline. */
+  .board-av { background: hsl(var(--h) 70% 90%); color: hsl(var(--h) 55% 28%); box-shadow: 0 0 0 2px var(--board-tile); }
+  .dark .board-av { background: hsl(var(--h) 35% 26%); color: hsl(var(--h) 80% 86%); }
 }
 
 /*
