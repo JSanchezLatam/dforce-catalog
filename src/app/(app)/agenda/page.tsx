@@ -1,7 +1,7 @@
 import { AgendaShell } from "@/modules/agenda/AgendaShell";
 import { panamaDay, panamaMinute, parseAgendaParams, rangeFor } from "@/modules/agenda/dates";
-import { toAgendaItem, toWeekSummary, toWorkshopItem } from "@/modules/agenda/items";
-import { agendaInWorkshop, agendaOverdue, agendaRange, agendaWeekCounts } from "@/modules/agenda/queries";
+import { nextLabel, toAgendaItem, toWeekSummary, toWorkshopItem } from "@/modules/agenda/items";
+import { agendaInWorkshop, agendaOverdue, agendaBusyDays, agendaNext, agendaRange, agendaWeekCounts } from "@/modules/agenda/queries";
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { listTecnicos } from "@/modules/technicians/queries";
@@ -20,12 +20,14 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
   const now = new Date();
   const { view, date } = parseAgendaParams(await searchParams, now);
   const scope = orderScope(user);
-  const [{ rows, truncated }, overdue, workshop, tecnicos, weekCounts] = await Promise.all([
+  const [{ rows, truncated }, overdue, workshop, tecnicos, weekCounts, busyDays, nextRow] = await Promise.all([
     agendaRange(scope, rangeFor(view, date)),
     agendaOverdue(scope, now),
     view === "combined" ? agendaInWorkshop(scope) : null,
     can(user, "service-orders.assign") ? listTecnicos() : null,
     agendaWeekCounts(scope, rangeFor("week", date), now),
+    agendaBusyDays(scope, date),
+    agendaNext(scope, now),
   ]);
   const items = rows.map((row) => toAgendaItem(row, now));
   const today = panamaDay(now);
@@ -43,6 +45,8 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
         roster={tecnicos ? tecnicos.map(({ id, nombre }) => ({ id, nombre })) : null}
         truncated={truncated}
         weekSummary={toWeekSummary(weekCounts)}
+        busyDays={busyDays}
+        next={nextRow ? { item: toAgendaItem(nextRow, now), label: nextLabel(nextRow.appointmentAt!, now) } : null}
         overdueTotal={overdue.total}
         overdue={overdue.rows.map((row) => toAgendaItem(row, now))}
         overdueTruncated={overdue.truncated}

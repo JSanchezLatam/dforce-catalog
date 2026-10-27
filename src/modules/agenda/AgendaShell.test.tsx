@@ -12,7 +12,7 @@ const DAY = "2026-10-27";
 const at = (id: string, over: Parameters<typeof makeItem>[0] = {}) =>
   makeItem({ id, dayKey: DAY, customerName: `Cliente ${id}`, time: "09:00", minuteOfDay: 9 * 60, ...over });
 
-const base = { date: DAY, today: DAY, nowMinute: 10 * 60 + 40, workshop: null, workshopTruncated: false, roster: null, overdueTotal: 0, overdue: [], overdueTruncated: false, truncated: false, weekSummary: [] } as const;
+const base = { date: DAY, today: DAY, nowMinute: 10 * 60 + 40, workshop: null, workshopTruncated: false, roster: null, overdueTotal: 0, overdue: [], overdueTruncated: false, truncated: false, weekSummary: [], busyDays: [], next: null } as const;
 
 /** jsdom matches no media query: the width is whatever the test says, and the query is recorded. */
 function setWidth(wide: boolean) {
@@ -376,6 +376,22 @@ describe("AgendaShell", () => {
     fireEvent.change(screen.getByPlaceholderText("Buscar placa o cliente…"), { target: { value: "zzzz" } });
     expect(screen.getAllByText("Sin resultados")).toHaveLength(1);
     expect(screen.queryByText("Sin citas para este día")).not.toBeInTheDocument();
+  });
+
+  describe("calendar and Próxima cita", () => {
+    it("the column holds the mini calendar (links keep the view) and the Próxima cita card, before the filter", () => {
+      render(<AgendaShell {...base} view="week" items={[]} busyDays={["2026-10-05"]} next={{ item: makeItem({ id: "n", customerName: "Jorge Vega" }), label: "en 20 min" }} />);
+      expect(screen.getByRole("link", { name: "Mes siguiente" })).toHaveAttribute("href", "/agenda?view=week&date=2026-11-01");
+      expect(screen.getByText("con citas")).toBeInTheDocument();
+      expect(screen.getByText("Próxima cita · en 20 min")).toBeInTheDocument();
+      const text = document.body.textContent ?? "";
+      expect(text.indexOf("Próxima cita")).toBeLessThan(text.indexOf("Categoría"));
+    });
+
+    it("with no next appointment the card says so", () => {
+      render(<AgendaShell {...base} view="day" items={[]} />);
+      expect(screen.getByText("Sin citas próximas")).toBeInTheDocument();
+    });
   });
 
   describe("side column", () => {

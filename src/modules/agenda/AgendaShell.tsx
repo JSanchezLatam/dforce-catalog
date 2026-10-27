@@ -12,6 +12,8 @@ import { Popover, PopoverContent } from "@/components/ui/popover";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { AgendaDetail } from "@/modules/agenda/AgendaDetail";
 import { AgendaHeader } from "@/modules/agenda/AgendaHeader";
+import { MiniCalendar } from "@/modules/agenda/MiniCalendar";
+import { NextCard } from "@/modules/agenda/NextCard";
 import { AgendaSidebar } from "@/modules/agenda/AgendaSidebar";
 import { AgendaTabs, type TabKey } from "@/modules/agenda/AgendaTabs";
 
@@ -44,9 +46,13 @@ type Props = {
   truncated: boolean;
   /** "Esta semana", from the page's own count query. */
   weekSummary: readonly { label: string; count: number }[];
+  /** Panama days of the displayed month with an appointment. */
+  busyDays: readonly string[];
+  /** The earliest future booked appointment with its server-made "en 20 min" text; null when none. */
+  next: { item: AgendaItem; label: string } | null;
 };
 
-export function AgendaShell({ view, date, today, nowMinute, items, workshop, workshopTruncated, roster, overdueTotal, overdue, overdueTruncated, truncated, weekSummary }: Props) {
+export function AgendaShell({ view, date, today, nowMinute, items, workshop, workshopTruncated, roster, overdueTotal, overdue, overdueTruncated, truncated, weekSummary, busyDays, next }: Props) {
   const [tab, setTab] = useState<TabKey>("todas");
   const [search, setSearch] = useState("");
   const [hidden, setHidden] = useState<readonly TypeKey[]>([]);
@@ -83,6 +89,8 @@ export function AgendaShell({ view, date, today, nowMinute, items, workshop, wor
           counts={typeCounts(items)}
           hidden={hidden}
           summary={weekSummary}
+          calendar={<MiniCalendar view={view} date={date} today={today} busyDays={busyDays} />}
+          next={<NextCard next={next} />}
           onToggle={(key) => setHidden((h) => (h.includes(key) ? h.filter((k) => k !== key) : [...h, key]))}
           onAll={() => setHidden([])}
         />

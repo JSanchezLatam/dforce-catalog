@@ -51,6 +51,7 @@ describe("AgendaSidebar", () => {
     render(<AgendaSidebar {...base} hidden={["revisado", "none"]} onAll={onAll} />);
     const todos = screen.getByRole("button", { name: "Todos" });
     expect(todos.className).toContain("min-h-11");
+    expect(todos.className).toContain("min-w-11");
     await userEvent.click(todos);
     expect(onAll).toHaveBeenCalledTimes(1);
   });
@@ -59,6 +60,18 @@ describe("AgendaSidebar", () => {
     render(<AgendaSidebar {...base} />);
     const week = screen.getByRole("region", { name: "Esta semana" });
     for (const { label, count } of summary) expect(within(week).getByText(label).parentElement).toHaveTextContent(`${label}${count}`);
+  });
+
+  it("Esta semana draws a thin bar per row, as wide as its count is relative to the largest, and aria-hidden", () => {
+    const { container } = render(<AgendaSidebar {...base} />);
+    const bars = [...container.querySelectorAll("[data-bar]")] as HTMLElement[];
+    expect(bars.map((b) => b.style.width)).toEqual(["100%", "60%", "40%", "20%"]);
+    for (const bar of bars) expect(bar.parentElement).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("an all-zero week draws empty bars, not NaN", () => {
+    const { container } = render(<AgendaSidebar {...base} summary={summary.map((r) => ({ ...r, count: 0 }))} />);
+    expect([...container.querySelectorAll("[data-bar]")].map((b) => (b as HTMLElement).style.width)).toEqual(["0%", "0%", "0%", "0%"]);
   });
 
   it("Column collapses behind Filtros: a 44x44 disclosure button toggles the column below lg", async () => {

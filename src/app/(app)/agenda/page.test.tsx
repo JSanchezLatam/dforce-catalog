@@ -11,11 +11,13 @@ const agendaRange = vi.hoisted(() => vi.fn());
 const agendaOverdue = vi.hoisted(() => vi.fn());
 const agendaInWorkshop = vi.hoisted(() => vi.fn());
 const agendaWeekCounts = vi.hoisted(() => vi.fn());
+const agendaBusyDays = vi.hoisted(() => vi.fn());
+const agendaNext = vi.hoisted(() => vi.fn());
 const orderScope = vi.hoisted(() => vi.fn());
 const listTecnicos = vi.hoisted(() => vi.fn());
 const canMock = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders: session }));
-vi.mock("@/modules/agenda/queries", () => ({ agendaRange, agendaOverdue, agendaInWorkshop, agendaWeekCounts }));
+vi.mock("@/modules/agenda/queries", () => ({ agendaRange, agendaOverdue, agendaInWorkshop, agendaWeekCounts, agendaBusyDays, agendaNext }));
 vi.mock("@/modules/service-orders/scope", () => ({ orderScope }));
 vi.mock("@/modules/technicians/queries", () => ({ listTecnicos }));
 const realCan = vi.hoisted(() => ({ fn: null as null | ((...args: never[]) => boolean) }));
@@ -98,6 +100,8 @@ beforeEach(() => {
   agendaRange.mockResolvedValue({ rows: [], truncated: false });
   agendaOverdue.mockResolvedValue({ rows: [], truncated: false, total: 0 });
   agendaInWorkshop.mockResolvedValue({ rows: [], truncated: false });
+  agendaBusyDays.mockResolvedValue([]);
+  agendaNext.mockResolvedValue(null);
   agendaWeekCounts.mockResolvedValue({ agendadas: 5, recibidas: 3, vencidas: 2, noShow: 1 });
   // The real roster rows carry more than the Detail needs, and a Date among it.
   listTecnicos.mockResolvedValue([
@@ -268,6 +272,30 @@ describe("AgendaPage Vencidas and combined", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("Mini calendar and Próxima cita: busy days of the displayed month and the next booked appointment, both scoped, plain props", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-26T14:40:00Z"));
+    try {
+      agendaBusyDays.mockResolvedValue(["2026-10-05"]);
+      agendaNext.mockResolvedValue(agendaRow({ id: "nx", appointmentAt: new Date("2026-10-26T16:00:00Z"), customerName: "Jorge Vega" }));
+      // A date in the NEXT month: the dots belong to the displayed month, not to today's.
+      const props = shellProps(await AgendaPage(params({ view: "week", date: "2026-11-03" })));
+      expect(agendaBusyDays).toHaveBeenCalledWith(SCOPE, "2026-11-03");
+      const [scope, now] = agendaNext.mock.calls[0];
+      expect(scope).toBe(SCOPE);
+      expect(now.toISOString()).toBe("2026-10-26T14:40:00.000Z");
+      expect(props?.busyDays).toEqual(["2026-10-05"]);
+      expect(props?.next).toMatchObject({ label: "en 1 h 20 min", item: { id: "nx", customerName: "Jorge Vega", time: "11:00" } });
+      expect(() => assertPlain(props)).not.toThrow();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("no future booked appointment: next is null", async () => {
+    expect(shellProps(await AgendaPage(params({ view: "day", date: "2026-10-26" })))?.next).toBeNull();
   });
 
   it("the shell gets the true Vencida total, not the rows it loaded", async () => {
