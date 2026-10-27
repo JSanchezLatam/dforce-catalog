@@ -285,3 +285,14 @@ Tasks 9.15-9.20 done; 9.21 (browser re-check) open.
 Mutation-verify (one file each, restored from a backup copy; final diff holds none): drop the `updateOrder` comparison -> service "Stale reprogram is refused" red AND e2e "Stale reprogram is refused" red; route drops `expectedStatus` from the first `updateOrder` call -> route 409 field-PATCH test red; validate only when `body.status` is a string -> the four field-PATCH 400 tests red; dialog stops sending `expectedStatus` -> "Request body" red; drop each of `max-w-full`, `whitespace-normal`, `[overflow-wrap:anywhere]` -> the AgendaChip badge test red (each); Taller placed after CRM -> four nav-items tests red. The picker-track class, `pickExisting` rename and the `"taller"` collapse key were verified RED before the fix (class absent / key absent), not by a separate revert.
 
 Spec: delta spec Reprogramar requirement (body and guard), "Request body", "Order no longer booked" rewritten, new scenario "Reprogram without expectedStatus is unchanged", and the sidebar sentence (Agenda is in "Taller"). Design D3 updated. Main specs naming where links live: none state the group (`metrics-dashboard` "Navigation Entries" and `workshop-status-board` only say who sees the link), so nothing to change at archive for item 5; at archive the Reprogramar requirement merges into the main workshop-agenda spec as written.
+
+## Browser checks (WU9), 2026-10-26
+
+Three passes at http://192.168.0.7:3000, browser zone Asia/Tokyo, against a copy of the dev DB seeded with ~30 `agendacheck-*` orders.
+
+- Pass 1: 8/9. Defect: Reprogramar / No se presentó buttons overflowed week and month columns at 768 px; phone dialog put the quick form below the footer. Fixed (round 1).
+- Pass 2: GGA found Reprogramar had no stale guard (fixed with `expectedStatus` on the field path); muted-chip badges overflowed the month chip at 768; the customer search overflowed the phone dialog. Fixed (round 2) plus the owner-requested "Taller" sidebar group.
+- Pass 3: badges inside their chips (max −5 px), stale Reprogramar refused and normal Reprogramar works, "Taller" group per role with persisted collapse, 15 full loads without hydration/RSC errors. Remaining: the customer picker table still pushed "Seleccionar" to 441 px at 390 px; fixed in `CustomerPicker` (identifier stacked under the name in one wrapping cell, short "Cliente" header) and re-measured: table right 349 ≤ dialog body 354, button right 341, page scrollWidth 390, no console errors. The same fix applies to the order form picker.
+- Earlier passes: every control ≥ 44×44 at 768 and 390; booking from header and from a day; quick create with Enter creating no order; duplicate phone choices; deactivated duplicate disables "Usar ese cliente"; No se presentó with stale 409 through two tabs; técnico PermissionDenied, pantalla redirected.
+
+Not checked: reminders delivery, the 500-row notice, a second machine.

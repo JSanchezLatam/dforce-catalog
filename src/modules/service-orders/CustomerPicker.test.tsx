@@ -93,6 +93,20 @@ describe("CustomerPicker", () => {
     expect(screen.getByText("Ya Elegido")).toBeInTheDocument();
   });
 
+  // A 390 px phone pushed "Seleccionar" off a three-column table (measured at the LAN IP):
+  // the identifier stacks under the name and the cell wraps, so the button column always fits.
+  it("Phone width: the identifier stacks under the name in one wrapping cell, beside the button", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ customers: [row({ id: "c-1", name: "Cliente Largo", plates: ["ABC123"] })], total: 1 }));
+
+    render(<CustomerPicker selectedCustomer={null} canCreateCustomer={false} onSelect={vi.fn()} />);
+    await typeAndDebounce("cliente");
+
+    const nameCell = screen.getByText("Cliente Largo").closest("td")!;
+    expect(nameCell).toContainElement(screen.getByText("ABC123"));
+    expect(nameCell.className).toContain("whitespace-normal");
+    expect(nameCell.closest("tr")!.querySelectorAll("td")).toHaveLength(2);
+  });
+
   it("falls back through phone, then email, then the registration date when a row has no plate", async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({
