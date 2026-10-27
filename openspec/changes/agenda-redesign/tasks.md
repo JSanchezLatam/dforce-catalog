@@ -201,10 +201,10 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU18: combined (branch `feat/agenda-redesign-wu18-combined`) [~300]
 
-- [ ] 18.1 RED `CombinedView.test.tsx`: grid and "En el taller ahora" with a count badge; each card shows the dot, plate + make model or "Sin vehículo", name, status label, since-time, technician initials or "Sin técnico", the hold reason + "hace 2 días" only while `on_hold`, links to `/service-orders/<id>`, no phone; `lg:grid-cols-2` side by side, grid first when stacked. (Technicians on the card; Side by side and stacked)
-- [ ] 18.2 GREEN `CombinedView.tsx` on the WU4 workshop items and shell props.
-- [ ] 18.3 Mutation-verify: show the phone -> its test red; reason for `in_progress` -> "Hold reason" red.
-- [ ] 18.4 Close: C + B (mockup frame 2 at 1024; stacked at 390).
+- [x] 18.1 RED `CombinedView.test.tsx`: grid and "En el taller ahora" with a count badge; each card shows the dot, plate + make model or "Sin vehículo", name, status label, since-time, technician initials or "Sin técnico", the hold reason + "hace 2 días" only while `on_hold`, links to `/service-orders/<id>`, no phone; `lg:grid-cols-2` side by side, grid first when stacked. (Technicians on the card; Side by side and stacked)
+- [x] 18.2 GREEN `CombinedView.tsx` on the WU4 workshop items and shell props.
+- [x] 18.3 Mutation-verify: show the phone -> its test red; reason for `in_progress` -> "Hold reason" red.
+- [x] 18.4 Close: C + B (mockup frame 2 at 1024; stacked at 390).
 
 ## WU19: phone (branch `feat/agenda-redesign-wu19-phone`) [~250]
 
