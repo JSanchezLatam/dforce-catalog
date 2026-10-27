@@ -39,7 +39,7 @@ type AgendaItem = { id; href; dayKey; time /* HH:mm */; minuteOfDay: number; cus
 
 Pure helpers in `items.ts`: `matchesSearch` (NFD fold, plate/name), `filterItems`, `typeCounts`, `weekSummary` (Agendadas/Recibidas/Vencidas/No se presentó), `layoutDay(items) → {item, lane, lanes}` (greedy 1 h intervals). `grid.ts`: `ROW=104`, `hourWindow(items) = [min(8, firstHour), max(18, lastHour+1)]` so out-of-hours rows never vanish, `top = (minuteOfDay − start·60)/60·ROW`. The now-line shows only when `today` is visible and inside the window. Week caps at 2 lanes, and anything beyond is a 44px "+N" link to the day view.
 
-Time: everything is formatted on the server. Times use the existing `formatAgendaTime` (numeric `formatToParts`). The "en N min" for the next appointment and the since-time use `board/format.ts#formatAge`, frozen at render.
+Time: everything is formatted on the server. Times use the existing `formatAgendaTime` (numeric `formatToParts`). The "en N min" for the next appointment (`nextLabel`) and the since-time (a private `durationText` in `items.ts`, because `formatAge` reads "2 h"/"1 d" and the spec needs "2 h 40 min"/"1 día") are built in `items.ts`, frozen at render.
 
 ## File Changes (by WU, chained, ≤400 changed lines each)
 
