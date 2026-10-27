@@ -1,7 +1,7 @@
 import { can, type Action } from "@/modules/auth/policy";
 import type { SessionUser } from "@/modules/auth/session";
 
-export type NavIconKey = "inventory" | "builder" | "catalogs" | "template-config" | "customers" | "service-orders" | "vencimientos" | "users" | "technicians" | "metrics" | "my-metrics";
+export type NavIconKey = "inventory" | "builder" | "catalogs" | "template-config" | "customers" | "service-orders" | "vencimientos" | "users" | "technicians" | "metrics" | "my-metrics" | "board";
 
 export type NavLink = { kind: "link"; href: string; label: string; icon: NavIconKey; action?: Action; badge?: number };
 
@@ -22,6 +22,7 @@ const CRM_ITEMS: (NavLink | NavParent)[] = [
   // One entry per viewer: `metrics.read` is admin/jefe, `metrics.self` the técnico only.
   { kind: "link", href: "/metrics", label: "Métricas", icon: "metrics", action: "metrics.read" },
   { kind: "link", href: "/mis-numeros", label: "Mis números", icon: "my-metrics", action: "metrics.self" },
+  { kind: "link", href: "/tablero", label: "Tablero", icon: "board", action: "board.read" },
 ];
 
 const CATALOGO_ITEMS: (NavLink | NavParent)[] = [

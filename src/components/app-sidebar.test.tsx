@@ -222,3 +222,22 @@ describe("AppSidebar — Vencimientos badge", () => {
     expect(await screen.findByText("Vencimientos próximos (5)")).toBeInTheDocument();
   });
 });
+
+describe("AppSidebar — Tablero icon", () => {
+  it("renders the `board` key as LayoutDashboard, not the Package fallback", () => {
+    render(
+      <SidebarProvider defaultOpen>
+        <AppSidebar
+          navGroups={[{ id: "crm", label: "CRM", items: [{ kind: "link", href: "/tablero", label: "Tablero", icon: "board" }] }]}
+          user={{ id: "u1", role: "administrador", name: "Jorge" }}
+          workshopName="Taller Demo"
+          logoR2Key={null}
+          initialCollapseState={DEFAULT_NAV_COLLAPSE_STATE}
+        />
+      </SidebarProvider>,
+    );
+
+    const svg = screen.getByRole("link", { name: "Tablero" }).querySelector("svg");
+    expect(svg).toHaveClass("lucide-layout-dashboard");
+  });
+});
