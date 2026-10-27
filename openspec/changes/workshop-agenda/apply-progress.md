@@ -74,3 +74,73 @@ Zone proof: the e2e file passes with `TZ=UTC` and `TZ=Pacific/Auckland`; the poo
 Gates (final tree, WU1 + WU2): `npm test` 237 files / 3738 passed; `npx tsc --noEmit` clean; `npm run lint` 0 errors / 13 warnings. Full e2e on a recreated `dforce_e2e` (`TZ=UTC npm run test:e2e`): 27 files / 348 tests passed, 0 skipped. `dforce_catalog` and `dforce_catalog_wu4` untouched.
 
 Unverified: `typeof total === "number"` and the types of `AgendaRow` are checked by e2e and tsc against the real select; the arity/`expectTypeOf` half of "scope required" is compile-time only (`tsc --noEmit` covers test files; vitest does not typecheck). Not measured: query plan or speed at volume (no index was added; follow-up in tasks.md).
+
+## WU3: items, header, day and week views, page wiring (tasks 3.1-3.6 and 3.8 done; 3.7 e2e NOT written; 3.9 closing steps left to the orchestrator)
+
+Files (changed lines vs `feat/workshop-agenda-wu2`, untracked included; ~598 total, OVER the 400 budget, about 200 production and 400 tests/fixture):
+- New production: `src/modules/agenda/items.ts` (54), `AgendaChip.tsx` (26), `AgendaHeader.tsx` (46), `DayView.tsx` (16), `WeekView.tsx` (34)
+- New tests: `items.test.ts` (76), `items.fixture.ts` (18, shared with WU4), `AgendaHeader.test.tsx` (54), `DayView.test.tsx` (58), `WeekView.test.tsx` (51), `agenda-safety.test.ts` (40)
+- Modified: `src/modules/agenda/dates.ts` (+6/-3: `panamaToday` renamed and exported as `panamaDay`, new `WEEKDAY_SHORT`), `src/app/(app)/agenda/page.tsx` (wiring), `src/app/(app)/agenda/page.test.tsx` (rewritten around `searchParams`)
+
+TDD: all new test files written first and run RED ("Failed to resolve import" for the missing modules) before the GREEN code. One fixture bug (href not following the id) found by the Overlap test and fixed in the fixture.
+
+Mutation-verify (per-file backup, restored, full agenda suite re-run green afterwards; `git diff` clean of mutations):
+
+| Mutation | Test that went red |
+|---|---|
+| page: `can()` replaced by `if (false)` | "Técnico is denied: ..." and "Pantalla never sees the agenda ..." |
+| sort chips by id only | "Overlap stacks: three 09:00 chips ..." (DayView) and "Overlap stacks: orders by time, then id ..." (items) |
+| `description` added to the item | "Chip fields: plain strings for the Panama day ..." |
+| chip drops `min-h-11` | "Chip fields: time, name, phone, plate in that order ..." |
+| header links drop `min-h-11 min-w-11` | "Hit targets classes: every link is at least 44x44" |
+| week grid `grid-cols-7` without `grid-cols-1` | "collapses to a vertical list on phone and seven columns from md" |
+| overdue computed as `appointmentAt < now` | "Only booked orders are Vencida ...", "Flag is computed once on the server ..." |
+| truncation notice condition inverted | "Row cap disclosure ..." and the page "renders the rows as chips and discloses a truncated range" |
+| view switcher uses `today` instead of `date` | "Navigation links: the view switcher keeps the selected date" |
+| chip drops the "Vencida" label | "Vencida label ...", "puts each chip under its own day ..." |
+| a `"use client"` file with `toLocaleString` | "No client locale date text ..." (safety) |
+| a file with `crypto.randomUUID` | "No secure-context APIs ..." (safety) |
+
+Not placebo-checked: a hard-coded extra text node in the chip is not caught (the chip has no description field to render; the guard is the item shape, covered by the `description` mutation above).
+
+Gates (WU3 + WU4 tree): `npm test` 243 files / 3781 tests passed; `npx tsc --noEmit` clean; `npm run lint` 0 errors / 13 warnings (a first run showed 14: an unused `addDays` import in AgendaHeader, removed). No SQL changed, so e2e not re-run.
+
+Deviations and decisions:
+- 3.6 says the page does `Promise.all` of range + overdue; the overdue query is NOT called in WU3 because nothing renders its result until the Vencidas panel (WU5). Calling it now is a wasted query per request. WU5 adds it. The per-chip "Vencida" label comes from `isOverdue` in `toAgendaItem`, not from that query.
+- `items.ts` has no `description` (task text wins over design D7). `toAgendaItem` throws on a null `appointmentAt` rather than rendering a blank time.
+- `sortItems`/`groupByDay` live in `items.ts`; the shared `AgendaChip.tsx` and `items.fixture.ts` are extra files not named in the task (WU4 reuses them).
+- `month` and `combined` fall back to the day view in the page switch (as the task says); `month` is replaced by MonthView in WU4.
+- Page signature is now `AgendaPage({ searchParams })` (required, Promise); arrays from repeated query keys fall back to week/today and are tested.
+- Week view on phone: the same markup, `grid-cols-1` below `md`, so it is a vertical list of seven day sections (empty days show only their header link). Day headers are links to the day view (`min-h-11 min-w-11`).
+- Header range label uses digits only (`DD/MM/YYYY`, `Semana del DD/MM/YYYY`, `MM/YYYY`), no month names.
+
+Unverified: 3.7 `src/e2e/agenda-page.e2e.test.ts` (unauthenticated redirect and a real-DB render per role) was not written: the page needs `next/headers` and a real session cookie, there is no existing harness for a page in `src/e2e`, and no SQL changed in this unit. Needs a decision (follow-up or WU9 browser check). 44px targets, phone/tablet layout, hydration and the RSC boundary are class assertions in jsdom only (browser, WU9). The first commit exceeds the 400-line budget by about 200 lines; the production half is about 200, so the overrun is test volume.
+
+## WU4: month view (tasks 4.1-4.3 done; 4.4 closing steps left to the orchestrator)
+
+Files (~145 changed lines vs the WU3 tree):
+- New: `src/modules/agenda/MonthView.tsx` (62), `MonthView.test.tsx` (68)
+- page hunks that belong to WU4 (everything else in `page.tsx` / `page.test.tsx` is WU3): in `src/app/(app)/agenda/page.tsx` the `import { MonthView } ...` line and the render switch, which is now `view === "month" ? <MonthView/> : view === "week" ? <WeekView/> : <DayView/>` (WU3's version is the single `view === "week" ? <WeekView/> : <DayView/>` line); in `page.test.tsx` the last test, "view=month draws the month grid for the whole drawn range".
+
+TDD: `MonthView.test.tsx` RED (cannot resolve `./MonthView`), then GREEN.
+
+Mutation-verify:
+
+| Mutation | Test that went red |
+|---|---|
+| `CHIPS_PER_CELL = 4` | "Month cell cap: 5 appointments show the first 3 ..." and "Singular and plural ..." |
+| overflow `> 0` to `>= 0` | "Exactly three chips show no overflow link" |
+| hidden count off by one | "Month cell cap ...", "Exactly three chips ...", "Singular and plural ..." |
+| drop the outside-month dimming | "Outside-month days are dimmed but still carry their chips" |
+| drop `aria-current="date"` | "marks today's Panama day" |
+| day number and "+N más" lose `min-h-11 min-w-11` | "Hit targets classes ..." |
+| chip list loses `max-md:hidden` | "phone: chips collapse to a count below md ..." |
+| page: month arm replaced by `false` | page "view=month draws the month grid ..." |
+
+Not caught (cosmetic): removing only the today background classes while keeping `aria-current`.
+
+Gates: see WU3 (single tree run covers both).
+
+Decisions: on a phone (below `md`) each cell shows the day number (a link to the day view, 44x44) and a count (`aria-label` "N citas"/"1 cita"); the chips and the "+N más" link render from `md` up. The grid is 7 columns at every width, with no horizontal page scroll by construction, but chip legibility at 768 px (about 100 px per cell) is unproven. `monthGrid` rows come from WU1's `dates.ts`; the range already covered the drawn weeks.
+
+Unverified: legibility of chips in 100 px cells at 768 px and the 390 px count layout (browser, WU9); no empty-state text in the month grid (the spec only requires it for the day view).
