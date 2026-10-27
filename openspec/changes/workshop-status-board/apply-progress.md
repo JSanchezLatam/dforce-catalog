@@ -24,3 +24,5 @@
 - The spec mentions a role *filter* in the user list; no role filter exists in the code (only selector and badge), so none was touched.
 - Pages in e2e (g) are called as functions with forged headers (`next/headers` mocked), not through `proxy.ts`; no browser check (WU4).
 - Task 1.3 "order scoping" test passes without code change (pantalla already falls through the technician EXISTS path); it is a regression guard, not a RED.
+
+- WU3 must write the `pantalla` MATRIX row literally when `board.customer` arrives (GGA WU1 note: the `Object.fromEntries` cast disables the missing-grant tsc check).
