@@ -19,13 +19,16 @@ type Props = {
   nowMinute?: number;
   selectedId?: string | null;
   onSelect?: (item: AgendaItem, anchor: HTMLElement) => void;
+  /** Below md only this day's header and column show (CSS only); omitted, all seven always do. */
+  selectedDay?: string;
   onSlot?: (day: string, time: string) => void;
 };
 
-export function WeekGrid({ days, items, todayKey, nowMinute, selectedId = null, onSelect, onSlot }: Props) {
+export function WeekGrid({ days, items, todayKey, nowMinute, selectedId = null, onSelect, onSlot, selectedDay }: Props) {
   const [start, end] = hourWindow(items);
   const hours = Array.from({ length: end - start }, (_, i) => start + i);
-  const columns = "grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))]";
+  const columns = "grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] max-md:grid-cols-[3.5rem_minmax(0,1fr)]";
+  const phoneHidden = (day: string) => (selectedDay !== undefined && day !== selectedDay ? "max-md:hidden" : "");
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className={`${columns} border-b border-border`}>
@@ -33,7 +36,7 @@ export function WeekGrid({ days, items, todayKey, nowMinute, selectedId = null, 
         {days.map((day, i) => {
           const count = items.filter((it) => it.dayKey === day).length;
           return (
-            <div key={day} data-day-header={day} data-weekend={i >= 5 ? "" : undefined} className={`border-l border-border px-2 py-2 ${day === todayKey ? "bg-muted" : ""}`}>
+            <div key={day} data-day-header={day} data-weekend={i >= 5 ? "" : undefined} className={`border-l border-border px-2 py-2 ${phoneHidden(day)} ${day === todayKey ? "bg-muted" : ""}`}>
               <div data-weekday className="text-[11px] font-semibold tracking-wide text-muted-foreground">{WEEKDAY_SHORT[i]}</div>
               <div className="flex items-baseline gap-1">
                 <span data-day-number className="text-xl font-bold">{Number(day.slice(8))}</span>
@@ -62,7 +65,7 @@ export function WeekGrid({ days, items, todayKey, nowMinute, selectedId = null, 
               key={day}
               data-day-column={day}
               data-weekend={i >= 5 ? "" : undefined}
-              className={`relative border-l border-border ${i >= 5 ? "agenda-hatch" : ""} ${day === todayKey ? "bg-muted/40" : ""}`}
+              className={`relative border-l border-border ${phoneHidden(day)} ${i >= 5 ? "agenda-hatch" : ""} ${day === todayKey ? "bg-muted/40" : ""}`}
               style={{ height: hours.length * ROW }}
             >
               {hours.map((h) => {

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -53,6 +53,24 @@ describe("AgendaHeader", () => {
     const button = screen.getByRole("button", { name: "Nueva cita" });
     expect(button.className).toContain("bg-primary");
     expect(button.className).toContain("min-h-11");
+  });
+
+  it("Compact on a phone: the floating button replaces 'Nueva cita', and the breadcrumb, subtitle and range pill hide below md", () => {
+    render(<AgendaHeader {...base} />);
+    expect(screen.getByRole("button", { name: "Nueva cita" }).className).toContain("max-md:hidden");
+    expect(screen.getByRole("navigation", { name: "Ruta" }).className).toContain("max-md:hidden");
+    expect(screen.getByText("Citas del taller y órdenes en curso").className).toContain("max-md:hidden");
+    expect(screen.getByText("Semana del 26/10/2026").className).toContain("max-md:hidden");
+  });
+
+  it("Phone: Actualizar is icon-only (still named), the view links tighten, and the filters control sits on the view row beside the refresh", () => {
+    render(<AgendaHeader {...base} filters={<button type="button" aria-label="Filtros" />} />);
+    const refresh = screen.getByRole("button", { name: "Actualizar" });
+    expect(screen.getByText("Actualizar").className).toContain("max-md:sr-only");
+    const row = screen.getByRole("navigation", { name: "Vista" }).parentElement!;
+    expect(row).toContainElement(refresh);
+    expect(row).toContainElement(screen.getByRole("button", { name: "Filtros" }));
+    for (const link of within(screen.getByRole("navigation", { name: "Vista" })).getAllByRole("link")) expect(link.className).toContain("max-md:px-2");
   });
 
   it("Manual refresh: the existing RefreshListButton is there", () => {

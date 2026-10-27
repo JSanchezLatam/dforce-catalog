@@ -93,4 +93,20 @@ describe("AgendaSidebar", () => {
     expect(column.className).not.toContain("hidden");
     expect(column).toContainElement(screen.getByRole("heading", { name: "Categoría" }));
   });
+
+  it("Phone: the mini calendar and Próxima cita are not shown below md, while Categoría and Esta semana stay behind Filtros", () => {
+    render(<AgendaSidebar {...base} calendar={<div>CAL</div>} next={<div>NEXT</div>} />);
+    for (const t of ["CAL", "NEXT"]) expect(screen.getByText(t).parentElement!.className).toContain("max-md:hidden");
+    expect(screen.getByText("Categoría").closest("section")!.parentElement!.className).not.toContain("max-md:hidden");
+  });
+
+  it("Controlled by the shell: `open` drives the column, and the sidebar's own button hides below md (the header carries it there)", async () => {
+    const onOpenChange = vi.fn();
+    render(<AgendaSidebar {...base} open onOpenChange={onOpenChange} />);
+    const button = screen.getByRole("button", { name: "Filtros" });
+    expect(button.className).toContain("max-md:hidden");
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(button);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 });

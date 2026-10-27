@@ -208,11 +208,11 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU19: phone (branch `feat/agenda-redesign-wu19-phone`) [~250]
 
-- [ ] 19.1 RED `DayStrip.test.tsx`: seven Mon-Sun links rewriting `date`, dots on Tuesday and Thursday, today marked, selected highlighted, each 44x44; the hour grid shows the selected day only; the strip scrolls inside itself.
-- [ ] 19.2 RED `AgendaShell.test.tsx`: phone FAB "Nueva cita" (>= 44px) opens booking with the selected day and empty time; the search control reaches the search field; the side column and mini calendar are hidden on a phone.
-- [ ] 19.3 GREEN `DayStrip.tsx`, shell phone chrome and class gates.
-- [ ] 19.4 Mutation-verify: drop the dots -> "Phone day strip" red; FAB prefilled with a time -> "Header and floating button defaults" red.
-- [ ] 19.5 Close: C + B (390 is mockup frame 4: day, and the sheet).
+- [x] 19.1 RED `DayStrip.test.tsx`: seven Mon-Sun links rewriting `date`, dots on Tuesday and Thursday, today marked, selected highlighted, each 44x44; the hour grid shows the selected day only; the strip scrolls inside itself.
+- [x] 19.2 RED `AgendaShell.test.tsx`: phone FAB "Nueva cita" (>= 44px) opens booking with the selected day and empty time; the search control reaches the search field; the side column and mini calendar are hidden on a phone.
+- [x] 19.3 GREEN `DayStrip.tsx`, shell phone chrome and class gates.
+- [x] 19.4 Mutation-verify: drop the dots -> "Phone day strip" red; FAB prefilled with a time -> "Header and floating button defaults" red.
+- [x] 19.5 Close: C + B (390 is mockup frame 4: day, and the sheet).
 
 ## WU20: sign-off, verify, archive (branch `feat/agenda-redesign-wu20-signoff`)
 
