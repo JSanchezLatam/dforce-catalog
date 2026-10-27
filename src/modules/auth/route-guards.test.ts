@@ -127,6 +127,8 @@ export const ROUTE_GUARDS: Record<
   // WU4: the full board and its poll route, read-only.
   "/tablero": { GET: "board.read" },
   "/api/board": { GET: "board.read" },
+  // kanban-board: the poll route. The `/kanban` page entry lands with the page (completeness needs the file).
+  "/api/kanban": { GET: "board.read" },
   // workshop-agenda: the appointment calendar (day, week, month and combined views).
   "/agenda": { GET: "agenda.manage" },
   "/tablero/clientes": { GET: "board.customer" },
