@@ -12,7 +12,7 @@ const DAY = "2026-10-27";
 const at = (id: string, over: Parameters<typeof makeItem>[0] = {}) =>
   makeItem({ id, dayKey: DAY, customerName: `Cliente ${id}`, time: "09:00", minuteOfDay: 9 * 60, ...over });
 
-const base = { date: DAY, today: DAY, nowMinute: 10 * 60 + 40, workshop: null, workshopTruncated: false } as const;
+const base = { date: DAY, today: DAY, nowMinute: 10 * 60 + 40, workshop: null, workshopTruncated: false, roster: null } as const;
 
 /** jsdom matches no media query: the width is whatever the test says, and the query is recorded. */
 function setWidth(wide: boolean) {
@@ -213,6 +213,16 @@ describe("AgendaShell", () => {
     rerender(<AgendaShell {...base} view="month" items={[at("a")]} />);
     expect(popover()).toBeNull();
     expect(sheet()).toBeNull();
+  });
+
+  it("the roster reaches the Detail: a booked card offers '+ Asignar técnico' only when the shell has one", async () => {
+    const { unmount } = render(<AgendaShell {...base} view="day" items={[at("a")]} roster={[{ id: "t1", nombre: "Julio Rangel" }]} />);
+    await userEvent.click(card(/Cliente a/));
+    expect(within(popover()!).getByRole("button", { name: "+ Asignar técnico" })).toBeInTheDocument();
+    unmount();
+    render(<AgendaShell {...base} view="day" items={[at("a")]} roster={null} />);
+    await userEvent.click(card(/Cliente a/));
+    expect(within(popover()!).queryByRole("button", { name: "+ Asignar técnico" })).not.toBeInTheDocument();
   });
 
   it("month has no Detail yet: the legacy chips stay links", () => {

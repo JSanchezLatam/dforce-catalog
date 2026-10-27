@@ -89,7 +89,7 @@ describe("AgendaDetail", () => {
   });
 
   it("Muted Detail is read-only: an open appointment offers Abrir orden only, and shows its chips and technicians", () => {
-    render(<AgendaDetail item={jorge({ status: "open", statusLabel: "Recibida", muted: true })} onClose={vi.fn()} />);
+    render(<AgendaDetail item={jorge({ status: "open", statusLabel: "Recibida", muted: true })} roster={[{ id: "t9", nombre: "Otro" }]} onClose={vi.fn()} />);
     expect(screen.getByText("Recibida")).toBeInTheDocument();
     expect(chips()).toHaveLength(5);
     expect(chips().filter((c) => c.getAttribute("aria-current") === "true").map((c) => c.textContent)).toEqual(["REVISADO"]);
@@ -261,6 +261,58 @@ describe("AgendaDetail", () => {
       render(<AgendaDetail item={jorge({ status: "open", statusLabel: "Recibida", muted: true })} onClose={vi.fn()} />);
       expect(screen.queryByRole("group", { name: "Categoría" })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Reparación" })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("assigning a technician", () => {
+    const roster = [
+      { id: "t1", nombre: "Julio Rangel" },
+      { id: "t2", nombre: "Marta Pérez" },
+      { id: "t3", nombre: "Luis Soto" },
+    ];
+    const openPicker = async () => {
+      await userEvent.click(screen.getByRole("button", { name: "+ Asignar técnico" }));
+      return screen.getByRole("combobox");
+    };
+
+    it("Assign control follows the permission: absent without a roster, a 44px button with one", () => {
+      const { unmount } = render(<AgendaDetail item={jorge()} onClose={vi.fn()} />);
+      expect(screen.queryByRole("button", { name: "+ Asignar técnico" })).not.toBeInTheDocument();
+      unmount();
+      render(<AgendaDetail item={jorge()} roster={roster} onClose={vi.fn()} />);
+      expect(screen.getByRole("button", { name: "+ Asignar técnico" })).toHaveClass("min-h-11", "min-w-11");
+    });
+
+    it("never for a non-booked appointment, even with a roster", () => {
+      render(<AgendaDetail item={jorge({ status: "open", statusLabel: "Recibida", muted: true })} roster={roster} onClose={vi.fn()} />);
+      expect(screen.queryByRole("button", { name: "+ Asignar técnico" })).not.toBeInTheDocument();
+    });
+
+    it("the picker lists the roster minus the technicians already on the order", async () => {
+      render(<AgendaDetail item={jorge()} roster={roster} onClose={vi.fn()} />);
+      const select = await openPicker();
+      expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual(["Elegí un técnico", "Marta Pérez", "Luis Soto"]);
+    });
+
+    it("Assign a technician: POST assignments with the tecnicoId, toast 'Técnico asignado'", async () => {
+      const calls = stubFetch(() => json({ asignacion: { id: "a1" } }, 201));
+      render(<AgendaDetail item={jorge()} roster={roster} onClose={vi.fn()} />);
+      await userEvent.selectOptions(await openPicker(), "t2");
+      await userEvent.click(screen.getByRole("button", { name: "Asignar" }));
+      await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+      expect(calls[0].url).toBe("/api/service-orders/o1/assignments");
+      expect(calls[0].init.method).toBe("POST");
+      expect(JSON.parse(calls[0].init.body as string)).toEqual({ tecnicoId: "t2" });
+      expect(addToast).toHaveBeenCalledWith("success", "Técnico asignado");
+    });
+
+    it("Assign refusal stays inline: order_closed 409 shows its message and no toast", async () => {
+      stubFetch(() => json({ error: "order_closed", message: "No se puede asignar un técnico a una orden completada o cancelada." }, 409));
+      render(<AgendaDetail item={jorge()} roster={roster} onClose={vi.fn()} />);
+      await userEvent.selectOptions(await openPicker(), "t2");
+      await userEvent.click(screen.getByRole("button", { name: "Asignar" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("No se puede asignar un técnico a una orden completada o cancelada.");
+      expect(addToast).not.toHaveBeenCalled();
     });
   });
 });
