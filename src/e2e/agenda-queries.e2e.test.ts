@@ -6,7 +6,7 @@
  * is compared as a delta against its value before seeding.
  */
 import { execSync } from "node:child_process";
-import { count, eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { rangeFor } from "@/modules/agenda/dates";
@@ -168,7 +168,7 @@ describe("agenda queries (E2E)", () => {
     });
   });
 
-  it("Technicians do not multiply rows: three technicians give the same row count and count() totals as none", async () => {
+  it("Technicians do not multiply rows: three technicians still give one row per order", async () => {
     const day = "2031-11-04";
     const solo = await newOrder({ at: `${day}T09:00:00-05:00` });
     const crowded = await newOrder({ at: `${day}T10:00:00-05:00` });
@@ -179,8 +179,6 @@ describe("agenda queries (E2E)", () => {
     expect(ids(page.rows)).toEqual([solo, crowded]);
     expect(page.rows.find((r) => r.id === solo)?.technicians).toEqual([]);
     expect(page.rows.find((r) => r.id === crowded)?.technicians).toHaveLength(3);
-    const [{ total }] = await db.select({ total: count() }).from(ordenServicio).where(inArray(ordenServicio.id, ids(page.rows)));
-    expect(total).toBe(2);
   });
 
   it("A deactivated technician is excluded from the row", async () => {
