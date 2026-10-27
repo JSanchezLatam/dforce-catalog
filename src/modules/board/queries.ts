@@ -4,7 +4,7 @@
  * `queries.privacy.test.ts` enforces it on this file's text. Three batched
  * queries per snapshot (orders, technicians, history), never one per order.
  */
-import { and, asc, eq, gte, inArray, max, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, max, or, sql } from "drizzle-orm";
 
 import { BACKLOG_STATUSES } from "@/modules/metrics/shape";
 import { db } from "@/shared/db/client";
@@ -49,7 +49,8 @@ export async function workshopBoardData(now: Date = new Date()): Promise<{ rows:
       .select({ ordenId: ordenTecnico.ordenId, nombre: tecnico.nombre })
       .from(ordenTecnico)
       .innerJoin(tecnico, eq(tecnico.id, ordenTecnico.tecnicoId))
-      .where(inArray(ordenTecnico.ordenId, ids))
+      // A deactivated technician is off the roster (readiness already ignores them), so off the board.
+      .where(and(inArray(ordenTecnico.ordenId, ids), isNull(tecnico.deactivatedAt)))
       .orderBy(asc(tecnico.nombre)),
     db
       .select({ ordenId: ordenEstadoHistorial.ordenId, changedAt: max(ordenEstadoHistorial.changedAt) })
