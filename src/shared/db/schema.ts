@@ -10,7 +10,7 @@ import { boolean, check, date, foreignKey, index, integer, jsonb, pgEnum, pgSequ
 import { sql } from "drizzle-orm";
 
 /** R9.6 / NFR-8 — single `role` column, extensible without an RBAC library. */
-export const roleEnum = pgEnum("role", ["tecnico", "administrador", "jefe_taller"]);
+export const roleEnum = pgEnum("role", ["tecnico", "administrador", "jefe_taller", "pantalla"]);
 
 export const users = pgTable("users", {
   id: text("id")

@@ -169,7 +169,7 @@ describe("UserForm — creating", () => {
     await open(user, "Nuevo usuario");
 
     await user.click(screen.getByLabelText("Rol"));
-    expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(["Técnico", "Jefe de taller", "Administrador"]);
+    expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(["Técnico", "Jefe de taller", "Pantalla", "Administrador"]);
     await user.click(screen.getByRole("option", { name: "Jefe de taller" }));
     await user.type(screen.getByLabelText("Usuario"), "jefa");
     await user.type(screen.getByLabelText("Contraseña inicial"), "secreto123");
@@ -177,6 +177,22 @@ describe("UserForm — creating", () => {
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(bodyOf(fetchMock).role).toBe("jefe_taller");
+  });
+
+  it("sends Pantalla as the enum value pantalla", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 201, body: { user: { id: "u-10" } } });
+    render(<UserForm />);
+    await open(user, "Nuevo usuario");
+
+    await user.click(screen.getByLabelText("Rol"));
+    await user.click(await screen.findByRole("option", { name: "Pantalla" }));
+    await user.type(screen.getByLabelText("Usuario"), "tv-taller");
+    await user.type(screen.getByLabelText("Contraseña inicial"), "secreto123");
+    await user.click(screen.getByRole("button", { name: "Guardar" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(bodyOf(fetchMock).role).toBe("pantalla");
   });
 
   it("calls onSaved after a successful create", async () => {

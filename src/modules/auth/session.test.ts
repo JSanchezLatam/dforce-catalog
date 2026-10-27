@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { isSessionActive, isUserActive, requireSession, revokeOtherSessions, validateSession } from "./session";
+import { ROLES } from "./roles";
+import { isSessionActive, isUserActive, requireSession, revokeOtherSessions, sessionTtlMs, validateSession } from "./session";
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -131,5 +132,13 @@ describe("revokeOtherSessions()", () => {
     const fn = vi.fn();
     await revokeOtherSessions("user-1", null, fn);
     expect(fn).toHaveBeenCalledWith("user-1", null);
+  });
+});
+
+describe("Lifetime per role — sessionTtlMs()", () => {
+  const DAY_MS = 24 * HOUR_MS;
+
+  it.each(ROLES)("%s gets the lifetime its role calls for", (role) => {
+    expect(sessionTtlMs(role)).toBe(role === "pantalla" ? 180 * DAY_MS : 7 * DAY_MS);
   });
 });
