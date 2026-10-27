@@ -22,7 +22,7 @@ describe("CombinedView", () => {
     const card = screen.getByRole("button", { name: /Cita Uno/ });
     expect(card).toHaveAttribute("aria-pressed", "true");
     await userEvent.click(card);
-    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "c1" }));
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "c1" }), card);
   });
 
   it("Side by side and stacked: one column on phone and tablet portrait, two from lg", () => {

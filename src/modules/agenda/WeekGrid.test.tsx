@@ -132,7 +132,8 @@ describe("WeekGrid", () => {
     const onSelect = vi.fn();
     render(<WeekGrid days={DAYS} items={[at("a", TUE, 9), at("b", DAYS[2], 9)]} selectedId="b" onSelect={onSelect} />);
     expect(screen.getByRole("button", { name: /Cliente b/ })).toHaveAttribute("aria-pressed", "true");
-    await userEvent.click(screen.getByRole("button", { name: /Cliente a/ }));
-    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "a" }));
+    const card = screen.getByRole("button", { name: /Cliente a/ });
+    await userEvent.click(card);
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "a" }), card);
   });
 });

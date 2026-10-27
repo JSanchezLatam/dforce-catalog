@@ -18,7 +18,7 @@ type Props = {
   todayKey?: string;
   nowMinute?: number;
   selectedId?: string | null;
-  onSelect?: (item: AgendaItem) => void;
+  onSelect?: (item: AgendaItem, anchor: HTMLElement) => void;
   onSlot?: (day: string, time: string) => void;
 };
 
