@@ -45,7 +45,7 @@ const initialsOf = (nombre: string) =>
     .map((w) => w[0].toUpperCase())
     .join("");
 
-function vehicleText(row: AgendaRow, withYear: boolean): string {
+function vehicleText(row: Pick<AgendaRow, "vehiclePlate" | "vehicleMake" | "vehicleModel"> & { vehicleYear?: number | null }, withYear: boolean): string {
   if (!row.vehiclePlate) return "Sin vehículo";
   const model = [row.vehicleMake, row.vehicleModel, withYear ? row.vehicleYear : null].filter(Boolean).join(" ");
   return model ? `${row.vehiclePlate} · ${model}` : row.vehiclePlate;
@@ -90,20 +90,40 @@ export function groupByDay(items: readonly AgendaItem[]): Map<string, AgendaItem
 }
 
 /** An order on the shop floor: no appointment fields, and the hold reason only while `on_hold`. */
-export type WorkshopItem = Pick<AgendaItem, "id" | "href" | "customerName" | "customerPhone" | "vehicleLabel" | "status" | "statusLabel"> & {
+export type WorkshopItem = Pick<AgendaItem, "id" | "href" | "customerName" | "customerPhone" | "vehicleLabel" | "categoria" | "status" | "statusLabel"> & {
+  /** Initials of the assigned technicians, or "Sin técnico". */
+  technicianInitials: string;
+  /** Time in the current status: "35 min", "2 h 40 min", "1 día". */
+  sinceLabel: string;
   holdReason: string | null;
+  /** "hace 2 días"; set exactly when `holdReason` is. */
+  holdSinceLabel: string | null;
 };
 
-export function toWorkshopItem(row: WorkshopRow): WorkshopItem {
+/** "35 min", "2 h 40 min" ("3 h" on the hour), "1 día", "2 días". The spec's wording, not the board's `formatAge` ("2 h", "1 d"). */
+function durationText(from: Date, now: Date): string {
+  const minutes = Math.max(0, Math.floor((now.getTime() - from.getTime()) / 60_000));
+  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 24 * 60) return minutes % 60 ? `${Math.floor(minutes / 60)} h ${minutes % 60} min` : `${minutes / 60} h`;
+  const days = Math.floor(minutes / (24 * 60));
+  return days === 1 ? "1 día" : `${days} días`;
+}
+
+export function toWorkshopItem(row: WorkshopRow, now: Date): WorkshopItem {
+  const onHold = row.status === "on_hold" && row.esperaMotivo;
   return {
     id: row.id,
     href: `/service-orders/${row.id}`,
     customerName: row.customerName,
     customerPhone: row.customerPhone,
-    vehicleLabel: row.vehiclePlate ?? "Sin vehículo",
+    vehicleLabel: vehicleText(row, false),
+    categoria: row.categoria,
+    technicianInitials: row.technicians.map((t) => initialsOf(t.nombre)).join(" ") || "Sin técnico",
     status: row.status,
     statusLabel: ORDER_STATUS_LABEL[row.status],
-    holdReason: row.status === "on_hold" && row.esperaMotivo ? ESPERA_MOTIVO_LABEL[row.esperaMotivo] : null,
+    sinceLabel: durationText(row.sinceAt, now),
+    holdReason: onHold ? ESPERA_MOTIVO_LABEL[row.esperaMotivo!] : null,
+    holdSinceLabel: onHold ? `hace ${durationText(row.holdSinceAt ?? row.sinceAt, now)}` : null,
   };
 }
 

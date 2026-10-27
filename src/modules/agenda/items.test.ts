@@ -144,6 +144,8 @@ describe("groupByDay", () => {
 });
 
 describe("toWorkshopItem", () => {
+  const WNOW = new Date("2026-10-27T20:00:00Z");
+  const ago = (minutes: number) => new Date(WNOW.getTime() - minutes * 60_000);
   const wrow = (over: Partial<WorkshopRow> = {}): WorkshopRow => ({
     id: "w1",
     status: "in_progress",
@@ -151,27 +153,63 @@ describe("toWorkshopItem", () => {
     customerName: "Pérez",
     customerPhone: "61234567",
     vehiclePlate: "AB1234",
+    vehicleMake: "Toyota",
+    vehicleModel: "Hilux",
+    categoria: "reparacion",
+    technicians: [],
+    sinceAt: ago(35),
+    holdSinceAt: null,
     ...over,
   });
 
-  it("Hold reason shown only while on hold: the label for on_hold, none for in_progress", () => {
-    expect(toWorkshopItem(wrow({ status: "on_hold", esperaMotivo: "repuesto" })).holdReason).toBe("Repuesto");
-    expect(toWorkshopItem(wrow({ status: "in_progress", esperaMotivo: "repuesto" })).holdReason).toBeNull();
+  it("Hold reason shown only while on hold: the label and 'hace 2 días' for on_hold, none for in_progress", () => {
+    const held = toWorkshopItem(wrow({ status: "on_hold", esperaMotivo: "repuesto", sinceAt: ago(60), holdSinceAt: ago(2 * 24 * 60) }), WNOW);
+    expect(held.holdReason).toBe("Repuesto");
+    expect(held.holdSinceLabel).toBe("hace 2 días");
+    const moving = toWorkshopItem(wrow({ status: "in_progress", esperaMotivo: "repuesto", holdSinceAt: ago(2 * 24 * 60) }), WNOW);
+    expect(moving.holdReason).toBeNull();
+    expect(moving.holdSinceLabel).toBeNull();
   });
 
-  it("is plain data: label, link, 'Sin vehículo' for a null plate, survives a JSON round trip", () => {
-    const item = toWorkshopItem(wrow({ status: "open", vehiclePlate: null }));
+  it("an on_hold order with no '-> on_hold' history row counts the hold from the latest change", () => {
+    const held = toWorkshopItem(wrow({ status: "on_hold", esperaMotivo: "repuesto", sinceAt: ago(90), holdSinceAt: null }), WNOW);
+    expect(held.holdSinceLabel).toBe("hace 1 h 30 min");
+  });
+
+  it("Time in status: 35 min, 2 h 40 min, 1 día and 2 días, and whole hours without '0 min'", () => {
+    const label = (minutes: number) => toWorkshopItem(wrow({ sinceAt: ago(minutes) }), WNOW).sinceLabel;
+    expect(label(35)).toBe("35 min");
+    expect(label(2 * 60 + 40)).toBe("2 h 40 min");
+    expect(label(3 * 60)).toBe("3 h");
+    expect(label(24 * 60)).toBe("1 día");
+    expect(label(2 * 24 * 60 + 300)).toBe("2 días");
+    expect(label(-5)).toBe("0 min");
+  });
+
+  it("Technicians on the card: initials in name order, 'Sin técnico' when none", () => {
+    const two = toWorkshopItem(wrow({ technicians: [{ id: "t1", nombre: "Marta Pinzón" }, { id: "t2", nombre: "Julio Rangel" }] }), WNOW);
+    expect(two.technicianInitials).toBe("MP JR");
+    expect(toWorkshopItem(wrow(), WNOW).technicianInitials).toBe("Sin técnico");
+  });
+
+  it("is plain data: label, link, vehicle, category, 'Sin vehículo' for a null plate, survives a JSON round trip", () => {
+    const item = toWorkshopItem(wrow({ status: "open", vehiclePlate: null, vehicleMake: null, vehicleModel: null, categoria: null }), WNOW);
     expect(item).toEqual({
       id: "w1",
       href: "/service-orders/w1",
       customerName: "Pérez",
       customerPhone: "61234567",
       vehicleLabel: "Sin vehículo",
+      categoria: null,
+      technicianInitials: "Sin técnico",
       status: "open",
       statusLabel: "Recibida",
+      sinceLabel: "35 min",
       holdReason: null,
+      holdSinceLabel: null,
     });
     expect(JSON.parse(JSON.stringify(item))).toEqual(item);
+    expect(toWorkshopItem(wrow(), WNOW)).toMatchObject({ vehicleLabel: "AB1234 · Toyota Hilux", categoria: "reparacion" });
   });
 });
 

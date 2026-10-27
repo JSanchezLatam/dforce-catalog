@@ -13,7 +13,7 @@ import { rangeFor } from "@/modules/agenda/dates";
 import { agendaInWorkshop, agendaOverdue, agendaRange, IN_WORKSHOP_STATUSES } from "@/modules/agenda/queries";
 import { orderScope, SYSTEM_SCOPE } from "@/modules/service-orders/scope";
 import { db } from "@/shared/db/client";
-import { cliente, ordenServicio, ordenTecnico, tecnico, users, vehiculo } from "@/shared/db/schema";
+import { cliente, ordenEstadoHistorial, ordenServicio, ordenTecnico, tecnico, users, vehiculo } from "@/shared/db/schema";
 import { GET as fullBoardGET } from "../app/api/board/route";
 import { GET as customerBoardGET } from "../app/api/board/clientes/route";
 import { purgeHistory } from "./purge-history";
@@ -36,7 +36,12 @@ describe("agenda combined view and Vencidas panel (E2E)", () => {
   const extraUsers: string[] = [];
   const extraTecnicos: string[] = [];
 
-  const newOrder = async (o: { status?: Status; at?: Date | string | null; noVehicle?: boolean }) => {
+  const newTecnico = async (nombre: string, deactivated = false) => {
+    const [t] = await db.insert(tecnico).values({ nombre, deactivatedAt: deactivated ? new Date(NOW) : null }).returning({ id: tecnico.id });
+    extraTecnicos.push(t.id);
+    return t.id;
+  };
+  const newOrder = async (o: { status?: Status; at?: Date | string | null; noVehicle?: boolean; createdAt?: Date }) => {
     const status = o.status ?? "booked";
     const [row] = await db
       .insert(ordenServicio)
@@ -47,12 +52,15 @@ describe("agenda combined view and Vencidas panel (E2E)", () => {
         esperaMotivo: status === "on_hold" ? "repuesto" : undefined,
         status,
         appointmentAt: o.at ? new Date(o.at) : null,
+        createdAt: o.createdAt,
         completedAt: status === "done" ? new Date(NOW) : null,
       })
       .returning({ id: ordenServicio.id });
     mine.add(row.id);
     return row.id;
   };
+  const history = (ordenId: string, fromStatus: Status | null, toStatus: NonNullable<Status>, changedAt: Date) =>
+    db.insert(ordenEstadoHistorial).values({ ordenId, fromStatus, toStatus, changedAt });
   const ids = (rows: { id: string }[]) => rows.map((r) => r.id);
   const workshop = async (cap?: number) => {
     const page = await agendaInWorkshop(SYSTEM_SCOPE, cap);
@@ -157,6 +165,54 @@ describe("agenda combined view and Vencidas panel (E2E)", () => {
 
     expect(after.total - before).toBe(2);
     expect(ids(after.rows)).not.toContain(old);
+  });
+
+  it("Time in status uses the history row: created 5 days ago, moved to in_progress 3 h ago -> 3 h; with no history it falls back to created_at", async () => {
+    const created = new Date(Date.now() - 5 * 24 * 60 * MIN);
+    const moved = new Date(Date.now() - 3 * 60 * MIN);
+    const withHistory = await newOrder({ status: "in_progress", createdAt: created });
+    await history(withHistory, null, "open", created);
+    await history(withHistory, "open", "in_progress", moved);
+    const noHistory = await newOrder({ status: "open", createdAt: created });
+
+    const rows = (await workshop()).rows;
+
+    expect(rows.find((r) => r.id === withHistory)!.sinceAt.getTime()).toBe(moved.getTime());
+    expect(rows.find((r) => r.id === noHistory)!.sinceAt.getTime()).toBe(created.getTime());
+    expect(rows.find((r) => r.id === withHistory)!.holdSinceAt).toBeNull();
+  });
+
+  it("Hold since: the LATEST '-> on_hold' row, not an earlier hold", async () => {
+    const day = 24 * 60 * MIN;
+    const base = Date.now();
+    const t = (ago: number) => new Date(base - ago);
+    const held = await newOrder({ status: "on_hold", createdAt: t(6 * day) });
+    await history(held, "in_progress", "on_hold", t(5 * day));
+    await history(held, "on_hold", "in_progress", t(4 * day));
+    await history(held, "in_progress", "on_hold", t(1 * day));
+
+    const rows = (await workshop()).rows;
+
+    const heldRow = rows.find((r) => r.id === held)!;
+    expect(heldRow.holdSinceAt!.getTime()).toBe(t(1 * day).getTime());
+    expect(heldRow.sinceAt.getTime()).toBe(heldRow.holdSinceAt!.getTime());
+  });
+
+  it("Technicians and vehicle on the in-workshop row: make, model, category, active technicians by name; a deactivated one is off", async () => {
+    const id = await newOrder({ status: "diagnosing" });
+    const marta = await newTecnico(`Marta ${stamp}`);
+    const julio = await newTecnico(`Julio ${stamp}`);
+    const baja = await newTecnico(`Baja ${stamp}`, true);
+    await db.insert(ordenTecnico).values([marta, julio, baja].map((tecnicoId) => ({ ordenId: id, tecnicoId, assignedBy: adminId })));
+
+    const rows = (await workshop()).rows;
+
+    expect(rows.find((r) => r.id === id)).toMatchObject({
+      vehicleMake: "Toyota",
+      vehicleModel: "Hilux",
+      categoria: "revisado",
+      technicians: [{ id: julio, nombre: `Julio ${stamp}` }, { id: marta, nombre: `Marta ${stamp}` }],
+    });
   });
 
   it("Board payload still carries no customer data: both board bodies lack the sentinel name and phone", async () => {

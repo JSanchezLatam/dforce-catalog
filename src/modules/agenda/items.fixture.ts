@@ -30,10 +30,14 @@ export function makeWorkshopItem(over: Partial<WorkshopItem> = {}): WorkshopItem
     href: `/service-orders/${over.id ?? "w1"}`,
     customerName: "Pérez",
     customerPhone: "61234567",
-    vehicleLabel: "AB1234",
+    vehicleLabel: "AB1234 · Toyota Hilux",
+    categoria: "reparacion",
+    technicianInitials: "Sin técnico",
     status: "in_progress",
     statusLabel: "En progreso",
+    sinceLabel: "35 min",
     holdReason: null,
+    holdSinceLabel: null,
     ...over,
   };
 }

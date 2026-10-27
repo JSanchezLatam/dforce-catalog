@@ -89,10 +89,10 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU4: in-workshop read (branch `feat/agenda-redesign-wu4-workshop-read`) [~280]
 
-- [ ] 4.1 RED e2e `src/e2e/agenda-combined.e2e.test.ts`: since-time comes from the latest status-change history row (created 5 days ago, `in_progress` 3 h ago -> 3 h), falling back to `created_at`; `on_hold` carries its hold-since from the `-> on_hold` row; technicians and make/model/`categoria` present; the set is still exactly the five statuses; board bodies still carry no sentinel customer. (Time in status uses the history row; In-workshop set; Board payload still carries no customer data)
-- [ ] 4.2 RED `items.test.ts`: `toWorkshopItem` adds `dot` category, `vehicleLabel`, technician initials ("MP JR" / "Sin técnico"), `sinceLabel` via `formatAge` ("35 min", "2 h 40 min", "1 día", "2 días"), hold reason + "hace 2 días" only while `on_hold`. (Time in status; Hold reason shown only while on hold)
-- [ ] 4.3 GREEN `queries.ts` (`agendaInWorkshop`: latest-history batch, technician batch, new columns), `items.ts`, `items.test.ts`; `CombinedView.tsx` only adapts to the new type (no redesign).
-- [ ] 4.4 Mutation-verify: take the OLDEST history row -> "uses the history row" red; show hold reason for `in_progress` -> its test red.
+- [x] 4.1 RED e2e `src/e2e/agenda-combined.e2e.test.ts`: since-time comes from the latest status-change history row (created 5 days ago, `in_progress` 3 h ago -> 3 h), falling back to `created_at`; `on_hold` carries its hold-since from the `-> on_hold` row; technicians and make/model/`categoria` present; the set is still exactly the five statuses; board bodies still carry no sentinel customer. (Time in status uses the history row; In-workshop set; Board payload still carries no customer data)
+- [x] 4.2 RED `items.test.ts`: `toWorkshopItem` adds `dot` category, `vehicleLabel`, technician initials ("MP JR" / "Sin técnico"), `sinceLabel` via `formatAge` ("35 min", "2 h 40 min", "1 día", "2 días"), hold reason + "hace 2 días" only while `on_hold`. (Time in status; Hold reason shown only while on hold)
+- [x] 4.3 GREEN `queries.ts` (`agendaInWorkshop`: latest-history batch, technician batch, new columns), `items.ts`, `items.test.ts`; `CombinedView.tsx` only adapts to the new type (no redesign).
+- [x] 4.4 Mutation-verify: take the OLDEST history row -> "uses the history row" red; show hold reason for `in_progress` -> its test red.
 - [ ] 4.5 Close: C (+ e2e).
 
 ## WU5: grid core (branch `feat/agenda-redesign-wu5-grid-core`) [~295]

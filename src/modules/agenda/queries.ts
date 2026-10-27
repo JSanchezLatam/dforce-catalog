@@ -7,13 +7,13 @@
  * in-workshop) fetch `cap + 1` rows: more than `cap` back means "truncated", and the extra row is dropped.
  * `count(*)` is never selected raw: pg returns bigint as a string, drizzle's `count()` maps it to a number.
  */
-import { and, asc, count, eq, gte, inArray, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray, isNull, lt, max, ne, or, sql, type SQL } from "drizzle-orm";
 
 import { OVERDUE_MARGIN_MINUTES, panamaDay, panamaMidnight, stepDate } from "@/modules/agenda/dates";
 import { BACKLOG_STATUSES } from "@/modules/metrics/shape";
 import type { OrderScope } from "@/modules/service-orders/scope";
 import { db } from "@/shared/db/client";
-import { cliente, ordenServicio, ordenTecnico, tecnico, vehiculo } from "@/shared/db/schema";
+import { cliente, ordenEstadoHistorial, ordenServicio, ordenTecnico, tecnico, vehiculo } from "@/shared/db/schema";
 
 export const AGENDA_ROW_CAP = 500;
 
@@ -171,7 +171,33 @@ export type WorkshopRow = {
   customerName: string;
   customerPhone: string;
   vehiclePlate: string | null;
+  vehicleMake: string | null;
+  vehicleModel: string | null;
+  categoria: AgendaRow["categoria"];
+  technicians: AgendaRow["technicians"];
+  /** The latest status change, or the order's creation when it has no history. */
+  sinceAt: Date;
+  /** The latest change INTO `on_hold`; null when the order has none. */
+  holdSinceAt: Date | null;
 };
+
+/** Latest status change and latest change into `on_hold` per order: one batched query, as the board does. */
+async function statusSinceByOrder(ids: string[]): Promise<Map<string, { latest: Date; hold: Date | null }>> {
+  const byOrder = new Map<string, { latest: Date; hold: Date | null }>();
+  if (ids.length === 0) return byOrder;
+  const rows = await db
+    .select({
+      ordenId: ordenEstadoHistorial.ordenId,
+      latest: max(ordenEstadoHistorial.changedAt),
+      hold: sql<Date | null>`max(${ordenEstadoHistorial.changedAt}) filter (where ${ordenEstadoHistorial.toStatus} = 'on_hold')`.mapWith(ordenEstadoHistorial.changedAt),
+    })
+    .from(ordenEstadoHistorial)
+    .where(inArray(ordenEstadoHistorial.ordenId, ids))
+    .groupBy(ordenEstadoHistorial.ordenId);
+  // `max()` is nullable in its type only: a group exists because it has a row, and `changed_at` is NOT NULL.
+  for (const r of rows) byOrder.set(r.ordenId, { latest: r.latest!, hold: r.hold });
+  return byOrder;
+}
 
 /** Every in-workshop order whatever its appointment date, oldest first. Lives here, not in `board/`, because it joins `cliente`. */
 export async function agendaInWorkshop(scope: OrderScope, cap = AGENDA_ROW_CAP): Promise<{ rows: WorkshopRow[]; truncated: boolean }> {
@@ -183,6 +209,10 @@ export async function agendaInWorkshop(scope: OrderScope, cap = AGENDA_ROW_CAP):
       customerName: cliente.name,
       customerPhone: cliente.phone,
       vehiclePlate: vehiculo.plate,
+      vehicleMake: vehiculo.make,
+      vehicleModel: vehiculo.model,
+      categoria: ordenServicio.categoria,
+      createdAt: ordenServicio.createdAt,
     })
     .from(ordenServicio)
     .innerJoin(cliente, eq(ordenServicio.clienteId, cliente.id))
@@ -190,5 +220,16 @@ export async function agendaInWorkshop(scope: OrderScope, cap = AGENDA_ROW_CAP):
     .where(and(inArray(ordenServicio.status, IN_WORKSHOP_STATUSES), scope.where))
     .orderBy(asc(ordenServicio.createdAt), asc(ordenServicio.id))
     .limit(cap + 1);
-  return { rows: rows.slice(0, cap), truncated: rows.length > cap };
+  const page = rows.slice(0, cap);
+  const ids = page.map((r) => r.id);
+  const [techs, since] = await Promise.all([techniciansByOrder(ids), statusSinceByOrder(ids)]);
+  return {
+    rows: page.map(({ createdAt, ...r }) => ({
+      ...r,
+      technicians: techs.get(r.id) ?? [],
+      sinceAt: since.get(r.id)?.latest ?? createdAt,
+      holdSinceAt: since.get(r.id)?.hold ?? null,
+    })),
+    truncated: rows.length > cap,
+  };
 }
