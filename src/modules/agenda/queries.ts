@@ -17,7 +17,7 @@ import { cliente, ordenEstadoHistorial, ordenServicio, ordenTecnico, tecnico, ve
 
 export const AGENDA_ROW_CAP = 500;
 
-// `appointmentAt` is typed nullable by the column; both predicates below only admit non-null rows.
+// `appointmentAt` is typed nullable by the column; the range and overdue predicates only admit non-null rows.
 const COLUMNS = {
   id: ordenServicio.id,
   status: ordenServicio.status,
