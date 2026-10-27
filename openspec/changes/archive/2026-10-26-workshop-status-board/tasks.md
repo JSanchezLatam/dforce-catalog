@@ -96,7 +96,7 @@ Closing steps for every unit (last task of each): gates → `gga config` → `GG
   - `pantalla` gets `PermissionDenied` on `/tablero` and on `/inventory`, `/service-orders`, `/users`, `/account`.
   - Console clean: no hydration mismatch and no Server Component serialization error on either view (data volume matters: seed enough rows).
 - [x] 4.9 Document in the PR (docs only, no code): create the screen account at `/users`, kiosk OS setup (wake, auto-start). Follow-ups to list, not build (the `proxy.ts` try/catch was built in 4.14): "+N más" vs auto-scroll; "Terminada" copy confirmation.
-- [ ] 4.10 Closing steps (gates, GGA `PR_BASE_BRANCH=feat/workshop-status-board-wu3`, PR → wu3). Then: all four PRs landed → tracker out of draft → merge to `main` (state branch/pushed/merged).
+- [x] 4.10 Closing steps (gates, GGA `PR_BASE_BRANCH=feat/workshop-status-board-wu3`, PR → wu3). Then: all four PRs landed → tracker out of draft → merge to `main` (state branch/pushed/merged).
 - [x] 4.11 Fix round (browser checks) D1: `formatBoardTime` replaces `formatDateTime` in `WorkshopBoard` (hydration mismatch, NBSP vs space). Exact-string + regex tests.
 - [x] 4.12 D2: stale banner measured against a live clock (`now`, 10 s ticker only while failing, cleared on success/unmount).
 - [x] 4.13 D3: customer `MAX_ROWS` 12 -> 8.
@@ -112,3 +112,15 @@ Closing steps for every unit (last task of each): gates → `gga config` → `GG
 - Kiosk OS automation (wake, auto-start).
 - Clearing the 13 existing lint warnings.
 - [x] F1 Follow-up: the full board lists deactivated technicians on orders they were assigned to (`workshopBoardData` joins `tecnico` without a `deactivated_at` filter); readiness already ignores them. Owner decision: the board shows only active technicians; `workshopBoardData` filters `tecnico.deactivated_at IS NULL` (done in WU4, e2e-covered).
+
+## Follow-ups open at archive
+
+Carried out of the change; none blocks it (verify-report PASS WITH WARNINGS, 0 CRITICAL).
+
+- "+N más" vs auto-scroll when a customer column exceeds 8 rows.
+- Confirm the "Terminada" copy for `done` on the waiting-room screen.
+- Staff who reach `/tablero` from the sidebar have only the browser back button.
+- Backfill `orden_estado_historial` for pre-0033 orders so time in status stops falling back to `updated_at`.
+- Kiosk OS setup (wake, auto-start).
+- An e2e for the `pantalla` forced-password-change path through the proxy and the form.
+- Owner checks: `pantalla` password login and forced change, a real TV at room distance, a second machine for the stop/restart case.

@@ -75,3 +75,15 @@ Revert the chain's PRs. The enum value stays (Postgres cannot drop it); deactiva
 ## Proposal question round
 
 Decisions are final; one open copy question (non-blocking): is "Terminada" right for `done` on the waiting-room screen?
+
+## Follow-ups open at archive
+
+Carried out of the change; none blocks it (verify-report PASS WITH WARNINGS, 0 CRITICAL).
+
+- "+N más" vs auto-scroll when a customer column exceeds 8 rows.
+- Confirm the "Terminada" copy for `done` on the waiting-room screen.
+- Staff who reach `/tablero` from the sidebar have only the browser back button.
+- Backfill `orden_estado_historial` for pre-0033 orders so time in status stops falling back to `updated_at`.
+- Kiosk OS setup (wake, auto-start).
+- An e2e for the `pantalla` forced-password-change path through the proxy and the form.
+- Owner checks: `pantalla` password login and forced change, a real TV at room distance, a second machine for the stop/restart case.
