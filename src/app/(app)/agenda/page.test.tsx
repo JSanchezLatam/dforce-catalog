@@ -16,6 +16,25 @@ vi.mock("@/modules/service-orders/scope", () => ({ orderScope }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 import AgendaPage from "./page";
+import type { AgendaRow } from "@/modules/agenda/queries";
+
+// The wire shape of a query row; a test overrides only what it is about.
+const agendaRow = (over: Partial<AgendaRow>): AgendaRow => ({
+  id: "o",
+  status: "booked",
+  appointmentAt: new Date("2026-10-26T19:05:00Z"),
+  customerName: "Pérez",
+  customerPhone: "1",
+  vehiclePlate: null,
+  vehicleMake: null,
+  vehicleModel: null,
+  vehicleYear: null,
+  categoria: null,
+  description: null,
+  noShow: false,
+  technicians: [],
+  ...over,
+});
 
 const params = (q: Record<string, string | string[]> = {}) => ({ searchParams: Promise.resolve(q) });
 const SCOPE = { where: undefined };
@@ -95,7 +114,7 @@ describe("AgendaPage data", () => {
     agendaRange.mockResolvedValue({
       truncated: true,
       rows: [
-        { id: "o1", status: "booked", appointmentAt: new Date("2026-10-26T19:05:00Z"), customerName: "Pérez", customerPhone: "61234567", vehiclePlate: null },
+        agendaRow({ id: "o1", appointmentAt: new Date("2026-10-26T19:05:00Z"), customerName: "Pérez", customerPhone: "61234567", vehiclePlate: null }),
       ],
     });
 
@@ -113,8 +132,8 @@ describe("AgendaPage data", () => {
       agendaRange.mockResolvedValue({
         truncated: false,
         rows: [
-          { id: "late", status: "booked", appointmentAt: new Date("2026-10-26T18:00:00Z"), customerName: "Tarde", customerPhone: "1", vehiclePlate: "X" },
-          { id: "soon", status: "booked", appointmentAt: new Date("2026-10-26T19:30:00Z"), customerName: "Casi", customerPhone: "2", vehiclePlate: "Y" },
+          agendaRow({ id: "late", appointmentAt: new Date("2026-10-26T18:00:00Z"), customerName: "Tarde", customerPhone: "1", vehiclePlate: "X" }),
+          agendaRow({ id: "soon", appointmentAt: new Date("2026-10-26T19:30:00Z"), customerName: "Casi", customerPhone: "2", vehiclePlate: "Y" }),
         ],
       });
 
@@ -137,7 +156,7 @@ describe("AgendaPage data", () => {
   });
 });
 
-const OVERDUE_ROW = { id: "v1", status: "booked", appointmentAt: new Date("2026-09-16T13:30:00Z"), customerName: "Vieja", customerPhone: "7", vehiclePlate: null };
+const OVERDUE_ROW = agendaRow({ id: "v1", appointmentAt: new Date("2026-09-16T13:30:00Z"), customerName: "Vieja", customerPhone: "7", vehiclePlate: null });
 
 describe("AgendaPage Vencidas and combined", () => {
   beforeEach(() => {

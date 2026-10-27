@@ -5,6 +5,7 @@
  */
 import { formatAgendaTime, isOverdue, panamaDay } from "@/modules/agenda/dates";
 import type { AgendaRow, WorkshopRow } from "@/modules/agenda/queries";
+import { categoriaLabel, type ServiceCategory } from "@/modules/service-orders/categories";
 import { ESPERA_MOTIVO_LABEL, ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 
 export type AgendaItem = {
@@ -16,29 +17,64 @@ export type AgendaItem = {
   time: string;
   customerName: string;
   customerPhone: string;
+  /** Minutes since Panama midnight; the grid places the card from it. */
+  minuteOfDay: number;
+  /** `plate · make model`, the plate alone, or "Sin vehículo". */
   vehicleLabel: string;
+  /** `vehicleLabel` plus the year when there is one. */
+  vehicleDetail: string;
+  categoria: ServiceCategory | null;
+  categoriaLabel: string;
+  description: string | null;
+  technicians: { id: string; nombre: string; initials: string }[];
   status: AgendaRow["status"];
   statusLabel: string;
   /** Any status but `booked`: shown, linked, never actionable. */
   muted: boolean;
   overdue: boolean;
+  /** A cancelled row only reaches the agenda as a no-show. */
+  noShow: boolean;
 };
+
+/** First letters of the first two words, upper-case: "Julio Rangel" -> "JR", "Marta" -> "M". */
+const initialsOf = (nombre: string) =>
+  nombre
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join("");
+
+function vehicleText(row: AgendaRow, withYear: boolean): string {
+  if (!row.vehiclePlate) return "Sin vehículo";
+  const model = [row.vehicleMake, row.vehicleModel, withYear ? row.vehicleYear : null].filter(Boolean).join(" ");
+  return model ? `${row.vehiclePlate} · ${model}` : row.vehiclePlate;
+}
 
 export function toAgendaItem(row: AgendaRow, now: Date): AgendaItem {
   // Both agenda predicates only admit non-null instants; a null here is a bug upstream, not a blank chip.
   if (!row.appointmentAt) throw new Error(`Agenda row ${row.id} has no appointment instant`);
+  const time = formatAgendaTime(row.appointmentAt.toISOString());
+  const [hh, mm] = time.split(":").map(Number);
   return {
     id: row.id,
     href: `/service-orders/${row.id}`,
     dayKey: panamaDay(row.appointmentAt),
-    time: formatAgendaTime(row.appointmentAt.toISOString()),
+    time,
     customerName: row.customerName,
     customerPhone: row.customerPhone,
-    vehicleLabel: row.vehiclePlate ?? "Sin vehículo",
+    minuteOfDay: hh * 60 + mm,
+    vehicleLabel: vehicleText(row, false),
+    vehicleDetail: vehicleText(row, true),
+    categoria: row.categoria,
+    categoriaLabel: categoriaLabel(row.categoria),
+    description: row.description,
+    technicians: row.technicians.map((t) => ({ ...t, initials: initialsOf(t.nombre) })),
     status: row.status,
-    statusLabel: ORDER_STATUS_LABEL[row.status],
+    statusLabel: row.noShow ? "No se presentó" : ORDER_STATUS_LABEL[row.status],
     muted: row.status !== "booked",
     overdue: isOverdue(row.status, row.appointmentAt, now),
+    noShow: row.noShow,
   };
 }
 
