@@ -1,14 +1,13 @@
-import { CalendarDays, Ellipsis, User } from "lucide-react";
-import Link from "next/link";
+import { CalendarDays, User } from "lucide-react";
 
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cardAlert } from "@/modules/board/alerts";
 import { formatAge, formatBoardTime } from "@/modules/board/format";
 import { AlertStrip, CardShell, CategoryTag, TechAvatars, TimeChip, UrgentBadge } from "@/modules/board/primitives";
+import type { OrderStatus } from "@/modules/service-orders/transitions";
+import { CardMenu } from "./CardMenu";
 import type { KanbanCard } from "./shape";
 
-/** Read-only card: until the move actions land, the ⋯ menu offers only "Ver orden". */
-export function KanbanCardView({ card, generatedAt }: { card: KanbanCard; generatedAt: string }) {
+export function KanbanCardView({ card, generatedAt, canMove, onMove }: { card: KanbanCard; generatedAt: string; canMove: boolean; onMove: (card: KanbanCard, target: OrderStatus) => void }) {
   const alert = cardAlert(card, generatedAt, card.missing);
   // `BoardRow.plate` holds the TV's "Sin vehículo"; the card wants null so it reads "Sin placa".
   const noVehicle = card.missing.includes("vehiculo");
@@ -19,16 +18,7 @@ export function KanbanCardView({ card, generatedAt }: { card: KanbanCard; genera
       make={card.make}
       model={card.model}
       urgent={card.urgent}
-      action={
-        <DropdownMenu>
-          <DropdownMenuTrigger aria-label="Acciones de la orden" className="-mt-1.5 -mr-1.5 grid size-11 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-muted">
-            <Ellipsis aria-hidden="true" className="size-4.5" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-auto min-w-40">
-            <DropdownMenuItem className="min-h-11" render={<Link href={`/service-orders/${card.id}`} />}>Ver orden</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      }
+      action={<CardMenu card={card} canMove={canMove} onMove={(target) => onMove(card, target)} />}
       tags={
         hasTags ? (
           <>

@@ -23,7 +23,7 @@ const card = (over: Partial<Card> = {}): Card => ({
   mine: false,
   ...over,
 });
-const renderCard = (over?: Partial<Card>) => render(<ul><KanbanCardView card={card(over)} generatedAt={GENERATED_AT} /></ul>);
+const renderCard = (over?: Partial<Card>) => render(<ul><KanbanCardView card={card(over)} generatedAt={GENERATED_AT} canMove={false} onMove={() => {}} /></ul>);
 
 describe("KanbanCardView", () => {
   it("shows plate, vehicle, full technician names and a neutral time chip, and no amber strip for a plain in-progress card", () => {
