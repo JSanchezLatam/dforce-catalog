@@ -4,7 +4,7 @@
 
 ### Requirement: Manual Urgent Flag
 
-An order MAY carry a manual "Urgente" flag, stored as a nullable `urgente_at` timestamp and a nullable `urgente_by` (the user who set it); the latest set only, with no history. Both are null or both are set, enforced by the database. Only roles holding `service-orders.assign` (administrador, jefe_taller) MUST be able to set or clear it; a técnico or pantalla attempt MUST be refused with 403 and change nothing. Setting an already-urgent order or clearing a non-urgent one MUST be idempotent. The flag MUST NOT clear when the order reaches `done` or `cancelled`, and MUST NOT depend on elapsed time. On success the UI MUST toast "Orden marcada como urgente" or "Orden desmarcada como urgente" (above `router.refresh()`, below the `try/catch`); failures stay inline or in the board's error toast.
+An order MAY carry a manual "Urgente" flag, stored as a nullable `urgente_at` timestamp and a nullable `urgente_by` (the user who set it); the latest set only, with no history. `urgente_by` MUST NOT be set while `urgente_at` is null, enforced by the database; `urgente_at` with a null `urgente_by` is allowed so deleting the user who set it (`ON DELETE SET NULL`) keeps the flag. Only roles holding `service-orders.assign` (administrador, jefe_taller) MUST be able to set or clear it; a técnico or pantalla attempt MUST be refused with 403 and change nothing. Setting an already-urgent order or clearing a non-urgent one MUST be idempotent. The flag MUST NOT clear when the order reaches `done` or `cancelled`, and MUST NOT depend on elapsed time. On success the UI MUST toast "Orden marcada como urgente" or "Orden desmarcada como urgente" (above `router.refresh()`, below the `try/catch`); failures stay inline or in the board's error toast.
 
 #### Scenario: Jefe sets and clears
 - GIVEN a non-urgent order
@@ -27,6 +27,6 @@ An order MAY carry a manual "Urgente" flag, stored as a nullable `urgente_at` ti
 - THEN `urgente_at` MUST remain set **[e2e]**
 
 #### Scenario: Database ties the pair
-- GIVEN a direct write with `urgente_at` set and `urgente_by` null
+- GIVEN a direct write with `urgente_by` set and `urgente_at` null
 - WHEN it executes
 - THEN the database MUST reject it **[e2e]**
