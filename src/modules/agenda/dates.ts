@@ -55,6 +55,12 @@ export function formatLongDay(key: string): string {
   return `${weekday} ${Number(key.slice(8))} de ${MONTH_LONG[Number(key.slice(5, 7)) - 1]}`;
 }
 
+/** "Octubre 2026": static tables, like `formatLongDay`. */
+export function formatMonthYear(key: string): string {
+  const month = MONTH_LONG[Number(key.slice(5, 7)) - 1];
+  return `${month[0].toUpperCase()}${month.slice(1)} ${key.slice(0, 4)}`;
+}
+
 /** Panama 00:00 of `key` as an instant. */
 export function panamaMidnight(key: string): Date {
   return new Date(`${key}T00:00:00-05:00`);

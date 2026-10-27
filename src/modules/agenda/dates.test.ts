@@ -5,6 +5,7 @@ import {
   addDays,
   formatAgendaTime,
   formatLongDay,
+  formatMonthYear,
   panamaMinute,
   isOverdue,
   monthGrid,
@@ -177,5 +178,15 @@ describe("formatLongDay", () => {
     expect(months).toEqual(["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]);
     const days = Array.from({ length: 7 }, (_, d) => formatLongDay(`2026-10-${19 + d}`).split(" ")[0]);
     expect(days).toEqual(["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]);
+  });
+});
+
+describe("formatMonthYear", () => {
+  it.each([
+    ["2026-10-27", "Octubre 2026"],
+    ["2026-01-05", "Enero 2026"],
+    ["2031-12-31", "Diciembre 2031"],
+  ])("%s -> %s from static tables", (key, text) => {
+    expect(formatMonthYear(key)).toBe(text);
   });
 });

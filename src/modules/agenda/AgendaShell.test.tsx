@@ -12,7 +12,7 @@ const DAY = "2026-10-27";
 const at = (id: string, over: Parameters<typeof makeItem>[0] = {}) =>
   makeItem({ id, dayKey: DAY, customerName: `Cliente ${id}`, time: "09:00", minuteOfDay: 9 * 60, ...over });
 
-const base = { date: DAY, today: DAY, nowMinute: 10 * 60 + 40, workshop: null, workshopTruncated: false, roster: null, overdueTotal: 0 } as const;
+const base = { date: DAY, today: DAY, nowMinute: 10 * 60 + 40, workshop: null, workshopTruncated: false, roster: null, overdueTotal: 0, overdue: [], overdueTruncated: false, truncated: false } as const;
 
 /** jsdom matches no media query: the width is whatever the test says, and the query is recorded. */
 function setWidth(wide: boolean) {
@@ -302,5 +302,79 @@ describe("AgendaShell", () => {
       fireEvent.change(search(), { target: { value: "pedro" } });
       expect(popover()).toBeNull();
     });
+  });
+
+  describe("Vencidas tab", () => {
+    const old = makeItem({ id: "old", customerName: "Vieja", dayKey: "2026-09-12", time: "09:30", overdue: true });
+    const newer = makeItem({ id: "new", customerName: "Nueva", dayKey: "2026-10-20", time: "16:00", overdue: true });
+    const vencidas = () => userEvent.click(screen.getByRole("tab", { name: /Vencidas/ }));
+
+    it("Vencidas list row: every Vencida oldest first, each with its full date as digits and the card fields", async () => {
+      render(<AgendaShell {...base} overdueTotal={2} overdue={[old, newer]} view="week" items={[at("a")]} />);
+      await vencidas();
+      const rows = screen.getAllByRole("listitem");
+      expect(rows.map((r) => r.textContent)).toEqual([expect.stringContaining("12/09/2026 09:30"), expect.stringContaining("20/10/2026 16:00")]);
+      expect(rows[0].textContent).toMatch(/Vieja.*AB1234.*Vencida/);
+      expect(screen.queryByRole("button", { name: /Cliente a/ })).not.toBeInTheDocument();
+    });
+
+    it("a row opens the Detail with its actions", async () => {
+      render(<AgendaShell {...base} overdueTotal={1} overdue={[old]} view="month" items={[]} />);
+      await vencidas();
+      await userEvent.click(card(/Vieja/));
+      expect(card(/Vieja/)).toHaveAttribute("aria-pressed", "true");
+      expect(within(popover()!).getByRole("button", { name: "No se presentó" })).toBeInTheDocument();
+      expect(within(popover()!).getByRole("button", { name: "Reprogramar" })).toBeInTheDocument();
+    });
+
+    it("Empty state: no Vencida order shows 'Sin citas vencidas'", async () => {
+      render(<AgendaShell {...base} view="day" items={[]} />);
+      await vencidas();
+      expect(screen.getByText("Sin citas vencidas")).toBeInTheDocument();
+    });
+
+    it("Vencidas list is capped and disclosed: the notice shows only when truncated", async () => {
+      const { rerender } = render(<AgendaShell {...base} overdueTotal={501} overdue={[old]} view="day" items={[]} />);
+      await vencidas();
+      expect(screen.queryByText("Se muestran las primeras 500 citas vencidas.")).not.toBeInTheDocument();
+      rerender(<AgendaShell {...base} overdueTotal={501} overdue={[old]} overdueTruncated view="day" items={[]} />);
+      expect(screen.getByText("Se muestran las primeras 500 citas vencidas.")).toBeInTheDocument();
+    });
+
+    it("the search covers the list; nothing matching says 'Sin resultados' (and the badge stays the true total)", async () => {
+      render(<AgendaShell {...base} overdueTotal={2} overdue={[old, newer]} view="day" items={[]} />);
+      await vencidas();
+      fireEvent.change(screen.getByPlaceholderText("Buscar placa o cliente…"), { target: { value: "nueva" } });
+      expect(screen.getAllByRole("listitem")).toHaveLength(1);
+      fireEvent.change(screen.getByPlaceholderText("Buscar placa o cliente…"), { target: { value: "zzzz" } });
+      expect(screen.getByText("Sin resultados")).toBeInTheDocument();
+      expect(screen.queryByText("Sin citas vencidas")).not.toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /Vencidas/ })).toHaveTextContent("2");
+    });
+  });
+
+  it("a view change closes the open Detail: a trip to month and back does not reopen it on a stale anchor", async () => {
+    const { rerender } = render(<AgendaShell {...base} view="day" items={[at("a")]} />);
+    await userEvent.click(card(/Cliente a/));
+    expect(popover()).not.toBeNull();
+    rerender(<AgendaShell {...base} view="month" items={[at("a")]} />);
+    rerender(<AgendaShell {...base} view="day" items={[at("a")]} />);
+    expect(popover()).toBeNull();
+    expect(card(/Cliente a/)).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("a date change closes the open Detail too: the same order on another day is a new card", async () => {
+    const { rerender } = render(<AgendaShell {...base} view="day" items={[at("a")]} />);
+    await userEvent.click(card(/Cliente a/));
+    rerender(<AgendaShell {...base} date="2026-10-28" view="day" items={[at("a")]} />);
+    expect(popover()).toBeNull();
+    expect(card(/Cliente a/)).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it.each(["day", "week", "month", "combined"] as const)("one empty message: %s emptied by the search says 'Sin resultados' alone", (view) => {
+    render(<AgendaShell {...base} view={view} items={[at("a")]} />);
+    fireEvent.change(screen.getByPlaceholderText("Buscar placa o cliente…"), { target: { value: "zzzz" } });
+    expect(screen.getAllByText("Sin resultados")).toHaveLength(1);
+    expect(screen.queryByText("Sin citas para este día")).not.toBeInTheDocument();
   });
 });

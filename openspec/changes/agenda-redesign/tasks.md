@@ -161,11 +161,11 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU13: Vencidas tab (branch `feat/agenda-redesign-wu13-vencidas-tab`) [~355]
 
-- [ ] 13.1 RED shell/tab test: the Vencidas tab lists every Vencida row oldest first, each with `DD/MM/YYYY HH:mm` digits ("12/09/2026 09:30") and the card fields, opening the Detail; badge = `total` (not `rows.length`); N = 0 -> "Sin citas vencidas"; truncation notice at 500; a marked no-show leaves the list and the badge drops by one. (Vencidas list row; Empty state; Count is the true count; Cancelled no-show leaves the tab)
-- [ ] 13.2 RED e2e `agenda-combined.e2e.test.ts`: 40-day-old booked appears with the week view of today; 3 Vencida (one in range) -> badge 3; 501 -> 500 rows + notice + badge 501; cancelled via No se presentó leaves the tab and shows in the grid as a no-show. (Old overdue appointment never disappears; Vencidas list is capped; Cancelled no-show leaves the tab)
-- [ ] 13.3 GREEN shell tab body, `page.tsx` (drop panel and the `actions` function prop), DELETE `VencidasPanel.tsx`, `VencidasPanel.test.tsx`, `ItemActions.tsx`, `ItemActions.test.tsx`; `page.test.tsx` updated.
-- [ ] 13.4 Mutation-verify: badge from `rows.length` -> "Count is the true count" red; sort newest first -> its order test red; drop the cap notice -> the notice test red.
-- [ ] 13.5 Close: C (+ e2e) + B.
+- [x] 13.1 RED shell/tab test: the Vencidas tab lists every Vencida row oldest first, each with `DD/MM/YYYY HH:mm` digits ("12/09/2026 09:30") and the card fields, opening the Detail; badge = `total` (not `rows.length`); N = 0 -> "Sin citas vencidas"; truncation notice at 500; a marked no-show leaves the list and the badge drops by one. (Vencidas list row; Empty state; Count is the true count; Cancelled no-show leaves the tab)
+- [x] 13.2 RED e2e `agenda-combined.e2e.test.ts`: 40-day-old booked appears with the week view of today; 3 Vencida (one in range) -> badge 3; 501 -> 500 rows + notice + badge 501; cancelled via No se presentó leaves the tab and shows in the grid as a no-show. (Old overdue appointment never disappears; Vencidas list is capped; Cancelled no-show leaves the tab)
+- [x] 13.3 GREEN shell tab body, `page.tsx` (drop panel and the `actions` function prop), DELETE `VencidasPanel.tsx`, `VencidasPanel.test.tsx`; `page.test.tsx` updated. `ItemActions.tsx` and its test are KEPT: `AgendaDetail` still renders it (only its VencidasPanel case was removed). Also done here: the `AgendaHeader` mockup layout deferred from WU12.
+- [x] 13.4 Mutation-verify: badge from `rows.length` -> "Count is the true count" red; sort newest first -> its order test red; drop the cap notice -> the notice test red.
+- [x] 13.5 Close: C (+ e2e) + B.
 
 ## WU14: side column, type filter, week summary (branch `feat/agenda-redesign-wu14-sidebar-filter`) [~380; fallback: "Esta semana" moves to WU15]
 

@@ -2,7 +2,7 @@
  * /agenda is a Server Component: authorize, resolve the params, read the range with the caller's
  * scope, render server views. The queries module is mocked with the real row shape.
  */
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -218,25 +218,29 @@ describe("AgendaPage Vencidas and combined", () => {
     agendaOverdue.mockResolvedValue({ rows: [OVERDUE_ROW], truncated: false, total: 1 });
   });
 
-  it.each(["day", "week", "month", "combined"])("Panel on every view: %s shows Vencidas (1)", async (view) => {
+  it.each(["day", "week", "month", "combined"])("Tabs on every view: %s shows the Vencidas badge and, opened, the list with its full date", async (view) => {
     render(await AgendaPage(params({ view, date: "2026-10-26" })));
 
-    expect(screen.getByRole("heading", { name: "Vencidas (1)" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Vencidas/ })).toHaveTextContent("1");
+    await userEvent.click(screen.getByRole("tab", { name: /Vencidas/ }));
     expect(screen.getByText(/16\/09\/2026 08:30/)).toBeInTheDocument();
   });
 
-  it.each(["day", "week", "month", "combined"])("Every Vencida stays actionable from the panel on %s; the grid offers the buttons only after a card is selected", async (view) => {
+  it.each(["day", "week", "month", "combined"])("Every Vencida stays actionable on %s: from the Vencidas tab, and from the grid after a card is selected", async (view) => {
     agendaRange.mockResolvedValue({ truncated: false, rows: [{ ...OVERDUE_ROW, id: "r1", appointmentAt: new Date("2026-10-26T15:00:00Z") }] });
 
     render(await AgendaPage(params({ view, date: "2026-10-26" })));
 
-    const panel = screen.getByRole("heading", { name: "Vencidas (1)" }).closest("section")!;
-    expect(within(panel).getByRole("button", { name: "Reprogramar" })).toBeInTheDocument();
-    expect(within(panel).getByRole("button", { name: "No se presentó" })).toBeInTheDocument();
-    expect(screen.queryAllByRole("button", { name: "Reprogramar" }).filter((b) => !panel.contains(b))).toHaveLength(0);
-    if (view === "month") return;
-    await userEvent.click(screen.getByRole("button", { name: /Vieja/ }));
-    expect(screen.queryAllByRole("button", { name: "Reprogramar" }).filter((b) => !panel.contains(b))).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Reprogramar" })).not.toBeInTheDocument();
+    if (view !== "month") {
+      await userEvent.click(screen.getByRole("button", { name: /Vieja/ }));
+      expect(screen.getByRole("button", { name: "Reprogramar", hidden: true })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "No se presentó", hidden: true })).toBeInTheDocument();
+    }
+    // `hidden`: the open sheet marks the page behind it aria-hidden.
+    fireEvent.click(screen.getByRole("tab", { name: /Vencidas/, hidden: true }));
+    await userEvent.click(screen.getByRole("button", { name: /Vieja/, hidden: true }));
+    expect(screen.getByRole("button", { name: "No se presentó", hidden: true })).toBeInTheDocument();
   });
 
   it("the shell gets the true Vencida total, not the rows it loaded", async () => {

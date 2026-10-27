@@ -26,7 +26,7 @@ const SENTINEL_NAME = "SENTINEL_AGENDA_COMBINED_NAME";
 const SENTINEL_PHONE = "50769990077";
 const ALL_STATUSES: NonNullable<Status>[] = ["booked", "open", "diagnosing", "in_progress", "on_hold", "ready_for_review", "done", "cancelled"];
 
-describe("agenda combined view and Vencidas panel (E2E)", () => {
+describe("agenda combined view and Vencidas tab (E2E)", () => {
   const stamp = Date.now();
   const plate = `CB${stamp}`;
   let adminId: string;
@@ -165,6 +165,34 @@ describe("agenda combined view and Vencidas panel (E2E)", () => {
 
     expect(after.total - before).toBe(2);
     expect(ids(after.rows)).not.toContain(old);
+  });
+
+  it("Vencidas list is capped and disclosed: with more rows than the cap, cap rows come back, truncated, and the total is the true count", async () => {
+    await newOrder({ at: new Date(NOW.getTime() - 3 * 24 * 60 * MIN) });
+    await newOrder({ at: new Date(NOW.getTime() - 4 * 24 * 60 * MIN) });
+    await newOrder({ at: new Date(NOW.getTime() - 5 * 24 * 60 * MIN) });
+
+    const all = await agendaOverdue(SYSTEM_SCOPE, NOW);
+    const capped = await agendaOverdue(SYSTEM_SCOPE, NOW, 2);
+
+    expect(capped.rows).toHaveLength(2);
+    expect(capped.truncated).toBe(true);
+    expect(capped.total).toBe(all.total);
+    expect(all.total).toBeGreaterThan(2);
+    expect(ids(capped.rows)).toEqual(ids(all.rows).slice(0, 2));
+  });
+
+  it("Cancelled no-show leaves the tab and shows in the grid as a no-show", async () => {
+    const at = new Date(NOW.getTime() - 26 * 60 * MIN);
+    const id = await newOrder({ at });
+    expect(ids((await agendaOverdue(SYSTEM_SCOPE, NOW)).rows)).toContain(id);
+
+    await db.update(ordenServicio).set({ status: "cancelled" }).where(eq(ordenServicio.id, id));
+    await history(id, "booked", "cancelled", new Date(at.getTime() + 60 * MIN));
+
+    expect(ids((await agendaOverdue(SYSTEM_SCOPE, NOW)).rows)).not.toContain(id);
+    const grid = await agendaRange(SYSTEM_SCOPE, rangeFor("day", "2031-03-09"));
+    expect(grid.rows.find((r) => r.id === id)).toMatchObject({ noShow: true });
   });
 
   it("Time in status uses the history row: created 5 days ago, moved to in_progress 3 h ago -> 3 h; with no history it falls back to created_at", async () => {

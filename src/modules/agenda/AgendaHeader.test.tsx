@@ -33,9 +33,25 @@ describe("AgendaHeader", () => {
     }
   });
 
-  it("Header trigger: 'Agendar cita' stays the primary variant and keeps the 44px class", () => {
+  it("Header layout: breadcrumb, title, subtitle and the month the toolbar is on", () => {
     render(<AgendaHeader {...base} />);
-    const button = screen.getByRole("button", { name: "Agendar cita" });
+    const crumbs = screen.getByRole("navigation", { name: "Ruta" });
+    expect(crumbs).toHaveTextContent("Taller / Agenda");
+    expect(screen.getByRole("heading", { level: 1, name: "Agenda" })).toBeInTheDocument();
+    expect(screen.getByText("Citas del taller y órdenes en curso")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Octubre 2026" })).toBeInTheDocument();
+  });
+
+  it("Header layout: the search field sits in the title row, beside the booking button", () => {
+    render(<AgendaHeader {...base} search={<input aria-label="Buscar" />} tabs={<div role="tablist" aria-label="Citas" />} />);
+    const search = screen.getByRole("textbox", { name: "Buscar" });
+    expect(search.parentElement).toContainElement(screen.getByRole("button", { name: "Nueva cita" }));
+    expect(screen.getByRole("tablist", { name: "Citas" })).toBeInTheDocument();
+  });
+
+  it("Header trigger: 'Nueva cita' stays the primary variant and keeps the 44px class", () => {
+    render(<AgendaHeader {...base} />);
+    const button = screen.getByRole("button", { name: "Nueva cita" });
     expect(button.className).toContain("bg-primary");
     expect(button.className).toContain("min-h-11");
   });
@@ -61,9 +77,9 @@ describe("AgendaHeader", () => {
     expect(screen.getByText("26/10/2026")).toBeInTheDocument();
   });
 
-  it("Booking trigger: 'Agendar cita' opens the dialog defaulting to the selected date", async () => {
+  it("Booking trigger: 'Nueva cita' opens the dialog defaulting to the selected date", async () => {
     render(<AgendaHeader {...base} />);
-    await userEvent.click(screen.getByRole("button", { name: "Agendar cita" }));
+    await userEvent.click(screen.getByRole("button", { name: "Nueva cita" }));
     expect((screen.getByLabelText("Día") as HTMLInputElement).value).toBe("2026-10-26");
   });
 });
