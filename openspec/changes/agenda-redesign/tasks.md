@@ -133,14 +133,14 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 - [x] 9.1 Confirm by `rg` that nothing imports `DayView` or `WeekView`; delete `DayView.tsx`, `DayView.test.tsx`, `WeekView.tsx`, `WeekView.test.tsx`; move any still-meaningful assertion into the new tests first (RED if absent).
 - [x] 9.2 Close: C. Browser: smoke load of day and week (no console error).
 
-## WU10: detail (branch `feat/agenda-redesign-wu10-detail`) [~310]
+## WU10: detail (branches `feat/agenda-redesign-wu10-detail` = Detail component + card anchors, and `feat/agenda-redesign-wu10b-detail-mount` = shell mount; split at ~470 lines) [~310 forecast]
 
-- [ ] 10.1 RED `dates.test.ts`: `formatLongDay("2026-10-27")` = "Martes 27 de octubre" from static tables (no `Intl`); the agenda-safety test still passes.
-- [ ] 10.2 RED `AgendaDetail.test.tsx`: booked, not Vencida -> "Cita agendada", name, "Martes 27 de octubre", "11:00", "AC 5521 · Toyota Corolla 2019", `tel:` link, description ("Sin descripción" when empty), five chips with "REVISADO" marked, "Julio Rangel", "Abrir orden" (button and pencil with that accessible name), "Reprogramar", no "No se presentó"; Vencida -> both actions; `open` -> only "Abrir orden", read-only chips; no-show -> only "Abrir orden"; Escape / outside press / close control (44x44) close it and the card loses `aria-pressed`. (Detail content; Vencida Detail offers both actions; Muted Detail is read-only; Close affordances; Reprogramar lives in the Detail only)
-- [ ] 10.3 RED `AgendaShell.test.tsx`: `matchMedia("(min-width: 768px)")` read inside the click handler picks popover vs `Sheet side="bottom"` with `showCloseButton={false}` and our own "Cerrar"; Reprogramar and No se presentó open the existing dialogs.
-- [ ] 10.4 GREEN `AgendaDetail.tsx`, `dates.ts` (`formatLongDay`), shell wiring; dialogs `ReprogramDialog`/`NoShowConfirm` reused unchanged beyond the new item shape.
-- [ ] 10.5 Mutation-verify: offer No se presentó when not Vencida -> "Detail content" red; make chips editable for `open` -> "Muted Detail is read-only" red; use `typeof document` -> safety test red.
-- [ ] 10.6 Close: C + B. The popover anchors and flips at the right edge; the sheet is reachable at 390 and does not widen the page; a Monday week card's Detail is not clipped at 1024; confirm the portrait-tablet (768) popover on the device (design open question).
+- [x] 10.1 RED `dates.test.ts`: `formatLongDay("2026-10-27")` = "Martes 27 de octubre" from static tables (no `Intl`); the agenda-safety test still passes.
+- [x] 10.2 RED `AgendaDetail.test.tsx`: booked, not Vencida -> "Cita agendada", name, "Martes 27 de octubre", "11:00", "AC 5521 · Toyota Corolla 2019", `tel:` link, description ("Sin descripción" when empty), five chips with "REVISADO" marked, "Julio Rangel", "Abrir orden" (button and pencil with that accessible name), "Reprogramar", no "No se presentó"; Vencida -> both actions; `open` -> only "Abrir orden", read-only chips; no-show -> only "Abrir orden"; Escape / outside press / close control (44x44) close it and the card loses `aria-pressed`. (Detail content; Vencida Detail offers both actions; Muted Detail is read-only; Close affordances; Reprogramar lives in the Detail only)
+- [x] 10.3 RED `AgendaShell.test.tsx`: `matchMedia("(min-width: 768px)")` read inside the click handler picks popover vs `Sheet side="bottom"` with `showCloseButton={false}` and our own "Cerrar"; Reprogramar and No se presentó open the existing dialogs.
+- [x] 10.4 GREEN `AgendaDetail.tsx`, `dates.ts` (`formatLongDay`), shell wiring; dialogs `ReprogramDialog`/`NoShowConfirm` reused unchanged beyond the new item shape.
+- [x] 10.5 Mutation-verify: offer No se presentó when not Vencida -> "Detail content" red; make chips editable for `open` -> "Muted Detail is read-only" red; use `typeof document` -> safety test red.
+- [x] 10.6 Close: C + B. The popover anchors and flips at the right edge; the sheet is reachable at 390 and does not widen the page; a Monday week card's Detail is not clipped at 1024; confirm the portrait-tablet (768) popover on the device (design open question).
 
 ## WU11: detail edits (branch `feat/agenda-redesign-wu11-detail-edits`) [~245]
 
