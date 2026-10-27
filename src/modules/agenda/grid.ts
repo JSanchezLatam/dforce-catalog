@@ -25,3 +25,6 @@ const pad = (n: number) => String(n).padStart(2, "0");
 
 /** `HH:mm`, digits only, so the server and the client print the same text. */
 export const clockLabel = (minuteOfDay: number): string => `${pad(Math.floor(minuteOfDay / 60))}:${pad(minuteOfDay % 60)}`;
+
+/** Accessible name of a free-hour control: the day as `DD/MM/YYYY` and the hour, digits only. */
+export const slotLabel = (day: string, time: string): string => `Nueva cita ${day.split("-").reverse().join("/")} ${time}`;

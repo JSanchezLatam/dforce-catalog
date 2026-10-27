@@ -24,6 +24,10 @@ describe("agenda colour hooks", () => {
     expect(css).toMatch(/\[data-categoria="none"\]\s*\{[^}]*--s:\s*6%/);
   });
 
+  it("defines the weekend hatch the week grid marks Saturday and Sunday with", () => {
+    expect(css).toMatch(/\.agenda-hatch\s*\{[^}]*repeating-linear-gradient/);
+  });
+
   it("has a dark variant of the card and of its strip", () => {
     expect(css).toContain(".dark .agenda-ev {");
     expect(css).toContain(".dark .agenda-ev-strip {");

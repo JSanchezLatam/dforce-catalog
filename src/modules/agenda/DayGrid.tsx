@@ -4,7 +4,7 @@
  * activation exist only when the caller passes `onSlot` / `onSelect`.
  */
 import { AgendaCard } from "@/modules/agenda/AgendaCard";
-import { clockLabel, hourWindow, nowLineTop, ROW, top } from "@/modules/agenda/grid";
+import { clockLabel, hourWindow, nowLineTop, ROW, slotLabel, top } from "@/modules/agenda/grid";
 import { layoutDay, type AgendaItem } from "@/modules/agenda/items";
 
 type Props = {
@@ -24,7 +24,6 @@ export function DayGrid({ date, items, todayKey, nowMinute, selectedId = null, o
   const hours = Array.from({ length: end - start }, (_, i) => start + i);
   const taken = new Set(items.map((i) => Math.floor(i.minuteOfDay / 60)));
   const now = nowMinute === undefined ? null : nowLineTop(nowMinute, todayKey === date, [start, end]);
-  const [y, m, d] = date.split("-");
   return (
     <div className="flex flex-col gap-2">
       {items.length === 0 ? <p className="text-sm text-muted-foreground">Sin citas para este día</p> : null}
@@ -37,7 +36,7 @@ export function DayGrid({ date, items, todayKey, nowMinute, selectedId = null, o
               {onSlot && !taken.has(h) ? (
                 <button
                   type="button"
-                  aria-label={`Nueva cita ${d}/${m}/${y} ${label}`}
+                  aria-label={slotLabel(date, label)}
                   onClick={() => onSlot(date, label)}
                   className="absolute inset-0 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
                 />

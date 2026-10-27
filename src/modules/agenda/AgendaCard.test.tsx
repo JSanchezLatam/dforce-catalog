@@ -99,4 +99,22 @@ describe("AgendaCard", () => {
     await userEvent.click(screen.getByRole("button"));
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "o1" }));
   });
+
+  it("icons are decoration: the vehicle line and each status pill carry an aria-hidden svg beside their text", () => {
+    const { container, unmount } = render(<AgendaCard item={makeItem()} />);
+    expect(container.querySelectorAll("svg")).toHaveLength(1);
+    expect(screen.getByText("AB1234 · Toyota Corolla").previousElementSibling?.tagName.toLowerCase()).toBe("svg");
+    unmount();
+    const cases: [Parameters<typeof makeItem>[0], string][] = [
+      [{ status: "open", statusLabel: "Recibida", muted: true }, "Recibida"],
+      [{ status: "booked", overdue: true }, "Vencida"],
+      [{ status: "cancelled", statusLabel: "No se presentó", muted: true, noShow: true }, "No se presentó"],
+    ];
+    for (const [over, text] of cases) {
+      const view = render(<AgendaCard item={makeItem(over)} />);
+      const pill = screen.getByText(text);
+      expect(pill.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+      view.unmount();
+    }
+  });
 });
