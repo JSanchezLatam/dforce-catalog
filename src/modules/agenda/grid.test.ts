@@ -19,6 +19,11 @@ describe("hourWindow", () => {
     expect(hourWindow([at(18, 45)])).toEqual([8, 20]);
   });
 
+  it("the grid never runs past midnight: a 23:30 card ends the window at 24", () => {
+    expect(hourWindow([at(23, 30)])).toEqual([8, 24]);
+    expect(hourWindow([at(23)])).toEqual([8, 24]);
+  });
+
   it("a card starting on the closing hour gets its own row", () => {
     expect(hourWindow([at(18)])).toEqual([8, 19]);
   });
