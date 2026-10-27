@@ -78,6 +78,19 @@ describe("AgendaCard", () => {
     expect(screen.getByText("Pérez")).not.toHaveClass("line-through");
   });
 
+  it("Muted statuses render attenuated and Vencida carries the red ring; a plain booked card has neither", () => {
+    const { unmount } = render(<AgendaCard item={makeItem({ status: "open", statusLabel: "Recibida", muted: true })} />);
+    expect(screen.getByRole("button")).toHaveClass("opacity-60");
+    unmount();
+    const vencida = render(<AgendaCard item={makeItem({ overdue: true })} />);
+    expect(screen.getByRole("button")).toHaveClass("ring-destructive");
+    expect(screen.getByRole("button")).not.toHaveClass("opacity-60");
+    vencida.unmount();
+    render(<AgendaCard item={makeItem()} />);
+    expect(screen.getByRole("button")).not.toHaveClass("opacity-60");
+    expect(screen.getByRole("button")).not.toHaveClass("ring-destructive");
+  });
+
   it("a statused card with no technician shows no 'Sin técnico'", () => {
     render(<AgendaCard item={makeItem({ status: "open", statusLabel: "Recibida", muted: true })} />);
     expect(screen.queryByText("Sin técnico")).not.toBeInTheDocument();
