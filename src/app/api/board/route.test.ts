@@ -14,6 +14,9 @@ const ROW: BoardOrderRow = {
   esperaMotivo: "repuesto",
   updatedAt: new Date("2026-10-26T14:00:00Z"),
   appointmentAt: new Date("2026-10-27T14:00:00Z"),
+  urgenteAt: null,
+  vehiculoId: "VEHICLE-ID-LEAK",
+  categoria: "reparacion",
   plate: "AB1234",
   make: "Toyota",
   model: "Hilux",
@@ -43,6 +46,7 @@ describe("GET /api/board", () => {
           holdReason: "Repuesto",
           technicians: ["Ana"],
           statusSince: "2026-10-26T14:30:00.000Z",
+          urgent: false,
         },
       ],
     });

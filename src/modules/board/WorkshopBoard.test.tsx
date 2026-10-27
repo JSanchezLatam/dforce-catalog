@@ -13,6 +13,7 @@ const row = (over: Partial<BoardRow> & Pick<BoardRow, "status" | "statusLabel">)
   holdReason: null,
   technicians: [],
   statusSince: "2026-10-26T14:48:00.000Z",
+  urgent: false,
   ...over,
 });
 const SNAPSHOT: BoardSnapshot = {
