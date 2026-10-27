@@ -1,7 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { DayView } from "./DayView";
 import { makeItem } from "./items.fixture";
 import { ItemActions } from "./ItemActions";
 import { VencidasPanel } from "./VencidasPanel";
@@ -17,11 +16,6 @@ describe("ItemActions", () => {
     expect(names()).toEqual(["Reprogramar"]);
     rerender(<ItemActions item={makeItem({ muted: true, status: "open" })} />);
     expect(names()).toEqual([]);
-  });
-
-  it("DayView renders the actions on a booked chip", () => {
-    render(<DayView items={[makeItem()]} />);
-    expect(screen.getByRole("button", { name: "Reprogramar" })).toBeInTheDocument();
   });
 
   it("VencidasPanel renders what the actions slot returns", () => {

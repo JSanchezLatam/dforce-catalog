@@ -130,8 +130,8 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU9: retire the old day/week views (branch `feat/agenda-redesign-wu9-retire-day-week`) [~195, deletions only]
 
-- [ ] 9.1 Confirm by `rg` that nothing imports `DayView` or `WeekView`; delete `DayView.tsx`, `DayView.test.tsx`, `WeekView.tsx`, `WeekView.test.tsx`; move any still-meaningful assertion into the new tests first (RED if absent).
-- [ ] 9.2 Close: C. Browser: smoke load of day and week (no console error).
+- [x] 9.1 Confirm by `rg` that nothing imports `DayView` or `WeekView`; delete `DayView.tsx`, `DayView.test.tsx`, `WeekView.tsx`, `WeekView.test.tsx`; move any still-meaningful assertion into the new tests first (RED if absent).
+- [x] 9.2 Close: C. Browser: smoke load of day and week (no console error).
 
 ## WU10: detail (branch `feat/agenda-redesign-wu10-detail`) [~310]
 
