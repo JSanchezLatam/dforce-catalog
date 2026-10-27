@@ -54,7 +54,7 @@ describe("AgendaShell", () => {
     render(<AgendaShell {...base} view="combined" items={[at("a")]} workshop={[makeWorkshopItem({ customerName: "Taller Uno" })]} />);
     const day = screen.getByRole("region", { name: "Citas del día" });
     expect(within(day).getByRole("button", { name: /Cliente a/ })).toBeInTheDocument();
-    expect(within(screen.getByRole("region", { name: "En el taller" })).getByText("Taller Uno")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "En el taller ahora" })).getByText("Taller Uno")).toBeInTheDocument();
   });
 
   it("the now-line comes from the nowMinute the page captured", () => {
@@ -300,7 +300,7 @@ describe("AgendaShell", () => {
       render(<AgendaShell {...base} view="combined" items={items} workshop={[makeWorkshopItem({ customerName: "Taller Uno" })]} />);
       await userEvent.type(search(), "zzzz");
       expect(screen.getByText("Sin resultados")).toBeInTheDocument();
-      expect(within(screen.getByRole("region", { name: "En el taller" })).getByText("Taller Uno")).toBeInTheDocument();
+      expect(within(screen.getByRole("region", { name: "En el taller ahora" })).getByText("Taller Uno")).toBeInTheDocument();
     });
 
     it("an open Detail goes away when the search hides its card", async () => {
