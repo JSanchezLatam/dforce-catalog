@@ -144,7 +144,7 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU11: detail edits (branch `feat/agenda-redesign-wu11-detail-edits`) [~245]
 
-- [ ] 11.1 RED e2e `src/e2e/agenda-detail.e2e.test.ts`: PATCH `{categoria:"reparacion", expectedStatus:"booked"}` persists; the same PATCH on an order received elsewhere -> 409 `stale_status`, `categoria` unchanged. (Edit the type persists; Stale type edit)
+- [x] 11.1 RED e2e `src/e2e/agenda-detail.e2e.test.ts`: PATCH `{categoria:"reparacion", expectedStatus:"booked"}` persists; the same PATCH on an order received elsewhere -> 409 `stale_status`, `categoria` unchanged. (Edit the type persists; Stale type edit)
 - [ ] 11.2 RED `AgendaDetail.test.tsx`: chip click sends exactly `{categoria, expectedStatus:"booked"}` and toasts "Categoría actualizada" ABOVE `router.refresh()`, both below the try/catch (a throwing refresh must not retract the toast); 409 shows the message inline, no toast; control disabled in flight; "+ Asignar técnico" absent without `service-orders.assign`; picker lists the roster minus the item's technicians; POST `assignments` with `tecnicoId`, toast "Técnico asignado", `order_closed` 409 inline.
 - [ ] 11.3 GREEN `AgendaDetail.tsx` (`patchOrder`, `AssignTecnicoControl`), `page.tsx` (`listTecnicos()` only when `can(user,"service-orders.assign")`, roster as plain props).
 - [ ] 11.4 Mutation-verify: toast below `router.refresh()` -> the call-order test red; drop `expectedStatus` -> payload test red; always render assign -> "Assign control follows the permission" red.

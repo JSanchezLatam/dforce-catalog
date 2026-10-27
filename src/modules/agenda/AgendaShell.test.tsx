@@ -75,6 +75,19 @@ describe("AgendaShell", () => {
     expect(within(popover()!).queryByText("Cliente a")).not.toBeInTheDocument();
   });
 
+  it("a new card gets a fresh Detail: the previous appointment's refusal does not follow it", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "stale_status", message: "La orden cambió mientras la mirabas. Actualizá la agenda." }), { status: 409 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<AgendaShell {...base} view="week" items={[at("a", { status: "booked", categoria: null }), at("b", { status: "booked", time: "11:00", minuteOfDay: 11 * 60 })]} />);
+    await userEvent.click(card(/Cliente a/));
+    await userEvent.click(within(popover()!).getByRole("button", { name: "Reparación" }));
+    expect(await within(popover()!).findByRole("alert")).toHaveTextContent("La orden cambió");
+    await userEvent.click(card(/Cliente b/));
+    expect(within(popover()!).getByText("Cliente b")).toBeInTheDocument();
+    expect(within(popover()!).queryByRole("alert")).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
   it("activating the open card again keeps its Detail (it closes by Escape, outside press or Cerrar)", async () => {
     render(<AgendaShell {...base} view="day" items={[at("a")]} />);
     await userEvent.click(card(/Cliente a/));
