@@ -48,4 +48,11 @@ describe("WeekView", () => {
       expect(head.className).toContain("min-w-11");
     }
   });
+
+  it("Booking trigger: every day column has its own 44px control", () => {
+    render(<WeekView date="2026-10-26" today="2026-10-28" items={[]} />);
+    const buttons = screen.getAllByRole("button");
+    expect(buttons).toHaveLength(7);
+    expect(within(screen.getByTestId("day-2026-10-28")).getByRole("button", { name: "Agendar cita el 28/10" }).className).toContain("min-h-11");
+  });
 });

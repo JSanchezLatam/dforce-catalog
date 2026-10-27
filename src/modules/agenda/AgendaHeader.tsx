@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 import { stepDate, weekStart, type AgendaView } from "@/modules/agenda/dates";
+import { AgendaBookingForm } from "@/modules/agenda/AgendaBookingForm";
 import { RefreshListButton } from "@/modules/service-orders/RefreshListButton";
 
 const VIEWS: { view: AgendaView; label: string }[] = [
@@ -32,6 +33,7 @@ export function AgendaHeader({ view, date, today, truncated }: { view: AgendaVie
         <Link href={to(view, stepDate(view, date, 1))} className={NAV}>Siguiente</Link>
         <span className="px-2 text-sm font-semibold tabular-nums">{rangeLabel(view, date)}</span>
         <RefreshListButton />
+        <AgendaBookingForm day={date} triggerClassName="min-h-11" />
       </div>
       <nav aria-label="Vista" className="flex flex-wrap gap-2">
         {VIEWS.map((v) => (

@@ -1,7 +1,9 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+vi.mock("@/shared/ui/ToastProvider", () => ({ useToast: () => ({ addToast: vi.fn() }) }));
 
 import { AgendaHeader } from "./AgendaHeader";
 
@@ -50,5 +52,11 @@ describe("AgendaHeader", () => {
     expect(screen.getByText("10/2026")).toBeInTheDocument();
     rerender(<AgendaHeader {...base} view="day" />);
     expect(screen.getByText("26/10/2026")).toBeInTheDocument();
+  });
+
+  it("Booking trigger: 'Agendar cita' opens the dialog defaulting to the selected date", async () => {
+    render(<AgendaHeader {...base} />);
+    await userEvent.click(screen.getByRole("button", { name: "Agendar cita" }));
+    expect((screen.getByLabelText("Día") as HTMLInputElement).value).toBe("2026-10-26");
   });
 });
