@@ -106,10 +106,10 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU6: card and day grid (branch `feat/agenda-redesign-wu6-card-day-grid`) [~330]
 
-- [ ] 6.1 RED `AgendaCard.test.tsx` (component-testing skill): the strip reads "11:00 · REVISADO"; name; "AC 5521 · Toyota Corolla"; "JR"; NO status label for a plain booked card; NO phone, NO description; "Sin categoría" / "Sin vehículo" / "Sin técnico" when null; status text for Recibida, Completada, Vencida, No se presentó (struck-through name); a `<button>` with `data-categoria`, `aria-pressed` when selected, `min-h-11`; five typed cards carry five distinct hooks. (Card fields; No vehicle, no type...; Colour follows the type; Status is text as well as colour)
-- [ ] 6.2 RED `DayGrid.test.tsx`: hour rows 08:00-17:00 with labels; a 14:30 block offset; three 09:00 cards all present; "Sin citas para este día" on an empty day; the now-line labelled `HH:mm` only on today; with `onSlot` each free hour is a focusable button named with day and hour, without it none render. (Empty day; Empty slot is a labelled control)
-- [ ] 6.3 GREEN `AgendaCard.tsx`, `DayGrid.tsx` (plain components, no `"use client"`, no server imports, `HH:mm` digits only).
-- [ ] 6.4 Mutation-verify: render the description -> "Card fields" red; remove `data-categoria` -> "Colour follows the type" red; drop the guard on the now-line -> "Now-line" red.
+- [x] 6.1 RED `AgendaCard.test.tsx` (component-testing skill): the strip reads "11:00 · REVISADO"; name; "AC 5521 · Toyota Corolla"; "JR"; NO status label for a plain booked card; NO phone, NO description; "Sin categoría" / "Sin vehículo" / "Sin técnico" when null; status text for Recibida, Completada, Vencida, No se presentó (struck-through name); a `<button>` with `data-categoria`, `aria-pressed` when selected, `min-h-11`; five typed cards carry five distinct hooks. (Card fields; No vehicle, no type...; Colour follows the type; Status is text as well as colour)
+- [x] 6.2 RED `DayGrid.test.tsx`: hour rows 08:00-17:00 with labels; a 14:30 block offset; three 09:00 cards all present; "Sin citas para este día" on an empty day; the now-line labelled `HH:mm` only on today; with `onSlot` each free hour is a focusable button named with day and hour, without it none render. (Empty day; Empty slot is a labelled control)
+- [x] 6.3 GREEN `AgendaCard.tsx`, `DayGrid.tsx` (plain components, no `"use client"`, no server imports, `HH:mm` digits only).
+- [x] 6.4 Mutation-verify: render the description -> "Card fields" red; remove `data-categoria` -> "Colour follows the type" red; drop the guard on the now-line -> "Now-line" red.
 - [ ] 6.5 Close: C. Browser: N/A until WU8 (unmounted).
 
 ## WU7: week grid and popover (branch `feat/agenda-redesign-wu7-week-grid-popover`) [~320]
