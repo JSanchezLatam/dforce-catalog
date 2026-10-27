@@ -16,7 +16,7 @@ Read-side extension plus a UI rebuild against `mockup/index.html`. `page.tsx` st
 | Vehicles | `GET /api/customers/[id]/vehicles` after the customer is selected. Failed ≠ empty, as in `ServiceOrderForm.tsx:187-211` (copied, not extracted) | Extracting a hook from ServiceOrderForm | It keeps ServiceOrderForm out of scope. The extraction becomes a follow-up |
 | Detail edits | Booked only. Type chips → `patchOrder(id,{categoria, expectedStatus:"booked"})`, toast "Tipo de servicio actualizado". Assign → reuse `AssignTecnicoControl`, with `available` = the roster from `listTecnicos()` (only when `can(user,"service-orders.assign")`) minus the item's technicians | — | Both write paths exist. The PATCH cannot unset (`isServiceCategory` rejects null) |
 | Colour | `globals.css` `@layer components`: `.agenda-ev`, `.agenda-ev-strip` and `.agenda-dot`, with hue set by `[data-categoria=instalacion\|mant_preventivo\|mant_correctivo\|reparacion\|revisado\|none]` (262/205/35/350/152/240 at saturation 6%), plus a `.dark .agenda-ev` variant. The formula is copied from mockup lines 47-56 | New `:root` tokens; reusing `--chart-*` | This is the approved formula. Hue-only, so it is theme-agnostic. `--chart-*` hues do not match the mockup |
-| Labels | `CATEGORIA_LABEL` for the five types. "Sin tipo" for null (agenda only) | Mockup casing | One vocabulary repo-wide |
+| Labels | `CATEGORIA_LABEL` for the five types. "Sin categoría" for null (agenda only) | Mockup casing | One vocabulary repo-wide |
 
 ## Data Flow
 
