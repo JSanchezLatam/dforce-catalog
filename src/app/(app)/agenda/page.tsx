@@ -1,9 +1,11 @@
 import { AgendaHeader } from "@/modules/agenda/AgendaHeader";
+import { CombinedView } from "@/modules/agenda/CombinedView";
 import { DayView } from "@/modules/agenda/DayView";
 import { panamaDay, parseAgendaParams, rangeFor } from "@/modules/agenda/dates";
-import { toAgendaItem } from "@/modules/agenda/items";
+import { toAgendaItem, toWorkshopItem } from "@/modules/agenda/items";
 import { MonthView } from "@/modules/agenda/MonthView";
-import { agendaRange } from "@/modules/agenda/queries";
+import { agendaInWorkshop, agendaOverdue, agendaRange } from "@/modules/agenda/queries";
+import { VencidasPanel } from "@/modules/agenda/VencidasPanel";
 import { WeekView } from "@/modules/agenda/WeekView";
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
@@ -22,7 +24,12 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
   // One clock for the whole render: the Vencida flag and "today" must agree.
   const now = new Date();
   const { view, date } = parseAgendaParams(await searchParams, now);
-  const { rows, truncated } = await agendaRange(orderScope(user), rangeFor(view, date));
+  const scope = orderScope(user);
+  const [{ rows, truncated }, overdue, workshop] = await Promise.all([
+    agendaRange(scope, rangeFor(view, date)),
+    agendaOverdue(scope, now),
+    view === "combined" ? agendaInWorkshop(scope) : null,
+  ]);
   const items = rows.map((row) => toAgendaItem(row, now));
   const today = panamaDay(now);
 
@@ -34,9 +41,12 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
         <MonthView date={date} today={today} items={items} />
       ) : view === "week" ? (
         <WeekView date={date} today={today} items={items} />
+      ) : view === "combined" && workshop ? (
+        <CombinedView items={items} workshop={workshop.rows.map(toWorkshopItem)} workshopTruncated={workshop.truncated} />
       ) : (
         <DayView items={items} />
       )}
+      <VencidasPanel items={overdue.rows.map((row) => toAgendaItem(row, now))} total={overdue.total} truncated={overdue.truncated} />
     </div>
   );
 }

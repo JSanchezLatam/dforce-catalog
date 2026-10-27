@@ -7,9 +7,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const session = vi.hoisted(() => vi.fn());
 const agendaRange = vi.hoisted(() => vi.fn());
+const agendaOverdue = vi.hoisted(() => vi.fn());
+const agendaInWorkshop = vi.hoisted(() => vi.fn());
 const orderScope = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders: session }));
-vi.mock("@/modules/agenda/queries", () => ({ agendaRange }));
+vi.mock("@/modules/agenda/queries", () => ({ agendaRange, agendaOverdue, agendaInWorkshop }));
 vi.mock("@/modules/service-orders/scope", () => ({ orderScope }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
@@ -22,6 +24,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   orderScope.mockReturnValue(SCOPE);
   agendaRange.mockResolvedValue({ rows: [], truncated: false });
+  agendaOverdue.mockResolvedValue({ rows: [], truncated: false, total: 0 });
+  agendaInWorkshop.mockResolvedValue({ rows: [], truncated: false });
 });
 
 describe("AgendaPage access", () => {
@@ -33,6 +37,8 @@ describe("AgendaPage access", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Agenda" })).toBeInTheDocument();
     expect(screen.getByText("No tenés permiso para ver esta página")).toBeInTheDocument();
     expect(agendaRange).not.toHaveBeenCalled();
+    expect(agendaOverdue).not.toHaveBeenCalled();
+    expect(agendaInWorkshop).not.toHaveBeenCalled();
   });
 
   it("Pantalla never sees the agenda: invoked directly it is denied too", async () => {
@@ -42,6 +48,8 @@ describe("AgendaPage access", () => {
 
     expect(screen.getByText("No tenés permiso para ver esta página")).toBeInTheDocument();
     expect(agendaRange).not.toHaveBeenCalled();
+    expect(agendaOverdue).not.toHaveBeenCalled();
+    expect(agendaInWorkshop).not.toHaveBeenCalled();
   });
 
   it.each([["administrador"], ["jefe_taller"]])("%s gets the page, not the denial", async (role) => {
@@ -126,5 +134,52 @@ describe("AgendaPage data", () => {
     const [, range] = agendaRange.mock.calls[0];
     expect(range.from.toISOString()).toBe("2026-09-28T05:00:00.000Z");
     expect(range.to.toISOString()).toBe("2026-11-02T05:00:00.000Z");
+  });
+});
+
+const OVERDUE_ROW = { id: "v1", status: "booked", appointmentAt: new Date("2026-09-16T13:30:00Z"), customerName: "Vieja", customerPhone: "7", vehiclePlate: null };
+
+describe("AgendaPage Vencidas and combined", () => {
+  beforeEach(() => {
+    session.mockResolvedValue({ id: "a", role: "administrador" });
+    agendaOverdue.mockResolvedValue({ rows: [OVERDUE_ROW], truncated: false, total: 1 });
+  });
+
+  it.each(["day", "week", "month", "combined"])("Panel on every view: %s shows Vencidas (1)", async (view) => {
+    render(await AgendaPage(params({ view, date: "2026-10-26" })));
+
+    expect(screen.getByRole("heading", { name: "Vencidas (1)" })).toBeInTheDocument();
+    expect(screen.getByText(/16\/09\/2026 08:30/)).toBeInTheDocument();
+  });
+
+  it("reads the overdue list with orderScope(user) and the same now the chips use", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-26T20:00:00Z"));
+    try {
+      render(await AgendaPage(params({ view: "day", date: "2026-10-26" })));
+
+      const [scope, now] = agendaOverdue.mock.calls[0];
+      expect(scope).toBe(SCOPE);
+      expect(now.toISOString()).toBe("2026-10-26T20:00:00.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("combined: the selected day's range plus the in-workshop read, both scoped", async () => {
+    agendaInWorkshop.mockResolvedValue({ truncated: false, rows: [{ id: "w1", status: "on_hold", esperaMotivo: "repuesto", customerName: "Taller", customerPhone: "9", vehiclePlate: null }] });
+
+    render(await AgendaPage(params({ view: "combined", date: "2026-10-26" })));
+
+    expect(agendaInWorkshop).toHaveBeenCalledWith(SCOPE);
+    const [, range] = agendaRange.mock.calls[0];
+    expect(range.to.toISOString()).toBe("2026-10-27T05:00:00.000Z");
+    expect(screen.getByRole("link", { name: /Taller/ }).textContent).toContain("Repuesto");
+  });
+
+  it.each(["day", "week", "month"])("%s does not run the in-workshop read", async (view) => {
+    render(await AgendaPage(params({ view, date: "2026-10-26" })));
+
+    expect(agendaInWorkshop).not.toHaveBeenCalled();
   });
 });

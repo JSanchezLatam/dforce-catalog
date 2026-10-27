@@ -125,7 +125,7 @@ export const ROUTE_GUARDS: Record<
   // WU4: the full board and its poll route, read-only.
   "/tablero": { GET: "board.read" },
   "/api/board": { GET: "board.read" },
-  // workshop-agenda WU1: the appointment calendar (page stub here; data arrives in later work units).
+  // workshop-agenda: the appointment calendar (day, week, month and combined views).
   "/agenda": { GET: "agenda.manage" },
   "/tablero/clientes": { GET: "board.customer" },
   "/api/board/clientes": { GET: "board.customer" },

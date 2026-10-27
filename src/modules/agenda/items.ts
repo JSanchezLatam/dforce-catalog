@@ -4,8 +4,8 @@
  * the one `now` the page captured (the client never sees a clock).
  */
 import { formatAgendaTime, isOverdue, panamaDay } from "@/modules/agenda/dates";
-import type { AgendaRow } from "@/modules/agenda/queries";
-import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
+import type { AgendaRow, WorkshopRow } from "@/modules/agenda/queries";
+import { ESPERA_MOTIVO_LABEL, ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 
 export type AgendaItem = {
   id: string;
@@ -51,4 +51,22 @@ export function groupByDay(items: readonly AgendaItem[]): Map<string, AgendaItem
   const days = new Map<string, AgendaItem[]>();
   for (const item of sortItems(items)) days.set(item.dayKey, [...(days.get(item.dayKey) ?? []), item]);
   return days;
+}
+
+/** An order on the shop floor: no appointment fields, and the hold reason only while `on_hold`. */
+export type WorkshopItem = Pick<AgendaItem, "id" | "href" | "customerName" | "customerPhone" | "vehicleLabel" | "status" | "statusLabel"> & {
+  holdReason: string | null;
+};
+
+export function toWorkshopItem(row: WorkshopRow): WorkshopItem {
+  return {
+    id: row.id,
+    href: `/service-orders/${row.id}`,
+    customerName: row.customerName,
+    customerPhone: row.customerPhone,
+    vehicleLabel: row.vehiclePlate ?? "Sin vehículo",
+    status: row.status,
+    statusLabel: ORDER_STATUS_LABEL[row.status],
+    holdReason: row.status === "on_hold" && row.esperaMotivo ? ESPERA_MOTIVO_LABEL[row.esperaMotivo] : null,
+  };
 }

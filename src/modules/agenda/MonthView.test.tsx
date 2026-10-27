@@ -10,7 +10,7 @@ const at = (n: number, dayKey = DAY) =>
 const cell = (key: string) => screen.getByTestId(`cell-${key}`);
 
 describe("MonthView", () => {
-  it("draws Monday-first week rows: Oct 2026 spans 19 Sep to 1 Nov (5 rows), Feb 2027 only 4", () => {
+  it("draws Monday-first week rows: Oct 2026 spans 28 Sep to 1 Nov (5 rows), Feb 2027 only 4", () => {
     const { rerender } = render(<MonthView date="2026-10-10" today="2026-10-15" items={[]} />);
     expect(screen.getAllByTestId(/^cell-/)).toHaveLength(35);
     expect(cell("2026-09-28")).toBeInTheDocument();

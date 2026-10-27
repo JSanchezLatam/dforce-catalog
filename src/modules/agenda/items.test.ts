@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { groupByDay, toAgendaItem, type AgendaItem } from "./items";
-import type { AgendaRow } from "./queries";
+import { groupByDay, toAgendaItem, toWorkshopItem, type AgendaItem } from "./items";
+import type { AgendaRow, WorkshopRow } from "./queries";
 
 const NOW = new Date("2026-10-26T20:00:00Z"); // 15:00 Panama
 
@@ -72,5 +72,37 @@ describe("groupByDay", () => {
     const grouped = groupByDay([item("c", "d1", "09:00"), item("a", "d1", "09:00"), item("z", "d1", "08:00"), item("b", "d2", "07:00")]);
     expect(grouped.get("d1")!.map((i) => i.id)).toEqual(["z", "a", "c"]);
     expect(grouped.get("d2")!.map((i) => i.id)).toEqual(["b"]);
+  });
+});
+
+describe("toWorkshopItem", () => {
+  const wrow = (over: Partial<WorkshopRow> = {}): WorkshopRow => ({
+    id: "w1",
+    status: "in_progress",
+    esperaMotivo: null,
+    customerName: "Pérez",
+    customerPhone: "61234567",
+    vehiclePlate: "AB1234",
+    ...over,
+  });
+
+  it("Hold reason shown only while on hold: the label for on_hold, none for in_progress", () => {
+    expect(toWorkshopItem(wrow({ status: "on_hold", esperaMotivo: "repuesto" })).holdReason).toBe("Repuesto");
+    expect(toWorkshopItem(wrow({ status: "in_progress", esperaMotivo: "repuesto" })).holdReason).toBeNull();
+  });
+
+  it("is plain data: label, link, 'Sin vehículo' for a null plate, survives a JSON round trip", () => {
+    const item = toWorkshopItem(wrow({ status: "open", vehiclePlate: null }));
+    expect(item).toEqual({
+      id: "w1",
+      href: "/service-orders/w1",
+      customerName: "Pérez",
+      customerPhone: "61234567",
+      vehicleLabel: "Sin vehículo",
+      status: "open",
+      statusLabel: "Recibida",
+      holdReason: null,
+    });
+    expect(JSON.parse(JSON.stringify(item))).toEqual(item);
   });
 });

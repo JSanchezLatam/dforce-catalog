@@ -11,7 +11,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 
 import type { OrderScope } from "@/modules/service-orders/scope";
 
-import { agendaOverdue, agendaRange } from "./queries";
+import { agendaInWorkshop, agendaOverdue, agendaRange, IN_WORKSHOP_STATUSES } from "./queries";
 
 const source = fs.readFileSync(path.resolve(import.meta.dirname, "queries.ts"), "utf8");
 
@@ -36,12 +36,29 @@ describe("Range Query: the SQL text", () => {
     expect(source).toMatch(/ne\(ordenServicio\.status,\s*"cancelled"\)/);
   });
 
-  it("applies the caller's scope in the range and in the predicate the overdue rows and count share", () => {
-    expect(source.match(/scope\.where/g)).toHaveLength(2);
+  it("applies the caller's scope in the range, the in-workshop read and the predicate the overdue rows and count share", () => {
+    expect(source.match(/scope\.where/g)).toHaveLength(3);
   });
 
   it("binds instants and never does zone logic in SQL or locale formatting", () => {
     expect(source).not.toMatch(/AT TIME ZONE/i);
     expect(source).not.toMatch(/toLocale/);
+  });
+});
+
+describe("Combined: the in-workshop query lives in agenda/, never in board/", () => {
+  it("agendaInWorkshop takes the OrderScope first, with a defaulted cap", () => {
+    expect(agendaInWorkshop.length).toBe(1);
+    expectTypeOf(agendaInWorkshop).parameter(0).toEqualTypeOf<OrderScope>();
+  });
+
+  it("In-workshop set: the five working statuses, booked excluded, built from the shared constant", () => {
+    expect([...IN_WORKSHOP_STATUSES]).toEqual(["open", "diagnosing", "in_progress", "on_hold", "ready_for_review"]);
+    expect(source).toMatch(/BACKLOG_STATUSES/);
+  });
+
+  it("the board query file still never names cliente", () => {
+    const board = fs.readFileSync(path.resolve(import.meta.dirname, "../board/queries.ts"), "utf8");
+    expect(board).not.toMatch(/\bcliente\b/);
   });
 });
