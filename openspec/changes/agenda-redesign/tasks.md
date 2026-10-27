@@ -170,7 +170,7 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 ## WU14: side column, type filter, week summary (branch `feat/agenda-redesign-wu14-sidebar-filter`) [~380; fallback: "Esta semana" moves to WU15]
 
 - [x] 14.1 RED `items.test.ts`: `typeCounts` (4 revisado, 2 reparacion, 2 sin tipo -> 4/2/2, others 0) is independent of search and checkboxes; `filterItems` honours the unchecked set.
-- [x] 14.2 RED `AgendaSidebar.test.tsx`: order mini calendar slot, "Próxima cita" slot, "Categoría", "Esta semana"; six checkboxes with dot and count, all checked, unchecking hides the cards, counts unchanged, "Todos" re-checks all six; summary shows Agendadas / Recibidas / Vencidas / No se presentó from `toWeekSummary`; below `lg` hidden behind a "Filtros" button (`min-h-11 min-w-11`). (Type counts; Unchecking hides a type; Todos resets; Column collapses behind Filtros)
+- [x] 14.2 RED `AgendaSidebar.test.tsx`: order mini calendar slot, "Próxima cita" slot, "Categoría", "Esta semana"; six checkboxes with dot and count, all checked, unchecking hides the cards, counts unchanged, "Todos" re-checks all six; summary shows Agendadas / Recibidas / Vencidas / No se presentó from `toWeekSummary`; below `xl` (1280) hidden behind a "Filtros" button (`min-h-11 min-w-11`). (Type counts; Unchecking hides a type; Todos resets; Column collapses behind Filtros)
 - [x] 14.3 GREEN `AgendaSidebar.tsx`, shell filter state, `page.tsx` (`agendaWeekCounts`).
 - [x] 14.4 Mutation-verify: counts from the filtered list -> "Type counts" red; "Todos" leaves one unchecked -> "Todos resets" red.
 - [x] 14.5 Close: C + B (the "Filtros" button at 768).

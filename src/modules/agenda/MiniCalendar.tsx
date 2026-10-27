@@ -17,7 +17,7 @@ export function MiniCalendar({ view, date, today, busyDays }: { view: AgendaView
   const monday = weekStart(date);
   const week = new Set(Array.from({ length: 7 }, (_, i) => addDays(monday, i)));
   return (
-    <div className="rounded-xl border bg-card p-4">
+    <div className="rounded-xl border bg-card p-3">
       <div className="mb-2 flex items-center justify-between">
         <strong className="text-sm">{formatMonthYear(date)}</strong>
         <div className="flex">
@@ -40,7 +40,7 @@ export function MiniCalendar({ view, date, today, busyDays }: { view: AgendaView
               data-selected-week={week.has(key) ? "" : undefined}
               data-outside={outside ? "" : undefined}
               aria-current={key === today ? "date" : undefined}
-              className={cn("relative flex min-h-11 items-center justify-center", week.has(key) && "bg-muted", week.has(key) && i % 7 === 0 && "rounded-l-full", week.has(key) && i % 7 === 6 && "rounded-r-full", outside && "opacity-50")}
+              className={cn("relative flex min-h-11 min-w-11 items-center justify-center", week.has(key) && "bg-muted", week.has(key) && i % 7 === 0 && "rounded-l-full", week.has(key) && i % 7 === 6 && "rounded-r-full", outside && "opacity-50")}
             >
               <span className={cn("grid size-8 place-items-center rounded-full", key === today && "bg-foreground font-bold text-background")}>{Number(key.slice(8))}</span>
               {busy ? (

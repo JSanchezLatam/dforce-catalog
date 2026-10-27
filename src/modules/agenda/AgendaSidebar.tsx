@@ -12,7 +12,7 @@ const CARD = "rounded-xl border bg-card p-4";
 const BAR: Record<string, string> = { Agendadas: "bg-sky-500", Recibidas: "bg-emerald-500", Vencidas: "bg-red-500", "No se presentó": "bg-zinc-400" };
 
 /**
- * The left column: calendar and Próxima cita (slots, later units), the Categoría filter, "Esta semana". From `lg` it is
+ * The left column: calendar and Próxima cita (slots, later units), the Categoría filter, "Esta semana". From `xl` it is
  * always shown; below it, it hides behind a "Filtros" disclosure button. CSS decides, so no width is read in render.
  */
 export function AgendaSidebar({ counts, hidden, summary, onToggle, onAll, calendar, next }: {
@@ -27,11 +27,11 @@ export function AgendaSidebar({ counts, hidden, summary, onToggle, onAll, calend
   const [open, setOpen] = useState(false);
   const max = Math.max(0, ...summary.map((r) => r.count));
   return (
-    <div className="flex flex-col gap-3 lg:w-72 lg:shrink-0">
-      <button type="button" aria-expanded={open} aria-controls="agenda-sidebar" onClick={() => setOpen(!open)} className="inline-flex min-h-11 min-w-11 items-center justify-center self-start rounded-md border px-3 text-sm hover:bg-muted lg:hidden">
+    <div className="flex flex-col gap-3 xl:w-[21rem] xl:shrink-0">
+      <button type="button" aria-expanded={open} aria-controls="agenda-sidebar" onClick={() => setOpen(!open)} className="inline-flex min-h-11 min-w-11 items-center justify-center self-start rounded-md border px-3 text-sm hover:bg-muted xl:hidden">
         Filtros
       </button>
-      <div id="agenda-sidebar" className={cn("flex-col gap-3", open ? "flex" : "hidden lg:flex")}>
+      <div id="agenda-sidebar" className={cn("flex-col gap-3", open ? "flex" : "hidden xl:flex")}>
         {calendar}
         {next}
         <section aria-labelledby="agenda-categoria" className={CARD}>

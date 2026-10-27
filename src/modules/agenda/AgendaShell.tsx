@@ -84,7 +84,7 @@ export function AgendaShell({ view, date, today, nowMinute, items, workshop, wor
         search={<Input type="search" aria-label="Buscar" placeholder="Buscar placa o cliente…" value={search} onChange={(e) => setSearch(e.target.value)} className="min-h-11 sm:w-64" />}
         tabs={<AgendaTabs tab={tab} agendadas={filterItems(items, "agendadas", search, hidden).length} vencidas={overdueTotal} onTab={setTab} />}
       />
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
         <AgendaSidebar
           counts={typeCounts(items)}
           hidden={hidden}

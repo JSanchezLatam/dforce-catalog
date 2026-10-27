@@ -57,9 +57,13 @@ describe("MiniCalendar", () => {
     expect(screen.getAllByText("con citas")).toHaveLength(1);
   });
 
-  it("Hit targets classes: cells and month controls are at least 44px tall", () => {
-    render(<MiniCalendar {...base} />);
-    for (const link of screen.getAllByRole("link")) expect(link.className).toContain("min-h-11");
-    expect(screen.getByRole("link", { name: "Mes siguiente" }).className).toContain("min-w-11");
+  it("Hit targets classes: every cell and month control is at least 44x44", () => {
+    const { container } = render(<MiniCalendar {...base} />);
+    for (const link of screen.getAllByRole("link")) {
+      expect(link.className).toContain("min-h-11");
+      expect(link.className).toContain("min-w-11");
+    }
+    // 7 x 44 = 308px of cells must fit inside the card: p-3 plus the 1px border leaves 310px of a 21rem column.
+    expect(container.firstElementChild!.className).toContain("p-3");
   });
 });
