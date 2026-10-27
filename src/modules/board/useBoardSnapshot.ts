@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 const POLL_MS = 30_000;
+const TICK_MS = 10_000;
 
 type Snapshot = { generatedAt: string; rows: unknown[] };
 
@@ -22,6 +23,18 @@ export function useBoardSnapshot<T extends Snapshot>(url: string, initial: T) {
     lastOkAt: Date.now(),
     failedAt: null,
   }));
+
+  // Live clock, running only while a failure is current: the banner measures against
+  // it, not against the moment of the last failed poll (which can land at 59.6 s).
+  const [tick, setTick] = useState(0);
+  const failing = state.failedAt !== null;
+  useEffect(() => {
+    if (!failing) return;
+    const id = setInterval(() => setTick(Date.now()), TICK_MS);
+    return () => clearInterval(id);
+  }, [failing]);
+  // A tick left over from an earlier failure is older than `failedAt`, so max() ignores it.
+  const now = state.failedAt === null ? null : Math.max(tick, state.failedAt);
 
   useEffect(() => {
     let inFlight = false;
@@ -53,5 +66,5 @@ export function useBoardSnapshot<T extends Snapshot>(url: string, initial: T) {
     };
   }, [url]);
 
-  return state;
+  return { ...state, now };
 }

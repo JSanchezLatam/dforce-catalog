@@ -49,7 +49,7 @@ Closing steps for every unit (last task of each): gates → `gga config` → `GG
 - [x] 1.8 GREEN `auth/landing.ts` (`landingPathFor`); use it in `app/page.tsx:7` and `loginAction` (`actions.ts:37`). `ForcedPasswordChangeForm.tsx` stays unchanged (pushes `/`).
 - [x] 1.9 e2e `src/e2e/pantalla-role.e2e.test.ts` (modelled on `technicians-migration.e2e.test.ts:31-77` for the migrate step): (a) migrate from 0034, `pantalla` valid and a user row inserts; (b) create `pantalla` user → `mustChangePassword` true, no roster row; (c) switch non-técnico → `pantalla` creates no roster row; (d) login `pantalla` vs `administrador` → `sessions.expires_at` ≈ 180 d / 7 d; (e) second login on screen B leaves screen A's session valid; (f) forced password change then `/` resolves to `/tablero/clientes`; (g) `pantalla` forged headers against `/inventory`, `/service-orders`, `/users`, `/account` pages and `GET /api/users` → `PermissionDenied`/403; (h) one active admin + N `pantalla`: deactivate/demote admin → `last_active_admin`; (i) password reset and deactivation of a `pantalla` account with two sessions → both `revoked_at` set, login refused. (all user-management and Pantalla/Revocation [e2e] scenarios except the board-route ones)
 - [x] 1.10 Mutation-verify, each by name: set the `pantalla` TTL to 7 d → "Lifetime per role" red; point `landingPathFor` at `/inventory` for `pantalla` → "Landing per role" red; flip one `pantalla` MATRIX cell to true → "Matrix row" red; drop `"pantalla"` from the `createUser` copy → "Role error copy" red; add `'pantalla'` use to 0035 neighbours or merge a second statement into 0035 → migration e2e red (same-transaction error).
-- [ ] 1.11 Adjust fixtures/`Record<Role,…>` sites that tsc lists for the new member; closing steps (gates, GGA with `PR_BASE_BRANCH=feat/workshop-status-board`, PR → tracker).
+- [x] 1.11 Adjust fixtures/`Record<Role,…>` sites that tsc lists for the new member; closing steps (gates, GGA with `PR_BASE_BRANCH=feat/workshop-status-board`, PR → tracker).
 
 ## WU2: data layer (branch `feat/workshop-status-board-wu2`)  [forecast ~420, OVER BUDGET]
 
@@ -62,7 +62,7 @@ Closing steps for every unit (last task of each): gates → `gga config` → `GG
 - [x] 2.7 GREEN `board/queries.ts`: (1) orders left-joined to `vehiculo`, status in `BACKLOG_STATUSES` or `done` with `completedAt >= (${toWorkshopDateKey(now)}::timestamp AT TIME ZONE 'America/Panama')`, customer variant minus `booked`, explicit column list, order by `createdAt`; (2) `orden_tecnico ⨝ tecnico` via `inArray` (full board only); (3) `max(changedAt)` per `ordenId` via `inArray`. `now` injectable. Time in status = latest history `changedAt`, else `updatedAt`.
 - [x] 2.8 e2e `src/e2e/board.e2e.test.ts` (modelled on `metrics.e2e.test.ts`): eight statuses seeded → full board returns exactly the seven non-cancelled; customer query returns no `booked`/`cancelled`; done at 23:30 Panama yesterday dropped and 00:30 today kept at 09:00 Panama, with the DB session and server zone set to UTC; latest of two history rows wins; no-history order falls back to `updated_at`; history rows of another order are not counted; technicians batched per order; booked order with null vehicle present on the full board and absent from the customer query; customer seeded with sentinel name and phone → serialized full-board AND customer payloads contain neither. (Status Set: all three; Time in Status: Latest wins, Fallback; Customer View: Hidden statuses; Field Whitelist: Customer data seeded [e2e], query level)
 - [x] 2.9 Mutation-verify, each by name: swap Panama for UTC in the day boundary → "Done yesterday is dropped at Panama midnight" red; take `min` instead of `max(changedAt)` → "Latest history row wins" red; change the vehicle left join to inner → "Booked order without a vehicle" e2e red; spread a source row in a mapper → "Sentinel poison never leaks" red; delete the `appointmentAt` booked-only guard → "appointmentAt only while booked" red; add a `cliente` import → privacy test red.
-- [ ] 2.10 Closing steps (gates, GGA `PR_BASE_BRANCH=feat/workshop-status-board-wu1`, PR → wu1). If over 400 reviewed lines, ship 2.8 as a sub-PR on the same base.
+- [x] 2.10 Closing steps (gates, GGA `PR_BASE_BRANCH=feat/workshop-status-board-wu1`, PR → wu1). If over 400 reviewed lines, ship 2.8 as a sub-PR on the same base.
 
 ## WU3: customer view, poller, guards (branch `feat/workshop-status-board-wu3`)  [forecast ~430, OVER BUDGET]
 
@@ -74,7 +74,7 @@ Closing steps for every unit (last task of each): gates → `gga config` → `GG
 - [x] 3.6 GREEN `board/useBoardSnapshot.ts` (`setInterval` 30 s, no `usePollWhileActive`, no `router.refresh`), `board/StaleBanner.tsx`, `board/CustomerBoard.tsx` (`StatusBadge` with `className="text-base px-3 py-1"`, overflow clips with "+N más"), `app/tablero/layout.tsx` (chrome-less `<main className="min-h-dvh p-6 text-xl">`), `app/tablero/error.tsx` (client; "Sin conexión, reintentando…", `window.location.reload()` after 60 s; test with fake timers), `app/tablero/clientes/page.tsx` (`requireSessionFromHeaders` → `can()` → `PermissionDenied`).
 - [x] 3.7 e2e `src/e2e/board-routes.e2e.test.ts`: `pantalla` reads `/api/board/clientes` and its page (200); no session / expired / revoked session → page redirects to `/login` and `GET /api/board/clientes` answers 401 JSON (not an HTML redirect); revoked `pantalla` session (via admin password reset) → next poll 401; a DB failure yields JSON 5xx; `pantalla` freshly created lands on `/tablero/clientes` after forced password change without passing through `PermissionDenied`. (Access Matrix: Pantalla reads the customer view, Unauthenticated; Poll route payload; Revocation: Password reset revokes (poll half); Landing: Pantalla never reaches a denied landing [e2e])
 - [x] 3.8 Mutation-verify, each by name: remove the `can()` check from the route → "Técnico is denied the customer view" red; make the poller skip when `document.hidden` → "hidden tab still polls" red; send 403 to `/login` instead of `/` → "403 navigates to /" red; replace `CUSTOMER_STATUS` with a local copy → "Labels equal the portal's" red; delete a `ROUTE_GUARDS` entry → "Guard registry stays complete" red; drop `no-store` or overlap guard → their named tests red.
-- [ ] 3.9 Closing steps (gates, GGA `PR_BASE_BRANCH=feat/workshop-status-board-wu2`, PR → wu2). If over 400 reviewed lines, ship 3.7 as a sub-PR on the same base.
+- [x] 3.9 Closing steps (gates, GGA `PR_BASE_BRANCH=feat/workshop-status-board-wu2`, PR → wu2). If over 400 reviewed lines, ship 3.7 as a sub-PR on the same base.
 
 ## WU4: full board, nav, browser checks (branch `feat/workshop-status-board-wu4`)
 
@@ -85,7 +85,7 @@ Closing steps for every unit (last task of each): gates → `gga config` → `GG
 - [x] 4.5 GREEN `auth/policy.ts` (`board.read` + MATRIX grants), `app/api/board/route.ts`, `app/tablero/page.tsx`, `board/WorkshopBoard.tsx`, `layout/nav-items.ts:17` + `NavIconKey` `"board"`, `components/app-sidebar.tsx:62` icon map, `ROUTE_GUARDS` entries. The Action ships in THIS WU with its routes.
 - [x] 4.6 e2e additions in `src/e2e/board-routes.e2e.test.ts`: técnico reads `/tablero` and `GET /api/board` and sees EVERY order, not just assigned ones (seed an unassigned order); `pantalla` forged against `/tablero` → `PermissionDenied`, `/api/board` → 403; `GET /api/board` as administrador with a sentinel customer name/phone seeded → body contains neither; unauthenticated `/tablero` redirects to `/login` and `/api/board` answers 401 JSON. (Técnico reads, Customer data seeded board payload clean, Unauthenticated, Pantalla denied [e2e])
 - [x] 4.7 Mutation-verify, each by name: grant `board.read` to `pantalla` → "Pantalla is denied the full board" red; remove the `can()` call from `/api/board` → 403 test red; scope `/api/board` to the técnico's own orders → "Técnico reads the full board" e2e red; remove `appointmentAt` from the booked row → "Booked order without a vehicle" red; hand "Tablero" to `pantalla` in nav → "Nav link by role" red.
-- [ ] 4.8 [browser] checks at `http://192.168.0.7:3000` (NOT localhost; second machine for the stop/restart case; no test can cover these; read the console after a client navigation, do not trust `textContent`; follow `project_browser_check_traps`). Record every result in the PR:
+- [x] 4.8 [browser] checks at `http://192.168.0.7:3000` (NOT localhost; second machine for the stop/restart case; no test can cover these; read the console after a client navigation, do not trust `textContent`; follow `project_browser_check_traps`). Record every result in the PR:
   - TV-size legibility of both views at 1080p/real TV from the room's distance: plate, vehicle, status readable, no clipped row at a realistic order count.
   - Both views render with real data: `/tablero` and `/tablero/clientes`, chrome-less (no sidebar) for `pantalla`.
   - `pantalla` login lands on `/tablero/clientes` (incl. forced password change path), no `PermissionDenied` hop.
@@ -95,12 +95,18 @@ Closing steps for every unit (last task of each): gates → `gga config` → `GG
   - Técnico sees the full board with every order and NO controls.
   - `pantalla` gets `PermissionDenied` on `/tablero` and on `/inventory`, `/service-orders`, `/users`, `/account`.
   - Console clean: no hydration mismatch and no Server Component serialization error on either view (data volume matters: seed enough rows).
-- [ ] 4.9 Document in the PR (docs only, no code): create the screen account at `/users`, kiosk OS setup (wake, auto-start). Follow-ups to list, not build: `proxy.ts:50` has no try/catch (a TV loading during a DB outage never reaches `error.tsx`); "+N más" vs auto-scroll; "Terminada" copy confirmation.
+- [x] 4.9 Document in the PR (docs only, no code): create the screen account at `/users`, kiosk OS setup (wake, auto-start). Follow-ups to list, not build (the `proxy.ts` try/catch was built in 4.14): "+N más" vs auto-scroll; "Terminada" copy confirmation.
 - [ ] 4.10 Closing steps (gates, GGA `PR_BASE_BRANCH=feat/workshop-status-board-wu3`, PR → wu3). Then: all four PRs landed → tracker out of draft → merge to `main` (state branch/pushed/merged).
+- [x] 4.11 Fix round (browser checks) D1: `formatBoardTime` replaces `formatDateTime` in `WorkshopBoard` (hydration mismatch, NBSP vs space). Exact-string + regex tests.
+- [x] 4.12 D2: stale banner measured against a live clock (`now`, 10 s ticker only while failing, cleared on success/unmount).
+- [x] 4.13 D3: customer `MAX_ROWS` 12 -> 8.
+- [x] 4.14 D4: `proxy.ts` catches session-validation errors: 503 JSON for `/api/*`, 503 self-refreshing HTML for pages. (Closes the 4.9 follow-up and the first "Follow-ups" bullet.)
+- [x] 4.15 D5: `(app)/layout.tsx` redirects `pantalla` to its landing before the shell. Spec scenario "Other routes denied" updated.
+- [x] 4.16 D6: full board grid inside an `overflow-x-auto` wrapper.
+- [x] 4.17 GGA: dropped the "no control" claim from `tablero/page.test.tsx`; renamed the jefe_taller e2e test that said administrador.
 
 ## Follow-ups (out of scope)
 
-- `proxy.ts:50` try/catch so a TV loading during a DB outage reaches an error boundary.
 - Overflow policy (auto-scroll instead of "+N más").
 - Backfill history for pre-0033 orders so time in status stops falling back to `updated_at`.
 - Kiosk OS automation (wake, auto-start).

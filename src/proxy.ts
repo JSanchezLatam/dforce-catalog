@@ -24,6 +24,18 @@ function denyAccess(request: NextRequest, isApiRoute: boolean): NextResponse {
   return NextResponse.redirect(new URL("/login", request.url));
 }
 
+const UNAVAILABLE_HTML =
+  '<!doctype html><html lang="es"><head><meta charset="utf-8"><meta http-equiv="refresh" content="30">' +
+  '<meta name="viewport" content="width=device-width,initial-scale=1"><title>Sin conexión</title></head>' +
+  '<body style="font-family:system-ui,sans-serif;font-size:2rem;text-align:center;padding:4rem">Sin conexión, reintentando…</body></html>';
+
+function unavailable(isApiRoute: boolean): NextResponse {
+  if (isApiRoute) {
+    return NextResponse.json({ error: "Service unavailable" }, { status: 503 });
+  }
+  return new NextResponse(UNAVAILABLE_HTML, { status: 503, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+}
+
 /**
  * `handleProxy()`/`proxy()` split (mirrors `handleLogout()`/`POST()` in
  * `api/logout/route.ts`) — `proxy` is the exact signature Next.js' file
@@ -47,7 +59,16 @@ export async function handleProxy(
   }
 
   const validate = deps.validateSession ?? validateSession;
-  const user = await validate(token);
+  let user: Awaited<ReturnType<typeof validateSession>>;
+  try {
+    user = await validate(token);
+  } catch (error) {
+    // A DB error is NOT "no session": redirecting to /login or clearing the cookie would
+    // log out every screen for an outage. Answer 503 so the poller keeps its snapshot and a
+    // page reloads itself.
+    console.error("proxy: session validation failed", error);
+    return unavailable(isApiRoute);
+  }
 
   // Invalid/expired/revoked token, OR a deactivated user's otherwise-valid
   // session (design.md Decision 7 — validateSession() already returns null

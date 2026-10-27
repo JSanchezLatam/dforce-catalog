@@ -61,8 +61,16 @@ describe("WorkshopBoard", () => {
     // Badge text, not colour alone: the column heading and the badge both say it.
     expect(booked.getAllByText("Agendada").length).toBeGreaterThanOrEqual(1);
     const text = booked.getByRole("listitem").textContent ?? "";
-    expect(text).toMatch(/10:00/); // 15:00Z is 10:00 in America/Panama
+    expect(text).toContain("27/10 10:00"); // 15:00Z is 10:00 in America/Panama; digits only, so SSR and browser agree
     expect(text).not.toMatch(/15:00|3:00/); // a server-zone render would show the UTC hour
+  });
+
+  it("the 7-column grid scrolls inside its own container, so a 390 px phone never scrolls the page sideways", () => {
+    render(<WorkshopBoard initial={SNAPSHOT} />);
+
+    const grid = screen.getAllByRole("region")[0].parentElement!;
+    expect(grid.parentElement).toHaveClass("overflow-x-auto");
+    expect(grid).toHaveClass("grid-cols-7");
   });
 
   it("non-booked rows show no appointment time", () => {

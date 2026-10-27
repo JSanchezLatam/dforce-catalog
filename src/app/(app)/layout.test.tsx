@@ -8,6 +8,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const user = vi.hoisted(() => ({ current: { id: "u1", role: "administrador" } }));
 vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders: vi.fn(async () => user.current) }));
+const redirect = vi.hoisted(() => vi.fn((path: string) => {
+  throw new Error(`NEXT_REDIRECT:${path}`);
+}));
+vi.mock("next/navigation", () => ({ redirect }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
 vi.mock("@/modules/account/queries", () => ({ getUserProfile: async () => null }));
 vi.mock("@/modules/workshop-config/service", () => ({ getWorkshopConfig: async () => null }));
@@ -70,5 +74,25 @@ describe("(app)/layout — mobile navigation", () => {
     const header = screen.getByRole("button", { name: "Abrir menú" }).closest("header");
     expect(header).toHaveClass("lg:hidden");
     expect(header).not.toHaveClass("md:hidden");
+  });
+});
+
+describe("(app)/layout - pantalla never sees the application shell", () => {
+  it("redirects a pantalla session to its landing before the shell, the badges or the profile are loaded", async () => {
+    user.current = { id: "u2", role: "pantalla" };
+
+    await expect(AppLayout({ children: null })).rejects.toThrow("NEXT_REDIRECT:/tablero/clientes");
+
+    expect(redirect).toHaveBeenCalledWith("/tablero/clientes");
+    expect(getNavBadges).not.toHaveBeenCalled();
+  });
+
+  it("does not redirect an administrador", async () => {
+    getNavBadges.mockResolvedValue({});
+    redirect.mockClear();
+
+    render(await AppLayout({ children: null }));
+
+    expect(redirect).not.toHaveBeenCalled();
   });
 });

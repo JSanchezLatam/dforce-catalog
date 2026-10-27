@@ -130,4 +130,52 @@ describe("useBoardSnapshot", () => {
     expect(result.current.failedAt).toBeNull();
     expect(result.current.snapshot).toEqual(NEXT);
   });
+
+  describe("Stale banner clock", () => {
+    it("exposes a live `now` while a failure is current: the banner can reach `hace 1 min` by t+70 s and `hace 2 min` by t+130 s", async () => {
+      // Good snapshot lands at t+30.4 s; polls at 60 and 90 s fail, 59.6 s after it.
+      fetchMock.mockImplementationOnce(async () => {
+        await new Promise((r) => setTimeout(r, 400));
+        return json(NEXT);
+      });
+      fetchMock.mockImplementation(async () => json({ error: "down" }, 500));
+      const { result } = renderHook(() => useBoardSnapshot("/api/board/clientes", FIRST));
+      const minutes = () => {
+        const { lastOkAt, now } = result.current;
+        return now === null ? null : Math.floor((now - lastOkAt) / 60_000);
+      };
+
+      await tick(90_000);
+      expect(minutes()).toBe(0);
+      await tick(11_000); // t+101 s, 70.6 s after the good snapshot
+      expect(minutes()).toBe(1);
+      await tick(60_000);
+      expect(minutes()).toBe(2);
+    });
+
+    it("a success clears `now` and leaves no timer behind but the poll", async () => {
+      fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+      fetchMock.mockImplementation(async () => json(NEXT));
+      const { result, unmount } = renderHook(() => useBoardSnapshot("/api/board/clientes", FIRST));
+
+      await tick(30_000);
+      expect(result.current.now).not.toBeNull();
+      expect(vi.getTimerCount()).toBe(2); // poll + ticker
+      await tick(30_000);
+
+      expect(result.current.now).toBeNull();
+      expect(vi.getTimerCount()).toBe(1); // poll only
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("unmounting during a failure clears the ticker too", async () => {
+      fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+      const { unmount } = renderHook(() => useBoardSnapshot("/api/board/clientes", FIRST));
+      await tick(30_000);
+      expect(vi.getTimerCount()).toBe(2);
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  });
 });

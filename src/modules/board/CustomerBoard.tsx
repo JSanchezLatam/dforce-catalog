@@ -12,14 +12,15 @@ const COLUMNS: { label: PortalOrder["status"]; badge: BadgeStatus }[] = [
   { label: "En proceso", badge: "in_progress" },
   { label: "Terminada", badge: "done" },
 ];
-const MAX_ROWS = 12;
+// 8 rows (~112 px each) plus header and "+N más" fit a 1080 px TV; 12 measured 1444 px.
+const MAX_ROWS = 8;
 
 /** Waiting-room view: plate, vehicle and status only. Props are plain serializable data. */
 export function CustomerBoard({ initial }: { initial: CustomerSnapshot }) {
-  const { snapshot, lastOkAt, failedAt } = useBoardSnapshot("/api/board/clientes", initial);
+  const { snapshot, lastOkAt, now } = useBoardSnapshot("/api/board/clientes", initial);
   return (
     <>
-      <StaleBanner lastOkAt={lastOkAt} failedAt={failedAt} />
+      <StaleBanner lastOkAt={lastOkAt} now={now} />
       <div className="grid grid-cols-3 gap-6">
         {COLUMNS.map(({ label, badge }) => {
           const rows = snapshot.rows.filter((r) => r.status === label);

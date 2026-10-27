@@ -8,22 +8,22 @@ const MIN = 60_000;
 
 describe("StaleBanner", () => {
   it("is hidden before the first failed poll", () => {
-    const { container } = render(<StaleBanner lastOkAt={T0} failedAt={null} />);
+    const { container } = render(<StaleBanner lastOkAt={T0} now={null} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it("is hidden while less than a minute has elapsed since the last good snapshot", () => {
-    const { container } = render(<StaleBanner lastOkAt={T0} failedAt={T0 + MIN - 1} />);
+    const { container } = render(<StaleBanner lastOkAt={T0} now={T0 + MIN - 1} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it("reads exactly `Sin conexión · actualizado hace 1 min` (U+00B7) once a minute elapsed", () => {
-    render(<StaleBanner lastOkAt={T0} failedAt={T0 + MIN} />);
+    render(<StaleBanner lastOkAt={T0} now={T0 + MIN} />);
     expect(screen.getByRole("status").textContent).toBe("Sin conexión · actualizado hace 1 min");
   });
 
   it("counts whole minutes", () => {
-    render(<StaleBanner lastOkAt={T0} failedAt={T0 + 5 * MIN + 59_000} />);
+    render(<StaleBanner lastOkAt={T0} now={T0 + 5 * MIN + 59_000} />);
     expect(screen.getByRole("status").textContent).toBe("Sin conexión · actualizado hace 5 min");
   });
 });

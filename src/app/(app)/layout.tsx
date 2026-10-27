@@ -1,7 +1,9 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { SIDEBAR_COOKIE_NAME, SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { landingPathFor } from "@/modules/auth/landing";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getNavBadges } from "@/modules/layout/nav-badges";
 import { getNavGroups } from "@/modules/layout/nav-items";
@@ -11,6 +13,8 @@ import { getWorkshopConfig } from "@/modules/workshop-config/service";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireSessionFromHeaders();
+  // The big-screen account never sees the application shell, even on a page it is denied.
+  if (user.role === "pantalla") redirect(landingPathFor(user.role));
   // Same `getDueVencimientos` call the page renders its rows from, so the badge
   // equals the row count. Empty for a viewer without `vencimientos.read`.
   const navGroups = getNavGroups(user, await getNavBadges(user));
