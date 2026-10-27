@@ -80,11 +80,11 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU3: side reads (branch `feat/agenda-redesign-wu3-side-reads`) [~240]
 
-- [ ] 3.1 RED e2e `src/e2e/agenda-queries.e2e.test.ts` (DB session and server zone UTC): `agendaBusyDays(scope, month)` returns exactly the two days with appointments, a 23:30-Panama row belongs to D (not D+1), a cancelled-before-time order's day is absent; `agendaNext(scope, now)` skips a past booked and a future `open`, picks the earliest future booked beyond the visible range, returns null when none; `agendaWeekCounts(scope, week)` returns Agendadas 5 / Vencidas 2 / Recibidas 3 / No se presentó 1 for the seeded week, independent of the range. (Busy days are real; Próxima cita beyond the visible range / ignores non-booked and past; Week summary counts)
-- [ ] 3.2 RED `queries.test.ts`: exports exist, scope REQUIRED (tsc), bound Panama instants only, `count()` not raw.
-- [ ] 3.3 GREEN `queries.ts`: `agendaBusyDays` (select `appointment_at` of the bound Panama month range, no `AT TIME ZONE`; derive and dedupe day keys in TS with `panamaDay`), `agendaNext`, `agendaWeekCounts` (one grouped query, drizzle `count()`).
-- [ ] 3.4 RED/GREEN `items.ts` + `items.test.ts`: `nextLabel(appointmentAt, now)` -> "en 20 min" (<60), "en 1 h 20 min" (<24 h), `DD/MM/YYYY` later; `toWeekSummary(counts)`.
-- [ ] 3.5 Mutation-verify: use the UTC day for busy days -> "Busy days are real" red; remove `status = 'booked'` from next -> "ignores non-booked" red; count by visible range -> "Week summary counts" red.
+- [x] 3.1 RED e2e `src/e2e/agenda-queries.e2e.test.ts` (DB session and server zone UTC): `agendaBusyDays(scope, month)` returns exactly the two days with appointments, a 23:30-Panama row belongs to D (not D+1), a cancelled-before-time order's day is absent; `agendaNext(scope, now)` skips a past booked and a future `open`, picks the earliest future booked beyond the visible range, returns null when none; `agendaWeekCounts(scope, week)` returns Agendadas 5 / Vencidas 2 / Recibidas 3 / No se presentó 1 for the seeded week, independent of the range. (Busy days are real; Próxima cita beyond the visible range / ignores non-booked and past; Week summary counts)
+- [x] 3.2 RED `queries.test.ts`: exports exist, scope REQUIRED (tsc), bound Panama instants only, `count()` not raw.
+- [x] 3.3 GREEN `queries.ts`: `agendaBusyDays` (select `appointment_at` of the bound Panama month range, no `AT TIME ZONE`; derive and dedupe day keys in TS with `panamaDay`), `agendaNext`, `agendaWeekCounts` (one grouped query, drizzle `count()`).
+- [x] 3.4 RED/GREEN `items.ts` + `items.test.ts`: `nextLabel(appointmentAt, now)` -> "en 20 min" (<60), "en 1 h 20 min" (<24 h), `DD/MM/YYYY` later; `toWeekSummary(counts)`.
+- [x] 3.5 Mutation-verify: use the UTC day for busy days -> "Busy days are real" red; remove `status = 'booked'` from next -> "ignores non-booked" red; count by visible range -> "Week summary counts" red.
 - [ ] 3.6 Close: C (+ e2e).
 
 ## WU4: in-workshop read (branch `feat/agenda-redesign-wu4-workshop-read`) [~280]

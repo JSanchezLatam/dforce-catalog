@@ -10,7 +10,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { rangeFor } from "@/modules/agenda/dates";
-import { agendaOverdue, agendaRange } from "@/modules/agenda/queries";
+import { agendaBusyDays, agendaNext, agendaOverdue, agendaRange, agendaWeekCounts } from "@/modules/agenda/queries";
 import { orderScope, SYSTEM_SCOPE } from "@/modules/service-orders/scope";
 import { db } from "@/shared/db/client";
 import { cliente, ordenEstadoHistorial, ordenServicio, ordenTecnico, tecnico, users, vehiculo } from "@/shared/db/schema";
@@ -335,5 +335,56 @@ describe("agenda queries (E2E)", () => {
     expect(ids(got.rows)).not.toContain(stranger);
     expect(ids(overdue.rows)).toEqual([assignedOverdue]);
     expect(overdue.total).toBe(1);
+  });
+
+  // The side reads are database-wide (no id filter is possible), so each test owns an era no other test seeds.
+
+  it("Busy days are real: Panama days, deduped; 23:30 Panama on D is D although the session is UTC; cancelled-before-time and out-of-month rows are absent", async () => {
+    await newOrder({ at: "2032-01-02T09:00:00-05:00" });
+    await newOrder({ at: "2032-01-02T15:00:00-05:00" }); // same day twice: one key
+    await newOrder({ at: "2032-01-05T23:30:00-05:00" }); // 2032-01-06T04:30Z: the UTC day is D+1
+    const early = await newOrder({ status: "cancelled", at: "2032-01-09T10:00:00-05:00" });
+    await history(early, "booked", "cancelled", "2032-01-09T09:00:00-05:00");
+    await newOrder({ at: "2031-12-31T23:30:00-05:00" }); // 2032-01-01T04:30Z: UTC says January, Panama says December
+    await newOrder({ at: "2032-02-01T00:00:00-05:00" }); // first instant of the next month
+
+    expect(await agendaBusyDays(SYSTEM_SCOPE, "2032-01-17")).toEqual(["2032-01-02", "2032-01-05"]);
+  });
+
+  it("Próxima cita beyond the visible range / ignores non-booked and past: the earliest future booked one, null when none", async () => {
+    const now = new Date("2032-03-01T15:00:00Z");
+    await newOrder({ at: "2032-02-20T10:00:00-05:00" }); // past booked
+    await newOrder({ status: "open", at: "2032-03-05T10:00:00-05:00" }); // future, not booked
+    const next = await newOrder({ at: "2032-03-20T10:00:00-05:00", description: "Alineación" });
+    await newOrder({ at: "2032-04-01T10:00:00-05:00" });
+    const tec = await newTecnico(`Next ${stamp}`);
+    await db.insert(ordenTecnico).values({ ordenId: next, tecnicoId: tec, assignedBy: adminId });
+
+    const got = await agendaNext(SYSTEM_SCOPE, now);
+
+    expect(got).toMatchObject({ id: next, status: "booked", description: "Alineación", vehiclePlate: `AG${stamp}`, technicians: [{ id: tec }] });
+    expect(await agendaNext(SYSTEM_SCOPE, new Date("2032-05-01T00:00:00Z"))).toBeNull();
+  });
+
+  it("Week summary counts: Agendadas 5 / Vencidas 2 / Recibidas 3 / No se presentó 1 for the week, whatever the visible day", async () => {
+    const now = new Date("2031-12-10T15:00:00Z"); // Wednesday 10:00 Panama
+    const week = rangeFor("week", "2031-12-10"); // Monday 12-08 .. Sunday 12-14
+    for (const at of ["2031-12-10T09:30:00-05:00" /* 30 min ago: inside the margin */, "2031-12-10T09:00:00-05:00" /* exactly 60 min ago: not yet Vencida */, "2031-12-11T09:00:00-05:00", "2031-12-12T09:00:00-05:00", "2031-12-14T20:00:00-05:00"]) await newOrder({ at });
+    await newOrder({ at: "2031-12-08T09:00:00-05:00" });
+    await newOrder({ at: "2031-12-09T09:00:00-05:00", noVehicle: true });
+    await newOrder({ status: "open", at: "2031-12-09T11:00:00-05:00" });
+    await newOrder({ status: "in_progress", at: "2031-12-09T12:00:00-05:00" });
+    await newOrder({ status: "done", at: "2031-12-09T13:00:00-05:00" });
+    const noShow = await newOrder({ status: "cancelled", at: "2031-12-08T10:00:00-05:00" });
+    await history(noShow, "booked", "cancelled", "2031-12-08T12:00:00-05:00");
+    const early = await newOrder({ status: "cancelled", at: "2031-12-08T11:00:00-05:00" });
+    await history(early, "booked", "cancelled", "2031-12-08T08:00:00-05:00");
+    await newOrder({ at: "2031-12-07T20:00:00-05:00" }); // Sunday before: outside
+    await newOrder({ at: "2031-12-15T00:00:00-05:00" }); // Monday after: outside
+
+    const counts = await agendaWeekCounts(SYSTEM_SCOPE, week, now);
+
+    expect(counts).toEqual({ agendadas: 5, recibidas: 3, vencidas: 2, noShow: 1 });
+    expect(Object.values(counts).every((n) => typeof n === "number")).toBe(true);
   });
 });
