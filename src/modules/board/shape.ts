@@ -8,6 +8,7 @@
  */
 import { CUSTOMER_STATUS } from "@/modules/portal-sync/snapshot";
 import { ESPERA_MOTIVO_LABEL, ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
+import type { PortalOrder } from "@portal/contract";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import type { OrdenServicio } from "@/shared/db/schema";
 import { BACKLOG_STATUSES } from "@/modules/metrics/shape";
@@ -36,7 +37,7 @@ export type BoardRow = {
 };
 export type BoardSnapshot = { generatedAt: string; rows: BoardRow[] };
 
-export type CustomerRow = { plate: string; make: string | null; model: string | null; status: string };
+export type CustomerRow = { plate: string; make: string | null; model: string | null; status: PortalOrder["status"] };
 export type CustomerSnapshot = { generatedAt: string; rows: CustomerRow[] };
 
 const STATUS_ORDER: readonly string[] = [...BACKLOG_STATUSES, "done"];

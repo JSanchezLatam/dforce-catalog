@@ -3,9 +3,9 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CustomerBoard } from "./CustomerBoard";
-import type { CustomerSnapshot } from "./shape";
+import type { CustomerRow, CustomerSnapshot } from "./shape";
 
-const row = (plate: string, status: string, make: string | null = "Toyota", model: string | null = "Hilux") => ({ plate, make, model, status });
+const row = (plate: string, status: CustomerRow["status"], make: string | null = "Toyota", model: string | null = "Hilux") => ({ plate, make, model, status });
 const SNAPSHOT: CustomerSnapshot = {
   generatedAt: "2026-10-26T15:00:00.000Z",
   rows: [row("AB1234", "Recibida"), row("CD5678", "En proceso", null, null), row("EF9012", "Terminada", "Kia", "Rio")],
