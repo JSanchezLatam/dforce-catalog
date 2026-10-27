@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 import { formatMonthYear, stepDate, weekStart, type AgendaView } from "@/modules/agenda/dates";
-import { AgendaBookingForm } from "@/modules/agenda/AgendaBookingForm";
+import { Button } from "@/components/ui/button";
 import { RefreshListButton } from "@/modules/service-orders/RefreshListButton";
 import { PAGE_HEADING } from "@/shared/ui/styles";
 
@@ -25,8 +25,8 @@ function rangeLabel(view: AgendaView, date: string): string {
   return view === "week" ? `Semana del ${dmy(weekStart(date))}` : dmy(date);
 }
 
-/** Plain links only: the URL is the state. `search` and `tabs` are slots for the shell's client state. */
-export function AgendaHeader({ view, date, today, truncated, search, tabs }: { view: AgendaView; date: string; today: string; truncated: boolean; search?: ReactNode; tabs?: ReactNode }) {
+/** Links for the URL state; "Nueva cita" hands the opening to the shell (`onNew`). `search` and `tabs` are slots for the shell's client state. */
+export function AgendaHeader({ view, date, today, truncated, onNew, search, tabs }: { view: AgendaView; date: string; today: string; truncated: boolean; onNew: () => void; search?: ReactNode; tabs?: ReactNode }) {
   const to = (v: AgendaView, d: string) => `/agenda?view=${v}&date=${d}`;
   return (
     <div className="mb-4 flex flex-col gap-4">
@@ -38,7 +38,7 @@ export function AgendaHeader({ view, date, today, truncated, search, tabs }: { v
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {search}
-          <AgendaBookingForm day={date} triggerLabel="Nueva cita" triggerClassName="min-h-11" />
+          <Button type="button" className="min-h-11" onClick={onNew}>Nueva cita</Button>
         </div>
       </div>
       {tabs}

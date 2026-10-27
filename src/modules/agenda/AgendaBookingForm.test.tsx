@@ -6,6 +6,7 @@
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const refresh = vi.fn();
@@ -18,10 +19,22 @@ import { AgendaBookingForm } from "./AgendaBookingForm";
 
 const CUSTOMER = { id: "c-ana", name: "Ana Pérez", phone: "50761111111", email: null, deactivatedAt: null, plates: ["ABC111"], createdAt: "2026-01-01T00:00:00.000Z" };
 
+const CUSTOMER_B = { ...CUSTOMER, id: "c-beto", name: "Beto Ruiz", plates: [] };
+// The wire shape of GET /api/customers/[id]/vehicles: toPublicVehiculo, timestamps as ISO strings.
+const vehicle = (id: string, plate: string, make: string | null, model: string | null) => ({
+  id, clienteId: "c-ana", make, model, year: 2020, plate, chasis: null, colorPrimario: null, colorSecundario: null,
+  estilo: null, motor: "combustion", numeroUnidad: null, deactivatedAt: null, createdAt: "2026-01-01T00:00:00.000Z",
+});
+const KIA = vehicle("v-kia", "ABC111", "Kia", "Sportage");
+const PICANTO = vehicle("v-pic", "XYZ222", "Kia", "Picanto");
+
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-/** Routes by URL: the picker's GET and the booking POST. Returns the POST calls. */
-function stubFetch(post: () => Response | Promise<Response> = () => json({ orden: { id: "o1" } }, 201)) {
+/** Routes by URL: the vehicles GET, the picker's GET and the booking POST. Returns the POST calls. */
+function stubFetch(
+  post: () => Response | Promise<Response> = () => json({ orden: { id: "o1" } }, 201),
+  vehicles: (id: string) => Response | Promise<Response> = (id) => json({ vehicles: id === "c-ana" ? [KIA, PICANTO] : [] }),
+) {
   const posts: { url: string; init: RequestInit }[] = [];
   vi.stubGlobal(
     "fetch",
@@ -30,7 +43,9 @@ function stubFetch(post: () => Response | Promise<Response> = () => json({ orden
         posts.push({ url, init });
         return post();
       }
-      return json({ customers: [CUSTOMER], total: 1 });
+      const owner = /^\/api\/customers\/([^/]+)\/vehicles$/.exec(url);
+      if (owner) return vehicles(owner[1]);
+      return json({ customers: url.includes("Beto") ? [CUSTOMER_B] : [CUSTOMER], total: 1 });
     }),
   );
   return posts;
@@ -50,21 +65,26 @@ afterEach(() => {
   else process.env.TZ = ORIGINAL_TZ;
 });
 
-async function open(day = "2026-11-02") {
+/** The shell owns `open`; this host does the same so a successful booking can close the dialog. */
+function Host({ day, time }: { day: string; time?: string }) {
+  const [isOpen, setOpen] = useState(true);
+  return <AgendaBookingForm open={isOpen} onOpenChange={setOpen} day={day} time={time} />;
+}
+
+async function open(day = "2026-11-02", time?: string) {
   const user = userEvent.setup();
-  render(<AgendaBookingForm day={day} />);
-  await user.click(screen.getByRole("button", { name: "Agendar cita" }));
+  render(<Host day={day} time={time} />);
   return user;
 }
 
-async function pickCustomer(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByRole("textbox", { name: /buscar cliente/i }), "Ana");
-  await user.click(await screen.findByRole("button", { name: /Seleccionar Ana/i }));
+async function pickCustomer(user: ReturnType<typeof userEvent.setup>, name = "Ana") {
+  await user.type(screen.getByRole("textbox", { name: /buscar cliente/i }), name);
+  await user.click(await screen.findByRole("button", { name: new RegExp(`Seleccionar ${name}`, "i") }));
 }
 
 const dayField = () => screen.getByLabelText("Día") as HTMLInputElement;
 const timeField = () => screen.getByLabelText("Hora") as HTMLInputElement;
-const submit = () => screen.getByRole("button", { name: /^(Guardar cita|Guardando)/ });
+const submit = () => screen.getByRole("button", { name: /^(Agendar cita|Guardando)/ });
 
 async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>) {
   await pickCustomer(user);
@@ -173,6 +193,120 @@ describe("AgendaBookingForm", () => {
   });
 });
 
+describe("AgendaBookingForm vehicle and type", () => {
+  const vehicleButton = (name: string) => screen.findByRole("button", { name });
+  const bodyOf = (posts: { init: RequestInit }[]) => JSON.parse(posts[0].init.body as string);
+  const typeChip = (label: string) => screen.getByRole("button", { name: label });
+
+  it("Request body with vehicle and type: carries both and still no technician", async () => {
+    const posts = stubFetch();
+    const user = await open();
+    await pickCustomer(user);
+    await user.click(await vehicleButton("ABC111 · Kia Sportage"));
+    await user.click(typeChip("Instalación"));
+    await user.type(timeField(), "09:00");
+    await user.click(submit());
+
+    await vi.waitFor(() => expect(posts).toHaveLength(1));
+    expect(bodyOf(posts)).toEqual({ clienteId: "c-ana", status: "booked", appointmentAt: "2026-11-02T09:00:00-05:00", description: null, vehiculoId: "v-kia", categoria: "instalacion" });
+    expect(bodyOf(posts)).not.toHaveProperty("tecnicoIds");
+  });
+
+  it("Vehicle list: nothing is fetched before a customer is chosen; then the customer's vehicles are listed as 'plate · make model', unselected, in 44px buttons", async () => {
+    stubFetch();
+    const user = await open();
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/vehicles"))).toBe(false);
+    expect(screen.queryByText("Vehículo (opcional)")).not.toBeInTheDocument();
+    await pickCustomer(user);
+
+    expect(screen.getByText("Vehículo (opcional)")).toBeInTheDocument();
+    const kia = await vehicleButton("ABC111 · Kia Sportage");
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith("/api/customers/c-ana/vehicles");
+    expect(kia).toHaveAttribute("aria-pressed", "false");
+    expect(kia.className).toMatch(/(^|\s)min-h-11(\s|$)/); // not the Button's own pointer-coarse variant
+    expect(screen.getByRole("button", { name: "XYZ222 · Kia Picanto" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("Vehicle list: a vehicle without make and model reads as its plate alone", async () => {
+    stubFetch(undefined, () => json({ vehicles: [vehicle("v-bare", "BARE01", null, null)] }));
+    const user = await open();
+    await pickCustomer(user);
+    expect(await vehicleButton("BARE01")).toBeInTheDocument();
+  });
+
+  it("Vehicle choices follow the customer: switching clears the choice, shows the note, and the body carries no vehiculoId", async () => {
+    const posts = stubFetch();
+    const user = await open();
+    await pickCustomer(user);
+    await user.click(await vehicleButton("ABC111 · Kia Sportage"));
+    expect(screen.getByRole("button", { name: "ABC111 · Kia Sportage" })).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(screen.getByRole("button", { name: "Quitar cliente seleccionado" }));
+    expect(screen.queryByRole("button", { name: "ABC111 · Kia Sportage" })).not.toBeInTheDocument();
+    await pickCustomer(user, "Beto");
+    expect(await screen.findByText("Este cliente no tiene vehículos")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "ABC111 · Kia Sportage" })).not.toBeInTheDocument();
+
+    await user.type(timeField(), "09:00");
+    await user.click(submit());
+    await vi.waitFor(() => expect(posts).toHaveLength(1));
+    expect(bodyOf(posts)).toMatchObject({ clienteId: "c-beto" });
+    expect(bodyOf(posts)).not.toHaveProperty("vehiculoId");
+  });
+
+  it.each([
+    ["an HTTP error", () => json({ error: "Forbidden" }, 403)],
+    ["a network failure", () => Promise.reject(new TypeError("Failed to fetch"))],
+  ])("A vehicles fetch failure is not 'no vehicles': %s shows its own message", async (_name, reply) => {
+    stubFetch(undefined, reply);
+    const user = await open();
+    await pickCustomer(user);
+
+    expect(await screen.findByText("No se pudieron cargar los vehículos")).toBeInTheDocument();
+    expect(screen.queryByText("Este cliente no tiene vehículos")).not.toBeInTheDocument();
+  });
+
+  it("Optional choices are clearable: activating a chosen vehicle and a chosen type again drops them from the body", async () => {
+    const posts = stubFetch();
+    const user = await open();
+    await pickCustomer(user);
+    await user.click(await vehicleButton("ABC111 · Kia Sportage"));
+    await user.click(typeChip("Reparación"));
+    expect(typeChip("Reparación")).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "ABC111 · Kia Sportage" }));
+    await user.click(typeChip("Reparación"));
+    expect(screen.getByRole("button", { name: "ABC111 · Kia Sportage" })).toHaveAttribute("aria-pressed", "false");
+    expect(typeChip("Reparación")).toHaveAttribute("aria-pressed", "false");
+
+    await user.type(timeField(), "09:00");
+    await user.click(submit());
+    await vi.waitFor(() => expect(posts).toHaveLength(1));
+    expect(bodyOf(posts)).not.toHaveProperty("vehiculoId");
+    expect(bodyOf(posts)).not.toHaveProperty("categoria");
+  });
+
+  it("Type chips: the five types, none preselected, each in a 44px button", async () => {
+    stubFetch();
+    await open();
+    expect(screen.getByText("Categoría (opcional)")).toBeInTheDocument();
+    for (const label of ["Instalación", "Mant. Preventivo", "Mant. Correctivo", "Reparación", "REVISADO"]) {
+      expect(typeChip(label)).toHaveAttribute("aria-pressed", "false");
+      expect(typeChip(label).className).toContain("min-h-11");
+    }
+  });
+
+  it("Prefill: a slot opens with its day and hour; the header opens with the day and an empty time", async () => {
+    stubFetch();
+    const { unmount } = render(<Host day="2026-10-29" time="11:00" />);
+    expect(dayField().value).toBe("2026-10-29");
+    expect(timeField().value).toBe("11:00");
+    unmount();
+    render(<Host day="2026-11-05" />);
+    expect(dayField().value).toBe("2026-11-05");
+    expect(timeField().value).toBe("");
+  });
+});
+
 describe("AgendaBookingForm quick customer create", () => {
   const CREATED = { id: "c-new", name: "Luis Gómez", phone: "50766667777", email: null, deactivatedAt: null, createdAt: "2026-10-26T00:00:00.000Z" };
 
@@ -186,7 +320,7 @@ describe("AgendaBookingForm quick customer create", () => {
           posts.push({ url, body: JSON.parse(init.body as string) });
           return url === "/api/customers" ? json({ cliente: CREATED }, 201) : json({ orden: { id: "o1" } }, 201);
         }
-        return json({ customers: [], total: 0 });
+        return String(url).endsWith("/vehicles") ? json({ vehicles: [] }) : json({ customers: [], total: 0 });
       }),
     );
     return posts;
@@ -209,7 +343,7 @@ describe("AgendaBookingForm quick customer create", () => {
 
     expect(await screen.findByText(/Cliente seleccionado:/)).toHaveTextContent("Luis Gómez");
     expect(addToast).toHaveBeenCalledExactlyOnceWith("success", "Cliente creado");
-    expect(screen.getByRole("heading", { name: "Agendar cita" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Nueva cita" })).toBeInTheDocument();
     expect(timeField().value).toBe("09:00");
     expect((screen.getByLabelText("Descripción") as HTMLInputElement).value).toBe("Cambio de aceite");
 

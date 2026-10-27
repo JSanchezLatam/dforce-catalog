@@ -460,4 +460,33 @@ describe("AgendaShell", () => {
       expect(popover()).toBeNull();
     });
   });
+
+  describe("Nueva cita", () => {
+    const field = (name: string) => screen.getByLabelText(name) as HTMLInputElement;
+
+    it("the header button opens the dialog on the selected date with an empty time", async () => {
+      render(<AgendaShell {...base} date="2026-11-05" view="week" items={[]} />);
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Nueva cita" }));
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(field("Día").value).toBe("2026-11-05");
+      expect(field("Hora").value).toBe("");
+    });
+
+    it.each(["day", "week", "combined"] as const)("an empty %s slot opens the dialog with its day and hour", async (view) => {
+      render(<AgendaShell {...base} date="2026-10-29" view={view} items={[at("a", { dayKey: "2026-10-29" })]} />);
+      await userEvent.click(screen.getAllByRole("button", { name: "Nueva cita 29/10/2026 11:00" })[0]);
+      expect(field("Día").value).toBe("2026-10-29");
+      expect(field("Hora").value).toBe("11:00");
+    });
+
+    it("a second opening starts clean: the day and time of the new opening, not the previous one", async () => {
+      render(<AgendaShell {...base} date="2026-10-29" view="day" items={[]} />);
+      await userEvent.click(screen.getByRole("button", { name: "Nueva cita 29/10/2026 11:00" }));
+      await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      await userEvent.click(screen.getByRole("button", { name: "Nueva cita" }));
+      expect(field("Hora").value).toBe("");
+    });
+  });
 });

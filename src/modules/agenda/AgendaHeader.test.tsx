@@ -3,11 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
-vi.mock("@/shared/ui/ToastProvider", () => ({ useToast: () => ({ addToast: vi.fn() }) }));
 
 import { AgendaHeader } from "./AgendaHeader";
 
-const base = { view: "week" as const, date: "2026-10-26", today: "2026-10-28", truncated: false };
+const base = { view: "week" as const, date: "2026-10-26", today: "2026-10-28", truncated: false, onNew: () => {} };
 
 describe("AgendaHeader", () => {
   it("Navigation links: previous, next and Hoy are plain links that rewrite the query", () => {
@@ -77,9 +76,11 @@ describe("AgendaHeader", () => {
     expect(screen.getByText("26/10/2026")).toBeInTheDocument();
   });
 
-  it("Booking trigger: 'Nueva cita' opens the dialog defaulting to the selected date", async () => {
-    render(<AgendaHeader {...base} />);
+  it("Booking trigger: 'Nueva cita' only asks the shell to open the dialog; the header owns no dialog", async () => {
+    const onNew = vi.fn();
+    render(<AgendaHeader {...base} onNew={onNew} />);
     await userEvent.click(screen.getByRole("button", { name: "Nueva cita" }));
-    expect((screen.getByLabelText("Día") as HTMLInputElement).value).toBe("2026-10-26");
+    expect(onNew).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
