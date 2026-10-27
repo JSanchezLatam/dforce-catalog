@@ -35,6 +35,7 @@ const adminGrants: Grants = {
   "metrics.read": true,
   "metrics.self": false,
   "board.customer": true,
+  "board.read": true,
 };
 
 // Every administrador grant except the four the owner keeps for himself, and
@@ -79,6 +80,7 @@ const tecnicoGrants: Grants = {
   "metrics.read": false,
   "metrics.self": true,
   "board.customer": false,
+  "board.read": true,
 };
 
 // The big-screen account holds `board.customer` and nothing else.
@@ -126,6 +128,13 @@ describe("can() — role × action permission matrix", () => {
     expect(can({ role: "jefe_taller" }, "board.customer")).toBe(true);
     expect(can({ role: "pantalla" }, "board.customer")).toBe(true);
     expect(can({ role: "tecnico" }, "board.customer")).toBe(false);
+  });
+
+  it("Pantalla is denied the full board: board.read is for administrador, jefe_taller and tecnico, never pantalla", () => {
+    expect(can({ role: "administrador" }, "board.read")).toBe(true);
+    expect(can({ role: "jefe_taller" }, "board.read")).toBe(true);
+    expect(can({ role: "tecnico" }, "board.read")).toBe(true);
+    expect(can({ role: "pantalla" }, "board.read")).toBe(false);
   });
 
   it("records consent for administrador and jefe_taller, never for tecnico", () => {

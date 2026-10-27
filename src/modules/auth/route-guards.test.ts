@@ -122,6 +122,9 @@ export const ROUTE_GUARDS: Record<
   "/metrics": { GET: "metrics.read" },
   "/mis-numeros": { GET: "metrics.self" },
   // workshop-status-board WU3: the waiting-room view and its poll route, read-only.
+  // WU4: the full board and its poll route, read-only.
+  "/tablero": { GET: "board.read" },
+  "/api/board": { GET: "board.read" },
   "/tablero/clientes": { GET: "board.customer" },
   "/api/board/clientes": { GET: "board.customer" },
   "/api/account": { GET: "account.self", PATCH: "account.self" },

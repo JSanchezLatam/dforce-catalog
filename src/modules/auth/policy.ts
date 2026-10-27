@@ -34,8 +34,9 @@ export const ACTIONS = [
   "metrics.self",
   "sync.manual",
   "account.self",
-  // workshop-status-board: the waiting-room view and its poll route. `board.read` (the
-  // full board) ships with its own routes in a later work unit.
+  // workshop-status-board: `board.read` is the full board (staff), `board.customer` the
+  // waiting-room view (also the screen account's only action).
+  "board.read",
   "board.customer",
 ] as const;
 
@@ -80,6 +81,7 @@ export const MATRIX: Record<Role, Grants> = {
     "metrics.read": false,
     "metrics.self": true,
     "board.customer": false,
+    "board.read": true,
   },
   // The workshop manager: everything the owner holds except user management,
   // workshop and template settings, closed-order corrections and photo deletion.
@@ -113,6 +115,7 @@ export const MATRIX: Record<Role, Grants> = {
     "sync.manual": true,
     "account.self": true,
     "board.customer": true,
+    "board.read": true,
   },
   // The big-screen account: `board.customer` and nothing else. Spelled out cell by cell
   // (no generated row) so a missing grant stays a tsc error.
@@ -146,6 +149,7 @@ export const MATRIX: Record<Role, Grants> = {
     "sync.manual": false,
     "account.self": false,
     "board.customer": true,
+    "board.read": false,
   },
   administrador: {
     "customers.read": true,
@@ -177,6 +181,7 @@ export const MATRIX: Record<Role, Grants> = {
     "metrics.read": true,
     "metrics.self": false,
     "board.customer": true,
+    "board.read": true,
   },
 };
 
