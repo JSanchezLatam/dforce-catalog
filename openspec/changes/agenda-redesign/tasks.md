@@ -232,3 +232,4 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 - The `PATCH categoria` route cannot unset a type (`isServiceCategory` rejects null).
 - The 500-row truncation notice still needs a browser look with 500+ rows.
 - Clearing the 13 existing lint warnings.
+- The side-read e2e tests assert exact results across the whole database and rely on owning their months (2032-01, 2032-03, 2031-12; `agendaNext` after 2032-05 is null): scope them per test or move the dates if another e2e file seeds those months.

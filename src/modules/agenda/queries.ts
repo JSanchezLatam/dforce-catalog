@@ -3,8 +3,8 @@
  * `OrderScope`, which is REQUIRED so a forgotten scope is a tsc error, not a leak.
  *
  * Every instant is a bound parameter computed by `dates.ts` (Panama midnights), so neither the
- * database session zone nor the server zone can move a boundary. Each read fetches `cap + 1` rows:
- * more than `cap` back means "truncated", and the extra row is dropped before returning.
+ * database session zone nor the server zone can move a boundary. The row lists (range, overdue,
+ * in-workshop) fetch `cap + 1` rows: more than `cap` back means "truncated", and the extra row is dropped.
  * `count(*)` is never selected raw: pg returns bigint as a string, drizzle's `count()` maps it to a number.
  */
 import { and, asc, count, eq, gte, inArray, isNull, lt, ne, or, sql, type SQL } from "drizzle-orm";

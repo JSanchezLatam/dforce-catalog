@@ -1,6 +1,6 @@
 /**
- * agenda/items.ts - one query row to the plain data the views render. Strings and booleans only:
- * no `Date` crosses a Server Component boundary, and `overdue` is decided here, on the server, from
+ * agenda/items.ts - one query row to the plain data the views render. Plain JSON values only:
+ * no `Date` and no function crosses a Server Component boundary, and `overdue` is decided here, on the server, from
  * the one `now` the page captured (the client never sees a clock).
  */
 import { formatAgendaTime, isOverdue, panamaDay } from "@/modules/agenda/dates";
