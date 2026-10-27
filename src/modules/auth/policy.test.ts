@@ -34,6 +34,7 @@ const adminGrants: Grants = {
   "technicians.manage": true,
   "metrics.read": true,
   "metrics.self": false,
+  "board.customer": true,
 };
 
 // Every administrador grant except the four the owner keeps for himself, and
@@ -77,10 +78,11 @@ const tecnicoGrants: Grants = {
   "technicians.manage": false,
   "metrics.read": false,
   "metrics.self": true,
+  "board.customer": false,
 };
 
-// The big-screen account holds nothing: `board.customer` arrives with its route in WU3.
-const pantallaGrants: Grants = Object.fromEntries(ACTIONS.map((a) => [a, false])) as unknown as Grants;
+// The big-screen account holds `board.customer` and nothing else.
+const pantallaGrants: Grants = Object.fromEntries(ACTIONS.map((a) => [a, a === "board.customer"])) as unknown as Grants;
 
 // Exhaustive over Role: a new role is a tsc error here until it has a row.
 const GRANTS_BY_ROLE: Record<Role, Grants> = {
@@ -112,11 +114,18 @@ describe("can() — role × action permission matrix", () => {
     }
   });
 
-  it("Matrix row: pantalla is false for every action, including account.self and users.manage", () => {
+  it("Matrix row: pantalla is true for board.customer and false for every other action, including account.self and users.manage", () => {
     const user = { id: "p", role: "pantalla" as const };
     for (const action of ACTIONS) {
-      expect(can(user, action)).toBe(false);
+      expect(can(user, action)).toBe(action === "board.customer");
     }
+  });
+
+  it("Access Matrix: board.customer is for administrador, jefe_taller and pantalla, never tecnico", () => {
+    expect(can({ role: "administrador" }, "board.customer")).toBe(true);
+    expect(can({ role: "jefe_taller" }, "board.customer")).toBe(true);
+    expect(can({ role: "pantalla" }, "board.customer")).toBe(true);
+    expect(can({ role: "tecnico" }, "board.customer")).toBe(false);
   });
 
   it("records consent for administrador and jefe_taller, never for tecnico", () => {
