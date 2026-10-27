@@ -75,22 +75,25 @@ export function WeekGrid({ days, items, todayKey, nowMinute, selectedId = null, 
                   </div>
                 );
               })}
-              {laid
-                .filter((l) => l.lane < MAX_LANES)
-                .map(({ item, lane, lanes }) => {
-                  const shown = Math.min(lanes, MAX_LANES);
-                  return (
-                    <div key={item.id} className="absolute p-1" style={{ top: top(item.minuteOfDay, start), height: ROW, left: `${(lane / shown) * 100}%`, width: `${100 / shown}%` }}>
-                      <AgendaCard item={item} selected={item.id === selectedId} onSelect={onSelect} />
-                    </div>
-                  );
-                })}
+              {/* The cards stop short of the "+N" gutter, so the link never covers card text. */}
+              <div className={`absolute inset-y-0 left-0 ${hidden.length > 0 ? "right-11" : "right-0"}`}>
+                {laid
+                  .filter((l) => l.lane < MAX_LANES)
+                  .map(({ item, lane, lanes }) => {
+                    const shown = Math.min(lanes, MAX_LANES);
+                    return (
+                      <div key={item.id} className="absolute p-1" style={{ top: top(item.minuteOfDay, start), height: ROW, left: `${(lane / shown) * 100}%`, width: `${100 / shown}%` }}>
+                        <AgendaCard item={item} selected={item.id === selectedId} onSelect={onSelect} />
+                      </div>
+                    );
+                  })}
+              </div>
               {/* shortcut: one link per day, placed at its first hidden card, even when two separate clusters overflow; split per cluster if that ever shows up in real data */}
               {hidden.length > 0 ? (
                 <Link
                   href={`/agenda?view=day&date=${day}`}
                   aria-label={`+${hidden.length} más`}
-                  className="absolute right-1 z-10 grid min-h-11 min-w-11 place-items-center rounded-lg border border-border bg-card text-xs font-semibold shadow-sm"
+                  className="absolute right-0 z-10 grid min-h-11 min-w-11 place-items-center rounded-lg border border-border bg-card text-xs font-semibold shadow-sm"
                   style={{ top: top(hidden[0].item.minuteOfDay, start) + 4 }}
                 >
                   +{hidden.length}

@@ -89,6 +89,7 @@ describe("AgendaCard", () => {
     expect(button).toHaveClass("min-h-11");
     expect(button).toHaveAttribute("aria-pressed", "false");
     expect(button).toHaveAccessibleName(expect.stringContaining("Julio Rangel"));
+    expect(button).toHaveAccessibleName(expect.stringContaining("REVISADO"));
     rerender(<AgendaCard item={jorge()} selected />);
     expect(screen.getByRole("button")).toHaveAttribute("aria-pressed", "true");
   });

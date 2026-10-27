@@ -1,13 +1,10 @@
 import { AgendaHeader } from "@/modules/agenda/AgendaHeader";
-import { CombinedView } from "@/modules/agenda/CombinedView";
-import { DayView } from "@/modules/agenda/DayView";
-import { panamaDay, parseAgendaParams, rangeFor } from "@/modules/agenda/dates";
+import { AgendaShell } from "@/modules/agenda/AgendaShell";
+import { panamaDay, panamaMinute, parseAgendaParams, rangeFor } from "@/modules/agenda/dates";
 import { toAgendaItem, toWorkshopItem } from "@/modules/agenda/items";
-import { MonthView } from "@/modules/agenda/MonthView";
 import { agendaInWorkshop, agendaOverdue, agendaRange } from "@/modules/agenda/queries";
 import { ItemActions } from "@/modules/agenda/ItemActions";
 import { VencidasPanel } from "@/modules/agenda/VencidasPanel";
-import { WeekView } from "@/modules/agenda/WeekView";
 import { can } from "@/modules/auth/policy";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { orderScope } from "@/modules/service-orders/scope";
@@ -38,15 +35,15 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
     <div className="p-4 sm:p-8">
       <PageHeader title="Agenda" />
       <AgendaHeader view={view} date={date} today={today} truncated={truncated} />
-      {view === "month" ? (
-        <MonthView date={date} today={today} items={items} />
-      ) : view === "week" ? (
-        <WeekView date={date} today={today} items={items} />
-      ) : view === "combined" && workshop ? (
-        <CombinedView items={items} workshop={workshop.rows.map((r) => toWorkshopItem(r, now))} workshopTruncated={workshop.truncated} />
-      ) : (
-        <DayView items={items} date={date} />
-      )}
+      <AgendaShell
+        view={view}
+        date={date}
+        today={today}
+        nowMinute={panamaMinute(now)}
+        items={items}
+        workshop={workshop ? workshop.rows.map((r) => toWorkshopItem(r, now)) : null}
+        workshopTruncated={workshop?.truncated ?? false}
+      />
       <VencidasPanel items={overdue.rows.map((row) => toAgendaItem(row, now))} total={overdue.total} truncated={overdue.truncated} actions={(item) => <ItemActions item={item} />} />
     </div>
   );

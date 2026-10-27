@@ -24,7 +24,7 @@ function StatusIcon({ item }: { item: AgendaItem }) {
 export function AgendaCard({ item, selected = false, onSelect }: { item: AgendaItem; selected?: boolean; onSelect?: (item: AgendaItem) => void }) {
   const status = statusText(item);
   const names = item.technicians.map((t) => t.nombre).join(", ");
-  const name = [`${item.time} ${item.customerName}`, item.vehicleLabel, status, names].filter(Boolean).join(", ");
+  const name = [`${item.time} ${item.customerName}`, item.categoriaLabel, item.vehicleLabel, status, names].filter(Boolean).join(", ");
   return (
     <button
       type="button"

@@ -122,10 +122,10 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU8: shell wire (branch `feat/agenda-redesign-wu8-shell-wire`) [~260]
 
-- [ ] 8.1 RED `AgendaShell.test.tsx`: renders `DayGrid` for day, `WeekGrid` for week, the legacy `MonthView` for month; activating a card marks it `aria-pressed`; props are plain (no function or `Date`) so the page output serializes.
-- [ ] 8.2 RED `page.test.tsx`: day/week/combined render through the shell; queries still called with `orderScope(user)`; `now` captured once and passed through; Técnico still denied.
-- [ ] 8.3 GREEN `AgendaShell.tsx` (`"use client"`, selection state only), `page.tsx` swap, `CombinedView.tsx` uses `DayGrid`.
-- [ ] 8.4 Mutation-verify: pass a function prop from the page -> the serializability test red; remove `can()` -> "Técnico is denied" red.
+- [x] 8.1 RED `AgendaShell.test.tsx`: renders `DayGrid` for day, `WeekGrid` for week, the legacy `MonthView` for month; activating a card marks it `aria-pressed`; props are plain (no function or `Date`) so the page output serializes.
+- [x] 8.2 RED `page.test.tsx`: day/week/combined render through the shell; queries still called with `orderScope(user)`; `now` captured once and passed through; Técnico still denied.
+- [x] 8.3 GREEN `AgendaShell.tsx` (`"use client"`, selection state only), `page.tsx` swap, `CombinedView.tsx` uses `DayGrid`.
+- [x] 8.4 Mutation-verify: pass a function prop from the page -> the serializability test red; remove `can()` -> "Técnico is denied" red.
 - [ ] 8.5 Close: C + B. This is the RSC-boundary check: open week and combined with real data (the Pagination trap: one row hides it; seed enough).
 
 ## WU9: retire the old day/week views (branch `feat/agenda-redesign-wu9-retire-day-week`) [~195, deletions only]

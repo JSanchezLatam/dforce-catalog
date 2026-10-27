@@ -77,6 +77,16 @@ describe("WeekGrid", () => {
     expect(more).toHaveClass("min-h-11", "min-w-11");
   });
 
+  it("the '+N' link has its own gutter: the day's cards stop short of it, and only when something overflows", () => {
+    const over = render(<WeekGrid days={DAYS} items={[at("a", TUE, 9), at("b", TUE, 9), at("c", TUE, 9)]} />);
+    const card = within(column(over.container, TUE)).getByRole("button", { name: /Cliente a/ });
+    expect(card.parentElement!.parentElement).toHaveClass("right-11");
+    expect(screen.getByRole("link", { name: "+1 más" })).toHaveClass("right-0");
+    over.unmount();
+    const fit = render(<WeekGrid days={DAYS} items={[at("a", TUE, 9), at("b", TUE, 9)]} />);
+    expect(within(column(fit.container, TUE)).getByRole("button", { name: /Cliente a/ }).parentElement!.parentElement).not.toHaveClass("right-11");
+  });
+
   it("two overlapping cards show no '+N' link; the count is the hidden ones", () => {
     const two = render(<WeekGrid days={DAYS} items={[at("a", TUE, 9), at("b", TUE, 9)]} />);
     expect(screen.queryByRole("link", { name: /más/ })).not.toBeInTheDocument();
