@@ -38,6 +38,7 @@ const EDITABLE: Record<Role, Record<OrderStatus, boolean>> = {
   administrador: { booked: true, open: true, diagnosing: true, in_progress: true, on_hold: true, ready_for_review: true, done: false, cancelled: false },
   jefe_taller: { booked: true, open: true, diagnosing: true, in_progress: true, on_hold: true, ready_for_review: true, done: false, cancelled: false },
   tecnico: { booked: false, open: false, diagnosing: true, in_progress: true, on_hold: false, ready_for_review: false, done: false, cancelled: false },
+  pantalla: { booked: false, open: false, diagnosing: false, in_progress: false, on_hold: false, ready_for_review: false, done: false, cancelled: false },
 };
 
 /** D11 — true only for a `(role, status)` pair the table above permits. */

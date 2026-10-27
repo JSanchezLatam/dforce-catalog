@@ -34,6 +34,8 @@ const adminGrants: Grants = {
   "technicians.manage": true,
   "metrics.read": true,
   "metrics.self": false,
+  "board.customer": true,
+  "board.read": true,
 };
 
 // Every administrador grant except the four the owner keeps for himself, and
@@ -77,13 +79,19 @@ const tecnicoGrants: Grants = {
   "technicians.manage": false,
   "metrics.read": false,
   "metrics.self": true,
+  "board.customer": false,
+  "board.read": true,
 };
+
+// The big-screen account holds `board.customer` and nothing else.
+const pantallaGrants: Grants = Object.fromEntries(ACTIONS.map((a) => [a, a === "board.customer"])) as unknown as Grants;
 
 // Exhaustive over Role: a new role is a tsc error here until it has a row.
 const GRANTS_BY_ROLE: Record<Role, Grants> = {
   administrador: adminGrants,
   jefe_taller: jefeGrants,
   tecnico: tecnicoGrants,
+  pantalla: pantallaGrants,
 };
 
 describe("can() — role × action permission matrix", () => {
@@ -106,6 +114,27 @@ describe("can() — role × action permission matrix", () => {
     for (const [action, expected] of Object.entries(jefeGrants)) {
       expect(can(user, action as Action)).toBe(expected);
     }
+  });
+
+  it("Matrix row: pantalla is true for board.customer and false for every other action, including account.self and users.manage", () => {
+    const user = { id: "p", role: "pantalla" as const };
+    for (const action of ACTIONS) {
+      expect(can(user, action)).toBe(action === "board.customer");
+    }
+  });
+
+  it("Access Matrix: board.customer is for administrador, jefe_taller and pantalla, never tecnico", () => {
+    expect(can({ role: "administrador" }, "board.customer")).toBe(true);
+    expect(can({ role: "jefe_taller" }, "board.customer")).toBe(true);
+    expect(can({ role: "pantalla" }, "board.customer")).toBe(true);
+    expect(can({ role: "tecnico" }, "board.customer")).toBe(false);
+  });
+
+  it("Pantalla is denied the full board: board.read is for administrador, jefe_taller and tecnico, never pantalla", () => {
+    expect(can({ role: "administrador" }, "board.read")).toBe(true);
+    expect(can({ role: "jefe_taller" }, "board.read")).toBe(true);
+    expect(can({ role: "tecnico" }, "board.read")).toBe(true);
+    expect(can({ role: "pantalla" }, "board.read")).toBe(false);
   });
 
   it("records consent for administrador and jefe_taller, never for tecnico", () => {

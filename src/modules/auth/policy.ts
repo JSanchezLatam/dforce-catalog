@@ -34,6 +34,10 @@ export const ACTIONS = [
   "metrics.self",
   "sync.manual",
   "account.self",
+  // workshop-status-board: `board.read` is the full board (staff), `board.customer` the
+  // waiting-room view (also the screen account's only action).
+  "board.read",
+  "board.customer",
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -76,6 +80,8 @@ export const MATRIX: Record<Role, Grants> = {
     "technicians.manage": false,
     "metrics.read": false,
     "metrics.self": true,
+    "board.customer": false,
+    "board.read": true,
   },
   // The workshop manager: everything the owner holds except user management,
   // workshop and template settings, closed-order corrections and photo deletion.
@@ -108,6 +114,42 @@ export const MATRIX: Record<Role, Grants> = {
     "metrics.self": false,
     "sync.manual": true,
     "account.self": true,
+    "board.customer": true,
+    "board.read": true,
+  },
+  // The big-screen account: `board.customer` and nothing else. Spelled out cell by cell
+  // (no generated row) so a missing grant stays a tsc error.
+  pantalla: {
+    "customers.read": false,
+    "customers.write": false,
+    "customers.deleteVehicle": false,
+    "customers.consent": false,
+    "customers.portalRotate": false,
+    "vencimientos.read": false,
+    "vencimientos.contact": false,
+    "service-orders.read": false,
+    "service-orders.write": false,
+    "service-orders.deletePhoto": false,
+    "service-orders.correct": false,
+    "service-orders.readAll": false,
+    "service-orders.create": false,
+    "service-orders.assign": false,
+    "inventory.read": false,
+    "catalogs.read": false,
+    "catalogs.download": false,
+    "catalogs.generate": false,
+    "catalogs.listAll": false,
+    "template.edit": false,
+    "workshop.read": false,
+    "workshop.edit": false,
+    "users.manage": false,
+    "technicians.manage": false,
+    "metrics.read": false,
+    "metrics.self": false,
+    "sync.manual": false,
+    "account.self": false,
+    "board.customer": true,
+    "board.read": false,
   },
   administrador: {
     "customers.read": true,
@@ -138,6 +180,8 @@ export const MATRIX: Record<Role, Grants> = {
     "technicians.manage": true,
     "metrics.read": true,
     "metrics.self": false,
+    "board.customer": true,
+    "board.read": true,
   },
 };
 

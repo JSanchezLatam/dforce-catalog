@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 // `actions.ts` imports these at module load even on the path under test, and
 // both throw outside a request scope.
-vi.mock("next/headers", () => ({ cookies: vi.fn() }));
-vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
+const set = vi.hoisted(() => vi.fn());
+const redirect = vi.hoisted(() => vi.fn());
+vi.mock("next/headers", () => ({ cookies: vi.fn().mockResolvedValue({ set }) }));
+vi.mock("next/navigation", () => ({ redirect }));
 
 const authenticateUser = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/auth/authenticate", () => ({ authenticateUser }));
@@ -23,6 +25,18 @@ describe("loginAction", () => {
     const state = await loginAction(null, new FormData());
 
     expect(state).toEqual({ error: "Usuario o contraseña incorrectos." });
+  });
+
+  it.each([
+    ["pantalla", "/tablero/clientes"],
+    ["tecnico", "/inventory"],
+  ])("Landing per role: a %s login redirects to %s", async (role, path) => {
+    authenticateUser.mockResolvedValue({ ok: true, token: "t", expiresAt: new Date(), role });
+    redirect.mockClear();
+
+    await loginAction(null, new FormData());
+
+    expect(redirect).toHaveBeenCalledWith(path);
   });
 
   // The no-enumeration property (R9.1/9.2) is NOT tested here. It lives in

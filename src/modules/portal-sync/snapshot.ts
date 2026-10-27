@@ -19,7 +19,7 @@ import type { Cliente, OrdenServicio, Vehiculo } from "@/shared/db/schema";
  * Typed `Record<Exclude<OrderStatus, "booked">, …>`: a new internal status is a compile error, not a leaked
  * string. `booked` has no customer label because it never leaves: `buildSnapshot` filters it out first.
  */
-const CUSTOMER_STATUS: Record<Exclude<OrderStatus, "booked">, PortalOrder["status"]> = {
+export const CUSTOMER_STATUS: Record<Exclude<OrderStatus, "booked">, PortalOrder["status"]> = {
   open: "Recibida",
   diagnosing: "En proceso",
   in_progress: "En proceso",

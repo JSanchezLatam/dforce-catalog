@@ -34,10 +34,10 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     expect(configGroup.pinBottom).toBe(true);
   });
 
-  it("admin sees all CRM items, Vencimientos right after Órdenes de servicio (Clientes, Órdenes de servicio, Vencimientos, Inventario, Métricas)", () => {
+  it("admin sees all CRM items, Vencimientos right after Órdenes de servicio (Clientes, Órdenes de servicio, Vencimientos, Inventario, Métricas, Tablero)", () => {
     const groups = getNavGroups(admin);
     const crm = groups.find((g) => g.label === "CRM")!;
-    expect(crm.items.map((i) => i.label)).toEqual(["Clientes", "Órdenes de servicio", "Vencimientos", "Inventario", "Métricas"]);
+    expect(crm.items.map((i) => i.label)).toEqual(["Clientes", "Órdenes de servicio", "Vencimientos", "Inventario", "Métricas", "Tablero"]);
   });
 
   // metrics-dashboard WU2: one entry per viewer, never two. `getNavGroups` filters on a
@@ -54,6 +54,15 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     const crm = getNavGroups(tecnico).find((g) => g.label === "CRM")!;
     expect(crm.items.find((i) => i.label === "Mis números")).toMatchObject({ href: "/mis-numeros", icon: "my-metrics", action: "metrics.self" });
     expect(crm.items.map((i) => i.label)).not.toContain("Métricas");
+  });
+
+  // workshop-status-board WU4: "Tablero" follows `board.read`, so the screen account never sees it.
+  it("Nav link by role: Tablero (/tablero) for administrador, jefe_taller and técnico, and for no other role", () => {
+    for (const user of [admin, jefe, tecnico]) {
+      const crm = getNavGroups(user).find((g) => g.label === "CRM")!;
+      expect(crm.items.find((i) => i.label === "Tablero")).toMatchObject({ href: "/tablero", icon: "board", action: "board.read" });
+    }
+    expect(getNavGroups({ id: "p", role: "pantalla" } as SessionUser)).toEqual([]);
   });
 
   it("admin sees Catálogo items WITHOUT Inventario (Generar Catálogos, Catálogos Generados only)", () => {
@@ -133,16 +142,16 @@ describe("getNavGroups() — grouped sidebar nav", () => {
   // keeps these totals identical (that coincidence is exactly what let the
   // wrong grouping slip through review previously). Do not rely on these
   // alone to prove correct placement.
-  it("técnico sees only 5 total items across 2 groups", () => {
+  it("técnico sees only 6 total items across 2 groups", () => {
     const groups = getNavGroups(tecnico);
     const totalItems = groups.reduce((s, g) => s + g.items.length, 0);
-    expect(totalItems).toBe(5);
+    expect(totalItems).toBe(6);
   });
 
-  it("admin sees 11 total items across 3 groups", () => {
+  it("admin sees 12 total items across 3 groups", () => {
     const groups = getNavGroups(admin);
     const totalItems = groups.reduce((s, g) => s + g.items.length, 0);
-    expect(totalItems).toBe(11);
+    expect(totalItems).toBe(12);
   });
 
   // Stable ids decouple sidebar-group-collapse cookie state from display

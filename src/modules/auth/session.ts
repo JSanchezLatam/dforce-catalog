@@ -36,9 +36,12 @@ export type SessionRow = {
   mustChangePassword: boolean;
 };
 
-// ponytail: fixed 7-day session lifetime — no per-session TTL requirement exists yet;
-// revisit if a spec requirement asks for configurable expiry.
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** A wall-mounted screen must outlive a week without anyone to log it back in. */
+export function sessionTtlMs(role: Role): number {
+  return (role === "pantalla" ? 180 : 7) * DAY_MS;
+}
 
 function generateToken(): string {
   return randomBytes(32).toString("hex");
@@ -59,9 +62,9 @@ export function isUserActive(user: { deactivatedAt: Date | null }): boolean {
   return user.deactivatedAt === null;
 }
 
-export async function issueSession(userId: string): Promise<{ token: string; expiresAt: Date }> {
+export async function issueSession(userId: string, role: Role): Promise<{ token: string; expiresAt: Date }> {
   const token = generateToken();
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  const expiresAt = new Date(Date.now() + sessionTtlMs(role));
   await db.insert(sessions).values({ id: token, userId, expiresAt });
   return { token, expiresAt };
 }

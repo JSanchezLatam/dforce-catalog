@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { landingPathFor } from "@/modules/auth/landing";
 import { authenticateUser } from "@/modules/auth/authenticate";
 import { SESSION_COOKIE } from "@/modules/auth/session";
 
@@ -34,5 +35,5 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
     path: "/",
   });
 
-  redirect("/inventory");
+  redirect(landingPathFor(result.role));
 }
