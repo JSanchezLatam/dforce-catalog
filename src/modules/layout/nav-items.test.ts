@@ -31,9 +31,9 @@ describe("getNavGroups() — grouped sidebar nav", () => {
   // The workshop-floor links live in their own group, first, in this order per role.
   it("Taller group holds Tablero, Agenda, Métricas, Mis números in that order, filtered per role", () => {
     const taller = (u: SessionUser) => getNavGroups(u).find((g) => g.label === "Taller")?.items.map((i) => i.label);
-    expect(taller(admin)).toEqual(["Tablero", "Agenda", "Métricas"]);
-    expect(taller(jefe)).toEqual(["Tablero", "Agenda", "Métricas"]);
-    expect(taller(tecnico)).toEqual(["Tablero", "Mis números"]);
+    expect(taller(admin)).toEqual(["Tablero", "Kanban", "Agenda", "Métricas"]);
+    expect(taller(jefe)).toEqual(["Tablero", "Kanban", "Agenda", "Métricas"]);
+    expect(taller(tecnico)).toEqual(["Tablero", "Kanban", "Mis números"]);
     expect(taller({ id: "p", role: "pantalla" } as SessionUser)).toBeUndefined();
   });
 
@@ -70,6 +70,17 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     for (const user of [admin, jefe, tecnico]) {
       const taller = getNavGroups(user).find((g) => g.label === "Taller")!;
       expect(taller.items.find((i) => i.label === "Tablero")).toMatchObject({ href: "/tablero", icon: "board", action: "board.read" });
+    }
+    expect(getNavGroups({ id: "p", role: "pantalla" } as SessionUser)).toEqual([]);
+  });
+
+  // kanban-board WU2: "Kanban" sits right below "Tablero" and follows the same `board.read`.
+  it("Nav link by role: Kanban (/kanban) directly below Tablero for administrador, jefe_taller and técnico, and for no other role", () => {
+    for (const user of [admin, jefe, tecnico]) {
+      const taller = getNavGroups(user).find((g) => g.label === "Taller")!;
+      const labels = taller.items.map((i) => i.label);
+      expect(labels.indexOf("Kanban")).toBe(labels.indexOf("Tablero") + 1);
+      expect(taller.items.find((i) => i.label === "Kanban")).toMatchObject({ href: "/kanban", icon: "kanban", action: "board.read" });
     }
     expect(getNavGroups({ id: "p", role: "pantalla" } as SessionUser)).toEqual([]);
   });
@@ -162,16 +173,16 @@ describe("getNavGroups() — grouped sidebar nav", () => {
   // keeps these totals identical (that coincidence is exactly what let the
   // wrong grouping slip through review previously). Do not rely on these
   // alone to prove correct placement.
-  it("técnico sees only 6 total items across 3 groups", () => {
+  it("técnico sees only 7 total items across 3 groups", () => {
     const groups = getNavGroups(tecnico);
     const totalItems = groups.reduce((s, g) => s + g.items.length, 0);
-    expect(totalItems).toBe(6);
+    expect(totalItems).toBe(7);
   });
 
-  it("admin sees 13 total items across 4 groups", () => {
+  it("admin sees 14 total items across 4 groups", () => {
     const groups = getNavGroups(admin);
     const totalItems = groups.reduce((s, g) => s + g.items.length, 0);
-    expect(totalItems).toBe(13);
+    expect(totalItems).toBe(14);
   });
 
   // Stable ids decouple sidebar-group-collapse cookie state from display
