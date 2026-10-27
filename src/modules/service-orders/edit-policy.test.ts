@@ -7,7 +7,7 @@ import { canChangeOrderPhotos, canEditOrderFields, isClosedStatus, orderEditMode
 import type { OrderStatus } from "./transitions";
 
 /**
- * D11 — all twenty-four `(role, status)` combinations, spelled out one per row so a
+ * D11 — all thirty-two `(role, status)` combinations, spelled out one per row so a
  * flipped cell in `edit-policy.ts` fails by a name that says which cell moved.
  * A parametrised expectation derived from the same shape as the source would
  * only re-state the implementation.
@@ -37,6 +37,14 @@ const TRUTH_TABLE: ReadonlyArray<[Role, OrderStatus, boolean]> = [
   ["tecnico", "ready_for_review", false],
   ["tecnico", "done", false],
   ["tecnico", "cancelled", false],
+  ["pantalla", "booked", false],
+  ["pantalla", "open", false],
+  ["pantalla", "diagnosing", false],
+  ["pantalla", "in_progress", false],
+  ["pantalla", "on_hold", false],
+  ["pantalla", "ready_for_review", false],
+  ["pantalla", "done", false],
+  ["pantalla", "cancelled", false],
 ];
 
 describe("canEditOrderFields (D11)", () => {

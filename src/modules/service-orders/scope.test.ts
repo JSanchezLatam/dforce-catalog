@@ -25,6 +25,12 @@ describe("orderScope", () => {
     expect(render(orderScope({ id: "u", role: "tecnico" }).where!).sql).not.toContain("deactivated_at");
   });
 
+  it("gives pantalla no orders: it takes the technician EXISTS path and matches nothing", () => {
+    const where = orderScope({ id: "screen-1", role: "pantalla" }).where;
+    expect(where).toBeDefined();
+    expect(render(where!).params).toEqual(["screen-1"]);
+  });
+
   it("fails closed for a role the matrix does not know", () => {
     expect(orderScope({ id: "u", role: "intruso" as never }).where).toBeDefined();
   });

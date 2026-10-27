@@ -195,6 +195,13 @@ describe("UsersTable — the role label it renders", () => {
     expect(screen.queryByText("tecnico")).not.toBeInTheDocument();
   });
 
+  it("shows Pantalla, not the raw pantalla, in the table row", () => {
+    render(<UsersTable users={[{ ...ACTIVE, id: "u-10", username: "tv", role: "pantalla" }]} />);
+
+    expect(within(rowFor("tv")).getByText("Pantalla")).toBeInTheDocument();
+    expect(screen.queryByText("pantalla")).not.toBeInTheDocument();
+  });
+
   it("shows Jefe de taller, not the raw jefe_taller, in the table row and the phone card", () => {
     render(<UsersTable users={[{ ...ACTIVE, id: "u-9", username: "jefa", role: "jefe_taller" }]} />);
 

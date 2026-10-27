@@ -109,6 +109,9 @@ export const MATRIX: Record<Role, Grants> = {
     "sync.manual": true,
     "account.self": true,
   },
+  // The big-screen account: reads nothing yet. `board.customer` is granted in WU3
+  // together with the route that evaluates it (no Action may exist without one).
+  pantalla: Object.fromEntries(ACTIONS.map((a) => [a, false])) as unknown as Grants,
   administrador: {
     "customers.read": true,
     "customers.write": true,

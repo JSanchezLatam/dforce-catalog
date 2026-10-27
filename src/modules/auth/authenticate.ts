@@ -66,6 +66,6 @@ export async function authenticateUser(
     return { ok: false };
   }
 
-  const { token, expiresAt } = await doIssueSession(user.id);
+  const { token, expiresAt } = await doIssueSession(user.id, user.role);
   return { ok: true, token, expiresAt, role: user.role };
 }

@@ -79,11 +79,15 @@ const tecnicoGrants: Grants = {
   "metrics.self": true,
 };
 
+// The big-screen account holds nothing: `board.customer` arrives with its route in WU3.
+const pantallaGrants: Grants = Object.fromEntries(ACTIONS.map((a) => [a, false])) as unknown as Grants;
+
 // Exhaustive over Role: a new role is a tsc error here until it has a row.
 const GRANTS_BY_ROLE: Record<Role, Grants> = {
   administrador: adminGrants,
   jefe_taller: jefeGrants,
   tecnico: tecnicoGrants,
+  pantalla: pantallaGrants,
 };
 
 describe("can() — role × action permission matrix", () => {
@@ -105,6 +109,13 @@ describe("can() — role × action permission matrix", () => {
     const user = { id: "j", role: "jefe_taller" as const };
     for (const [action, expected] of Object.entries(jefeGrants)) {
       expect(can(user, action as Action)).toBe(expected);
+    }
+  });
+
+  it("Matrix row: pantalla is false for every action, including account.self and users.manage", () => {
+    const user = { id: "p", role: "pantalla" as const };
+    for (const action of ACTIONS) {
+      expect(can(user, action)).toBe(false);
     }
   });
 

@@ -73,6 +73,6 @@ describe("authenticateUser() — deactivation refusal (design.md Decision 7)", (
     const result = await authenticateUser("active-admin", "correct-password", deps);
 
     expect(result).toEqual({ ok: true, token: "tok", expiresAt: expect.any(Date), role: "administrador" });
-    expect(deps.issueSession).toHaveBeenCalledWith("user-3");
+    expect(deps.issueSession).toHaveBeenCalledWith("user-3", "administrador");
   });
 });

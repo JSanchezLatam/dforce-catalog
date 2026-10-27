@@ -345,12 +345,12 @@ describe("createUser", () => {
     expect(d.insert).not.toHaveBeenCalled();
   });
 
-  it("rejects an unknown role rather than trusting the caller, in Spanish", async () => {
+  it("Role error copy: rejects an unknown role rather than trusting the caller, in Spanish", async () => {
     const d = deps();
 
     await expectProfileErrors(
       createUser({ username: "ana", password: "temporal1", role: "superadmin" as never }, d),
-      { role: "El rol debe ser técnico, jefe de taller o administrador." },
+      { role: "El rol debe ser técnico, jefe de taller, pantalla o administrador." },
     );
     expect(d.insert).not.toHaveBeenCalled();
   });
@@ -557,11 +557,11 @@ describe("updateUser", () => {
     // `updateUser` validates the role on its own line, with its own literal —
     // the `createUser` test above defends a different one. Without this test,
     // reverting `updateUser`'s role message to English leaves the suite green.
-    it("rejects an unknown role in Spanish, and writes nothing", async () => {
+    it("Role error copy: rejects an unknown role in Spanish, and writes nothing", async () => {
       const { applyUpdate, deps } = txDeps();
 
       await expectProfileErrors(updateUser("admin-1", "user-9", { role: "superadmin" as never }, deps), {
-        role: "El rol debe ser técnico, jefe de taller o administrador.",
+        role: "El rol debe ser técnico, jefe de taller, pantalla o administrador.",
       });
       expect(applyUpdate).not.toHaveBeenCalled();
     });

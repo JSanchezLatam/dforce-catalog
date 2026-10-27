@@ -33,7 +33,7 @@ function findIndex(indexes: ReturnType<typeof getTableConfig>["indexes"], name: 
 
 describe("schema — role enum (renamed in crm-shell-settings-rbac WU1)", () => {
   it("roleEnum has the renamed values (usuario → tecnico) plus jefe_taller", () => {
-    expect(roleEnum.enumValues).toEqual(["tecnico", "administrador", "jefe_taller"]);
+    expect(roleEnum.enumValues).toEqual(["tecnico", "administrador", "jefe_taller", "pantalla"]);
   });
 });
 
