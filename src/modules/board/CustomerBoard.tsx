@@ -2,11 +2,12 @@
 
 import { StatusBadge, type BadgeStatus } from "@/shared/ui/StatusBadge";
 import { StaleBanner } from "./StaleBanner";
+import type { PortalOrder } from "@portal/contract";
 import type { CustomerSnapshot } from "./shape";
 import { useBoardSnapshot } from "./useBoardSnapshot";
 
 // The customer-facing labels `CUSTOMER_STATUS` produces, mapped to a badge family.
-const COLUMNS: { label: string; badge: BadgeStatus }[] = [
+const COLUMNS: { label: PortalOrder["status"]; badge: BadgeStatus }[] = [
   { label: "Recibida", badge: "open" },
   { label: "En proceso", badge: "in_progress" },
   { label: "Terminada", badge: "done" },
