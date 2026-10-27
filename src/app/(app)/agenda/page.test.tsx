@@ -10,11 +10,12 @@ const session = vi.hoisted(() => vi.fn());
 const agendaRange = vi.hoisted(() => vi.fn());
 const agendaOverdue = vi.hoisted(() => vi.fn());
 const agendaInWorkshop = vi.hoisted(() => vi.fn());
+const agendaWeekCounts = vi.hoisted(() => vi.fn());
 const orderScope = vi.hoisted(() => vi.fn());
 const listTecnicos = vi.hoisted(() => vi.fn());
 const canMock = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders: session }));
-vi.mock("@/modules/agenda/queries", () => ({ agendaRange, agendaOverdue, agendaInWorkshop }));
+vi.mock("@/modules/agenda/queries", () => ({ agendaRange, agendaOverdue, agendaInWorkshop, agendaWeekCounts }));
 vi.mock("@/modules/service-orders/scope", () => ({ orderScope }));
 vi.mock("@/modules/technicians/queries", () => ({ listTecnicos }));
 const realCan = vi.hoisted(() => ({ fn: null as null | ((...args: never[]) => boolean) }));
@@ -97,6 +98,7 @@ beforeEach(() => {
   agendaRange.mockResolvedValue({ rows: [], truncated: false });
   agendaOverdue.mockResolvedValue({ rows: [], truncated: false, total: 0 });
   agendaInWorkshop.mockResolvedValue({ rows: [], truncated: false });
+  agendaWeekCounts.mockResolvedValue({ agendadas: 5, recibidas: 3, vencidas: 2, noShow: 1 });
   // The real roster rows carry more than the Detail needs, and a Date among it.
   listTecnicos.mockResolvedValue([
     { id: "t1", nombre: "Julio Rangel", userId: "u1", deactivatedAt: null, createdAt: new Date("2026-01-01T00:00:00Z") },
@@ -245,6 +247,27 @@ describe("AgendaPage Vencidas and combined", () => {
     fireEvent.click(screen.getByRole("tab", { name: /Vencidas/, hidden: true }));
     await userEvent.click(screen.getByRole("button", { name: /Vieja/, hidden: true }));
     expect(screen.getByRole("button", { name: "No se presentó", hidden: true })).toBeInTheDocument();
+  });
+
+  it.each(["day", "week", "month", "combined"])("Week summary counts: %s asks for the Monday-Sunday week of the date with the page's one now", async (view) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-28T20:00:00Z"));
+    try {
+      const props = shellProps(await AgendaPage(params({ view, date: "2026-10-29" })));
+      const [scope, week, now] = agendaWeekCounts.mock.calls[0];
+      expect(scope).toBe(SCOPE);
+      expect(week.from.toISOString()).toBe("2026-10-26T05:00:00.000Z");
+      expect(week.to.toISOString()).toBe("2026-11-02T05:00:00.000Z");
+      expect(now.toISOString()).toBe("2026-10-28T20:00:00.000Z");
+      expect(props?.weekSummary).toEqual([
+        { label: "Agendadas", count: 5 },
+        { label: "Recibidas", count: 3 },
+        { label: "Vencidas", count: 2 },
+        { label: "No se presentó", count: 1 },
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("the shell gets the true Vencida total, not the rows it loaded", async () => {

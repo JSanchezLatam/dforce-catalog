@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { filterItems, groupByDay, layoutDay, matchesSearch, nextLabel, toAgendaItem, toWeekSummary, toWorkshopItem, type AgendaItem } from "./items";
+import { filterItems, typeCounts, groupByDay, layoutDay, matchesSearch, nextLabel, toAgendaItem, toWeekSummary, toWorkshopItem, type AgendaItem } from "./items";
 import { makeItem } from "./items.fixture";
 import type { AgendaRow, WorkshopRow } from "./queries";
 
@@ -340,5 +340,32 @@ describe("filterItems", () => {
     const other = makeItem({ id: "x", customerName: "Pedro" });
     expect(filterItems([future, other], "todas", "pedro").map((i) => i.id)).toEqual(["x"]);
     expect(filterItems([future, other], "agendadas", "pedro").map((i) => i.id)).toEqual(["x"]);
+  });
+});
+
+describe("typeCounts", () => {
+  it("Type counts: 4 revisado, 2 reparacion and 2 untyped give 4 / 2 / 2 and 0 for the others", () => {
+    const items = [
+      ...[1, 2, 3, 4].map((n) => makeItem({ id: `r${n}`, categoria: "revisado" })),
+      ...[1, 2].map((n) => makeItem({ id: `p${n}`, categoria: "reparacion" })),
+      ...[1, 2].map((n) => makeItem({ id: `n${n}`, categoria: null })),
+    ];
+    expect(typeCounts(items)).toEqual({ instalacion: 0, mant_preventivo: 0, mant_correctivo: 0, reparacion: 2, revisado: 4, none: 2 });
+  });
+});
+
+describe("filterItems with unchecked types", () => {
+  const rev = makeItem({ id: "r", categoria: "revisado" });
+  const rep = makeItem({ id: "p", categoria: "reparacion" });
+  const none = makeItem({ id: "n", categoria: null });
+
+  it("Unchecking hides a type, and 'none' hides the untyped cards", () => {
+    expect(filterItems([rev, rep, none], "todas", "", ["revisado"]).map((i) => i.id)).toEqual(["p", "n"]);
+    expect(filterItems([rev, rep, none], "todas", "", ["none"]).map((i) => i.id)).toEqual(["r", "p"]);
+  });
+
+  it("combines with the tab and the search", () => {
+    expect(filterItems([rev, rep], "todas", "perez", ["revisado"]).map((i) => i.id)).toEqual(["p"]);
+    expect(filterItems([rev, makeItem({ id: "x", categoria: "reparacion", overdue: true })], "agendadas", "", ["revisado"])).toEqual([]);
   });
 });
