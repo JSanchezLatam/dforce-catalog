@@ -16,7 +16,7 @@ Chained PRs recommended: Yes
 Chain strategy: feature-branch-chain
 400-line budget risk: High
 
-Branches: WU1 targets `feat/kanban-board`; each later `feat/kanban-board-wuN-<slug>` targets the previous WU branch. Slugs: `wu1-urgent`, `wu2-read-model`, `wu3a-primitives`, `wu3b-board`, `wu4a-plan`, `wu4b-menu`, `wu5-sheet`, `wu6-dnd`, `wu7-tv`, `wu8-signoff`. A child that shows parent changes has the wrong base. Run GGA (`gga run --pr-mode --diff-only`, pin `PR_BASE_BRANCH`) before each PR.
+Branches: WU1 targets `feat/kanban-board`; each later `feat/kanban-board-wuN-<slug>` targets the previous WU branch. Slugs: `wu1-urgent`, `wu2a-shape`, `wu2b-api`, `wu2c-derive-nav` (WU2 shipped as three PRs), `wu3a-primitives`, `wu3b-board`, `wu4a-plan`, `wu4b-menu`, `wu5-sheet`, `wu6-dnd`, `wu7-tv`, `wu8-signoff`. A child that shows parent changes has the wrong base. Run GGA (`gga run --pr-mode --diff-only`, pin `PR_BASE_BRANCH`) before each PR.
 
 Conventions for every WU: Strict TDD (RED confirmed failing by name, then GREEN); mutation-verify every rule (revert, name the red test); fixtures match the wire; new SQL needs a `dforce_e2e` row (recreate the DB fresh); UI toasts follow `OrderStatusControls.tsx` (toast above `router.refresh()`, below `try/catch`); no secure-context APIs; 44x44 on actions. Gates: `npm test`, `npx tsc --noEmit`, `npm run lint` (0 errors, 13 warnings, no new).
 
@@ -59,10 +59,10 @@ Conventions for every WU: Strict TDD (RED confirmed failing by name, then GREEN)
 
 ## WU3a: Tokens and primitives
 
-- [ ] 3a.1 `src/app/globals.css`: `--board-canvas/-col/-tile/-tile-shadow`, `--urgent`, `--board-warn-*` in `:root` and `.dark` (mockup lines 33-47), `--color-*` in `@theme inline`, `.board-hue-tile/-bar/-ring/-drop`, `.board-av`. Additive only; read current file first.
-- [ ] 3a.2 RED `board/alerts.test.ts`; GREEN `board/alerts.ts#cardAlert(row, now, missing?)`: "Cita vencida · hace 1 h 10 min", "Repuesto · hace 3 días", "Falta vehículo y categoría"; none for a long `in_progress` card.
-- [ ] 3a.3 RED `board/primitives.test.tsx` (no `button`/`a`, no hooks; "Sin placa", "Sin vehículo", "Sin técnico", sr-only full tech names, Urgente badge icon + text); GREEN `board/primitives.tsx` (`ColumnShell`, `CardShell`, `UrgentBadge`, `TimeChip`, `AlertStrip`, `TechAvatars`, `CategoryTag`, `STATUS_HUE`).
-- [ ] 3a.4 Verify: unit, mutation-verify alert reasons; browser: tokens render in light and dark.
+- [x] 3a.1 `src/app/globals.css`: `--board-canvas/-col/-tile/-tile-shadow`, `--urgent`, `--board-warn-*` in `:root` and `.dark` (mockup lines 33-47), `--color-*` in `@theme inline`, `.board-hue-tile/-bar/-ring/-drop`, `.board-av`. Additive only; read current file first.
+- [x] 3a.2 RED `board/alerts.test.ts`; GREEN `board/alerts.ts#cardAlert(row, now, missing?)`: "Cita vencida · hace 1 h 10 min", "Repuesto · hace 3 días", "Falta vehículo y categoría"; none for a long `in_progress` card.
+- [x] 3a.3 RED `board/primitives.test.tsx` (no `button`/`a`, no hooks; "Sin placa", "Sin vehículo", "Sin técnico", sr-only full tech names, Urgente badge icon + text); GREEN `board/primitives.tsx` (`ColumnShell`, `CardShell`, `UrgentBadge`, `TimeChip`, `AlertStrip`, `TechAvatars`, `CategoryTag`, `STATUS_HUE`).
+- [x] 3a.4 Verify: unit, mutation-verify alert reasons and primitives. The browser check (tokens render in light and dark) is deferred to WU3b: no page renders the primitives until then.
 
 ## WU3b: Read-only board and page
 
