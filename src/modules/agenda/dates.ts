@@ -19,6 +19,9 @@ const KEY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 /** Monday-first, static text: no Intl, so server and browser agree. */
 export const WEEKDAY_SHORT = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"] as const;
 
+const WEEKDAY_LONG = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"] as const;
+const MONTH_LONG = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"] as const;
+
 /** A `booked` order is Vencida once its appointment is MORE than this many minutes past. */
 export const OVERDUE_MARGIN_MINUTES = 60;
 
@@ -44,6 +47,12 @@ export function addDays(key: string, days: number): string {
 export function weekStart(key: string): string {
   const dow = new Date(keyToUtc(key)).getUTCDay();
   return addDays(key, -((dow + 6) % 7));
+}
+
+/** "Martes 27 de octubre": static tables, never `Intl` (server and browser must print the same text). */
+export function formatLongDay(key: string): string {
+  const weekday = WEEKDAY_LONG[(new Date(keyToUtc(key)).getUTCDay() + 6) % 7];
+  return `${weekday} ${Number(key.slice(8))} de ${MONTH_LONG[Number(key.slice(5, 7)) - 1]}`;
 }
 
 /** Panama 00:00 of `key` as an instant. */

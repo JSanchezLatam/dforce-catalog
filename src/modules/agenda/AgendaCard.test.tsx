@@ -110,8 +110,10 @@ describe("AgendaCard", () => {
   it("activating the card reports its item", async () => {
     const onSelect = vi.fn();
     render(<AgendaCard item={jorge()} onSelect={onSelect} />);
-    await userEvent.click(screen.getByRole("button"));
-    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "o1" }));
+    const button = screen.getByRole("button");
+    await userEvent.click(button);
+    // The element comes with the item: the Detail anchors its popover on it.
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "o1" }), button);
   });
 
   it("icons are decoration: the vehicle line and each status pill carry an aria-hidden svg beside their text", () => {

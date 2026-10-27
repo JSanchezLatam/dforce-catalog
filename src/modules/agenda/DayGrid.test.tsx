@@ -102,7 +102,8 @@ describe("DayGrid", () => {
     render(<DayGrid date={DAY} items={[at("a", 9), at("b", 11)]} selectedId="b" onSelect={onSelect} />);
     expect(screen.getByRole("button", { name: /Cliente b/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: /Cliente a/ })).toHaveAttribute("aria-pressed", "false");
-    await userEvent.click(screen.getByRole("button", { name: /Cliente a/ }));
-    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "a" }));
+    const card = screen.getByRole("button", { name: /Cliente a/ });
+    await userEvent.click(card);
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "a" }), card);
   });
 });
