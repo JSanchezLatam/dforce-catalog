@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agenda Redesign Mockup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          background: "var(--background)", foreground: "var(--foreground)",
+          card: "var(--card)", primary: "var(--primary)", "primary-foreground": "var(--primary-foreground)",
+          muted: "var(--muted)", "muted-foreground": "var(--muted-foreground)",
+          border: "var(--border)", destructive: "var(--destructive)", warning: "var(--warning)", success: "var(--success)",
+          sidebar: "var(--sidebar)",
+        },
+      },
+    },
+  };
+</script>
+<style>
+  /* Tokens copied verbatim from src/app/globals.css (:root and .dark). */
+  .theme-light {
+    --background: hsl(0 0% 100%); --foreground: hsl(240 10% 3.9%);
+    --card: hsl(0 0% 100%); --primary: hsl(240 5.9% 10%); --primary-foreground: hsl(0 0% 98%);
+    --muted: hsl(240 4.8% 95.9%); --muted-foreground: hsl(240 3.8% 46.1%);
+    --destructive: hsl(0 84.2% 60.2%); --warning: hsl(32 95% 44%); --success: hsl(142 71% 45%);
+    --border: hsl(240 5.9% 90%); --sidebar: hsl(0 0% 98%);
+    --canvas: hsl(240 5% 97%);
+  }
+  .theme-dark {
+    --background: hsl(240 10% 3.9%); --foreground: hsl(0 0% 98%);
+    --card: hsl(240 10% 5.9%); --primary: hsl(0 0% 98%); --primary-foreground: hsl(240 5.9% 10%);
+    --muted: hsl(240 3.7% 15.9%); --muted-foreground: hsl(240 5% 64.9%);
+    --destructive: hsl(0 62.8% 30.6%); --warning: hsl(32 95% 44%); --success: hsl(142 71% 45%);
+    --border: hsl(240 3.7% 15.9%); --sidebar: hsl(240 5.9% 10%);
+    --canvas: hsl(240 8% 7%);
+  }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .frame { background: var(--background); color: var(--foreground); }
+  .canvas { background: var(--canvas); }
+  .note { font: 600 11px/1.4 ui-monospace, Menlo, monospace; }
+
+  /* Service type colour: soft fill, strong time strip. Hue per type; status is always ALSO text. */
+  .ev { --s: 85%; background: hsl(var(--h) var(--s) 95%); color: hsl(var(--h) 55% 22%); border: 1px solid hsl(var(--h) var(--s) 86%); }
+  .ev .strip { background: hsl(var(--h) var(--s) 89%); border-bottom: 1px dashed hsl(var(--h) var(--s) 72%); }
+  .theme-dark .ev { background: hsl(var(--h) calc(var(--s) * .45) 15%); color: hsl(var(--h) 85% 88%); border-color: hsl(var(--h) calc(var(--s) * .4) 25%); }
+  .theme-dark .ev .strip { background: hsl(var(--h) calc(var(--s) * .45) 21%); border-bottom-color: hsl(var(--h) calc(var(--s) * .4) 34%); }
+  .dot { background: hsl(var(--h) var(--s, 80%) 55%); }
+  .c-instalacion { --h: 262; } .c-mant_preventivo { --h: 205; } .c-mant_correctivo { --h: 35; }
+  .c-reparacion { --h: 350; } .c-revisado { --h: 152; } .c-none { --h: 240; --s: 6% !important; }
+  .ev.muted { opacity: .62; }
+  .ev.cancelled { opacity: .45; } .ev.cancelled .name { text-decoration: line-through; }
+  .ev.overdue { box-shadow: 0 0 0 2px var(--destructive); }
+  .hatch { background-image: repeating-linear-gradient(135deg, transparent 0 7px, var(--border) 7px 8px); }
+  .seg button[aria-pressed="true"] { background: var(--background); box-shadow: 0 1px 2px rgb(0 0 0 / .15); color: var(--foreground); }
+  .scroll-x { scrollbar-width: none; } .scroll-x::-webkit-scrollbar { display: none; }
+</style>
+</head>
+<body class="bg-zinc-300 text-zinc-900">
+<header class="sticky top-0 z-50 flex items-center gap-4 bg-zinc-900 px-8 py-3 text-zinc-100">
+  <strong>Agenda — mockup</strong>
+  <span class="text-sm text-zinc-400">Rediseño basado en las 4 referencias (la de Managekō como base)</span>
+  <div class="ml-auto flex gap-1 rounded-lg bg-zinc-800 p-1 text-sm">
+    <button id="t-dark" class="rounded-md bg-zinc-100 px-3 py-1 text-zinc-900">Oscuro</button>
+    <button id="t-light" class="rounded-md px-3 py-1">Claro</button>
+  </div>
+</header>
+<main id="root" class="mx-auto flex w-max flex-col gap-14 px-8 py-10"></main>
+
+<script>
+const ic = (d, s = 16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const I = {
+  plus: ic('<path d="M12 5v14M5 12h14"/>'),
+  left: ic('<path d="m15 18-6-6 6-6"/>'), right: ic('<path d="m9 18 6-6-6-6"/>'),
+  search: ic('<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>'),
+  clock: ic('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', 12),
+  car: ic('<path d="M5 17h14M6 17v2M18 17v2M4 13l2-5h12l2 5v4H4z"/><circle cx="8" cy="14" r="1"/><circle cx="16" cy="14" r="1"/>', 13),
+  phone: ic('<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>', 13),
+  cal: ic('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>'),
+  check: ic('<path d="M20 6 9 17l-5-5"/>', 12),
+  x: ic('<path d="M18 6 6 18M6 6l12 12"/>'),
+  edit: ic('<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>'),
+  ext: ic('<path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>', 14),
+  wrench: ic('<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/>', 13),
+  filter: ic('<path d="M22 3H2l8 9.5V19l4 2v-8.5z"/>', 14),
+  menu: ic('<path d="M3 6h18M3 12h18M3 18h18"/>', 20),
+  bell: ic('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/>', 14),
+  pause: ic('<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>', 12),
+  user: ic('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>', 13),
+};
+
+const TYPES = {
+  instalacion: "Instalación", mant_preventivo: "Mant. preventivo", mant_correctivo: "Mant. correctivo",
+  reparacion: "Reparación", revisado: "Revisado", none: "Sin tipo",
+};
+const DAYS = [
+  { k: "LUN", n: 26 }, { k: "MAR", n: 27, today: true }, { k: "MIÉ", n: 28 }, { k: "JUE", n: 29 },
+  { k: "VIE", n: 30 }, { k: "SÁB", n: 31, weekend: true }, { k: "DOM", n: 1, weekend: true },
+];
+// status: booked | received | done | overdue | noshow
+const EVENTS = [
+  { d: 0, t: "08:00", name: "Ana Gómez", plate: "AB 1234", veh: "Toyota Hilux", desc: "Revisado anual", cat: "revisado", tech: ["JR"], st: "done" },
+  { d: 0, t: "10:00", name: "Luis Castillo", plate: "CP 8812", veh: "Kia Rio", desc: "Ruido en frenos", cat: "reparacion", tech: [], st: "noshow" },
+  { d: 0, t: "14:00", name: "María Ruiz", plate: "BD 4410", veh: "Mazda CX-5", desc: "Instalar cámara de retroceso", cat: "instalacion", tech: ["MP", "JR"], st: "done" },
+  { d: 1, t: "08:00", name: "Pedro Sánchez", plate: "AE 2231", veh: "Nissan Frontier", desc: "Cambio de aceite y filtros", cat: "mant_preventivo", tech: ["MP"], st: "received" },
+  { d: 1, t: "09:00", name: "Carla Méndez", plate: "BF 0098", veh: "Hyundai Tucson", desc: "Falla eléctrica en luces", cat: "reparacion", tech: [], st: "overdue" },
+  { d: 1, t: "11:00", name: "Jorge Vega", plate: "AC 5521", veh: "Toyota Corolla", desc: "Revisado + alineación", cat: "revisado", tech: ["JR"], st: "booked", selected: true },
+  { d: 1, t: "11:00", name: "Rosa Díaz", plate: null, veh: null, desc: "Cotizar sonido completo", cat: "none", tech: [], st: "booked" },
+  { d: 1, t: "15:00", name: "Iván Torres", plate: "CA 7743", veh: "Ford Ranger", desc: "Vibración al frenar", cat: "mant_correctivo", tech: ["LS"], st: "booked" },
+  { d: 2, t: "08:00", name: "Sofía Herrera", plate: "AD 3390", veh: "Honda CR-V", desc: "Revisado anual", cat: "revisado", tech: [], st: "booked" },
+  { d: 2, t: "10:00", name: "Diego Rojas", plate: "BB 6620", veh: "Suzuki Swift", desc: "Revisar aire acondicionado", cat: "none", tech: [], st: "booked" },
+  { d: 2, t: "13:00", name: "Lucía Navarro", plate: "CE 1185", veh: "Toyota RAV4", desc: "Mantenimiento 40.000 km", cat: "mant_preventivo", tech: ["MP"], st: "booked" },
+  { d: 3, t: "09:00", name: "Andrés Molina", plate: "AF 9001", veh: "Mitsubishi L200", desc: "Cambio de embrague", cat: "reparacion", tech: ["LS", "JR"], st: "booked" },
+  { d: 3, t: "14:00", name: "Elena Castro", plate: "BC 2457", veh: "Kia Sportage", desc: "Instalar luces LED", cat: "instalacion", tech: [], st: "booked" },
+  { d: 4, t: "08:00", name: "Raúl Ortega", plate: "AA 7310", veh: "Chevrolet Spark", desc: "Revisado anual", cat: "revisado", tech: [], st: "booked" },
+  { d: 4, t: "11:00", name: "Patricia Vargas", plate: "CD 4402", veh: "Nissan Kicks", desc: "Suspensión delantera", cat: "mant_correctivo", tech: ["LS"], st: "booked" },
+  { d: 4, t: "16:00", name: "Tomás Ríos", plate: "BE 8834", veh: "Hyundai Accent", desc: "Cambio de aceite", cat: "mant_preventivo", tech: [], st: "booked" },
+  { d: 5, t: "09:00", name: "Gabriel Paz", plate: "AG 1290", veh: "Jeep Wrangler", desc: "Instalar barra LED", cat: "instalacion", tech: ["MP"], st: "booked" },
+];
+const STATUS = {
+  booked: null,
+  received: { label: "Recibida", icon: I.check, cls: "muted" },
+  done: { label: "Completada", icon: I.check, cls: "muted" },
+  overdue: { label: "Vencida", icon: I.clock, cls: "overdue", red: true },
+  noshow: { label: "No se presentó", icon: I.x, cls: "cancelled" },
+};
+const TECH = { JR: "Julio Rangel", MP: "Marta Pinzón", LS: "Leo Salas" };
+
+const avatars = (list, size = 20) => list.length
+  ? `<div class="flex -space-x-1.5">${list.map((t) => `<span title="${TECH[t]}" class="grid place-items-center rounded-full bg-[var(--foreground)] text-[var(--background)] ring-2 ring-[var(--card)] font-semibold" style="width:${size}px;height:${size}px;font-size:${size * .42}px">${t}</span>`).join("")}</div>`
+  : `<span class="inline-flex items-center gap-1 truncate text-[11px] opacity-70">${I.user} Sin técnico</span>`;
+
+const statusPill = (st) => {
+  const s = STATUS[st];
+  if (!s) return "";
+  return `<span class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${s.red ? "bg-[var(--destructive)] text-white" : "bg-black/10 dark:bg-white/10"}">${s.icon}${s.label}</span>`;
+};
+
+function eventCard(e, { compact = false } = {}) {
+  const s = STATUS[e.st];
+  return `<div class="ev c-${e.cat} ${s ? s.cls : ""} flex h-full flex-col overflow-hidden rounded-lg text-left ${e.selected ? "ring-2 ring-[var(--foreground)]" : ""}">
+    <div class="strip truncate px-2 py-1 text-[11px] font-semibold">${e.t} · ${TYPES[e.cat]}</div>
+    <div class="flex min-h-0 flex-1 flex-col gap-0.5 px-2 py-1.5">
+      <div class="name truncate text-[13px] font-semibold">${e.name}</div>
+      <div class="flex items-center gap-1 truncate text-[11px] opacity-80">${I.car}<span class="truncate">${e.plate ? `${e.plate} · ${e.veh}` : "Sin vehículo"}</span></div>
+      <div class="mt-auto flex items-center justify-between gap-1">${compact || (STATUS[e.st] && !e.tech.length) ? "" : avatars(e.tech, 18)}${statusPill(e.st)}</div>
+    </div>
+  </div>`;
+}
+
+/* ---------- shared pieces ---------- */
+function seg(options, active, small = false) {
+  return `<div class="seg flex rounded-lg bg-[var(--muted)] p-1 ${small ? "text-xs" : "text-sm"} text-[var(--muted-foreground)]">${options
+    .map((o) => `<button aria-pressed="${o === active}" class="rounded-md ${small ? "px-2.5 py-1.5" : "px-3.5 py-1.5"} font-medium">${o}</button>`).join("")}</div>`;
+}
+function tabs(active) {
+  const t = [["Todas", null], ["Agendadas", 14], ["Vencidas", 2]];
+  return `<div class="flex gap-6 border-b border-[var(--border)] text-sm">${t.map(([l, n]) => `
+    <button class="-mb-px flex items-center gap-2 border-b-2 pb-2.5 ${l === active ? "border-[var(--foreground)] font-semibold" : "border-transparent text-[var(--muted-foreground)]"}">${l}${n ? `<span class="rounded-full px-1.5 text-[11px] font-semibold ${l === "Vencidas" ? "bg-[var(--destructive)] text-white" : "bg-[var(--muted)]"}">${n}</span>` : ""}</button>`).join("")}</div>`;
+}
+function miniCal() {
+  const head = ["L", "M", "M", "J", "V", "S", "D"];
+  const cells = [];
+  for (let i = 0; i < 3; i++) cells.push({ n: 28 + i, out: true });
+  for (let n = 1; n <= 31; n++) cells.push({ n });
+  cells.push({ n: 1, out: true });
+  const busy = new Set([2, 5, 6, 8, 9, 13, 14, 15, 19, 20, 22, 26, 27, 28, 29, 30, 31]);
+  return `<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+    <div class="mb-3 flex items-center justify-between"><strong class="text-sm">Octubre 2026</strong><div class="flex gap-1 text-[var(--muted-foreground)]"><button class="grid h-8 w-8 place-items-center rounded-md hover:bg-[var(--muted)]">${I.left}</button><button class="grid h-8 w-8 place-items-center rounded-md hover:bg-[var(--muted)]">${I.right}</button></div></div>
+    <div class="grid grid-cols-7 gap-y-1 text-center text-xs">
+      ${head.map((h) => `<div class="pb-1 text-[11px] font-medium text-[var(--muted-foreground)]">${h}</div>`).join("")}
+      ${cells.map((c, i) => {
+        const inWeek = !c.out && c.n >= 26 && c.n <= 31 || (c.out && c.n === 1);
+        const today = !c.out && c.n === 27;
+        return `<div class="relative ${inWeek ? "bg-[var(--muted)]" : ""} ${inWeek && i % 7 === 0 ? "rounded-l-full" : ""} ${inWeek && i % 7 === 6 ? "rounded-r-full" : ""}">
+          <span class="mx-auto grid h-8 w-8 place-items-center rounded-full ${today ? "bg-[var(--foreground)] font-bold text-[var(--background)]" : ""} ${c.out ? "text-[var(--muted-foreground)] opacity-50" : ""}">${c.n}</span>
+          ${!c.out && busy.has(c.n) && !today ? `<span class="absolute bottom-0 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-[var(--muted-foreground)]"></span>` : ""}</div>`;
+      }).join("")}
+    </div></div>`;
+}
+function nextCard() {
+  return `<div class="rounded-xl bg-teal-700 p-4 text-white">
+    <div class="flex items-center justify-between text-xs text-teal-100"><span class="inline-flex items-center gap-1">${I.bell} Próxima cita · en 20 min</span><span class="font-semibold">11:00</span></div>
+    <div class="mt-2 text-base font-semibold">Jorge Vega</div>
+    <div class="flex items-center gap-1 text-sm text-teal-100">${I.car} AC 5521 · Toyota Corolla</div>
+    <div class="mt-1 text-xs text-teal-100">Revisado + alineación</div>
+    <div class="mt-3 flex gap-2">
+      <button class="min-h-11 flex-1 rounded-lg bg-white px-3 text-sm font-semibold text-teal-800">Abrir orden</button>
+      <button class="min-h-11 rounded-lg bg-teal-800 px-3 text-sm font-medium" title="Llamar">${I.phone}</button>
+    </div></div>`;
+}
+function typeFilters() {
+  const counts = { instalacion: 4, mant_preventivo: 4, mant_correctivo: 2, reparacion: 3, revisado: 4, none: 2 };
+  return `<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+    <div class="mb-2 flex items-center justify-between"><strong class="text-sm">Tipo de servicio</strong><button class="text-xs text-[var(--muted-foreground)] underline">Todos</button></div>
+    ${Object.entries(TYPES).map(([k, l]) => `<label class="flex min-h-10 items-center gap-3 text-sm">
+      <input type="checkbox" checked class="h-4 w-4 accent-current"><span class="dot c-${k} h-2.5 w-2.5 rounded-full"></span><span class="flex-1">${l}</span>
+      <span class="rounded-md bg-[var(--muted)] px-1.5 text-xs font-semibold">${counts[k]}</span></label>`).join("")}
+  </div>`;
+}
+function weekSummary() {
+  const rows = [["Agendadas", 14, 100, "bg-sky-500"], ["Recibidas", 3, 22, "bg-emerald-500"], ["Vencidas", 2, 14, "bg-red-500"], ["No se presentó", 1, 7, "bg-zinc-400"]];
+  return `<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4">
+    <strong class="text-sm">Esta semana</strong>
+    <div class="mt-3 flex flex-col gap-3">${rows.map(([l, n, w, c]) => `
+      <div class="text-xs"><div class="mb-1 flex justify-between"><span class="flex items-center gap-2"><span class="h-2 w-2 rounded-full ${c}"></span>${l}</span><strong>${n}</strong></div>
+      <div class="h-1.5 rounded-full bg-[var(--muted)]"><div class="h-1.5 rounded-full ${c}" style="width:${w}%"></div></div></div>`).join("")}</div></div>`;
+}
+function appSidebar() {
+  const g = [["Taller", ["Tablero", "Kanban", "Agenda", "Métricas"]], ["CRM", ["Clientes", "Órdenes de servicio", "Vencimientos", "Inventario"]], ["Catálogo", ["Generar Catálogos", "Catálogos Generados"]]];
+  return `<aside class="flex w-56 shrink-0 flex-col gap-5 border-r border-[var(--border)] bg-[var(--sidebar)] p-4 text-sm">
+    <div class="flex items-center gap-2 font-bold"><span class="grid h-8 w-8 place-items-center rounded-lg bg-[var(--foreground)] text-[var(--background)]">D</span>Dforce</div>
+    ${g.map(([h, items]) => `<div><div class="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">${h}</div>
+      ${items.map((i) => `<div class="rounded-md px-2 py-1.5 ${i === "Agenda" ? "bg-[var(--muted)] font-semibold" : "text-[var(--muted-foreground)]"}">${i}</div>`).join("")}</div>`).join("")}
+  </aside>`;
+}
+
+function appRail() {
+  return `<aside class="flex w-16 shrink-0 flex-col items-center gap-3 border-r border-[var(--border)] bg-[var(--sidebar)] py-4">
+    <span class="grid h-9 w-9 place-items-center rounded-lg bg-[var(--foreground)] font-bold text-[var(--background)]">D</span>
+    ${[I.wrench, I.cal, I.user, I.filter].map((g, i) => `<span class="grid h-11 w-11 place-items-center rounded-lg ${i === 1 ? "bg-[var(--muted)] text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}">${g}</span>`).join("")}
+  </aside>`;
+}
+
+/* ---------- week grid ---------- */
+const H0 = 8, H1 = 18, ROW = 104;
+const hours = Array.from({ length: H1 - H0 }, (_, i) => H0 + i);
+const yOf = (t) => { const [h, m] = t.split(":").map(Number); return (h - H0 + m / 60) * ROW; };
+
+function weekGrid({ popover = false, slot = false } = {}) {
+  const cols = DAYS.map((d, di) => {
+    const evs = EVENTS.filter((e) => e.d === di);
+    const byTime = {};
+    evs.forEach((e) => (byTime[e.t] ??= []).push(e));
+    const blocks = Object.values(byTime).flatMap((group) => group.map((e, i) => `
+      <div class="absolute p-1" style="top:${yOf(e.t)}px;height:${ROW}px;left:${(i / group.length) * 100}%;width:${100 / group.length}%">${eventCard(e)}</div>`)).join("");
+    return `<div class="relative border-l border-[var(--border)] ${d.weekend ? "hatch" : ""} ${d.today ? "bg-[var(--muted)]/40" : ""}" style="height:${hours.length * ROW}px">
+      ${hours.map((_, i) => `<div class="absolute inset-x-0 border-t border-[var(--border)]" style="top:${i * ROW}px"></div>`).join("")}
+      ${blocks}
+      ${slot && di === 3 ? `<div class="absolute inset-x-1 grid place-items-center rounded-lg border-2 border-dashed border-emerald-500/70 text-emerald-500" style="top:${yOf("11:00") + 4}px;height:${ROW - 8}px">${I.plus}</div>` : ""}
+      ${d.today ? `<div class="absolute inset-x-0 z-10 flex items-center" style="top:${yOf("10:40")}px"><span class="-ml-1 h-2.5 w-2.5 rounded-full bg-red-500"></span><span class="h-0.5 flex-1 bg-red-500"></span></div>` : ""}
+    </div>`;
+  }).join("");
+
+  return `<div class="relative overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
+    <div class="grid border-b border-[var(--border)]" style="grid-template-columns:64px repeat(7,1fr)">
+      <div class="flex items-center justify-center gap-1 text-[var(--muted-foreground)]"><button class="grid h-9 w-9 place-items-center rounded-md hover:bg-[var(--muted)]">${I.left}</button></div>
+      ${DAYS.map((d) => `<div class="border-l border-[var(--border)] px-3 py-2.5 ${d.today ? "bg-[var(--muted)]" : ""}">
+        <div class="text-[11px] font-semibold tracking-wide text-[var(--muted-foreground)]">${d.k}</div>
+        <div class="flex items-baseline gap-2"><span class="text-xl font-bold ${d.today ? "" : ""}">${d.n}</span>${d.today ? `<span class="rounded-full bg-[var(--foreground)] px-1.5 text-[10px] font-semibold text-[var(--background)]">Hoy</span>` : ""}
+        <span class="ml-auto text-[11px] text-[var(--muted-foreground)]">${EVENTS.filter((e) => e.d === DAYS.indexOf(d)).length || ""}</span></div></div>`).join("")}
+    </div>
+    <div class="relative max-h-[820px] overflow-y-auto">
+      <div class="grid" style="grid-template-columns:64px repeat(7,1fr)">
+        <div class="relative" style="height:${hours.length * ROW}px">
+          ${hours.map((h, i) => `<div class="absolute right-2 -translate-y-1/2 text-[11px] text-[var(--muted-foreground)]" style="top:${i * ROW}px">${i ? `${String(h).padStart(2, "0")}:00` : ""}</div>`).join("")}
+          <div class="absolute right-1 z-10 -translate-y-1/2 rounded bg-red-500 px-1 text-[10px] font-semibold text-white" style="top:${yOf("10:40")}px">10:40</div>
+        </div>
+        ${cols}
+      </div>
+      ${popover ? detailPopover() : ""}
+    </div>
+  </div>`;
+}
+
+function detailPopover(sheet = false) {
+  return `<div class="${sheet ? "" : "absolute z-20 w-[340px]"} rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-2xl" ${sheet ? "" : `style="left:calc(64px + (100% - 64px) * 2 / 7 + 8px);top:${yOf("09:00")}px"`}>
+    <div class="flex items-start justify-between gap-3">
+      <div><div class="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">Cita agendada</div>
+      <div class="text-lg font-bold">Jorge Vega</div></div>
+      <div class="flex gap-1 text-[var(--muted-foreground)]"><button class="grid h-11 w-11 place-items-center rounded-md hover:bg-[var(--muted)]" aria-label="Editar">${I.edit}</button>${sheet ? `<button class="grid h-11 w-11 place-items-center rounded-md hover:bg-[var(--muted)]" aria-label="Cerrar">${I.x}</button>` : ""}</div>
+    </div>
+    <div class="mt-3 flex flex-col gap-2 text-sm">
+      <div class="flex items-center justify-between rounded-lg bg-[var(--muted)] px-3 py-2.5"><span>Martes 27 de octubre</span><span class="font-semibold">11:00</span></div>
+      <div class="flex items-center gap-2">${I.car}<span>AC 5521 · Toyota Corolla 2019</span></div>
+      <div class="flex items-center gap-2">${I.phone}<span>6612-4480</span></div>
+      <div class="rounded-lg border border-[var(--border)] px-3 py-2 text-[var(--muted-foreground)]">Revisado + alineación. Pidió que lo llamen al terminar.</div>
+    </div>
+    <div class="mt-3 flex flex-wrap gap-1.5">${["revisado", "mant_preventivo", "reparacion"].map((k, i) => `<span class="ev c-${k} inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${i ? "opacity-40" : ""}">${i ? "" : I.check}${TYPES[k]}</span>`).join("")}</div>
+    <div class="mt-3 flex items-center justify-between"><div class="flex items-center gap-2 text-sm">${avatars(["JR"], 28)}<span>Julio Rangel</span></div><button class="grid h-11 w-11 place-items-center rounded-full border border-dashed border-[var(--border)] text-[var(--muted-foreground)]" aria-label="Asignar técnico">${I.plus}</button></div>
+    <button class="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] text-sm font-semibold text-[var(--primary-foreground)]">${I.ext} Abrir orden</button>
+    <div class="mt-2 grid grid-cols-2 gap-2">
+      <button class="min-h-11 rounded-lg border border-[var(--border)] text-sm font-medium">Reprogramar</button>
+      <button class="min-h-11 rounded-lg border border-red-500/50 text-sm font-medium text-red-500">No se presentó</button>
+    </div>
+  </div>`;
+}
+
+function newPopover() {
+  return `<div class="w-[380px] rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-2xl">
+    <div class="flex items-center justify-between"><div class="text-lg font-bold">Nueva cita</div><button class="grid h-11 w-11 place-items-center rounded-md text-[var(--muted-foreground)]">${I.x}</button></div>
+    <div class="mt-3 flex flex-col gap-3 text-sm">
+      <div class="grid grid-cols-[1fr_110px] gap-2">
+        <div class="flex min-h-11 items-center justify-between rounded-lg border border-[var(--border)] px-3">Jueves 29 oct ${I.cal}</div>
+        <div class="flex min-h-11 items-center justify-between rounded-lg border border-[var(--border)] px-3">11:00 <span class="opacity-50">▾</span></div>
+      </div>
+      <div class="flex min-h-11 items-center gap-2 rounded-lg border border-[var(--border)] px-3 text-[var(--muted-foreground)]">${I.search} Buscar cliente por nombre, teléfono o placa</div>
+      <div class="rounded-lg border border-[var(--border)]">
+        <div class="flex items-center justify-between px-3 py-2"><div><div class="font-medium">Elena Castro</div><div class="text-xs text-[var(--muted-foreground)]">BC 2457, AF 1102</div></div><button class="min-h-11 rounded-md border border-[var(--border)] px-3 text-xs font-medium">Seleccionar</button></div>
+      </div>
+      <div><div class="mb-1.5 text-xs font-medium text-[var(--muted-foreground)]">Vehículo <span class="opacity-70">(opcional)</span></div>
+        <div class="flex gap-2">${["BC 2457 · Kia Sportage", "AF 1102 · Kia Picanto"].map((v, i) => `<button class="min-h-11 flex-1 rounded-lg border px-2 text-xs ${i ? "border-[var(--border)]" : "border-[var(--foreground)] font-semibold"}">${v}</button>`).join("")}</div></div>
+      <div><div class="mb-1.5 text-xs font-medium text-[var(--muted-foreground)]">Tipo de servicio <span class="opacity-70">(opcional)</span></div>
+        <div class="flex flex-wrap gap-1.5">${Object.keys(TYPES).filter((k) => k !== "none").map((k) => `<button class="ev c-${k} inline-flex min-h-9 items-center gap-1 rounded-full px-3 text-xs font-semibold ${k === "instalacion" ? "" : "opacity-50"}">${k === "instalacion" ? I.check : ""}${TYPES[k]}</button>`).join("")}</div></div>
+      <div class="min-h-[64px] rounded-lg border border-[var(--border)] px-3 py-2 text-[var(--muted-foreground)]">Descripción: Instalar luces LED en neblineros</div>
+    </div>
+    <button class="mt-4 min-h-11 w-full rounded-lg bg-[var(--primary)] text-sm font-semibold text-[var(--primary-foreground)]">Agendar cita</button>
+  </div>`;
+}
+
+function pageTop({ range = "26 oct – 1 nov", view = "Semana", compact = false } = {}) {
+  return `<div class="flex flex-col gap-4">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div><div class="text-xs text-[var(--muted-foreground)]">Taller / <span class="text-[var(--foreground)]">Agenda</span></div>
+        <h1 class="mt-1 text-2xl font-bold">Agenda</h1>
+        <p class="text-sm text-[var(--muted-foreground)]">Citas del taller y órdenes en curso</p></div>
+      <div class="flex items-center gap-2">
+        ${compact ? "" : `<div class="flex min-h-11 w-64 items-center gap-2 rounded-lg border border-[var(--border)] px-3 text-sm text-[var(--muted-foreground)]">${I.search} Buscar placa o cliente…</div>`}
+        <button class="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--primary)] px-4 text-sm font-semibold text-[var(--primary-foreground)]">${I.plus} Nueva cita</button>
+      </div>
+    </div>
+    ${tabs("Todas")}
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <h2 class="text-xl font-bold">Octubre 2026</h2>
+        <button class="min-h-11 rounded-lg border border-[var(--border)] px-3 text-sm font-medium">Hoy</button>
+        <div class="flex rounded-lg border border-[var(--border)]"><button class="grid h-11 w-11 place-items-center">${I.left}</button><button class="grid h-11 w-11 place-items-center border-l border-[var(--border)]">${I.right}</button></div>
+      </div>
+      <div class="flex items-center gap-2">${seg(["Día", "Semana", "Mes", "Combinada"], view)}
+        <div class="hidden min-h-11 items-center gap-2 rounded-lg border border-[var(--border)] px-3 text-sm md:flex">${I.cal} ${range}</div></div>
+    </div>
+  </div>`;
+}
+
+/* ---------- frames ---------- */
+function frame(title, notes, width, inner) {
+  return `<section class="flex flex-col gap-3">
+    <div><h3 class="text-lg font-bold text-zinc-900">${title}</h3>
+    <ul class="note mt-1 flex max-w-[1200px] flex-col gap-0.5 text-zinc-600">${notes.map((n) => `<li>• ${n}</li>`).join("")}</ul></div>
+    <div class="frame themed overflow-hidden rounded-2xl shadow-xl ring-1 ring-black/10" style="width:${width}px">${inner}</div>
+  </section>`;
+}
+
+const desktop = frame("1 · Escritorio — Semana (con el detalle de una cita abierto)", [
+  "Menú lateral colapsado (riel) para darle ancho a la semana; se expande como hoy. Base: la referencia de Managekō (pestañas, franja de hora arriba de cada tarjeta, línea roja de 'ahora', día de hoy resaltado, fin de semana rayado).",
+  "Columna izquierda: mini calendario con la semana marcada y puntos en días con citas · 'Próxima cita' (ref. 2) · filtro por tipo de servicio con conteo (ref. 1) · resumen de la semana (ref. 3).",
+  "Color = tipo de servicio. El estado SIEMPRE va además en texto: Recibida / Completada (atenuadas), Vencida (borde rojo), No se presentó (tachada).",
+  "Clic en una tarjeta abre el detalle al costado (ref. 3) con Abrir orden, Reprogramar y No se presentó. La pestaña 'Vencidas' reemplaza al panel de abajo de hoy.",
+  "Cada cita ocupa un bloque de 1 hora: hoy la cita guarda solo la hora de llegada, no una duración.",
+], 1440, `<div class="flex">${appRail()}
+  <div class="canvas flex-1 p-6"><div class="flex gap-5">
+    <div class="flex w-72 shrink-0 flex-col gap-4">${miniCal()}${nextCard()}${typeFilters()}${weekSummary()}</div>
+    <div class="flex min-w-0 flex-1 flex-col gap-4">${pageTop()}${weekGrid({ popover: true, slot: true })}</div>
+  </div></div></div>`);
+
+function dayTimeline(dayIdx, h = 560) {
+  const evs = EVENTS.filter((e) => e.d === dayIdx);
+  const byTime = {};
+  evs.forEach((e) => (byTime[e.t] ??= []).push(e));
+  return `<div class="relative overflow-y-auto" style="max-height:${h}px"><div class="relative" style="height:${hours.length * ROW}px;margin-left:56px">
+    ${hours.map((hr, i) => `<div class="absolute inset-x-0 border-t border-[var(--border)]" style="top:${i * ROW}px"><span class="absolute -left-14 -translate-y-1/2 text-[11px] text-[var(--muted-foreground)]">${i ? `${String(hr).padStart(2, "0")}:00` : ""}</span></div>`).join("")}
+    ${Object.values(byTime).flatMap((g) => g.map((e, i) => `<div class="absolute p-1" style="top:${yOf(e.t)}px;height:${ROW}px;left:${(i / g.length) * 100}%;width:${100 / g.length}%">${eventCard(e)}</div>`)).join("")}
+    <div class="absolute inset-x-0 z-10 flex items-center" style="top:${yOf("10:40")}px"><span class="-ml-1 h-2.5 w-2.5 rounded-full bg-red-500"></span><span class="h-0.5 flex-1 bg-red-500"></span></div>
+  </div></div>`;
+}
+
+const SHOP = [
+  { plate: "AE 2231", veh: "Nissan Frontier", name: "Pedro Sánchez", st: "En diagnóstico", since: "2 h 40 min", tech: ["MP"], cat: "mant_preventivo" },
+  { plate: "BD 7720", veh: "Toyota Prado", name: "Rafael Pinto", st: "En progreso", since: "1 día", tech: ["JR", "LS"], cat: "reparacion" },
+  { plate: "CF 0034", veh: "Kia Soluto", name: "Nadia Ríos", st: "En espera", hold: "Repuesto · hace 2 días", since: "2 días", tech: ["LS"], cat: "reparacion", warn: true },
+  { plate: "AB 9981", veh: "Honda Civic", name: "Óscar León", st: "Lista para revisión", since: "35 min", tech: ["MP"], cat: "instalacion" },
+  { plate: "CC 6612", veh: "Ford Explorer", name: "Inés Vidal", st: "Recibida", since: "15 min", tech: [], cat: "revisado" },
+];
+const shopCard = (o) => `<div class="rounded-xl border border-[var(--border)] bg-[var(--card)] p-3">
+  <div class="flex items-start justify-between gap-2"><div class="min-w-0"><div class="flex items-center gap-2"><span class="dot c-${o.cat} h-2 w-2 rounded-full"></span><strong class="text-sm">${o.plate}</strong><span class="truncate text-xs text-[var(--muted-foreground)]">${o.veh}</span></div>
+  <div class="mt-0.5 text-xs text-[var(--muted-foreground)]">${o.name}</div></div>
+  <span class="shrink-0 rounded-full bg-[var(--muted)] px-2 py-0.5 text-[11px] font-semibold">${o.st}</span></div>
+  ${o.hold ? `<div class="mt-2 flex items-center gap-1.5 rounded-md bg-amber-500/15 px-2 py-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">${I.pause} ${o.hold}</div>` : ""}
+  <div class="mt-2 flex items-center justify-between text-[11px] text-[var(--muted-foreground)]"><span class="inline-flex items-center gap-1">${I.clock} ${o.since} en este estado</span>${avatars(o.tech, 20)}</div>
+</div>`;
+
+const combined = frame("2 · Tablet horizontal / laptop (1024) — Combinada", [
+  "Lo que definiste: la agenda del día con sus detalles + las órdenes en proceso. Izquierda el día; derecha 'En el taller ahora'.",
+  "En tablet la columna izquierda (mini calendario, filtros) se esconde detrás del botón 'Filtros'.",
+  "Las órdenes en espera muestran el motivo y cuánto llevan (mismo aviso ámbar que el kanban).",
+], 1024, `<div class="canvas flex flex-col gap-4 p-5">
+  ${pageTop({ view: "Combinada", compact: true, range: "Martes 27 oct" })}
+  <div class="flex gap-4">
+    <div class="flex-1 rounded-xl border border-[var(--border)] bg-[var(--card)] p-3">
+      <div class="mb-2 flex items-center justify-between px-1"><strong class="text-sm">Martes 27 · 5 citas</strong><button class="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 text-xs">${I.filter} Filtros</button></div>
+      ${dayTimeline(1, 520)}
+    </div>
+    <div class="flex w-[360px] shrink-0 flex-col gap-2 rounded-xl border border-[var(--border)] bg-[var(--muted)]/40 p-3">
+      <div class="flex items-center justify-between px-1"><strong class="text-sm">En el taller ahora</strong><span class="rounded-full bg-[var(--foreground)] px-2 text-xs font-semibold text-[var(--background)]">5</span></div>
+      ${SHOP.map(shopCard).join("")}
+    </div>
+  </div></div>`);
+
+function monthGrid() {
+  const cells = [];
+  for (let i = 0; i < 3; i++) cells.push({ n: 28 + i, out: true });
+  for (let n = 1; n <= 31; n++) cells.push({ n });
+  cells.push({ n: 1, out: true });
+  const per = (n) => EVENTS.filter((e) => DAYS[e.d].n === n && n >= 26).concat(
+    n === 6 ? [EVENTS[3], EVENTS[8], EVENTS[13], EVENTS[5]] : n === 14 ? [EVENTS[11], EVENTS[12]] : n === 20 ? [EVENTS[2]] : []);
+  return `<div class="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
+    <div class="grid grid-cols-7 border-b border-[var(--border)] text-center text-[11px] font-semibold text-[var(--muted-foreground)]">${["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"].map((d) => `<div class="py-2">${d}</div>`).join("")}</div>
+    <div class="grid grid-cols-7">${cells.map((c, i) => {
+      const evs = c.out ? [] : per(c.n);
+      const today = !c.out && c.n === 27;
+      return `<div class="min-h-[108px] border-b border-l border-[var(--border)] p-1.5 ${i % 7 >= 5 ? "hatch" : ""} ${today ? "bg-[var(--muted)]" : ""}">
+        <div class="mb-1 flex items-center justify-between"><span class="grid h-7 w-7 place-items-center rounded-full text-xs font-semibold ${today ? "bg-[var(--foreground)] text-[var(--background)]" : ""} ${c.out ? "opacity-40" : ""}">${c.n}</span></div>
+        <div class="flex flex-col gap-1">${evs.slice(0, 3).map((e) => `<div class="ev c-${e.cat} ${STATUS[e.st]?.cls ?? ""} flex items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-[11px] font-medium">${e.st === "overdue" ? "⚠ " : ""}${e.t} ${e.plate ?? e.name.split(" ")[0]}</div>`).join("")}
+        ${evs.length > 3 ? `<button class="min-h-7 text-left text-[11px] font-semibold text-[var(--muted-foreground)]">+${evs.length - 3} más</button>` : ""}</div></div>`;
+    }).join("")}</div></div>`;
+}
+
+const tablet = frame("3 · Tablet vertical (768) — Mes", [
+  "Cada día muestra hasta 3 citas con hora + placa, color por tipo; '+N más' abre ese día.",
+  "Tocar un día lleva a la vista Día. Vencida lleva ⚠ además del borde rojo.",
+], 768, `<div class="canvas flex flex-col gap-4 p-5">${pageTop({ view: "Mes", compact: true, range: "Octubre" })}${monthGrid()}</div>`);
+
+function phoneDay() {
+  return `<div class="canvas flex h-[844px] flex-col">
+    <div class="flex items-center justify-between border-b border-[var(--border)] bg-[var(--card)] px-4 py-2"><button class="grid h-11 w-11 place-items-center">${I.menu}</button><strong>Agenda</strong><button class="grid h-11 w-11 place-items-center">${I.search}</button></div>
+    <div class="flex flex-col gap-3 bg-[var(--card)] px-4 pb-3 pt-3">
+      <div class="flex items-center justify-between"><h2 class="text-lg font-bold">Octubre 2026</h2><div class="flex"><button class="grid h-11 w-11 place-items-center">${I.left}</button><button class="grid h-11 w-11 place-items-center">${I.right}</button></div></div>
+      ${seg(["Día", "Semana", "Mes", "Comb."], "Día", true).replace("flex rounded-lg", "grid grid-cols-4 rounded-lg")}
+      <div class="scroll-x -mx-4 flex gap-2 overflow-x-auto px-4">${DAYS.map((d, i) => `<button class="flex min-h-[64px] w-12 shrink-0 flex-col items-center justify-center rounded-xl ${d.today ? "bg-teal-700 text-white" : "bg-[var(--muted)]"}">
+        <span class="text-[10px] font-semibold opacity-80">${d.k}</span><span class="text-lg font-bold">${d.n}</span>
+        <span class="mt-0.5 h-1 w-1 rounded-full ${EVENTS.some((e) => e.d === i) ? (d.today ? "bg-white" : "bg-[var(--muted-foreground)]") : "bg-transparent"}"></span></button>`).join("")}</div>
+      <div class="scroll-x flex gap-2 overflow-x-auto text-xs">${[["Todas", 5, true], ["Agendadas", 3], ["Vencidas", 1, false, true]].map(([l, n, on, red]) => `<button class="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 ${on ? "border-[var(--foreground)] bg-[var(--foreground)] text-[var(--background)]" : "border-[var(--border)]"}">${l}<span class="rounded-full px-1.5 font-semibold ${red ? "bg-[var(--destructive)] text-white" : on ? "bg-[var(--background)]/20" : "bg-[var(--muted)]"}">${n}</span></button>`).join("")}</div>
+    </div>
+    <div class="relative flex-1 overflow-hidden px-3 pt-2">${dayTimeline(1, 600).replace("margin-left:56px", "margin-left:48px").replaceAll("-left-14", "-left-12")}
+      <button class="absolute bottom-5 right-5 inline-flex min-h-14 items-center gap-2 rounded-full bg-[var(--primary)] px-5 text-sm font-semibold text-[var(--primary-foreground)] shadow-xl">${I.plus} Nueva cita</button>
+    </div>
+  </div>`;
+}
+function phoneSheet() {
+  return `<div class="canvas relative h-[844px]">
+    <div class="absolute inset-0 opacity-40">${phoneDay()}</div>
+    <div class="absolute inset-0 bg-black/50"></div>
+    <div class="absolute inset-x-0 bottom-0 rounded-t-3xl bg-[var(--card)] pt-2">
+      <div class="mx-auto mb-1 h-1.5 w-10 rounded-full bg-[var(--muted)]"></div>
+      ${detailPopover(true).replace("rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-2xl", "p-5")}
+    </div>
+  </div>`;
+}
+
+const phones = `<section class="flex flex-col gap-3">
+  <div><h3 class="text-lg font-bold text-zinc-900">4 · Celular (390) — Día y detalle</h3>
+  <ul class="note mt-1 flex flex-col gap-0.5 text-zinc-600">
+    <li>• Franja de días deslizable (ref. 2) con punto en los días con citas; chips Todas / Agendadas / Vencidas.</li>
+    <li>• Botón flotante 'Nueva cita'. Tocar una cita abre el detalle como hoja desde abajo, con los mismos botones.</li>
+    <li>• La vista Semana en celular muestra la lista del día elegido (7 columnas no entran en 390 px).</li>
+  </ul></div>
+  <div class="flex gap-8">
+    <div class="frame themed overflow-hidden rounded-[2.2rem] shadow-xl ring-8 ring-zinc-900" style="width:390px">${phoneDay()}</div>
+    <div class="frame themed overflow-hidden rounded-[2.2rem] shadow-xl ring-8 ring-zinc-900" style="width:390px">${phoneSheet()}</div>
+  </div></section>`;
+
+const create = frame("5 · Nueva cita — desde el botón o tocando un hueco vacío", [
+  "Tocar un hueco libre de la grilla (el '+' punteado del jueves 11:00 en el frame 1) abre esto con día y hora ya puestos (ref. 3).",
+  "NUEVO y opcional: vehículo y tipo de servicio. Hoy la cita solo pide cliente, día, hora y descripción; sin tipo, la tarjeta sale gris ('Sin tipo').",
+  "En celular es la misma tarjeta, a pantalla completa.",
+], 420, `<div class="canvas p-5">${newPopover()}</div>`);
+
+const legend = frame("Leyenda de colores y estados", [
+  "Los colores salen de la paleta del sistema y funcionan en claro y oscuro; ningún estado depende solo del color.",
+], 1000, `<div class="canvas grid grid-cols-3 gap-3 p-5">
+  ${Object.keys(TYPES).map((k) => `<div style="height:84px">${eventCard({ t: "09:00", name: TYPES[k], plate: "AB 1234", veh: "Toyota Hilux", cat: k, tech: ["JR"], st: "booked" }, { compact: true })}</div>`).join("")}
+  ${["received", "done", "overdue", "noshow"].map((st) => `<div style="height:84px">${eventCard({ t: "09:00", name: STATUS[st].label, plate: "AB 1234", veh: "Toyota Hilux", cat: "mant_preventivo", tech: [], st }, { compact: true })}</div>`).join("")}
+</div>`);
+
+document.getElementById("root").innerHTML = desktop + combined + tablet + phones + create + legend;
+
+function setTheme(t) {
+  document.querySelectorAll(".themed").forEach((el) => { el.classList.toggle("theme-dark", t === "dark"); el.classList.toggle("theme-light", t === "light"); el.classList.toggle("dark", t === "dark"); });
+  document.getElementById("t-dark").className = `rounded-md px-3 py-1 ${t === "dark" ? "bg-zinc-100 text-zinc-900" : ""}`;
+  document.getElementById("t-light").className = `rounded-md px-3 py-1 ${t === "light" ? "bg-zinc-100 text-zinc-900" : ""}`;
+}
+document.getElementById("t-dark").onclick = () => setTheme("dark");
+document.getElementById("t-light").onclick = () => setTheme("light");
+setTheme("dark");
+</script>
+</body>
+</html>

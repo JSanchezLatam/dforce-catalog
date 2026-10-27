@@ -111,6 +111,13 @@ evidence.
   design doc and got repealed wholesale on `feat/customers-ui-polish` before
   GGA caught it; it is written here so the next reader finds it.
 
+- **Mockup first, for every new module and every changed view.** Decided by
+  the owner 2026-10-27, after the agenda shipped without one and its UX was
+  rejected. Before design or apply touches UI, a self-contained HTML mockup
+  (`openspec/changes/<name>/mockup/index.html`, tokens copied from
+  `globals.css`, light and dark, desktop/tablet/phone) goes to the owner, and
+  nothing is built until they approve it.
+
 Writing a component test is a procedure, not a decision — see the
 `component-testing` skill.
 
