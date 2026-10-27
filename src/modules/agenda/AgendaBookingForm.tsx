@@ -39,17 +39,6 @@ export function AgendaBookingForm({ open, onOpenChange, day, time = "", canCreat
   );
 }
 
-/** The per-day "+" control of the month cells (until the month view opens the shell's dialog): 44px, named by its day. */
-export function DayBooking({ day }: { day: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <Button type="button" variant="ghost" className="min-h-11 min-w-11" aria-label={`Agendar cita el ${day.slice(8)}/${day.slice(5, 7)}`} onClick={() => setOpen(true)}>+</Button>
-      <AgendaBookingForm open={open} onOpenChange={setOpen} day={day} />
-    </>
-  );
-}
-
 /** Server refusals worth their own Spanish line; anything else shows the route's own `errors` text. */
 function refusal(status: number, body: { error?: string; errors?: Record<string, string> } | null): string {
   if (body?.error === "cliente_deactivated") return "Ese cliente está desactivado. Elegí otro.";

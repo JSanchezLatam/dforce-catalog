@@ -194,10 +194,10 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU17: month (branch `feat/agenda-redesign-wu17-month`) [~370]
 
-- [ ] 17.1 RED `MonthView.test.tsx`: five appointments -> 3 cards + "+2 más" linking `/agenda?view=day&date=<day>`; exactly 3 -> no control; 4 -> "+1 más"; cards are buttons opening the Detail with a status glyph and accessible "Vencida"; outside-month days dimmed but carrying cards; today marked; phone width -> day number link plus "2 citas" only, no cards, no "+N más"; the cell "+" opens booking prefilled with that day; cells and controls `min-h-11 min-w-11`. (Month cell cap; Phone month cell; Month card carries status text; Month cell prefill)
-- [ ] 17.2 GREEN `MonthView.tsx`, shell passes `onSelect` / `onSlot`; DELETE `AgendaChip.tsx`, `AgendaChip.test.tsx`; drop `DayBooking` from `AgendaBookingForm.tsx` if unused.
-- [ ] 17.3 Mutation-verify: `slice(0,4)` -> "Month cell cap" red; `>= 3` -> "Exactly three" red; render cards on the phone -> its test red.
-- [ ] 17.4 Close: C + B (768 portrait month is mockup frame 3).
+- [x] 17.1 RED `MonthView.test.tsx`: five appointments -> 3 cards + "+2 más" linking `/agenda?view=day&date=<day>`; exactly 3 -> no control; 4 -> "+1 más"; cards are buttons opening the Detail with a status glyph and accessible "Vencida"; outside-month days dimmed but carrying cards; today marked; phone width -> day number link plus "2 citas" only, no cards, no "+N más"; the cell "+" opens booking prefilled with that day; cells and controls `min-h-11 min-w-11`. (Month cell cap; Phone month cell; Month card carries status text; Month cell prefill)
+- [x] 17.2 GREEN `MonthView.tsx`, shell passes `onSelect` / `onSlot`; DELETE `AgendaChip.tsx`, `AgendaChip.test.tsx`; drop `DayBooking` from `AgendaBookingForm.tsx` if unused.
+- [x] 17.3 Mutation-verify: `slice(0,4)` -> "Month cell cap" red; `>= 3` -> "Exactly three" red; render cards on the phone -> its test red.
+- [x] 17.4 Close: C + B (768 portrait month is mockup frame 3).
 
 ## WU18: combined (branch `feat/agenda-redesign-wu18-combined`) [~300]
 

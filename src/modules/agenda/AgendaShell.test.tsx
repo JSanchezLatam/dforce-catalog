@@ -45,7 +45,7 @@ describe("AgendaShell", () => {
     expect(screen.getByRole("button", { name: /Cliente a/ })).toBeInTheDocument();
   });
 
-  it("month keeps the legacy month grid", () => {
+  it("month renders the month grid", () => {
     render(<AgendaShell {...base} view="month" items={[at("a")]} />);
     expect(screen.getAllByTestId(/^cell-/)).toHaveLength(35);
   });
@@ -209,7 +209,7 @@ describe("AgendaShell", () => {
     expect(screen.getByRole("dialog", { name: "¿El cliente no se presentó?" })).toBeInTheDocument();
   });
 
-  it("switching to the month view (same shell instance) drops an open Detail instead of floating it over the legacy grid", async () => {
+  it("switching to the month view (same shell instance) drops an open Detail instead of floating it over the month grid", async () => {
     const { rerender } = render(<AgendaShell {...base} view="day" items={[at("a")]} />);
     await userEvent.click(card(/Cliente a/));
     expect(popover()).not.toBeNull();
@@ -228,10 +228,16 @@ describe("AgendaShell", () => {
     expect(within(popover()!).queryByRole("button", { name: "+ Asignar técnico" })).not.toBeInTheDocument();
   });
 
-  it("month has no Detail yet: the legacy chips stay links", () => {
-    render(<AgendaShell {...base} view="month" items={[at("a")]} />);
+  it("month: a card opens the Detail and the cell '+' opens the booking dialog on that day with no time", async () => {
+    render(<AgendaShell {...base} view="month" items={[at("a", { vehicleLabel: "Sin vehículo" })]} />);
     expect(popover()).toBeNull();
-    expect(sheet()).toBeNull();
+    await userEvent.click(card(/Cliente/));
+    expect(card(/Cliente/)).toHaveAttribute("aria-pressed", "true");
+    expect(within(popover()!).getByText("Cliente a")).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(screen.getByRole("button", { name: "Nueva cita el 20/10" }));
+    expect((screen.getByLabelText("Día") as HTMLInputElement).value).toBe("2026-10-20");
+    expect((screen.getByLabelText("Hora") as HTMLInputElement).value).toBe("");
   });
 
   describe("search and tabs", () => {
