@@ -13,7 +13,7 @@ import { FIELD_ERROR } from "@/shared/ui/styles";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 /** "Reprogramar": a booked appointment (Vencida or not) moves to a new Panama day and time. Muted chips get nothing. */
-export function ReprogramDialog({ item }: { item: AgendaItem }) {
+export function ReprogramDialog({ item, onSuccess }: { item: AgendaItem; onSuccess?: () => void }) {
   const [open, setOpen] = useState(false);
   if (item.muted) return null;
   return (
@@ -23,13 +23,13 @@ export function ReprogramDialog({ item }: { item: AgendaItem }) {
         <DialogHeader>
           <DialogTitle>Reprogramar cita</DialogTitle>
         </DialogHeader>
-        <ReprogramFields item={item} onDone={() => setOpen(false)} />
+        <ReprogramFields item={item} onDone={() => setOpen(false)} onSuccess={onSuccess} />
       </DialogContent>
     </Dialog>
   );
 }
 
-function ReprogramFields({ item, onDone }: { item: AgendaItem; onDone: () => void }) {
+function ReprogramFields({ item, onDone, onSuccess }: { item: AgendaItem; onDone: () => void; onSuccess?: () => void }) {
   const router = useRouter();
   const { addToast } = useToast();
   const id = useId();
@@ -56,6 +56,7 @@ function ReprogramFields({ item, onDone }: { item: AgendaItem; onDone: () => voi
     }
     // ABOVE the refresh, BELOW the try/catch (inside patchOrder).
     onDone();
+    onSuccess?.();
     addToast("success", "Cita reprogramada");
     router.refresh();
   }
