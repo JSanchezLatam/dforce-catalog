@@ -6,7 +6,7 @@ Baseline: `openspec/specs/user-management/spec.md` (incomplete; the "Jefe de Tal
 
 ### Requirement: Pantalla Is an Assignable Role
 
-An `administrador` MUST be able to create a user with, and change a user to, the role `pantalla` (a read-only account for the big screens, see `workshop-status-board`), through the same user create and edit paths, list and list filter that serve the existing roles. The role selector, the role badge and the list filter MUST show "Pantalla". The Spanish validation message that lists the allowed roles, in both `createUser` and `updateUser` in `modules/account/service.ts`, MUST name every assignable role including `pantalla`: "El rol debe ser técnico, jefe de taller, pantalla o administrador." An unknown role MUST still be rejected with that message.
+An `administrador` MUST be able to create a user with, and change a user to, the role `pantalla` (a read-only account for the big screens, see `workshop-status-board`), through the same user create and edit paths and list that serve the existing roles. The role selector and the role badge MUST show "Pantalla" (the user list has no role filter). The Spanish validation message that lists the allowed roles, in both `createUser` and `updateUser` in `modules/account/service.ts`, MUST name every assignable role including `pantalla`: "El rol debe ser técnico, jefe de taller, pantalla o administrador." An unknown role MUST still be rejected with that message.
 
 The role `pantalla` MUST NOT hold `users.manage`, so it MUST NOT reach any user-management route or screen, and MUST NOT hold `account.self`. Existing guards (last active administrador cannot be removed, self-deactivation refused) MUST be unchanged and MUST continue to count only `administrador` as the protected floor. A `pantalla` user MUST NOT get a technician roster row: roster creation stays gated on `tecnico` only. Changing a user to or from `pantalla` MUST NOT touch any roster row. Deactivating a `pantalla` user, or resetting its password, MUST revoke its sessions like any other role.
 
@@ -17,8 +17,8 @@ The database enum MUST gain the value `pantalla` by a migration that does not us
 - WHEN they create a user with role `pantalla`
 - THEN the user MUST be created with that role, `mustChangePassword` true, and no roster row **[e2e]**
 
-#### Scenario: Role selector, badge and filter
-- GIVEN the user form, list and role filter
+#### Scenario: Role selector and badge
+- GIVEN the user form and list
 - WHEN rendered
 - THEN each MUST offer or show "Pantalla" **[unit]**
 

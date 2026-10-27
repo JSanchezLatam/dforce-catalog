@@ -105,3 +105,5 @@ Closing steps for every unit (last task of each): gates → `gga config` → `GG
 - Backfill history for pre-0033 orders so time in status stops falling back to `updated_at`.
 - Kiosk OS automation (wake, auto-start).
 - Clearing the 13 existing lint warnings.
+- [ ] F1 Follow-up: the full board lists deactivated technicians on orders they were assigned to (`workshopBoardData` joins `tecnico` without a `deactivated_at` filter); readiness already ignores them. Decide with the owner before WU4 ships.
+- [ ] F1 Follow-up: the full board lists deactivated technicians on orders they were assigned to (`workshopBoardData` joins `tecnico` without a `deactivated_at` filter); readiness already ignores them. Decide with the owner before WU4 ships.
