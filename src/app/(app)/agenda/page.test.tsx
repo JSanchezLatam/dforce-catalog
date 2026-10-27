@@ -17,8 +17,10 @@ vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders: session })
 vi.mock("@/modules/agenda/queries", () => ({ agendaRange, agendaOverdue, agendaInWorkshop }));
 vi.mock("@/modules/service-orders/scope", () => ({ orderScope }));
 vi.mock("@/modules/technicians/queries", () => ({ listTecnicos }));
+const realCan = vi.hoisted(() => ({ fn: null as null | ((...args: never[]) => boolean) }));
 vi.mock("@/modules/auth/policy", async (original) => {
   const real = await original<typeof import("@/modules/auth/policy")>();
+  realCan.fn = real.can as never;
   canMock.mockImplementation(real.can);
   return { ...real, can: canMock };
 });
@@ -89,6 +91,8 @@ const SCOPE = { where: undefined };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // clearAllMocks keeps implementations: a test that denies one permission must not leak into the next.
+  canMock.mockImplementation(realCan.fn!);
   orderScope.mockReturnValue(SCOPE);
   agendaRange.mockResolvedValue({ rows: [], truncated: false });
   agendaOverdue.mockResolvedValue({ rows: [], truncated: false, total: 0 });

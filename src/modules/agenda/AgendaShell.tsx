@@ -62,7 +62,7 @@ export function AgendaShell({ view, date, today, nowMinute, items, workshop, wor
   if (open && !selected) setOpen(null);
   const noMatch = visible.length === 0 && (items.length > 0 || search !== "");
   const grid = { todayKey: today, nowMinute, selectedId: selected?.id ?? null, onSelect: select };
-  // The day grid says it itself; the others get the paragraph, so a hidden day shows one message, never two.
+  // The day grid and the combined view say it themselves; week and month get the paragraph, so a hidden day shows one message, never two.
   const emptyText = noMatch ? "Sin resultados" : undefined;
   return (
     <div className="flex flex-col gap-3">
