@@ -136,6 +136,14 @@ No test can cover these (AGENTS.md known limits 2 and 3). Use `http://192.168.0.
 - [ ] 9.8 Post the results table in the PR description. Defects found become fix commits on this branch (test first), not a new scope. Then: all PRs landed → tracker out of draft → merge to `main` (state branch/pushed/merged).
 - [ ] 9.9 Closing steps (gates, GGA `PR_BASE_BRANCH=feat/workshop-agenda-wu8`, PR → wu8).
 
+## WU9 fix round (browser checks at the LAN IP, branch `feat/workshop-agenda-fixes`)
+
+- [x] 9.10 RED/GREEN tablet overflow: `WeekView`/`MonthView` render chips without `ItemActions` (kept in `DayView`, thus `CombinedView`, and the Vencidas panel); `AgendaChip` link gets `min-w-0` and name/phone/vehicle `[overflow-wrap:anywhere]`. Tests: WeekView/MonthView "Narrow columns: chips carry no Reprogramar / No se presentó buttons...", `AgendaChip.test.tsx` "Narrow columns: the link can shrink...", page.test "Every Vencida stays actionable from %s...", `ItemActions.test` DayView/CombinedView keep the actions. Spec updated (Reprogramar requirement, chip requirement, new scenario "Week and month chips carry no actions").
+- [x] 9.11 RED/GREEN header "Agendar cita" stays the primary variant: `AgendaBookingForm` takes `triggerVariant` (default `default`); `DayBooking` passes `ghost`. Test: AgendaHeader "Header trigger: ... primary variant and keeps the 44px class".
+- [x] 9.12 RED/GREEN booking dialog on a phone: `DialogFooter` moved outside the `<form>` (submit carries `form={formId}`), quick-form slot sits between the form and the footer, picker wrapper `w-full min-w-0`. Tests: AgendaBookingForm "Dialog layout: ..." (two); "Nested submit" tests stay green.
+- [x] 9.13 RED/GREEN MonthView count: visible `aria-hidden` number plus `sr-only` "N cita(s)" instead of `aria-label` on a plain span. Test: MonthView "Count is visible text plus sr-only text...".
+- [x] 9.14 Mutation-verify each by name (see apply-progress "Fix round").
+
 ## Follow-ups (out of scope)
 
 - Bookings made less than 24 h ahead get no reminder (`reminders/schedule.ts:79,89-91`); existing behavior, owner awareness.

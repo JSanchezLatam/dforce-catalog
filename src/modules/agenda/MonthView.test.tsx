@@ -66,8 +66,23 @@ describe("MonthView", () => {
 
   it("phone: chips collapse to a count below md and show in full from md", () => {
     render(<MonthView date={DAY} today="2026-01-01" items={at(2)} />);
-    expect(within(cell(DAY)).getByLabelText("2 citas").className).toContain("md:hidden");
+    expect(within(cell(DAY)).getByText("2 citas").parentElement!.className).toContain("md:hidden");
     expect(within(cell(DAY)).getByRole("list").className).toContain("max-md:hidden");
+  });
+
+  it("Narrow columns: chips carry no Reprogramar / No se presentó buttons, even a Vencida one", () => {
+    render(<MonthView date={DAY} today="2026-01-01" items={[makeItem({ id: "a", dayKey: DAY }), makeItem({ id: "b", dayKey: DAY, overdue: true })]} />);
+    expect(screen.queryByRole("button", { name: "Reprogramar" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "No se presentó" })).not.toBeInTheDocument();
+  });
+
+  it("Count is visible text plus sr-only text, not an aria-label on a plain span", () => {
+    const { container } = render(<MonthView date={DAY} today="2026-01-01" items={at(2)} />);
+    const count = within(cell(DAY)).getByText("2 citas").closest("span")!.parentElement!;
+    expect(count.className).toContain("md:hidden");
+    expect(within(cell(DAY)).getByText("2 citas").className).toContain("sr-only");
+    expect(within(count).getByText("2")).toHaveAttribute("aria-hidden", "true");
+    expect(container.querySelector("span[aria-label]")).toBeNull();
   });
 
   it("Booking trigger: each cell opens the dialog prefilled with its own day, at 44px", async () => {

@@ -1,12 +1,11 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { CombinedView } from "./CombinedView";
 import { DayView } from "./DayView";
 import { makeItem } from "./items.fixture";
 import { ItemActions } from "./ItemActions";
-import { MonthView } from "./MonthView";
 import { VencidasPanel } from "./VencidasPanel";
-import { WeekView } from "./WeekView";
 
 afterEach(cleanup);
 const names = () => screen.queryAllByRole("button").map((b) => b.textContent);
@@ -23,8 +22,7 @@ describe("ItemActions", () => {
 
   it.each([
     ["DayView", () => <DayView items={[makeItem()]} />],
-    ["WeekView", () => <WeekView date="2026-10-26" today="2026-10-26" items={[makeItem()]} />],
-    ["MonthView", () => <MonthView date="2026-10-26" today="2026-10-26" items={[makeItem()]} />],
+    ["CombinedView", () => <CombinedView items={[makeItem()]} workshop={[]} workshopTruncated={false} />],
   ])("%s renders the actions on a booked chip", (_name, view) => {
     render(view());
     expect(screen.getByRole("button", { name: "Reprogramar" })).toBeInTheDocument();

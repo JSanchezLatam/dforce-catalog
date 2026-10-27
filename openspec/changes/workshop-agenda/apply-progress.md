@@ -254,3 +254,20 @@ Gates: `npm test` 250 files / 3876 passed; `npx tsc --noEmit` clean; `npm run li
 Lines vs `feat/workshop-agenda-wu7-e2e` (tracked + untracked): production about 227 (server ~20, client ~207); unit tests about 385 (server 75, client ~310); e2e 127 in its own file. Production + unit ~610, over 400: split server-first (service.ts, route.ts, their tests, the e2e file ~95 + 127) then the client.
 
 Unverified: no browser or LAN-IP check (dialog focus/scroll, 44x44 on Reprogramar / No se presentó, the month-cell crowding with up to 3 chips x 2 buttons are 9.x). The e2e "received meanwhile" goes through the real route (vehicle + category, then `status: open`), but the two-tab race itself is sequential, not concurrent. Actions show on every non-muted chip in Day/Week/Month; the Vencida-only rule applies to No se presentó. Role gating is the route's (403 text is shown inline); the buttons render for any role that can open /agenda.
+
+## Fix round (browser checks) (branch `feat/workshop-agenda-fixes`; nothing committed)
+
+Tasks 9.10-9.14 done (WU9 fix tasks). Defects from the LAN-IP checks:
+
+1. Tablet overflow: week/month chips render no action buttons (day view, combined day list and Vencidas panel keep them; the panel is on every view). Chip link `min-w-0`, name/phone/vehicle `[overflow-wrap:anywhere]`. Spec text updated.
+2. Header "Agendar cita" primary: new `triggerVariant` prop (default `default`), `DayBooking` passes `ghost`.
+3. Booking dialog on phone: footer outside the `<form>` with `form={formId}`; order is fields, quick-form slot, footer; picker wrapper `w-full min-w-0`. `CustomerPicker` untouched.
+4. MonthView count: aria-hidden number + `sr-only` text.
+
+Mutation-verify (one file each, restored from an in-memory original; final diff holds none): week/month re-adding `ItemActions` -> the two "Narrow columns" tests red; `aria-label` span back -> "Count is visible text plus sr-only text" red; drop `min-w-0` or the overflow-wrap class -> AgendaChip test red; `triggerVariant` default `ghost` -> header test red; drop `form={formId}` -> "Dialog layout: the submit is tied..." red (plus 11 booking tests that submit); slot after the footer -> same layout test red; drop `w-full min-w-0` -> "picker wrapper can shrink" red.
+
+Existing `ItemActions.test` Week/Month "renders the actions" cases inverted (now DayView and CombinedView).
+
+Gates: `npm test` 251 files / 3886 passed; `npx tsc --noEmit` clean; `npm run lint` 0 errors / 13 warnings. No SQL touched, e2e not run.
+
+Unverified: no browser re-check. 44x44 of the footer buttons, that wrapped chips fit at 768/390, the quick-form slot height on a 390 phone (it is `shrink-0` between form and footer, so a tall quick form still squeezes the scrolling fields), and the `form=` submit across browsers are 9.x browser items.
