@@ -38,6 +38,8 @@ export const ACTIONS = [
   // waiting-room view (also the screen account's only action).
   "board.read",
   "board.customer",
+  // workshop-agenda: the appointment calendar and its booking, reschedule and no-show actions.
+  "agenda.manage",
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -82,6 +84,7 @@ export const MATRIX: Record<Role, Grants> = {
     "metrics.self": true,
     "board.customer": false,
     "board.read": true,
+    "agenda.manage": false,
   },
   // The workshop manager: everything the owner holds except user management,
   // workshop and template settings, closed-order corrections and photo deletion.
@@ -116,6 +119,7 @@ export const MATRIX: Record<Role, Grants> = {
     "account.self": true,
     "board.customer": true,
     "board.read": true,
+    "agenda.manage": true,
   },
   // The big-screen account: `board.customer` and nothing else. Spelled out cell by cell
   // (no generated row) so a missing grant stays a tsc error.
@@ -150,6 +154,7 @@ export const MATRIX: Record<Role, Grants> = {
     "account.self": false,
     "board.customer": true,
     "board.read": false,
+    "agenda.manage": false,
   },
   administrador: {
     "customers.read": true,
@@ -182,6 +187,7 @@ export const MATRIX: Record<Role, Grants> = {
     "metrics.self": false,
     "board.customer": true,
     "board.read": true,
+    "agenda.manage": true,
   },
 };
 

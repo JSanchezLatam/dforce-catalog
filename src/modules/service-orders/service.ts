@@ -143,6 +143,13 @@ export class OrderIncompleteError extends Error {
   }
 }
 
+/** `expectedStatus` of a transition no longer matches the locked row: the caller acted on a stale screen. The message is Spanish UI copy. */
+export class StaleOrderStatusError extends Error {
+  constructor() {
+    super("La orden cambió mientras la mirabas. Actualizá la agenda.");
+  }
+}
+
 export type CreateOrdenServicioInput = {
   /** Agendada (`booked`) or Recibida (`open`, the default); nothing else is a valid start. */
   status?: "booked" | "open";
@@ -298,6 +305,8 @@ export type UpdateOrdenServicioDeps = {
   scope: OrderScope;
   /** Issued by `authorizeCorrection` after the password check; the only way to write a closed order. */
   correction?: CorrectionGrant;
+  /** Optional guard: the status the caller saw. Compared with the LOCKED row before anything is written; absent = no check. */
+  expectedStatus?: OrderStatus;
 } & ReminderWiringDeps &
   PortalSyncDeps;
 
@@ -345,6 +354,7 @@ export async function updateOrder(
       canWrite: (status) => canEditOrderFields(deps.role, status),
       correction: deps.correction,
     });
+    if (deps.expectedStatus !== undefined && deps.expectedStatus !== order.status) throw new StaleOrderStatusError();
     if (patch.vehiculoId !== undefined) await assertVehicleSettable(tx, order, patch.vehiculoId);
     if (order.status === "booked" && patch.appointmentAt === null) {
       throw new AppointmentRequiredError({ appointmentAt: "Una orden agendada necesita su fecha y hora" });
@@ -426,6 +436,8 @@ export type TransitionOrdenServicioDeps = {
   actorId: string;
   /** Required exactly when `to` is `on_hold`; refused with any other target. Unchecked at the type level: it comes from a body. */
   esperaMotivo?: EsperaMotivo | null;
+  /** Optional guard: the status the caller saw. Compared with the LOCKED row before anything is written; absent = no check. */
+  expectedStatus?: OrderStatus;
 } & ReminderWiringDeps &
   PortalSyncDeps;
 
@@ -451,6 +463,7 @@ export async function transitionOrder(
   // TRY a transition; `assertTransition` is the rule, and it has no edge out of a closed one.
   const { from, updated } = await database.transaction(async (tx) => {
     const { order } = await lockOrderForMutation(tx, id, { scope: deps.scope, canWrite: () => true });
+    if (deps.expectedStatus !== undefined && deps.expectedStatus !== order.status) throw new StaleOrderStatusError();
     // After the lock, so an order that does not exist (or is out of scope) answers 404 before any 400 about the body.
     if (to === "on_hold" ? !esperaMotivoEnum.enumValues.includes(esperaMotivo as EsperaMotivo) : esperaMotivo !== null) {
       throw new EsperaMotivoError(

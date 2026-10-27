@@ -18,14 +18,23 @@ function labelTree(groups: NavGroup[]): Record<string, string[]> {
 }
 
 describe("getNavGroups() — grouped sidebar nav", () => {
-  it("shows 3 groups to admin: CRM, Catálogo, Configuración", () => {
+  it("shows 4 groups to admin: Taller first, then CRM, Catálogo, Configuración", () => {
     const groups = getNavGroups(admin);
-    expect(groups.map((g) => g.label)).toEqual(["CRM", "Catálogo", "Configuración"]);
+    expect(groups.map((g) => g.label)).toEqual(["Taller", "CRM", "Catálogo", "Configuración"]);
   });
 
-  it("shows 2 groups to técnico: CRM, Catálogo (no Configuración)", () => {
+  it("shows 3 groups to técnico: Taller, CRM, Catálogo (no Configuración)", () => {
     const groups = getNavGroups(tecnico);
-    expect(groups.map((g) => g.label)).toEqual(["CRM", "Catálogo"]);
+    expect(groups.map((g) => g.label)).toEqual(["Taller", "CRM", "Catálogo"]);
+  });
+
+  // The workshop-floor links live in their own group, first, in this order per role.
+  it("Taller group holds Tablero, Agenda, Métricas, Mis números in that order, filtered per role", () => {
+    const taller = (u: SessionUser) => getNavGroups(u).find((g) => g.label === "Taller")?.items.map((i) => i.label);
+    expect(taller(admin)).toEqual(["Tablero", "Agenda", "Métricas"]);
+    expect(taller(jefe)).toEqual(["Tablero", "Agenda", "Métricas"]);
+    expect(taller(tecnico)).toEqual(["Tablero", "Mis números"]);
+    expect(taller({ id: "p", role: "pantalla" } as SessionUser)).toBeUndefined();
   });
 
   it("Configuración group has pinBottom for admin", () => {
@@ -34,34 +43,45 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     expect(configGroup.pinBottom).toBe(true);
   });
 
-  it("admin sees all CRM items, Vencimientos right after Órdenes de servicio (Clientes, Órdenes de servicio, Vencimientos, Inventario, Métricas, Tablero)", () => {
+  it("admin sees the CRM items Clientes, Órdenes de servicio, Vencimientos, Inventario (the workshop links moved to Taller)", () => {
     const groups = getNavGroups(admin);
     const crm = groups.find((g) => g.label === "CRM")!;
-    expect(crm.items.map((i) => i.label)).toEqual(["Clientes", "Órdenes de servicio", "Vencimientos", "Inventario", "Métricas", "Tablero"]);
+    expect(crm.items.map((i) => i.label)).toEqual(["Clientes", "Órdenes de servicio", "Vencimientos", "Inventario"]);
   });
 
   // metrics-dashboard WU2: one entry per viewer, never two. `getNavGroups` filters on a
   // positive action, so the técnico's page needs its own action (`metrics.self`).
   it("admin and jefe see Métricas (/metrics) and not Mis números", () => {
     for (const user of [admin, jefe]) {
-      const crm = getNavGroups(user).find((g) => g.label === "CRM")!;
-      expect(crm.items.find((i) => i.label === "Métricas")).toMatchObject({ href: "/metrics", icon: "metrics", action: "metrics.read" });
-      expect(crm.items.map((i) => i.label)).not.toContain("Mis números");
+      const taller = getNavGroups(user).find((g) => g.label === "Taller")!;
+      expect(taller.items.find((i) => i.label === "Métricas")).toMatchObject({ href: "/metrics", icon: "metrics", action: "metrics.read" });
+      expect(taller.items.map((i) => i.label)).not.toContain("Mis números");
     }
   });
 
   it("técnico sees Mis números (/mis-numeros) and not Métricas", () => {
-    const crm = getNavGroups(tecnico).find((g) => g.label === "CRM")!;
-    expect(crm.items.find((i) => i.label === "Mis números")).toMatchObject({ href: "/mis-numeros", icon: "my-metrics", action: "metrics.self" });
-    expect(crm.items.map((i) => i.label)).not.toContain("Métricas");
+    const taller = getNavGroups(tecnico).find((g) => g.label === "Taller")!;
+    expect(taller.items.find((i) => i.label === "Mis números")).toMatchObject({ href: "/mis-numeros", icon: "my-metrics", action: "metrics.self" });
+    expect(taller.items.map((i) => i.label)).not.toContain("Métricas");
   });
 
   // workshop-status-board WU4: "Tablero" follows `board.read`, so the screen account never sees it.
   it("Nav link by role: Tablero (/tablero) for administrador, jefe_taller and técnico, and for no other role", () => {
     for (const user of [admin, jefe, tecnico]) {
-      const crm = getNavGroups(user).find((g) => g.label === "CRM")!;
-      expect(crm.items.find((i) => i.label === "Tablero")).toMatchObject({ href: "/tablero", icon: "board", action: "board.read" });
+      const taller = getNavGroups(user).find((g) => g.label === "Taller")!;
+      expect(taller.items.find((i) => i.label === "Tablero")).toMatchObject({ href: "/tablero", icon: "board", action: "board.read" });
     }
+    expect(getNavGroups({ id: "p", role: "pantalla" } as SessionUser)).toEqual([]);
+  });
+
+  // workshop-agenda WU1: "Agenda" follows `agenda.manage`; the glyph is its own (CalendarDays).
+  it("Nav link by role: Agenda (/agenda) in Taller for administrador and jefe_taller, and for no other role", () => {
+    for (const user of [admin, jefe]) {
+      const taller = getNavGroups(user).find((g) => g.label === "Taller")!;
+      expect(taller.items.find((i) => i.label === "Agenda")).toMatchObject({ href: "/agenda", icon: "agenda", action: "agenda.manage" });
+    }
+    const taller = getNavGroups(tecnico).find((g) => g.label === "Taller")!;
+    expect(taller.items.map((i) => i.label)).not.toContain("Agenda");
     expect(getNavGroups({ id: "p", role: "pantalla" } as SessionUser)).toEqual([]);
   });
 
@@ -120,9 +140,9 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     expect(labels).not.toContain("Gestión de usuarios");
   });
 
-  it("técnico's tree is unchanged by the new entry — still 2 groups, no Configuración", () => {
+  it("técnico's tree is unchanged by the new entry — still no Configuración", () => {
     const groups = getNavGroups(tecnico);
-    expect(groups.map((g) => g.label)).toEqual(["CRM", "Catálogo"]);
+    expect(groups.map((g) => g.label)).toEqual(["Taller", "CRM", "Catálogo"]);
   });
 
   it("técnico does NOT see Generar Catálogos (catalogs.generate denied), and Catálogo only has Catálogos Generados", () => {
@@ -142,16 +162,16 @@ describe("getNavGroups() — grouped sidebar nav", () => {
   // keeps these totals identical (that coincidence is exactly what let the
   // wrong grouping slip through review previously). Do not rely on these
   // alone to prove correct placement.
-  it("técnico sees only 6 total items across 2 groups", () => {
+  it("técnico sees only 6 total items across 3 groups", () => {
     const groups = getNavGroups(tecnico);
     const totalItems = groups.reduce((s, g) => s + g.items.length, 0);
     expect(totalItems).toBe(6);
   });
 
-  it("admin sees 12 total items across 3 groups", () => {
+  it("admin sees 13 total items across 4 groups", () => {
     const groups = getNavGroups(admin);
     const totalItems = groups.reduce((s, g) => s + g.items.length, 0);
-    expect(totalItems).toBe(12);
+    expect(totalItems).toBe(13);
   });
 
   // Stable ids decouple sidebar-group-collapse cookie state from display
@@ -160,6 +180,7 @@ describe("getNavGroups() — grouped sidebar nav", () => {
   it("every top-level group exposes a stable id independent from its label", () => {
     const groups = getNavGroups(admin);
     expect(groups.map((g) => ({ label: g.label, id: g.id }))).toEqual([
+      { label: "Taller", id: "taller" },
       { label: "CRM", id: "crm" },
       { label: "Catálogo", id: "catalogo" },
       { label: "Configuración", id: "configuracion" },
