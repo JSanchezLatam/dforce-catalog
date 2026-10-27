@@ -3,7 +3,7 @@
  * roll back from one place. `router.refresh()` and the success toast belong to the CALLER, below its
  * try/catch: a refresh that throws must not read as a failure of a write the server already accepted.
  */
-import { orderStatusEnum } from "@/shared/db/schema";
+import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
 
@@ -42,7 +42,7 @@ export async function moveOrder(
   if (res.ok) {
     // The card is placed by what the server wrote (a received order with a technician may land in `diagnosing`).
     const returned = body?.orden?.status;
-    const known = orderStatusEnum.enumValues.find((s) => s === returned);
+    const known = (Object.keys(ORDER_STATUS_LABEL) as OrderStatus[]).find((s) => s === returned);
     // shortcut: a 2xx body without a known status is placed where it was sent; the refresh corrects it.
     return { ok: true, status: known ?? move.status };
   }
