@@ -16,6 +16,9 @@ const DAY_MS = 86_400_000;
 const PANAMA_OFFSET_MS = 5 * 3_600_000;
 const KEY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
+/** Monday-first, static text: no Intl, so server and browser agree. */
+export const WEEKDAY_SHORT = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"] as const;
+
 /** A `booked` order is Vencida once its appointment is MORE than this many minutes past. */
 export const OVERDUE_MARGIN_MINUTES = 60;
 
@@ -87,8 +90,8 @@ export function stepDate(view: AgendaView, key: string, direction: -1 | 1): stri
   return utcToKey(Date.UTC(y, m, day));
 }
 
-/** Today's Panama day: shifting by the fixed offset avoids any zone lookup. */
-function panamaToday(now: Date): string {
+/** The Panama day of an instant (today's, for `now`): shifting by the fixed offset avoids any zone lookup. */
+export function panamaDay(now: Date): string {
   return utcToKey(now.getTime() - PANAMA_OFFSET_MS);
 }
 
@@ -98,7 +101,7 @@ export function parseAgendaParams(
   now: Date,
 ): { view: AgendaView; date: string } {
   const view = VIEWS.find((v) => v === raw.view) ?? "week";
-  const date = isDayKey(raw.date) ? raw.date : panamaToday(now);
+  const date = isDayKey(raw.date) ? raw.date : panamaDay(now);
   return { view, date };
 }
 
