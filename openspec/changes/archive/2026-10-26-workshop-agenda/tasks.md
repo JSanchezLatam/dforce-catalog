@@ -162,3 +162,13 @@ No test can cover these (AGENTS.md known limits 2 and 3). Use `http://192.168.0.
 - Polling or auto-refresh of the agenda (manual `RefreshListButton` only in v1).
 - An index on `orden_servicio.appointment_at` if the range query proves slow.
 - Clearing the 13 existing lint warnings.
+
+## Follow-ups open at archive
+
+- Bookings made less than 24 h ahead get no reminder (`reminders/schedule.ts:79,89-91`); existing behaviour, owner awareness.
+- The 500-row truncation notice ("Se muestran las primeras 500 citas; acotá el rango.") is unit and e2e proven but was not seen in a browser (needs 500+ appointments in one range).
+- An index on `orden_servicio.appointment_at` if the range query proves slow (plan unmeasured).
+- Technician names on in-workshop rows of the combined view.
+- Polling or auto-refresh of the agenda (manual `RefreshListButton` only in v1).
+- `canCreateCustomer` is not plumbed from the page; it holds today only because both agenda roles (`administrador`, `jefe_taller`) hold `customers.write`. Revisit if either role changes.
+- A check from a second machine on the LAN; the browser passes ran from the server's own LAN IP.
