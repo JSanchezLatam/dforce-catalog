@@ -625,7 +625,7 @@ The page header MUST offer a search field with placeholder "Buscar placa o clien
 
 ### Requirement: Agenda Side Column
 
-On `lg` width and up the page MUST render a left column with, in order: a mini calendar, the "Próxima cita" card, the "Categoría" filter and the "Esta semana" summary. Below `lg` the column MUST be hidden behind a "Filtros" button of at least 44x44 that opens it; on a phone the mini calendar is replaced by the day strip. 
+On `xl` width (1280) and up the page MUST render a left column with, in order: a mini calendar, the "Próxima cita" card, the "Categoría" filter and the "Esta semana" summary. Below `xl` the column MUST be hidden behind a "Filtros" button of at least 44x44 that opens it; on a phone the mini calendar is replaced by the day strip. 
 
 Mini calendar: a Monday-first month grid with the month name and year, previous/next month controls, today marked, the selected day's Monday–Sunday week highlighted, and a dot under every day of the displayed month that has at least one appointment (by the inclusion rules of "Which Orders Appear"; an accessible text such as "con citas"). Day cells and month controls MUST be plain links rewriting `date` and keeping `view`; the month controls move to the 1st of the adjacent month. The dots MUST come from a lightweight query covering the displayed month's Panama range (Panama midnights, same scope), independent of the visible range and not subject to the range-query cap notice; it returns day keys only.
 

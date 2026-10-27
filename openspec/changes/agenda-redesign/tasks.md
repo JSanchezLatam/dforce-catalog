@@ -170,18 +170,18 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 ## WU14: side column, type filter, week summary (branch `feat/agenda-redesign-wu14-sidebar-filter`) [~380; fallback: "Esta semana" moves to WU15]
 
 - [x] 14.1 RED `items.test.ts`: `typeCounts` (4 revisado, 2 reparacion, 2 sin tipo -> 4/2/2, others 0) is independent of search and checkboxes; `filterItems` honours the unchecked set.
-- [x] 14.2 RED `AgendaSidebar.test.tsx`: order mini calendar slot, "Próxima cita" slot, "Categoría", "Esta semana"; six checkboxes with dot and count, all checked, unchecking hides the cards, counts unchanged, "Todos" re-checks all six; summary shows Agendadas / Recibidas / Vencidas / No se presentó from `toWeekSummary`; below `lg` hidden behind a "Filtros" button (`min-h-11 min-w-11`). (Type counts; Unchecking hides a type; Todos resets; Column collapses behind Filtros)
+- [x] 14.2 RED `AgendaSidebar.test.tsx`: order mini calendar slot, "Próxima cita" slot, "Categoría", "Esta semana"; six checkboxes with dot and count, all checked, unchecking hides the cards, counts unchanged, "Todos" re-checks all six; summary shows Agendadas / Recibidas / Vencidas / No se presentó from `toWeekSummary`; below `xl` (1280) hidden behind a "Filtros" button (`min-h-11 min-w-11`). (Type counts; Unchecking hides a type; Todos resets; Column collapses behind Filtros)
 - [x] 14.3 GREEN `AgendaSidebar.tsx`, shell filter state, `page.tsx` (`agendaWeekCounts`).
 - [x] 14.4 Mutation-verify: counts from the filtered list -> "Type counts" red; "Todos" leaves one unchecked -> "Todos resets" red.
 - [x] 14.5 Close: C + B (the "Filtros" button at 768).
 
 ## WU15: mini calendar and Próxima cita (branch `feat/agenda-redesign-wu15-sidebar-calendar`) [~305]
 
-- [ ] 15.1 RED `MiniCalendar.test.tsx`: Monday-first grid; dots only on the two busy days, with the text "con citas"; cells are links `/agenda?view=week&date=2026-10-xx`; "next month" targets `date=2026-11-01`; the selected week (Mon 26 - Sun 1) highlighted; today marked. (Mini calendar busy dots / navigation)
-- [ ] 15.2 RED `NextCard.test.tsx`: "Próxima cita · en 20 min" with "11:00", customer, vehicle, description, "Abrir orden" and a `tel:` button (both 44x44); "Sin citas próximas"; `rg` finds no `setInterval`/`setTimeout` in the agenda files. (Próxima cita text / empty / is static)
-- [ ] 15.3 GREEN `MiniCalendar.tsx`, `NextCard.tsx`, `page.tsx` (`agendaBusyDays`, `agendaNext` into the `Promise.all`).
-- [ ] 15.4 Mutation-verify: dot on every day -> "busy dots" red; a timer in the card -> the static test red.
-- [ ] 15.5 Close: C + B (dots after a month navigation).
+- [x] 15.1 RED `MiniCalendar.test.tsx`: Monday-first grid; dots only on the two busy days, with the text "con citas"; cells are links `/agenda?view=week&date=2026-10-xx`; "next month" targets `date=2026-11-01`; the selected week (Mon 26 - Sun 1) highlighted; today marked. (Mini calendar busy dots / navigation)
+- [x] 15.2 RED `NextCard.test.tsx`: "Próxima cita · en 20 min" with "11:00", customer, vehicle, description, "Abrir orden" and a `tel:` button (both 44x44); "Sin citas próximas"; `rg` finds no `setInterval`/`setTimeout` in the agenda files. (Próxima cita text / empty / is static)
+- [x] 15.3 GREEN `MiniCalendar.tsx`, `NextCard.tsx`, `page.tsx` (`agendaBusyDays`, `agendaNext` into the `Promise.all`).
+- [x] 15.4 Mutation-verify: dot on every day -> "busy dots" red; a timer in the card -> the static test red.
+- [x] 15.5 Close: C + B (dots after a month navigation).
 
 ## WU16: Nueva cita (branch `feat/agenda-redesign-wu16-nueva-cita`) [~360]
 
