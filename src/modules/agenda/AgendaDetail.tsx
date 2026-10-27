@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * agenda/AgendaDetail.tsx - the content of an appointment's Detail. The shell puts it in a popover (md and up) or a
  * bottom sheet (below md); this component knows neither. A client component: the close is reported through
@@ -5,7 +7,6 @@
  * booked Detail edits the category through `patchOrder` and assigns a technician through the existing control. The
  * shell keys it by order id, so its pending and error state never follow the selection to another appointment.
  */
-"use client";
 
 import { useState } from "react";
 import Link from "next/link";
