@@ -172,3 +172,76 @@ describe("AgendaBookingForm", () => {
     await vi.waitFor(() => expect(addToast).toHaveBeenCalledTimes(1));
   });
 });
+
+describe("AgendaBookingForm quick customer create", () => {
+  const CREATED = { id: "c-new", name: "Luis Gómez", phone: "50766667777", email: null, deactivatedAt: null, createdAt: "2026-10-26T00:00:00.000Z" };
+
+  /** The search finds nobody (so the create form shows); POSTs are recorded by URL. */
+  function stubQuickFetch() {
+    const posts: { url: string; body: Record<string, unknown> }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          posts.push({ url, body: JSON.parse(init.body as string) });
+          return url === "/api/customers" ? json({ cliente: CREATED }, 201) : json({ orden: { id: "o1" } }, 201);
+        }
+        return json({ customers: [], total: 0 });
+      }),
+    );
+    return posts;
+  }
+
+  async function searchNobody(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByRole("textbox", { name: /buscar cliente/i }), "Zed");
+    await screen.findByText("Crear cliente nuevo");
+  }
+
+  it("Successful create selects: the new customer is picked, toasted, and the booking fields are untouched", async () => {
+    const posts = stubQuickFetch();
+    const user = await open();
+    await user.type(timeField(), "09:00");
+    await user.type(screen.getByLabelText("Descripción"), "Cambio de aceite");
+    await searchNobody(user);
+    await user.type(screen.getByLabelText("Nombre"), "Luis Gómez");
+    await user.type(screen.getByLabelText("Teléfono"), "50766667777");
+    await user.click(screen.getByRole("button", { name: "Crear cliente" }));
+
+    expect(await screen.findByText(/Cliente seleccionado:/)).toHaveTextContent("Luis Gómez");
+    expect(addToast).toHaveBeenCalledExactlyOnceWith("success", "Cliente creado");
+    expect(screen.getByRole("heading", { name: "Agendar cita" })).toBeInTheDocument();
+    expect(timeField().value).toBe("09:00");
+    expect((screen.getByLabelText("Descripción") as HTMLInputElement).value).toBe("Cambio de aceite");
+
+    await user.click(submit());
+    await vi.waitFor(() => expect(posts.filter((p) => p.url === "/api/service-orders")).toHaveLength(1));
+    expect(posts.find((p) => p.url === "/api/service-orders")!.body.clienteId).toBe("c-new");
+  });
+
+  it("Nested submit does not submit the booking: Enter in a quick-form field posts the customer and never the order", async () => {
+    const posts = stubQuickFetch();
+    const user = await open();
+    await user.type(timeField(), "09:00");
+    await searchNobody(user);
+    await user.type(screen.getByLabelText("Nombre"), "Luis Gómez");
+    await user.type(screen.getByLabelText("Teléfono"), "50766667777{Enter}");
+
+    await vi.waitFor(() => expect(posts.filter((p) => p.url === "/api/customers")).toHaveLength(1));
+    expect(posts.filter((p) => p.url === "/api/service-orders")).toHaveLength(0);
+    // No customer is picked yet, so a leaked submit would stop at the booking's own validation and
+    // post nothing: this line is what catches it.
+    expect(screen.queryByText("Elegí un cliente")).not.toBeInTheDocument();
+  });
+
+  it("Nested submit: the quick form is not a DOM descendant of the booking form", async () => {
+    stubQuickFetch();
+    const user = await open();
+    await searchNobody(user);
+
+    const quick = screen.getByLabelText("Nombre").closest("form")!;
+    const booking = screen.getByLabelText("Hora").closest("form")!;
+    expect(quick).not.toBe(booking);
+    expect(booking.contains(quick)).toBe(false);
+  });
+});
+

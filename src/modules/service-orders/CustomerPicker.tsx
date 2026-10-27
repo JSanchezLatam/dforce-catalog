@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +46,7 @@ export function CustomerPicker({
   canCreateCustomer,
   onSelect,
   onDeselect,
+  renderCreate,
 }: {
   selectedCustomer: ClienteListItem | null;
   canCreateCustomer: boolean;
@@ -56,6 +57,11 @@ export function CustomerPicker({
    * "quitar" that PATCH would refuse is a promise the API does not keep.
    */
   onDeselect?: () => void;
+  /**
+   * Replaces the full `CustomerForm` in the zero-match branch (the agenda's slim name+phone form).
+   * Absent = today's behaviour exactly; `select` is the same pick a row click performs.
+   */
+  renderCreate?: (select: (customer: ClienteListItem) => void) => ReactNode;
 }) {
   const [term, setTerm] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
@@ -245,7 +251,9 @@ export function CustomerPicker({
         <p className="text-sm text-muted-foreground">Sin coincidencias para esa búsqueda.</p>
       )}
 
-      {zeroExactMatches && canCreateCustomer && (
+      {zeroExactMatches && canCreateCustomer && renderCreate && <RenderSlot render={renderCreate} select={handleSelect} />}
+
+      {zeroExactMatches && canCreateCustomer && !renderCreate && (
         // `onSaved`'s second argument is exactly what this create just wrote
         // (the form's own submitted vehicle collection), not a hardcoded `[]`
         // — the API's 201 response carries only the `cliente` row, no
@@ -261,4 +269,9 @@ export function CustomerPicker({
       )}
     </div>
   );
+}
+
+/** Calls a render prop from its own component, so the picker's refs are not read while it renders. */
+function RenderSlot({ render, select }: { render: (select: (customer: ClienteListItem) => void) => ReactNode; select: (customer: ClienteListItem) => void }) {
+  return <>{render(select)}</>;
 }

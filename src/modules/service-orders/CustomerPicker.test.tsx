@@ -341,4 +341,37 @@ describe("CustomerPicker", () => {
     expect(screen.getByRole("button", { name: /crear cliente nuevo/i })).toBeInTheDocument();
     expect(screen.queryByRole("row")).not.toBeInTheDocument();
   });
+
+  describe("renderCreate (optional)", () => {
+    it("Without renderCreate the CustomerForm branch renders exactly as before", async () => {
+      render(<CustomerPicker selectedCustomer={null} canCreateCustomer onSelect={vi.fn()} />);
+      await typeAndDebounce("nadie");
+
+      expect(screen.getByRole("button", { name: /crear cliente nuevo/i })).toBeInTheDocument();
+    });
+
+    it("With renderCreate it replaces that branch and the callback selects the customer", async () => {
+      const onSelect = vi.fn();
+      const created = row({ id: "c-new", name: "Recién Creado" });
+      render(
+        <CustomerPicker
+          selectedCustomer={null}
+          canCreateCustomer
+          onSelect={onSelect}
+          renderCreate={(select) => (
+            <button type="button" onClick={() => select(created)}>
+              Crear acá
+            </button>
+          )}
+        />,
+      );
+      await typeAndDebounce("nadie");
+
+      expect(screen.queryByRole("button", { name: /crear cliente nuevo/i })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Crear acá" }));
+
+      expect(onSelect).toHaveBeenCalledWith(created);
+      expect(screen.getByText("Recién Creado")).toBeInTheDocument();
+    });
+  });
 });
