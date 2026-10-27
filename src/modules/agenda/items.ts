@@ -84,26 +84,28 @@ export function sortItems(items: readonly AgendaItem[]): AgendaItem[] {
 }
 
 /** A card's place in a day grid: `lane` of `lanes` equal columns. */
-export type LaidOut = { item: AgendaItem; lane: number; lanes: number };
+export type LaidOut = { item: AgendaItem; lane: number; lanes: number; /** Index of the run of overlapping cards it belongs to, from 0. */ cluster: number };
 
 /** Greedy one-hour intervals in (time, id) order: a card takes the first free lane, and a run of overlapping cards shares its widest lane count. */
 export function layoutDay(items: readonly AgendaItem[]): LaidOut[] {
   const out: { item: AgendaItem; lane: number }[] = [];
   const laneEnds: number[] = [];
   const results: LaidOut[] = [];
+  let clusterEnd = 0;
   let cluster = 0;
   const flush = () => {
-    for (const o of out) results.push({ ...o, lanes: laneEnds.length });
+    for (const o of out) results.push({ ...o, lanes: laneEnds.length, cluster });
+    cluster++;
     out.length = 0;
     laneEnds.length = 0;
   };
   for (const item of sortItems(items)) {
     const start = item.minuteOfDay;
-    if (laneEnds.length > 0 && start >= cluster) flush();
+    if (laneEnds.length > 0 && start >= clusterEnd) flush();
     let lane = laneEnds.findIndex((end) => end <= start);
     if (lane === -1) lane = laneEnds.length;
     laneEnds[lane] = start + 60;
-    cluster = Math.max(cluster, start + 60);
+    clusterEnd = Math.max(clusterEnd, start + 60);
     out.push({ item, lane });
   }
   flush();

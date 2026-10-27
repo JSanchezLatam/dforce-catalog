@@ -284,6 +284,11 @@ describe("layoutDay", () => {
     );
   });
 
+  it("each card knows its overlap cluster: a gap starts a new one", () => {
+    const out = layoutDay([at("a", 9), at("b", 9, 30), at("c", 10), at("d", 14), at("e", 14)]);
+    expect(out.map((l) => [l.item.id, l.cluster])).toEqual([["a", 0], ["b", 0], ["c", 0], ["d", 1], ["e", 1]]);
+  });
+
   it("an empty day lays out nothing", () => {
     expect(layoutDay([])).toEqual([]);
   });

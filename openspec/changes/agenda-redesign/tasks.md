@@ -114,7 +114,7 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU7: week grid and popover (branch `feat/agenda-redesign-wu7-week-grid-popover`) [~320]
 
-- [x] 7.1 RED `WeekGrid.test.tsx`: seven Monday-first columns with weekday, day number and per-day count; today's header carries "Hoy"; Saturday and Sunday carry the weekend mark; exactly one now-line, in today's column; none for a week without today; lanes cap at 2 with a 44px "+N" link to `/agenda?view=day&date=<day>`; each free hour a labelled button when `onSlot` is given. (Today and weekends are marked; Now-line only on today; Empty slot is a labelled control)
+- [x] 7.1 RED `WeekGrid.test.tsx`: seven Monday-first columns with weekday, day number and per-day count; today's header carries "Hoy"; Saturday and Sunday carry the weekend mark; exactly one now-line, in today's column; none for a week without today; an overlapping run shows its first card at full width (no lanes in the week) plus a 44px "+N más" link (N = hidden cards) to `/agenda?view=day&date=<day>`; each free hour a labelled button when `onSlot` is given. (Today and weekends are marked; Now-line only on today; Empty slot is a labelled control)
 - [x] 7.2 RED `components/ui/popover.test.tsx`: controlled `open`; non-modal; `Positioner anchor` is the given element; closes on Escape and outside press; renders no portal while closed.
 - [x] 7.3 GREEN `WeekGrid.tsx`, `src/components/ui/popover.tsx` (Base UI wrapper).
 - [x] 7.4 Mutation-verify: render the now-line in every column -> "Now-line only on today" red; mark only Sunday -> "Today and weekends are marked" red; open the popover while `open=false` -> its test red.
