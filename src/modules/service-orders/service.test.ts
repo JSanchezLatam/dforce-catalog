@@ -17,6 +17,7 @@ import {
   OrderIncompleteError,
   InvalidVehiculoError,
   OrdenServicioNotFoundError,
+  StaleOrderStatusError,
   transitionOrder,
   UnknownClienteError,
   updateOrder,
@@ -620,6 +621,39 @@ describe("transitionOrder (R21)", () => {
     await transitionOrder("o1", "cancelled", { ...staff, db: database, onTransitioned, cancelRemindersForOrder });
 
     expect(onTransitioned).toHaveBeenCalledWith(expect.objectContaining({ status: "cancelled" }), "in_progress", "cancelled");
+  });
+
+  // Agenda "No se presentó": a screen that loaded the order as booked must not cancel one received since.
+  it("Stale no-show is refused: expectedStatus differing from the LOCKED status throws StaleOrderStatusError and writes nothing", async () => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: "open" });
+    const cancelRemindersForOrder = vi.fn().mockResolvedValue(undefined);
+    const onTransitioned = vi.fn();
+
+    await expect(
+      transitionOrder("o1", "cancelled", { ...staff, db: database, expectedStatus: "booked", cancelRemindersForOrder, onTransitioned }),
+    ).rejects.toBeInstanceOf(StaleOrderStatusError);
+
+    expect(log.locks).toEqual(["update"]);
+    expect(log.sets).toEqual([]);
+    expect(log.history).toEqual([]);
+    expect(cancelRemindersForOrder).not.toHaveBeenCalled();
+    expect(onTransitioned).not.toHaveBeenCalled();
+  });
+
+  it("proceeds when expectedStatus matches the locked status", async () => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: "booked" });
+
+    await transitionOrder("o1", "cancelled", { ...staff, db: database, expectedStatus: "booked", cancelRemindersForOrder: async () => {} });
+
+    expect(log.history).toEqual([expect.objectContaining({ fromStatus: "booked", toStatus: "cancelled" })]);
+  });
+
+  it("Transitions without expectedStatus are unchanged: no expectedStatus transitions from any status", async () => {
+    const { database, log } = lockedDb({ ...OPEN_ROW, status: "open" });
+
+    await transitionOrder("o1", "cancelled", { ...staff, db: database, cancelRemindersForOrder: async () => {} });
+
+    expect(log.history).toEqual([expect.objectContaining({ fromStatus: "open", toStatus: "cancelled" })]);
   });
 
   it("runs the reminder side effects only AFTER the transaction commits", async () => {

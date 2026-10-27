@@ -12,6 +12,7 @@ import {
   InvalidVehiculoError,
   OrdenServicioNotFoundError,
   OrderIncompleteError,
+  StaleOrderStatusError,
   updateOrder,
   transitionOrder,
   type TransitionOrdenServicioDeps,
@@ -19,6 +20,7 @@ import {
   type UpdateOrdenServicioPatch,
 } from "@/modules/service-orders/service";
 import { orderScope } from "@/modules/service-orders/scope";
+import { orderStatusEnum } from "@/shared/db/schema";
 import { OrderTransitionError, TransitionForbiddenError, type OrderStatus } from "@/modules/service-orders/transitions";
 
 /** Nullable `text` columns this route accepts, all guarded the same way. */
@@ -59,12 +61,17 @@ export async function handleUpdateOrdenServicio(
   const scope = orderScope(user);
   try {
     if (typeof body.status === "string") {
+      const { expectedStatus } = body;
+      if (expectedStatus !== undefined && !orderStatusEnum.enumValues.includes(expectedStatus)) {
+        return NextResponse.json({ errors: { expectedStatus: "Estado esperado inválido" } }, { status: 400 });
+      }
       const orden = await transitionOrder(id, body.status as OrderStatus, {
         ...serviceDeps,
         scope,
         canAssign: can(user, "service-orders.assign"),
         actorId: user.id,
         esperaMotivo: body.esperaMotivo,
+        expectedStatus,
       });
       return NextResponse.json({ orden });
     }
@@ -177,6 +184,9 @@ export async function handleUpdateOrdenServicio(
         { error: "forbidden", message: "Solo un administrador o el jefe de taller puede cerrar, cancelar o devolver una orden." },
         { status: 403 },
       );
+    }
+    if (err instanceof StaleOrderStatusError) {
+      return NextResponse.json({ error: "stale_status", message: err.message }, { status: 409 });
     }
     if (err instanceof OrderTransitionError) {
       return NextResponse.json({ error: "invalid_transition", from: err.from, to: err.to }, { status: 400 }); // R21

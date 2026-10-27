@@ -433,6 +433,47 @@ describe("PATCH /api/service-orders/[id] — the edit gate (D11)", () => {
     expect(setSpy).not.toHaveBeenCalled();
   });
 
+  it("passes expectedStatus through: a matching one transitions as usual", async () => {
+    const response = await handleUpdateOrdenServicio(requestWith({ status: "cancelled", expectedStatus: "open" }), "o1", {
+      db: lockedDb("open", vi.fn(() => ({ where: () => ({ returning: async () => [ordenWith("cancelled")] }) }))).db,
+      cancelRemindersForOrder: async () => {},
+    });
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).orden.status).toBe("cancelled");
+  });
+
+  it("answers a stale expectedStatus with 409 stale_status, the Spanish message and no write", async () => {
+    const setSpy = vi.fn();
+    const { db, audit } = lockedDb("open", setSpy);
+
+    const response = await handleUpdateOrdenServicio(requestWith({ status: "cancelled", expectedStatus: "booked" }), "o1", { db });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "stale_status", message: "La orden cambió mientras la mirabas. Actualizá la agenda." });
+    expect(setSpy).not.toHaveBeenCalled();
+    expect(audit).toEqual([]);
+  });
+
+  it.each([[5], [["booked"]], ["archived"], [""]])("rejects expectedStatus %j with 400 and no write", async (expectedStatus) => {
+    const setSpy = vi.fn();
+
+    const response = await handleUpdateOrdenServicio(requestWith({ status: "cancelled", expectedStatus }), "o1", { db: lockedDb("booked", setSpy).db });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ errors: { expectedStatus: "Estado esperado inválido" } });
+    expect(setSpy).not.toHaveBeenCalled();
+  });
+
+  it("answers a status PATCH without expectedStatus exactly as before (200, no stale check)", async () => {
+    const response = await handleUpdateOrdenServicio(requestWith({ status: "cancelled" }), "o1", {
+      db: lockedDb("open", vi.fn(() => ({ where: () => ({ returning: async () => [ordenWith("cancelled")] }) }))).db,
+      cancelRemindersForOrder: async () => {},
+    });
+
+    expect(response.status).toBe(200);
+  });
+
   // Readiness is derived from the marks, never chosen: PATCH refuses it.
   it("refuses a PATCH status of ready_for_review with 400 and no write", async () => {
     const setSpy = vi.fn();
