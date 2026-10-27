@@ -1,5 +1,9 @@
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+vi.mock("@/shared/ui/ToastProvider", () => ({ useToast: () => ({ addToast: vi.fn() }) }));
 
 import { makeItem } from "./items.fixture";
 import { MonthView } from "./MonthView";
@@ -64,5 +68,13 @@ describe("MonthView", () => {
     render(<MonthView date={DAY} today="2026-01-01" items={at(2)} />);
     expect(within(cell(DAY)).getByLabelText("2 citas").className).toContain("md:hidden");
     expect(within(cell(DAY)).getByRole("list").className).toContain("max-md:hidden");
+  });
+
+  it("Booking trigger: each cell opens the dialog prefilled with its own day, at 44px", async () => {
+    render(<MonthView date={DAY} today="2026-01-01" items={[]} />);
+    const button = within(cell("2026-10-20")).getByRole("button", { name: "Agendar cita el 20/10" });
+    expect(button.className).toContain("min-h-11");
+    await userEvent.click(button);
+    expect((screen.getByLabelText("Día") as HTMLInputElement).value).toBe("2026-10-20");
   });
 });

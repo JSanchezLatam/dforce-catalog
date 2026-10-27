@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
+import { DayBooking } from "@/modules/agenda/AgendaBookingForm";
 import { AgendaChip } from "@/modules/agenda/AgendaChip";
 import { addDays, weekStart, WEEKDAY_SHORT } from "@/modules/agenda/dates";
 import { groupByDay, type AgendaItem } from "@/modules/agenda/items";
@@ -23,6 +24,7 @@ export function WeekView({ date, today, items }: { date: string; today: string; 
             >
               {name} {Number(key.slice(8))}
             </Link>
+            <DayBooking day={key} />
             {(byDay.get(key) ?? []).map((item) => (
               <AgendaChip key={item.id} item={item} />
             ))}

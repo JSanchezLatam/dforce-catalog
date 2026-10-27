@@ -44,7 +44,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Searc
       ) : view === "combined" && workshop ? (
         <CombinedView items={items} workshop={workshop.rows.map(toWorkshopItem)} workshopTruncated={workshop.truncated} />
       ) : (
-        <DayView items={items} />
+        <DayView items={items} date={date} />
       )}
       <VencidasPanel items={overdue.rows.map((row) => toAgendaItem(row, now))} total={overdue.total} truncated={overdue.truncated} />
     </div>

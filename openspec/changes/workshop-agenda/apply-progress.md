@@ -182,3 +182,28 @@ Deviations and findings:
 - Board privacy e2e is an absence test: anchored with `toContain(plate)` and with the agenda read returning the sentinel, but NOT mutation-verified at the route level; the source-text privacy test was.
 
 Unverified: side-by-side from `lg` versus stacked, 44px on the new links and chip legibility are class assertions in jsdom only (browser, WU9); no browser or LAN-IP check; the Vencidas panel look at 390 px is unseen. Query plan and speed at volume not measured.
+
+## WU6: booking dialog (branch `feat/workshop-agenda-wu6`, off `feat/workshop-agenda-wu5-e2e`)
+
+Tasks 6.1-6.4 done; 6.5 (GGA, PR) left to the orchestrator. Nothing committed.
+
+Files: new `agenda/AgendaBookingForm.tsx` (+ `.test.tsx`), `src/e2e/agenda-booking.e2e.test.ts`; edited `AgendaHeader`, `DayView`, `WeekView`, `MonthView` (+ their tests) and `app/(app)/agenda/page.tsx` (passes `date` to `DayView`).
+
+Behaviour: `AgendaBookingForm({day, triggerLabel, triggerClassName, ariaLabel})` is a `"use client"` controlled Dialog with its trigger; the body (`BookingFields`, which holds `useRouter`/`useToast`) mounts only while open, so every opening starts clean and the 40-odd month cells cost one button each, with no wrapper/provider needed by the existing view tests. No `typeof document` guard, no portal of its own. `DayBooking` is the per-day "+" (aria-label `Agendar cita el DD/MM`, `min-h-11 min-w-11`) used in DayView (only when `date` is given, so CombinedView is unchanged), WeekView columns and MonthView cells; the header button "Agendar cita" defaults to the selected `date`. POST body: `{clienteId, status:"booked", appointmentAt:\`${day}T${time}:00-05:00\`, description: trimmed or null}`; the route accepts a null description and omits vehicle/category. `CustomerPicker` untouched, `canCreateCustomer={false}` (WU7 adds the create form). Required checks "Elegí un cliente" / "Elegí el día" / "Elegí la hora"; 409 `cliente_deactivated` -> "Ese cliente está desactivado. Elegí otro."; `unknown_cliente` -> "Seleccioná un cliente válido"; 400 shows the first `errors` value; network -> `CONNECTION_ERROR`. Success: close, `addToast("success","Cita agendada")`, `router.refresh()`, below the try/catch.
+
+TDD: unit tests written first, run RED (missing module; 4 trigger tests red on the views) before the code. The e2e was written after the code.
+
+Mutation-verify (single file backed up and restored each time; final `git diff` holds only WU6 changes):
+
+| Mutation | Test that went red |
+|---|---|
+| `appointmentAt` via `new Date(...).toISOString()` (TZ = Pacific/Auckland) | "Request body: exactly clienteId, booked, the -05:00 instant ..." |
+| remove the required-field check | the three "Required fields: a missing customer / day / time ..." |
+| `router.refresh()` before `addToast` | "Success feedback: closes, toasts once, and the toast is added above refresh even when refresh throws" (a first attempt with `sd` did not match and was a no-op; redone with a script) |
+| drop `disabled={isSubmitting}` on submit | "In flight: the submit is disabled until the response lands" |
+
+Gates: `npm test` 246 files / 3821 passed; `npx tsc --noEmit` clean; `npm run lint` 0 errors / 13 warnings. Full e2e on a recreated `dforce_e2e`: 29 files / 355 passed. `dforce_catalog` and `dforce_catalog_wu4` untouched.
+
+Lines vs `feat/workshop-agenda-wu5-e2e` (tracked diff +58/-11, plus untracked): production 128 (form) + 14 edits; unit tests 174 (form) + 37 in the view tests; about 360 added in total, e2e 74 in its own file.
+
+Unverified: no browser or LAN-IP check (dialog look, 44px, focus handling inside the base-ui Dialog, the "+" placement in cells and columns) - WU9; the e2e was not mutation-verified (reminder window, history row); description is a single-line input, not the order form's textarea; `Date` zone test relies on `process.env.TZ` taking effect at runtime in Node.

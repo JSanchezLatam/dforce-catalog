@@ -55,4 +55,13 @@ describe("DayView", () => {
     render(<DayView items={[]} />);
     expect(screen.getByText("Sin citas para este día")).toBeInTheDocument();
   });
+
+  it("Booking trigger: a 44px control for the selected day, only when the day is known", () => {
+    const { rerender } = render(<DayView items={[]} date="2026-11-05" />);
+    const button = screen.getByRole("button", { name: "Agendar cita el 05/11" });
+    expect(button.className).toContain("min-h-11");
+    expect(button.className).toContain("min-w-11");
+    rerender(<DayView items={[]} />);
+    expect(screen.queryByRole("button")).toBeNull();
+  });
 });

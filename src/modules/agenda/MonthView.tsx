@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
+import { DayBooking } from "@/modules/agenda/AgendaBookingForm";
 import { AgendaChip } from "@/modules/agenda/AgendaChip";
 import { monthGrid, WEEKDAY_SHORT } from "@/modules/agenda/dates";
 import { groupByDay, type AgendaItem } from "@/modules/agenda/items";
@@ -37,6 +38,7 @@ export function MonthView({ date, today, items }: { date: string; today: string;
               >
                 {Number(key.slice(8))}
               </Link>
+              <DayBooking day={key} />
               {dayItems.length > 0 ? (
                 <span aria-label={`${dayItems.length} ${dayItems.length === 1 ? "cita" : "citas"}`} className="text-xs text-muted-foreground md:hidden">
                   {dayItems.length}
