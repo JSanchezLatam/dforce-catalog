@@ -9,9 +9,10 @@ import path from "node:path";
 
 import { describe, expect, expectTypeOf, it } from "vitest";
 
+import { ordenServicio } from "@/shared/db/schema";
 import type { OrderScope } from "@/modules/service-orders/scope";
 
-import { agendaInWorkshop, agendaOverdue, agendaRange, IN_WORKSHOP_STATUSES } from "./queries";
+import { agendaInWorkshop, agendaOverdue, agendaRange, IN_WORKSHOP_STATUSES, type AgendaRow } from "./queries";
 
 const source = fs.readFileSync(path.resolve(import.meta.dirname, "queries.ts"), "utf8");
 
@@ -31,8 +32,31 @@ describe("Range Query: scope required", () => {
   });
 });
 
+describe("Range Query: row shape", () => {
+  it("AgendaRow exposes the vehicle, type, description, no-show and technician fields", () => {
+    expectTypeOf<AgendaRow>().toHaveProperty("vehicleMake").toEqualTypeOf<string | null>();
+    expectTypeOf<AgendaRow>().toHaveProperty("vehicleModel").toEqualTypeOf<string | null>();
+    expectTypeOf<AgendaRow>().toHaveProperty("vehicleYear").toEqualTypeOf<number | null>();
+    expectTypeOf<AgendaRow>().toHaveProperty("categoria").toEqualTypeOf<(typeof ordenServicio.$inferSelect)["categoria"]>();
+    expectTypeOf<AgendaRow>().toHaveProperty("description").toEqualTypeOf<string | null>();
+    expectTypeOf<AgendaRow>().toHaveProperty("noShow").toEqualTypeOf<boolean>();
+    expectTypeOf<AgendaRow>().toHaveProperty("technicians").toEqualTypeOf<{ id: string; nombre: string }[]>();
+  });
+});
+
+describe("No-show: the SQL text", () => {
+  it("admits a cancelled order only through an EXISTS on its booked -> cancelled history row after the appointment", () => {
+    expect(source).toMatch(/exists/i);
+    expect(source).toMatch(/orden_estado_historial/);
+    expect(source).toMatch(/from_status\s*=\s*'booked'/);
+    expect(source).toMatch(/changed_at\s*>/);
+    // Defined is not applied: the range WHERE must actually OR the predicate in.
+    expect(source).toMatch(/or\(ne\(ordenServicio\.status,\s*"cancelled"\),\s*NO_SHOW\)/);
+  });
+});
+
 describe("Range Query: the SQL text", () => {
-  it("excludes cancelled orders from the range", () => {
+  it("excludes cancelled orders from the range unless they are a no-show", () => {
     expect(source).toMatch(/ne\(ordenServicio\.status,\s*"cancelled"\)/);
   });
 

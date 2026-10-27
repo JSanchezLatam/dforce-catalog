@@ -13,6 +13,13 @@ function row(over: Partial<AgendaRow> = {}): AgendaRow {
     customerName: "Pérez",
     customerPhone: "61234567",
     vehiclePlate: "AB1234",
+    vehicleMake: "Toyota",
+    vehicleModel: "Corolla",
+    vehicleYear: 2019,
+    categoria: "revisado",
+    description: null,
+    noShow: false,
+    technicians: [],
     ...over,
   };
 }

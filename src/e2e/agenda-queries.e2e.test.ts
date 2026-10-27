@@ -13,7 +13,7 @@ import { rangeFor } from "@/modules/agenda/dates";
 import { agendaOverdue, agendaRange } from "@/modules/agenda/queries";
 import { orderScope, SYSTEM_SCOPE } from "@/modules/service-orders/scope";
 import { db } from "@/shared/db/client";
-import { cliente, ordenServicio, ordenTecnico, tecnico, users, vehiculo } from "@/shared/db/schema";
+import { cliente, ordenEstadoHistorial, ordenServicio, ordenTecnico, tecnico, users, vehiculo } from "@/shared/db/schema";
 import { purgeHistory } from "./purge-history";
 
 type Status = typeof ordenServicio.$inferInsert.status;
@@ -32,7 +32,7 @@ describe("agenda queries (E2E)", () => {
   const extraUsers: string[] = [];
   const extraTecnicos: string[] = [];
 
-  const newOrder = async (o: { status?: Status; at: string | Date | null; noVehicle?: boolean }) => {
+  const newOrder = async (o: { status?: Status; at: string | Date | null; noVehicle?: boolean; description?: string }) => {
     const status = o.status ?? "booked";
     const [row] = await db
       .insert(ordenServicio)
@@ -40,6 +40,7 @@ describe("agenda queries (E2E)", () => {
         clienteId,
         vehiculoId: o.noVehicle ? null : vehiculoId,
         categoria: o.noVehicle ? null : "revisado",
+        description: o.description,
         esperaMotivo: status === "on_hold" ? "repuesto" : undefined,
         status,
         appointmentAt: o.at === null ? null : new Date(o.at),
@@ -54,6 +55,13 @@ describe("agenda queries (E2E)", () => {
     return { ...page, rows: page.rows.filter((r) => mine.has(r.id)) };
   };
   const ids = (rows: { id: string }[]) => rows.map((r) => r.id);
+  const history = (ordenId: string, fromStatus: Status | null, toStatus: NonNullable<Status>, changedAt: string) =>
+    db.insert(ordenEstadoHistorial).values({ ordenId, fromStatus, toStatus, changedAt: new Date(changedAt) });
+  const newTecnico = async (nombre: string, deactivated = false) => {
+    const [t] = await db.insert(tecnico).values({ nombre, deactivatedAt: deactivated ? new Date(NOW) : null }).returning({ id: tecnico.id });
+    extraTecnicos.push(t.id);
+    return t.id;
+  };
 
   beforeAll(async () => {
     execSync("npx drizzle-kit migrate", { stdio: "inherit" });
@@ -66,7 +74,7 @@ describe("agenda queries (E2E)", () => {
     adminId = u.id;
     const [c] = await db.insert(cliente).values({ name: NAME, phone: PHONE }).returning({ id: cliente.id });
     clienteId = c.id;
-    const [v] = await db.insert(vehiculo).values({ clienteId, plate: `AG${stamp}`, make: "Toyota", model: "Hilux", motor: "combustion" }).returning({ id: vehiculo.id });
+    const [v] = await db.insert(vehiculo).values({ clienteId, plate: `AG${stamp}`, make: "Toyota", model: "Hilux", year: 2019, motor: "combustion" }).returning({ id: vehiculo.id });
     vehiculoId = v.id;
   }, 60_000);
 
@@ -122,6 +130,90 @@ describe("agenda queries (E2E)", () => {
 
     expect(rows.map((r) => r.status).sort()).toEqual(["booked", "diagnosing", "done", "in_progress", "on_hold", "open", "ready_for_review"]);
     expect(ids(rows)).not.toContain(byStatus.cancelled);
+  });
+
+  it("Vehicle, type, description and technicians come back; Order without vehicle has nulls and no technicians", async () => {
+    const full = await newOrder({ at: "2031-11-03T09:00:00-05:00", description: "Ruido al frenar" });
+    const bare = await newOrder({ at: "2031-11-03T10:00:00-05:00", noVehicle: true });
+    const ana = await newTecnico(`Ana ${stamp}`);
+    const beto = await newTecnico(`Beto ${stamp}`);
+    await db.insert(ordenTecnico).values([
+      { ordenId: full, tecnicoId: beto, assignedBy: adminId },
+      { ordenId: full, tecnicoId: ana, assignedBy: adminId },
+    ]);
+
+    const rows = (await range("day", "2031-11-03")).rows;
+
+    expect(rows.find((r) => r.id === full)).toMatchObject({
+      vehiclePlate: `AG${stamp}`,
+      vehicleMake: "Toyota",
+      vehicleModel: "Hilux",
+      vehicleYear: 2019,
+      categoria: "revisado",
+      description: "Ruido al frenar",
+      noShow: false,
+      technicians: [
+        { id: ana, nombre: `Ana ${stamp}` },
+        { id: beto, nombre: `Beto ${stamp}` },
+      ],
+    });
+    expect(rows.find((r) => r.id === bare)).toMatchObject({
+      vehiclePlate: null,
+      vehicleMake: null,
+      vehicleModel: null,
+      vehicleYear: null,
+      categoria: null,
+      description: null,
+      technicians: [],
+    });
+  });
+
+  it("Technicians do not multiply rows: three technicians still give one row per order", async () => {
+    const day = "2031-11-04";
+    const solo = await newOrder({ at: `${day}T09:00:00-05:00` });
+    const crowded = await newOrder({ at: `${day}T10:00:00-05:00` });
+    for (const n of ["A", "B", "C"]) await db.insert(ordenTecnico).values({ ordenId: crowded, tecnicoId: await newTecnico(`${n} ${stamp}`), assignedBy: adminId });
+
+    const page = await range("day", day);
+
+    expect(ids(page.rows)).toEqual([solo, crowded]);
+    expect(page.rows.find((r) => r.id === solo)?.technicians).toEqual([]);
+    expect(page.rows.find((r) => r.id === crowded)?.technicians).toHaveLength(3);
+  });
+
+  it("A deactivated technician is excluded from the row", async () => {
+    const id = await newOrder({ at: "2031-11-05T09:00:00-05:00" });
+    const active = await newTecnico(`Activo ${stamp}`);
+    const gone = await newTecnico(`Baja ${stamp}`, true);
+    await db.insert(ordenTecnico).values([
+      { ordenId: id, tecnicoId: active, assignedBy: adminId },
+      { ordenId: id, tecnicoId: gone, assignedBy: adminId },
+    ]);
+
+    const row = (await range("day", "2031-11-05")).rows.find((r) => r.id === id);
+
+    expect(row?.technicians.map((t) => t.id)).toEqual([active]);
+  });
+
+  it("Cancelled after the appointment time is a no-show; Cancelled before it, from another status, or with no history stays hidden", async () => {
+    const day = "2031-11-06";
+    const at = `${day}T10:00:00-05:00`;
+    const noShow = await newOrder({ status: "cancelled", at });
+    await history(noShow, null, "booked", `${day}T08:00:00-05:00`);
+    await history(noShow, "booked", "cancelled", `${day}T12:00:00-05:00`);
+    const early = await newOrder({ status: "cancelled", at });
+    await history(early, "booked", "cancelled", `${day}T09:00:00-05:00`);
+    const fromOpen = await newOrder({ status: "cancelled", at });
+    await history(fromOpen, "open", "cancelled", `${day}T12:00:00-05:00`);
+    const noHistory = await newOrder({ status: "cancelled", at });
+    const live = await newOrder({ at });
+
+    const rows = (await range("day", day)).rows;
+
+    expect(ids(rows).sort()).toEqual([noShow, live].sort());
+    expect(rows.find((r) => r.id === noShow)).toMatchObject({ status: "cancelled", noShow: true });
+    expect(rows.find((r) => r.id === live)).toMatchObject({ noShow: false });
+    for (const out of [early, fromOpen, noHistory]) expect(ids(rows)).not.toContain(out);
   });
 
   it("Order without an appointment is absent from the range and from the overdue list", async () => {
