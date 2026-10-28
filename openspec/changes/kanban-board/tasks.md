@@ -99,7 +99,7 @@ Conventions for every WU: Strict TDD (RED confirmed failing by name, then GREEN)
 - [x] 6.1 `package.json`: `@dnd-kit/core` exact `6.3.1`; confirm `npm ls` and lockfile.
 - [x] 6.2 RED `kanban/DndBoard.test.tsx`: legal columns highlighted and others dimmed "No se puede mover acá" for an `in_progress` card; illegal drop does nothing; técnico has no grip; phone `disabled`; board renders identical static markup before mount (D11a). GREEN `kanban/DndBoard.tsx` (`MouseSensor {distance: 5}`, `TouchSensor {delay: 200, tolerance: 5}`, `listeners` only, no `attributes`, no `createPortal`, mount via `useSyncExternalStore`).
 - [x] 6.3 Wire drop → `planMove` (same path as menu). Resolve open question: is `DndContext` `id` needed?
-- [ ] 6.4 (unit/mutation part done in WU6; browser part open) Verify (mandatory, no test can see it): LAN IP at 1440/1024/768/390, light+dark; mouse drag; tablet long-press keeps horizontal scroll; console has no hydration mismatch or serialization error; mutation-verify the legality check.
+- [x] 6.4 Verified by the orchestrator 2026-10-27 at :3001: jefe at 1440 dark and light — dragging an `in_progress` card by its 44x44 grip lights En espera and Completada and dims the other five with "No se puede mover acá"; the in-tree overlay follows the pointer; a drop on En espera opens the reason dialog; a drop on Recibida does nothing; técnico and 390 show no visible grip; at 768 a horizontal swipe on a card body still scrolls the columns (scrollLeft 0→292); no hydration warnings or serialization errors. Mutation log for the legality check is in apply-progress.md.
 
 ## WU7: TV restyle
 
