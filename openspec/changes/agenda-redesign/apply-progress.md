@@ -200,3 +200,9 @@
 - Files outside `src/modules/agenda` touched: `src/modules/service-orders/RefreshListButton.tsx` and `.test.tsx`. Gates: npm test 4146, tsc clean, lint 0/13. PR total 320 changed lines including the openspec notes (290 added + 30 deleted).
 - RED first (4 tests). Mutations (restored): label never hidden / header refresh not compact / filters slot dropped / no `max-md:px-2` / toggle inert / sidebar button left on phone -> each named test red; always-compact -> "not compact" red.
 - Not verified: the row actually fitting at 390 without wrapping, and the first card's new offset.
+
+## Closing notes (orchestrator, 2026-10-28)
+
+- WU11 shipped as two PRs to stay under 400 lines: `wu11-detail-edits` (category chips and the Detail edits) and `wu11b-assign` (#296, technician assignment). The full files were parked in a scratch copy and restored, and the `key={selected.id}` fix was re-applied on top.
+- The WU10 risk that a press inside Reprogramar or No se presentó could close the Detail popover was checked in the browser on merged main and does not happen.
+- Booking uses a centred `Dialog` with native date and time inputs (WU16), not a popover. The spec was amended before archive.
