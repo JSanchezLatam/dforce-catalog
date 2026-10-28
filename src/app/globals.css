@@ -213,6 +213,45 @@
 }
 
 /*
+ * Agenda service-type colour (agenda-redesign): soft fill, strong time strip, hue per type. The formula is the
+ * approved mockup's; status is always ALSO text, never colour alone. `data-categoria` goes on the card (or any
+ * ancestor of a dot) and sets only the hue, so the hooks work in both themes. `none` is the null type: same
+ * hue family as neutral, saturation cut to 6%.
+ */
+@layer components {
+  .agenda-ev {
+    background: hsl(var(--h, 240) var(--s, 85%) 95%);
+    color: hsl(var(--h, 240) 55% 22%);
+    border: 1px solid hsl(var(--h, 240) var(--s, 85%) 86%);
+  }
+  .agenda-ev-strip {
+    background: hsl(var(--h, 240) var(--s, 85%) 89%);
+    border-bottom: 1px dashed hsl(var(--h, 240) var(--s, 85%) 72%);
+  }
+  .dark .agenda-ev {
+    background: hsl(var(--h, 240) calc(var(--s, 85%) * 0.45) 15%);
+    color: hsl(var(--h, 240) 85% 88%);
+    border-color: hsl(var(--h, 240) calc(var(--s, 85%) * 0.4) 25%);
+  }
+  .dark .agenda-ev-strip {
+    background: hsl(var(--h, 240) calc(var(--s, 85%) * 0.45) 21%);
+    border-bottom-color: hsl(var(--h, 240) calc(var(--s, 85%) * 0.4) 34%);
+  }
+  .agenda-dot {
+    background: hsl(var(--h, 240) var(--s, 80%) 55%);
+  }
+  .agenda-hatch {
+    background-image: repeating-linear-gradient(135deg, transparent 0 7px, var(--border) 7px 8px);
+  }
+  [data-categoria="instalacion"] { --h: 262; }
+  [data-categoria="mant_preventivo"] { --h: 205; }
+  [data-categoria="mant_correctivo"] { --h: 35; }
+  [data-categoria="reparacion"] { --h: 350; }
+  [data-categoria="revisado"] { --h: 152; }
+  [data-categoria="none"] { --h: 240; --s: 6%; }
+}
+
+/*
  * Letter, explicitly. With no `@page` rule the browser picks the size from the
  * print dialog's default, which is per-user and locale-dependent — the owner
  * got a sheet noticeably smaller than the page, centred. Panama prints Letter;

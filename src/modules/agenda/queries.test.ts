@@ -9,9 +9,10 @@ import path from "node:path";
 
 import { describe, expect, expectTypeOf, it } from "vitest";
 
+import { ordenServicio } from "@/shared/db/schema";
 import type { OrderScope } from "@/modules/service-orders/scope";
 
-import { agendaInWorkshop, agendaOverdue, agendaRange, IN_WORKSHOP_STATUSES } from "./queries";
+import { agendaBusyDays, agendaInWorkshop, agendaNext, agendaOverdue, agendaRange, agendaWeekCounts, IN_WORKSHOP_STATUSES, type AgendaRow, type WeekCounts } from "./queries";
 
 const source = fs.readFileSync(path.resolve(import.meta.dirname, "queries.ts"), "utf8");
 
@@ -31,13 +32,36 @@ describe("Range Query: scope required", () => {
   });
 });
 
+describe("Range Query: row shape", () => {
+  it("AgendaRow exposes the vehicle, type, description, no-show and technician fields", () => {
+    expectTypeOf<AgendaRow>().toHaveProperty("vehicleMake").toEqualTypeOf<string | null>();
+    expectTypeOf<AgendaRow>().toHaveProperty("vehicleModel").toEqualTypeOf<string | null>();
+    expectTypeOf<AgendaRow>().toHaveProperty("vehicleYear").toEqualTypeOf<number | null>();
+    expectTypeOf<AgendaRow>().toHaveProperty("categoria").toEqualTypeOf<(typeof ordenServicio.$inferSelect)["categoria"]>();
+    expectTypeOf<AgendaRow>().toHaveProperty("description").toEqualTypeOf<string | null>();
+    expectTypeOf<AgendaRow>().toHaveProperty("noShow").toEqualTypeOf<boolean>();
+    expectTypeOf<AgendaRow>().toHaveProperty("technicians").toEqualTypeOf<{ id: string; nombre: string }[]>();
+  });
+});
+
+describe("No-show: the SQL text", () => {
+  it("admits a cancelled order only through an EXISTS on its booked -> cancelled history row after the appointment", () => {
+    expect(source).toMatch(/exists/i);
+    expect(source).toMatch(/orden_estado_historial/);
+    expect(source).toMatch(/from_status\s*=\s*'booked'/);
+    expect(source).toMatch(/changed_at\s*>/);
+    // Defined is not applied: the range WHERE must actually OR the predicate in.
+    expect(source).toMatch(/const SHOWN = or\(ne\(ordenServicio\.status,\s*"cancelled"\),\s*NO_SHOW\)/);
+  });
+});
+
 describe("Range Query: the SQL text", () => {
-  it("excludes cancelled orders from the range", () => {
+  it("excludes cancelled orders from the range unless they are a no-show", () => {
     expect(source).toMatch(/ne\(ordenServicio\.status,\s*"cancelled"\)/);
   });
 
-  it("applies the caller's scope in the range, the in-workshop read and the predicate the overdue rows and count share", () => {
-    expect(source.match(/scope\.where/g)).toHaveLength(3);
+  it("applies the caller's scope in the range, the in-workshop read, the predicate the overdue rows and count share, and the three side reads", () => {
+    expect(source.match(/scope\.where/g)).toHaveLength(6);
   });
 
   it("binds instants and never does zone logic in SQL or locale formatting", () => {
@@ -60,5 +84,30 @@ describe("Combined: the in-workshop query lives in agenda/, never in board/", ()
   it("the board query file still never names cliente", () => {
     const board = fs.readFileSync(path.resolve(import.meta.dirname, "../board/queries.ts"), "utf8");
     expect(board).not.toMatch(/\bcliente\b/);
+  });
+});
+
+describe("Side reads: surface and SQL text", () => {
+  it("each takes the OrderScope first, mandatory", () => {
+    for (const fn of [agendaBusyDays, agendaNext, agendaWeekCounts]) expect(fn).toBeTypeOf("function");
+    expect(agendaBusyDays.length).toBe(2);
+    expect(agendaNext.length).toBe(2);
+    expect(agendaWeekCounts.length).toBe(3);
+    expectTypeOf(agendaBusyDays).parameter(0).toEqualTypeOf<OrderScope>();
+    expectTypeOf(agendaNext).parameter(0).toEqualTypeOf<OrderScope>();
+    expectTypeOf(agendaWeekCounts).parameter(0).toEqualTypeOf<OrderScope>();
+  });
+
+  it("the week counts are four numbers, not raw bigint strings", () => {
+    expectTypeOf<WeekCounts>().toEqualTypeOf<{ agendadas: number; recibidas: number; vencidas: number; noShow: number }>();
+    expect(source).toMatch(/mapWith\(Number\)/);
+  });
+
+  it("next is booked-only and busy days share the range's inclusion rule", () => {
+    const next = /export async function agendaNext[\s\S]*?\n}\n/.exec(source)?.[0] ?? "";
+    expect(next).toMatch(/eq\(ordenServicio\.status,\s*"booked"\)/);
+    expect(next).toMatch(/gte\(ordenServicio\.appointmentAt,\s*now\)/);
+    // Range, busy days and week counts all filter through the one definition.
+    expect(source.match(/\bSHOWN, scope\.where/g)).toHaveLength(3);
   });
 });

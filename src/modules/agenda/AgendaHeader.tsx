@@ -1,9 +1,12 @@
+import type { ReactNode } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
-import { stepDate, weekStart, type AgendaView } from "@/modules/agenda/dates";
-import { AgendaBookingForm } from "@/modules/agenda/AgendaBookingForm";
+import { formatMonthYear, stepDate, weekStart, type AgendaView } from "@/modules/agenda/dates";
+import { Button } from "@/components/ui/button";
 import { RefreshListButton } from "@/modules/service-orders/RefreshListButton";
+import { PAGE_HEADING } from "@/shared/ui/styles";
 
 const VIEWS: { view: AgendaView; label: string }[] = [
   { view: "day", label: "Día" },
@@ -22,26 +25,43 @@ function rangeLabel(view: AgendaView, date: string): string {
   return view === "week" ? `Semana del ${dmy(weekStart(date))}` : dmy(date);
 }
 
-/** Plain links only: the URL is the state, so there is nothing to hydrate but the refresh button. */
-export function AgendaHeader({ view, date, today, truncated }: { view: AgendaView; date: string; today: string; truncated: boolean }) {
+/** Links for the URL state; "Nueva cita" hands the opening to the shell (`onNew`). `search` and `tabs` are slots for the shell's client state. */
+export function AgendaHeader({ view, date, today, truncated, onNew, search, tabs, filters }: { view: AgendaView; date: string; today: string; truncated: boolean; onNew: () => void; search?: ReactNode; tabs?: ReactNode; filters?: ReactNode }) {
   const to = (v: AgendaView, d: string) => `/agenda?view=${v}&date=${d}`;
   return (
-    <div className="mb-4 flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Link href={to(view, stepDate(view, date, -1))} className={NAV}>Anterior</Link>
-        <Link href={to(view, today)} className={NAV}>Hoy</Link>
-        <Link href={to(view, stepDate(view, date, 1))} className={NAV}>Siguiente</Link>
-        <span className="px-2 text-sm font-semibold tabular-nums">{rangeLabel(view, date)}</span>
-        <RefreshListButton />
-        <AgendaBookingForm day={date} triggerClassName="min-h-11" />
+    <div className="mb-4 flex flex-col gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <nav aria-label="Ruta" className="text-xs text-muted-foreground max-md:hidden">Taller / <span className="text-foreground">Agenda</span></nav>
+          <h1 className={cn("mt-1", PAGE_HEADING)}>Agenda</h1>
+          <p className="text-sm text-muted-foreground max-md:hidden">Citas del taller y órdenes en curso</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {search}
+          <Button type="button" className="min-h-11 max-md:hidden" onClick={onNew}>Nueva cita</Button>
+        </div>
       </div>
-      <nav aria-label="Vista" className="flex flex-wrap gap-2">
-        {VIEWS.map((v) => (
-          <Link key={v.view} href={to(v.view, date)} aria-current={v.view === view ? "page" : undefined} className={cn(NAV, v.view === view && "bg-primary text-primary-foreground hover:bg-primary")}>
-            {v.label}
-          </Link>
-        ))}
-      </nav>
+      {tabs}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-xl font-bold">{formatMonthYear(date)}</h2>
+          <Link href={to(view, today)} className={NAV}>Hoy</Link>
+          <Link href={to(view, stepDate(view, date, -1))} aria-label="Anterior" className={NAV}><ChevronLeft aria-hidden className="size-4" /></Link>
+          <Link href={to(view, stepDate(view, date, 1))} aria-label="Siguiente" className={NAV}><ChevronRight aria-hidden className="size-4" /></Link>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <nav aria-label="Vista" className="flex gap-1 rounded-lg bg-muted p-1">
+            {VIEWS.map((v) => (
+              <Link key={v.view} href={to(v.view, date)} aria-current={v.view === view ? "page" : undefined} className={cn(NAV, "border-0 max-md:px-2", v.view === view && "bg-background font-semibold shadow-sm")}>
+                {v.label}
+              </Link>
+            ))}
+          </nav>
+          <span className="inline-flex min-h-11 items-center rounded-lg border px-3 text-sm tabular-nums max-md:hidden">{rangeLabel(view, date)}</span>
+          <RefreshListButton compact />
+          {filters}
+        </div>
+      </div>
       {truncated ? <p role="status" className="text-sm text-amber-700 dark:text-amber-300">Se muestran las primeras 500 citas; acotá el rango.</p> : null}
     </div>
   );

@@ -35,4 +35,17 @@ describe("RefreshListButton", () => {
     const button = screen.getByRole("button", { name: "Actualizar" });
     expect(button).toHaveClass("min-h-11", "min-w-11");
   });
+
+  it("compact: below md only the icon shows, and the name stays 'Actualizar' for assistive tech", () => {
+    render(<RefreshListButton compact />);
+    const button = screen.getByRole("button", { name: "Actualizar" });
+    expect(screen.getByText("Actualizar").className).toContain("max-md:sr-only");
+    expect(button.className).toContain("min-h-11");
+    expect(button.className).toContain("min-w-11");
+  });
+
+  it("not compact (the service-orders list): the label is never hidden", () => {
+    render(<RefreshListButton />);
+    expect(screen.getByText("Actualizar").className).not.toContain("sr-only");
+  });
 });

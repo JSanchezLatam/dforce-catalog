@@ -26,7 +26,8 @@ import { Button } from "@/components/ui/button";
  * the disabled trigger are the "something is happening", exactly as
  * `ManualSyncButton` does it.
  */
-export function RefreshListButton() {
+/** `compact`: below md only the icon shows (the label stays for assistive tech). */
+export function RefreshListButton({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const [isRefreshing, startRefresh] = useTransition();
 
@@ -41,7 +42,7 @@ export function RefreshListButton() {
       onClick={() => startRefresh(() => router.refresh())}
     >
       <RefreshCw className={isRefreshing ? "animate-spin" : undefined} aria-hidden="true" />
-      {isRefreshing ? "Actualizando…" : "Actualizar"}
+      <span className={compact ? "max-md:sr-only" : undefined}>{isRefreshing ? "Actualizando…" : "Actualizar"}</span>
     </Button>
   );
 }

@@ -4,6 +4,9 @@ import {
   OVERDUE_MARGIN_MINUTES,
   addDays,
   formatAgendaTime,
+  formatLongDay,
+  formatMonthYear,
+  panamaMinute,
   isOverdue,
   monthGrid,
   panamaMidnight,
@@ -147,5 +150,43 @@ describe("Time text identical on server and client", () => {
 
   it("emits ASCII digits and a colon only", () => {
     expect(formatAgendaTime("2026-10-26T17:07:00Z")).toMatch(/^[0-9]{2}:[0-9]{2}$/);
+  });
+});
+
+describe("panamaMinute", () => {
+  it("is the Panama minute of day, not the server's", () => {
+    expect(panamaMinute(new Date("2026-10-26T19:05:00Z"))).toBe(14 * 60 + 5);
+    expect(panamaMinute(new Date("2026-10-26T05:00:00Z"))).toBe(0);
+    expect(panamaMinute(new Date("2026-10-27T04:59:00Z"))).toBe(23 * 60 + 59);
+  });
+});
+
+describe("formatLongDay", () => {
+  it.each([
+    ["2026-10-27", "Martes 27 de octubre"],
+    ["2026-11-01", "Domingo 1 de noviembre"],
+    ["2026-10-26", "Lunes 26 de octubre"],
+    ["2028-02-29", "Martes 29 de febrero"],
+    ["2026-01-03", "Sábado 3 de enero"],
+    ["2026-12-31", "Jueves 31 de diciembre"],
+  ])("%s reads %s, from static tables", (key, text) => {
+    expect(formatLongDay(key)).toBe(text);
+  });
+
+  it("covers all twelve months and seven weekdays without Intl", () => {
+    const months = Array.from({ length: 12 }, (_, m) => formatLongDay(`2026-${String(m + 1).padStart(2, "0")}-15`).split(" de ")[1]);
+    expect(months).toEqual(["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]);
+    const days = Array.from({ length: 7 }, (_, d) => formatLongDay(`2026-10-${19 + d}`).split(" ")[0]);
+    expect(days).toEqual(["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]);
+  });
+});
+
+describe("formatMonthYear", () => {
+  it.each([
+    ["2026-10-27", "Octubre 2026"],
+    ["2026-01-05", "Enero 2026"],
+    ["2031-12-31", "Diciembre 2031"],
+  ])("%s -> %s from static tables", (key, text) => {
+    expect(formatMonthYear(key)).toBe(text);
   });
 });

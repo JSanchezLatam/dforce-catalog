@@ -11,7 +11,7 @@ import { FIELD_ERROR } from "@/shared/ui/styles";
 import { useToast } from "@/shared/ui/ToastProvider";
 
 /** "No se presentó": offered to a Vencida booked appointment only; an ordinary cancellation behind a confirmation. */
-export function NoShowConfirm({ item }: { item: AgendaItem }) {
+export function NoShowConfirm({ item, onSuccess }: { item: AgendaItem; onSuccess?: () => void }) {
   const [open, setOpen] = useState(false);
   if (item.muted || !item.overdue) return null;
   return (
@@ -21,13 +21,13 @@ export function NoShowConfirm({ item }: { item: AgendaItem }) {
         <DialogHeader>
           <DialogTitle>¿El cliente no se presentó?</DialogTitle>
         </DialogHeader>
-        <ConfirmBody item={item} onDone={() => setOpen(false)} />
+        <ConfirmBody item={item} onDone={() => setOpen(false)} onSuccess={onSuccess} />
       </DialogContent>
     </Dialog>
   );
 }
 
-function ConfirmBody({ item, onDone }: { item: AgendaItem; onDone: () => void }) {
+function ConfirmBody({ item, onDone, onSuccess }: { item: AgendaItem; onDone: () => void; onSuccess?: () => void }) {
   const router = useRouter();
   const { addToast } = useToast();
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +45,7 @@ function ConfirmBody({ item, onDone }: { item: AgendaItem; onDone: () => void })
     }
     // ABOVE the refresh, BELOW the try/catch (inside patchOrder).
     onDone();
+    onSuccess?.();
     addToast("success", "Orden cancelada");
     router.refresh();
   }
