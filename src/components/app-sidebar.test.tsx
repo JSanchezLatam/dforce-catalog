@@ -4,24 +4,28 @@
  * jsdom/`*.test.tsx` convention this file follows).
  *
  * `next/navigation`'s `usePathname` is mocked because `NavLinkItem` calls it
- * unconditionally to compute the active-link style; this component tree
- * never opens the footer user-menu dropdown in these tests, so
- * `next-themes`/`next/navigation`'s `useRouter` (used lazily by
- * `ThemeToggle`/`LogoutButton` only once that dropdown's content mounts)
- * never need mocking here.
+ * unconditionally to compute the active-link style. `useRouter` and
+ * `next-themes` are mocked only because opening the footer user menu mounts
+ * `LogoutButton` and `ThemeToggle`.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { AppSidebar } from "./app-sidebar";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DEFAULT_NAV_COLLAPSE_STATE, type NavCollapseState } from "@/modules/layout/nav-collapse-state";
 import type { NavGroup } from "@/modules/layout/nav-items";
 
 const nav = vi.hoisted(() => ({ pathname: "/inventory" }));
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname,
+  // LogoutButton calls it as soon as the user menu opens.
+  useRouter: () => ({ push: vi.fn() }),
+}));
+// ThemeToggle renders nothing until next-themes has resolved a theme; there is no provider here.
+vi.mock("next-themes", () => ({
+  useTheme: () => ({ resolvedTheme: "light", setTheme: vi.fn() }),
 }));
 
 const NAV_GROUPS: NavGroup[] = [
@@ -338,5 +342,144 @@ describe("AppSidebar — Tablero parent", () => {
 
     expect(screen.getByRole("button", { name: "Tablero" })).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("link", { name: "Pantalla de clientes" })).not.toBeInTheDocument();
+  });
+});
+
+/** sidebar-redesign WU2 (D3-D5). jsdom sees classes, not hover, sizes or paint: those are browser checks. */
+describe("AppSidebar — nav restyle (sidebar-redesign WU2)", () => {
+  const TABLERO: NavGroup[] = [
+    {
+      id: "taller",
+      label: "Taller",
+      items: [
+        {
+          kind: "parent",
+          id: "tablero",
+          label: "Tablero",
+          icon: "board",
+          children: [
+            { kind: "link", href: "/kanban", label: "Órdenes en curso", icon: "kanban", action: "board.read" },
+            { kind: "link", href: "/tablero", label: "Pantalla del taller", icon: "board", action: "board.read" },
+            { kind: "link", href: "/tablero/clientes", label: "Pantalla de clientes", icon: "board", action: "board.customer" },
+          ],
+        },
+      ],
+    },
+  ];
+
+  afterEach(() => {
+    nav.pathname = "/inventory";
+    window.innerWidth = 1024;
+  });
+
+  function renderNav(groups: NavGroup[], opts: { open?: boolean; state?: NavCollapseState } = {}) {
+    return render(
+      <SidebarProvider defaultOpen={opts.open ?? true}>
+        <AppSidebar
+          navGroups={groups}
+          user={{ id: "u1", role: "administrador", name: "Jorge" }}
+          workshopName="Taller Demo"
+          logoR2Key={null}
+          initialCollapseState={opts.state ?? DEFAULT_NAV_COLLAPSE_STATE}
+        />
+      </SidebarProvider>,
+    );
+  }
+
+  it("expanded on /tablero/clientes marks only Pantalla de clientes as the current page", () => {
+    nav.pathname = "/tablero/clientes";
+    renderNav(TABLERO);
+
+    const current = screen.getAllByRole("link").filter((l) => l.getAttribute("aria-current") === "page");
+    expect(current.map((l) => l.textContent)).toEqual(["Pantalla de clientes"]);
+  });
+
+  it("a top-level link on its own page carries aria-current, and only that one", () => {
+    nav.pathname = "/customers";
+    renderNav(NAV_GROUPS);
+
+    expect(screen.getByRole("link", { name: "Clientes" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Generar Catálogos" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("in the rail on /kanban the Tablero button is active", () => {
+    nav.pathname = "/kanban";
+    renderNav(TABLERO, { open: false });
+
+    expect(screen.getByRole("button", { name: "Tablero" })).toHaveAttribute("data-active");
+  });
+
+  it("renders no separator", () => {
+    renderNav(NAV_GROUPS);
+
+    expect(document.querySelector('[data-sidebar="separator"]')).toBeNull();
+  });
+
+  it("hides an open group's chevron until hover or focus, but never on touch", () => {
+    renderNav(NAV_GROUPS);
+
+    const chevron = screen.getByRole("button", { name: "CRM" }).querySelector("svg");
+    expect(chevron).toHaveClass(
+      "opacity-0",
+      "group-hover/label:opacity-100",
+      "group-focus-visible/label:opacity-100",
+      "pointer-coarse:opacity-100",
+    );
+  });
+
+  it("keeps a closed group's chevron visible", () => {
+    renderNav(NAV_GROUPS, { state: { ...DEFAULT_NAV_COLLAPSE_STATE, crm: false } });
+
+    const chevron = screen.getByRole("button", { name: "CRM" }).querySelector("svg");
+    expect(chevron).not.toHaveClass("opacity-0");
+  });
+
+  it("paints group labels muted", () => {
+    renderNav(NAV_GROUPS);
+
+    expect(screen.getByRole("button", { name: "CRM" })).toHaveClass("text-muted-foreground");
+  });
+
+  it("draws the user card with a border", () => {
+    renderNav(NAV_GROUPS);
+
+    expect(screen.getByRole("button", { name: /Jorge/ })).toHaveClass("rounded-xl", "border", "border-sidebar-border");
+  });
+
+  it("opens the user menu with Mi cuenta, the theme item and Cerrar sesión, in that order", async () => {
+    const user = userEvent.setup();
+    renderNav(NAV_GROUPS);
+
+    await user.click(screen.getByRole("button", { name: /Jorge/ }));
+
+    const items = await screen.findAllByRole("menuitem");
+    expect(items.map((i) => i.textContent)).toEqual(["Mi cuenta", "Modo oscuro", "Cerrar sesión"]);
+  });
+
+  // The sheet's absolute 44px close button sits over the header's top-right corner.
+  it("reserves room for the sheet's close button in the header, only inside the mobile sheet", async () => {
+    window.innerWidth = 800; // useIsMobile reads innerWidth
+    const user = userEvent.setup();
+    render(
+      <SidebarProvider>
+        <SidebarTrigger aria-label="Abrir menú" />
+        <AppSidebar
+          navGroups={NAV_GROUPS}
+          user={{ id: "u1", role: "administrador", name: "Jorge" }}
+          workshopName="Taller Demo"
+          logoR2Key={null}
+          initialCollapseState={DEFAULT_NAV_COLLAPSE_STATE}
+        />
+      </SidebarProvider>,
+    );
+    await user.click(screen.getByRole("button", { name: "Abrir menú" }));
+
+    const header = await waitFor(() => {
+      const el = document.querySelector('[data-sidebar="header"]');
+      if (!el) throw new Error("sheet not open");
+      return el;
+    });
+    expect(header.closest('[data-mobile="true"]')).not.toBeNull();
+    expect(header).toHaveClass("in-data-[mobile=true]:pr-13");
   });
 });

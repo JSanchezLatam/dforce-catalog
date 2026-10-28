@@ -49,11 +49,11 @@ Conventions for every WU:
 
 ## WU2: Nav restyle
 
-- [ ] 2.1 RED `app-sidebar.test.tsx`: expanded on `/tablero/clientes` marks only "Pantalla de clientes" with `aria-current="page"` (today none is marked); a top-level link on its page carries `aria-current`; rail on `/kanban` makes the Tablero trigger `data-active`.
-- [ ] 2.2 RED: no `[data-sidebar="separator"]`; open-group chevron has `opacity-0` plus the hover, focus-visible and `pointer-coarse:opacity-100` classes, and a closed group's chevron does not have `opacity-0`; labels carry `text-muted-foreground`.
-- [ ] 2.3 RED: user card trigger carries the border classes; the menu lists "Mi cuenta", the theme item and "Cerrar sesión" (mock `next-themes` and `useRouter` only if opening the menu requires it).
-- [ ] 2.4 GREEN `app-sidebar.tsx` (D3 `activeChildHref`, D4, D5). Existing tests at `:313-342` stay green unchanged.
-- [ ] 2.5 Verify: unit, then mutation-verify `activeChildHref` (switch to plain `startsWith`) and the separator removal.
+- [x] 2.1 RED `app-sidebar.test.tsx`: expanded on `/tablero/clientes` marks only "Pantalla de clientes" with `aria-current="page"` (today none is marked); a top-level link on its page carries `aria-current`; rail on `/kanban` makes the Tablero trigger `data-active`.
+- [x] 2.2 RED: no `[data-sidebar="separator"]`; open-group chevron has `opacity-0` plus the hover, focus-visible and `pointer-coarse:opacity-100` classes, and a closed group's chevron does not have `opacity-0`; labels carry `text-muted-foreground`.
+- [x] 2.3 RED: user card trigger carries the border classes; the menu lists "Mi cuenta", the theme item and "Cerrar sesión" (mock `next-themes` and `useRouter` only if opening the menu requires it).
+- [x] 2.4 GREEN `app-sidebar.tsx` (D3 `activeChildHref`, D4, D5). Existing tests at `:313-342` stay green unchanged.
+- [x] 2.5 Verify: unit, then mutation-verify `activeChildHref` (switch to plain `startsWith`) and the separator removal.
 
 ## WU3: Search core
 
