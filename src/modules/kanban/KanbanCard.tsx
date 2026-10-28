@@ -5,10 +5,11 @@ import type { ReactNode } from "react";
 import { CalendarDays, GripVertical, User } from "lucide-react";
 
 import { cardAlert } from "@/modules/board/alerts";
-import { formatAge, formatBoardTime } from "@/modules/board/format";
+import { formatBoardTime } from "@/modules/board/format";
 import { AlertStrip, CardShell, CategoryTag, TechAvatars, TimeChip, UrgentBadge } from "@/modules/board/primitives";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import { CardMenu } from "./CardMenu";
+import { ageLabel } from "./derive";
 import type { KanbanCard } from "./shape";
 
 type CardProps = { card: KanbanCard; generatedAt: string; canMove: boolean; onMove: (card: KanbanCard, target: OrderStatus) => void; onUrgent: (card: KanbanCard, on: boolean) => void };
@@ -63,7 +64,7 @@ export function KanbanCardBody({ card, generatedAt, canMove, onMove, onUrgent, r
           {card.status === "booked" && card.appointmentAt ? (
             <TimeChip icon={CalendarDays}>{formatBoardTime(card.appointmentAt)}</TimeChip>
           ) : (
-            <TimeChip>{`hace ${formatAge(card.statusSince, generatedAt)}`}</TimeChip>
+            <TimeChip>{`hace ${ageLabel(card.statusSince, generatedAt)}`}</TimeChip>
           )}
         </>
       }

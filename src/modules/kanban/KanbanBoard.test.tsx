@@ -29,6 +29,7 @@ const ROWS: KanbanCard[] = [
 const snapshot = (over: Partial<KanbanSnapshot> = {}): KanbanSnapshot => ({ generatedAt: GENERATED_AT, onRoster: true, rows: ROWS, ...over });
 const col = (name: string) => within(screen.getByRole("region", { name }));
 const kpi = (name: string) => group("Indicadores").getByText(name).parentElement!.children[1].textContent;
+const sub = (name: string) => group("Indicadores").getByText(name).parentElement!.children[2]?.textContent;
 const group = (name: string) => within(screen.getByRole("group", { name }));
 const plates = (name: string) => col(name).getAllByRole("listitem").map((li) => li.querySelector(".font-extrabold")?.textContent);
 
@@ -41,6 +42,50 @@ describe("KanbanBoard", () => {
     expect(screen.queryByText("CX")).toBeNull();
     expect(plates("Completada")).toEqual(["DN"]);
     expect(col("En diagnóstico").getByText("Sin órdenes")).toBeInTheDocument();
+  });
+
+  it("captions each KPI from the snapshot, and leaves a caption out when it has no data", () => {
+    render(<KanbanBoard initial={snapshot()} canMove />);
+    const labels = ["En el taller", "Urgentes", "En espera", "Completadas hoy", "Agendadas hoy", "Citas vencidas"];
+    // The only booked card (09:00) is already behind generatedAt (10:00), so there is no "próxima".
+    expect(labels.map(sub)).toEqual(["en 3 estados", "marcadas a mano", "repuesto", "última 09:30", undefined, "desde 09:00"]);
+  });
+
+  it("decorates the column scroller with an aria-hidden right-edge fade that cannot take a click", () => {
+    render(<KanbanBoard initial={snapshot()} canMove />);
+    const fade = screen.getByRole("region", { name: "Agendada" }).parentElement!.nextElementSibling!;
+    expect(fade).toHaveAttribute("aria-hidden", "true");
+    expect(fade).toHaveClass("pointer-events-none");
+  });
+
+  it("tints each phone tab with its status tile", () => {
+    render(<KanbanBoard initial={snapshot()} canMove />);
+    const tab = group("Estados").getByRole("button", { name: /^En progreso/ });
+    expect(tab.querySelector(".board-hue-tile")).not.toBeNull();
+    expect(group("Estados").getAllByRole("button").every((b) => b.querySelector(".board-hue-tile"))).toBe(true);
+  });
+
+  it("the Actualizar button is 44x44 and re-reads the snapshot now", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => snapshot() });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      render(<KanbanBoard initial={snapshot()} canMove />);
+      const btn = screen.getByRole("button", { name: "Actualizar" });
+      expect(btn).toHaveClass("size-11");
+      expect(fetchMock).not.toHaveBeenCalled();
+      await userEvent.click(btn);
+      expect(fetchMock).toHaveBeenCalledWith("/api/kanban", expect.anything());
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("tells a mover that dragging works and leaves the técnico on the read-only line", () => {
+    const { rerender } = render(<KanbanBoard initial={snapshot()} canMove />);
+    expect(screen.getByText("Arrastrá una tarjeta a otra columna para cambiar su estado.")).toBeInTheDocument();
+    rerender(<KanbanBoard initial={snapshot()} canMove={false} />);
+    expect(screen.queryByText(/Arrastrá/)).toBeNull();
+    expect(screen.getByText("Estado de las órdenes del taller. Los cambios de estado los hace el jefe de taller.")).toBeInTheDocument();
   });
 
   it("puts the urgent card first in its column, ahead of an older one", () => {

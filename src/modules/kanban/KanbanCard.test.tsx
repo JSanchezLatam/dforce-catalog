@@ -35,6 +35,11 @@ describe("KanbanCardView", () => {
     expect(document.querySelector(".bg-board-warn-bg")).toBeNull();
   });
 
+  it("spells a day-old card out as hace 1 día, not the TV's hace 1 d", () => {
+    renderCard({ statusSince: "2026-10-25T14:00:00.000Z" });
+    expect(screen.getByText("hace 1 día")).toBeInTheDocument();
+  });
+
   it("a booked card shows the appointment time in Panama and the overdue strip", () => {
     renderCard({ status: "booked", appointmentAt: "2026-10-26T14:00:00.000Z" });
     expect(screen.getByText("26/10 09:00")).toBeInTheDocument();
