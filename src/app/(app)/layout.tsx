@@ -29,7 +29,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const initialCollapseState = decodeNavCollapseState(cookieStore.get(NAV_COLLAPSE_COOKIE_NAME)?.value);
 
   return (
-    <SidebarProvider defaultOpen={sidebarDefaultOpen}>
+    <SidebarProvider
+      defaultOpen={sidebarDefaultOpen}
+      className="has-data-[variant=inset]:bg-muted dark:has-data-[variant=inset]:bg-background"
+    >
       <AppSidebar
         navGroups={navGroups}
         user={{ id: user.id, role: user.role, name: profile?.name, username: profile?.username }}
@@ -37,7 +40,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         logoR2Key={config?.logoR2Key ?? null}
         initialCollapseState={initialCollapseState}
       />
-      <SidebarInset>
+      <SidebarInset className="dark:bg-card lg:rounded-2xl lg:border">
         {/* Below `lg` the sidebar is an off-canvas Sheet with no other way to open
             it, so phones get this bar. `aria-label` replaces shadcn's English
             sr-only "Toggle Sidebar"; `min-h-11 min-w-11` is the 44x44 rule. */}
