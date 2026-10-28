@@ -3,6 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { KanbanBoard } from "./KanbanBoard";
+
+// The board toasts after a move; these tests are about layout, so the provider is not mounted.
+vi.mock("@/shared/ui/ToastProvider", () => ({ useToast: () => ({ addToast: vi.fn() }) }));
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import type { KanbanCard, KanbanSnapshot } from "./shape";
