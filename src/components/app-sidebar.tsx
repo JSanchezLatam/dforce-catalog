@@ -15,7 +15,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  SidebarSeparator,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -65,6 +64,14 @@ const ICON_MAP: Record<string, typeof Package> = {
   agenda: CalendarDays,
 }
 
+// Longest matching sibling wins: /tablero is a prefix of /tablero/clientes, and only one child is current.
+function activeChildHref(children: NavLink[], pathname: string): string | undefined {
+  return children
+    .map((c) => c.href)
+    .filter((href) => pathname.startsWith(href))
+    .sort((a, b) => b.length - a.length)[0]
+}
+
 function NavLinkItem({ item }: { item: NavLink }) {
   const pathname = usePathname()
   const Icon = ICON_MAP[item.icon] || Package
@@ -77,6 +84,8 @@ function NavLinkItem({ item }: { item: NavLink }) {
       <SidebarMenuButton
         render={<Link href={item.href} />}
         isActive={isActive}
+        aria-current={isActive ? "page" : undefined}
+        className="data-active:font-semibold"
         tooltip={item.badge ? `${item.label} próximos (${item.badge})` : item.label}
       >
         <Icon />
@@ -106,7 +115,9 @@ function NavParentExpanded({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const pathname = usePathname()
   const Icon = ICON_MAP[parent.icon] || Package
+  const activeHref = activeChildHref(parent.children, pathname)
 
   return (
     <SidebarMenuItem>
@@ -125,7 +136,12 @@ function NavParentExpanded({
               const ChildIcon = ICON_MAP[child.icon] || Package
               return (
                 <SidebarMenuSubItem key={child.href}>
-                  <SidebarMenuSubButton render={<Link href={child.href} />}>
+                  <SidebarMenuSubButton
+                    render={<Link href={child.href} />}
+                    isActive={child.href === activeHref}
+                    aria-current={child.href === activeHref ? "page" : undefined}
+                    className="data-active:font-semibold"
+                  >
                     <ChildIcon />
                     <span>{child.label}</span>
                   </SidebarMenuSubButton>
@@ -142,17 +158,13 @@ function NavParentExpanded({
 function NavParentCollapsed({ parent }: { parent: NavParent }) {
   const pathname = usePathname()
   const Icon = ICON_MAP[parent.icon] || Package
-  // Longest matching sibling wins: /tablero is a prefix of /tablero/clientes, and only one child is current.
-  const activeHref = parent.children
-    .map((c) => c.href)
-    .filter((href) => pathname.startsWith(href))
-    .sort((a, b) => b.length - a.length)[0]
+  const activeHref = activeChildHref(parent.children, pathname)
 
   return (
     <SidebarMenuItem>
       <DropdownMenu>
         <DropdownMenuTrigger
-          render={<SidebarMenuButton tooltip={parent.label} className="cursor-pointer" />}
+          render={<SidebarMenuButton tooltip={parent.label} isActive={!!activeHref} className="cursor-pointer data-active:font-semibold" />}
         >
           <Icon />
           <span>{parent.label}</span>
@@ -216,7 +228,7 @@ function NavGroupSection({
   if (collapsed) {
     return (
       <SidebarGroup className={group.pinBottom ? "mt-auto" : ""} role="group" aria-labelledby={labelId}>
-        <SidebarGroupLabel id={labelId}>{group.label}</SidebarGroupLabel>
+        <SidebarGroupLabel id={labelId} className="text-muted-foreground dark:text-muted-foreground">{group.label}</SidebarGroupLabel>
         <SidebarGroupContent>
           <SidebarMenu>{renderItems()}</SidebarMenu>
         </SidebarGroupContent>
@@ -232,12 +244,14 @@ function NavGroupSection({
         <CollapsibleTrigger
           id={labelId}
           render={<SidebarGroupLabel render={<button type="button" />} />}
-          className="w-full cursor-pointer justify-between gap-1 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          className="group/label w-full cursor-pointer justify-between gap-1 text-muted-foreground dark:text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         >
           <span>{group.label}</span>
           <ChevronDown
             aria-hidden="true"
-            className="size-4 shrink-0 transition-transform duration-200 ease-linear motion-reduce:transition-none data-panel-open:rotate-180"
+            className={`size-4 shrink-0 transition-[transform,opacity] duration-200 ease-linear motion-reduce:transition-none data-panel-open:rotate-180 ${
+              open ? "opacity-0 group-hover/label:opacity-100 group-focus-visible/label:opacity-100 pointer-coarse:opacity-100" : ""
+            }`}
           />
         </CollapsibleTrigger>
         <CollapsibleContent>
@@ -283,7 +297,8 @@ export function AppSidebar({
 
   return (
     <Sidebar collapsible="icon" variant="inset">
-      <SidebarHeader>
+      {/* The mobile sheet's absolute 44px close button covers the top-right corner (3.25rem = right-2 + 2.75rem). */}
+      <SidebarHeader className="in-data-[mobile=true]:pr-13">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" render={<Link href="/inventory" />}>
@@ -297,9 +312,8 @@ export function AppSidebar({
       </SidebarHeader>
 
       <SidebarContent>
-        {navGroups.map((group, i) => (
+        {navGroups.map((group) => (
           <React.Fragment key={group.id}>
-            {i > 0 && <SidebarSeparator />}
             <NavGroupSection
               group={group}
               collapsed={collapsed}
@@ -310,8 +324,6 @@ export function AppSidebar({
         ))}
       </SidebarContent>
 
-      <SidebarSeparator />
-
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -321,7 +333,7 @@ export function AppSidebar({
                 render={
                   <SidebarMenuButton
                     size="lg"
-                    className="w-full cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                    className="w-full cursor-pointer rounded-xl border border-sidebar-border bg-sidebar dark:bg-sidebar-accent hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                   />
                 }
               >
@@ -336,7 +348,7 @@ export function AppSidebar({
                   </div>
                   <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/trigger:rotate-180" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent side="right" className="w-48 rounded-xl" align="start">
+              <DropdownMenuContent side={collapsed ? "right" : "top"} className="w-48 rounded-xl" align="start">
                 <DropdownMenuItem>
                   <Link href="/account" className="flex items-center gap-2">
                     <User className="size-4" />
