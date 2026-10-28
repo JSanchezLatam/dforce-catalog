@@ -127,6 +127,8 @@ describe("NavSearch", () => {
     });
 
     it("/ in the rail expands the sidebar and focuses the box", async () => {
+      // jsdom keeps document.cookie across tests: reset it so the expand assertion is this test's own.
+      document.cookie = "sidebar_state=false; path=/";
       const user = userEvent.setup();
       render(<Harness defaultOpen={false} />);
 
@@ -137,6 +139,8 @@ describe("NavSearch", () => {
     });
 
     it("the rail button 'Buscar en el menú' expands the sidebar and focuses the box", async () => {
+      // jsdom keeps document.cookie across tests: reset it so the expand assertion is this test's own.
+      document.cookie = "sidebar_state=false; path=/";
       const user = userEvent.setup();
       render(<Harness defaultOpen={false} />);
 

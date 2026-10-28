@@ -394,7 +394,7 @@ export function AppSidebar({
                   </div>
                   <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/trigger:rotate-180" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent side={collapsed ? "right" : "top"} className="w-(--anchor-width) min-w-48 rounded-xl" align="start">
+              <DropdownMenuContent side={collapsed && !isMobile ? "right" : "top"} className="w-(--anchor-width) min-w-48 rounded-xl" align="start">
                 <DropdownMenuItem>
                   <Link href="/account" className="flex items-center gap-2">
                     <User className="size-4" />
