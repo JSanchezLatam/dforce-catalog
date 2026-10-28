@@ -70,15 +70,15 @@ Conventions for every WU:
 
 ## WU4b: Slash and rail icon
 
-- [ ] 4b.1 RED `NavSearch.test.tsx`: `/` on the body focuses the box and types nothing; `/` inside a page `input`, a `textarea` or a contenteditable, or with Ctrl or Meta held, leaves focus alone; with `defaultOpen={false}`, `/` expands the sidebar and focuses the box; the rail button "Buscar en el menú" does the same; below 1024 with the sheet closed, `/` does nothing.
-- [ ] 4b.2 GREEN (D8, D9): window listener in an effect, `focusPending` ref and a focus effect, and the rail `SidebarMenuButton`.
-- [ ] 4b.3 Verify: mutation-verify the editable-target guard and the closed-sheet guard.
+- [x] 4b.1 RED `NavSearch.test.tsx`: `/` on the body focuses the box and types nothing; `/` inside a page `input`, a `textarea` or a contenteditable, or with Ctrl or Meta held, leaves focus alone; with `defaultOpen={false}`, `/` expands the sidebar and focuses the box; the rail button "Buscar en el menú" does the same; below 1024 with the sheet closed, `/` does nothing.
+- [x] 4b.2 GREEN (D8, D9): window listener in an effect, `focusPending` ref and a focus effect, and the rail `SidebarMenuButton`.
+- [x] 4b.3 Verify: mutation-verify the editable-target guard and the closed-sheet guard.
 
 ## WU5: Browser verification and sign-off
 
 Do every check at `http://192.168.0.7:3000` from a second machine, not at localhost. The LAN IP is an insecure context.
 
-- [ ] 5.1 Desktop 1440, light and dark, as administrador:
+- [x] 5.1 Desktop 1440, light and dark, as administrador:
   - Both panels float over the page.
   - The pill shows on a top-level link and on a Tablero child.
   - The chevron appears only on hover or focus, and stays on a closed group.
@@ -86,23 +86,24 @@ Do every check at `http://192.168.0.7:3000` from a second machine, not at localh
   - `/` focuses the box, and "ordenes" finds "Órdenes en curso" and "Órdenes de servicio".
   - `Enter` navigates.
   - The console has no hydration warning.
-- [ ] 5.2 Rail at 1440:
+- [x] 5.2 Rail at 1440:
   - Tooltips work, and the Vencimientos dot and tooltip count show.
   - The Tablero dropdown is right of the rail with the current child bold.
   - The search icon expands the sidebar and focuses the box.
-- [ ] 5.3 Tablet 820 (touch), light and dark:
+- [x] 5.3 Tablet 820 (touch), light and dark:
   - The sheet opens as a floating panel.
   - "Cerrar menú", the rows, the group labels and the search box each measure at least 44x44.
   - The chevrons are always visible, and no `/` chip shows.
   - Focusing the search box does not zoom.
-- [ ] 5.4 Phone 390, light and dark:
+- [x] 5.4 Phone 390, light and dark:
   - The same checks as 5.3.
   - The list scrolls while the user card stays pinned.
   - There is no page horizontal scroll.
-- [ ] 5.5 As técnico:
+- [x] 5.5 As técnico:
   - "Mis números" shows in Taller.
   - Searching "usuarios" shows "Sin resultados para «usuarios».".
-- [ ] 5.6 Full gates on the tip: `npm test`, `npx tsc --noEmit` and `npm run lint` (0/13).
+  Run 2026-10-28 at 192.168.0.7:3000 (Playwright, Chromium, real backup data): all of 5.1–5.5 held. Measured: chevron opacity 0→1 on hover; user menu above the card; "ordenes" → Órdenes en curso + Órdenes de servicio, Enter → /kanban; rail tooltip "Vencimientos próximos (6)", Tablero dropdown with "Órdenes en curso" bold; tablet/phone light+dark: 25–26 visible controls, none under 44px, chevron opacity 1, no `/` chip, input 16px, list scrolls with the card pinned, no horizontal scroll; técnico sees Mis números and "Sin resultados para «usuarios».". Zero hydration/serialization console errors. Not covered: a physical device and iOS Safari zoom.
+- [x] 5.6 Full gates on the tip: `npm test`, `npx tsc --noEmit` and `npm run lint` (0/13).
 - [ ] 5.7 `sdd-verify`. Then merge the chain into the tracker in order, and the tracker into main.
 - [ ] 5.8 `sdd-archive`: create `openspec/specs/app-sidebar/spec.md` from the delta.
 
