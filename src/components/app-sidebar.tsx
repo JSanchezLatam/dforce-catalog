@@ -228,7 +228,7 @@ function NavGroupSection({
   if (collapsed) {
     return (
       <SidebarGroup className={group.pinBottom ? "mt-auto" : ""} role="group" aria-labelledby={labelId}>
-        <SidebarGroupLabel id={labelId} className="text-muted-foreground">{group.label}</SidebarGroupLabel>
+        <SidebarGroupLabel id={labelId} className="text-muted-foreground dark:text-muted-foreground">{group.label}</SidebarGroupLabel>
         <SidebarGroupContent>
           <SidebarMenu>{renderItems()}</SidebarMenu>
         </SidebarGroupContent>
@@ -244,7 +244,7 @@ function NavGroupSection({
         <CollapsibleTrigger
           id={labelId}
           render={<SidebarGroupLabel render={<button type="button" />} />}
-          className="group/label w-full cursor-pointer justify-between gap-1 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          className="group/label w-full cursor-pointer justify-between gap-1 text-muted-foreground dark:text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         >
           <span>{group.label}</span>
           <ChevronDown

@@ -188,7 +188,7 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="m-2 h-[calc(100%-1rem)] w-(--sidebar-width) rounded-2xl border border-sidebar-border bg-sidebar p-0 text-sidebar-foreground"
+          className="m-2 h-[calc(100%-1rem)] w-(--sidebar-width) data-[side=left]:h-[calc(100%-1rem)] data-[side=left]:w-(--sidebar-width) data-[side=left]:sm:max-w-none data-[side=right]:h-[calc(100%-1rem)] data-[side=right]:w-(--sidebar-width) data-[side=right]:sm:max-w-none rounded-2xl border border-sidebar-border bg-sidebar p-0 text-sidebar-foreground"
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,

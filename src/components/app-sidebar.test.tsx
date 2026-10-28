@@ -437,7 +437,8 @@ describe("AppSidebar — nav restyle (sidebar-redesign WU2)", () => {
   it("paints group labels muted", () => {
     renderNav(NAV_GROUPS);
 
-    expect(screen.getByRole("button", { name: "CRM" })).toHaveClass("text-muted-foreground");
+    // dark: too, or the primitive's dark:text-sidebar-foreground/70 wins in dark mode.
+    expect(screen.getByRole("button", { name: "CRM" })).toHaveClass("text-muted-foreground", "dark:text-muted-foreground");
   });
 
   it("draws the user card with a border", () => {

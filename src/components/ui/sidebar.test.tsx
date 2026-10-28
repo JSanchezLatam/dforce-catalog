@@ -210,6 +210,14 @@ describe("Sidebar — mobile sheet close (sidebar-redesign D2)", () => {
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
   });
 
+  it("sizes the floating sheet with the side-scoped classes that beat SheetContent's own", async () => {
+    await openSheet();
+
+    // SheetContent ships data-[side=left]:h-full / w-3/4 / sm:max-w-sm; plain h/w classes lose to them (seen at the LAN IP: 292px wide, 8px past the bottom).
+    const sheet = document.querySelector('[data-mobile="true"]');
+    expect(sheet).toHaveClass("data-[side=left]:h-[calc(100%-1rem)]", "data-[side=left]:w-(--sidebar-width)", "data-[side=left]:sm:max-w-none");
+  });
+
   it("closes the sheet when activated", async () => {
     const user = await openSheet();
 
