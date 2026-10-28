@@ -103,9 +103,9 @@ Conventions for every WU: Strict TDD (RED confirmed failing by name, then GREEN)
 
 ## WU7: TV restyle
 
-- [ ] 7.1 RED `WorkshopBoard.test.tsx`: existing pinned asserts unchanged ("Ana, Beto" sr-only, "12 min"/"3 h"/"2 d", "Repuesto", "27/10 10:00", `section` direct child of `grid-cols-7`, no control); add Urgente badge and no "falta categoría". GREEN restyle `board/WorkshopBoard.tsx` with primitives; `on_hold` age in the alert.
-- [ ] 7.2 RED then GREEN `board/CustomerBoard.tsx`: `MAX_ROWS=8` and `+N más` kept, four fields only, key set unchanged.
-- [ ] 7.3 Verify: unit; browser `/tablero` and `/tablero/clientes` with data at 1080p and 390, light+dark, console clean.
+- [x] 7.1 RED `WorkshopBoard.test.tsx`: existing pinned asserts unchanged ("Ana, Beto" sr-only, "12 min"/"3 h"/"2 d", "Repuesto", "27/10 10:00", `section` direct child of `grid-cols-7`, no control); add Urgente badge and no "falta categoría". GREEN restyle `board/WorkshopBoard.tsx` with primitives; `on_hold` age in the alert.
+- [x] 7.2 RED then GREEN `board/CustomerBoard.tsx`: `MAX_ROWS=8` and `+N más` kept, four fields only, key set unchanged.
+- [x] 7.3 Verified by the orchestrator 2026-10-27 at :3001: `/tablero` (jefe) and `/tablero/clientes` (pantalla) at 1920x1080 and 390, light and dark: all columns render, zero buttons or links, urgent cards show the red badge and edge, the hold reason strip and the overdue-appointment strip appear only with a reason, the customer board caps at 8 with "+9 más" and shows only plate, vehicle and status; no page horizontal scroll; no console errors.
 
 ## WU8: Sign-off, verify, archive
 
