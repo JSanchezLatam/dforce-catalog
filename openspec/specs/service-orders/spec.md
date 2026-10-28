@@ -393,7 +393,6 @@ The order-creation `CustomerPicker` MUST clear its search term, result list, and
 - WHEN staff opens the form
 - THEN it MUST NOT show any customer deselect control
 
-
 ### Requirement: Order Creation Description Field and Appointment Label
 
 `Descripción` MUST be a multi-line text input (`<textarea>`) on the order-creation and edit forms, not a single-line input. The appointment field's label MUST read exactly `Fecha y hora de inicio`; the field itself remains a `datetime-local` input with unchanged value handling.
@@ -407,7 +406,6 @@ The order-creation `CustomerPicker` MUST clear its search term, result list, and
 - GIVEN the order form
 - WHEN it renders
 - THEN the appointment field's label MUST read exactly "Fecha y hora de inicio"
-
 
 ### Requirement: Printable Work Order
 
@@ -504,7 +502,6 @@ Printing MUST produce a light sheet regardless of the app's theme. The `(app)` s
 - GIVEN an order with 0 photos, whose customer holds current consent
 - WHEN it is printed
 - THEN the output MUST be exactly one page, clause and both signature lines included
-
 
 ### Requirement: Order Editing Is Gated by Role and Current Status
 
@@ -859,6 +856,7 @@ For a `tecnico`, EVERY order read and write path MUST be scoped by one shared pr
 - GIVEN the e2e suite with a real Postgres
 - WHEN it runs list, detail, print, photo, transition, patch and line paths as an unassigned técnico
 - THEN every path MUST deny, because injected-seam unit tests prove no real `WHERE` coverage
+
 ### Requirement: Customer Copy With Portal QR
 
 The system MUST provide a second print of an order, titled "Copia del cliente", reachable from the print view by a control, gated by `service-orders.read`. It is the only print that carries the QR. The workshop keeps the signed workshop copy; the customer takes this copy.
@@ -1089,3 +1087,33 @@ Each successful status action on the order detail MUST show a Spanish success to
 - GIVEN a hold the server accepted but whose `router.refresh()` throws
 - WHEN it settles
 - THEN the success toast MUST already have shown
+
+### Requirement: Manual Urgent Flag
+
+An order MAY carry a manual "Urgente" flag, stored as a nullable `urgente_at` timestamp and a nullable `urgente_by` (the user who set it); the latest set only, with no history. `urgente_by` MUST NOT be set while `urgente_at` is null, enforced by the database; `urgente_at` with a null `urgente_by` is allowed so deleting the user who set it (`ON DELETE SET NULL`) keeps the flag. Only roles holding `service-orders.assign` (administrador, jefe_taller) MUST be able to set or clear it; a técnico or pantalla attempt MUST be refused with 403 and change nothing. Setting an already-urgent order or clearing a non-urgent one MUST be idempotent. The flag MUST NOT clear when the order reaches `done` or `cancelled`, and MUST NOT depend on elapsed time. On success the UI MUST toast "Orden marcada como urgente" or "Orden desmarcada como urgente" (above `router.refresh()`, below the `try/catch`); failures stay inline or in the board's error toast.
+
+#### Scenario: Jefe sets and clears
+- GIVEN a non-urgent order
+- WHEN a jefe_taller marks it urgent and later clears it
+- THEN `urgente_at` and `urgente_by` MUST be set to the time and the jefe, then both MUST be null **[e2e]**
+
+#### Scenario: Técnico refused
+- GIVEN a `tecnico` session
+- WHEN it tries to set the flag
+- THEN the response MUST be 403 and both columns MUST stay null **[e2e]**
+
+#### Scenario: Idempotent set
+- GIVEN an already-urgent order
+- WHEN it is marked urgent again
+- THEN the request MUST succeed and keep a single `urgente_by` **[e2e]**
+
+#### Scenario: Survives leaving the board
+- GIVEN an urgent order
+- WHEN it is moved to `done`, or cancelled
+- THEN `urgente_at` MUST remain set **[e2e]**
+
+#### Scenario: Database ties the pair
+- GIVEN a direct write with `urgente_by` set and `urgente_at` null
+- WHEN it executes
+- THEN the database MUST reject it **[e2e]**
+

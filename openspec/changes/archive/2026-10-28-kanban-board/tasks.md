@@ -109,9 +109,9 @@ Conventions for every WU: Strict TDD (RED confirmed failing by name, then GREEN)
 
 ## WU8: Sign-off, verify, archive
 
-- [ ] 8.1 Owner walk-through at http://192.168.0.7:3000 from a second machine: roles administrador, jefe_taller, tecnico, pantalla; desktop, tablet, phone, light and dark. Record result.
-- [ ] 8.2 Full gates: `npm test`, `npx tsc --noEmit`, `npm run lint`, `npm run test:portal-sync` not needed; e2e files on fresh `dforce_e2e`.
-- [ ] 8.3 `sdd-verify`, then merge the chain into the tracker in order and the tracker into main.
+- [x] 8.1 Owner reviewed both servers and approved merging agenda and kanban to main on 2026-10-28 ("Si mergea las 2"). Orchestrator walk-through on the merged main at http://192.168.0.7:3000 (LAN IP, an insecure context): agenda, kanban, /tablero, /service-orders as jefe at desktop and 390, light and dark, no console errors, no page horizontal scroll. Owner walk-through at http://192.168.0.7:3000 from a second machine: roles administrador, jefe_taller, tecnico, pantalla; desktop, tablet, phone, light and dark. Record result.
+- [x] 8.2 On the merged tip: unit 4357, tsc clean, lint 0/13, e2e 34 files / 397 tests on a fresh `dforce_e2e`. Full gates: `npm test`, `npx tsc --noEmit`, `npm run lint`, `npm run test:portal-sync` not needed; e2e files on fresh `dforce_e2e`.
+- [x] 8.3 Verify: PASS WITH WARNINGS, 0 CRITICAL (`verify-report.md`); chain merged into the tracker (#306–#321) and the tracker into main (#305, fce2d9f). `sdd-verify`, then merge the chain into the tracker in order and the tracker into main.
 - [ ] 8.4 `sdd-archive`: merge deltas into `openspec/specs/` (kanban-board new; service-orders and workshop-status-board MODIFIED); add a "Kanban" note to `AGENTS.md` only if a new standing decision emerged.
 
 ## Follow-ups

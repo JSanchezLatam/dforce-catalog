@@ -69,14 +69,14 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 - [x] 1.4 GREEN `src/modules/agenda/queries.ts`: extend `COLUMNS`/`AgendaRow`; second batched `inArray(ordenTecnico.ordenId, ids)` join `tecnico` (active only) grouped in TS (copy `board/queries.ts:47-59`); `agendaRange` WHERE becomes `status <> 'cancelled' OR EXISTS(...)`; `noShow` derived in TS as `status === "cancelled"` (the WHERE admits a cancelled row only as a no-show); `agendaOverdue` reuses the columns.
 - [x] 1.5 Update the `AgendaRow` builder (in `items.test.ts`; `items.fixture.ts` holds items) rows to the new `AgendaRow` shape so tsc passes (no mapping change yet).
 - [x] 1.6 Mutation-verify: drop the `changed_at >` comparison -> "Cancelled before the appointment is hidden" red; drop `from_status = 'booked'` -> "Cancelled from another status stays hidden" red; replace the batch with a join -> "Technicians do not multiply rows" red; include deactivated -> its test red.
-- [ ] 1.7 Close: C (+ e2e file above).
+- [x] 1.7 Close: C (+ e2e file above).
 
 ## WU2: item fields (branch `feat/agenda-redesign-wu2-item-fields`) [~210]
 
 - [x] 2.1 RED `items.test.ts`: `toAgendaItem` returns plain data (no `Date`/function): `minuteOfDay`, `vehicleLabel` ("AC 5521 · Toyota Corolla" / "Sin vehículo"), `vehicleDetail` (+ year), `categoria`, `categoriaLabel` (`CATEGORIA_LABEL`, "Sin categoría"), `description`, `technicians[{id,nombre,initials}]` (initials "Julio Rangel" -> "JR", "Marta" -> "M"), `noShow`; `noShow` => `statusLabel` "No se presentó" and `muted`; description present on the item (flips the old "not in the item" test). (Technician initials; Card fields; Status is text as well as colour)
 - [x] 2.2 GREEN `items.ts`, `items.fixture.ts` (builder gains the new fields; every existing test file compiles).
 - [x] 2.3 Mutation-verify: initials from the first word only -> "Technician initials" red; drop `noShow` -> "No se presentó" text test red; `Date` left in the item -> the serializability test red.
-- [ ] 2.4 Close: C.
+- [x] 2.4 Close: C.
 
 ## WU3: side reads (branch `feat/agenda-redesign-wu3-side-reads`) [~240]
 
@@ -85,7 +85,7 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 - [x] 3.3 GREEN `queries.ts`: `agendaBusyDays` (select `appointment_at` of the bound Panama month range, no `AT TIME ZONE`; derive and dedupe day keys in TS with `panamaDay`), `agendaNext`, `agendaWeekCounts` (one grouped query, drizzle `count()`).
 - [x] 3.4 RED/GREEN `items.ts` + `items.test.ts`: `nextLabel(appointmentAt, now)` -> "en 20 min" (<60), "en 1 h 20 min" (<24 h), `DD/MM/YYYY` later; `toWeekSummary(counts)`.
 - [x] 3.5 Mutation-verify: use the UTC day for busy days -> "Busy days are real" red; remove `status = 'booked'` from next -> "ignores non-booked" red; count by visible range -> "Week summary counts" red.
-- [ ] 3.6 Close: C (+ e2e).
+- [x] 3.6 Close: C (+ e2e).
 
 ## WU4: in-workshop read (branch `feat/agenda-redesign-wu4-workshop-read`) [~280]
 
@@ -93,7 +93,7 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 - [x] 4.2 RED `items.test.ts`: `toWorkshopItem` adds `dot` category, `vehicleLabel`, technician initials ("MP JR" / "Sin técnico"), `sinceLabel` via a private `durationText` (not `formatAge`, whose "1 d" the spec rejects) ("35 min", "2 h 40 min", "1 día", "2 días"), hold reason + "hace 2 días" only while `on_hold`. (Time in status; Hold reason shown only while on hold)
 - [x] 4.3 GREEN `queries.ts` (`agendaInWorkshop`: latest-history batch, technician batch, new columns), `items.ts`, `items.test.ts`; `CombinedView.tsx` only adapts to the new type (no redesign).
 - [x] 4.4 Mutation-verify: take the OLDEST history row -> "uses the history row" red; show hold reason for `in_progress` -> its test red.
-- [ ] 4.5 Close: C (+ e2e).
+- [x] 4.5 Close: C (+ e2e).
 
 ## WU5: grid core (branch `feat/agenda-redesign-wu5-grid-core`) [~295]
 
@@ -102,7 +102,7 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 - [x] 5.3 RED `agenda-colour.test.ts` (source text of `globals.css`): `.agenda-ev`, `.agenda-ev-strip`, `.agenda-dot` with the six `[data-categoria=...]` hues (262/205/35/350/152/240) and a `.dark .agenda-ev` variant.
 - [x] 5.4 GREEN `grid.ts`, `layoutDay` in `items.ts`, `globals.css` `@layer components` (formula from mockup lines 47-56).
 - [x] 5.5 Mutation-verify: window clamp to 8-18 only -> "Outside the window" red; off-by-one in `top` -> "Grid hours" red; id-only sort -> "Overlap is deterministic" red.
-- [ ] 5.6 Close: C (no browser: nothing mounted).
+- [x] 5.6 Close: C (no browser: nothing mounted).
 
 ## WU6: card and day grid (branch `feat/agenda-redesign-wu6-card-day-grid`) [~330]
 
@@ -110,7 +110,7 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 - [x] 6.2 RED `DayGrid.test.tsx`: hour rows 08:00-17:00 with labels; a 14:30 block offset; three 09:00 cards all present; "Sin citas para este día" on an empty day; the now-line labelled `HH:mm` only on today; with `onSlot` each free hour is a focusable button named with day and hour, without it none render. (Empty day; Empty slot is a labelled control)
 - [x] 6.3 GREEN `AgendaCard.tsx`, `DayGrid.tsx` (plain components, no `"use client"`, no server imports, `HH:mm` digits only).
 - [x] 6.4 Mutation-verify: render the description -> "Card fields" red; remove `data-categoria` -> "Colour follows the type" red; drop the guard on the now-line -> "Now-line" red.
-- [ ] 6.5 Close: C. Browser: N/A until WU8 (unmounted).
+- [x] 6.5 Close: C. Browser: N/A until WU8 (unmounted).
 
 ## WU7: week grid and popover (branch `feat/agenda-redesign-wu7-week-grid-popover`) [~320]
 
@@ -118,7 +118,7 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 - [x] 7.2 RED `components/ui/popover.test.tsx`: controlled `open`; non-modal; `Positioner anchor` is the given element; closes on Escape and outside press; renders no portal while closed.
 - [x] 7.3 GREEN `WeekGrid.tsx`, `src/components/ui/popover.tsx` (Base UI wrapper).
 - [x] 7.4 Mutation-verify: render the now-line in every column -> "Now-line only on today" red; mark only Sunday -> "Today and weekends are marked" red; open the popover while `open=false` -> its test red.
-- [ ] 7.5 Close: C. Browser: N/A until WU8.
+- [x] 7.5 Close: C. Browser: N/A until WU8.
 
 ## WU8: shell wire (branch `feat/agenda-redesign-wu8-shell-wire`) [~260]
 
@@ -126,7 +126,7 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 - [x] 8.2 RED `page.test.tsx`: day/week/combined render through the shell; queries still called with `orderScope(user)`; `now` captured once and passed through; Técnico still denied.
 - [x] 8.3 GREEN `AgendaShell.tsx` (`"use client"`, selection state only), `page.tsx` swap, `CombinedView.tsx` uses `DayGrid`.
 - [x] 8.4 Mutation-verify: pass a function prop from the page -> the serializability test red; remove `can()` -> "Técnico is denied" red.
-- [ ] 8.5 Close: C + B. This is the RSC-boundary check: open week and combined with real data (the Pagination trap: one row hides it; seed enough).
+- [x] 8.5 Close: C + B. This is the RSC-boundary check: open week and combined with real data (the Pagination trap: one row hides it; seed enough).
 
 ## WU9: retire the old day/week views (branch `feat/agenda-redesign-wu9-retire-day-week`) [~195, deletions only]
 
@@ -216,9 +216,9 @@ Subagent prompts must carry: mutation-verify every fix (revert it, the NAMED tes
 
 ## WU20: sign-off, verify, archive (branch `feat/agenda-redesign-wu20-signoff`)
 
-- [ ] 20.1 Seed realistic data on the dev DB (several days, a month cell with more than 3, every status, a no-show, a Vencida, a no-vehicle booking, 3 technicians on one order); owner walks EVERY mockup frame at the LAN IP, light and dark: 1 desktop week with detail, 2 combined 1024, 3 month 768, 4 phone day and sheet, 5 Nueva cita, the legend. Record per frame pass/fail in the PR.
-- [ ] 20.2 Second-machine pass at the LAN IP (carry-over from the previous agenda). Defects found are fix commits on the owning WU branch, test first.
-- [ ] 20.3 Mark tracker ready, merge the chain in order, then the tracker to `main` (state branch / pushed / merged). Run `/sdd-verify`, then `/sdd-archive`: remove the "Vencidas Panel" requirement from the main spec, keep MODIFIED headings byte-identical to the main spec (a rename makes a mechanical apply duplicate), `rg` for stale panel wording.
+- [x] 20.1 (2026-10-28: the owner reviewed the agenda on the dev copy at the LAN IP and approved the merge, "Si mergea las 2"; the dev copy carries the `agendacheck-*` seed rows.) Seed realistic data on the dev DB (several days, a month cell with more than 3, every status, a no-show, a Vencida, a no-vehicle booking, 3 technicians on one order); owner walks EVERY mockup frame at the LAN IP, light and dark: 1 desktop week with detail, 2 combined 1024, 3 month 768, 4 phone day and sheet, 5 Nueva cita, the legend. Record per frame pass/fail in the PR.
+- [x] 20.2 (2026-10-28: orchestrator pass on merged main at http://192.168.0.7:3000, an insecure context: agenda desktop and 390, light and dark, no console errors, no page horizontal scroll; the Detail popover stays open while Reprogramar and No se presentó take presses and Escape, which closes the WU10 risk. Not from a second machine.) Second-machine pass at the LAN IP (carry-over from the previous agenda). Defects found are fix commits on the owning WU branch, test first.
+- [x] 20.3 (2026-10-28: tracker #283 merged to main as f05b38b; main == tested tip; verify PASS WITH WARNINGS, `verify-report.md`.) Mark tracker ready, merge the chain in order, then the tracker to `main` (state branch / pushed / merged). Run `/sdd-verify`, then `/sdd-archive`: remove the "Vencidas Panel" requirement from the main spec, keep MODIFIED headings byte-identical to the main spec (a rename makes a mechanical apply duplicate), `rg` for stale panel wording.
 
 ## Follow-ups (out of scope, from the proposal)
 

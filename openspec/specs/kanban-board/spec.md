@@ -1,8 +1,10 @@
-# Delta for kanban-board
+# Spec: kanban-board
 
-New capability: an in-app board at `/kanban` (Taller group) where orders sit in one column per status and administrador / jefe_taller move them. Visual contract: `openspec/changes/kanban-board/mockup/index.html` (approved 2026-10-27). UI strings are Spanish exactly as quoted; everything else is English. Tags: **[unit]** DB-free, **[e2e]** real Postgres, **[browser]** only provable in a browser at the LAN IP.
+## Purpose
 
-## ADDED Requirements
+An in-app board at `/kanban` (Taller group) where orders sit in one column per status and administrador / jefe_taller move them. Visual contract (archived): `openspec/changes/archive/2026-10-28-kanban-board/mockup/index.html` (approved 2026-10-27). UI strings are Spanish exactly as quoted; everything else is English. Tags: **[unit]** DB-free, **[e2e]** real Postgres, **[browser]** only provable in a browser at the LAN IP.
+
+## Requirements
 
 ### Requirement: Access and Navigation
 
@@ -35,7 +37,7 @@ A denied authenticated page request MUST render `PermissionDenied`; a denied API
 
 ### Requirement: Board Layout and Columns
 
-The board MUST show one column per status in this order: "Agendada", "Recibida", "En diagnóstico", "En progreso", "En espera", "Lista para revisión", "Completada" (labels from `ORDER_STATUS_LABEL`). `cancelled` MUST have no column. "Completada" MUST list only orders completed today in `America/Panama`. Each column MUST show its title, an icon and a count of its visible cards; an empty column MUST read "Sin órdenes" (for a técnico filtered to "Mis órdenes": "Ninguna orden tuya en este estado"). On desktop and tablet the columns MUST scroll horizontally inside their own container, with controls labelled "Columnas anteriores" and "Columnas siguientes" and scroll-snap, never scrolling the page. Within a column, urgent cards MUST sort first, then the board's existing order. The page MUST show "Actualizado hace N s" for the last snapshot.
+The board MUST show one column per status in this order: "Agendada", "Recibida", "En diagnóstico", "En progreso", "En espera", "Lista para revisión", "Completada" (labels from `ORDER_STATUS_LABEL`). `cancelled` MUST have no column. "Completada" MUST list only orders completed today in `America/Panama`. Each column MUST show its title, an icon and a count of its visible cards; an empty column MUST read "Sin órdenes" (for a técnico filtered to "Mis órdenes": "Ninguna orden tuya en este estado"). On desktop and tablet the columns MUST scroll horizontally inside their own container, with controls labelled "Columnas anteriores" and "Columnas siguientes" and scroll-snap, never scrolling the page. Within a column, urgent cards MUST sort first, then the board's existing order. The page MUST show how fresh the last snapshot is: "Actualizado hace menos de 30 s" while polls succeed (a ticking second count would need an always-on timer on every board), and the real age ("Sin conexión · actualizado hace N min") while a poll is failing.
 
 #### Scenario: Seven columns, no Cancelada
 - GIVEN orders in all eight statuses
