@@ -56,7 +56,9 @@ export function KanbanBoard({ initial, canMove }: { initial: KanbanSnapshot; can
   // The latest good-poll count, for the async confirmation below (a closure would hold the one from the click).
   const seqNow = useRef(seq);
   useEffect(() => { seqNow.current = seq; });
-  const [filter, setFilter] = useState<KanbanFilter>("all");
+  const [chosen, setFilter] = useState<KanbanFilter>("all");
+  // Derived, not reset: a poll can take the viewer off the roster while Mis órdenes is chosen, and its chip is gone.
+  const filter = chosen === "mine" && !snapshot.onRoster ? "all" : chosen;
   const [active, setActive] = useState(0);
   const scroller = useRef<HTMLDivElement>(null);
 
@@ -67,48 +69,49 @@ export function KanbanBoard({ initial, canMove }: { initial: KanbanSnapshot; can
   // Healthy: polls land every 30 s. The hook ticks `now` only while failing and render may not read Date.now().
   const updated = now === null ? "menos de 30 s" : `${Math.floor((now - lastOkAt) / 1000)} s`;
 
-  const setOverride = (id: string, o: Override | null) =>
+  // Writes one field of the card's override and leaves the other alone; `undefined` clears that field.
+  const setOverride = <K extends keyof Override>(id: string, field: K, value: Override[K]) =>
     setOverrides((m) => {
       const next = new Map(m);
-      if (o) next.set(id, o);
+      const o: Override = { ...next.get(id), [field]: value };
+      if (o.status || o.urgent) next.set(id, o);
       else next.delete(id);
       return next;
     });
 
   async function send(card: KanbanCard, target: OrderStatus, esperaMotivo?: string) {
-    setOverride(card.id, { status: target, seq: null });
+    setOverride(card.id, "status", { value: target, seq: null });
     const r = await moveOrder(card.id, { status: target, expectedStatus: card.status, esperaMotivo });
     if (!r.ok) {
-      setOverride(card.id, null);
+      setOverride(card.id, "status", undefined);
       addToast("error", r.error);
       return;
     }
     // Placed by what the server wrote, which may differ from the target (booked -> open can land in diagnosing).
-    setOverride(card.id, { status: r.status, seq: seqNow.current });
+    setOverride(card.id, "status", { value: r.status, seq: seqNow.current });
     // Toast above the refresh; moveOrder never throws, so both sit below its failure handling. The hook's
     // refresh(), not router.refresh(): the board is a client poller that ignores a re-rendered `initial`.
     addToast("success", r.status === "cancelled" ? "Orden cancelada" : `Orden movida a ${ORDER_STATUS_LABEL[r.status]}`);
     refresh();
   }
 
-  // Merges with the card's existing override (a confirmed move still being waited out), so only `urgent` changes.
   async function sendUrgent(card: KanbanCard, on: boolean) {
-    const prev = overrides.get(card.id);
-    if (prev?.seq === null) return; // its previous change is still in flight
-    setOverride(card.id, { ...prev, urgent: on, seq: null });
+    const prev = overrides.get(card.id)?.urgent;
+    if (prev?.seq === null) return; // its previous mark is still in flight
+    setOverride(card.id, "urgent", { value: on, seq: null });
     const r = await setUrgent(card.id, on);
     if (!r.ok) {
-      setOverride(card.id, prev ?? null);
+      setOverride(card.id, "urgent", prev);
       addToast("error", r.error);
       return;
     }
-    setOverride(card.id, { ...prev, urgent: on, seq: seqNow.current });
+    setOverride(card.id, "urgent", { value: on, seq: seqNow.current });
     addToast("success", on ? "Orden marcada como urgente" : "Orden desmarcada como urgente");
     refresh();
   }
 
   function onMove(card: KanbanCard, target: OrderStatus) {
-    if (overrides.get(card.id)?.seq === null) return; // its previous move is still in flight
+    if (overrides.get(card.id)?.status?.seq === null) return; // its previous move is still in flight
     const plan = planMove(card, target, canMove);
     if (plan.kind === "patch") void send(card, target);
     else if (plan.kind === "ask-reason" || plan.kind === "confirm" || plan.kind === "incomplete") setAsk({ card, target, kind: plan.kind });

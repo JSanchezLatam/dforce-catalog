@@ -29,7 +29,7 @@ describe("order urgent flag (E2E)", () => {
   const rowOf = async (id: string) => (await db.select().from(ordenServicio).where(eq(ordenServicio.id, id)))[0];
   const call = (handler: typeof handleSet, id: string, who: keyof typeof userIds, role: Role) =>
     handler(
-      new NextRequest(`http://localhost/api/service-orders/${id}/urgent`, { method: "POST", headers: { "x-user-id": userIds[who], "x-user-role": role } }),
+      new NextRequest(`http://localhost/api/service-orders/${id}/urgent`, { method: handler === handleClear ? "DELETE" : "POST", headers: { "x-user-id": userIds[who], "x-user-role": role } }),
       id,
     );
   const close = (id: string, to: "done" | "cancelled") =>

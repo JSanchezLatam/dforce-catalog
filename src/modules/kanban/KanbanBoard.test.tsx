@@ -181,5 +181,18 @@ describe("KanbanBoard", () => {
       expect(screen.getAllByRole("status").map((e) => e.textContent)).toContain("Sin conexión · actualizado hace 1 min");
       expect(plates("En progreso")).toEqual(["IP2", "IP1"]);
     });
+
+    it("Mis órdenes stops applying when a poll takes the viewer off the roster: every order shows and Todas reads pressed", async () => {
+      const offRoster = () => new Response(JSON.stringify(snapshot({ onRoster: false })), { status: 200, headers: { "content-type": "application/json" } });
+      vi.stubGlobal("fetch", vi.fn(async () => offRoster()));
+      render(<KanbanBoard initial={snapshot()} canMove />);
+      fireEvent.click(group("Filtros").getByRole("button", { name: /^Mis órdenes/ }));
+      expect(plates("En progreso")).toEqual(["IP1"]);
+      await act(() => vi.advanceTimersByTimeAsync(30_000));
+      expect(group("Filtros").queryByRole("button", { name: /^Mis órdenes/ })).toBeNull();
+      expect(plates("En progreso")).toEqual(["IP2", "IP1"]);
+      expect(group("Filtros").getByRole("button", { name: /^Todas/ })).toHaveAttribute("aria-pressed", "true");
+      expect(col("En diagnóstico").getByText("Sin órdenes")).toBeInTheDocument();
+    });
   });
 });
