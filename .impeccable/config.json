@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "geist",
+        "createdAt": "2026-10-28T17:07:41.196Z",
+        "reason": "repo convention: Geist is the app's shipped font (src/app/layout.tsx); mockups must mirror the app, changing it is out of scope"
+      }
+    ]
+  }
+}

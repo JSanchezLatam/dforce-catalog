@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sidebar Redesign Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" />
+<style>
+  /* Tokens copied verbatim from src/app/globals.css (:root and .dark), including --sidebar-*.
+     --page and --panel are mockup-only ALIASES of existing tokens (no new colors):
+     the darker page behind the two floating panels. */
+  .theme-light {
+    --background: hsl(0 0% 100%); --foreground: hsl(240 10% 3.9%);
+    --card: hsl(0 0% 100%); --popover: hsl(0 0% 100%); --popover-foreground: hsl(240 10% 3.9%);
+    --primary: hsl(240 5.9% 10%); --primary-foreground: hsl(0 0% 98%);
+    --muted: hsl(240 4.8% 95.9%); --muted-foreground: hsl(240 3.8% 46.1%);
+    --accent: hsl(240 4.8% 95.9%); --accent-foreground: hsl(240 5.9% 10%);
+    --destructive: hsl(0 84.2% 60.2%);
+    --border: hsl(240 5.9% 90%); --input: hsl(240 5.9% 90%); --ring: hsl(240 5.9% 10%);
+    --sidebar: hsl(0 0% 98%); --sidebar-foreground: hsl(240 5.3% 26.1%);
+    --sidebar-primary: hsl(240 5.9% 10%); --sidebar-primary-foreground: hsl(0 0% 98%);
+    --sidebar-accent: hsl(240 4.8% 95.9%); --sidebar-accent-foreground: hsl(240 5.9% 10%);
+    --sidebar-border: hsl(220 13% 91%); --sidebar-ring: hsl(240 5.9% 10%);
+    --page: var(--muted); --panel: var(--background); --content: var(--background);
+    --panel-shadow: 0 1px 2px rgb(16 16 24 / .05), 0 2px 8px rgb(16 16 24 / .04);
+  }
+  .theme-dark {
+    --background: hsl(240 10% 3.9%); --foreground: hsl(0 0% 98%);
+    --card: hsl(240 10% 5.9%); --popover: hsl(240 10% 5.9%); --popover-foreground: hsl(0 0% 98%);
+    --primary: hsl(0 0% 98%); --primary-foreground: hsl(240 5.9% 10%);
+    --muted: hsl(240 3.7% 15.9%); --muted-foreground: hsl(240 5% 64.9%);
+    --accent: hsl(240 3.7% 15.9%); --accent-foreground: hsl(0 0% 98%);
+    --destructive: hsl(0 62.8% 30.6%);
+    --border: hsl(240 3.7% 15.9%); --input: hsl(240 3.7% 15.9%); --ring: hsl(240 4.9% 83.9%);
+    --sidebar: hsl(240 5.9% 10%); --sidebar-foreground: hsl(240 4.8% 95.9%);
+    --sidebar-primary: hsl(224.3 76.3% 48%); --sidebar-primary-foreground: hsl(0 0% 100%);
+    --sidebar-accent: hsl(240 3.7% 15.9%); --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
+    --sidebar-border: hsl(240 3.7% 15.9%); --sidebar-ring: hsl(217.2 91.2% 59.8%);
+    --page: var(--background); --panel: var(--sidebar); --content: var(--card);
+    --panel-shadow: 0 1px 0 rgb(255 255 255 / .03) inset, 0 2px 8px rgb(0 0 0 / .4);
+  }
+  /* The badge stays the app's: SidebarMenuBadge text, and a destructive dot in the rail. In dark,
+     --destructive is a dark red (30.6%), so the dot keeps the light value for contrast — as the app does today. */
+  .theme-dark .rail-dot { background: hsl(0 84.2% 60.2%); }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Geist", ui-sans-serif, system-ui, sans-serif; background: #d4d4d8; color: #18181b; }
+  button, input { font: inherit; color: inherit; }
+  svg { flex-shrink: 0; }
+
+  .top { position: sticky; top: 0; z-index: 50; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 16px; background: #18181b; color: #f4f4f5; }
+  .top small { color: #a1a1aa; }
+  .seg { margin-left: auto; display: flex; gap: 4px; padding: 4px; border-radius: 8px; background: #27272a; }
+  .seg button { min-height: 44px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: #f4f4f5; color: #18181b; }
+  main { display: flex; flex-direction: column; gap: 48px; padding: 32px 16px 64px; }
+  h2 { margin: 0 0 4px; font-size: 15px; }
+  .cap { margin: 0 0 12px; font-size: 13px; color: #52525b; max-width: 80ch; }
+  .wrap { max-width: 100%; overflow-x: auto; padding-bottom: 8px; }
+  .row { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
+  .row > section { min-width: 0; max-width: 100%; }
+
+  /* ---------- device frame ---------- */
+  .frame { position: relative; overflow: hidden; border-radius: 14px; background: var(--page); color: var(--foreground); box-shadow: 0 10px 30px rgb(0 0 0 / .18); flex-shrink: 0; }
+  .shell { display: flex; gap: 8px; height: 100%; padding: 8px; }
+
+  /* ---------- floating sidebar panel ---------- */
+  .sb { display: flex; flex-direction: column; width: 264px; flex-shrink: 0; height: 100%; border-radius: 16px; background: var(--panel); color: var(--sidebar-foreground); border: 1px solid var(--sidebar-border); box-shadow: var(--panel-shadow); overflow: hidden; }
+  .sb-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px 6px; }
+  .logo { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: var(--sidebar-primary); color: var(--sidebar-primary-foreground); font-weight: 700; font-size: 12px; letter-spacing: .02em; }
+  .brand { font-weight: 600; font-size: 14px; color: var(--sidebar-accent-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .search { position: relative; margin: 4px 12px 8px; }
+  .search svg.lead { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted-foreground); pointer-events: none; }
+  .search input { width: 100%; height: 34px; padding: 0 34px 0 32px; border-radius: 8px; border: 1px solid var(--sidebar-border); background: var(--background); font-size: 13px; outline: none; }
+  .theme-dark .search input { background: var(--background); }
+  .search input::-webkit-search-cancel-button { display: none; } /* Esc clears; the native x collides with the "/" chip */
+  .search input::placeholder { color: var(--muted-foreground); }
+  .search input:focus-visible { border-color: var(--sidebar-ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sidebar-ring) 25%, transparent); }
+  .kbd { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); min-width: 20px; height: 20px; padding: 0 5px; display: grid; place-items: center; border-radius: 5px; border: 1px solid var(--sidebar-border); background: var(--sidebar-accent); color: var(--muted-foreground); font-size: 11px; font-family: ui-monospace, Menlo, monospace; pointer-events: none; }
+
+  .sb-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; padding: 0 8px 8px; scrollbar-width: thin; }
+  .grp { padding-top: 8px; }
+  .grp.bottom { margin-top: auto; padding-top: 6px; }
+  .glabel { display: flex; align-items: center; justify-content: space-between; width: 100%; height: 26px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-foreground); font-size: 12px; font-weight: 500; cursor: pointer; text-align: left; }
+  .glabel .chev { opacity: 0; transition: opacity .15s, transform .2s; }
+  .glabel:hover .chev, .glabel:focus-visible .chev { opacity: 1; }
+  .grp.closed .glabel .chev { opacity: 1; transform: rotate(-90deg); } /* a closed group always shows why it is empty */
+  .grp.closed .items { display: none; }
+  .glabel:focus-visible, .item:focus-visible, .ucard:focus-visible { outline: 2px solid var(--sidebar-ring); outline-offset: -2px; }
+
+  .items { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .item { position: relative; display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--sidebar-foreground); font-size: 14px; text-decoration: none; cursor: pointer; text-align: left; }
+  .item svg { color: var(--muted-foreground); }
+  .item:hover { background: var(--sidebar-accent); color: var(--sidebar-accent-foreground); }
+  .item[aria-current="page"] { background: var(--sidebar-accent); color: var(--sidebar-accent-foreground); font-weight: 600; }
+  .item[aria-current="page"] svg { color: var(--sidebar-accent-foreground); }
+  .item .lbl { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 6px; display: grid; place-items: center; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--sidebar-foreground); }
+  .item .pchev { color: var(--muted-foreground); transition: transform .2s; }
+  .parent.open > .item .pchev { transform: rotate(180deg); }
+  .sub { list-style: none; margin: 2px 0 2px 19px; padding: 0 0 0 10px; border-left: 1px solid var(--sidebar-border); display: none; flex-direction: column; gap: 2px; }
+  .parent.open > .sub { display: flex; }
+  .sub .item { font-size: 13.5px; min-height: 32px; }
+  mark { background: transparent; color: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+  .empty { padding: 16px 8px; font-size: 13px; color: var(--muted-foreground); }
+
+  /* ---------- pinned user card ---------- */
+  .sb-foot { position: relative; padding: 8px; }
+  .ucard { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: 12px; border: 1px solid var(--sidebar-border); background: var(--sidebar); text-align: left; cursor: pointer; }
+  .theme-dark .ucard { background: var(--sidebar-accent); }
+  .ucard:hover { border-color: color-mix(in srgb, var(--sidebar-foreground) 25%, transparent); }
+  .av { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: var(--sidebar-primary); color: var(--sidebar-primary-foreground); font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .who { flex: 1; min-width: 0; line-height: 1.25; }
+  .who b { display: block; font-size: 13.5px; font-weight: 600; color: var(--sidebar-accent-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .who span { font-size: 12px; color: var(--muted-foreground); }
+  .ucard .uchev { color: var(--muted-foreground); }
+
+  /* ---------- menus and tooltips (popover tokens) ---------- */
+  .menu { position: absolute; z-index: 20; min-width: 200px; padding: 4px; border-radius: 12px; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--border); box-shadow: 0 8px 24px rgb(0 0 0 / .18); }
+  .menu .mi { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; font-size: 13.5px; cursor: pointer; text-align: left; }
+  .menu .mi:hover { background: var(--accent); }
+  .menu .mi.cur { font-weight: 600; }
+  .menu hr { border: 0; border-top: 1px solid var(--border); margin: 4px -4px; }
+  .menu .mh { padding: 6px 8px 4px; font-size: 12px; color: var(--muted-foreground); }
+  .umenu { bottom: calc(100% - 4px); left: 8px; right: 8px; }
+  .tip { position: absolute; z-index: 20; padding: 4px 8px; border-radius: 6px; background: var(--primary); color: var(--primary-foreground); font-size: 12px; white-space: nowrap; pointer-events: none; }
+
+  /* ---------- collapsed icon rail ---------- */
+  .rail .sb { width: 56px; }
+  .rail .sb-head { justify-content: center; padding: 12px 0 8px; }
+  .rail .brand, .rail .lbl, .rail .badge, .rail .pchev, .rail .who, .rail .uchev, .rail .search input, .rail .kbd, .rail .sub { display: none !important; }
+  .rail .search { margin: 4px 8px 4px; }
+  .rail .search .rail-btn { display: grid; }
+  .search .rail-btn { display: none; place-items: center; width: 38px; height: 34px; border: 0; border-radius: 8px; background: transparent; color: var(--muted-foreground); cursor: pointer; }
+  .search .rail-btn:hover { background: var(--sidebar-accent); }
+  .rail .search svg.lead { display: none; }
+  .rail .sb-body { padding: 0 8px 8px; overflow: visible; }
+  .rail .glabel { display: none; }
+  .rail .grp { padding-top: 6px; }
+  .rail .grp + .grp::before { content: ""; display: block; width: 16px; height: 1px; margin: 0 auto 6px; background: var(--sidebar-border); } /* group boundary, quiet */
+  .rail .grp.closed .items { display: flex; } /* saved "closed" never hides an icon column */
+  .rail .item { justify-content: center; width: 38px; height: 34px; padding: 0; }
+  .rail .sb-foot { padding: 8px; }
+  .rail .ucard { justify-content: center; padding: 3px; border-radius: 10px; }
+  .rail-dot { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--destructive); display: none; }
+  .rail .rail-dot { display: block; }
+  .rail .item[aria-current="page"], .rail .parent.has-current > .item { background: var(--sidebar-accent); color: var(--sidebar-accent-foreground); }
+  .rail .parent.has-current > .item svg { color: var(--sidebar-accent-foreground); }
+
+  /* ---------- touch frames: 44px on every action control ---------- */
+  .touch .item, .touch .sub .item { min-height: 44px; font-size: 15px; }
+  .touch .glabel { height: 44px; font-size: 12.5px; }
+  .touch .glabel .chev { opacity: 1; } /* no hover on touch: the chevron is always there */
+  .touch .search input { height: 44px; font-size: 16px; } /* 16px stops iOS zoom-on-focus */
+  .touch .kbd { display: none; } /* no "/" key on a tablet */
+  .touch .ucard { min-height: 52px; }
+  .touch .menu .mi { min-height: 44px; }
+  .touch .closebtn { display: grid; }
+  .closebtn { display: none; place-items: center; width: 44px; height: 44px; margin-left: auto; border: 0; border-radius: 10px; background: transparent; color: var(--muted-foreground); cursor: pointer; }
+
+  /* ---------- content panel ---------- */
+  .content { flex: 1; min-width: 0; height: 100%; border-radius: 16px; background: var(--content); border: 1px solid var(--border); box-shadow: var(--panel-shadow); overflow: hidden; display: flex; flex-direction: column; }
+  .chead { display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 12px; border-bottom: 1px solid var(--border); font-size: 14px; flex-shrink: 0; }
+  .trig { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--foreground); cursor: pointer; }
+  .trig:hover { background: var(--accent); }
+  .touch .trig { width: 44px; height: 44px; }
+  .crumb { color: var(--muted-foreground); }
+  .crumb b { color: var(--foreground); font-weight: 600; }
+  .vsep { width: 1px; height: 16px; background: var(--border); }
+  .cbody { flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+  .cbody h1 { margin: 0; font-size: 22px; font-weight: 600; }
+  .cols { display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 12px; flex: 1; }
+  .colph { border-radius: 12px; background: var(--muted); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .colph i { display: block; height: 10px; width: 60%; border-radius: 4px; background: color-mix(in srgb, var(--muted-foreground) 30%, transparent); }
+  .tileph { height: 64px; border-radius: 10px; background: var(--background); border: 1px solid var(--border); }
+
+  /* ---------- sheet overlay (tablet / phone) ---------- */
+  .scrim { position: absolute; inset: 0; background: rgb(0 0 0 / .5); }
+  .sheet { position: absolute; top: 8px; bottom: 8px; left: 8px; }
+  .sheet .sb { box-shadow: 0 16px 48px rgb(0 0 0 / .35); }
+
+  /* ---------- notes ---------- */
+  .notes { max-width: 860px; background: #fafafa; border: 1px solid #e4e4e7; border-radius: 12px; padding: 16px 20px; font-size: 14px; line-height: 1.5; }
+  .notes h2 { margin-bottom: 8px; }
+  .notes ul { margin: 0; padding-left: 18px; }
+  .notes li + li { margin-top: 6px; }
+  .notes code { font-size: 12.5px; background: #f4f4f5; padding: 1px 4px; border-radius: 4px; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 4px; margin-right: 4px; }
+  .tag.new { background: #fef3c7; color: #92400e; }
+  .tag.re { background: #e0f2fe; color: #075985; }
+</style>
+</head>
+<body class="theme-light">
+<header class="top">
+  <strong>Sidebar — mockup</strong>
+  <small>Panel flotante con búsqueda (referencia: consola de Neon), con la paleta neutra de la app</small>
+  <div class="seg" role="group" aria-label="Tema">
+    <button id="t-light" aria-pressed="true">Claro</button>
+    <button id="t-dark" aria-pressed="false">Oscuro</button>
+  </div>
+</header>
+
+<main>
+  <section class="notes">
+    <h2>Notas para implementar</h2>
+    <ul>
+      <li><span class="tag re">Restyle</span>El panel flotante es casi un cambio de variante: el <code>Sidebar</code> de shadcn ya soporta <code>variant="inset"</code> (panel redondeado y el contenido como otra tarjeta). Hay que ajustar el fondo de la página (hoy usa <code>--sidebar</code>) y el radio a 16px; no hay colores nuevos.</li>
+      <li><span class="tag re">Restyle</span>Ítem activo = pastilla llena (<code>--sidebar-accent</code>, texto semibold). Las etiquetas de grupo pasan a texto chico y apagado, sin separadores entre grupos. Se mantienen el badge de Vencimientos (punto rojo en el riel), el riel de íconos con tooltips, la cookie que recuerda grupos abiertos y el menú de usuario (Mi cuenta, Tema, Cerrar sesión).</li>
+      <li><span class="tag re">Restyle</span>Los grupos siguen colapsables, pero el chevron solo aparece al pasar el mouse o con foco de teclado. En tablet y teléfono no hay mouse, así que ahí está siempre visible. Un grupo cerrado muestra su chevron, para que se entienda por qué está vacío.</li>
+      <li><span class="tag new">Nuevo</span><b>Búsqueda</b>: filtra los ítems visibles en el navegador, sin tildes ni mayúsculas ("ordenes" encuentra "Órdenes"). Muestra el padre si coincide un hijo y abre los grupos cerrados mientras se busca. <code>/</code> enfoca la caja, <code>Esc</code> la limpia y <code>Enter</code> abre el primer resultado. En el riel es un ícono: expande el sidebar y enfoca la caja.</li>
+      <li><span class="tag new">Nuevo</span><b>Tablero como padre</b> con "Órdenes en curso", "Pantalla del taller" y "Pantalla de clientes". Hoy <code>nav-items.ts</code> tiene Tablero y Kanban como links sueltos, así que esto cambia la navegación, no solo el estilo. Hay que confirmar a dónde va cada hijo y si "Kanban" desaparece del menú o pasa a ser "Órdenes en curso".</li>
+      <li><span class="tag new">Nuevo</span>La tarjeta de usuario fija abajo es la misma de hoy, pero con borde de tarjeta. En tablet y teléfono el sheet suma un botón de cerrar de 44px; hoy solo se cierra tocando afuera.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Escritorio · 1440 × 900 · expandido</h2>
+    <p class="cap">Página activa: Órdenes en curso. Probá la búsqueda (tecla <code>/</code> con el foco en la página), pasá el mouse por "Taller" para ver el chevron y hacé clic en la tarjeta de usuario.</p>
+    <div class="wrap"><div class="frame" id="f-desk" style="width:1440px;height:900px"></div></div>
+  </section>
+
+  <section>
+    <h2>Escritorio · 1440 × 900 · riel de íconos (<code>collapsible="icon"</code>)</h2>
+    <p class="cap">Solo íconos y tooltips. Tablero abre un menú desplegable a la derecha (abierto en el ejemplo). El punto rojo es el badge de Vencimientos, y su tooltip lleva el número, como hoy. La lupa expande el sidebar y enfoca la búsqueda.</p>
+    <div class="wrap"><div class="frame rail" id="f-rail" style="width:1440px;height:900px"></div></div>
+  </section>
+
+  <div class="row">
+    <section>
+      <h2>Tablet · 820 × 1180 · sheet superpuesto</h2>
+      <p class="cap">Ítems de 44px. El chevron de grupo siempre está visible y no aparece el atajo <code>/</code>.</p>
+      <div class="wrap"><div class="frame touch" id="f-tab" style="width:820px;height:1180px"></div></div>
+    </section>
+    <section>
+      <h2>Teléfono · 390 × 844 · sheet a toda altura</h2>
+      <p class="cap">Mismo sheet, más angosto. La lista se desplaza y la tarjeta de usuario queda fija.</p>
+      <div class="wrap"><div class="frame touch" id="f-phone" style="width:390px;height:844px"></div></div>
+    </section>
+    <section>
+      <h2>Búsqueda en acción · "ven"</h2>
+      <p class="cap">Coincide en cualquier parte de la etiqueta (Vencimientos, Inventario). Los grupos sin resultados se ocultan.</p>
+      <div class="wrap"><div class="frame" id="f-search" style="width:296px;height:520px"></div></div>
+      <h2 style="margin-top:24px">Sin resultados</h2>
+      <div class="wrap"><div class="frame" id="f-none" style="width:296px;height:260px"></div></div>
+    </section>
+  </div>
+</main>
+
+<script>
+const ic = (d, s = 16) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+// lucide paths, matching the icons app-sidebar.tsx maps today
+const P = {
+  board: '<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
+  kanban: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18M15 3v18"/>',
+  tv: '<rect width="20" height="15" x="2" y="3" rx="2"/><path d="M8 21h8M12 18v3"/>',
+  monitor: '<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="10" r="2.5"/>',
+  agenda: '<path d="M8 2v4M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/>',
+  metrics: '<path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/>',
+  customers: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  wrench: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+  clock: '<path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5M16 2v4M8 2v4M3 10h5"/><circle cx="16" cy="16" r="6"/><path d="M16 14v2.2l1.6 1"/>',
+  package: '<path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12M3.29 7 12 12l8.71-5M7.5 4.27l9 5.15"/>',
+  sheet: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M8 13h2M14 13h2M8 17h2M14 17h2"/>',
+  book: '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>',
+  settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  usercog: '<circle cx="18" cy="15" r="3"/><circle cx="9" cy="7" r="4"/><path d="M10 15H6a4 4 0 0 0-4 4v2M21.7 16.4l-.9-.3M15.2 13.9l-.9-.3M16.6 18.7l.3-.9M19.1 12.2l.3-.9M19.6 18.7l-.4-1M16.8 12.3l-.4-1M14.3 16.6l1-.4M20.7 13.8l1-.4"/>',
+  hardhat: '<path d="M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5M14 6a6 6 0 0 1 6 6v3M4 15v-3a6 6 0 0 1 6-6"/><rect x="2" y="15" width="20" height="4" rx="1"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  down: '<path d="m6 9 6 6 6-6"/>', updown: '<path d="m7 15 5 5 5-5M7 9l5-5 5 5"/>', right: '<path d="m9 18 6-6-6-6"/>',
+  panel: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>', user: '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+};
+const I = (k, s) => ic(P[k], s);
+
+/* Menu content exactly as the owner listed it. */
+const NAV = [
+  { id: "taller", label: "Taller", items: [
+    { id: "tablero", label: "Tablero", icon: "board", children: [
+      { label: "Órdenes en curso", icon: "kanban", current: true },
+      { label: "Pantalla del taller", icon: "tv" },
+      { label: "Pantalla de clientes", icon: "monitor" },
+    ] },
+    { label: "Agenda", icon: "agenda" },
+    { label: "Métricas", icon: "metrics" },
+  ] },
+  { id: "crm", label: "CRM", items: [
+    { label: "Clientes", icon: "customers" },
+    { label: "Órdenes de servicio", icon: "wrench" },
+    { label: "Vencimientos", icon: "clock", badge: 6 },
+    { label: "Inventario", icon: "package" },
+  ] },
+  { id: "catalogo", label: "Catálogo", items: [
+    { label: "Generar Catálogos", icon: "sheet" },
+    { label: "Catálogos Generados", icon: "book" },
+  ] },
+  { id: "config", label: "Configuración", bottom: true, items: [
+    { label: "Config. del CRM", icon: "settings" },
+    { id: "catcfg", label: "Config. de catálogos", icon: "settings", children: [
+      { label: "Configuración de plantillas", icon: "settings" },
+    ] },
+    { label: "Gestión de usuarios", icon: "usercog" },
+    { label: "Técnicos", icon: "hardhat" },
+  ] },
+];
+
+const fold = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// Highlight the matched span on the ORIGINAL label (NFD-fold keeps 1:1 length for these Spanish letters).
+function hl(label, q) {
+  if (!q) return esc(label);
+  const i = fold(label).indexOf(q);
+  if (i < 0) return esc(label);
+  return esc(label.slice(0, i)) + "<mark>" + esc(label.slice(i, i + q.length)) + "</mark>" + esc(label.slice(i + q.length));
+}
+
+function linkHtml(it, q, sub) {
+  const cur = it.current ? ' aria-current="page"' : "";
+  const badge = it.badge ? `<span class="badge" aria-hidden="true">${it.badge}</span><span class="rail-dot" aria-hidden="true"></span>` : "";
+  const aria = it.badge ? ` aria-label="${it.label}, ${it.badge} próximos"` : "";
+  return `<li><a href="#" class="item" data-tip="${it.badge ? `${it.label} próximos (${it.badge})` : it.label}"${cur}${aria}>${I(it.icon, sub ? 15 : 16)}<span class="lbl">${hl(it.label, q)}</span>${badge}</a></li>`;
+}
+
+function render(frame, st) {
+  const q = fold(st.q.trim());
+  let groups = "", hits = 0;
+  for (const g of NAV) {
+    let items = "";
+    for (const it of g.items) {
+      if (it.children) {
+        const selfHit = !q || fold(it.label).includes(q);
+        const kids = it.children.filter((c) => selfHit || fold(c.label).includes(q));
+        if (!kids.length) continue;
+        hits += kids.length + (selfHit ? 1 : 0);
+        const open = q ? true : st.open[it.id];
+        const hasCur = it.children.some((c) => c.current);
+        items += `<li class="parent${open ? " open" : ""}${hasCur ? " has-current" : ""}" data-parent="${it.id}">
+          <button class="item" type="button" aria-expanded="${!!open}" data-tip="${it.label}">${I(it.icon)}<span class="lbl">${hl(it.label, q)}</span>${I("updown", 14).replace("<svg", '<svg class="pchev"')}</button>
+          <ul class="sub">${kids.map((c) => linkHtml(c, q, true)).join("")}</ul></li>`;
+      } else if (!q || fold(it.label).includes(q)) {
+        hits++;
+        items += linkHtml(it, q);
+      }
+    }
+    if (!items) continue;
+    const closed = !q && st.closed[g.id];
+    groups += `<div class="grp${g.bottom ? " bottom" : ""}${closed ? " closed" : ""}" role="group" aria-labelledby="${frame.id}-${g.id}">
+      <button class="glabel" type="button" id="${frame.id}-${g.id}" data-group="${g.id}" aria-expanded="${!closed}"><span>${g.label}</span>${I("down", 14).replace("<svg", '<svg class="chev"')}</button>
+      <ul class="items">${items}</ul></div>`;
+  }
+  if (!hits) groups = `<p class="empty">Sin resultados para «${esc(st.q.trim())}».</p>`;
+
+  const sheet = st.mode === "sheet";
+  const sb = `<nav class="sb" aria-label="Navegación principal">
+    <div class="sb-head"><span class="logo" aria-hidden="true">DF</span><span class="brand">DForce Car Audio</span>
+      <button class="closebtn" type="button" aria-label="Cerrar menú">${I("x", 18)}</button></div>
+    <div class="search" role="search">${I("search", 15).replace("<svg", '<svg class="lead"')}
+      <input type="search" placeholder="Buscar…" aria-label="Buscar en el menú" value="${esc(st.q)}" autocomplete="off" />
+      <span class="kbd" aria-hidden="true">/</span>
+      <button class="rail-btn" type="button" aria-label="Buscar en el menú" data-tip="Buscar">${I("search", 16)}</button></div>
+    <div class="sb-body">${groups}</div>
+    <div class="sb-foot">
+      ${st.umenu ? `<div class="menu umenu" role="menu">
+        <div class="mh">Dimitri Espino</div>
+        <button class="mi" role="menuitem">${I("user", 15)}Mi cuenta</button><hr />
+        <button class="mi" role="menuitem" data-act="theme">${I("sun", 15)}Cambiar tema</button><hr />
+        <button class="mi" role="menuitem">${I("logout", 15)}Cerrar sesión</button></div>` : ""}
+      <button class="ucard" type="button" aria-haspopup="menu" aria-expanded="${!!st.umenu}" data-tip="Dimitri Espino">
+        <span class="av" aria-hidden="true">DE</span>
+        <span class="who"><b>Dimitri Espino</b><span>Administrador</span></span>
+        ${I("updown", 14).replace("<svg", '<svg class="uchev"')}</button>
+    </div></nav>`;
+
+  const n = frame.offsetWidth < 500 ? 1 : frame.offsetWidth < 900 ? 2 : 4;
+  const cols = Array.from({ length: n }, () => `<div class="colph"><i></i><div class="tileph"></div><div class="tileph"></div><div class="tileph"></div></div>`).join("");
+  const content = st.mode === "solo" ? "" : `<section class="content">
+    <div class="chead"><button class="trig" type="button" aria-label="${sheet ? "Abrir menú" : "Alternar barra lateral"}">${I("panel", 16)}</button><span class="vsep"></span>
+      <span class="crumb">Taller / Tablero / <b>Órdenes en curso</b></span></div>
+    <div class="cbody"><h1>Órdenes en curso</h1><div class="cols" style="--n:${n}">${cols}</div></div></section>`;
+
+  frame.innerHTML = sheet
+    ? `<div class="shell">${content}</div><div class="scrim"></div><div class="sheet" style="width:${st.sheetW}">${sb}</div>`
+    : `<div class="shell">${sb}${content}</div>${st.extra || ""}`;
+
+  const input = frame.querySelector(".search input");
+  if (st.focus) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); st.focus = false; }
+}
+
+/* ---------- state per frame + delegated events ---------- */
+const S = {};
+function mount(id, st) {
+  const frame = document.getElementById(id);
+  S[id] = Object.assign({ q: "", open: { tablero: true }, closed: {}, umenu: false, mode: "split" }, st);
+  render(frame, S[id]);
+  frame.addEventListener("input", (e) => { if (e.target.type === "search") { S[id].q = e.target.value; S[id].focus = true; render(frame, S[id]); } });
+  frame.addEventListener("keydown", (e) => {
+    if (e.target.type !== "search") return;
+    if (e.key === "Escape") { S[id].q = ""; S[id].focus = true; render(frame, S[id]); }
+    if (e.key === "Enter") { const a = frame.querySelector(".sb-body a.item"); if (a) a.click(); }
+  });
+  frame.addEventListener("click", (e) => {
+    const t = e.target.closest("button, a");
+    if (!t) return;
+    if (t.tagName === "A") e.preventDefault();
+    const st = S[id];
+    if (t.dataset.group) { st.closed[t.dataset.group] = !st.closed[t.dataset.group]; }
+    else if (t.closest(".parent") && t.parentElement.classList.contains("parent")) {
+      const pid = t.parentElement.dataset.parent;
+      if (frame.classList.contains("rail")) st.railMenu = st.railMenu === pid ? null : pid, railExtras(frame, st);
+      else st.open[pid] = !st.open[pid];
+    }
+    else if (t.classList.contains("ucard")) st.umenu = !st.umenu;
+    else if (t.dataset.act === "theme") { setTheme(document.body.classList.contains("theme-dark") ? "light" : "dark"); st.umenu = false; }
+    else if (t.classList.contains("rail-btn") || (t.classList.contains("trig") && frame.classList.contains("rail"))) {
+      frame.classList.remove("rail"); st.extra = ""; st.focus = t.classList.contains("rail-btn");
+    } else if (t.classList.contains("trig")) { frame.classList.add("rail"); railExtras(frame, st); }
+    else return;
+    render(frame, st);
+  });
+}
+
+/* Rail demo: the Tablero dropdown and one tooltip, positioned from the real rows. */
+function railExtras(frame, st) {
+  st.extra = "";
+  requestAnimationFrame(() => {
+    if (!frame.classList.contains("rail")) return;
+    const fr = frame.getBoundingClientRect();
+    const pos = (el) => { const r = el.getBoundingClientRect(); return { x: r.right - fr.left + 10, y: r.top - fr.top }; };
+    let html = "";
+    const parent = frame.querySelector('[data-parent="tablero"] > .item');
+    if (st.railMenu === "tablero" && parent) {
+      const p = pos(parent);
+      html += `<div class="menu" role="menu" style="left:${p.x}px;top:${p.y}px"><div class="mh">Tablero</div>
+        ${NAV[0].items[0].children.map((c) => `<button class="mi${c.current ? " cur" : ""}" role="menuitem">${I(c.icon, 15)}${c.label}</button>`).join("")}</div>`;
+    }
+    const venc = [...frame.querySelectorAll(".item")].find((a) => a.dataset.tip.startsWith("Vencimientos"));
+    if (st.railTip && venc) { const p = pos(venc); html += `<div class="tip" style="left:${p.x}px;top:${p.y + 7}px">${venc.dataset.tip}</div>`; }
+    frame.insertAdjacentHTML("beforeend", html);
+    st.extra = html;
+  });
+}
+
+/* Live tooltip on hover in the rail. */
+document.addEventListener("mouseover", (e) => {
+  const t = e.target.closest(".rail .item, .rail .ucard, .rail .rail-btn");
+  document.querySelectorAll(".tip.live").forEach((n) => n.remove());
+  if (!t || !t.dataset.tip) return;
+  const frame = t.closest(".frame"), fr = frame.getBoundingClientRect(), r = t.getBoundingClientRect();
+  frame.insertAdjacentHTML("beforeend", `<div class="tip live" style="left:${r.right - fr.left + 10}px;top:${r.top - fr.top + 7}px">${esc(t.dataset.tip)}</div>`);
+});
+
+/* "/" focuses the search of the first visible expanded sidebar, unless typing elsewhere. */
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "/" || /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+  e.preventDefault();
+  document.querySelector("#f-desk .search input").focus();
+});
+
+function setTheme(t) {
+  document.body.classList.toggle("theme-dark", t === "dark");
+  document.body.classList.toggle("theme-light", t !== "dark");
+  document.getElementById("t-dark").setAttribute("aria-pressed", t === "dark");
+  document.getElementById("t-light").setAttribute("aria-pressed", t !== "dark");
+}
+document.getElementById("t-dark").onclick = () => setTheme("dark");
+document.getElementById("t-light").onclick = () => setTheme("light");
+if (new URLSearchParams(location.search).get("theme") === "dark") setTheme("dark");
+
+mount("f-desk", {});
+mount("f-rail", { railMenu: "tablero", railTip: true });
+railExtras(document.getElementById("f-rail"), S["f-rail"]);
+mount("f-tab", { mode: "sheet", sheetW: "320px" });
+mount("f-phone", { mode: "sheet", sheetW: "calc(100% - 16px)" });
+mount("f-search", { mode: "solo", q: "ven" });
+mount("f-none", { mode: "solo", q: "facturas" });
+</script>
+</body>
+</html>
