@@ -579,6 +579,33 @@ describe("AppSidebar — menu search (sidebar-redesign WU4a)", () => {
     expect(screen.getByRole("link", { name: "Vencimientos" })).toBeInTheDocument();
   });
 
+  it("collapsing to the rail drops the filter, and expanding brings the query back", async () => {
+    const user = userEvent.setup();
+    render(
+      <SidebarProvider>
+        <SidebarTrigger aria-label="Alternar" />
+        <AppSidebar
+          navGroups={CRM}
+          user={{ id: "u1", role: "administrador", name: "Jorge" }}
+          workshopName="Taller Demo"
+          logoR2Key={null}
+          initialCollapseState={DEFAULT_NAV_COLLAPSE_STATE}
+        />
+      </SidebarProvider>,
+    );
+    await user.type(box(), "facturas");
+    expect(screen.getByText("Sin resultados para «facturas».")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Alternar" }));
+
+    expect(screen.queryByText(/Sin resultados/)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Clientes" })).toBeInTheDocument();
+    expect(document.querySelector("mark")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Alternar" }));
+    expect(screen.getByText("Sin resultados para «facturas».")).toBeInTheDocument();
+  });
+
   it("an empty query renders the unfiltered nav", () => {
     renderSearch();
 

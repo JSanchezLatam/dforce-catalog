@@ -70,9 +70,9 @@ Conventions for every WU:
 
 ## WU4b: Slash and rail icon
 
-- [ ] 4b.1 RED `NavSearch.test.tsx`: `/` on the body focuses the box and types nothing; `/` inside a page `input`, a `textarea` or a contenteditable, or with Ctrl or Meta held, leaves focus alone; with `defaultOpen={false}`, `/` expands the sidebar and focuses the box; the rail button "Buscar en el menú" does the same; below 1024 with the sheet closed, `/` does nothing.
-- [ ] 4b.2 GREEN (D8, D9): window listener in an effect, `focusPending` ref and a focus effect, and the rail `SidebarMenuButton`.
-- [ ] 4b.3 Verify: mutation-verify the editable-target guard and the closed-sheet guard.
+- [x] 4b.1 RED `NavSearch.test.tsx`: `/` on the body focuses the box and types nothing; `/` inside a page `input`, a `textarea` or a contenteditable, or with Ctrl or Meta held, leaves focus alone; with `defaultOpen={false}`, `/` expands the sidebar and focuses the box; the rail button "Buscar en el menú" does the same; below 1024 with the sheet closed, `/` does nothing.
+- [x] 4b.2 GREEN (D8, D9): window listener in an effect, `focusPending` ref and a focus effect, and the rail `SidebarMenuButton`.
+- [x] 4b.3 Verify: mutation-verify the editable-target guard and the closed-sheet guard.
 
 ## WU5: Browser verification and sign-off
 

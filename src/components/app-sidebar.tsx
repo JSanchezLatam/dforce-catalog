@@ -304,8 +304,11 @@ export function AppSidebar({
   logoR2Key: string | null
   initialCollapseState: NavCollapseState
 }) {
-  const { state } = useSidebar()
-  const [query, setQuery] = React.useState("")
+  const { state, isMobile } = useSidebar()
+  const [typed, setQuery] = React.useState("")
+  const collapsed = state === "collapsed"
+  // The rail hides the box, so a typed query must not filter it (nothing there could clear it). It returns on expand.
+  const query = collapsed && !isMobile ? "" : typed
   const visibleGroups = React.useMemo(() => filterNavGroups(navGroups, query), [navGroups, query])
   const pathname = usePathname()
   // From the UNFILTERED children: a search that hides /tablero/clientes must not hand the mark to /tablero.
@@ -316,8 +319,6 @@ export function AppSidebar({
       ),
     [navGroups, pathname],
   )
-  const collapsed = state === "collapsed"
-
   // Lifted so every group/parent collapsible writes into the SAME
   // `sidebar_group_state` cookie value without clobbering each other's
   // saved state — each key toggles independently (not an accordion).
@@ -349,10 +350,7 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
 
-      {/* The rail has no room for the box; its search icon is WU4b. */}
-      <div className="group-data-[collapsible=icon]:hidden">
-        <NavSearch query={query} onQueryChange={setQuery} firstHref={firstHref(visibleGroups)} />
-      </div>
+      <NavSearch query={typed} onQueryChange={setQuery} firstHref={firstHref(visibleGroups)} />
 
       <SidebarContent>
         {visibleGroups.length === 0 ? (
