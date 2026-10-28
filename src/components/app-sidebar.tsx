@@ -32,6 +32,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { NavSearch } from "@/modules/layout/NavSearch"
+import { filterNavGroups, firstHref, highlight } from "@/modules/layout/nav-search"
 import { LogoutButton } from "@/modules/layout/LogoutButton"
 import { ThemeToggle } from "@/modules/layout/ThemeToggle"
 import { WorkshopLogo } from "./WorkshopLogo"
@@ -72,7 +74,20 @@ function activeChildHref(children: NavLink[], pathname: string): string | undefi
     .sort((a, b) => b.length - a.length)[0]
 }
 
-function NavLinkItem({ item }: { item: NavLink }) {
+/** Wraps the matched span of `label` in <mark>; a blank query renders the plain label. */
+function Label({ label, query }: { label: string; query: string }) {
+  const parts = highlight(label, query)
+  if (!parts) return <span>{label}</span>
+  return (
+    <span>
+      {parts.before}
+      <mark className="bg-transparent font-bold text-inherit underline underline-offset-2">{parts.match}</mark>
+      {parts.after}
+    </span>
+  )
+}
+
+function NavLinkItem({ item, query }: { item: NavLink; query: string }) {
   const pathname = usePathname()
   const Icon = ICON_MAP[item.icon] || Package
   const isActive = pathname.startsWith(item.href)
@@ -89,7 +104,7 @@ function NavLinkItem({ item }: { item: NavLink }) {
         tooltip={item.badge ? `${item.label} próximos (${item.badge})` : item.label}
       >
         <Icon />
-        <span>{item.label}</span>
+        <Label label={item.label} query={query} />
         {item.badge ? <span className="sr-only">{`, ${item.badge} próximos`}</span> : null}
       </SidebarMenuButton>
       {item.badge ? (
@@ -108,10 +123,12 @@ function NavLinkItem({ item }: { item: NavLink }) {
 
 function NavParentExpanded({
   parent,
+  query,
   open,
   onOpenChange,
 }: {
   parent: NavParent
+  query: string
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
@@ -124,7 +141,7 @@ function NavParentExpanded({
       <Collapsible open={open} onOpenChange={onOpenChange}>
         <CollapsibleTrigger render={<SidebarMenuButton tooltip={parent.label} />} className="w-full cursor-pointer">
           <Icon aria-hidden="true" />
-          <span>{parent.label}</span>
+          <Label label={parent.label} query={query} />
           <ChevronDown
             aria-hidden="true"
             className="ml-auto size-4 shrink-0 transition-transform duration-200 ease-linear motion-reduce:transition-none data-panel-open:rotate-180"
@@ -143,7 +160,7 @@ function NavParentExpanded({
                     className="data-active:font-semibold"
                   >
                     <ChildIcon />
-                    <span>{child.label}</span>
+                    <Label label={child.label} query={query} />
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
               )
@@ -193,13 +210,21 @@ function NavGroupSection({
   collapsed,
   collapseState,
   onToggleGroup,
+  query,
 }: {
   group: NavGroup
   collapsed: boolean
   collapseState: NavCollapseState
   onToggleGroup: (id: string, open: boolean) => void
+  query: string
 }) {
   const labelId = React.useId()
+  // While searching, everything renders open and toggling is a no-op, so the saved cookie state is never touched.
+  const searching = query.trim() !== ""
+  const isOpen = (id: string) => searching || getGroupOpen(collapseState, id)
+  const toggle = (id: string, next: boolean) => {
+    if (!searching) onToggleGroup(id, next)
+  }
 
   function renderItems() {
     return group.items.map((item) => {
@@ -210,12 +235,13 @@ function NavGroupSection({
           <NavParentExpanded
             key={item.id}
             parent={item}
-            open={getGroupOpen(collapseState, item.id)}
-            onOpenChange={(open) => onToggleGroup(item.id, open)}
+            query={query}
+            open={isOpen(item.id)}
+            onOpenChange={(open) => toggle(item.id, open)}
           />
         )
       }
-      return <NavLinkItem key={item.href} item={item} />
+      return <NavLinkItem key={item.href} item={item} query={query} />
     })
   }
 
@@ -236,11 +262,11 @@ function NavGroupSection({
     )
   }
 
-  const open = getGroupOpen(collapseState, group.id)
+  const open = isOpen(group.id)
 
   return (
     <SidebarGroup className={group.pinBottom ? "mt-auto" : ""} role="group" aria-labelledby={labelId}>
-      <Collapsible open={open} onOpenChange={(next) => onToggleGroup(group.id, next)}>
+      <Collapsible open={open} onOpenChange={(next) => toggle(group.id, next)}>
         <CollapsibleTrigger
           id={labelId}
           render={<SidebarGroupLabel render={<button type="button" />} />}
@@ -278,6 +304,8 @@ export function AppSidebar({
   initialCollapseState: NavCollapseState
 }) {
   const { state } = useSidebar()
+  const [query, setQuery] = React.useState("")
+  const visibleGroups = React.useMemo(() => filterNavGroups(navGroups, query), [navGroups, query])
   const collapsed = state === "collapsed"
 
   // Lifted so every group/parent collapsible writes into the SAME
@@ -311,17 +339,26 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
 
+      {/* The rail has no room for the box; its search icon is WU4b. */}
+      <div className="group-data-[collapsible=icon]:hidden">
+        <NavSearch query={query} onQueryChange={setQuery} firstHref={firstHref(visibleGroups)} />
+      </div>
+
       <SidebarContent>
-        {navGroups.map((group) => (
-          <React.Fragment key={group.id}>
+        {visibleGroups.length === 0 ? (
+          <p className="px-4 py-4 text-sm text-muted-foreground">{`Sin resultados para «${query.trim()}».`}</p>
+        ) : (
+          visibleGroups.map((group) => (
             <NavGroupSection
+              key={group.id}
               group={group}
               collapsed={collapsed}
               collapseState={collapseState}
               onToggleGroup={handleToggleGroup}
+              query={query}
             />
-          </React.Fragment>
-        ))}
+          ))
+        )}
       </SidebarContent>
 
       <SidebarFooter>
@@ -333,7 +370,7 @@ export function AppSidebar({
                 render={
                   <SidebarMenuButton
                     size="lg"
-                    className="w-full cursor-pointer rounded-xl border border-sidebar-border bg-sidebar dark:bg-sidebar-accent hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                    className="w-full cursor-pointer rounded-xl border border-sidebar-border bg-sidebar hover:bg-sidebar hover:text-sidebar-foreground hover:border-sidebar-foreground/25 dark:bg-sidebar-accent dark:hover:bg-sidebar-accent data-[state=open]:border-sidebar-foreground/25"
                   />
                 }
               >
@@ -348,7 +385,7 @@ export function AppSidebar({
                   </div>
                   <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/trigger:rotate-180" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent side={collapsed ? "right" : "top"} className="w-48 rounded-xl" align="start">
+              <DropdownMenuContent side={collapsed ? "right" : "top"} className="w-(--anchor-width) min-w-48 rounded-xl" align="start">
                 <DropdownMenuItem>
                   <Link href="/account" className="flex items-center gap-2">
                     <User className="size-4" />
