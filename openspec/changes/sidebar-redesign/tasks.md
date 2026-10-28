@@ -41,11 +41,11 @@ Conventions for every WU:
 
 ## WU1: Shell
 
-- [ ] 1.1 RED `sidebar.test.tsx`: the inset inner panel carries `rounded-2xl`, the border and the shadow classes under `group-data-[variant=inset]`; the existing `lg:` spacing pins stay green.
-- [ ] 1.2 RED `sidebar.test.tsx` (stub `matchMedia` to below 1024 as in `use-mobile.test.tsx:9-18`): the open sheet has a button named "Cerrar menú" with `min-h-11 min-w-11`; clicking it closes the sheet; no English "Close" or "Sidebar" remains in the sheet.
-- [ ] 1.3 GREEN `sidebar.tsx` (D1 inner classes, D2 `showCloseButton={false}`, own `SheetClose`, floating panel, Spanish title and description).
-- [ ] 1.4 `app-sidebar.tsx:285`: `variant="sidebar"` → `"inset"` (that one line only; the rest of the file is WU2's). `layout.tsx`: `SidebarProvider` className `has-data-[variant=inset]:bg-muted dark:has-data-[variant=inset]:bg-background`; `SidebarInset` className `lg:rounded-2xl lg:border dark:bg-card`.
-- [ ] 1.5 Verify: unit, then mutation-verify (drop the close button's `min-h-11`; restore `[&>button]:hidden`).
+- [x] 1.1 RED `sidebar.test.tsx`: the inset inner panel carries `rounded-2xl`, the border and the shadow classes under `group-data-[variant=inset]`; the existing `lg:` spacing pins stay green.
+- [x] 1.2 RED `sidebar.test.tsx` (stub `matchMedia` to below 1024 as in `use-mobile.test.tsx:9-18`): the open sheet has a button named "Cerrar menú" with `min-h-11 min-w-11`; clicking it closes the sheet; no English "Close" or "Sidebar" remains in the sheet.
+- [x] 1.3 GREEN `sidebar.tsx` (D1 inner classes, D2 `showCloseButton={false}`, own `SheetClose`, floating panel, Spanish title and description).
+- [x] 1.4 `app-sidebar.tsx:285`: `variant="sidebar"` → `"inset"` (that one line only; the rest of the file is WU2's). `layout.tsx`: `SidebarProvider` className `has-data-[variant=inset]:bg-muted dark:has-data-[variant=inset]:bg-background`; `SidebarInset` className `lg:rounded-2xl lg:border dark:bg-card`.
+- [x] 1.5 Verify: unit, then mutation-verify (drop the close button's `min-h-11`; restore `[&>button]:hidden`).
 
 ## WU2: Nav restyle
 
@@ -109,5 +109,6 @@ Do every check at `http://192.168.0.7:3000` from a second machine, not at localh
 ## Follow-ups
 
 - Close the sheet after navigating (link tap or `Enter`). It stays open today. Not mocked.
+- `/kanban` root (`bg-board-canvas`) stops at its content height, so the inset panel shows a white band under it. Pre-existing, now more visible inside the rounded panel.
 - Share one `fold` between `agenda/items.ts:179` and `nav-search.ts`.
 - Clean the 13 pre-existing lint warnings (separate change).
