@@ -4,24 +4,28 @@
  * jsdom/`*.test.tsx` convention this file follows).
  *
  * `next/navigation`'s `usePathname` is mocked because `NavLinkItem` calls it
- * unconditionally to compute the active-link style; this component tree
- * never opens the footer user-menu dropdown in these tests, so
- * `next-themes`/`next/navigation`'s `useRouter` (used lazily by
- * `ThemeToggle`/`LogoutButton` only once that dropdown's content mounts)
- * never need mocking here.
+ * unconditionally to compute the active-link style. `useRouter` and
+ * `next-themes` are mocked only because opening the footer user menu mounts
+ * `LogoutButton` and `ThemeToggle`.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { AppSidebar } from "./app-sidebar";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DEFAULT_NAV_COLLAPSE_STATE, type NavCollapseState } from "@/modules/layout/nav-collapse-state";
 import type { NavGroup } from "@/modules/layout/nav-items";
 
-const nav = vi.hoisted(() => ({ pathname: "/inventory" }));
+const nav = vi.hoisted(() => ({ pathname: "/inventory", push: vi.fn() }));
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname,
+  // LogoutButton calls it as soon as the user menu opens.
+  useRouter: () => ({ push: nav.push }),
+}));
+// ThemeToggle renders nothing until next-themes has resolved a theme; there is no provider here.
+vi.mock("next-themes", () => ({
+  useTheme: () => ({ resolvedTheme: "light", setTheme: vi.fn() }),
 }));
 
 const NAV_GROUPS: NavGroup[] = [
@@ -338,5 +342,308 @@ describe("AppSidebar — Tablero parent", () => {
 
     expect(screen.getByRole("button", { name: "Tablero" })).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByRole("link", { name: "Pantalla de clientes" })).not.toBeInTheDocument();
+  });
+});
+
+/** sidebar-redesign WU2 (D3-D5). jsdom sees classes, not hover, sizes or paint: those are browser checks. */
+describe("AppSidebar — nav restyle (sidebar-redesign WU2)", () => {
+  const TABLERO: NavGroup[] = [
+    {
+      id: "taller",
+      label: "Taller",
+      items: [
+        {
+          kind: "parent",
+          id: "tablero",
+          label: "Tablero",
+          icon: "board",
+          children: [
+            { kind: "link", href: "/kanban", label: "Órdenes en curso", icon: "kanban", action: "board.read" },
+            { kind: "link", href: "/tablero", label: "Pantalla del taller", icon: "board", action: "board.read" },
+            { kind: "link", href: "/tablero/clientes", label: "Pantalla de clientes", icon: "board", action: "board.customer" },
+          ],
+        },
+      ],
+    },
+  ];
+
+  afterEach(() => {
+    nav.pathname = "/inventory";
+    window.innerWidth = 1024;
+  });
+
+  function renderNav(groups: NavGroup[], opts: { open?: boolean; state?: NavCollapseState } = {}) {
+    return render(
+      <SidebarProvider defaultOpen={opts.open ?? true}>
+        <AppSidebar
+          navGroups={groups}
+          user={{ id: "u1", role: "administrador", name: "Jorge" }}
+          workshopName="Taller Demo"
+          logoR2Key={null}
+          initialCollapseState={opts.state ?? DEFAULT_NAV_COLLAPSE_STATE}
+        />
+      </SidebarProvider>,
+    );
+  }
+
+  it("expanded on /tablero/clientes marks only Pantalla de clientes as the current page", () => {
+    nav.pathname = "/tablero/clientes";
+    renderNav(TABLERO);
+
+    const current = screen.getAllByRole("link").filter((l) => l.getAttribute("aria-current") === "page");
+    expect(current.map((l) => l.textContent)).toEqual(["Pantalla de clientes"]);
+  });
+
+  it("a search that hides the current child does not move the current mark to a shorter sibling", async () => {
+    // Searching "taller" on /tablero/clientes leaves only /tablero under Tablero; a prefix match over the FILTERED list would mark it.
+    nav.pathname = "/tablero/clientes";
+    const user = userEvent.setup();
+    renderNav(TABLERO);
+
+    await user.type(screen.getByRole("textbox", { name: "Buscar en el menú" }), "taller");
+
+    expect(screen.getByRole("link", { name: /Pantalla del taller/ })).not.toHaveAttribute("aria-current");
+    expect(screen.getAllByRole("link").filter((l) => l.getAttribute("aria-current") === "page")).toEqual([]);
+  });
+
+  it("a top-level link on its own page carries aria-current, and only that one", () => {
+    nav.pathname = "/customers";
+    renderNav(NAV_GROUPS);
+
+    expect(screen.getByRole("link", { name: "Clientes" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Generar Catálogos" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("in the rail on /kanban the Tablero button is active", () => {
+    nav.pathname = "/kanban";
+    renderNav(TABLERO, { open: false });
+
+    expect(screen.getByRole("button", { name: "Tablero" })).toHaveAttribute("data-active");
+  });
+
+  it("renders no separator", () => {
+    renderNav(NAV_GROUPS);
+
+    expect(document.querySelector('[data-sidebar="separator"]')).toBeNull();
+  });
+
+  it("hides an open group's chevron until hover or focus, but never on touch", () => {
+    renderNav(NAV_GROUPS);
+
+    const chevron = screen.getByRole("button", { name: "CRM" }).querySelector("svg");
+    expect(chevron).toHaveClass(
+      "opacity-0",
+      "group-hover/label:opacity-100",
+      "group-focus-visible/label:opacity-100",
+      "pointer-coarse:opacity-100",
+    );
+  });
+
+  it("keeps a closed group's chevron visible", () => {
+    renderNav(NAV_GROUPS, { state: { ...DEFAULT_NAV_COLLAPSE_STATE, crm: false } });
+
+    const chevron = screen.getByRole("button", { name: "CRM" }).querySelector("svg");
+    expect(chevron).not.toHaveClass("opacity-0");
+  });
+
+  it("paints group labels muted", () => {
+    renderNav(NAV_GROUPS);
+
+    // dark: too, or the primitive's dark:text-sidebar-foreground/70 wins in dark mode.
+    expect(screen.getByRole("button", { name: "CRM" })).toHaveClass("text-muted-foreground", "dark:text-muted-foreground");
+  });
+
+  it("draws the user card with a border", () => {
+    renderNav(NAV_GROUPS);
+
+    expect(screen.getByRole("button", { name: /Jorge/ })).toHaveClass("rounded-xl", "border", "border-sidebar-border");
+  });
+
+  it("opens the user menu with Mi cuenta, the theme item and Cerrar sesión, in that order", async () => {
+    const user = userEvent.setup();
+    renderNav(NAV_GROUPS);
+
+    await user.click(screen.getByRole("button", { name: /Jorge/ }));
+
+    const items = await screen.findAllByRole("menuitem");
+    expect(items.map((i) => i.textContent)).toEqual(["Mi cuenta", "Modo oscuro", "Cerrar sesión"]);
+  });
+
+  // The sheet's absolute 44px close button sits over the header's top-right corner.
+  it("reserves room for the sheet's close button in the header, only inside the mobile sheet", async () => {
+    window.innerWidth = 800; // useIsMobile reads innerWidth
+    const user = userEvent.setup();
+    render(
+      <SidebarProvider>
+        <SidebarTrigger aria-label="Abrir menú" />
+        <AppSidebar
+          navGroups={NAV_GROUPS}
+          user={{ id: "u1", role: "administrador", name: "Jorge" }}
+          workshopName="Taller Demo"
+          logoR2Key={null}
+          initialCollapseState={DEFAULT_NAV_COLLAPSE_STATE}
+        />
+      </SidebarProvider>,
+    );
+    await user.click(screen.getByRole("button", { name: "Abrir menú" }));
+
+    const header = await waitFor(() => {
+      const el = document.querySelector('[data-sidebar="header"]');
+      if (!el) throw new Error("sheet not open");
+      return el;
+    });
+    expect(header.closest('[data-mobile="true"]')).not.toBeNull();
+    expect(header).toHaveClass("in-data-[mobile=true]:pr-13");
+  });
+
+  it("renders the sidebar as the inset variant (floating panel shell)", () => {
+    renderNav(NAV_GROUPS);
+
+    expect(document.querySelector('[data-slot="sidebar"][data-variant]')).toHaveAttribute("data-variant", "inset");
+  });
+
+  it("while searching opens a saved-closed parent's matching children without writing the cookie, and Esc closes it again", async () => {
+    const user = userEvent.setup();
+    document.cookie = "sidebar_group_state=; path=/; max-age=0";
+    const before = document.cookie;
+    renderNav(TABLERO, { state: { ...DEFAULT_NAV_COLLAPSE_STATE, tablero: false } });
+    expect(screen.queryByRole("link", { name: "Pantalla de clientes" })).not.toBeInTheDocument();
+
+    await user.type(screen.getByRole("textbox", { name: "Buscar en el menú" }), "clien");
+    expect(screen.getByRole("link", { name: /Pantalla de clientes/ })).toBeInTheDocument();
+    expect(document.cookie).toBe(before);
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("link", { name: "Pantalla de clientes" })).not.toBeInTheDocument();
+    expect(document.cookie).toBe(before);
+  });
+
+  it("typing 'clien' and pressing Enter navigates to the first result, /tablero/clientes", async () => {
+    nav.push.mockClear();
+    const user = userEvent.setup();
+    renderNav(TABLERO);
+
+    await user.type(screen.getByRole("textbox", { name: "Buscar en el menú" }), "clien{Enter}");
+
+    expect(nav.push).toHaveBeenCalledExactlyOnceWith("/tablero/clientes");
+  });
+});
+
+/** sidebar-redesign WU4a (D7, D10). The pure filter has its own tests; these pin the wiring. */
+describe("AppSidebar — menu search (sidebar-redesign WU4a)", () => {
+  const CRM: NavGroup[] = [
+    {
+      id: "crm",
+      label: "CRM",
+      items: [
+        { kind: "link", href: "/customers", label: "Clientes", icon: "customers" },
+        { kind: "link", href: "/vencimientos", label: "Vencimientos", icon: "vencimientos" },
+        { kind: "link", href: "/service-orders", label: "Órdenes de servicio", icon: "service-orders" },
+      ],
+    },
+    { id: "catalogo", label: "Catálogo", items: [{ kind: "link", href: "/builder", label: "Generar Catálogos", icon: "builder" }] },
+  ];
+
+  function renderSearch(state: NavCollapseState = DEFAULT_NAV_COLLAPSE_STATE) {
+    return render(
+      <SidebarProvider>
+        <AppSidebar
+          navGroups={CRM}
+          user={{ id: "u1", role: "administrador", name: "Jorge" }}
+          workshopName="Taller Demo"
+          logoR2Key={null}
+          initialCollapseState={state}
+        />
+      </SidebarProvider>,
+    );
+  }
+  const box = () => screen.getByRole("textbox", { name: "Buscar en el menú" });
+
+  it("typing 'ven' hides the other links and highlights the match", async () => {
+    const user = userEvent.setup();
+    renderSearch();
+
+    await user.type(box(), "ven");
+
+    expect(screen.queryByRole("link", { name: "Clientes" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Catálogo" })).not.toBeInTheDocument();
+    const marks = screen.getByRole("link", { name: "Vencimientos" }).querySelectorAll("mark");
+    expect([...marks].map((m) => m.textContent)).toEqual(["Ven"]);
+  });
+
+  it("a query with no match reads 'Sin resultados para «facturas».'", async () => {
+    const user = userEvent.setup();
+    renderSearch();
+
+    await user.type(box(), "facturas");
+
+    expect(screen.getByText("Sin resultados para «facturas».")).toBeInTheDocument();
+    // Only the header's brand link is left.
+    expect(screen.getAllByRole("link").map((l) => l.textContent)).toEqual(["Taller Demo"]);
+  });
+
+  it("opens a saved-closed group without writing the cookie, and the saved state returns after Esc", async () => {
+    const user = userEvent.setup();
+    document.cookie = "sidebar_group_state=; path=/; max-age=0";
+    const before = document.cookie;
+    renderSearch({ ...DEFAULT_NAV_COLLAPSE_STATE, crm: false });
+    expect(screen.queryByRole("link", { name: "Vencimientos" })).not.toBeInTheDocument();
+
+    await user.type(box(), "ven");
+    expect(screen.getByRole("link", { name: "Vencimientos" })).toBeInTheDocument();
+    expect(document.cookie).toBe(before);
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("link", { name: "Vencimientos" })).not.toBeInTheDocument();
+    expect(document.cookie).toBe(before);
+  });
+
+  it("clicking a group label while searching writes no cookie and keeps the group open", async () => {
+    const user = userEvent.setup();
+    document.cookie = "sidebar_group_state=; path=/; max-age=0";
+    const before = document.cookie;
+    renderSearch();
+
+    await user.type(box(), "ven");
+    await user.click(screen.getByRole("button", { name: "CRM" }));
+
+    expect(document.cookie).toBe(before);
+    expect(screen.getByRole("link", { name: "Vencimientos" })).toBeInTheDocument();
+  });
+
+  it("collapsing to the rail drops the filter, and expanding brings the query back", async () => {
+    const user = userEvent.setup();
+    render(
+      <SidebarProvider>
+        <SidebarTrigger aria-label="Alternar" />
+        <AppSidebar
+          navGroups={CRM}
+          user={{ id: "u1", role: "administrador", name: "Jorge" }}
+          workshopName="Taller Demo"
+          logoR2Key={null}
+          initialCollapseState={DEFAULT_NAV_COLLAPSE_STATE}
+        />
+      </SidebarProvider>,
+    );
+    await user.type(box(), "facturas");
+    expect(screen.getByText("Sin resultados para «facturas».")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Alternar" }));
+
+    expect(screen.queryByText(/Sin resultados/)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Clientes" })).toBeInTheDocument();
+    expect(document.querySelector("mark")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Alternar" }));
+    expect(screen.getByText("Sin resultados para «facturas».")).toBeInTheDocument();
+  });
+
+  it("an empty query renders the unfiltered nav", () => {
+    renderSearch();
+
+    expect(screen.getAllByRole("link").map((l) => l.textContent)).toEqual([
+      "Taller Demo", "Clientes", "Vencimientos", "Órdenes de servicio", "Generar Catálogos",
+    ]);
+    expect(document.querySelector("mark")).toBeNull();
   });
 });
