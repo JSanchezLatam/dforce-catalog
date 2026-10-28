@@ -89,6 +89,22 @@ describe("DndBoard drag", () => {
     expect(within(section("En progreso")).getByText("IP")).toBeInTheDocument();
   });
 
+  // dnd-kit keys its registry by id and an unmount deletes the entry whose key is the unmounting hook's
+  // (@dnd-kit/core core.esm.js:3416-3429). A second useDraggable for the same id (the overlay's card) would replace the
+  // original's entry and delete it on drop, leaving the next drag of that card without a node. jsdom cannot see the
+  // symptom (rect/position), so this pins the registry itself.
+  it("a drag leaves the dragged card registered: the overlay copy registers no draggable of its own", async () => {
+    const del = vi.spyOn(Map.prototype, "delete");
+    const set = vi.spyOn(Map.prototype, "set");
+    render(<KanbanBoard initial={snapshot()} canMove />);
+    const registered = () => set.mock.calls.filter(([k, v]) => k === "IP" && typeof v === "object" && v !== null && "activatorNode" in v).length;
+    const before = registered();
+    await drag("IP", "En diagnóstico"); // illegal drop: the drag ends, the overlay unmounts
+    await waitFor(() => expect(screen.queryByText("No se puede mover acá")).toBeNull());
+    expect(registered()).toBe(before);
+    expect(del.mock.calls.filter(([k]) => k === "IP")).toHaveLength(0);
+  });
+
   it("a técnico (canMove false) has no grip", () => {
     render(<KanbanBoard initial={snapshot()} canMove={false} />);
     expect(document.querySelector("[title='Arrastrar']")).toBeNull();

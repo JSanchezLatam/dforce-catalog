@@ -17,7 +17,7 @@ import { deriveBoard, filterCards, type KanbanFilter } from "./derive";
 import { ConfirmMoveDialog } from "./ConfirmMoveDialog";
 import { EsperaDialog } from "./EsperaDialog";
 import { IncompleteDialog } from "./IncompleteDialog";
-import { KanbanCardView } from "./KanbanCard";
+import { KanbanCardBody, KanbanCardView } from "./KanbanCard";
 import { moveOrder, setUrgent } from "./mutations";
 import { applyOverrides, type Override } from "./overrides";
 import { planMove } from "./plan";
@@ -191,7 +191,7 @@ export function KanbanBoard({ initial, canMove }: { initial: KanbanSnapshot; can
 
       <DndBoard cards={rows} columns={COLUMNS} onDrop={onMove} overlay={(c) => (
         <ul inert className="rotate-[2.5deg] scale-[1.03] cursor-grabbing rounded-xl shadow-2xl">
-          <KanbanCardView card={c} generatedAt={snapshot.generatedAt} canMove={false} onMove={onMove} onUrgent={() => {}} />
+          <KanbanCardBody card={c} generatedAt={snapshot.generatedAt} canMove={false} onMove={onMove} onUrgent={() => {}} />
         </ul>
       )}>
       <div ref={scroller} onScroll={(e) => setActive(Math.round(e.currentTarget.scrollLeft / (step(e.currentTarget) || 1)))} className="relative flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3">
