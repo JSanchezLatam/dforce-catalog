@@ -56,7 +56,7 @@ const ORDEN: OrdenServicio = {
   id: "o1", clienteId: "c1", vehiculoId: "v1", status: "open", categoria: "revisado",
   description: null, appointmentAt: null, completedAt: null,
   hallazgos: null, recomendaciones: null, observaciones: null,
-  kilometraje: null, nivelCombustible: null, bateriaPct: null,
+  kilometraje: null, nivelCombustible: null, bateriaPct: null, urgenteAt: null, urgenteBy: null,
   createdAt: new Date("2026-05-01T14:00:00Z"), updatedAt: new Date("2026-05-01T14:00:00Z"),
   esperaMotivo: null,
   createdBy: null,

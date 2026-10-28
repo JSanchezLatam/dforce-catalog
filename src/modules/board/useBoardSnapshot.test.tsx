@@ -179,3 +179,88 @@ describe("useBoardSnapshot", () => {
     });
   });
 });
+
+describe("useBoardSnapshot seq and refresh", () => {
+  it("seq counts good snapshots only: a failed poll does not move it", async () => {
+    fetchMock.mockImplementationOnce(async () => json(NEXT));
+    fetchMock.mockImplementationOnce(async () => json({ error: "down" }, 500));
+    fetchMock.mockImplementation(async () => json(FIRST));
+    const { result } = renderHook(() => useBoardSnapshot("/api/board/clientes", FIRST));
+    expect(result.current.seq).toBe(0);
+
+    await tick(30_000);
+    expect(result.current.seq).toBe(1);
+    await tick(30_000);
+    expect(result.current.seq).toBe(1);
+    await tick(30_000);
+    expect(result.current.seq).toBe(2);
+  });
+
+  it("refresh() fetches at once, takes the snapshot, bumps seq and adds no timer", async () => {
+    fetchMock.mockImplementation(async () => json(NEXT));
+    const { result } = renderHook(() => useBoardSnapshot("/api/board/clientes", FIRST));
+
+    await act(async () => result.current.refresh());
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith("/api/board/clientes", { cache: "no-store" });
+    expect(result.current.snapshot).toEqual(NEXT);
+    expect(result.current.seq).toBe(1);
+    expect(vi.getTimerCount()).toBe(1); // the poll only
+    await tick(30_000);
+    expect(fetchMock).toHaveBeenCalledTimes(2); // cadence untouched
+  });
+
+  it("refresh() during a poll in flight waits for it, then fetches once more (never overlaps)", async () => {
+    let release!: (r: Response) => void;
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((r) => (release = r)));
+    fetchMock.mockImplementation(async () => json(NEXT));
+    const { result } = renderHook(() => useBoardSnapshot("/api/board/clientes", FIRST));
+
+    await tick(30_000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await act(async () => result.current.refresh());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => release(json(FIRST)));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.current.snapshot).toEqual(NEXT);
+    expect(result.current.seq).toBe(2);
+  });
+
+  it("refresh() after unmount sends nothing", () => {
+    const { result, unmount } = renderHook(() => useBoardSnapshot("/api/board/clientes", FIRST));
+    const { refresh } = result.current;
+    unmount();
+    refresh();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("a queued refresh is dropped when the poll in flight answers 401: it leaves, it does not refetch", async () => {
+    let release!: (r: Response) => void;
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((r) => (release = r)));
+    fetchMock.mockImplementation(async () => json(NEXT));
+    const { result } = renderHook(() => useBoardSnapshot("/api/board/clientes", FIRST));
+
+    await tick(30_000);
+    await act(async () => result.current.refresh());
+    await act(async () => release(json({}, 401)));
+
+    expect(assign).toHaveBeenCalledWith("/login");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("refresh is the same function on every render", () => {
+    const { result, rerender } = renderHook(() => useBoardSnapshot("/api/board/clientes", FIRST));
+    const first = result.current.refresh;
+    rerender();
+    expect(result.current.refresh).toBe(first);
+  });
+
+  it("refresh() on a 401 leaves for /login, like a poll", async () => {
+    fetchMock.mockImplementation(async () => json({}, 401));
+    const { result } = renderHook(() => useBoardSnapshot("/api/board/clientes", FIRST));
+    await act(async () => result.current.refresh());
+    expect(assign).toHaveBeenCalledWith("/login");
+  });
+});

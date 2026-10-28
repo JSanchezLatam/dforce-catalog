@@ -18,6 +18,10 @@ const poisoned = (extra: Partial<BoardOrderRow> = {}): BoardOrderRow =>
     esperaMotivo: null,
     updatedAt: T0,
     appointmentAt: null,
+    urgenteAt: null,
+    // selected for the kanban mapper only: the TV rows must never carry them
+    vehiculoId: LEAK,
+    categoria: LEAK,
     plate: "AB1234",
     make: "Toyota",
     model: "Hilux",
@@ -51,7 +55,7 @@ describe("workshop board mapper: toBoardSnapshot()", () => {
   it("row keys equal the whitelist exactly", () => {
     const [r] = toBoardSnapshot([poisoned()], [], [], NOW).rows;
 
-    expect(Object.keys(r).sort()).toEqual(["holdReason", "make", "model", "plate", "status", "statusLabel", "statusSince", "technicians"]);
+    expect(Object.keys(r).sort()).toEqual(["holdReason", "make", "model", "plate", "status", "statusLabel", "statusSince", "technicians", "urgent"]);
     expect(r).toEqual({
       status: "in_progress",
       statusLabel: "En progreso",
@@ -61,7 +65,32 @@ describe("workshop board mapper: toBoardSnapshot()", () => {
       holdReason: null,
       technicians: [],
       statusSince: T0.toISOString(),
+      urgent: false,
     });
+  });
+
+  it("Urgent flag reaches the row as a boolean, and the flagging timestamp does not", () => {
+    const flaggedAt = new Date("2026-10-26T13:00:00.000Z");
+    const rows = toBoardSnapshot([row("a", "open", { urgenteAt: flaggedAt }), row("b", "open")], [], [], NOW).rows;
+
+    expect(rows.map((r) => r.urgent)).toEqual([true, false]);
+    expect(JSON.stringify(rows)).not.toContain(flaggedAt.toISOString());
+  });
+
+  it("Urgent first within a status: a newer urgent row precedes an older non-urgent one", () => {
+    const old = new Date("2026-10-26T08:00:00.000Z");
+    const rows = toBoardSnapshot(
+      [row("old", "in_progress", { updatedAt: old }), row("hot", "in_progress", { updatedAt: T0, urgenteAt: T0 }), row("d", "open")],
+      [],
+      [],
+      NOW,
+    ).rows;
+
+    expect(rows.map((r) => [r.status, r.urgent, r.statusSince])).toEqual([
+      ["open", false, T0.toISOString()],
+      ["in_progress", true, T0.toISOString()],
+      ["in_progress", false, old.toISOString()],
+    ]);
   });
 
   it("Hold reason only while on hold: on_hold shows the Spanish label, in_progress carries none", () => {
