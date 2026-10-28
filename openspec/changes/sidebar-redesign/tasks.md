@@ -57,9 +57,9 @@ Conventions for every WU:
 
 ## WU3: Search core
 
-- [ ] 3.1 RED `nav-search.test.ts`: `fold("Órdenes") === "ordenes"`; blank query returns the input unchanged; "pantalla" keeps Tablero with its two matching children only; "tablero" keeps all three children; "ven" keeps Vencimientos and Inventario and drops empty groups; the real `getNavGroups(tecnico)` with "usuarios" yields `[]`; `firstHref` follows display order ("clien" → `/tablero/clientes`); `highlight("Órdenes en curso", "ordenes")` returns `{before: "", match: "Órdenes", after: " en curso"}`.
-- [ ] 3.2 GREEN `nav-search.ts` (D6).
-- [ ] 3.3 Verify: mutation-verify the parent self-match branch, the empty-group drop and the accent strip.
+- [x] 3.1 RED `nav-search.test.ts`: `fold("Órdenes") === "ordenes"`; blank query returns the input unchanged; "pantalla" keeps Tablero with its two matching children only; "tablero" keeps all three children; "ven" keeps Vencimientos and Inventario and drops empty groups; the real `getNavGroups(tecnico)` with "usuarios" yields `[]`; `firstHref` follows display order ("clien" → `/tablero/clientes`); `highlight("Órdenes en curso", "ordenes")` returns `{before: "", match: "Órdenes", after: " en curso"}`.
+- [x] 3.2 GREEN `nav-search.ts` (D6).
+- [x] 3.3 Verify: mutation-verify the parent self-match branch, the empty-group drop and the accent strip.
 
 ## WU4a: Search box
 
