@@ -394,6 +394,18 @@ describe("AppSidebar — nav restyle (sidebar-redesign WU2)", () => {
     expect(current.map((l) => l.textContent)).toEqual(["Pantalla de clientes"]);
   });
 
+  it("a search that hides the current child does not move the current mark to a shorter sibling", async () => {
+    // Searching "taller" on /tablero/clientes leaves only /tablero under Tablero; a prefix match over the FILTERED list would mark it.
+    nav.pathname = "/tablero/clientes";
+    const user = userEvent.setup();
+    renderNav(TABLERO);
+
+    await user.type(screen.getByRole("textbox", { name: "Buscar en el menú" }), "taller");
+
+    expect(screen.getByRole("link", { name: /Pantalla del taller/ })).not.toHaveAttribute("aria-current");
+    expect(screen.getAllByRole("link").filter((l) => l.getAttribute("aria-current") === "page")).toEqual([]);
+  });
+
   it("a top-level link on its own page carries aria-current, and only that one", () => {
     nav.pathname = "/customers";
     renderNav(NAV_GROUPS);

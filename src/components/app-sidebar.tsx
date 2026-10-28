@@ -123,18 +123,18 @@ function NavLinkItem({ item, query }: { item: NavLink; query: string }) {
 
 function NavParentExpanded({
   parent,
+  activeHref,
   query,
   open,
   onOpenChange,
 }: {
   parent: NavParent
+  activeHref: string | undefined
   query: string
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const pathname = usePathname()
   const Icon = ICON_MAP[parent.icon] || Package
-  const activeHref = activeChildHref(parent.children, pathname)
 
   return (
     <SidebarMenuItem>
@@ -172,10 +172,8 @@ function NavParentExpanded({
   )
 }
 
-function NavParentCollapsed({ parent }: { parent: NavParent }) {
-  const pathname = usePathname()
+function NavParentCollapsed({ parent, activeHref }: { parent: NavParent; activeHref: string | undefined }) {
   const Icon = ICON_MAP[parent.icon] || Package
-  const activeHref = activeChildHref(parent.children, pathname)
 
   return (
     <SidebarMenuItem>
@@ -211,12 +209,14 @@ function NavGroupSection({
   collapseState,
   onToggleGroup,
   query,
+  activeByParent,
 }: {
   group: NavGroup
   collapsed: boolean
   collapseState: NavCollapseState
   onToggleGroup: (id: string, open: boolean) => void
   query: string
+  activeByParent: Map<string, string | undefined>
 }) {
   const labelId = React.useId()
   // While searching, everything renders open and toggling is a no-op, so the saved cookie state is never touched.
@@ -230,11 +230,12 @@ function NavGroupSection({
     return group.items.map((item) => {
       if (item.kind === "parent") {
         return collapsed ? (
-          <NavParentCollapsed key={item.id} parent={item} />
+          <NavParentCollapsed key={item.id} parent={item} activeHref={activeByParent.get(item.id)} />
         ) : (
           <NavParentExpanded
             key={item.id}
             parent={item}
+            activeHref={activeByParent.get(item.id)}
             query={query}
             open={isOpen(item.id)}
             onOpenChange={(open) => toggle(item.id, open)}
@@ -306,6 +307,15 @@ export function AppSidebar({
   const { state } = useSidebar()
   const [query, setQuery] = React.useState("")
   const visibleGroups = React.useMemo(() => filterNavGroups(navGroups, query), [navGroups, query])
+  const pathname = usePathname()
+  // From the UNFILTERED children: a search that hides /tablero/clientes must not hand the mark to /tablero.
+  const activeByParent = React.useMemo(
+    () =>
+      new Map(
+        navGroups.flatMap((g) => g.items).flatMap((i) => (i.kind === "parent" ? [[i.id, activeChildHref(i.children, pathname)] as const] : [])),
+      ),
+    [navGroups, pathname],
+  )
   const collapsed = state === "collapsed"
 
   // Lifted so every group/parent collapsible writes into the SAME
@@ -356,6 +366,7 @@ export function AppSidebar({
               collapseState={collapseState}
               onToggleGroup={handleToggleGroup}
               query={query}
+              activeByParent={activeByParent}
             />
           ))
         )}
