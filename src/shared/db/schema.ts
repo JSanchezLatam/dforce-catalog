@@ -566,11 +566,16 @@ export const ordenServicio = pgTable(
     kilometraje: integer("kilometraje"),
     nivelCombustible: smallint("nivel_combustible"),
     bateriaPct: smallint("bateria_pct"),
+    // kanban-board — the manual "Urgente" flag: latest set only, no history. Deleting the setter
+    // NULLs `urgenteBy` (the CHECK below allows it) and the flag stays.
+    urgenteAt: timestamp("urgente_at", { withTimezone: true }),
+    urgenteBy: text("urgente_by").references(() => users.id, { onDelete: "set null" }),
     createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    check("orden_urgente_by_needs_at", sql`${table.urgenteBy} IS NULL OR ${table.urgenteAt} IS NOT NULL`),
     check("orden_kilometraje_range", sql`${table.kilometraje} between 0 and 2000000`),
     check("orden_nivel_combustible_range", sql`${table.nivelCombustible} between 0 and 4`),
     check("orden_bateria_pct_range", sql`${table.bateriaPct} between 0 and 100`),

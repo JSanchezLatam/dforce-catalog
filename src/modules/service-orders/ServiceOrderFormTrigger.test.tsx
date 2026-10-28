@@ -108,7 +108,7 @@ const EXISTING_ORDER: OrdenServicio = {
   observaciones: null,
   kilometraje: null,
   nivelCombustible: null,
-  bateriaPct: null,
+  bateriaPct: null, urgenteAt: null, urgenteBy: null,
   esperaMotivo: null,
   createdBy: "u1",
   createdAt: new Date("2026-09-01T10:00:00Z"),
