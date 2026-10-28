@@ -1,7 +1,7 @@
 "use client";
 
-import { CalendarDays, ChevronLeft, ChevronRight, CircleCheck, Clock, Eye, Flame, Pause, User, Wrench, type LucideIcon } from "lucide-react";
-import { createElement, useEffect, useRef, useState } from "react";
+import { CalendarDays, ChevronLeft, ChevronRight, CircleCheck, Clock, Eye, Flame, Pause, RefreshCw, User, Wrench, type LucideIcon } from "lucide-react";
+import { createElement, useEffect, useRef, useState, type CSSProperties } from "react";
 
 import { cn } from "@/lib/utils";
 import { compareInColumn } from "@/modules/board/sort";
@@ -61,7 +61,7 @@ export function KanbanBoard({ initial, canMove }: { initial: KanbanSnapshot; can
   const scroller = useRef<HTMLDivElement>(null);
 
   const rows = applyOverrides(snapshot.rows, overrides, seq).filter((c) => (COLUMNS as readonly string[]).includes(c.status));
-  const { kpis, counts } = deriveBoard(rows, snapshot.generatedAt);
+  const { kpis, subs, counts } = deriveBoard(rows, snapshot.generatedAt);
   const shown = filterCards(rows, filter);
   const byStatus = (s: OrderStatus) => shown.filter((c) => c.status === s).sort(compareInColumn);
   // Healthy: polls land every 30 s. The hook ticks `now` only while failing and render may not read Date.now().
@@ -134,13 +134,24 @@ export function KanbanBoard({ initial, canMove }: { initial: KanbanSnapshot; can
               </span>
             )}
           </h1>
-          <p className="text-sm text-muted-foreground">{`Estado de las órdenes del taller.${canMove ? "" : " Los cambios de estado los hace el jefe de taller."}`}</p>
+          <p className="text-sm text-muted-foreground">{canMove ? (
+              // Drag is desktop and tablet only (the grip is hidden below md), so the phone gets the neutral line.
+              <>
+                <span className="max-md:hidden">Arrastrá una tarjeta a otra columna para cambiar su estado.</span>
+                <span className="md:hidden">Estado de las órdenes del taller.</span>
+              </>
+            ) : (
+              "Estado de las órdenes del taller. Los cambios de estado los hace el jefe de taller."
+            )}</p>
         </div>
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
             <span aria-hidden="true" className="size-2 rounded-full bg-emerald-500" />
             {`Actualizado hace ${updated}`}
           </span>
+          <button type="button" aria-label="Actualizar" className={cn(control, "md:hidden")} onClick={refresh}>
+            <RefreshCw aria-hidden="true" className="size-4.5" />
+          </button>
           <div className="flex divide-x rounded-lg border bg-card max-md:hidden">
             {ARROWS.map(({ label, dir, icon: Icon }) => (
               <button key={label} type="button" aria-label={label} className={control} onClick={() => scroller.current?.scrollBy({ left: dir * step(scroller.current), behavior: "smooth" })}>
@@ -158,6 +169,7 @@ export function KanbanBoard({ initial, canMove }: { initial: KanbanSnapshot; can
             <div>
               <div className="text-xs font-medium text-muted-foreground">{label}</div>
               <div className={cn("text-xl font-bold tabular-nums sm:text-[26px] sm:leading-8", key === "urgent" && "text-urgent")}>{kpis[key]}</div>
+              {subs[key] && <div className="text-[11px] leading-tight text-muted-foreground">{subs[key]}</div>}
             </div>
           </div>
         ))}
@@ -181,7 +193,9 @@ export function KanbanBoard({ initial, canMove }: { initial: KanbanSnapshot; can
             key={s} type="button" aria-pressed={active === i} onClick={() => goTo(i)}
             className={cn("-mb-px flex min-h-11 shrink-0 items-center gap-1.5 border-b-2 px-2.5 text-sm", active === i ? "border-foreground font-semibold" : "border-transparent text-muted-foreground")}
           >
-            {createElement(STATUS_HUE[s].icon, { "aria-hidden": true, className: "size-4" })}
+            <span className="board-hue-tile grid size-6 place-items-center rounded-md" style={{ "--h": String(STATUS_HUE[s].h), "--s": STATUS_HUE[s].s } as CSSProperties}>
+              {createElement(STATUS_HUE[s].icon, { "aria-hidden": true, className: "size-3.5" })}
+            </span>
             {ORDER_STATUS_LABEL[s]}
             <span className="rounded-full bg-muted px-1.5 text-xs font-bold">{byStatus(s).length}</span>
           </button>
@@ -194,6 +208,7 @@ export function KanbanBoard({ initial, canMove }: { initial: KanbanSnapshot; can
           <KanbanCardBody card={c} generatedAt={snapshot.generatedAt} canMove={false} onMove={onMove} onUrgent={() => {}} />
         </ul>
       )}>
+      <div className="relative">
       <div ref={scroller} onScroll={(e) => setActive(Math.round(e.currentTarget.scrollLeft / (step(e.currentTarget) || 1)))} className="relative flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3">
         {COLUMNS.map((s) => {
           const cards = byStatus(s);
@@ -204,6 +219,9 @@ export function KanbanBoard({ initial, canMove }: { initial: KanbanSnapshot; can
             </DropColumn>
           );
         })}
+      </div>
+      {/* Decorative: says "there is more to the right" on a desktop scroller; the phone shows one column. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-r from-transparent to-board-canvas max-md:hidden" />
       </div>
       </DndBoard>
       {ask?.kind === "ask-reason" && <EsperaDialog card={ask.card} onConfirm={confirm} onClose={close} />}

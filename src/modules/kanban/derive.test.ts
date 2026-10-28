@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { OrderStatus } from "@/modules/service-orders/transitions";
-import { deriveBoard, filterCards, type KanbanFilter } from "./derive";
+import { ageLabel, deriveBoard, filterCards, type KanbanFilter } from "./derive";
 import type { KanbanCard } from "./shape";
 
 // 09:00 on 2026-10-27 in Panama (UTC-5).
@@ -80,5 +80,51 @@ describe("filterCards()", () => {
     ["on_hold", 1],
   ] as [KanbanFilter, number][])("%s keeps %i card(s)", (filter, count) => {
     expect(filterCards(rows, filter)).toHaveLength(count);
+  });
+});
+
+describe("deriveBoard() sub-captions", () => {
+  const subs = (rows: KanbanCard[]) => deriveBoard(rows, NOW).subs;
+
+  it("counts distinct in-shop states, singular for one, nothing for none", () => {
+    expect(subs([card("open"), card("open"), card("diagnosing"), card("booked")]).inShop).toBe("en 2 estados");
+    expect(subs([card("open"), card("open")]).inShop).toBe("en 1 estado");
+    expect(subs([card("booked")]).inShop).toBeNull();
+  });
+
+  it("names the distinct hold reasons, lower-cased, and ignores a card with none", () => {
+    const hold = (holdReason: string | null) => card("on_hold", { holdReason });
+    expect(subs([hold("Repuesto"), hold("Aprobación del cliente"), hold("Repuesto")]).onHold).toBe("repuesto y aprobación del cliente");
+    expect(subs([hold(null)]).onHold).toBeNull();
+    expect(subs([card("open")]).onHold).toBeNull();
+  });
+
+  it("gives the latest completion today, the next appointment still ahead and the oldest overdue, in Panama time", () => {
+    const rows = [
+      card("done", { statusSince: "2026-10-27T13:15:00.000Z" }), // 08:15
+      card("done", { statusSince: "2026-10-27T14:00:00.000Z" }), // 09:00
+      card("done", { statusSince: "2026-10-26T20:00:00.000Z" }), // yesterday, ignored
+      booked("2026-10-27T20:30:00.000Z"), // 15:30, ahead
+      booked("2026-10-27T16:00:00.000Z"), // 11:00, the next one
+      booked("2026-10-27T12:00:00.000Z"), // 07:00, overdue
+      booked("2026-10-27T13:30:00.000Z"), // 08:30, overdue
+    ];
+    expect(subs(rows)).toMatchObject({ doneToday: "última 09:00", bookedToday: "próxima 11:00", overdue: "desde 07:00" });
+  });
+
+  it("dates an overdue appointment from an earlier day, and has no caption without data", () => {
+    expect(subs([booked("2026-10-26T20:00:00.000Z")]).overdue).toBe("desde 26/10 15:00");
+    expect(subs([card("open")])).toMatchObject({ doneToday: null, bookedToday: null, overdue: null });
+  });
+});
+
+describe("ageLabel()", () => {
+  it("spells days out, singular and plural, and leaves minutes and hours as the TV prints them", () => {
+    const ago = (ms: number) => new Date(Date.parse(NOW) - ms).toISOString();
+    const MIN = 60_000;
+    expect(ageLabel(ago(15 * MIN), NOW)).toBe("15 min");
+    expect(ageLabel(ago(5 * 60 * MIN), NOW)).toBe("5 h");
+    expect(ageLabel(ago(24 * 60 * MIN), NOW)).toBe("1 día");
+    expect(ageLabel(ago(3 * 24 * 60 * MIN), NOW)).toBe("3 días");
   });
 });

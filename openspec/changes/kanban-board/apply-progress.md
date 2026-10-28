@@ -166,3 +166,19 @@ One PR, 225 changed lines (+157/-68): `primitives.tsx` (+`tv` scale prop on `Col
 Mutations (each reverted, red by name): urgent badge removed: "an urgent row carries the Urgente badge ..."; `urgent={false}` was a PLACEBO (passed), repaired with the `border-urgent/45` assertions, now red; hold via `cardAlert`: "shows the hold reason only on an on_hold row", "the hold reason sits in the amber strip ..."; alert dropped: same two; count 0: 9 tests; control injected: "carries no control"; slice removed / `+N` removed: "clips a long column ..."; Car icon removed: "a card is plate, vehicle (with its icon) ..."; count capped to 8: "the header counts every order ..."; `compareInColumn` urgent term removed: "puts an urgent card before ...", "Urgent first within a status ...".
 
 Gates: `npm test` 273 files / 4100 tests; `npx tsc --noEmit` clean; lint 0 errors / 13 warnings.
+
+## WU7b polish (task 3b.6) - done except the ticking counter, browser check pending
+
+Branch `feat/kanban-board-wu7b-polish`, 144 changed lines in 6 files (src + tests), under budget. Copy and markup matched to the approved mockup (frames 1, 6, 7).
+
+- KPI sub-captions: `deriveBoard` returns `subs` beside `kpis` (pure, from `generatedAt`, Panama time via `formatBoardTime`, never the clock): "en N estado(s)" (distinct in-shop states), "marcadas a mano", hold reasons lower-cased and joined with " y ", "ultima HH:MM" (latest done today), "proxima HH:MM" (earliest booked today still ahead), "desde HH:MM" (oldest overdue; carries "dd/mm" when it is from an earlier day). `null` renders nothing. Not in the phone KPI strip (mockup compact variant omits them too).
+- Right-edge fade: `aria-hidden`, `pointer-events-none`, `max-md:hidden` overlay in a new `relative` wrapper around the scroller (the phone shows one column).
+- Phone tabs: `board-hue-tile` span with the status's `--h/--s`, same as the column header.
+- Phone "Actualizar": `md:hidden`, `size-11`, calls the hook's `refresh()` (the same path moves use). Icon-only with `aria-label`, as the mockup; `RefreshListButton` was not reused (it calls `router.refresh()`, which this client-polled board ignores).
+- Ticking "Actualizado hace N s": KEPT as "menos de 30 s" when healthy. The hook ticks `now` only while failing; ticking while healthy needs an always-on timer in the shared poller (re-rendering every TV board) or a timer here (banned by kanban-safety). Needs an owner decision if wanted.
+- "hace 1 dia": `ageLabel` in `kanban/derive.ts` wraps `formatAge` (TV output and its pinned tests untouched). The alert strip text ("Cita vencida - hace 1 h") still uses the shared `agoText`.
+- Subtitle: "Arrastra una tarjeta a otra columna para cambiar su estado." for `canMove`; the tecnico keeps the read-only line.
+
+Mutations (each reverted, red by name): plural "estado" swapped: "counts distinct in-shop states ..."; hold reason not lower-cased: "names the distinct hold reasons ..."; "proxima" without the still-ahead filter: "gives the latest completion today ..."; overdue date dropped: "dates an overdue appointment from an earlier day ..."; singular/plural dia swapped: "spells days out ..." and "spells a day-old card out ..."; card back on `formatAge`: "spells a day-old card out ..." (plus a suite-wide red from the dropped import); sub-caption render off: "captions each KPI ..."; `aria-hidden` and `pointer-events-none` removed: "decorates the column scroller ..."; tile removed: "tints each phone tab ..."; `onClick` emptied or `size-11` dropped: "the Actualizar button is 44x44 ..."; subtitle forced off: "tells a mover that dragging works ...". Not covered by a test: `max-md:hidden` / `md:hidden` (jsdom matches no media query).
+
+Gates: `npm test` 273 files / 4111 tests; `npx tsc --noEmit` clean; lint 0 errors / 13 warnings.
