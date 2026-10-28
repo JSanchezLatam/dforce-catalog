@@ -111,3 +111,18 @@ Mutations run (each reverted; failing tests named). Half A: `canMove &&` dropped
 - Placebos found: none surviving. Three first-round mutations (toast order, rollback, error toast) reported green only because `sd -F` silently skips a multi-line pattern; redone with a script, all red by name.
 
 Gates: `npm test` 270 files / 4066 tests; `npx tsc --noEmit` clean; lint 0 errors / 13 warnings. No DB work. Browser check (4b.4) still open: see the report.
+
+## WU5: Urgent item and phone sheet (tasks 5.1, 5.2; 5.3 unit/mutation part) - done, browser check pending
+
+One PR, 340 changed lines (88 added / 18 removed in five existing files; new `MoveSheet.tsx` 63, `MoveSheet.test.tsx` 63, `KanbanBoard.urgent.test.tsx` 108).
+
+- `menuItems(card, canMove)` now returns `{ targets, cancel, urgent }`; `urgent` is `"mark" | "clear" | null`, null for a técnico and for a `done` card (the server answers 409 `order_closed`, so the toggle is not offered). Order in the menu: Mover a…, urgent, Ver orden, Cancelar orden.
+- Board: `sendUrgent` mirrors `send`: optimistic `urgent` override (merged over the card's existing override so a confirmed move is not lost), `setUrgent`, rollback to the previous override plus the server's own error line on failure (incl. the 409 `order_closed` message), success toast above `refresh()`. Same in-flight guard as moves.
+- `matchMedia` (design D12): read ONLY in the menu's open request (`onOpenChange`), never in render. The query is `(max-width: 767px)`, the exact complement of the agenda's `min-width: 768px`, so the jsdom shim (`matches: false`) means "wide" and the 4b tests keep exercising the dropdown. Narrow opens `MoveSheet` (`Sheet side="bottom"`, own 44px "Cerrar"), wide opens the controlled dropdown.
+- `MoveSheet` shares `menuItems`; header = plate (or "Sin placa") + Urgente badge, description = make, model, status. Rows `min-h-11`. Hue icons on the target rows come from `STATUS_HUE`; the mockup's coloured hue tiles were not copied.
+- No-drag-on-phone is vacuous until WU6 (no draggable exists yet); WU6 must test it.
+- Known limit: a move started right after an urgent toggle replaces the card's override, so for up to two polls the urgent badge can fall back to the last polled value. Not fixed (WU4b `send` untouched).
+
+Mutations (each reverted, failing tests named): `canMove` dropped from `urgent`: "a técnico (canMove false) sees only Ver orden", "a técnico gets only Ver orden; a done card gets no toggle", "offers the urgent toggle in the direction ..."; `done` check dropped: "a done card has no toggle", "a done card offers no toggle even for the jefe", "a técnico and a done card get no toggle"; desmarcada copy swapped: "clearing DELETEs and toasts the desmarcada copy"; rollback removed: "a 409 order_closed rolls the card back ..."; toast after refresh: "marking POSTs, sorts the card first ... BEFORE the refresh goes out"; always-menu: "a narrow viewport opens the bottom sheet ..." and "on a phone the same row lives in the bottom sheet and closes it"; always-sheet: 23 failures; optimistic override removed: PLACEBO first (the fetch resolved instantly), repaired with "the card is sorted first and badged while the request is still in flight", now red; sheet row height, close-on-choose, `side`, `canMove` forced true: each red in `MoveSheet.test.tsx`; POST/DELETE verb: "POSTs to mark and DELETEs to clear" and the DELETE board test.
+
+Gates: `npm test` 272 files / 4084 tests; `npx tsc --noEmit` clean; lint 0 errors / 13 warnings.

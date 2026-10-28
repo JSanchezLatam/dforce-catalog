@@ -90,9 +90,9 @@ Conventions for every WU: Strict TDD (RED confirmed failing by name, then GREEN)
 
 ## WU5: Urgent item and phone sheet
 
-- [ ] 5.1 RED then GREEN "Marcar como urgente"/"Quitar urgente" in `CardMenu.tsx` (gated by `canMove`): optimistic badge, sort first, toasts "Orden marcada como urgente" / "Orden desmarcada como urgente", rollback with error toast.
-- [ ] 5.2 RED `kanban/MoveSheet.test.tsx`: narrow viewport opens `Sheet side="bottom"` headed by plate and status; "Mover a" group of legal targets, urgent toggle, "Ver orden", "Cancelar orden"; rows 44x44; no draggable on phone. GREEN `kanban/MoveSheet.tsx`, sharing `menuItems`.
-- [ ] 5.3 Verify: unit; mutation-verify gating; browser at 390 (sheet, no drag), 768 (menu), light+dark, sheet console clean.
+- [x] 5.1 RED then GREEN "Marcar como urgente"/"Quitar urgente" in `CardMenu.tsx` (gated by `canMove`): optimistic badge, sort first, toasts "Orden marcada como urgente" / "Orden desmarcada como urgente", rollback with error toast.
+- [x] 5.2 RED `kanban/MoveSheet.test.tsx`: narrow viewport opens `Sheet side="bottom"` headed by plate and status; "Mover a" group of legal targets, urgent toggle, "Ver orden", "Cancelar orden"; rows 44x44; no draggable on phone. GREEN `kanban/MoveSheet.tsx`, sharing `menuItems`.
+- [x] 5.3 Verified by the orchestrator 2026-10-27 at :3001 on seed-customer order `kanbancheck-3`: at 390 (dark and light) ⋯ opens the bottom sheet (rows and "Cerrar" 44px, closes on choose, toast "Orden marcada como urgente", POST persisted); at 1440 ⋯ opens the dropdown with "Quitar urgente" (toast "Orden desmarcada como urgente", DELETE persisted); no page horizontal scroll, no hydration warnings.
 
 ## WU6: Drag and drop
 
@@ -114,7 +114,11 @@ Conventions for every WU: Strict TDD (RED confirmed failing by name, then GREEN)
 - [ ] 8.3 `sdd-verify`, then merge the chain into the tracker in order and the tracker into main.
 - [ ] 8.4 `sdd-archive`: merge deltas into `openspec/specs/` (kanban-board new; service-orders and workshop-status-board MODIFIED); add a "Kanban" note to `AGENTS.md` only if a new standing decision emerged.
 
-## Follow-ups (out of scope)
+## Follow-ups
+
+- A move started right after an urgent toggle replaces the card's single override, so the badge can revert for up to two polls (WU5 note). Merge override fields per card if it shows in use.
+- "Mis órdenes" stays applied if a poll flips `onRoster` to false while the chip is hidden (GGA note on WU3b).
+- `order-urgent.e2e.test.ts` builds every request as POST, including clears; pass the method (GGA note on WU1). (out of scope)
 
 - Toggle Urgente from the order detail page (not mocked).
 - Urgent-flag history trail (latest who/when only).
