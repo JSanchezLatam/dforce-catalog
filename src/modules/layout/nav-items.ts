@@ -15,8 +15,18 @@ export type NavGroup = {
 };
 
 const TALLER_ITEMS: (NavLink | NavParent)[] = [
-  { kind: "link", href: "/tablero", label: "Tablero", icon: "board", action: "board.read" },
-  { kind: "link", href: "/kanban", label: "Kanban", icon: "kanban", action: "board.read" },
+  // No parent action: each child carries the one its page enforces, and filterItem drops the parent once all are hidden.
+  {
+    kind: "parent",
+    id: "tablero",
+    label: "Tablero",
+    icon: "board",
+    children: [
+      { kind: "link", href: "/kanban", label: "Órdenes en curso", icon: "kanban", action: "board.read" },
+      { kind: "link", href: "/tablero", label: "Pantalla del taller", icon: "board", action: "board.read" },
+      { kind: "link", href: "/tablero/clientes", label: "Pantalla de clientes", icon: "board", action: "board.customer" },
+    ],
+  },
   { kind: "link", href: "/agenda", label: "Agenda", icon: "agenda", action: "agenda.manage" },
   // One entry per viewer: `metrics.read` is admin/jefe, `metrics.self` the técnico only.
   { kind: "link", href: "/metrics", label: "Métricas", icon: "metrics", action: "metrics.read" },

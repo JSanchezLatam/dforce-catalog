@@ -28,7 +28,9 @@ describe("EsperaDialog", () => {
   it("keeps Pasar a En espera disabled until a reason is chosen, then confirms with that reason", async () => {
     const onConfirm = vi.fn();
     render(<EsperaDialog card={card()} onConfirm={onConfirm} onClose={vi.fn()} />);
-    expect(screen.getByRole("dialog", { name: "¿Por qué queda en espera?" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "¿Por qué queda en espera?" })).toHaveAccessibleDescription(
+      "El motivo se ve en la tarjeta y en la Pantalla del taller, junto con cuánto lleva esperando.",
+    );
     expect(screen.getByText("Falta que llegue una pieza")).toBeInTheDocument();
     const confirm = screen.getByRole("button", { name: "Pasar a En espera" });
     expect(confirm).toBeDisabled();

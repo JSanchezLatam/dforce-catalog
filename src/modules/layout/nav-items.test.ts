@@ -31,10 +31,10 @@ describe("getNavGroups() — grouped sidebar nav", () => {
   // The workshop-floor links live in their own group, first, in this order per role.
   it("Taller group holds Tablero, Agenda, Métricas, Mis números in that order, filtered per role", () => {
     const taller = (u: SessionUser) => getNavGroups(u).find((g) => g.label === "Taller")?.items.map((i) => i.label);
-    expect(taller(admin)).toEqual(["Tablero", "Kanban", "Agenda", "Métricas"]);
-    expect(taller(jefe)).toEqual(["Tablero", "Kanban", "Agenda", "Métricas"]);
-    expect(taller(tecnico)).toEqual(["Tablero", "Kanban", "Mis números"]);
-    expect(taller({ id: "p", role: "pantalla" } as SessionUser)).toBeUndefined();
+    expect(taller(admin)).toEqual(["Tablero", "Agenda", "Métricas"]);
+    expect(taller(jefe)).toEqual(["Tablero", "Agenda", "Métricas"]);
+    expect(taller(tecnico)).toEqual(["Tablero", "Mis números"]);
+    expect(taller({ id: "p", role: "pantalla" } as SessionUser)).toEqual(["Tablero"]);
   });
 
   it("Configuración group has pinBottom for admin", () => {
@@ -65,24 +65,33 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     expect(taller.items.map((i) => i.label)).not.toContain("Métricas");
   });
 
-  // workshop-status-board WU4: "Tablero" follows `board.read`, so the screen account never sees it.
-  it("Nav link by role: Tablero (/tablero) for administrador, jefe_taller and técnico, and for no other role", () => {
-    for (const user of [admin, jefe, tecnico]) {
+  // board-nav-group: one "Tablero" parent holds the three board views, each gated by the action its page enforces.
+  it("Tablero parent: Órdenes en curso, Pantalla del taller, Pantalla de clientes for administrador and jefe_taller", () => {
+    for (const user of [admin, jefe]) {
       const taller = getNavGroups(user).find((g) => g.label === "Taller")!;
-      expect(taller.items.find((i) => i.label === "Tablero")).toMatchObject({ href: "/tablero", icon: "board", action: "board.read" });
+      expect(taller.items.find((i) => i.label === "Tablero")).toEqual({
+        kind: "parent",
+        id: "tablero",
+        label: "Tablero",
+        icon: "board",
+        children: [
+          { kind: "link", href: "/kanban", label: "Órdenes en curso", icon: "kanban", action: "board.read" },
+          { kind: "link", href: "/tablero", label: "Pantalla del taller", icon: "board", action: "board.read" },
+          { kind: "link", href: "/tablero/clientes", label: "Pantalla de clientes", icon: "board", action: "board.customer" },
+        ],
+      });
     }
-    expect(getNavGroups({ id: "p", role: "pantalla" } as SessionUser)).toEqual([]);
   });
 
-  // kanban-board WU2: "Kanban" sits right below "Tablero" and follows the same `board.read`.
-  it("Nav link by role: Kanban (/kanban) directly below Tablero for administrador, jefe_taller and técnico, and for no other role", () => {
-    for (const user of [admin, jefe, tecnico]) {
-      const taller = getNavGroups(user).find((g) => g.label === "Taller")!;
-      const labels = taller.items.map((i) => i.label);
-      expect(labels.indexOf("Kanban")).toBe(labels.indexOf("Tablero") + 1);
-      expect(taller.items.find((i) => i.label === "Kanban")).toMatchObject({ href: "/kanban", icon: "kanban", action: "board.read" });
-    }
-    expect(getNavGroups({ id: "p", role: "pantalla" } as SessionUser)).toEqual([]);
+  // `board.customer` is false for the técnico, so /tablero/clientes would refuse them.
+  it("Tablero parent for técnico holds Órdenes en curso and Pantalla del taller, never Pantalla de clientes", () => {
+    expect(labelTree(getNavGroups(tecnico)).Taller[0]).toBe("Tablero [Órdenes en curso, Pantalla del taller]");
+  });
+
+  // `board.customer` is the screen account's one grant, so its tree holds only that child. It is
+  // never drawn: (app)/layout redirects pantalla before the shell (pinned in layout.test.tsx).
+  it("pantalla's tree is Taller > Tablero > Pantalla de clientes and nothing else", () => {
+    expect(labelTree(getNavGroups({ id: "p", role: "pantalla" } as SessionUser))).toEqual({ Taller: ["Tablero [Pantalla de clientes]"] });
   });
 
   // workshop-agenda WU1: "Agenda" follows `agenda.manage`; the glyph is its own (CalendarDays).
@@ -93,7 +102,7 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     }
     const taller = getNavGroups(tecnico).find((g) => g.label === "Taller")!;
     expect(taller.items.map((i) => i.label)).not.toContain("Agenda");
-    expect(getNavGroups({ id: "p", role: "pantalla" } as SessionUser)).toEqual([]);
+    expect(getNavGroups({ id: "p", role: "pantalla" } as SessionUser)[0].items.map((i) => i.label)).not.toContain("Agenda");
   });
 
   it("admin sees Catálogo items WITHOUT Inventario (Generar Catálogos, Catálogos Generados only)", () => {
@@ -173,16 +182,16 @@ describe("getNavGroups() — grouped sidebar nav", () => {
   // keeps these totals identical (that coincidence is exactly what let the
   // wrong grouping slip through review previously). Do not rely on these
   // alone to prove correct placement.
-  it("técnico sees only 7 total items across 3 groups", () => {
+  it("técnico sees only 6 total items across 3 groups", () => {
     const groups = getNavGroups(tecnico);
     const totalItems = groups.reduce((s, g) => s + g.items.length, 0);
-    expect(totalItems).toBe(7);
+    expect(totalItems).toBe(6);
   });
 
-  it("admin sees 14 total items across 4 groups", () => {
+  it("admin sees 13 total items across 4 groups", () => {
     const groups = getNavGroups(admin);
     const totalItems = groups.reduce((s, g) => s + g.items.length, 0);
-    expect(totalItems).toBe(14);
+    expect(totalItems).toBe(13);
   });
 
   // Stable ids decouple sidebar-group-collapse cookie state from display

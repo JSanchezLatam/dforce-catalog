@@ -127,7 +127,7 @@ export function KanbanBoard({ initial, canMove }: { initial: KanbanSnapshot; can
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className={cn("flex items-center gap-3", PAGE_HEADING)}>
-            Kanban
+            Órdenes en curso
             {!canMove && (
               <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
                 <Eye aria-hidden="true" className="size-3.5" />Solo lectura

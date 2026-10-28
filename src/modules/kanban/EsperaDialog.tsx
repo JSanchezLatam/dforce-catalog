@@ -20,7 +20,7 @@ export function EsperaDialog({ card, onConfirm, onClose }: { card: KanbanCard; o
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>¿Por qué queda en espera?</DialogTitle>
-          <DialogDescription>El motivo se ve en la tarjeta y en el Tablero, junto con cuánto lleva esperando.</DialogDescription>
+          <DialogDescription>El motivo se ve en la tarjeta y en la Pantalla del taller, junto con cuánto lleva esperando.</DialogDescription>
         </DialogHeader>
         <OrderLine card={card} />
         <div className="grid gap-2">

@@ -128,7 +128,7 @@ describe("KanbanBoard", () => {
 
   it("shows Solo lectura only when the viewer cannot move orders", () => {
     const { rerender } = render(<KanbanBoard initial={snapshot()} canMove={false} />);
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Solo lectura");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(/^Órdenes en cursoSolo lectura$/);
     rerender(<KanbanBoard initial={snapshot()} canMove />);
     expect(screen.getByRole("heading", { level: 1 })).not.toHaveTextContent("Solo lectura");
   });
