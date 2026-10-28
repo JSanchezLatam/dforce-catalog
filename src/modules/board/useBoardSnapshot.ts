@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const POLL_MS = 30_000;
 const TICK_MS = 10_000;
@@ -16,13 +16,20 @@ const looksLikeSnapshot = (v: unknown): v is Snapshot =>
  * A failed poll (network, non-2xx, a body that is not a snapshot) keeps the last good
  * snapshot and sets `failedAt`; 401 leaves for /login, 403 for / (the role-aware landing).
  * Plain timers and fetch only: the app is served over HTTP on the LAN.
+ *
+ * `seq` counts good snapshots (a failed poll leaves it alone); optimistic overrides settle against it
+ * instead of comparing clocks. `refresh()` fetches now through the same guard as the poll: if a request
+ * is in flight it runs once more right after, so it never overlaps and never adds a timer.
  */
 export function useBoardSnapshot<T extends Snapshot>(url: string, initial: T) {
-  const [state, setState] = useState<{ snapshot: T; lastOkAt: number; failedAt: number | null }>(() => ({
+  const [state, setState] = useState<{ snapshot: T; lastOkAt: number; failedAt: number | null; seq: number }>(() => ({
     snapshot: initial,
     lastOkAt: Date.now(),
     failedAt: null,
+    seq: 0,
   }));
+  const fetchNow = useRef<() => void>(() => {});
+  const refresh = useCallback(() => fetchNow.current(), []);
 
   // Live clock, running only while a failure is current: the banner measures against
   // it, not against the moment of the last failed poll (which can land at 59.6 s).
@@ -39,7 +46,8 @@ export function useBoardSnapshot<T extends Snapshot>(url: string, initial: T) {
   useEffect(() => {
     let inFlight = false;
     let alive = true;
-    const id = setInterval(async () => {
+    let again = false;
+    async function run() {
       if (inFlight) return;
       inFlight = true;
       try {
@@ -47,24 +55,35 @@ export function useBoardSnapshot<T extends Snapshot>(url: string, initial: T) {
         if (!alive) return;
         if (res.status === 401 || res.status === 403) {
           clearInterval(id);
+          again = false;
           location.assign(res.status === 401 ? "/login" : "/");
           return;
         }
         const body: unknown = res.ok ? await res.json() : null;
         if (!alive) return;
         if (!looksLikeSnapshot(body)) throw new Error("not a snapshot");
-        setState({ snapshot: body as T, lastOkAt: Date.now(), failedAt: null });
+        setState((s) => ({ snapshot: body as T, lastOkAt: Date.now(), failedAt: null, seq: s.seq + 1 }));
       } catch {
         if (alive) setState((s) => ({ ...s, failedAt: Date.now() }));
       } finally {
         inFlight = false;
+        if (again && alive) {
+          again = false;
+          void run();
+        }
       }
-    }, POLL_MS);
+    }
+    const id = setInterval(run, POLL_MS);
+    fetchNow.current = () => {
+      if (inFlight) again = true;
+      else void run();
+    };
     return () => {
       alive = false;
+      fetchNow.current = () => {};
       clearInterval(id);
     };
   }, [url]);
 
-  return { ...state, now };
+  return { ...state, now, refresh };
 }

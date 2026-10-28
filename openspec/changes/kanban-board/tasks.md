@@ -75,11 +75,11 @@ Conventions for every WU: Strict TDD (RED confirmed failing by name, then GREEN)
 
 ## WU4a: Move rules and client state
 
-- [ ] 4a.1 RED `kanban/plan.test.ts`: `noop`, `illegal`, `incomplete`, `ask-reason`, `confirm` (done, `ready_for_review→in_progress`, cancelled), `patch`; `legalTargets` excludes `cancelled`, `diagnosing`, `ready_for_review`. GREEN `kanban/plan.ts`.
-- [ ] 4a.2 RED `kanban/overrides.test.ts`: in-flight stale poll kept, dropped when row matches, dropped after 2 good snapshots, urgent override. GREEN `kanban/overrides.ts#applyOverrides`.
-- [ ] 4a.3 RED `kanban/mutations.test.ts` (wire-shaped fixtures): `moveOrder` returns `{ok, status}` from `orden.status`; 409 `stale_status` → "La orden cambió mientras la mirabas. Actualizá el tablero."; `errors.form ?? errors.esperaMotivo ?? message`; network → `CONNECTION_ERROR`; `setUrgent`. GREEN `kanban/mutations.ts`.
-- [ ] 4a.4 RED then GREEN `board/useBoardSnapshot.ts`: additive `seq` and `refresh()`; existing TV tests unchanged; fake-timer cadence still one request per 30 s.
-- [ ] 4a.5 Verify: unit; mutation-verify each plan branch and the 2-snapshot rule.
+- [x] 4a.1 RED `kanban/plan.test.ts`: `noop`, `illegal`, `incomplete`, `ask-reason`, `confirm` (done, `ready_for_review→in_progress`, cancelled), `patch`; `legalTargets` excludes `cancelled`, `diagnosing`, `ready_for_review`. GREEN `kanban/plan.ts`.
+- [x] 4a.2 RED `kanban/overrides.test.ts`: in-flight stale poll kept, dropped when row matches, dropped after 2 good snapshots, urgent override. GREEN `kanban/overrides.ts#applyOverrides`.
+- [x] 4a.3 RED `kanban/mutations.test.ts` (wire-shaped fixtures): `moveOrder` returns `{ok, status}` from `orden.status`; 409 `stale_status` → "La orden cambió mientras la mirabas. Actualizá el tablero."; `errors.form ?? errors.esperaMotivo ?? message`; network → `CONNECTION_ERROR`; `setUrgent`. GREEN `kanban/mutations.ts`.
+- [x] 4a.4 RED then GREEN `board/useBoardSnapshot.ts`: additive `seq` and `refresh()`; existing TV tests unchanged; fake-timer cadence still one request per 30 s.
+- [x] 4a.5 Verify: unit; mutation-verify each plan branch and the 2-snapshot rule.
 
 ## WU4b: Menu, dialogs, optimistic wiring
 
