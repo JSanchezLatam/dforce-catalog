@@ -152,3 +152,17 @@ Gates: `npm test` 273 files / 4092 tests; `npx tsc --noEmit` clean; lint 0 error
 - Overlay double registration (confirmed in source): `useDraggable` does `draggableNodes.set(id, {key,...})` and its cleanup deletes the entry when `node.key === key` (`@dnd-kit/core/dist/core.esm.js:3416-3429`). The overlay's `KanbanCardView` registered the same id with its own key, replacing the column card's entry, and its unmount deleted it. Trace: SET original, SET overlay, DEL on drop. Fix: `KanbanCard.tsx` split into `KanbanCardView` (draggable wrapper) + `KanbanCardBody` (presentational); the overlay renders `KanbanCardBody`.
 - jsdom could NOT reproduce a user-visible failure of a second drag (the second overlay re-registers the id), so the test pins the registry instead: "a drag leaves the dragged card registered ..." (`DndBoard.test.tsx`). Mutation (overlay back to `KanbanCardView`): red by name.
 - `OrderLine` (`ConfirmMoveDialog.tsx`, also used by `EsperaDialog`) printed the TV's "Sin vehículo" as the plate; now `missing.includes("vehiculo") ? "Sin placa" : plate`, same rule as `MoveSheet`/the card. Test "OrderLine reads Sin placa ..." (`MoveDialogs.test.tsx`); mutation (revert to `card.plate`): red by name.
+
+## WU7: TV restyle (tasks 7.1, 7.2; 7.3 unit/mutation part) - done, browser check pending
+
+One PR, 225 changed lines (+157/-68): `primitives.tsx` (+`tv` scale prop on `ColumnShell`, `CardShell`, `UrgentBadge`, `TimeChip`, `AlertStrip`, `TechAvatars`; `ColumnShell` gained `more`), `WorkshopBoard.tsx`, `CustomerBoard.tsx` and their tests. No split needed.
+
+- Both boards render `ColumnShell` (the `section` is still a direct child of the grid wrapper) and the shared cards; technician names are initials plus the sr-only "Ana, Beto"; urgent shows the badge and the red edge; no control anywhere.
+- Deviation from design D15 / task 7.1 ("`on_hold` age in the alert"): the TV keeps the pinned strings in their own elements, so the amber strip holds the hold reason alone ("Repuesto") and the age stays the neutral chip ("2 d"). Merging them ("Repuesto - hace 2 dias") would break `WorkshopBoard.test.tsx` "Repuesto" and "2 d", which are the spec. Overdue booked still uses `cardAlert`.
+- `BoardRow.plate` carries the literal "Sin vehiculo"; the TV card maps it to a null plate ("Sin placa") so the two lines do not repeat.
+- Customer board: own `li` in the same aesthetic (plate, `Car` icon + vehicle, `StatusBadge`), header count is the full column count, `MAX_ROWS=8` and `+N mas` kept via `ColumnShell.more`.
+- Existing pinned tests untouched; 6 added (urgent badge + edge + no "falta", sr-only names, hold strip + overdue, column counts, customer count, customer card text).
+
+Mutations (each reverted, red by name): urgent badge removed: "an urgent row carries the Urgente badge ..."; `urgent={false}` was a PLACEBO (passed), repaired with the `border-urgent/45` assertions, now red; hold via `cardAlert`: "shows the hold reason only on an on_hold row", "the hold reason sits in the amber strip ..."; alert dropped: same two; count 0: 9 tests; control injected: "carries no control"; slice removed / `+N` removed: "clips a long column ..."; Car icon removed: "a card is plate, vehicle (with its icon) ..."; count capped to 8: "the header counts every order ..."; `compareInColumn` urgent term removed: "puts an urgent card before ...", "Urgent first within a status ...".
+
+Gates: `npm test` 273 files / 4100 tests; `npx tsc --noEmit` clean; lint 0 errors / 13 warnings.

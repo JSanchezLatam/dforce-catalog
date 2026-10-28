@@ -38,6 +38,21 @@ describe("CustomerBoard", () => {
     expect(col.getByText("+7 más")).toBeInTheDocument();
   });
 
+  it("the header counts every order in the column, not just the eight shown", () => {
+    const many = { ...SNAPSHOT, rows: Array.from({ length: 15 }, (_, i) => row(`P${String(i).padStart(4, "0")}`, "En proceso")) };
+    render(<CustomerBoard initial={many} />);
+
+    expect(within(screen.getByRole("region", { name: "En proceso" })).getByText("15")).toBeInTheDocument();
+  });
+
+  it("a card is plate, vehicle (with its icon) and the status in icon + text, nothing else", () => {
+    render(<CustomerBoard initial={SNAPSHOT} />);
+
+    const card = within(screen.getByRole("region", { name: "Terminada" })).getByRole("listitem");
+    expect(card.textContent).toBe("EF9012Kia RioTerminada");
+    expect(card.querySelectorAll("svg[aria-hidden='true']").length).toBeGreaterThanOrEqual(2);
+  });
+
   describe("live polling", () => {
     const fetchMock = vi.fn();
     beforeEach(() => {

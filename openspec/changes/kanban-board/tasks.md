@@ -103,8 +103,8 @@ Conventions for every WU: Strict TDD (RED confirmed failing by name, then GREEN)
 
 ## WU7: TV restyle
 
-- [ ] 7.1 RED `WorkshopBoard.test.tsx`: existing pinned asserts unchanged ("Ana, Beto" sr-only, "12 min"/"3 h"/"2 d", "Repuesto", "27/10 10:00", `section` direct child of `grid-cols-7`, no control); add Urgente badge and no "falta categoría". GREEN restyle `board/WorkshopBoard.tsx` with primitives; `on_hold` age in the alert.
-- [ ] 7.2 RED then GREEN `board/CustomerBoard.tsx`: `MAX_ROWS=8` and `+N más` kept, four fields only, key set unchanged.
+- [x] 7.1 RED `WorkshopBoard.test.tsx`: existing pinned asserts unchanged ("Ana, Beto" sr-only, "12 min"/"3 h"/"2 d", "Repuesto", "27/10 10:00", `section` direct child of `grid-cols-7`, no control); add Urgente badge and no "falta categoría". GREEN restyle `board/WorkshopBoard.tsx` with primitives; `on_hold` age in the alert.
+- [x] 7.2 RED then GREEN `board/CustomerBoard.tsx`: `MAX_ROWS=8` and `+N más` kept, four fields only, key set unchanged.
 - [ ] 7.3 Verify: unit; browser `/tablero` and `/tablero/clientes` with data at 1080p and 390, light+dark, console clean.
 
 ## WU8: Sign-off, verify, archive

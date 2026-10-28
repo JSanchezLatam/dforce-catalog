@@ -35,6 +35,8 @@ export function ColumnShell({
   className,
   rootRef,
   dropState,
+  tv,
+  more,
   children,
 }: {
   status: Exclude<OrderStatus, "cancelled">;
@@ -47,6 +49,10 @@ export function ColumnShell({
   rootRef?: Ref<HTMLElement>;
   /** During a drag: `legal` lights the column in its own hue, `illegal` dims it and says why. */
   dropState?: "legal" | "illegal";
+  /** Read-only TV scale: bigger type, tile and gaps. */
+  tv?: boolean;
+  /** TV overflow line ("+3 más") under the list. */
+  more?: string;
   children?: ReactNode;
 }) {
   const { h, s, icon: Icon } = STATUS_HUE[status];
@@ -55,7 +61,8 @@ export function ColumnShell({
       ref={rootRef}
       aria-label={label}
       className={cn(
-        "relative flex flex-col gap-2.5 overflow-hidden rounded-2xl bg-board-col p-2.5 pt-3.5",
+        "relative flex flex-col overflow-hidden rounded-2xl bg-board-col",
+        tv ? "gap-3 p-3 pt-4" : "gap-2.5 p-2.5 pt-3.5",
         dropState === "legal" && "board-hue-ring",
         dropState === "illegal" && "[&>:not([data-hint])]:opacity-40 [&>:not([data-hint])]:grayscale",
         className,
@@ -68,16 +75,16 @@ export function ColumnShell({
           No se puede mover acá
         </div>
       )}
-      <span aria-hidden="true" className="board-hue-bar absolute inset-x-0 top-0 h-1" />
-      <div className="flex items-center gap-2 px-1">
-        <span className="board-hue-tile grid size-8 shrink-0 place-items-center rounded-lg">
-          <Icon aria-hidden="true" className="size-4" />
+      <span aria-hidden="true" className={cn("board-hue-bar absolute inset-x-0 top-0", tv ? "h-1.5" : "h-1")} />
+      <div className={cn("flex items-center gap-2 px-1", tv && "pb-1")}>
+        <span className={cn("board-hue-tile grid shrink-0 place-items-center rounded-lg", tv ? "size-10" : "size-8")}>
+          <Icon aria-hidden="true" className={tv ? "size-5" : "size-4"} />
         </span>
-        <h2 className="min-w-0 flex-1 truncate text-sm font-bold">{label}</h2>
-        <span className="rounded-full bg-background px-2 py-0.5 text-xs font-bold tabular-nums ring-1 ring-border">{count}</span>
+        <h2 className={cn("min-w-0 flex-1 font-bold", tv ? "text-xl leading-6" : "truncate text-sm")}>{label}</h2>
+        <span className={cn("rounded-full bg-background py-0.5 font-bold tabular-nums ring-1 ring-border", tv ? "px-3 text-xl" : "px-2 text-xs")}>{count}</span>
       </div>
       {count > 0 ? (
-        <ul className="flex flex-col gap-2.5">{children}</ul>
+        <ul className={cn("flex flex-col", tv ? "gap-3" : "gap-2.5")}>{children}</ul>
       ) : (
         empty && (
           <div className="grid min-h-24 place-items-center rounded-xl border border-dashed border-border px-3 text-center text-xs text-muted-foreground">
@@ -85,6 +92,7 @@ export function ColumnShell({
           </div>
         )
       )}
+      {more && <p className="px-1 text-xl text-muted-foreground">{more}</p>}
     </section>
   );
 }
@@ -104,6 +112,7 @@ export function CardShell({
   tags,
   alert,
   footer,
+  tv,
   className,
 }: {
   plate: string | null;
@@ -117,44 +126,46 @@ export function CardShell({
   tags?: ReactNode;
   alert?: ReactNode;
   footer: ReactNode;
+  /** Read-only TV scale. */
+  tv?: boolean;
   className?: string;
 }) {
   const vehicle = [make, model].filter(Boolean).join(" ");
   return (
-    <li ref={rootRef} className={cn("relative rounded-xl border bg-board-tile p-3 shadow-(--board-tile-shadow)", urgent && "border-urgent/45", className)}>
-      {urgent && <span aria-hidden="true" className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-urgent" />}
+    <li ref={rootRef} className={cn("relative border bg-board-tile shadow-(--board-tile-shadow)", tv ? "rounded-2xl p-4" : "rounded-xl p-3", urgent && "border-urgent/45", className)}>
+      {urgent && <span aria-hidden="true" className={cn("absolute left-0 rounded-r-full bg-urgent", tv ? "inset-y-4 w-1.5" : "inset-y-3 w-1")} />}
       <div className="flex items-start gap-1.5">
         {grip}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[15px] leading-5 font-extrabold tracking-wider tabular-nums">
+          <div className={cn("truncate font-extrabold tracking-wider tabular-nums", tv ? "text-[28px] leading-8" : "text-[15px] leading-5")}>
             {plate ?? <span className="font-semibold tracking-normal text-muted-foreground italic">Sin placa</span>}
           </div>
-          <div className="mt-0.5 truncate text-xs text-muted-foreground">{vehicle || "Sin vehículo"}</div>
+          <div className={cn("mt-0.5 truncate text-muted-foreground", tv ? "text-lg leading-6" : "text-xs")}>{vehicle || "Sin vehículo"}</div>
         </div>
         {action}
       </div>
       {tags && <div className="mt-2 flex flex-wrap gap-1.5">{tags}</div>}
       {alert && <div className="mt-2">{alert}</div>}
-      <div className="mt-2.5 flex items-center justify-between gap-2 border-t pt-2.5">{footer}</div>
+      <div className={cn("flex items-center justify-between gap-2", tv ? "mt-3 flex-wrap" : "mt-2.5 border-t pt-2.5")}>{footer}</div>
     </li>
   );
 }
 
 /** Red badge: flame icon plus the word, never colour alone. */
-export function UrgentBadge() {
+export function UrgentBadge({ tv }: { tv?: boolean }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-urgent px-2 py-0.5 text-[11px] font-bold tracking-wide text-white uppercase">
-      <Flame aria-hidden="true" className="size-3" />
+    <span className={cn("inline-flex items-center gap-1 rounded-full bg-urgent font-bold tracking-wide text-white uppercase", tv ? "px-3 py-1 text-base" : "px-2 py-0.5 text-[11px]")}>
+      <Flame aria-hidden="true" className={tv ? "size-4" : "size-3"} />
       Urgente
     </span>
   );
 }
 
 /** Neutral time chip: never red or amber, whatever the elapsed time. */
-export function TimeChip({ icon: Icon = Clock, children }: { icon?: LucideIcon; children: ReactNode }) {
+export function TimeChip({ icon: Icon = Clock, tv, children }: { icon?: LucideIcon; tv?: boolean; children: ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium whitespace-nowrap text-muted-foreground">
-      <Icon aria-hidden="true" className="size-3" />
+    <span className={cn("inline-flex items-center gap-1 rounded-full bg-muted font-medium whitespace-nowrap text-muted-foreground", tv ? "px-3 py-1 text-base" : "px-2 py-0.5 text-[11px]")}>
+      <Icon aria-hidden="true" className={tv ? "size-4" : "size-3"} />
       {children}
     </span>
   );
@@ -163,11 +174,11 @@ export function TimeChip({ icon: Icon = Clock, children }: { icon?: LucideIcon; 
 const ALERT_ICON: Record<CardAlert["kind"], LucideIcon> = { overdue: Clock, hold: Pause, missing: TriangleAlert };
 
 /** The only amber on a card; `cardAlert` decides whether there is a reason to render it. */
-export function AlertStrip({ alert }: { alert: CardAlert }) {
+export function AlertStrip({ alert, tv }: { alert: CardAlert; tv?: boolean }) {
   const Icon = ALERT_ICON[alert.kind];
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-board-warn-border bg-board-warn-bg px-2.5 py-1.5 text-xs font-semibold text-board-warn-fg">
-      <Icon aria-hidden="true" className="size-3.5 shrink-0" />
+    <div className={cn("flex items-center gap-2 rounded-lg border border-board-warn-border bg-board-warn-bg font-semibold text-board-warn-fg", tv ? "px-3 py-2 text-base" : "px-2.5 py-1.5 text-xs")}>
+      <Icon aria-hidden="true" className={cn("shrink-0", tv ? "size-[18px]" : "size-3.5")} />
       <span>{alert.text}</span>
     </div>
   );
@@ -185,19 +196,19 @@ const initials = (name: string) =>
 const nameHue = (name: string) => [...name].reduce((acc, c) => (acc * 31 + c.charCodeAt(0)) % 360, 7);
 
 /** Initials are visual only; the full names are one sr-only span, e.g. "Ana, Beto". */
-export function TechAvatars({ names }: { names: string[] }) {
+export function TechAvatars({ names, tv }: { names: string[]; tv?: boolean }) {
   if (names.length === 0) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-        <span aria-hidden="true" className="grid size-6.5 place-items-center rounded-full border border-dashed border-muted-foreground/60">
-          <UserPlus className="size-3.5" />
+      <span className={cn("inline-flex items-center gap-1.5 text-muted-foreground", tv ? "text-base" : "text-xs")}>
+        <span aria-hidden="true" className={cn("grid place-items-center rounded-full border border-dashed border-muted-foreground/60", tv ? "size-10" : "size-6.5")}>
+          <UserPlus className={tv ? "size-5" : "size-3.5"} />
         </span>
         Sin técnico
       </span>
     );
   }
   const extra = names.length - MAX_AVATARS;
-  const avatar = "board-av grid size-6.5 shrink-0 place-items-center rounded-full text-[10px] font-bold";
+  const avatar = cn("board-av grid shrink-0 place-items-center rounded-full font-bold", tv ? "size-10 text-base" : "size-6.5 text-[10px]");
   return (
     <span className="flex -space-x-1">
       {names.slice(0, MAX_AVATARS).map((name, i) => (

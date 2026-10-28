@@ -109,6 +109,41 @@ describe("WorkshopBoard", () => {
     expect(container.querySelector("button, form, a, input, select, textarea")).toBeNull();
   });
 
+  it("an urgent row carries the Urgente badge (icon + text) and a calm row does not; no card ever says it lacks a category", () => {
+    const urgent = { ...SNAPSHOT, rows: [row({ status: "in_progress", statusLabel: "En progreso", plate: "UR0001", urgent: true }), row({ status: "in_progress", statusLabel: "En progreso", plate: "CA0001" })] };
+    const { container } = render(<WorkshopBoard initial={urgent} />);
+
+    const [first, second] = col("En progreso").getAllByRole("listitem");
+    expect(within(first).getByText("Urgente")).toBeInTheDocument();
+    expect(within(second).queryByText("Urgente")).not.toBeInTheDocument();
+    expect(first).toHaveClass("border-urgent/45"); // the red edge, beside the word
+    expect(second).not.toHaveClass("border-urgent/45");
+    expect(container.textContent).not.toMatch(/falta/i);
+  });
+
+  it("technicians are initials for the eye and one sr-only span with the full names", () => {
+    render(<WorkshopBoard initial={SNAPSHOT} />);
+
+    expect(col("En progreso").getByText("Ana, Beto")).toHaveClass("sr-only");
+    expect(col("En progreso").getByText("A").closest("[aria-hidden]")).not.toBeNull();
+    expect(col("Recibida").getByText("Sin técnico")).toBeInTheDocument();
+  });
+
+  it("the hold reason sits in the amber strip, and an overdue appointment says how long ago", () => {
+    const overdue = row({ status: "booked", statusLabel: "Agendada", plate: "BK0001", appointmentAt: "2026-10-26T13:00:00.000Z" });
+    render(<WorkshopBoard initial={{ ...SNAPSHOT, rows: [...SNAPSHOT.rows, overdue] }} />);
+
+    expect(col("En espera").getByText("Repuesto").closest("div")).toHaveClass("border-board-warn-border");
+    expect(col("Agendada").getByText("Cita vencida · hace 2 h")).toBeInTheDocument();
+  });
+
+  it("each column header counts its cards", () => {
+    render(<WorkshopBoard initial={SNAPSHOT} />);
+
+    expect(col("En progreso").getByText("1")).toBeInTheDocument();
+    expect(col("Completada").getByText("0")).toBeInTheDocument();
+  });
+
   describe("live polling", () => {
     const fetchMock = vi.fn();
     beforeEach(() => {
