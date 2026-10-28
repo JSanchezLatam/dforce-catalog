@@ -1,7 +1,6 @@
-import type { NavGroup, NavLink, NavParent } from "./nav-items";
+import { fold } from "@/shared/text";
 
-/** Lower-case with accents folded: "Órdenes" -> "ordenes". Same fold as agenda/items.ts. */
-export const fold = (s: string): string => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+import type { NavGroup, NavLink, NavParent } from "./nav-items";
 
 const matches = (label: string, q: string): boolean => fold(label).includes(q);
 

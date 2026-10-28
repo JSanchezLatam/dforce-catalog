@@ -122,7 +122,7 @@ export function KanbanBoard({ initial, canMove }: { initial: KanbanSnapshot; can
   const goTo = (i: number) => (setActive(i), scroller.current?.scrollTo({ left: i * step(scroller.current), behavior: "smooth" }));
 
   return (
-    <div className="flex min-w-0 flex-col gap-5 bg-board-canvas p-4 sm:p-6">
+    <div className="flex min-w-0 flex-1 flex-col gap-5 bg-board-canvas p-4 sm:p-6">
       <StaleBanner lastOkAt={lastOkAt} now={now} />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>

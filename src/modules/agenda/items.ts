@@ -7,6 +7,7 @@ import { formatAgendaTime, isOverdue, panamaDay } from "@/modules/agenda/dates";
 import type { AgendaRow, WeekCounts, WorkshopRow } from "@/modules/agenda/queries";
 import { categoriaLabel, type ServiceCategory } from "@/modules/service-orders/categories";
 import { ESPERA_MOTIVO_LABEL, ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
+import { fold } from "@/shared/text";
 
 export type AgendaItem = {
   id: string;
@@ -175,8 +176,6 @@ export function toWeekSummary(counts: WeekCounts): { label: string; count: numbe
   ];
 }
 
-/** Lower-case with accents folded: "Sofía" -> "sofia". */
-const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 const plateKey = (s: string) => fold(s).replace(/[\s-]/g, "");
 
 /** Plate or customer name, over the loaded cards only. A blank search matches everything. */

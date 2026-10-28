@@ -295,7 +295,7 @@ describe("AppSidebar — Tablero parent", () => {
     nav.pathname = "/inventory";
   });
 
-  async function boldChildren(pathname: string) {
+  async function railLinks(pathname: string) {
     nav.pathname = pathname;
     const user = userEvent.setup();
     render(
@@ -310,9 +310,18 @@ describe("AppSidebar — Tablero parent", () => {
       </SidebarProvider>,
     );
     await user.click(screen.getByRole("button", { name: "Tablero" }));
-    const links = await screen.findAllByRole("link", { name: /^(Órdenes en curso|Pantalla del taller|Pantalla de clientes)$/ });
+    return screen.findAllByRole("link", { name: /^(Órdenes en curso|Pantalla del taller|Pantalla de clientes)$/ });
+  }
+
+  async function boldChildren(pathname: string) {
+    const links = await railLinks(pathname);
     return links.filter((l) => l.classList.contains("font-semibold")).map((l) => l.textContent);
   }
+
+  it("on /tablero/clientes gives only Pantalla de clientes aria-current, as the expanded sidebar does", async () => {
+    const links = await railLinks("/tablero/clientes");
+    expect(links.filter((l) => l.getAttribute("aria-current") === "page").map((l) => l.textContent)).toEqual(["Pantalla de clientes"]);
+  });
 
   it("on /tablero/clientes marks only Pantalla de clientes", async () => {
     expect(await boldChildren("/tablero/clientes")).toEqual(["Pantalla de clientes"]);
@@ -494,6 +503,33 @@ describe("AppSidebar — nav restyle (sidebar-redesign WU2)", () => {
     });
     expect(header.closest('[data-mobile="true"]')).not.toBeNull();
     expect(header).toHaveClass("in-data-[mobile=true]:pr-13");
+  });
+
+  // Every way out of the sheet (a link, a dropdown child, Enter in the search box) changes the pathname.
+  it("closes the mobile sheet once the pathname changes", async () => {
+    window.innerWidth = 800; // useIsMobile reads innerWidth
+    const user = userEvent.setup();
+    // A fresh element each time: rerendering the same element object is a no-op for React.
+    const ui = () => (
+      <SidebarProvider>
+        <SidebarTrigger aria-label="Abrir menú" />
+        <AppSidebar
+          navGroups={NAV_GROUPS}
+          user={{ id: "u1", role: "administrador", name: "Jorge" }}
+          workshopName="Taller Demo"
+          logoR2Key={null}
+          initialCollapseState={DEFAULT_NAV_COLLAPSE_STATE}
+        />
+      </SidebarProvider>
+    );
+    const { rerender } = render(ui());
+    await user.click(screen.getByRole("button", { name: "Abrir menú" }));
+    expect(await screen.findByRole("dialog", { name: "Menú" })).toBeInTheDocument();
+
+    nav.pathname = "/customers";
+    rerender(ui());
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Menú" })).toBeNull());
   });
 
   it("renders the sidebar as the inset variant (floating panel shell)", () => {
