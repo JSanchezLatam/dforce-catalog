@@ -56,7 +56,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 `flex flex-col` that makes the sheet a flex item, which is why
                 `globals.css`'s print rules need `w-full` and not only
                 `max-w-none` — the reason is recorded there. */}
-            <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6 print:gap-0 print:py-0">
+            <div className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6 print:gap-0 print:py-0">
               {children}
             </div>
           </div>

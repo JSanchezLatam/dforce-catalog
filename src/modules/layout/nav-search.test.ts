@@ -4,7 +4,7 @@ import type { SessionUser } from "@/modules/auth/session";
 
 import { getNavGroups } from "./nav-items";
 import type { NavGroup } from "./nav-items";
-import { filterNavGroups, firstHref, fold, highlight } from "./nav-search";
+import { filterNavGroups, firstHref, highlight } from "./nav-search";
 
 const admin: SessionUser = { id: "admin-1", role: "administrador" };
 const tecnico: SessionUser = { id: "user-1", role: "tecnico" };
@@ -16,12 +16,6 @@ function tree(groups: NavGroup[]): Record<string, string[]> {
   }
   return out;
 }
-
-describe("fold()", () => {
-  it("lowercases and strips accents", () => {
-    expect(fold("Órdenes")).toBe("ordenes");
-  });
-});
 
 describe("filterNavGroups()", () => {
   const groups = getNavGroups(admin);

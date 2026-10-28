@@ -190,7 +190,11 @@ function NavParentCollapsed({ parent, activeHref }: { parent: NavParent; activeH
             const ChildIcon = ICON_MAP[child.icon] || Package
             return (
               <DropdownMenuItem key={child.href}>
-                <Link href={child.href} className={`flex items-center gap-2 ${child.href === activeHref ? "font-semibold" : ""}`}>
+                <Link
+                  href={child.href}
+                  aria-current={child.href === activeHref ? "page" : undefined}
+                  className={`flex items-center gap-2 ${child.href === activeHref ? "font-semibold" : ""}`}
+                >
                   <ChildIcon className="size-4" />
                   <span>{child.label}</span>
                 </Link>
@@ -304,13 +308,16 @@ export function AppSidebar({
   logoR2Key: string | null
   initialCollapseState: NavCollapseState
 }) {
-  const { state, isMobile } = useSidebar()
+  const { state, isMobile, setOpenMobile } = useSidebar()
   const [typed, setQuery] = React.useState("")
   const collapsed = state === "collapsed"
   // The rail hides the box, so a typed query must not filter it (nothing there could clear it). It returns on expand.
   const query = collapsed && !isMobile ? "" : typed
   const visibleGroups = React.useMemo(() => filterNavGroups(navGroups, query), [navGroups, query])
   const pathname = usePathname()
+  // Every way out of the sheet (a link, a dropdown child, Enter in the search box) ends in a new pathname.
+  // openMobile is only read on mobile, so desktop is untouched.
+  React.useEffect(() => setOpenMobile(false), [pathname, setOpenMobile])
   // From the UNFILTERED children: a search that hides /tablero/clientes must not hand the mark to /tablero.
   const activeByParent = React.useMemo(
     () =>
