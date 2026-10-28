@@ -35,6 +35,6 @@ describe("agenda safety", () => {
 
   it("no portal gated by typeof document, and no polling timer", () => {
     expect(matching(/typeof document/)).toEqual([]);
-    expect(matching(/setInterval/)).toEqual([]);
+    expect(matching(/setInterval|setTimeout/)).toEqual([]);
   });
 });
