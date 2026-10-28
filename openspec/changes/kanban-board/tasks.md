@@ -47,15 +47,15 @@ Conventions for every WU: Strict TDD (RED confirmed failing by name, then GREEN)
 
 ## WU2: Read model, API, guards, nav
 
-- [ ] 2.1 RED `src/modules/board/sort.test.ts`; GREEN `board/sort.ts#compareInColumn` (urgent first, then oldest `statusSince`).
-- [ ] 2.2 RED `board/shape.test.ts`: `BoardRow` key set gains `urgent` only (no `id`/`missing`/`mine`); poison fields `vehiculoId`, `categoria`; urgent-first within status. GREEN `board/queries.ts` (select `urgenteAt`, `vehiculoId`, `categoria`) and `shape.ts` (`boardFields` extract, `urgent`, sort via `compareInColumn`).
-- [ ] 2.3 RED `kanban/shape.test.ts` (`id` only in `KanbanCard`, `missing`, `mine`, exact keys, sentinel privacy); GREEN `kanban/shape.ts#toKanbanSnapshot`.
-- [ ] 2.4 RED then GREEN `kanban/queries.ts#viewerAssignments` (+`queries.privacy.test.ts`): `{onRoster, ordenIds}`, deactivated roster row excluded.
-- [ ] 2.5 RED then GREEN `kanban/derive.ts` (+test): six KPIs and filter counts from displayed rows and `generatedAt` via `toWorkshopDateKey`, never `Date.now()`; filters leave KPIs unchanged.
-- [ ] 2.6 RED then GREEN `src/app/api/kanban/route.ts` (+test): 401, 403 for pantalla, 200 shape; `ROUTE_GUARDS` `"/kanban"` and `"/api/kanban"` (`board.read`) in `route-guards.test.ts`.
-- [ ] 2.7 RED then GREEN `layout/nav-items.ts` (+test arrays at `:34-36` gain "Kanban" after "Tablero", absent for pantalla); `src/components/app-sidebar.tsx` icon `kanban`.
-- [ ] 2.8 e2e `src/e2e/kanban.e2e.test.ts` (fresh DB): new select columns, `mine` per viewer (A true, B false), deactivated roster, other technician, no customer sentinel, técnico PATCH refused, `/api/board` clean.
-- [ ] 2.9 Verify: unit suite, e2e, mutation-verify `mine` filter and `compareInColumn`.
+- [x] 2.1 RED `src/modules/board/sort.test.ts`; GREEN `board/sort.ts#compareInColumn` (urgent first, then oldest `statusSince`).
+- [x] 2.2 RED `board/shape.test.ts`: `BoardRow` key set gains `urgent` only (no `id`/`missing`/`mine`); poison fields `vehiculoId`, `categoria`; urgent-first within status. GREEN `board/queries.ts` (select `urgenteAt`, `vehiculoId`, `categoria`) and `shape.ts` (`boardFields` extract, `urgent`, sort via `compareInColumn`).
+- [x] 2.3 RED `kanban/shape.test.ts` (`id` only in `KanbanCard`, `missing`, `mine`, exact keys, sentinel privacy); GREEN `kanban/shape.ts#toKanbanSnapshot`.
+- [x] 2.4 RED then GREEN `kanban/queries.ts#viewerAssignments` (+`queries.privacy.test.ts`): `{onRoster, ordenIds}`, deactivated roster row excluded.
+- [x] 2.5 RED then GREEN `kanban/derive.ts` (+test): six KPIs and filter counts from displayed rows and `generatedAt` via `toWorkshopDateKey`, never `Date.now()`; filters leave KPIs unchanged.
+- [x] 2.6 RED then GREEN `src/app/api/kanban/route.ts` (+test): 401, 403 for pantalla, 200 shape; `ROUTE_GUARDS` `"/kanban"` and `"/api/kanban"` (`board.read`) in `route-guards.test.ts`. Applied: only `"/api/kanban"`; the `"/kanban"` entry moves to 3b.3 because the completeness test requires the page file to exist.
+- [x] 2.7 RED then GREEN `layout/nav-items.ts` (+test arrays at `:34-36` gain "Kanban" after "Tablero", absent for pantalla); `src/components/app-sidebar.tsx` icon `kanban`.
+- [x] 2.8 e2e `src/e2e/kanban.e2e.test.ts` (fresh DB): new select columns, `mine` per viewer (A true, B false), deactivated roster, other technician, no customer sentinel, técnico PATCH refused, `/api/board` clean.
+- [x] 2.9 Verify: unit suite, e2e, mutation-verify `mine` filter and `compareInColumn`.
 
 ## WU3a: Tokens and primitives
 
