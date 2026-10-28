@@ -10,7 +10,7 @@
  * `ThemeToggle`/`LogoutButton` only once that dropdown's content mounts)
  * never need mocking here.
  */
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -19,8 +19,9 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { DEFAULT_NAV_COLLAPSE_STATE, type NavCollapseState } from "@/modules/layout/nav-collapse-state";
 import type { NavGroup } from "@/modules/layout/nav-items";
 
+const nav = vi.hoisted(() => ({ pathname: "/inventory" }));
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/inventory",
+  usePathname: () => nav.pathname,
 }));
 
 const NAV_GROUPS: NavGroup[] = [
@@ -258,5 +259,84 @@ describe("AppSidebar — Agenda icon", () => {
 
     const svg = screen.getByRole("link", { name: "Agenda" }).querySelector("svg");
     expect(svg).toHaveClass("lucide-calendar-days");
+  });
+});
+
+/**
+ * /tablero is a prefix of /tablero/clientes, so a bare `startsWith` marked BOTH
+ * screens current on the customer screen. Only the longest matching sibling is.
+ */
+describe("AppSidebar — Tablero parent", () => {
+  const TABLERO: NavGroup[] = [
+    {
+      id: "taller",
+      label: "Taller",
+      items: [
+        {
+          kind: "parent",
+          id: "tablero",
+          label: "Tablero",
+          icon: "board",
+          children: [
+            { kind: "link", href: "/kanban", label: "Órdenes en curso", icon: "kanban", action: "board.read" },
+            { kind: "link", href: "/tablero", label: "Pantalla del taller", icon: "board", action: "board.read" },
+            { kind: "link", href: "/tablero/clientes", label: "Pantalla de clientes", icon: "board", action: "board.customer" },
+          ],
+        },
+      ],
+    },
+  ];
+
+  afterEach(() => {
+    nav.pathname = "/inventory";
+  });
+
+  async function boldChildren(pathname: string) {
+    nav.pathname = pathname;
+    const user = userEvent.setup();
+    render(
+      <SidebarProvider defaultOpen={false}>
+        <AppSidebar
+          navGroups={TABLERO}
+          user={{ id: "u1", role: "administrador", name: "Jorge" }}
+          workshopName="Taller Demo"
+          logoR2Key={null}
+          initialCollapseState={DEFAULT_NAV_COLLAPSE_STATE}
+        />
+      </SidebarProvider>,
+    );
+    await user.click(screen.getByRole("button", { name: "Tablero" }));
+    const links = await screen.findAllByRole("link", { name: /^(Órdenes en curso|Pantalla del taller|Pantalla de clientes)$/ });
+    return links.filter((l) => l.classList.contains("font-semibold")).map((l) => l.textContent);
+  }
+
+  it("on /tablero/clientes marks only Pantalla de clientes", async () => {
+    expect(await boldChildren("/tablero/clientes")).toEqual(["Pantalla de clientes"]);
+  });
+
+  it("on /tablero marks only Pantalla del taller", async () => {
+    expect(await boldChildren("/tablero")).toEqual(["Pantalla del taller"]);
+  });
+
+  // getGroupOpen answers "open" for any id outside NAV_COLLAPSE_KEYS, so an unlisted parent could never close.
+  it("in the expanded sidebar the Tablero parent collapses its three children", async () => {
+    const user = userEvent.setup();
+    render(
+      <SidebarProvider defaultOpen>
+        <AppSidebar
+          navGroups={TABLERO}
+          user={{ id: "u1", role: "administrador", name: "Jorge" }}
+          workshopName="Taller Demo"
+          logoR2Key={null}
+          initialCollapseState={DEFAULT_NAV_COLLAPSE_STATE}
+        />
+      </SidebarProvider>,
+    );
+    expect(screen.getByRole("link", { name: "Pantalla de clientes" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Tablero" }));
+
+    expect(screen.getByRole("button", { name: "Tablero" })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("link", { name: "Pantalla de clientes" })).not.toBeInTheDocument();
   });
 });

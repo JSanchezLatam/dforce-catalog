@@ -101,7 +101,7 @@ describe("encodeNavCollapseState() — compact cookie encode", () => {
   });
 
   it("round-trips through decode for every key closed", () => {
-    const allClosed = { taller: false, crm: false, catalogo: false, configuracion: false, "config-catalogos": false } as const;
+    const allClosed = { taller: false, crm: false, catalogo: false, configuracion: false, "config-catalogos": false, tablero: false } as const;
     const encoded = encodeNavCollapseState(allClosed);
     expect(decodeNavCollapseState(encoded)).toEqual(allClosed);
   });
@@ -150,7 +150,7 @@ describe("extractCookieValue() — pure document.cookie-style parser", () => {
 
 describe("isNavCollapseKey() — key guard used by UI lookups", () => {
   it("returns true for every known key", () => {
-    for (const key of ["taller", "crm", "catalogo", "configuracion", "config-catalogos"]) {
+    for (const key of ["taller", "crm", "catalogo", "configuracion", "config-catalogos", "tablero"]) {
       expect(isNavCollapseKey(key)).toBe(true);
     }
   });

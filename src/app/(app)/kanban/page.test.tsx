@@ -57,6 +57,7 @@ describe("/kanban", () => {
     render(await KanbanPage());
 
     expect(screen.getByText("Volver al inicio")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Órdenes en curso");
     expect(kanbanData).not.toHaveBeenCalled();
     expect(screen.queryByTestId("kanban-board")).not.toBeInTheDocument();
   });

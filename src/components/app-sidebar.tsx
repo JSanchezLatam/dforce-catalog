@@ -142,6 +142,11 @@ function NavParentExpanded({
 function NavParentCollapsed({ parent }: { parent: NavParent }) {
   const pathname = usePathname()
   const Icon = ICON_MAP[parent.icon] || Package
+  // Longest matching sibling wins: /tablero is a prefix of /tablero/clientes, and only one child is current.
+  const activeHref = parent.children
+    .map((c) => c.href)
+    .filter((href) => pathname.startsWith(href))
+    .sort((a, b) => b.length - a.length)[0]
 
   return (
     <SidebarMenuItem>
@@ -158,7 +163,7 @@ function NavParentCollapsed({ parent }: { parent: NavParent }) {
             const ChildIcon = ICON_MAP[child.icon] || Package
             return (
               <DropdownMenuItem key={child.href}>
-                <Link href={child.href} className={`flex items-center gap-2 ${pathname.startsWith(child.href) ? "font-semibold" : ""}`}>
+                <Link href={child.href} className={`flex items-center gap-2 ${child.href === activeHref ? "font-semibold" : ""}`}>
                   <ChildIcon className="size-4" />
                   <span>{child.label}</span>
                 </Link>

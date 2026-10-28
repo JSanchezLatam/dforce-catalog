@@ -13,7 +13,7 @@ import { PermissionDenied } from "@/shared/ui/PermissionDenied";
 export default async function KanbanPage() {
   const user = await requireSessionFromHeaders();
   if (!can(user, "board.read")) {
-    return <PermissionDenied title="Kanban" />;
+    return <PermissionDenied title="Órdenes en curso" />;
   }
   const now = new Date();
   const { viewer, ...board } = await kanbanData(user.id, now);
