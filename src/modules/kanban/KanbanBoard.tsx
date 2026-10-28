@@ -5,18 +5,19 @@ import { createElement, useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 import { compareInColumn } from "@/modules/board/sort";
-import { ColumnShell, STATUS_HUE } from "@/modules/board/primitives";
+import { STATUS_HUE } from "@/modules/board/primitives";
 import { StaleBanner } from "@/modules/board/StaleBanner";
 import { useBoardSnapshot } from "@/modules/board/useBoardSnapshot";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import { PAGE_HEADING } from "@/shared/ui/styles";
 import { useToast } from "@/shared/ui/ToastProvider";
+import { DndBoard, DropColumn } from "./DndBoard";
 import { deriveBoard, filterCards, type KanbanFilter } from "./derive";
 import { ConfirmMoveDialog } from "./ConfirmMoveDialog";
 import { EsperaDialog } from "./EsperaDialog";
 import { IncompleteDialog } from "./IncompleteDialog";
-import { KanbanCardView } from "./KanbanCard";
+import { KanbanCardBody, KanbanCardView } from "./KanbanCard";
 import { moveOrder, setUrgent } from "./mutations";
 import { applyOverrides, type Override } from "./overrides";
 import { planMove } from "./plan";
@@ -188,17 +189,23 @@ export function KanbanBoard({ initial, canMove }: { initial: KanbanSnapshot; can
       </div>
       <p className="-mt-3 text-xs text-muted-foreground md:hidden">{`${active + 1} de ${COLUMNS.length} · deslizá para cambiar de estado`}</p>
 
+      <DndBoard cards={rows} columns={COLUMNS} onDrop={onMove} overlay={(c) => (
+        <ul inert className="rotate-[2.5deg] scale-[1.03] cursor-grabbing rounded-xl shadow-2xl">
+          <KanbanCardBody card={c} generatedAt={snapshot.generatedAt} canMove={false} onMove={onMove} onUrgent={() => {}} />
+        </ul>
+      )}>
       <div ref={scroller} onScroll={(e) => setActive(Math.round(e.currentTarget.scrollLeft / (step(e.currentTarget) || 1)))} className="relative flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3">
         {COLUMNS.map((s) => {
           const cards = byStatus(s);
           return (
-            <ColumnShell key={s} status={s} label={ORDER_STATUS_LABEL[s]} count={cards.length} className="w-70 shrink-0 snap-start max-md:w-full"
+            <DropColumn key={s} status={s} label={ORDER_STATUS_LABEL[s]} count={cards.length} className="w-70 shrink-0 snap-start max-md:w-full"
               empty={filter === "mine" ? "Ninguna orden tuya en este estado" : "Sin órdenes"}>
               {cards.map((c) => <KanbanCardView key={c.id} card={c} generatedAt={snapshot.generatedAt} canMove={canMove} onMove={onMove} onUrgent={(c, on) => void sendUrgent(c, on)} />)}
-            </ColumnShell>
+            </DropColumn>
           );
         })}
       </div>
+      </DndBoard>
       {ask?.kind === "ask-reason" && <EsperaDialog card={ask.card} onConfirm={confirm} onClose={close} />}
       {ask?.kind === "confirm" && <ConfirmMoveDialog card={ask.card} target={ask.target} onConfirm={() => confirm()} onClose={close} />}
       {ask?.kind === "incomplete" && <IncompleteDialog card={ask.card} onClose={close} />}

@@ -12,6 +12,18 @@ const card = (over: Partial<KanbanCard> = {}): KanbanCard => ({
   technicians: [], statusSince: "2026-10-26T14:48:00.000Z", urgent: false, categoria: null, missing: [], mine: false, ...over,
 });
 
+describe("OrderLine", () => {
+  const noVehicle = { plate: "Sin vehículo", make: null, model: null, missing: ["vehiculo" as const] };
+  it("reads Sin placa for an order with no vehicle, in the confirm and the espera dialogs", () => {
+    const { unmount } = render(<ConfirmMoveDialog card={card(noVehicle)} target="done" onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByText("Sin placa")).toBeInTheDocument();
+    expect(screen.queryByText("Sin vehículo")).toBeNull();
+    unmount();
+    render(<EsperaDialog card={card(noVehicle)} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByText("Sin placa")).toBeInTheDocument();
+  });
+});
+
 describe("EsperaDialog", () => {
   it("keeps Pasar a En espera disabled until a reason is chosen, then confirms with that reason", async () => {
     const onConfirm = vi.fn();

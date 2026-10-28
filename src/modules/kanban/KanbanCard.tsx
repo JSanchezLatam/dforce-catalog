@@ -1,4 +1,8 @@
-import { CalendarDays, User } from "lucide-react";
+"use client";
+
+import { useDraggable } from "@dnd-kit/core";
+import type { ReactNode } from "react";
+import { CalendarDays, GripVertical, User } from "lucide-react";
 
 import { cardAlert } from "@/modules/board/alerts";
 import { formatAge, formatBoardTime } from "@/modules/board/format";
@@ -7,13 +11,32 @@ import type { OrderStatus } from "@/modules/service-orders/transitions";
 import { CardMenu } from "./CardMenu";
 import type { KanbanCard } from "./shape";
 
-export function KanbanCardView({ card, generatedAt, canMove, onMove, onUrgent }: { card: KanbanCard; generatedAt: string; canMove: boolean; onMove: (card: KanbanCard, target: OrderStatus) => void; onUrgent: (card: KanbanCard, on: boolean) => void }) {
+type CardProps = { card: KanbanCard; generatedAt: string; canMove: boolean; onMove: (card: KanbanCard, target: OrderStatus) => void; onUrgent: (card: KanbanCard, on: boolean) => void };
+
+/** The card in its column: the body plus the draggable registration. Works without a DndContext (inert default context). */
+export function KanbanCardView(props: CardProps) {
+  const { setNodeRef, setActivatorNodeRef, listeners, isDragging } = useDraggable({ id: props.card.id, disabled: !props.canMove });
+  // The grip alone starts a drag: listeners on the card would also catch the portalled menu's presses (React bubbles
+  // through portals). It is hidden below md, where the sheet replaces drag. `attributes` is never spread (D11b).
+  const grip = props.canMove ? (
+    <span ref={setActivatorNodeRef} {...listeners} title="Arrastrar" className="-mt-1.5 -ml-3 grid size-11 shrink-0 cursor-grab touch-none place-items-center text-muted-foreground/60 max-md:hidden">
+      <GripVertical aria-hidden="true" className="size-4" />
+    </span>
+  ) : undefined;
+  return <KanbanCardBody {...props} rootRef={setNodeRef} className={isDragging ? "opacity-40" : undefined} grip={grip} />;
+}
+
+/** Presentational card. The drag overlay renders this, never `KanbanCardView`: a second `useDraggable` with the same id would replace the column card's registry entry and delete it on drop. */
+export function KanbanCardBody({ card, generatedAt, canMove, onMove, onUrgent, rootRef, className, grip }: CardProps & { rootRef?: (el: HTMLElement | null) => void; className?: string; grip?: ReactNode }) {
   const alert = cardAlert(card, generatedAt, card.missing);
   // `BoardRow.plate` holds the TV's "Sin vehículo"; the card wants null so it reads "Sin placa".
   const noVehicle = card.missing.includes("vehiculo");
   const hasTags = card.urgent || card.categoria !== null || card.mine;
   return (
     <CardShell
+      rootRef={rootRef}
+      className={className}
+      grip={grip}
       plate={noVehicle ? null : card.plate}
       make={card.make}
       model={card.model}

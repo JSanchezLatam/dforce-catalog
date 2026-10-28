@@ -15,10 +15,10 @@ function copyFor(from: OrderStatus, to: OrderStatus): Copy {
 }
 
 /** Which order a dialog is about; the menu that opened it is already gone. */
-export function OrderLine({ card }: { card: Pick<KanbanCard, "plate" | "make" | "model"> }) {
+export function OrderLine({ card }: { card: Pick<KanbanCard, "plate" | "make" | "model" | "missing"> }) {
   return (
     <p className="rounded-lg bg-muted px-3 py-2 text-sm">
-      <b>{card.plate}</b>
+      <b>{card.missing.includes("vehiculo") ? "Sin placa" : card.plate}</b>
       {card.make && <span className="text-muted-foreground">{` · ${card.make} ${card.model ?? ""}`.trimEnd()}</span>}
     </p>
   );

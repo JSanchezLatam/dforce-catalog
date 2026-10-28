@@ -1,6 +1,6 @@
 /**
  * kanban/mutations.ts - the two writes the board makes. Both resolve and never throw, so a caller can
- * roll back from one place. `router.refresh()` and the success toast belong to the CALLER, below its
+ * roll back from one place. The board refresh (`useBoardSnapshot().refresh()`) and the success toast belong to the CALLER, below its
  * try/catch: a refresh that throws must not read as a failure of a write the server already accepted.
  */
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";

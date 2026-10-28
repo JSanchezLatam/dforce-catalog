@@ -4,8 +4,8 @@
  * them stays control-free (`WorkshopBoard.test.tsx` pins that). Status is always icon + text, red is
  * only the Urgente flag, amber is only `AlertStrip`. Visual contract: kanban-board `mockup/index.html`.
  */
-import { CalendarDays, CircleCheck, Clock, Eye, Flame, Inbox, Pause, Search, TriangleAlert, UserPlus, Wrench, Tag } from "lucide-react";
-import type { CSSProperties, ReactNode } from "react";
+import { CalendarDays, CircleCheck, Clock, Eye, Flame, Inbox, Lock, Pause, Search, TriangleAlert, UserPlus, Wrench, Tag } from "lucide-react";
+import type { CSSProperties, ReactNode, Ref } from "react";
 import type { LucideIcon } from "lucide-react";
 
 import { categoriaLabel, type ServiceCategory } from "@/modules/service-orders/categories";
@@ -33,6 +33,8 @@ export function ColumnShell({
   count,
   empty,
   className,
+  rootRef,
+  dropState,
   children,
 }: {
   status: Exclude<OrderStatus, "cancelled">;
@@ -41,15 +43,31 @@ export function ColumnShell({
   /** Shown only while `count` is 0. */
   empty?: string;
   className?: string;
+  /** The kanban's drop target. */
+  rootRef?: Ref<HTMLElement>;
+  /** During a drag: `legal` lights the column in its own hue, `illegal` dims it and says why. */
+  dropState?: "legal" | "illegal";
   children?: ReactNode;
 }) {
   const { h, s, icon: Icon } = STATUS_HUE[status];
   return (
     <section
+      ref={rootRef}
       aria-label={label}
-      className={cn("relative flex flex-col gap-2.5 overflow-hidden rounded-2xl bg-board-col p-2.5 pt-3.5", className)}
+      className={cn(
+        "relative flex flex-col gap-2.5 overflow-hidden rounded-2xl bg-board-col p-2.5 pt-3.5",
+        dropState === "legal" && "board-hue-ring",
+        dropState === "illegal" && "[&>:not([data-hint])]:opacity-40 [&>:not([data-hint])]:grayscale",
+        className,
+      )}
       style={hueStyle(h, s)}
     >
+      {dropState === "illegal" && (
+        <div data-hint className="absolute inset-x-3 top-16 z-10 flex items-center justify-center gap-1.5 rounded-lg bg-foreground px-3 py-2 text-xs font-semibold text-background shadow-lg">
+          <Lock aria-hidden="true" className="size-3.5" />
+          No se puede mover acá
+        </div>
+      )}
       <span aria-hidden="true" className="board-hue-bar absolute inset-x-0 top-0 h-1" />
       <div className="flex items-center gap-2 px-1">
         <span className="board-hue-tile grid size-8 shrink-0 place-items-center rounded-lg">
@@ -80,6 +98,7 @@ export function CardShell({
   make,
   model,
   urgent,
+  rootRef,
   grip,
   action,
   tags,
@@ -91,6 +110,8 @@ export function CardShell({
   make: string | null;
   model: string | null;
   urgent: boolean;
+  /** The kanban's draggable node. */
+  rootRef?: Ref<HTMLLIElement>;
   grip?: ReactNode;
   action?: ReactNode;
   tags?: ReactNode;
@@ -100,7 +121,7 @@ export function CardShell({
 }) {
   const vehicle = [make, model].filter(Boolean).join(" ");
   return (
-    <li className={cn("relative rounded-xl border bg-board-tile p-3 shadow-(--board-tile-shadow)", urgent && "border-urgent/45", className)}>
+    <li ref={rootRef} className={cn("relative rounded-xl border bg-board-tile p-3 shadow-(--board-tile-shadow)", urgent && "border-urgent/45", className)}>
       {urgent && <span aria-hidden="true" className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-urgent" />}
       <div className="flex items-start gap-1.5">
         {grip}
