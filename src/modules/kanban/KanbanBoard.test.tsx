@@ -82,7 +82,9 @@ describe("KanbanBoard", () => {
 
   it("tells a mover that dragging works and leaves the técnico on the read-only line", () => {
     const { rerender } = render(<KanbanBoard initial={snapshot()} canMove />);
-    expect(screen.getByText("Arrastrá una tarjeta a otra columna para cambiar su estado.")).toBeInTheDocument();
+    expect(screen.getByText("Arrastrá una tarjeta a otra columna para cambiar su estado.")).toHaveClass("max-md:hidden");
+    // The phone has no drag (the grip is hidden below md), so it reads the neutral line instead.
+    expect(screen.getByText("Estado de las órdenes del taller.")).toHaveClass("md:hidden");
     rerender(<KanbanBoard initial={snapshot()} canMove={false} />);
     expect(screen.queryByText(/Arrastrá/)).toBeNull();
     expect(screen.getByText("Estado de las órdenes del taller. Los cambios de estado los hace el jefe de taller.")).toBeInTheDocument();

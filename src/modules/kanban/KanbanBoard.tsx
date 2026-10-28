@@ -134,7 +134,15 @@ export function KanbanBoard({ initial, canMove }: { initial: KanbanSnapshot; can
               </span>
             )}
           </h1>
-          <p className="text-sm text-muted-foreground">{canMove ? "Arrastrá una tarjeta a otra columna para cambiar su estado." : "Estado de las órdenes del taller. Los cambios de estado los hace el jefe de taller."}</p>
+          <p className="text-sm text-muted-foreground">{canMove ? (
+              // Drag is desktop and tablet only (the grip is hidden below md), so the phone gets the neutral line.
+              <>
+                <span className="max-md:hidden">Arrastrá una tarjeta a otra columna para cambiar su estado.</span>
+                <span className="md:hidden">Estado de las órdenes del taller.</span>
+              </>
+            ) : (
+              "Estado de las órdenes del taller. Los cambios de estado los hace el jefe de taller."
+            )}</p>
         </div>
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
