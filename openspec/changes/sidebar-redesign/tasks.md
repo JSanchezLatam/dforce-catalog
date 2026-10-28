@@ -63,10 +63,10 @@ Conventions for every WU:
 
 ## WU4a: Search box
 
-- [ ] 4a.1 RED `NavSearch.test.tsx`: the input is named "Buscar en el menú" with placeholder "Buscar…"; `Esc` clears it; `Enter` calls the mocked `router.push` with `firstHref` and clears it; `Enter` with no result does nothing; the `/` chip carries `pointer-coarse:hidden`.
-- [ ] 4a.2 RED `app-sidebar.test.tsx`: typing "ven" hides CRM's other links and shows a highlighted "ven"; "facturas" shows "Sin resultados para «facturas»."; with CRM saved as closed, "ven" shows Vencimientos, `document.cookie` is unchanged, and after `Esc` CRM is closed again; clicking a group label while searching writes no cookie.
-- [ ] 4a.3 GREEN `NavSearch.tsx` (input, chip, Esc, Enter) and its `app-sidebar.tsx` wiring (D7 forced open, D10 empty state, highlight render).
-- [ ] 4a.4 Verify: mutation-verify the forced-open no-op (let it call `handleToggleGroup`, and the cookie test must turn red) and the `Enter` push.
+- [x] 4a.1 RED `NavSearch.test.tsx`: the input is named "Buscar en el menú" with placeholder "Buscar…"; `Esc` clears it; `Enter` calls the mocked `router.push` with `firstHref` and clears it; `Enter` with no result does nothing; the `/` chip carries `pointer-coarse:hidden`.
+- [x] 4a.2 RED `app-sidebar.test.tsx`: typing "ven" hides CRM's other links and shows a highlighted "ven"; "facturas" shows "Sin resultados para «facturas»."; with CRM saved as closed, "ven" shows Vencimientos, `document.cookie` is unchanged, and after `Esc` CRM is closed again; clicking a group label while searching writes no cookie.
+- [x] 4a.3 GREEN `NavSearch.tsx` (input, chip, Esc, Enter) and its `app-sidebar.tsx` wiring (D7 forced open, D10 empty state, highlight render).
+- [x] 4a.4 Verify: mutation-verify the forced-open no-op (let it call `handleToggleGroup`, and the cookie test must turn red) and the `Enter` push.
 
 ## WU4b: Slash and rail icon
 

@@ -394,6 +394,18 @@ describe("AppSidebar — nav restyle (sidebar-redesign WU2)", () => {
     expect(current.map((l) => l.textContent)).toEqual(["Pantalla de clientes"]);
   });
 
+  it("a search that hides the current child does not move the current mark to a shorter sibling", async () => {
+    // Searching "taller" on /tablero/clientes leaves only /tablero under Tablero; a prefix match over the FILTERED list would mark it.
+    nav.pathname = "/tablero/clientes";
+    const user = userEvent.setup();
+    renderNav(TABLERO);
+
+    await user.type(screen.getByRole("textbox", { name: "Buscar en el menú" }), "taller");
+
+    expect(screen.getByRole("link", { name: /Pantalla del taller/ })).not.toHaveAttribute("aria-current");
+    expect(screen.getAllByRole("link").filter((l) => l.getAttribute("aria-current") === "page")).toEqual([]);
+  });
+
   it("a top-level link on its own page carries aria-current, and only that one", () => {
     nav.pathname = "/customers";
     renderNav(NAV_GROUPS);
@@ -482,5 +494,97 @@ describe("AppSidebar — nav restyle (sidebar-redesign WU2)", () => {
     });
     expect(header.closest('[data-mobile="true"]')).not.toBeNull();
     expect(header).toHaveClass("in-data-[mobile=true]:pr-13");
+  });
+});
+
+/** sidebar-redesign WU4a (D7, D10). The pure filter has its own tests; these pin the wiring. */
+describe("AppSidebar — menu search (sidebar-redesign WU4a)", () => {
+  const CRM: NavGroup[] = [
+    {
+      id: "crm",
+      label: "CRM",
+      items: [
+        { kind: "link", href: "/customers", label: "Clientes", icon: "customers" },
+        { kind: "link", href: "/vencimientos", label: "Vencimientos", icon: "vencimientos" },
+        { kind: "link", href: "/service-orders", label: "Órdenes de servicio", icon: "service-orders" },
+      ],
+    },
+    { id: "catalogo", label: "Catálogo", items: [{ kind: "link", href: "/builder", label: "Generar Catálogos", icon: "builder" }] },
+  ];
+
+  function renderSearch(state: NavCollapseState = DEFAULT_NAV_COLLAPSE_STATE) {
+    return render(
+      <SidebarProvider>
+        <AppSidebar
+          navGroups={CRM}
+          user={{ id: "u1", role: "administrador", name: "Jorge" }}
+          workshopName="Taller Demo"
+          logoR2Key={null}
+          initialCollapseState={state}
+        />
+      </SidebarProvider>,
+    );
+  }
+  const box = () => screen.getByRole("textbox", { name: "Buscar en el menú" });
+
+  it("typing 'ven' hides the other links and highlights the match", async () => {
+    const user = userEvent.setup();
+    renderSearch();
+
+    await user.type(box(), "ven");
+
+    expect(screen.queryByRole("link", { name: "Clientes" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Catálogo" })).not.toBeInTheDocument();
+    const marks = screen.getByRole("link", { name: "Vencimientos" }).querySelectorAll("mark");
+    expect([...marks].map((m) => m.textContent)).toEqual(["Ven"]);
+  });
+
+  it("a query with no match reads 'Sin resultados para «facturas».'", async () => {
+    const user = userEvent.setup();
+    renderSearch();
+
+    await user.type(box(), "facturas");
+
+    expect(screen.getByText("Sin resultados para «facturas».")).toBeInTheDocument();
+    // Only the header's brand link is left.
+    expect(screen.getAllByRole("link").map((l) => l.textContent)).toEqual(["Taller Demo"]);
+  });
+
+  it("opens a saved-closed group without writing the cookie, and the saved state returns after Esc", async () => {
+    const user = userEvent.setup();
+    document.cookie = "sidebar_group_state=; path=/; max-age=0";
+    const before = document.cookie;
+    renderSearch({ ...DEFAULT_NAV_COLLAPSE_STATE, crm: false });
+    expect(screen.queryByRole("link", { name: "Vencimientos" })).not.toBeInTheDocument();
+
+    await user.type(box(), "ven");
+    expect(screen.getByRole("link", { name: "Vencimientos" })).toBeInTheDocument();
+    expect(document.cookie).toBe(before);
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("link", { name: "Vencimientos" })).not.toBeInTheDocument();
+    expect(document.cookie).toBe(before);
+  });
+
+  it("clicking a group label while searching writes no cookie and keeps the group open", async () => {
+    const user = userEvent.setup();
+    document.cookie = "sidebar_group_state=; path=/; max-age=0";
+    const before = document.cookie;
+    renderSearch();
+
+    await user.type(box(), "ven");
+    await user.click(screen.getByRole("button", { name: "CRM" }));
+
+    expect(document.cookie).toBe(before);
+    expect(screen.getByRole("link", { name: "Vencimientos" })).toBeInTheDocument();
+  });
+
+  it("an empty query renders the unfiltered nav", () => {
+    renderSearch();
+
+    expect(screen.getAllByRole("link").map((l) => l.textContent)).toEqual([
+      "Taller Demo", "Clientes", "Vencimientos", "Órdenes de servicio", "Generar Catálogos",
+    ]);
+    expect(document.querySelector("mark")).toBeNull();
   });
 });
