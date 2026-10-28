@@ -104,8 +104,8 @@ Do every check at `http://192.168.0.7:3000` from a second machine, not at localh
   - Searching "usuarios" shows "Sin resultados para «usuarios».".
   Run 2026-10-28 at 192.168.0.7:3000 (Playwright, Chromium, real backup data): all of 5.1–5.5 held. Measured: chevron opacity 0→1 on hover; user menu above the card; "ordenes" → Órdenes en curso + Órdenes de servicio, Enter → /kanban; rail tooltip "Vencimientos próximos (6)", Tablero dropdown with "Órdenes en curso" bold; tablet/phone light+dark: 25–26 visible controls, none under 44px, chevron opacity 1, no `/` chip, input 16px, list scrolls with the card pinned, no horizontal scroll; técnico sees Mis números and "Sin resultados para «usuarios».". Zero hydration/serialization console errors. Not covered: a physical device and iOS Safari zoom.
 - [x] 5.6 Full gates on the tip: `npm test`, `npx tsc --noEmit` and `npm run lint` (0/13).
-- [ ] 5.7 `sdd-verify`. Then merge the chain into the tracker in order, and the tracker into main.
-- [ ] 5.8 `sdd-archive`: create `openspec/specs/app-sidebar/spec.md` from the delta.
+- [x] 5.7 `sdd-verify`. Then merge the chain into the tracker in order, and the tracker into main.
+- [x] 5.8 `sdd-archive`: create `openspec/specs/app-sidebar/spec.md` from the delta.
 
 ## Follow-ups
 
