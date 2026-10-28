@@ -68,3 +68,14 @@ N/A. The change is client-only UI. It has no new route, query or permission. Sea
 ## Open Questions
 
 - [ ] The sheet stays open after navigating, today and with `Enter`. Closing it on navigation is a follow-up unless the owner wants it here.
+
+## Deviations recorded at verify
+
+Each came out of the LAN browser check, not out of this design:
+
+- **The rail drops the filter while collapsed on desktop.** `query = collapsed && !isMobile ? "" : typed` in `AppSidebar`: the rail hides the box, so nothing there could clear a typed query. The typed value is kept and the filter returns on expand.
+- **`SIDEBAR_WIDTH_MOBILE` is `min(20rem, calc(100vw - 1rem))`**.
+- **The `SidebarInset` radius moved into the primitive** (`ui/sidebar.tsx`).
+- **Sheet fixes**: `data-[side]` size overrides on the sheet, the close button raised to `z-10`, and the header reserves its corner with `in-data-[mobile=true]:pr-13`.
+
+Known gap, follow-up: the rail dropdown marks the current child with `font-semibold` only, without `aria-current`, so a screen reader is not told which child is current.

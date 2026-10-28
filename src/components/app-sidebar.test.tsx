@@ -17,11 +17,11 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DEFAULT_NAV_COLLAPSE_STATE, type NavCollapseState } from "@/modules/layout/nav-collapse-state";
 import type { NavGroup } from "@/modules/layout/nav-items";
 
-const nav = vi.hoisted(() => ({ pathname: "/inventory" }));
+const nav = vi.hoisted(() => ({ pathname: "/inventory", push: vi.fn() }));
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname,
   // LogoutButton calls it as soon as the user menu opens.
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: nav.push }),
 }));
 // ThemeToggle renders nothing until next-themes has resolved a theme; there is no provider here.
 vi.mock("next-themes", () => ({
@@ -494,6 +494,38 @@ describe("AppSidebar — nav restyle (sidebar-redesign WU2)", () => {
     });
     expect(header.closest('[data-mobile="true"]')).not.toBeNull();
     expect(header).toHaveClass("in-data-[mobile=true]:pr-13");
+  });
+
+  it("renders the sidebar as the inset variant (floating panel shell)", () => {
+    renderNav(NAV_GROUPS);
+
+    expect(document.querySelector('[data-slot="sidebar"][data-variant]')).toHaveAttribute("data-variant", "inset");
+  });
+
+  it("while searching opens a saved-closed parent's matching children without writing the cookie, and Esc closes it again", async () => {
+    const user = userEvent.setup();
+    document.cookie = "sidebar_group_state=; path=/; max-age=0";
+    const before = document.cookie;
+    renderNav(TABLERO, { state: { ...DEFAULT_NAV_COLLAPSE_STATE, tablero: false } });
+    expect(screen.queryByRole("link", { name: "Pantalla de clientes" })).not.toBeInTheDocument();
+
+    await user.type(screen.getByRole("textbox", { name: "Buscar en el menú" }), "clien");
+    expect(screen.getByRole("link", { name: /Pantalla de clientes/ })).toBeInTheDocument();
+    expect(document.cookie).toBe(before);
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("link", { name: "Pantalla de clientes" })).not.toBeInTheDocument();
+    expect(document.cookie).toBe(before);
+  });
+
+  it("typing 'clien' and pressing Enter navigates to the first result, /tablero/clientes", async () => {
+    nav.push.mockClear();
+    const user = userEvent.setup();
+    renderNav(TABLERO);
+
+    await user.type(screen.getByRole("textbox", { name: "Buscar en el menú" }), "clien{Enter}");
+
+    expect(nav.push).toHaveBeenCalledExactlyOnceWith("/tablero/clientes");
   });
 });
 
