@@ -130,7 +130,8 @@ describe("KanbanBoard", () => {
       expect(screen.getByText("Actualizado hace menos de 30 s")).toBeInTheDocument();
       await act(() => vi.advanceTimersByTimeAsync(100_000));
       expect(screen.getByText("Actualizado hace 100 s")).toBeInTheDocument();
-      expect(screen.getByRole("status")).toHaveTextContent("Sin conexión · actualizado hace 1 min");
+      // dnd-kit's own (empty) live region is a role=status too, so look through all of them for the banner.
+      expect(screen.getAllByRole("status").map((e) => e.textContent)).toContain("Sin conexión · actualizado hace 1 min");
       expect(plates("En progreso")).toEqual(["IP2", "IP1"]);
     });
   });

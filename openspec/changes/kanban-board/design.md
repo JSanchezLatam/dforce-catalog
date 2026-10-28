@@ -101,4 +101,4 @@ The migration is additive and nullable, with no backfill. Revert the chain in re
 ## Open Questions
 
 - [ ] Toast copy for removing the flag (proposed "Orden ya no es urgente") is left to the spec.
-- [ ] Confirm at apply time that the `DndContext` `id` prop is not needed once D11a/b are in place.
+- [x] Confirmed in WU6 (not needed; see apply-progress): confirm at apply time that the `DndContext` `id` prop is not needed once D11a/b are in place.

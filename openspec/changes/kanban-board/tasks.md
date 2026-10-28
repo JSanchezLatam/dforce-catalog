@@ -96,10 +96,10 @@ Conventions for every WU: Strict TDD (RED confirmed failing by name, then GREEN)
 
 ## WU6: Drag and drop
 
-- [ ] 6.1 `package.json`: `@dnd-kit/core` exact `6.3.1`; confirm `npm ls` and lockfile.
-- [ ] 6.2 RED `kanban/DndBoard.test.tsx`: legal columns highlighted and others dimmed "No se puede mover acá" for an `in_progress` card; illegal drop does nothing; técnico has no grip; phone `disabled`; board renders identical static markup before mount (D11a). GREEN `kanban/DndBoard.tsx` (`MouseSensor {distance: 5}`, `TouchSensor {delay: 200, tolerance: 5}`, `listeners` only, no `attributes`, no `createPortal`, mount via `useSyncExternalStore`).
-- [ ] 6.3 Wire drop → `planMove` (same path as menu). Resolve open question: is `DndContext` `id` needed?
-- [ ] 6.4 Verify (mandatory, no test can see it): LAN IP at 1440/1024/768/390, light+dark; mouse drag; tablet long-press keeps horizontal scroll; console has no hydration mismatch or serialization error; mutation-verify the legality check.
+- [x] 6.1 `package.json`: `@dnd-kit/core` exact `6.3.1`; confirm `npm ls` and lockfile.
+- [x] 6.2 RED `kanban/DndBoard.test.tsx`: legal columns highlighted and others dimmed "No se puede mover acá" for an `in_progress` card; illegal drop does nothing; técnico has no grip; phone `disabled`; board renders identical static markup before mount (D11a). GREEN `kanban/DndBoard.tsx` (`MouseSensor {distance: 5}`, `TouchSensor {delay: 200, tolerance: 5}`, `listeners` only, no `attributes`, no `createPortal`, mount via `useSyncExternalStore`).
+- [x] 6.3 Wire drop → `planMove` (same path as menu). Resolve open question: is `DndContext` `id` needed?
+- [ ] 6.4 (unit/mutation part done in WU6; browser part open) Verify (mandatory, no test can see it): LAN IP at 1440/1024/768/390, light+dark; mouse drag; tablet long-press keeps horizontal scroll; console has no hydration mismatch or serialization error; mutation-verify the legality check.
 
 ## WU7: TV restyle
 
