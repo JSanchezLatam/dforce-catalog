@@ -12,9 +12,13 @@ import type { PortalOrder } from "@portal/contract";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import type { OrdenServicio } from "@/shared/db/schema";
 import { BACKLOG_STATUSES } from "@/modules/metrics/shape";
+import { compareInColumn } from "./sort";
 
-/** Exactly the columns `queries.ts` selects. `id` is a join key and never leaves. */
-export type BoardOrderRow = Pick<OrdenServicio, "id" | "status" | "esperaMotivo" | "updatedAt" | "appointmentAt"> & {
+/**
+ * Exactly the columns `queries.ts` selects. `id` is a join key and never leaves this module's TV
+ * mappers; `vehiculoId` and `categoria` feed only `kanban/shape.ts`.
+ */
+export type BoardOrderRow = Pick<OrdenServicio, "id" | "status" | "esperaMotivo" | "updatedAt" | "appointmentAt" | "urgenteAt" | "vehiculoId" | "categoria"> & {
   // null: a `booked` order may have no vehicle (left join).
   plate: string | null;
   make: string | null;
@@ -32,6 +36,8 @@ export type BoardRow = {
   holdReason: string | null;
   technicians: string[];
   statusSince: string;
+  /** The manual Urgente flag; who set it and when never leave. */
+  urgent: boolean;
   /** Present only while `booked`. */
   appointmentAt?: string | null;
 };
@@ -42,23 +48,31 @@ export type CustomerSnapshot = { generatedAt: string; rows: CustomerRow[] };
 
 const STATUS_ORDER: readonly string[] = [...BACKLOG_STATUSES, "done"];
 
+/** The whitelist of a board row, written out by name. Shared with `kanban/shape.ts`, which adds its own fields on top. */
+export function boardFields(r: BoardOrderRow, techs: BoardTechRow[], sinceById: Map<string, Date>): BoardRow {
+  const row: BoardRow = {
+    status: r.status,
+    statusLabel: ORDER_STATUS_LABEL[r.status],
+    plate: r.plate ?? "Sin vehículo",
+    make: r.make,
+    model: r.model,
+    holdReason: r.status === "on_hold" && r.esperaMotivo ? ESPERA_MOTIVO_LABEL[r.esperaMotivo] : null,
+    technicians: techs.filter((t) => t.ordenId === r.id).map((t) => t.nombre),
+    statusSince: (sinceById.get(r.id) ?? r.updatedAt).toISOString(),
+    urgent: r.urgenteAt !== null,
+  };
+  if (r.status === "booked") row.appointmentAt = r.appointmentAt ? r.appointmentAt.toISOString() : null;
+  return row;
+}
+
+/** Status order, then urgent first, then the longest time in status. */
+export const compareRows = (a: BoardRow, b: BoardRow): number =>
+  STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || compareInColumn(a, b);
+
 export function toBoardSnapshot(rows: BoardOrderRow[], techs: BoardTechRow[], since: BoardSinceRow[], now: Date): BoardSnapshot {
   const sinceById = new Map(since.map((s) => [s.ordenId, s.changedAt]));
-  const mapped = rows.map((r) => {
-    const row: BoardRow = {
-      status: r.status,
-      statusLabel: ORDER_STATUS_LABEL[r.status],
-      plate: r.plate ?? "Sin vehículo",
-      make: r.make,
-      model: r.model,
-      holdReason: r.status === "on_hold" && r.esperaMotivo ? ESPERA_MOTIVO_LABEL[r.esperaMotivo] : null,
-      technicians: techs.filter((t) => t.ordenId === r.id).map((t) => t.nombre),
-      statusSince: (sinceById.get(r.id) ?? r.updatedAt).toISOString(),
-    };
-    if (r.status === "booked") row.appointmentAt = r.appointmentAt ? r.appointmentAt.toISOString() : null;
-    return row;
-  });
-  mapped.sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || Date.parse(a.statusSince) - Date.parse(b.statusSince));
+  const mapped = rows.map((r) => boardFields(r, techs, sinceById));
+  mapped.sort(compareRows);
   return { generatedAt: now.toISOString(), rows: mapped };
 }
 
