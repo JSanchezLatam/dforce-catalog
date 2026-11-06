@@ -69,7 +69,7 @@ WU5 and WU6 own disjoint files and may be written in parallel (subagents, one pe
 - [x] 4.2 RED `[id]/page.test.tsx`: open order hint + "Asignar técnico" (admin and jefe); no `#assign-tecnico` → link "Ir a Técnicos" to `/technicians` only with `technicians.manage`, else text only; Faltan sentences; booked incomplete → Recibir disabled, Cancelar enabled, second "Editar orden" trigger; técnico sees no hint. GREEN page hint row via `statusBarHint`, server-rendered.
 - [x] 4.3 RED `OrderStatusControls.test.tsx`: `receiveBlocked` disables Recibir and sets `aria-describedby` to the hint id; default false keeps `:300-346` green. GREEN.
 - [x] 4.4 Mutation-verify; gates; GGA; PR. (Mutations and gates done; GGA and PR left to the orchestrator. Deviation from D3: `ASSIGN_TECNICO_ID` and `STATUS_HINT_ID` live in the plain module `service-orders/dom-ids.ts`, not exported from the `"use client"` `AssignTecnicoControl.tsx`: a constant imported from a client file into a Server Component arrives as a client reference, not a string. The edit-mode guard around the hint's "Editar orden" was dropped as unreachable.)
-- [ ] 4.5 BROWSER (LAN IP): scroll+focus on the select, no RSC/hydration error in console (server element in hint row), hint wraps at 390 with no overflow, 44px, light+dark.
+- [x] 4.5 BROWSER (LAN IP): scroll+focus on the select, no RSC/hydration error in console (server element in hint row), hint wraps at 390 with no overflow, 44px, light+dark.
 
 ## WU5: Work-card hints (disjoint from WU6)
 
