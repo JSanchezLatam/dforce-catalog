@@ -88,7 +88,7 @@ WU5 and WU6 own disjoint files and may be written in parallel (subagents, one pe
 
 ## WU7: Técnico empty list (D11)
 
-- [ ] 7.1 RED `service-orders/page.test.tsx` (mock `findTecnicoByUserId`): linked → "No tenés órdenes asignadas."; unlinked → unlinked copy; filter/search → "Ninguna orden coincide con el filtro." + "Limpiar filtro"; admin unchanged; técnico with orders no reason; lookup NOT called unless `!readAll`, unfiltered, empty. GREEN `page.tsx`.
+- [x] 7.1 RED `service-orders/page.test.tsx` (mock `findTecnicoByUserId`): linked → "No tenés órdenes asignadas."; unlinked → unlinked copy; filter/search → "Ninguna orden coincide con el filtro." + "Limpiar filtro"; admin unchanged; técnico with orders no reason; lookup NOT called unless `!readAll`, unfiltered, empty. GREEN `page.tsx`.
 - [ ] 7.2 Mutation-verify; gates; GGA; PR.
 - [ ] 7.3 BROWSER (LAN IP): both técnico empty states against a real linked and an unlinked user.
 - [ ] 7.4 Tracker: whole-chain integration check (`npm test`, `tsc`, `lint` on the tracker), then merge to main; archive per SDD discipline.
