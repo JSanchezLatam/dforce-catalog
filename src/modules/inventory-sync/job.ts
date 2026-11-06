@@ -22,7 +22,8 @@ export type SyncPayload = {
 
 /** R2.5 — rejecting a concurrent manual sync with a proper message. */
 export class SyncAlreadyRunningError extends Error {
-  constructor(message = "A sync is already in progress") {
+  // Spanish: the route returns it and ManualSyncButton shows it to the operator as-is.
+  constructor(message = "Ya hay una sincronización en curso.") {
     super(message);
     this.name = "SyncAlreadyRunningError";
   }
