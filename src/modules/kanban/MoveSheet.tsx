@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, Flag, FlagOff, Trash2, X } from "lucide-react";
+import { ExternalLink, Flag, FlagOff, Info, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { createElement } from "react";
 
@@ -18,7 +18,7 @@ const row = "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left t
 export function MoveSheet({ card, canMove, open, onClose, onMove, onUrgent }: {
   card: KanbanCard; canMove: boolean; open: boolean; onClose: () => void; onMove: (target: OrderStatus) => void; onUrgent: (on: boolean) => void;
 }) {
-  const { targets, cancel, urgent } = menuItems(card, canMove);
+  const { targets, blocked, cancel, urgent } = menuItems(card, canMove);
   const act = (fn: () => void) => () => (onClose(), fn());
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
@@ -33,6 +33,12 @@ export function MoveSheet({ card, canMove, open, onClose, onMove, onUrgent }: {
           </div>
           <SheetClose aria-label="Cerrar" className="grid size-11 shrink-0 place-items-center rounded-full bg-muted"><X aria-hidden="true" className="size-4.5" /></SheetClose>
         </SheetHeader>
+        {blocked && (
+          <div data-blocked className="flex items-start gap-3 rounded-xl border border-dashed px-3 py-2.5 text-sm text-muted-foreground">
+            <Info aria-hidden="true" className="mt-0.5 size-4.5 shrink-0" />
+            <span>{blocked}</span>
+          </div>
+        )}
         {targets.length > 0 && (
           <div role="group" aria-labelledby={`${card.id}-mover`} className="grid gap-1">
             <div id={`${card.id}-mover`} className="px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Mover a</div>
