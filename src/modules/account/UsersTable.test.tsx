@@ -950,6 +950,14 @@ describe("UsersTable — phone cards (WU8)", () => {
     expect(card).not.toHaveTextContent("ana@taller.com");
   });
 
+  it("keeps the Activo chip green: it is not an order status, so it takes no order hue", () => {
+    render(<UsersTable users={[ACTIVE]} />);
+
+    const chip = within(cards().getByRole("listitem")).getByText("Activo");
+    expect(chip).toHaveClass("bg-green-100");
+    expect(chip).not.toHaveClass("hue-tint");
+  });
+
   it("marks a deactivated user's card Desactivado, not Activo", async () => {
     const user = userEvent.setup();
     render(<UsersTable users={[ACTIVE, INACTIVE]} />);

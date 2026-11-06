@@ -8,6 +8,7 @@ import { compareInColumn } from "@/modules/board/sort";
 import { STATUS_HUE } from "@/modules/board/primitives";
 import { StaleBanner } from "@/modules/board/StaleBanner";
 import { useBoardSnapshot } from "@/modules/board/useBoardSnapshot";
+import { blockedMoveReason } from "@/modules/service-orders/hints";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import { PAGE_HEADING } from "@/shared/ui/styles";
@@ -113,7 +114,8 @@ export function KanbanBoard({ initial, canMove }: { initial: KanbanSnapshot; can
   function onMove(card: KanbanCard, target: OrderStatus) {
     if (overrides.get(card.id)?.status?.seq === null) return; // its previous move is still in flight
     const plan = planMove(card, target, canMove);
-    if (plan.kind === "patch") void send(card, target);
+    if (plan.kind === "illegal") addToast("info", `${blockedMoveReason(card.status, target)}.`);
+    else if (plan.kind === "patch") void send(card, target);
     else if (plan.kind === "ask-reason" || plan.kind === "confirm" || plan.kind === "incomplete") setAsk({ card, target, kind: plan.kind });
   }
   const close = () => setAsk(null);

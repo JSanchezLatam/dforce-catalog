@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -59,5 +59,27 @@ describe("MoveSheet", () => {
     setup(card());
     for (const row of [...screen.getByRole("group", { name: "Mover a" }).querySelectorAll("button"), screen.getByRole("link", { name: "Ver orden" }), screen.getByRole("button", { name: "Cerrar" })])
       expect(row).toHaveClass(row.getAttribute("aria-label") === "Cerrar" ? "size-11" : "min-h-11");
+  });
+
+  describe("blocked reason", () => {
+    const REASON = "Para pasarla a En diagnóstico, asigná un técnico.";
+    it("an open card shows the reason as the first, non-button row and keeps Trash2 on Cancelar orden", () => {
+      setup(card({ status: "open" }));
+      const text = screen.getByText(REASON);
+      expect(text.closest("button, a")).toBeNull();
+      const rows = screen.getByRole("dialog").querySelectorAll("button:not([aria-label=Cerrar]), a, [data-blocked]");
+      expect(rows[0]).toContainElement(text);
+      expect(rows[0].querySelector("svg")).not.toBeNull();
+      expect(screen.getByRole("button", { name: "Cancelar orden" }).querySelector("svg")).not.toBeNull();
+      expect(screen.queryByRole("group", { name: "Mover a" })).toBeNull();
+    });
+
+    it("is absent for a booked card and for a técnico", () => {
+      setup(card({ status: "booked" }));
+      expect(screen.queryByText(REASON)).toBeNull();
+      cleanup();
+      setup(card({ status: "open" }), false);
+      expect(screen.queryByText(REASON)).toBeNull();
+    });
   });
 });

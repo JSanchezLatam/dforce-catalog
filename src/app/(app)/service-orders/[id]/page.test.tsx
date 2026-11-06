@@ -4,6 +4,7 @@
  * hand the element to RTL, mock only the request-scoped and data edges.
  */
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const notFound = vi.hoisted(() => vi.fn(() => { throw new Error("NEXT_NOT_FOUND"); }));
@@ -20,7 +21,7 @@ vi.mock("@/modules/auth/policy", () => ({ can: vi.fn(() => true) }));
 const SCOPE = vi.hoisted(() => ({ where: "scope-sentinel" }));
 const orderScope = vi.hoisted(() => vi.fn<(user: unknown) => typeof SCOPE>(() => SCOPE));
 vi.mock("@/modules/service-orders/scope", () => ({ orderScope }));
-const statusControls = vi.hoisted(() => vi.fn<(props: { orderId: string; status: string; canAssign: boolean }) => null>(() => null));
+const statusControls = vi.hoisted(() => vi.fn<(props: { orderId: string; status: string; canAssign: boolean; receiveBlocked?: boolean }) => null>(() => null));
 vi.mock("@/modules/service-orders/OrderStatusControls", () => ({ OrderStatusControls: statusControls }));
 const listOrderAssignees = vi.hoisted(() => vi.fn<(ordenId: string) => Promise<OrderAssignee[]>>(async () => []));
 const listOrderLines = vi.hoisted(() => vi.fn<(ordenId: string) => Promise<OrderWorkLine[]>>(async () => []));
@@ -43,6 +44,7 @@ vi.mock("@/modules/service-orders/photos", () => ({ listOrderPhotos }));
 
 import { can } from "@/modules/auth/policy";
 import type { Role } from "@/modules/auth/roles";
+import { STATUS_HINT_ID } from "@/modules/service-orders/dom-ids";
 import type { OrderAssignee, OrderWorkLine } from "@/modules/service-orders/order-team";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import type { OrdenServicio, Reminder, Vehiculo } from "@/shared/db/schema";
@@ -503,6 +505,71 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
 });
 
 /**
+ * order-blocked-action-hints WU2 (D5 layout): "Editar orden" and "Imprimir" sit
+ * on the breadcrumb line with their icons; the card header holds only the title
+ * and badge, and the status controls get their own row under it. Server markup
+ * only: no function crosses to a client component.
+ */
+describe("ServiceOrderDetailPage — action bar layout", () => {
+  beforeEach(() => {
+    getClienteById.mockResolvedValue(detailWith(null));
+    listRemindersForOrder.mockResolvedValue([]);
+    requireSessionFromHeaders.mockResolvedValue({ id: "u1", role: "administrador" });
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status: "in_progress" }, items: [] });
+    statusControls.mockImplementation(() => (<div data-testid="status-row" />) as never);
+  });
+  afterEach(() => statusControls.mockImplementation(() => null));
+
+  const crumbRow = () => screen.getByRole("navigation", { name: "breadcrumb" }).parentElement!;
+  const cardHeader = () => screen.getByText("Orden o1").closest("[data-slot=card-header]") as HTMLElement;
+
+  it("puts Editar orden and Imprimir in the breadcrumb row, not in the card header", async () => {
+    render(await renderPage());
+
+    for (const control of [screen.getByRole("button", { name: "Editar orden" }), screen.getByRole("link", { name: "Imprimir" })]) {
+      expect(crumbRow()).toContainElement(control);
+      expect(cardHeader()).not.toContainElement(control);
+    }
+  });
+
+  it("lets the breadcrumb row wrap and pushes the actions to the right (class pins; the browser measures)", async () => {
+    render(await renderPage());
+
+    expect(crumbRow()).toHaveClass("flex", "flex-wrap", "justify-between");
+  });
+
+  it("gives Editar orden a Pencil and Imprimir a Printer", async () => {
+    render(await renderPage());
+
+    expect(screen.getByRole("button", { name: "Editar orden" }).querySelector("svg")).toHaveClass("lucide-pencil");
+    expect(screen.getByRole("link", { name: "Imprimir" }).querySelector("svg")).toHaveClass("lucide-printer");
+  });
+
+  it("gives Corregir the Pencil too, on the same breadcrumb row", async () => {
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status: "done" }, items: [] });
+    render(await renderPage());
+
+    const button = screen.getByRole("button", { name: "Corregir" });
+    expect(crumbRow()).toContainElement(button);
+    expect(button.querySelector("svg")).toHaveClass("lucide-pencil");
+  });
+
+  it("holds only the title and the badge in the title row, with the controls on their own row under it", async () => {
+    render(await renderPage());
+
+    const title = screen.getByText("Orden o1").closest("[data-slot=card-title]") as HTMLElement;
+    expect(title).toHaveTextContent("Orden o1");
+    expect(title).not.toContainElement(screen.getByTestId("status-row"));
+    const header = cardHeader();
+    // A direct child of the header: its own row, not tucked in beside Editar orden / Imprimir.
+    expect(screen.getByTestId("status-row").parentElement).toBe(header);
+    expect(header.className).toContain("flex-col");
+    // Document order: title first, controls after it.
+    expect(title.compareDocumentPosition(screen.getByTestId("status-row")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+/**
  * service-order-reception — the "Recepción" card. The intake is optional, so
  * an unset kilometraje reads as a warning chip rather than a silent blank: the
  * technician must be able to tell "nobody recorded it" from "there is no such
@@ -878,7 +945,7 @@ describe("ServiceOrderDetailPage — technicians on the order", () => {
     roleCan(assign ? ["service-orders.read", "service-orders.assign"] : ["service-orders.read"]);
     render(await renderPage());
 
-    expect(statusControls).toHaveBeenCalledWith({ orderId: "o1", status: "in_progress", canAssign: assign }, undefined);
+    expect(statusControls).toHaveBeenCalledWith({ orderId: "o1", status: "in_progress", canAssign: assign, receiveBlocked: false }, undefined);
   });
 
   describe("the work-lines card", () => {
@@ -910,7 +977,18 @@ describe("ServiceOrderDetailPage — technicians on the order", () => {
         mode: "write",
         viewerTecnicoId: "t1",
         canManageAll: true,
+        assignableCount: 0,
+        canManageTechnicians: false,
       });
+    });
+
+    it("hands the card how many technicians are still assignable and whether the viewer manages them", async () => {
+      roleCan(["service-orders.read", "service-orders.assign", "service-orders.write", "technicians.manage"]);
+      listTecnicos.mockResolvedValue([tecnicoRow("t8", "Carla Motor"), tecnicoRow("t9", "Beto Frenos")]);
+      render(await renderPage());
+
+      expect(lastProps().assignableCount).toBe(2);
+      expect(lastProps().canManageTechnicians).toBe(true);
     });
 
     it("crosses the RSC boundary as plain data: it survives a JSON round trip unchanged", async () => {
@@ -950,5 +1028,185 @@ describe("ServiceOrderDetailPage — technicians on the order", () => {
 
       expect(lastProps().mode).toBe(mode);
     });
+  });
+});
+
+/**
+ * order-blocked-action-hints WU4 (D2-D4): the hint row under the status controls. The copy comes
+ * from `statusBarHint` (hints.test.ts owns every sentence); this block pins what the PAGE owns:
+ * who sees it, which action widget each hint gets, `receiveBlocked`, and that only strings and
+ * booleans cross to a client component. The real scroll is verified in a browser, not here.
+ */
+describe("ServiceOrderDetailPage — blocked-action hints", () => {
+  const STAFF = ["service-orders.read", "service-orders.assign", "service-orders.write"];
+  const roleCan = (allowed: string[]) =>
+    vi.mocked(can).mockImplementation(((_user: unknown, action: string) => allowed.includes(action)) as typeof can);
+  const tecnicoRow = (id: string, nombre: string) => ({ id, nombre, userId: null, deactivatedAt: null, createdAt: new Date("2026-01-01") });
+  const assignee = (tecnicoId: string, nombre: string, over: Partial<OrderAssignee> = {}): OrderAssignee => ({
+    tecnicoId, nombre, active: true, parteLista: false, ...over,
+  });
+  const OPEN_HINT = "Para pasarla a En diagnóstico, asigná un técnico.";
+  const BOOKED_HINT = "Completá el vehículo y la categoría antes de recibir la orden.";
+
+  async function show(status: OrderStatus, over: Partial<OrdenServicio> = {}, role: Role = "administrador") {
+    requireSessionFromHeaders.mockResolvedValue({ id: "u1", role });
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status, ...over }, items: [] });
+    render(await renderPage());
+  }
+
+  beforeEach(() => {
+    roleCan([...STAFF, "technicians.manage"]);
+    getClienteById.mockResolvedValue(detailWith(null));
+    listRemindersForOrder.mockResolvedValue([]);
+    listOrderPhotos.mockResolvedValue([]);
+    listOrderAssignees.mockResolvedValue([]);
+    listOrderLines.mockResolvedValue([]);
+    findTecnicoByUserId.mockResolvedValue(null);
+    listTecnicos.mockResolvedValue([tecnicoRow("t9", "Beto Frenos")]);
+    statusControls.mockClear();
+    statusControls.mockImplementation(() => (<div data-testid="status-row" />) as never);
+  });
+  afterEach(() => {
+    vi.mocked(can).mockImplementation(() => true);
+    statusControls.mockImplementation(() => null);
+  });
+
+  describe("an open order with nobody assigned", () => {
+    it.each<Role>(["administrador", "jefe_taller"])("shows %s the hint and an Asignar técnico button", async (role) => {
+      await show("open", {}, role);
+
+      expect(screen.getByText(OPEN_HINT)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Asignar técnico" })).toBeInTheDocument();
+    });
+
+    it("puts the hint in the card header, after the status controls", async () => {
+      await show("open");
+
+      const header = screen.getByText("Orden o1").closest("[data-slot=card-header]") as HTMLElement;
+      const hint = screen.getByText(OPEN_HINT);
+      expect(header).toContainElement(hint);
+      expect(screen.getByTestId("status-row").compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("focuses the #assign-tecnico select when Asignar técnico is clicked", async () => {
+      await show("open");
+      await userEvent.setup().click(screen.getByRole("button", { name: "Asignar técnico" }));
+
+      expect(document.getElementById("assign-tecnico")).toHaveFocus();
+    });
+
+    it("offers a link to Técnicos, and no Asignar técnico, when nobody is left to assign and the viewer may manage them", async () => {
+      listTecnicos.mockResolvedValue([]);
+      await show("open");
+
+      expect(screen.getByText(OPEN_HINT)).toBeInTheDocument();
+      expect(document.getElementById("assign-tecnico")).toBeNull();
+      expect(screen.getByRole("link", { name: "Ir a Técnicos" })).toHaveAttribute("href", "/technicians");
+      expect(screen.queryByRole("button", { name: "Asignar técnico" })).not.toBeInTheDocument();
+    });
+
+    it("shows the text only, with no link and no button, when nobody is left and the viewer may not manage technicians", async () => {
+      listTecnicos.mockResolvedValue([]);
+      roleCan(STAFF);
+      await show("open", {}, "jefe_taller");
+
+      expect(screen.getByText(OPEN_HINT)).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Ir a Técnicos" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Asignar técnico" })).not.toBeInTheDocument();
+    });
+
+    it("shows no assign hint once someone is assigned", async () => {
+      listOrderAssignees.mockResolvedValue([assignee("t1", "Ana Mecánica")]);
+      await show("open");
+
+      expect(screen.queryByText(OPEN_HINT)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("an in_progress order", () => {
+    const FALTAN = "Pasa a Lista para revisión cuando todos los técnicos marcan «Mi parte lista». Faltan: ";
+
+    it("lists, in order, the active technicians who have not marked their part", async () => {
+      listOrderAssignees.mockResolvedValue([
+        assignee("t1", "Carlos Pérez", { parteLista: true }),
+        assignee("t2", "Luis Ríos"),
+        assignee("t3", "Ana Gómez"),
+      ]);
+      await show("in_progress");
+
+      expect(screen.getByText(`${FALTAN}Luis Ríos, Ana Gómez.`)).toBeInTheDocument();
+    });
+
+    it("leaves a deactivated technician out of the list", async () => {
+      listOrderAssignees.mockResolvedValue([assignee("t2", "Luis Ríos"), assignee("t3", "Ana Gómez", { active: false })]);
+      await show("in_progress");
+
+      expect(screen.getByText(`${FALTAN}Luis Ríos.`)).toBeInTheDocument();
+      expect(screen.queryByText(/Ana Gómez\./)).not.toBeInTheDocument();
+    });
+
+    it("renders no hint when the only unmarked assignee is deactivated", async () => {
+      listOrderAssignees.mockResolvedValue([assignee("t3", "Ana Gómez", { active: false })]);
+      await show("in_progress");
+
+      expect(screen.queryByText(/Faltan:/)).not.toBeInTheDocument();
+    });
+
+    it.each<OrderStatus>(["diagnosing", "on_hold", "ready_for_review"])("never says Faltan on a %s order", async (status) => {
+      listOrderAssignees.mockResolvedValue([assignee("t2", "Luis Ríos")]);
+      await show(status);
+
+      expect(screen.queryByText(/Faltan:/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("an Agendada order", () => {
+    it.each<[string, Partial<OrdenServicio>]>([
+      ["vehicle", { vehiculoId: null }],
+      ["category", { categoria: null }],
+      ["both", { vehiculoId: null, categoria: null }],
+    ])("missing its %s blocks Recibir, says why, and offers a second Editar orden in the hint", async (_what, over) => {
+      await show("booked", over);
+
+      expect(statusControls.mock.calls.at(-1)![0].receiveBlocked).toBe(true);
+      const hint = screen.getByText(BOOKED_HINT);
+      expect(hint).toHaveAttribute("id", STATUS_HINT_ID);
+      const editButtons = screen.getAllByRole("button", { name: "Editar orden" });
+      expect(editButtons).toHaveLength(2);
+      const row = hint.parentElement!;
+      expect(editButtons.filter((b) => row.contains(b))).toHaveLength(1);
+    });
+
+    it("opens the same edit dialog from the hint's button", async () => {
+      await show("booked", { vehiculoId: null });
+      const inHint = screen.getAllByRole("button", { name: "Editar orden" }).find((b) => screen.getByText(BOOKED_HINT).parentElement!.contains(b))!;
+      await userEvent.setup().click(inHint);
+
+      expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    });
+
+    it("leaves Recibir alone and shows no hint when vehicle and category are set", async () => {
+      await show("booked");
+
+      expect(statusControls.mock.calls.at(-1)![0].receiveBlocked).toBe(false);
+      expect(screen.queryByText(BOOKED_HINT)).not.toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "Editar orden" })).toHaveLength(1);
+    });
+  });
+
+  it("shows a caller without service-orders.assign no hint, whatever is missing", async () => {
+    roleCan(["service-orders.read", "service-orders.write"]);
+    await show("booked", { vehiculoId: null }, "tecnico");
+
+    expect(screen.queryByText(BOOKED_HINT)).not.toBeInTheDocument();
+    expect(statusControls.mock.calls.at(-1)![0].receiveBlocked).toBe(false);
+  });
+
+  it("hands the status controls only serializable props (no function crosses the RSC boundary)", async () => {
+    await show("booked", { vehiculoId: null });
+
+    const props = statusControls.mock.calls.at(-1)![0];
+    expect(JSON.parse(JSON.stringify(props))).toEqual(props);
+    expect(Object.values(props).some((v) => typeof v === "function")).toBe(false);
   });
 });

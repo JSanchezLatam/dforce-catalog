@@ -17,6 +17,7 @@ const card = (id: string, status: OrderStatus): KanbanCard => ({
   statusSince: "2026-10-26T14:48:00.000Z", urgent: false, categoria: null, missing: [], mine: false,
 });
 const snapshot = (): KanbanSnapshot => ({ generatedAt: "2026-10-26T15:00:00.000Z", onRoster: false, rows: [card("DG", "diagnosing"), card("IP", "in_progress")] });
+const wide = (): KanbanSnapshot => ({ ...snapshot(), rows: [card("OP", "open"), card("BK", "booked"), ...snapshot().rows] });
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 const orden = { id: "o1", status: "in_progress", esperaMotivo: null };
 
@@ -28,6 +29,7 @@ const ORDER = Object.values(ORDER_STATUS_LABEL);
 const colAt = (label: string) => ({ x: ORDER.indexOf(label) * 300 + 100, y: 100 });
 beforeEach(() => {
   fetchMock.mockClear();
+  addToast.mockClear();
   vi.stubGlobal("fetch", fetchMock);
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
     const i = ORDER.indexOf(this.getAttribute("aria-label") ?? "");
@@ -49,20 +51,40 @@ async function drag(plate: string, to: string, drop = true) {
 }
 
 describe("DndBoard drag", () => {
-  it("lights the legal columns and dims the others with the hint, for an in_progress card", async () => {
+  it("lights the legal columns and dims the others with the hint of THIS origin and target, for an in_progress card", async () => {
     render(<KanbanBoard initial={snapshot()} canMove />);
     await drag("IP", "En espera", false);
     for (const label of ["En espera", "Completada"]) {
       expect(section(label).className).toContain("board-hue-ring");
-      expect(within(section(label)).queryByText("No se puede mover acá")).toBeNull();
+      expect(section(label).querySelector("[data-hint]")).toBeNull();
     }
-    for (const label of ["Agendada", "Recibida", "En diagnóstico", "Lista para revisión"]) {
-      expect(within(section(label)).getByText("No se puede mover acá")).toBeInTheDocument();
+    const hints: Record<string, string> = {
+      "Agendada": "Desde En progreso no se puede pasar a Agendada",
+      "Recibida": "Desde En progreso no se puede pasar a Recibida",
+      "En diagnóstico": "Desde En progreso no se puede pasar a En diagnóstico",
+      "Lista para revisión": "Pasa sola cuando todos marcan su parte lista",
+    };
+    for (const [label, text] of Object.entries(hints)) {
+      expect(within(section(label)).getByText(text)).toBeInTheDocument();
       expect(section(label).className).not.toContain("board-hue-ring");
     }
+    expect(screen.queryByText("No se puede mover acá")).toBeNull();
     // The source column is neither lit nor dimmed.
     expect(section("En progreso").className).not.toMatch(/board-hue-ring|opacity-40/);
-    expect(within(section("En progreso")).queryByText("No se puede mover acá")).toBeNull();
+    expect(section("En progreso").querySelector("[data-hint]")).toBeNull();
+  });
+
+  it("the same target reads differently by origin: En diagnóstico says Pasa sola from Recibida, Desde Agendada from Agendada", async () => {
+    render(<KanbanBoard initial={wide()} canMove />);
+    await drag("OP", "En diagnóstico", false);
+    expect(within(section("En diagnóstico")).getByText("Pasa sola al asignar un técnico")).toBeInTheDocument();
+    expect(within(section("En progreso")).getByText("Desde Recibida no se puede pasar a En progreso")).toBeInTheDocument();
+  });
+
+  it("a booked card over En diagnóstico is not told it passes by itself", async () => {
+    render(<KanbanBoard initial={wide()} canMove />);
+    await drag("BK", "En diagnóstico", false);
+    expect(within(section("En diagnóstico")).getByText("Desde Agendada no se puede pasar a En diagnóstico")).toBeInTheDocument();
   });
 
   it("drops on a legal column through the same path as the menu: En espera asks the reason, nothing is sent yet", async () => {
@@ -80,13 +102,30 @@ describe("DndBoard drag", () => {
     expect(within(section("En progreso")).getByText("DG")).toBeInTheDocument();
   });
 
-  it("dropping on an illegal column does nothing: no request, no dialog, the card stays", async () => {
-    render(<KanbanBoard initial={snapshot()} canMove />);
-    await drag("IP", "En diagnóstico");
-    await waitFor(() => expect(screen.queryByText("No se puede mover acá")).toBeNull()); // the drag ended
+  it("dropping an open card on En diagnóstico sends nothing and toasts the reason with a period", async () => {
+    render(<KanbanBoard initial={wide()} canMove />);
+    await drag("OP", "En diagnóstico");
+    await waitFor(() => expect(addToast).toHaveBeenCalledExactlyOnceWith("info", "Pasa sola al asignar un técnico."));
     expect(fetchMock).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(within(section("En progreso")).getByText("IP")).toBeInTheDocument();
+    expect(within(section("Recibida")).getByText("OP")).toBeInTheDocument();
+  });
+
+  it("dropping a booked card on En diagnóstico toasts the origin-aware reason", async () => {
+    render(<KanbanBoard initial={wide()} canMove />);
+    await drag("BK", "En diagnóstico");
+    await waitFor(() => expect(addToast).toHaveBeenCalledExactlyOnceWith("info", "Desde Agendada no se puede pasar a En diagnóstico."));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("dropping on the card's own column is silent: no request, no toast", async () => {
+    render(<KanbanBoard initial={snapshot()} canMove />);
+    await drag("IP", "En espera", false);
+    fireEvent.mouseMove(document, { clientX: colAt("En progreso").x, clientY: colAt("En progreso").y });
+    fireEvent.mouseUp(document, { clientX: colAt("En progreso").x, clientY: colAt("En progreso").y });
+    await waitFor(() => expect(screen.queryByText(/Desde En progreso/)).toBeNull()); // the drag ended
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(addToast).not.toHaveBeenCalled();
   });
 
   // dnd-kit keys its registry by id and an unmount deletes the entry whose key is the unmounting hook's
@@ -100,7 +139,7 @@ describe("DndBoard drag", () => {
     const registered = () => set.mock.calls.filter(([k, v]) => k === "IP" && typeof v === "object" && v !== null && "activatorNode" in v).length;
     const before = registered();
     await drag("IP", "En diagnóstico"); // illegal drop: the drag ends, the overlay unmounts
-    await waitFor(() => expect(screen.queryByText("No se puede mover acá")).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/Desde En progreso/)).toBeNull());
     expect(registered()).toBe(before);
     expect(del.mock.calls.filter(([k]) => k === "IP")).toHaveLength(0);
   });

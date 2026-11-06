@@ -11,18 +11,23 @@ import type { LucideIcon } from "lucide-react";
 import { categoriaLabel, type ServiceCategory } from "@/modules/service-orders/categories";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import { cn } from "@/lib/utils";
+import { ORDER_HUE } from "@/shared/ui/status-hue";
 import type { CardAlert } from "./alerts";
 
 /** One hue per column (mockup `ST`). `h`/`s` feed `--h`/`--s` for the `.board-hue-*` classes in globals.css. */
-export const STATUS_HUE: Record<Exclude<OrderStatus, "cancelled">, { h: number; s: string; icon: LucideIcon }> = {
-  booked: { h: 188, s: "70%", icon: CalendarDays },
-  open: { h: 221, s: "70%", icon: Inbox },
-  diagnosing: { h: 262, s: "60%", icon: Search },
-  in_progress: { h: 290, s: "50%", icon: Wrench },
-  on_hold: { h: 220, s: "14%", icon: Pause },
-  ready_for_review: { h: 168, s: "60%", icon: Eye },
-  done: { h: 142, s: "55%", icon: CircleCheck },
+const STATUS_ICON: Record<Exclude<OrderStatus, "cancelled">, LucideIcon> = {
+  booked: CalendarDays,
+  open: Inbox,
+  diagnosing: Search,
+  in_progress: Wrench,
+  on_hold: Pause,
+  ready_for_review: Eye,
+  done: CircleCheck,
 };
+
+export const STATUS_HUE = Object.fromEntries(
+  (Object.keys(ORDER_HUE) as (keyof typeof ORDER_HUE)[]).map((status) => [status, { ...ORDER_HUE[status], icon: STATUS_ICON[status] }]),
+) as Record<Exclude<OrderStatus, "cancelled">, { h: number; s: string; icon: LucideIcon }>;
 
 const hueStyle = (h: number | string, s?: string) => ({ "--h": String(h), ...(s ? { "--s": s } : {}) }) as CSSProperties;
 
@@ -35,6 +40,7 @@ export function ColumnShell({
   className,
   rootRef,
   dropState,
+  dropHint,
   tv,
   more,
   children,
@@ -49,6 +55,8 @@ export function ColumnShell({
   rootRef?: Ref<HTMLElement>;
   /** During a drag: `legal` lights the column in its own hue, `illegal` dims it and says why. */
   dropState?: "legal" | "illegal";
+  /** Why the dragged card cannot land here; shown only while `dropState` is `illegal`. */
+  dropHint?: string;
   /** Read-only TV scale: bigger type, tile and gaps. */
   tv?: boolean;
   /** TV overflow line ("+3 más") under the list. */
@@ -69,10 +77,10 @@ export function ColumnShell({
       )}
       style={hueStyle(h, s)}
     >
-      {dropState === "illegal" && (
-        <div data-hint className="absolute inset-x-3 top-16 z-10 flex items-center justify-center gap-1.5 rounded-lg bg-foreground px-3 py-2 text-xs font-semibold text-background shadow-lg">
-          <Lock aria-hidden="true" className="size-3.5" />
-          No se puede mover acá
+      {dropState === "illegal" && dropHint && (
+        <div data-hint className="absolute inset-x-3 top-16 z-10 flex items-start justify-center gap-1.5 rounded-lg bg-foreground px-3 py-2 text-xs font-semibold text-background shadow-lg">
+          <Lock aria-hidden="true" className="size-3.5 shrink-0" />
+          <span>{dropHint}</span>
         </div>
       )}
       <span aria-hidden="true" className={cn("board-hue-bar absolute inset-x-0 top-0", tv ? "h-1.5" : "h-1")} />

@@ -18,6 +18,8 @@ const buttonVariants = cva(
         destructive:
           "bg-red-500/10 text-red-700 hover:bg-red-500/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-red-500/20 dark:text-red-300 dark:hover:bg-red-500/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
+        // No colour utilities on purpose: they would beat the `.hue-tint`/`.hue-fill` recipes (@layer components).
+        hue: "",
       },
       size: {
         default:

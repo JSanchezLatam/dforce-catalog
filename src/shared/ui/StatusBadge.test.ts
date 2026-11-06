@@ -18,17 +18,17 @@ const TINT = {
   red: "bg-red-100 text-red-800 dark:bg-red-400/15 dark:text-red-300",
 } as const;
 
+/** The seven hued order statuses take `.hue-tint` instead (tested in StatusBadge.test.tsx). */
 const ALL_STATUSES: BadgeStatus[] = [
-  "running", "uploading", "completed", "uploaded", "failed", "pending",
-  "open", "in_progress", "ready_for_review", "done", "cancelled", "scheduled", "sent", "skipped", "opted_out",
+  "running", "uploading", "completed", "uploaded", "failed", "pending", "warning",
+  "cancelled", "scheduled", "sent", "skipped", "opted_out",
 ];
 
 describe("statusBadgeClassName() — theme-paired colours (audit #6)", () => {
   it.each([
-    ["open", TINT.zinc],
-    ["in_progress", TINT.amber],
-    ["ready_for_review", TINT.amber],
-    ["done", TINT.green],
+    ["pending", TINT.zinc],
+    ["warning", TINT.amber],
+    ["completed", TINT.green],
     ["cancelled", `${TINT.zinc} line-through decoration-1`],
   ] as const)("%s carries the mockup CHIP classes", (status, expected) => {
     expect(statusBadgeClassName(status)).toContain(expected);
@@ -64,10 +64,10 @@ describe("statusBadgeClassName() — confirmed shadcn status mapping", () => {
     expect(running).toContain("gap-1");
   });
 
-  it("maps order_status (R21, Phase 6): open/in_progress/done/cancelled", () => {
-    expect(statusBadgeClassName("open")).toContain(TINT.zinc);
-    expect(statusBadgeClassName("in_progress")).toContain(TINT.amber);
-    expect(statusBadgeClassName("done")).toContain(TINT.green);
+  it("maps order_status (R21, Phase 6): the hued seven take hue-tint, cancelled stays neutral", () => {
+    for (const status of ["booked", "open", "diagnosing", "in_progress", "on_hold", "ready_for_review", "done"] as const) {
+      expect(statusBadgeClassName(status)).toContain("hue-tint");
+    }
     expect(statusBadgeClassName("cancelled")).toContain(TINT.zinc);
   });
 

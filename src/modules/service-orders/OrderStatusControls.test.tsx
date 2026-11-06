@@ -17,6 +17,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ToastProvider } from "@/shared/ui/ToastProvider";
+import { STATUS_HINT_ID } from "./dom-ids";
 import { OrderStatusControls } from "./OrderStatusControls";
 import type { OrderStatus } from "./transitions";
 
@@ -52,12 +53,12 @@ describe("OrderStatusControls — a network failure has to say so", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
 
     renderControls();
-    await user.click(screen.getByRole("button", { name: "Marcar como En progreso" }));
+    await user.click(screen.getByRole("button", { name: "Pasar a En progreso" }));
 
     expect(await screen.findByText("No se pudo conectar. Revisa tu conexión e intenta de nuevo.")).toBeInTheDocument();
     // And it never pretends the transition happened.
     expect(refresh).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Marcar como En progreso" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Pasar a En progreso" })).toBeEnabled();
   });
 
   it("keeps the generic message for a request that arrived and was refused", async () => {
@@ -65,11 +66,11 @@ describe("OrderStatusControls — a network failure has to say so", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
 
     renderControls();
-    await user.click(screen.getByRole("button", { name: "Marcar como En progreso" }));
+    await user.click(screen.getByRole("button", { name: "Pasar a En progreso" }));
 
     expect(await screen.findByText("No se pudo actualizar el estado de la orden.")).toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Marcar como En progreso" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Pasar a En progreso" })).toBeEnabled();
   });
 
   /**
@@ -103,7 +104,7 @@ describe("OrderStatusControls — a network failure has to say so", () => {
     process.on("unhandledRejection", capture);
     try {
       renderControls();
-      await user.click(screen.getByRole("button", { name: "Marcar como En progreso" }));
+      await user.click(screen.getByRole("button", { name: "Pasar a En progreso" }));
 
       await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
       await vi.waitFor(() => expect(escaped).toContain(boom));
@@ -119,7 +120,7 @@ describe("OrderStatusControls — a network failure has to say so", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200 }));
 
     renderControls();
-    await user.click(screen.getByRole("button", { name: "Marcar como En progreso" }));
+    await user.click(screen.getByRole("button", { name: "Pasar a En progreso" }));
 
     await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
   });
@@ -138,7 +139,7 @@ describe("OrderStatusControls — a network failure has to say so", () => {
 it("keeps every status control at the 44x44 floor", () => {
   renderControls(); // the harness, which supplies the ToastProvider the component needs
 
-  const buttons = screen.getAllByRole("button", { name: /Marcar como/ });
+  const buttons = screen.getAllByRole("button");
   expect(buttons.length).toBeGreaterThan(0);
   for (const button of buttons) {
     expect(button.className).toContain("min-h-11");
@@ -146,12 +147,12 @@ it("keeps every status control at the 44x44 floor", () => {
   }
 });
 
-// A phone fits one "Marcar como …" button per line, not two: the row must wrap.
+// A phone fits one status button per line, not two: the row must wrap.
 // Class, not pixels, for the same jsdom reason as above.
 it("lets the status controls wrap onto a second line", () => {
   renderControls();
 
-  const [button] = screen.getAllByRole("button", { name: /Marcar como/ });
+  const [button] = screen.getAllByRole("button");
   expect(button.parentElement!.className).toContain("flex-wrap");
 });
 
@@ -160,6 +161,7 @@ it("lets the status controls wrap onto a second line", () => {
  * buttons are not offered: a control that can only fail is a trap.
  */
 describe("OrderStatusControls — only what the role may do", () => {
+  // The visible text IS the accessible name (WCAG 2.5.3): no button carries an aria-label.
   const labels = () => screen.queryAllByRole("button").map((b) => b.textContent);
 
   function renderFor(status: OrderStatus, canAssign: boolean) {
@@ -188,21 +190,21 @@ describe("OrderStatusControls — only what the role may do", () => {
   it("offers staff one hold button per reason, then close and cancel, on an in_progress order", () => {
     renderFor("in_progress", true);
     expect(labels()).toEqual([
-      "Marcar como En espera (repuesto)",
-      "Marcar como En espera (aprobación del cliente)",
-      "Marcar como Completada",
-      "Marcar como Cancelada",
+      "En espera · repuesto",
+      "En espera · aprobación",
+      "Completar",
+      "Cancelar",
     ]);
   });
 
   it("offers staff resume and cancel on an on_hold order", () => {
     renderFor("on_hold", true);
-    expect(labels()).toEqual(["Reanudar", "Marcar como Cancelada"]);
+    expect(labels()).toEqual(["Reanudar", "Cancelar"]);
   });
 
   it("offers staff receive and cancel on a booked order", () => {
     renderFor("booked", true);
-    expect(labels()).toEqual(["Recibir", "Marcar como Cancelada"]);
+    expect(labels()).toEqual(["Recibir", "Cancelar"]);
   });
 
   it("offers a técnico nothing on a booked or an on_hold order", () => {
@@ -213,9 +215,9 @@ describe("OrderStatusControls — only what the role may do", () => {
     expect(labels()).toEqual([]);
   });
 
-  it("offers staff the send-back, the close and the cancel on a ready_for_review order", () => {
+  it("offers staff the close first, then the send-back, then the cancel on a ready_for_review order", () => {
     renderFor("ready_for_review", true);
-    expect(labels()).toEqual(["Marcar como En progreso", "Marcar como Completada", "Marcar como Cancelada"]);
+    expect(labels()).toEqual(["Completar", "Volver a En progreso", "Cancelar"]);
   });
 });
 
@@ -236,8 +238,8 @@ describe("OrderStatusControls — hold, resume, receive", () => {
   }
 
   it.each([
-    ["Marcar como En espera (repuesto)", "repuesto"],
-    ["Marcar como En espera (aprobación del cliente)", "aprobacion_cliente"],
+    ["En espera · repuesto", "repuesto"],
+    ["En espera · aprobación", "aprobacion_cliente"],
   ])("sends the reason of the button pressed: %s", async (name, esperaMotivo) => {
     const user = userEvent.setup();
     const fetchMock = okFetch();
@@ -277,7 +279,7 @@ describe("OrderStatusControls — hold, resume, receive", () => {
     okFetch();
 
     renderControls("diagnosing");
-    await user.click(screen.getByRole("button", { name: "Marcar como En progreso" }));
+    await user.click(screen.getByRole("button", { name: "Pasar a En progreso" }));
 
     expect(await screen.findByText("Orden pasada a En progreso")).toBeInTheDocument();
   });
@@ -287,7 +289,7 @@ describe("OrderStatusControls — hold, resume, receive", () => {
     okFetch();
 
     renderControls("in_progress");
-    await user.click(screen.getByRole("button", { name: "Marcar como Cancelada" }));
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
 
     expect(await screen.findByText("Orden cancelada")).toBeInTheDocument();
   });
@@ -323,7 +325,7 @@ describe("OrderStatusControls — hold, resume, receive", () => {
     );
 
     renderControls("in_progress");
-    await user.click(screen.getByRole("button", { name: "Marcar como En espera (repuesto)" }));
+    await user.click(screen.getByRole("button", { name: "En espera · repuesto" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Indicá el motivo de la espera: repuesto o aprobación del cliente");
     expect(screen.queryByText("Orden puesta en espera")).not.toBeInTheDocument();
@@ -361,7 +363,7 @@ describe("OrderStatusControls — hold, resume, receive", () => {
     process.on("unhandledRejection", capture);
     try {
       renderControls("in_progress");
-      await user.click(screen.getByRole("button", { name: "Marcar como En espera (repuesto)" }));
+      await user.click(screen.getByRole("button", { name: "En espera · repuesto" }));
       await vi.waitFor(() => expect(escaped).toContain(boom));
     } finally {
       process.off("unhandledRejection", capture);
@@ -380,6 +382,156 @@ describe("OrderStatusControls — hold, resume, receive", () => {
         expect(button.className).toContain("min-w-11");
       }
       unmount();
+    }
+  });
+});
+
+/**
+ * order-blocked-action-hints WU2 (D5, D6): short visible labels that ARE the
+ * accessible name (WCAG 2.5.3 Label in Name — the spec's aria-label column was
+ * dropped), an icon and the target status hue per button, one filled "normal
+ * next step", and Cancelar last after an aria-hidden divider.
+ */
+describe("OrderStatusControls — action bar", () => {
+  const sbar = () => screen.getAllByRole("button")[0].parentElement!;
+
+  it("uses the visible short label as the accessible name: no button has an aria-label", () => {
+    for (const status of ["booked", "diagnosing", "in_progress", "on_hold", "ready_for_review"] as const) {
+      const { unmount } = renderControls(status);
+      for (const button of screen.getAllByRole("button")) expect(button).not.toHaveAttribute("aria-label");
+      unmount();
+    }
+  });
+
+  it("puts an icon in every button, and Ban on Cancelar", () => {
+    renderControls("in_progress");
+    const icons = Object.fromEntries(
+      screen.getAllByRole("button").map((b) => [b.textContent, b.querySelector("svg")?.getAttribute("class") ?? ""]),
+    );
+    expect(icons["En espera · repuesto"]).toContain("lucide-pause");
+    expect(icons["En espera · aprobación"]).toContain("lucide-pause");
+    expect(icons["Completar"]).toContain("lucide-check");
+    expect(icons["Cancelar"]).toContain("lucide-ban");
+  });
+
+  it.each([
+    ["booked", "Recibir", "lucide-inbox"],
+    ["diagnosing", "Pasar a En progreso", "lucide-wrench"],
+    ["on_hold", "Reanudar", "lucide-wrench"],
+    ["ready_for_review", "Volver a En progreso", "lucide-wrench"],
+  ] as const)("shows the %s button %s with its icon", (status, name, iconClass) => {
+    renderControls(status);
+    expect(screen.getByRole("button", { name }).querySelector("svg")).toHaveClass(iconClass);
+  });
+
+  it.each([
+    ["booked", "Recibir"],
+    ["diagnosing", "Pasar a En progreso"],
+    ["on_hold", "Reanudar"],
+    ["ready_for_review", "Completar"],
+  ] as const)("fills exactly one button on %s: %s", (status, filled) => {
+    renderControls(status);
+    const fills = screen.getAllByRole("button").filter((b) => b.classList.contains("hue-fill"));
+    expect(fills.map((b) => b.textContent)).toEqual([filled]);
+  });
+
+  it.each(["open", "in_progress"] as const)("fills nothing on %s", (status) => {
+    renderControls(status);
+    expect(document.querySelectorAll(".hue-fill")).toHaveLength(0);
+  });
+
+  it("tints the rest, Volver a En progreso included, and leaves Cancelar destructive instead", () => {
+    renderControls("ready_for_review");
+    expect(screen.getByRole("button", { name: "Volver a En progreso" })).toHaveClass("hue-tint");
+    expect(screen.getByRole("button", { name: "Volver a En progreso" })).not.toHaveClass("hue-fill");
+    const cancel = screen.getByRole("button", { name: "Cancelar" });
+    expect(cancel).not.toHaveClass("hue-tint");
+    expect(cancel).not.toHaveClass("hue-fill");
+    expect(cancel.className).toContain("bg-red-500/10");
+  });
+
+  it("colours each button with the hue of the status it leads to, from the shared source", () => {
+    renderControls("in_progress");
+    const hue = (name: string) => {
+      const style = screen.getByRole("button", { name }).style;
+      return [style.getPropertyValue("--h"), style.getPropertyValue("--s")];
+    };
+    expect(hue("En espera · repuesto")).toEqual(["220", "14%"]);
+    expect(hue("En espera · aprobación")).toEqual(["220", "14%"]);
+    expect(hue("Completar")).toEqual(["142", "55%"]);
+    cleanup();
+    renderControls("ready_for_review");
+    expect(hue("Volver a En progreso")).toEqual(["290", "50%"]);
+  });
+
+  it("puts an aria-hidden divider right before Cancelar, which is last", () => {
+    renderControls("in_progress");
+    const children = Array.from(sbar().children);
+    const cancel = screen.getByRole("button", { name: "Cancelar" });
+    expect(children.at(-1)).toBe(cancel);
+    expect(children.at(-2)).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("stacks full width below 640px of container, with the divider turning horizontal", () => {
+    renderControls("in_progress");
+    expect(sbar().parentElement!.className).toContain("@container");
+    expect(sbar()).toHaveClass("@max-[639px]:grid", "@max-[639px]:grid-cols-1");
+    expect(screen.getByRole("button", { name: "Completar" })).toHaveClass("@max-[639px]:w-full");
+    expect(sbar().children[3]).toHaveClass("@max-[639px]:h-px");
+  });
+
+  it("gives the container its own width, or the detail header (flex-col items-start) collapses it to 0", () => {
+    renderControls("in_progress");
+    // An inline-size container has no content width: without w-full every button stacked at 44px wide (browser, WU2).
+    expect(sbar().parentElement).toHaveClass("@container", "w-full");
+  });
+});
+
+/**
+ * order-blocked-action-hints WU4 (D4): an Agendada order without vehicle or category cannot be
+ * received. The page resolves that to one boolean; this control disables Recibir and points it at
+ * the hint that says why. Cancelar stays reachable.
+ */
+describe("OrderStatusControls — receiveBlocked", () => {
+  function renderBlocked(status: OrderStatus, receiveBlocked: boolean | undefined) {
+    return render(
+      <ToastProvider>
+        <OrderStatusControls orderId="o1" status={status} canAssign receiveBlocked={receiveBlocked} />
+      </ToastProvider>,
+    );
+  }
+
+  it("disables Recibir, keeps Cancelar enabled and points Recibir at the hint", () => {
+    renderBlocked("booked", true);
+
+    expect(screen.getByRole("button", { name: "Recibir" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Recibir" })).toHaveAttribute("aria-describedby", STATUS_HINT_ID);
+    expect(screen.getByRole("button", { name: "Cancelar" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Cancelar" })).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("sends nothing when the disabled Recibir is clicked", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    renderBlocked("booked", true);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Recibir" }));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([false, undefined])("leaves Recibir enabled and undescribed when receiveBlocked is %s", (value) => {
+    renderBlocked("booked", value);
+
+    expect(screen.getByRole("button", { name: "Recibir" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Recibir" })).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("touches no other button on any other status", () => {
+    renderBlocked("in_progress", true);
+
+    for (const button of screen.getAllByRole("button")) {
+      expect(button).toBeEnabled();
+      expect(button).not.toHaveAttribute("aria-describedby");
     }
   });
 });

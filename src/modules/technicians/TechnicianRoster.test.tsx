@@ -66,6 +66,14 @@ describe("TechnicianRoster — layout", () => {
     expect(within(cards().getByText("Zoe").closest("li") as HTMLElement).getByText("Desactivado")).toBeInTheDocument();
   });
 
+  it("keeps the Activo chip green: it is not an order status, so it takes no order hue", () => {
+    render(<TechnicianRoster technicians={[LUIS]} logins={[]} canLink={false} />);
+
+    const chip = cards().getByText("Activo");
+    expect(chip).toHaveClass("bg-green-100");
+    expect(chip).not.toHaveClass("hue-tint");
+  });
+
   it("gives the create button and every row kebab a 44x44 floor", () => {
     render(<TechnicianRoster technicians={[LUIS]} logins={[]} canLink={false} />);
 

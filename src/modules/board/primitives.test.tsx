@@ -132,6 +132,18 @@ describe("Board Layout and Columns - ColumnShell", () => {
     expect(region.style.getPropertyValue("--s")).toBe(STATUS_HUE.in_progress.s);
   });
 
+  it("an illegal column shows the dropHint it was given, never the old generic text", () => {
+    render(<ColumnShell status="diagnosing" label="En diagnóstico" count={0} dropState="illegal" dropHint="Pasa sola al asignar un técnico" />);
+    const region = screen.getByRole("region", { name: "En diagnóstico" });
+    expect(within(region).getByText("Pasa sola al asignar un técnico")).toBeInTheDocument();
+    expect(within(region).queryByText("No se puede mover acá")).toBeNull();
+  });
+
+  it("a hint is only shown while the column is illegal", () => {
+    render(<ColumnShell status="diagnosing" label="En diagnóstico" count={0} dropState="legal" dropHint="Pasa sola al asignar un técnico" />);
+    expect(screen.queryByText("Pasa sola al asignar un técnico")).toBeNull();
+  });
+
   it("shows the empty text only when the column is empty and one was given", () => {
     const { rerender } = render(<ColumnShell status="done" label="Completada" count={0} empty="Sin órdenes" />);
     expect(screen.getByText("Sin órdenes")).toBeInTheDocument();

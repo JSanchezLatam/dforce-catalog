@@ -7,6 +7,7 @@ import {
   assertTransition,
   assertTransitionPermitted,
   getManualTransitions,
+  isAllowedTransition,
   OrderTransitionError,
   TransitionForbiddenError,
   type OrderStatus,
@@ -229,4 +230,16 @@ describe("assertTransitionPermitted (R21, who may transition)", () => {
       expect(() => assertTransitionPermitted(false, from, to)).toThrow(TransitionForbiddenError);
     },
   );
+});
+
+describe("isAllowedTransition (non-throwing form of assertTransition)", () => {
+  it("agrees with the R21 pairs for every from/to combination, and never throws", () => {
+    const all = orderStatusEnum.enumValues;
+    for (const from of all) {
+      for (const to of all) {
+        const legal = R21_PAIRS.some(([f, t]) => f === from && t === to);
+        expect(isAllowedTransition(from, to), `${from} -> ${to}`).toBe(legal);
+      }
+    }
+  });
 });
