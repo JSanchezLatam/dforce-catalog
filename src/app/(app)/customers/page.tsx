@@ -358,7 +358,7 @@ export default async function CustomersPage({
                     <span className={`shrink-0 ${DEACTIVATED_CHIP}`}>Desactivado</span>
                   ) : (
                     // `done` is the success tone (green on a tint); only the word differs.
-                    <StatusBadge status="done" label="Activo" className="shrink-0" />
+                    <StatusBadge status="completed" label="Activo" className="shrink-0" />
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 text-sm">

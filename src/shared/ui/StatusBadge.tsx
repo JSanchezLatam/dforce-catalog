@@ -1,6 +1,9 @@
 import { Ban, BellOff, CalendarClock, CheckCircle, ClipboardCheck, Clock, Loader2, MinusCircle, PauseCircle, Search, XCircle, type LucideIcon } from "lucide-react";
 
+import type { CSSProperties } from "react";
+
 import { cn } from "@/lib/utils";
+import { ORDER_HUE, type HuedOrderStatus } from "./status-hue";
 
 export type BadgeStatus =
   | "running"
@@ -9,6 +12,8 @@ export type BadgeStatus =
   | "uploading"
   | "uploaded"
   | "failed"
+  // A non-order amber chip (vencimientos "Este mes" / "En N días").
+  | "warning"
   // order_status (R21, Phase 6 — service-orders/[id] page)
   | "booked"
   | "open"
@@ -40,21 +45,28 @@ const TONE = {
   danger: "bg-red-100 text-red-800 dark:bg-red-400/15 dark:text-red-300",
 } as const;
 
+/**
+ * The seven order statuses wear their board hue (`.hue-tint`, vars set inline by `StatusBadge`);
+ * `cancelled` keeps its neutral struck-through chip. A caller using `statusBadgeClassName` with an
+ * order status must set `--h`/`--s` itself - none does today.
+ */
+const HUE_TINT = "hue-tint";
+
 const STATUS_TONE: Record<BadgeStatus, string> = {
   running: TONE.warning,
   uploading: TONE.warning,
   completed: TONE.success,
   uploaded: TONE.success,
   failed: TONE.danger,
+  warning: TONE.warning,
   pending: TONE.neutral,
-  // booked is info-toned so it never reads as the neutral reminder `scheduled`.
-  booked: TONE.info,
-  open: TONE.neutral,
-  diagnosing: TONE.info,
-  in_progress: TONE.warning,
-  on_hold: TONE.warning,
-  ready_for_review: TONE.warning,
-  done: TONE.success,
+  booked: HUE_TINT,
+  open: HUE_TINT,
+  diagnosing: HUE_TINT,
+  in_progress: HUE_TINT,
+  on_hold: HUE_TINT,
+  ready_for_review: HUE_TINT,
+  done: HUE_TINT,
   // Struck through, as in the mockup: neutral grey alone reads the same as "open".
   cancelled: `${TONE.neutral} line-through decoration-1`,
   scheduled: TONE.neutral,
@@ -69,6 +81,7 @@ const STATUS_ICON: Record<BadgeStatus, LucideIcon> = {
   completed: CheckCircle,
   uploaded: CheckCircle,
   failed: XCircle,
+  warning: Clock,
   pending: Clock,
   booked: CalendarClock,
   open: Clock,
@@ -112,8 +125,12 @@ export function StatusBadge({
   className?: string;
 }) {
   const Icon = STATUS_ICON[status];
+  const hue = status in ORDER_HUE ? ORDER_HUE[status as HuedOrderStatus] : undefined;
   return (
-    <span className={cn(statusBadgeClassName(status), className)}>
+    <span
+      className={cn(statusBadgeClassName(status), className)}
+      style={hue ? ({ "--h": String(hue.h), "--s": hue.s } as CSSProperties) : undefined}
+    >
       <Icon aria-hidden="true" size={14} className={isAnimated(status) ? "animate-spin" : ""} />
       {label}
     </span>

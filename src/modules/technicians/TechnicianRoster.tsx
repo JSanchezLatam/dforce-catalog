@@ -176,7 +176,7 @@ export function TechnicianRoster({
               {row.deactivatedAt !== null ? (
                 <span className={`shrink-0 ${DEACTIVATED_CHIP}`}>Desactivado</span>
               ) : (
-                <StatusBadge status="done" label="Activo" className="shrink-0" />
+                <StatusBadge status="completed" label="Activo" className="shrink-0" />
               )}
             </div>
           </RecordCard>

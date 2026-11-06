@@ -207,6 +207,15 @@
   .board-hue-ring { box-shadow: 0 0 0 2px hsl(var(--h) var(--s) 55%); background: hsl(var(--h) var(--s) 55% / .08); }
   .board-hue-drop { border: 2px dashed hsl(var(--h) var(--s) 55%); color: hsl(var(--h) var(--s) 40%); background: hsl(var(--h) var(--s) 55% / .08); }
   .dark .board-hue-drop { color: hsl(var(--h) var(--s) 75%); }
+  /* Order-status badge and status buttons: tint is a pale chip, fill is the one "next step" button. */
+  .hue-tint { background: hsl(var(--h) var(--s) 92%); color: hsl(var(--h) var(--s) 28%); }
+  .hue-tint:hover { background: hsl(var(--h) var(--s) 87%); }
+  .dark .hue-tint { background: hsl(var(--h) calc(var(--s) * .5) 18%); color: hsl(var(--h) var(--s) 78%); }
+  .dark .hue-tint:hover { background: hsl(var(--h) calc(var(--s) * .5) 24%); }
+  .hue-fill { background: hsl(var(--h) var(--s) 32%); color: #fff; }
+  .hue-fill:hover { background: hsl(var(--h) var(--s) 27%); }
+  .dark .hue-fill { background: hsl(var(--h) var(--s) 78%); color: var(--background); }
+  .dark .hue-fill:hover { background: hsl(var(--h) var(--s) 84%); }
   /* Technician avatar: only `--h` is set inline. */
   .board-av { background: hsl(var(--h) 70% 90%); color: hsl(var(--h) 55% 28%); box-shadow: 0 0 0 2px var(--board-tile); }
   .dark .board-av { background: hsl(var(--h) 35% 26%); color: hsl(var(--h) 80% 86%); }

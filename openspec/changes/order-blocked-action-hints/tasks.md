@@ -38,11 +38,11 @@ WU5 and WU6 own disjoint files and may be written in parallel (subagents, one pe
 
 ## WU1: Badge and hue unification (D7-D9)
 
-- [ ] 1.1 RED `src/shared/ui/status-hue.test.ts`: `ORDER_HUE` exports the seven statuses with today's H/S numbers (done 142 55, on_hold 220 14, in_progress 290 50); GREEN create `src/shared/ui/status-hue.ts`; `board/primitives.tsx` builds `STATUS_HUE` from it plus icons (existing primitives tests stay green).
-- [ ] 1.2 RED `StatusBadge` tests (spec "Badge hue equals STATUS_HUE", "Cancelled keeps its own style"; En progreso and En espera differ; non-order uses unchanged); GREEN `StatusBadge.tsx` renders `hue-tint` with inline `--h/--s`, `cancelled` untouched; add `.hue-tint`/`.hue-fill` (+hover) in `globals.css` `@layer components`.
-- [ ] 1.3 RED `vencimientos/display` test: amber maps to new `"warning"` key; GREEN `display.ts` (+ `StatusBadge` `warning` key with `TONE.warning`).
-- [ ] 1.4 RED tests pinning `"completed"` for "Activo" in `TechnicianRoster.tsx:179`, `UsersTable.tsx:323`, `customers/page.tsx:361`; GREEN move all three.
-- [ ] 1.5 RED `BacklogCounters` test pins `board-hue-bar` plus `--h/--s` vars; GREEN edit `metrics/charts/BacklogCounters.tsx`.
+- [x] 1.1 RED `src/shared/ui/status-hue.test.ts`: `ORDER_HUE` exports the seven statuses with today's H/S numbers (done 142 55, on_hold 220 14, in_progress 290 50); GREEN create `src/shared/ui/status-hue.ts`; `board/primitives.tsx` builds `STATUS_HUE` from it plus icons (existing primitives tests stay green).
+- [x] 1.2 RED `StatusBadge` tests (spec "Badge hue equals STATUS_HUE", "Cancelled keeps its own style"; En progreso and En espera differ; non-order uses unchanged); GREEN `StatusBadge.tsx` renders `hue-tint` with inline `--h/--s`, `cancelled` untouched; add `.hue-tint`/`.hue-fill` (+hover) in `globals.css` `@layer components`.
+- [x] 1.3 RED `vencimientos/display` test: amber maps to new `"warning"` key; GREEN `display.ts` (+ `StatusBadge` `warning` key with `TONE.warning`).
+- [x] 1.4 RED tests pinning `"completed"` for "Activo" in `TechnicianRoster.tsx:179`, `UsersTable.tsx:323`, `customers/page.tsx:361`; GREEN move all three.
+- [x] 1.5 RED `BacklogCounters` test pins `board-hue-bar` plus `--h/--s` vars; GREEN edit `metrics/charts/BacklogCounters.tsx`.
 - [ ] 1.6 Mutation-verify 1.2-1.5; gates; GGA; PR.
 - [ ] 1.7 BROWSER (LAN IP, light+dark): badge text ≥4.5:1 incl. Completada at 12px; "Activo"/"Este mes" unchanged; `/tablero/clientes` badges; console clean.
 

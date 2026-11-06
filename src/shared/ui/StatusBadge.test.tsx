@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { ORDER_HUE } from "./status-hue";
 import { StatusBadge, type BadgeStatus } from "./StatusBadge";
 
 /**
@@ -34,7 +35,7 @@ describe("StatusBadge — className passthrough (H2)", () => {
   });
 
   it("renders unchanged when no class is passed, so the other six sites do not move", () => {
-    render(<StatusBadge status="done" label="Finalizada" />);
+    render(<StatusBadge status="completed" label="Finalizada" />);
     const badge = screen.getByText("Finalizada");
 
     expect(badge).toHaveClass("py-0.5");
@@ -58,7 +59,7 @@ describe("StatusBadge — the eight order statuses", () => {
   const lookOf = (status: BadgeStatus): string => {
     const { container, unmount } = render(<StatusBadge status={status} label={status} />);
     const chip = container.firstElementChild as HTMLElement;
-    const look = `${chip.className}|${chip.querySelector("svg")?.getAttribute("class")}`;
+    const look = `${chip.className}|${chip.getAttribute("style")}|${chip.querySelector("svg")?.getAttribute("class")}`;
     unmount();
     return look;
   };
@@ -70,5 +71,46 @@ describe("StatusBadge — the eight order statuses", () => {
 
   it("does not render booked like the reminder state scheduled", () => {
     expect(lookOf("booked")).not.toBe(lookOf("scheduled"));
+  });
+});
+
+describe("StatusBadge: order statuses wear their board hue", () => {
+  it.each(Object.entries(ORDER_HUE))("%s renders hue-tint with --h/--s from ORDER_HUE", (status, { h, s }) => {
+    render(<StatusBadge status={status as BadgeStatus} label="x" />);
+    const badge = screen.getByText("x");
+
+    expect(badge).toHaveClass("hue-tint");
+    expect(badge.style.getPropertyValue("--h")).toBe(String(h));
+    expect(badge.style.getPropertyValue("--s")).toBe(s);
+    expect(badge.className).not.toMatch(/\bbg-(zinc|amber|green|sky|red)-/);
+  });
+
+  it("keeps cancelled neutral and struck through, with no hue", () => {
+    render(<StatusBadge status="cancelled" label="x" />);
+    const badge = screen.getByText("x");
+
+    expect(badge).toHaveClass("line-through", "bg-zinc-100");
+    expect(badge).not.toHaveClass("hue-tint");
+    expect(badge.style.getPropertyValue("--h")).toBe("");
+  });
+
+  it("gives En progreso and En espera different hues (they were both amber)", () => {
+    render(
+      <>
+        <StatusBadge status="in_progress" label="progreso" />
+        <StatusBadge status="on_hold" label="espera" />
+      </>,
+    );
+
+    expect(screen.getByText("progreso").style.getPropertyValue("--h")).not.toBe(screen.getByText("espera").style.getPropertyValue("--h"));
+  });
+
+  it("leaves the non-order uses on their tone classes", () => {
+    render(<StatusBadge status="warning" label="w" />);
+    const badge = screen.getByText("w");
+
+    expect(badge).toHaveClass("bg-amber-100", "text-amber-800");
+    expect(badge).not.toHaveClass("hue-tint");
+    expect(badge.getAttribute("style")).toBeNull();
   });
 });
