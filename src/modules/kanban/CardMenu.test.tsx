@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -20,13 +20,20 @@ const onUrgent = vi.fn();
 // The viewport is read in the click, so a test sets it before opening the menu.
 const narrow = (on: boolean) => vi.spyOn(window, "matchMedia").mockImplementation((q) => ({ matches: on && q === "(max-width: 767px)" }) as MediaQueryList);
 afterEach(() => (vi.restoreAllMocks(), onUrgent.mockClear()));
+const REASON = "Para pasarla a En diagnóstico, asigná un técnico.";
 const labels = async () => (await screen.findAllByRole("menuitem")).map((i) => i.textContent);
 
 describe("menuItems", () => {
   it("offers drop targets without cancelled, and cancel only while the order can still be cancelled", () => {
-    expect(menuItems({ status: "in_progress", urgent: false }, true)).toEqual({ targets: ["on_hold", "done"], cancel: true, urgent: "mark" });
-    expect(menuItems({ status: "done", urgent: false }, true)).toEqual({ targets: [], cancel: false, urgent: null });
-    expect(menuItems({ status: "in_progress", urgent: false }, false)).toEqual({ targets: [], cancel: false, urgent: null });
+    expect(menuItems({ status: "in_progress", urgent: false }, true)).toEqual({ targets: ["on_hold", "done"], cancel: true, urgent: "mark", blocked: null });
+    expect(menuItems({ status: "done", urgent: false }, true)).toEqual({ targets: [], cancel: false, urgent: null, blocked: null });
+    expect(menuItems({ status: "in_progress", urgent: false }, false)).toEqual({ targets: [], cancel: false, urgent: null, blocked: null });
+  });
+
+  it("blocked carries the assign-a-technician reason only for an open card the viewer may move", () => {
+    expect(menuItems({ status: "open", urgent: false }, true).blocked).toBe(REASON);
+    expect(menuItems({ status: "open", urgent: false }, false).blocked).toBeNull();
+    expect(menuItems({ status: "booked", urgent: false }, true).blocked).toBeNull();
   });
 
   it("offers the urgent toggle in the direction of the card's flag, and never on a closed order", () => {
@@ -51,9 +58,32 @@ describe("CardMenu", () => {
 
   it("omits Mover a… when no target is legal, and Cancelar orden still reports cancelled", async () => {
     const onMove = await open(card({ status: "open" }), true);
-    expect(await labels()).toEqual(["Marcar como urgente", "Ver orden", "Cancelar orden"]);
+    expect(await labels()).toEqual([REASON, "Marcar como urgente", "Ver orden", "Cancelar orden"]);
     await userEvent.click(screen.getByRole("menuitem", { name: "Cancelar orden" }));
     expect(onMove).toHaveBeenCalledExactlyOnceWith("cancelled");
+  });
+
+  it("an open card for a jefe starts with a disabled, aria-disabled reason item with an Info icon, then a separator", async () => {
+    const onMove = await open(card({ status: "open" }), true);
+    const items = await screen.findAllByRole("menuitem");
+    expect(items.map((i) => i.textContent)).toEqual([REASON, "Marcar como urgente", "Ver orden", "Cancelar orden"]);
+    const blocked = items[0];
+    expect(blocked).toHaveAttribute("aria-disabled", "true");
+    expect(blocked.querySelector("svg")).not.toBeNull();
+    expect(blocked.nextElementSibling).toHaveAttribute("role", "separator");
+    expect(screen.queryByRole("menuitem", { name: "Mover a…" })).toBeNull();
+    await userEvent.click(blocked);
+    expect(onMove).not.toHaveBeenCalled();
+    expect(onUrgent).not.toHaveBeenCalled();
+    expect(screen.getByRole("menuitem", { name: "Ver orden" })).toBeInTheDocument(); // the menu stayed open
+  });
+
+  it("no reason item for a booked card (jefe) or an open card (técnico)", async () => {
+    await open(card({ status: "booked" }), true);
+    expect(screen.queryByText(REASON)).toBeNull();
+    cleanup();
+    await open(card({ status: "open" }), false);
+    expect(await labels()).toEqual(["Ver orden"]);
   });
 
   it("a técnico (canMove false) sees only Ver orden", async () => {

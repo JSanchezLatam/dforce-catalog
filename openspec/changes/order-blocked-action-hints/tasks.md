@@ -79,11 +79,11 @@ WU5 and WU6 own disjoint files and may be written in parallel (subagents, one pe
 
 ## WU6: Kanban (D10; disjoint from WU5)
 
-- [ ] 6.1 RED `CardMenu.test.tsx`: open card + jefe → first item disabled, `aria-disabled`, Info icon, then separator; click sends nothing and menu stays; absent for booked/técnico. GREEN `menuItems` `blocked` + `CardMenu.tsx`.
-- [ ] 6.2 RED `MoveSheet.test.tsx`: first non-button row with the text; Cancelar orden keeps `Trash2`. GREEN.
-- [ ] 6.3 RED `board/primitives.test.tsx` + `DndBoard.test.tsx:83-103`: `dropHint` text per origin/target; no "No se puede mover acá". GREEN `ColumnShell dropHint`, `DropColumn` via `blockedMoveReason`.
-- [ ] 6.4 RED `KanbanBoard.test.tsx`: illegal drop → no request, info toast `reason + "."` (open→diagnosing, booked→diagnosing); own column silent. GREEN `onMove` illegal branch.
-- [ ] 6.5 Mutation-verify; gates; GGA; PR.
+- [x] 6.1 RED `CardMenu.test.tsx`: open card + jefe → first item disabled, `aria-disabled`, Info icon, then separator; click sends nothing and menu stays; absent for booked/técnico. GREEN `menuItems` `blocked` + `CardMenu.tsx`.
+- [x] 6.2 RED `MoveSheet.test.tsx`: first non-button row with the text; Cancelar orden keeps `Trash2`. GREEN.
+- [x] 6.3 RED `board/primitives.test.tsx` + `DndBoard.test.tsx:83-103`: `dropHint` text per origin/target; no "No se puede mover acá". GREEN `ColumnShell dropHint`, `DropColumn` via `blockedMoveReason`.
+- [x] 6.4 RED `KanbanBoard.test.tsx`: illegal drop → no request, info toast `reason + "."` (open→diagnosing, booked→diagnosing); own column silent. GREEN `onMove` illegal branch. (Drop tests live in `DndBoard.test.tsx`, where the real dnd-kit drag helper is; `plan.ts` unchanged.)
+- [x] 6.5 Mutation-verify; gates; GGA; PR.
 - [ ] 6.6 BROWSER (LAN IP, Chrome device extension): real mouse drag and tablet long-press show hints readable and unclipped at 1280/768; toast on drop; menu text wraps ≤280px, row ≥44px; console clean.
 
 ## WU7: Técnico empty list (D11)

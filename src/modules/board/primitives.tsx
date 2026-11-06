@@ -40,6 +40,7 @@ export function ColumnShell({
   className,
   rootRef,
   dropState,
+  dropHint,
   tv,
   more,
   children,
@@ -54,6 +55,8 @@ export function ColumnShell({
   rootRef?: Ref<HTMLElement>;
   /** During a drag: `legal` lights the column in its own hue, `illegal` dims it and says why. */
   dropState?: "legal" | "illegal";
+  /** Why the dragged card cannot land here; shown only while `dropState` is `illegal`. */
+  dropHint?: string;
   /** Read-only TV scale: bigger type, tile and gaps. */
   tv?: boolean;
   /** TV overflow line ("+3 más") under the list. */
@@ -74,10 +77,10 @@ export function ColumnShell({
       )}
       style={hueStyle(h, s)}
     >
-      {dropState === "illegal" && (
-        <div data-hint className="absolute inset-x-3 top-16 z-10 flex items-center justify-center gap-1.5 rounded-lg bg-foreground px-3 py-2 text-xs font-semibold text-background shadow-lg">
-          <Lock aria-hidden="true" className="size-3.5" />
-          No se puede mover acá
+      {dropState === "illegal" && dropHint && (
+        <div data-hint className="absolute inset-x-3 top-16 z-10 flex items-start justify-center gap-1.5 rounded-lg bg-foreground px-3 py-2 text-xs font-semibold text-background shadow-lg">
+          <Lock aria-hidden="true" className="size-3.5 shrink-0" />
+          <span>{dropHint}</span>
         </div>
       )}
       <span aria-hidden="true" className={cn("board-hue-bar absolute inset-x-0 top-0", tv ? "h-1.5" : "h-1")} />

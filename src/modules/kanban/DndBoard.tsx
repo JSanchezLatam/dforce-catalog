@@ -4,6 +4,7 @@ import { DndContext, DragOverlay, MouseSensor, TouchSensor, pointerWithin, useDr
 import { createContext, useContext, useState, useSyncExternalStore, type ComponentProps, type ReactNode } from "react";
 
 import { ColumnShell } from "@/modules/board/primitives";
+import { blockedMoveReason } from "@/modules/service-orders/hints";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import { legalTargets } from "./plan";
 import type { KanbanCard } from "./shape";
@@ -61,5 +62,5 @@ export function DropColumn(props: ComponentProps<typeof ColumnShell>) {
   const { setNodeRef } = useDroppable({ id: props.status });
   const dragged = useContext(Dragged);
   const dropState = !dragged || dragged.status === props.status ? undefined : legalTargets(dragged.status).includes(props.status) ? "legal" : "illegal";
-  return <ColumnShell {...props} rootRef={setNodeRef} dropState={dropState} />;
+  return <ColumnShell {...props} rootRef={setNodeRef} dropState={dropState} dropHint={dropState === "illegal" ? blockedMoveReason(dragged!.status, props.status) : undefined} />;
 }
