@@ -20,7 +20,7 @@ import {
   type OrdenSort,
 } from "@/modules/service-orders/queries";
 import { ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
-import { listTecnicos } from "@/modules/technicians/queries";
+import { findTecnicoByUserId, listTecnicos } from "@/modules/technicians/queries";
 import type { OrderStatus } from "@/modules/service-orders/transitions";
 import { orderStatusEnum } from "@/shared/db/schema";
 import { formatDateTime } from "@/shared/datetime";
@@ -104,6 +104,16 @@ export default async function ServiceOrdersPage({
     countOrdenesServicio(filters, scope),
   ]);
 
+  // D11: a técnico's empty list is not "no orders registered". One indexed read,
+  // made only here — never for admin/jefe, a filtered list or a non-empty page.
+  const unfiltered = !filters.status && !filters.search;
+  const tecnicoEmptyReason =
+    items.length === 0 && unfiltered && !can(user, "service-orders.readAll")
+      ? (await findTecnicoByUserId(user.id))
+        ? "No tenés órdenes asignadas."
+        : "Tu usuario no está vinculado a un técnico. Pedile al administrador que lo vincule en Técnicos."
+      : null;
+
   const pageCount = Math.max(1, Math.ceil(total / pageWindow.limit));
 
   // Only the create form reads the roster, and a técnico cannot create. Plain
@@ -176,7 +186,7 @@ export default async function ServiceOrdersPage({
                     holding forty. `customers/page.tsx` learned this and wrote
                     it down three lines below its own branch; this is the same
                     class on the sibling screen. */}
-                {filters.status || filters.search ? (
+                {!unfiltered ? (
                   <>
                     Ninguna orden coincide con el filtro.{" "}
                     <Link href="/service-orders" className="text-primary hover:underline">
@@ -184,7 +194,7 @@ export default async function ServiceOrdersPage({
                     </Link>
                   </>
                 ) : (
-                  "Todavía no hay órdenes de servicio registradas."
+                  (tecnicoEmptyReason ?? "Todavía no hay órdenes de servicio registradas.")
                 )}
               </p>
             </div>

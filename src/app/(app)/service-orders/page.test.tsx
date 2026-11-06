@@ -6,7 +6,7 @@
  */
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/modules/auth/session", () => ({
   requireSessionFromHeaders: vi.fn(async () => ({ id: "u1", role: "tecnico" })),
@@ -41,7 +41,9 @@ vi.mock("@/modules/service-orders/queries", async (importOriginal) => {
 });
 
 const listTecnicos = vi.hoisted(() => vi.fn(async () => [{ id: "t1", nombre: "Ana Mecánica", userId: null, deactivatedAt: null, createdAt: new Date("2026-01-01") }]));
-vi.mock("@/modules/technicians/queries", () => ({ listTecnicos }));
+// Real return shape: `{ id } | null` (technicians/queries.ts).
+const findTecnicoByUserId = vi.hoisted(() => vi.fn<(userId: string) => Promise<{ id: string } | null>>(async () => null));
+vi.mock("@/modules/technicians/queries", () => ({ listTecnicos, findTecnicoByUserId }));
 
 const listInventory = vi.hoisted(() => vi.fn(async () => ({ items: [] })));
 vi.mock("@/modules/inventory-view/queries", async (importOriginal) => {
@@ -697,6 +699,59 @@ describe("ServiceOrdersPage — the empty state does not lie", () => {
     render(await renderEmpty({}));
 
     expect(screen.getByText(/Todavía no hay órdenes de servicio registradas/)).toBeInTheDocument();
+  });
+});
+
+describe("ServiceOrdersPage — técnico empty list (order-blocked-action-hints D11)", () => {
+  const ASSIGNED = "No tenés órdenes asignadas.";
+  const UNLINKED = "Tu usuario no está vinculado a un técnico. Pedile al administrador que lo vincule en Técnicos.";
+  const FALSE_CLAIM = /Todavía no hay órdenes de servicio registradas/;
+
+  function renderAs(readAll: boolean, items: unknown[], params: Record<string, string> = {}) {
+    can.mockImplementation((_user, action) => (action === "service-orders.readAll" ? readAll : true));
+    findTecnicoByUserId.mockClear();
+    listOrdenesServicio.mockResolvedValue(items);
+    countOrdenesServicio.mockResolvedValue(items.length);
+    return ServiceOrdersPage({ searchParams: Promise.resolve(params) });
+  }
+
+  afterEach(() => can.mockImplementation(() => true));
+
+  it("a linked técnico with no assigned orders is told so, not that none are registered", async () => {
+    findTecnicoByUserId.mockResolvedValue({ id: "t1" });
+    render(await renderAs(false, []));
+    expect(screen.getByText(ASSIGNED)).toBeInTheDocument();
+    expect(screen.queryByText(FALSE_CLAIM)).not.toBeInTheDocument();
+    expect(findTecnicoByUserId).toHaveBeenCalledWith("u1");
+  });
+
+  it("an unlinked técnico is told to ask the administrator", async () => {
+    findTecnicoByUserId.mockResolvedValue(null);
+    render(await renderAs(false, []));
+    expect(screen.getByText(UNLINKED)).toBeInTheDocument();
+    expect(screen.queryByText(ASSIGNED)).not.toBeInTheDocument();
+    expect(screen.queryByText(FALSE_CLAIM)).not.toBeInTheDocument();
+  });
+
+  it("a filter keeps the filter copy and never looks the roster up", async () => {
+    render(await renderAs(false, [], { status: "done" }));
+    expect(screen.getByText(/Ninguna orden coincide con el filtro/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Limpiar filtro" })).toBeInTheDocument();
+    expect(screen.queryByText(ASSIGNED)).not.toBeInTheDocument();
+    expect(findTecnicoByUserId).not.toHaveBeenCalled();
+  });
+
+  it("a técnico with orders sees no reason and no lookup", async () => {
+    render(await renderAs(false, [orden()]));
+    expect(screen.queryByText(ASSIGNED)).not.toBeInTheDocument();
+    expect(screen.queryByText(UNLINKED)).not.toBeInTheDocument();
+    expect(findTecnicoByUserId).not.toHaveBeenCalled();
+  });
+
+  it("admin or jefe keep the original empty text and never look the roster up", async () => {
+    render(await renderAs(true, []));
+    expect(screen.getByText(FALSE_CLAIM)).toBeInTheDocument();
+    expect(findTecnicoByUserId).not.toHaveBeenCalled();
   });
 });
 
