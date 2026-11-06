@@ -48,10 +48,10 @@ WU5 and WU6 own disjoint files and may be written in parallel (subagents, one pe
 
 ## WU2: Action bar (D5, D6)
 
-- [ ] 2.1 RED `OrderStatusControls.test.tsx`: switch every "Marcar como …" query (19 hits) and the `labels()` helper to the visible short labels; confirm no aria-label drops visible words (name === visible text) and `ready_for_review` order is Completar, Volver a En progreso, divider, Cancelar. Run `rg "Marcar como" src` to confirm only this bar's test changes (bulk and list-page hits are different bars and stay).
-- [ ] 2.2 RED: icons per button with `Ban` on Cancelar; exactly one filled button on booked/diagnosing/on_hold/ready_for_review, none on open/in_progress; hue per target; `aria-hidden` divider before Cancelar; Cancelar `destructive`; técnico renders none.
-- [ ] 2.3 GREEN `src/components/ui/button.tsx` `hue` variant (no colour utilities); `OrderStatusControls.tsx` short labels, no `aria-label`, `style` vars from `STATUS_HUE[to]`, `hue-tint`/`hue-fill`, order and divider, stacked full-width below 640px container, 44x44.
-- [ ] 2.4 RED then GREEN `[id]/page.tsx` header (+test): Editar orden/Imprimir (Pencil, Printer) on the breadcrumb line, same visibility rules; card title row holds only title and badge; controls on their own row.
+- [x] 2.1 RED `OrderStatusControls.test.tsx`: switch every "Marcar como …" query (19 hits) and the `labels()` helper to the visible short labels; confirm no aria-label drops visible words (name === visible text) and `ready_for_review` order is Completar, Volver a En progreso, divider, Cancelar. Run `rg "Marcar como" src` to confirm only this bar's test changes (bulk and list-page hits are different bars and stay).
+- [x] 2.2 RED: icons per button with `Ban` on Cancelar; exactly one filled button on booked/diagnosing/on_hold/ready_for_review, none on open/in_progress; hue per target; `aria-hidden` divider before Cancelar; Cancelar `destructive`; técnico renders none.
+- [x] 2.3 GREEN `src/components/ui/button.tsx` `hue` variant (no colour utilities); `OrderStatusControls.tsx` short labels, no `aria-label`, `style` vars from `STATUS_HUE[to]`, `hue-tint`/`hue-fill`, order and divider, stacked full-width below 640px container, 44x44.
+- [x] 2.4 RED then GREEN `[id]/page.tsx` header (+test): Editar orden/Imprimir (Pencil, Printer) on the breadcrumb line, same visibility rules; card title row holds only title and badge; controls on their own row.
 - [ ] 2.5 Mutation-verify (fill rule, hue source, divider, order); gates; GGA; PR.
 - [ ] 2.6 BROWSER (LAN IP, light+dark, Chrome device extension for tablet/phone): 1280 with sidebar no clip, 390 full-width stack, ≥44x44, button contrast ≥4.5:1 incl. tinted and filled Completar.
 

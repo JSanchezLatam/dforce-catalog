@@ -530,6 +530,12 @@ describe("ServiceOrderDetailPage — action bar layout", () => {
     }
   });
 
+  it("lets the breadcrumb row wrap and pushes the actions to the right (class pins; the browser measures)", async () => {
+    render(await renderPage());
+
+    expect(crumbRow()).toHaveClass("flex", "flex-wrap", "justify-between");
+  });
+
   it("gives Editar orden a Pencil and Imprimir a Printer", async () => {
     render(await renderPage());
 

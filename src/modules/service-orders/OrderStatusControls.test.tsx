@@ -474,8 +474,8 @@ describe("OrderStatusControls — action bar", () => {
   it("stacks full width below 640px of container, with the divider turning horizontal", () => {
     renderControls("in_progress");
     expect(sbar().parentElement!.className).toContain("@container");
-    expect(sbar().className).toContain("@max-[639px]:grid");
-    expect(screen.getByRole("button", { name: "Completar" }).className).toContain("@max-[639px]:w-full");
-    expect(sbar().children[3].className).toContain("@max-[639px]:h-px");
+    expect(sbar()).toHaveClass("@max-[639px]:grid", "@max-[639px]:grid-cols-1");
+    expect(screen.getByRole("button", { name: "Completar" })).toHaveClass("@max-[639px]:w-full");
+    expect(sbar().children[3]).toHaveClass("@max-[639px]:h-px");
   });
 });
