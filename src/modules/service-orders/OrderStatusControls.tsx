@@ -162,7 +162,7 @@ export function OrderStatusControls({
   };
 
   return (
-    <div className="@container">
+    <div className="@container w-full">
       {/* Below 640px of container the row becomes one full-width column and the divider a hairline. */}
       <div className="flex flex-wrap items-center gap-2 @max-[639px]:grid @max-[639px]:grid-cols-1">
         {others.map(button)}

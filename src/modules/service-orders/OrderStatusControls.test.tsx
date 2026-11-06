@@ -478,4 +478,10 @@ describe("OrderStatusControls — action bar", () => {
     expect(screen.getByRole("button", { name: "Completar" })).toHaveClass("@max-[639px]:w-full");
     expect(sbar().children[3]).toHaveClass("@max-[639px]:h-px");
   });
+
+  it("gives the container its own width, or the detail header (flex-col items-start) collapses it to 0", () => {
+    renderControls("in_progress");
+    // An inline-size container has no content width: without w-full every button stacked at 44px wide (browser, WU2).
+    expect(sbar().parentElement).toHaveClass("@container", "w-full");
+  });
 });
