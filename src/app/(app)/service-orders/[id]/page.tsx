@@ -2,7 +2,7 @@ import { Fragment, type ReactNode } from "react";
 import { PermissionDenied } from "@/shared/ui/PermissionDenied";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BellRing, TriangleAlert } from "lucide-react";
+import { BellRing, Pencil, Printer, TriangleAlert } from "lucide-react";
 
 import {
   Breadcrumb,
@@ -149,63 +149,74 @@ export default async function ServiceOrderDetailPage({
 
   return (
     <div className="p-4 sm:p-8">
-      <Breadcrumb className="mb-6">
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink render={<Link href="/service-orders" />}>Órdenes de servicio</BreadcrumbLink>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage title={orden.id}>{shortId}</BreadcrumbPage>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
+      {/* Secondary actions ride the breadcrumb line (mockup section 9), so the card header keeps
+          its width for the title and the status controls. */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbLink render={<Link href="/service-orders" />}>Órdenes de servicio</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator />
+            <BreadcrumbItem>
+              <BreadcrumbPage title={orden.id}>{shortId}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* D11 — the same predicate the PATCH route enforces, so the
+              control and the write cannot drift. An administrador on a closed
+              order gets "Corregir" (closed-order-lock); only strings and
+              booleans cross to the client trigger, no function is serialized.
+              The icon is a server-rendered element, not a function. */}
+          {editMode !== "refused" && (
+            /* AGENTS.md's 44x44 floor. `ServiceOrderForm` renders its edit
+               trigger as `size="sm"` (h-7 = 28px) and exposes no `className`
+               for this mount to pass, so the floor is applied to its button
+               child from the wrapper. Giving `ServiceOrderFormTrigger` a
+               className passthrough would be the direct fix and is a
+               follow-up: that component is outside this work unit. */
+            <div className="[&>button]:min-h-11 [&>button]:min-w-11">
+              <ServiceOrderFormTrigger
+                order={orden}
+                /* Edit mode never renders `CustomerPicker` (the order's
+                   customer is fixed), so this value is unreachable. */
+                canCreateCustomer={false}
+                motor={vehiculo?.motor ?? null}
+                triggerLabel={
+                  <>
+                    <Pencil aria-hidden="true" />
+                    {editMode === "correction" ? "Corregir" : "Editar orden"}
+                  </>
+                }
+              />
+            </div>
+          )}
+          {/* D8 — the entry point to the printed work order. `buttonVariants`
+              on a plain `Link`, NOT `<Button render={<Link/>}>`, for the
+              reason `customers/[id]/page.tsx:235` records; this page gains no
+              client component from it. `min-h-11 min-w-11` is AGENTS.md's
+              44x44 floor over `size="default"`'s `h-8`. */}
+          <Link
+            href={`/service-orders/${orden.id}/print`}
+            className={cn(buttonVariants({ variant: "outline", size: "default" }), "min-h-11 min-w-11")}
+          >
+            <Printer aria-hidden="true" />
+            Imprimir
+          </Link>
+        </div>
+      </div>
 
       <Card className="mb-6">
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
-          <CardTitle className="flex items-center gap-3 sm:flex-1">
+        <CardHeader className="flex flex-col gap-3">
+          <CardTitle className="flex flex-wrap items-center gap-3">
             <span title={orden.id}>Orden {shortId}</span>
             <StatusBadge status={orden.status} label={ORDER_STATUS_LABEL[orden.status]} />
             {orden.esperaMotivo && (
               <span className="text-sm font-normal text-muted-foreground">Motivo: {ESPERA_MOTIVO_LABEL[orden.esperaMotivo]}</span>
             )}
           </CardTitle>
-          <div className="flex flex-wrap items-center gap-2">
-            {/* D11 — the same predicate the PATCH route enforces, so the
-                control and the write cannot drift. An administrador on a closed
-                order gets "Corregir" (closed-order-lock); only strings and
-                booleans cross to the client trigger, no function is serialized. */}
-            {editMode !== "refused" && (
-              /* AGENTS.md's 44x44 floor. `ServiceOrderForm` renders its edit
-                 trigger as `size="sm"` (h-7 = 28px) and exposes no `className`
-                 for this mount to pass, so the floor is applied to its button
-                 child from the wrapper. Giving `ServiceOrderFormTrigger` a
-                 className passthrough would be the direct fix and is a
-                 follow-up: that component is outside this work unit. */
-              <div className="[&>button]:min-h-11 [&>button]:min-w-11">
-                <ServiceOrderFormTrigger
-                  order={orden}
-                  /* Edit mode never renders `CustomerPicker` (the order's
-                     customer is fixed), so this value is unreachable. */
-                  canCreateCustomer={false}
-                  motor={vehiculo?.motor ?? null}
-                  triggerLabel={editMode === "correction" ? "Corregir" : undefined}
-                />
-              </div>
-            )}
-            {/* D8 — the entry point to the printed work order. `buttonVariants`
-                on a plain `Link`, NOT `<Button render={<Link/>}>`, for the
-                reason `customers/[id]/page.tsx:235` records; this page gains no
-                client component from it. `min-h-11 min-w-11` is AGENTS.md's
-                44x44 floor over `size="default"`'s `h-8`. */}
-            <Link
-              href={`/service-orders/${orden.id}/print`}
-              className={cn(buttonVariants({ variant: "outline", size: "default" }), "min-h-11 min-w-11")}
-            >
-              Imprimir
-            </Link>
-            <OrderStatusControls orderId={orden.id} status={orden.status} canAssign={canAssign} />
-          </div>
+          <OrderStatusControls orderId={orden.id} status={orden.status} canAssign={canAssign} />
         </CardHeader>
         <CardContent>
           <dl>

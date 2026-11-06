@@ -503,6 +503,71 @@ describe("ServiceOrderDetailPage — the edit control (D11)", () => {
 });
 
 /**
+ * order-blocked-action-hints WU2 (D5 layout): "Editar orden" and "Imprimir" sit
+ * on the breadcrumb line with their icons; the card header holds only the title
+ * and badge, and the status controls get their own row under it. Server markup
+ * only: no function crosses to a client component.
+ */
+describe("ServiceOrderDetailPage — action bar layout", () => {
+  beforeEach(() => {
+    getClienteById.mockResolvedValue(detailWith(null));
+    listRemindersForOrder.mockResolvedValue([]);
+    requireSessionFromHeaders.mockResolvedValue({ id: "u1", role: "administrador" });
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status: "in_progress" }, items: [] });
+    statusControls.mockImplementation(() => (<div data-testid="status-row" />) as never);
+  });
+  afterEach(() => statusControls.mockImplementation(() => null));
+
+  const crumbRow = () => screen.getByRole("navigation", { name: "breadcrumb" }).parentElement!;
+  const cardHeader = () => screen.getByText("Orden o1").closest("[data-slot=card-header]") as HTMLElement;
+
+  it("puts Editar orden and Imprimir in the breadcrumb row, not in the card header", async () => {
+    render(await renderPage());
+
+    for (const control of [screen.getByRole("button", { name: "Editar orden" }), screen.getByRole("link", { name: "Imprimir" })]) {
+      expect(crumbRow()).toContainElement(control);
+      expect(cardHeader()).not.toContainElement(control);
+    }
+  });
+
+  it("lets the breadcrumb row wrap and pushes the actions to the right (class pins; the browser measures)", async () => {
+    render(await renderPage());
+
+    expect(crumbRow()).toHaveClass("flex", "flex-wrap", "justify-between");
+  });
+
+  it("gives Editar orden a Pencil and Imprimir a Printer", async () => {
+    render(await renderPage());
+
+    expect(screen.getByRole("button", { name: "Editar orden" }).querySelector("svg")).toHaveClass("lucide-pencil");
+    expect(screen.getByRole("link", { name: "Imprimir" }).querySelector("svg")).toHaveClass("lucide-printer");
+  });
+
+  it("gives Corregir the Pencil too, on the same breadcrumb row", async () => {
+    getOrdenServicioById.mockResolvedValue({ orden: { ...ORDEN, status: "done" }, items: [] });
+    render(await renderPage());
+
+    const button = screen.getByRole("button", { name: "Corregir" });
+    expect(crumbRow()).toContainElement(button);
+    expect(button.querySelector("svg")).toHaveClass("lucide-pencil");
+  });
+
+  it("holds only the title and the badge in the title row, with the controls on their own row under it", async () => {
+    render(await renderPage());
+
+    const title = screen.getByText("Orden o1").closest("[data-slot=card-title]") as HTMLElement;
+    expect(title).toHaveTextContent("Orden o1");
+    expect(title).not.toContainElement(screen.getByTestId("status-row"));
+    const header = cardHeader();
+    // A direct child of the header: its own row, not tucked in beside Editar orden / Imprimir.
+    expect(screen.getByTestId("status-row").parentElement).toBe(header);
+    expect(header.className).toContain("flex-col");
+    // Document order: title first, controls after it.
+    expect(title.compareDocumentPosition(screen.getByTestId("status-row")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+/**
  * service-order-reception — the "Recepción" card. The intake is optional, so
  * an unset kilometraje reads as a warning chip rather than a silent blank: the
  * technician must be able to tell "nobody recorded it" from "there is no such
