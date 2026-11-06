@@ -51,8 +51,14 @@ describe("FocusTargetButton", () => {
   });
 
   it("does nothing when the target is not on the page", async () => {
+    // React reports a throwing handler on window "error" instead of failing the click.
+    const onError = vi.fn((e: ErrorEvent) => e.preventDefault());
+    window.addEventListener("error", onError);
     render(<FocusTargetButton targetId="nope">Asignar técnico</FocusTargetButton>);
     await userEvent.setup().click(screen.getByRole("button", { name: "Asignar técnico" }));
+    window.removeEventListener("error", onError);
+
+    expect(onError).not.toHaveBeenCalled();
 
     // Focus stays where the click put it: on the button, with no throw.
     expect(screen.getByRole("button", { name: "Asignar técnico" })).toHaveFocus();
