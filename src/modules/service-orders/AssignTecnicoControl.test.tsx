@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ToastProvider } from "@/shared/ui/ToastProvider";
 import { AssignTecnicoControl } from "./AssignTecnicoControl";
+import { ASSIGN_TECNICO_ID } from "./dom-ids";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
@@ -43,6 +44,16 @@ async function assign(user: ReturnType<typeof userEvent.setup>, nombre = "Beto F
 }
 
 describe("AssignTecnicoControl", () => {
+  it("renders its select under the shared id the hint button focuses, and no such element when nobody is left", () => {
+    const { unmount } = renderControl();
+    expect(ASSIGN_TECNICO_ID).toBe("assign-tecnico");
+    expect(screen.getByLabelText("Asignar técnico")).toHaveAttribute("id", ASSIGN_TECNICO_ID);
+    unmount();
+
+    renderControl([]);
+    expect(document.getElementById(ASSIGN_TECNICO_ID)).toBeNull();
+  });
+
   it("offers exactly the technicians it is given", () => {
     renderControl();
 

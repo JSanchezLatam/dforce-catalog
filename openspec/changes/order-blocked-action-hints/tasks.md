@@ -65,11 +65,11 @@ WU5 and WU6 own disjoint files and may be written in parallel (subagents, one pe
 
 ## WU4: Detail hints 1, 2, 3 (D2-D4)
 
-- [ ] 4.1 RED `FocusTargetButton.test.tsx` (stub `scrollIntoView`; guarded when absent): click focuses `#assign-tecnico`. GREEN `shared/ui/FocusTargetButton.tsx`; `AssignTecnicoControl.tsx` exports `ASSIGN_TECNICO_ID` and uses it.
-- [ ] 4.2 RED `[id]/page.test.tsx`: open order hint + "Asignar técnico" (admin and jefe); no `#assign-tecnico` → link "Ir a Técnicos" to `/technicians` only with `technicians.manage`, else text only; Faltan sentences; booked incomplete → Recibir disabled, Cancelar enabled, second "Editar orden" trigger; técnico sees no hint. GREEN page hint row via `statusBarHint`, server-rendered.
-- [ ] 4.3 RED `OrderStatusControls.test.tsx`: `receiveBlocked` disables Recibir and sets `aria-describedby` to the hint id; default false keeps `:300-346` green. GREEN.
-- [ ] 4.4 Mutation-verify; gates; GGA; PR.
-- [ ] 4.5 BROWSER (LAN IP): scroll+focus on the select, no RSC/hydration error in console (server element in hint row), hint wraps at 390 with no overflow, 44px, light+dark.
+- [x] 4.1 RED `FocusTargetButton.test.tsx` (stub `scrollIntoView`; guarded when absent): click focuses `#assign-tecnico`. GREEN `shared/ui/FocusTargetButton.tsx`; `AssignTecnicoControl.tsx` exports `ASSIGN_TECNICO_ID` and uses it.
+- [x] 4.2 RED `[id]/page.test.tsx`: open order hint + "Asignar técnico" (admin and jefe); no `#assign-tecnico` → link "Ir a Técnicos" to `/technicians` only with `technicians.manage`, else text only; Faltan sentences; booked incomplete → Recibir disabled, Cancelar enabled, second "Editar orden" trigger; técnico sees no hint. GREEN page hint row via `statusBarHint`, server-rendered.
+- [x] 4.3 RED `OrderStatusControls.test.tsx`: `receiveBlocked` disables Recibir and sets `aria-describedby` to the hint id; default false keeps `:300-346` green. GREEN.
+- [x] 4.4 Mutation-verify; gates; GGA; PR. (Mutations and gates done; GGA and PR left to the orchestrator. Deviation from D3: `ASSIGN_TECNICO_ID` and `STATUS_HINT_ID` live in the plain module `service-orders/dom-ids.ts`, not exported from the `"use client"` `AssignTecnicoControl.tsx`: a constant imported from a client file into a Server Component arrives as a client reference, not a string. The edit-mode guard around the hint's "Editar orden" was dropped as unreachable.)
+- [x] 4.5 BROWSER (LAN IP): scroll+focus on the select, no RSC/hydration error in console (server element in hint row), hint wraps at 390 with no overflow, 44px, light+dark.
 
 ## WU5: Work-card hints (disjoint from WU6)
 

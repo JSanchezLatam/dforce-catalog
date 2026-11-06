@@ -17,6 +17,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ToastProvider } from "@/shared/ui/ToastProvider";
+import { STATUS_HINT_ID } from "./dom-ids";
 import { OrderStatusControls } from "./OrderStatusControls";
 import type { OrderStatus } from "./transitions";
 
@@ -483,5 +484,54 @@ describe("OrderStatusControls — action bar", () => {
     renderControls("in_progress");
     // An inline-size container has no content width: without w-full every button stacked at 44px wide (browser, WU2).
     expect(sbar().parentElement).toHaveClass("@container", "w-full");
+  });
+});
+
+/**
+ * order-blocked-action-hints WU4 (D4): an Agendada order without vehicle or category cannot be
+ * received. The page resolves that to one boolean; this control disables Recibir and points it at
+ * the hint that says why. Cancelar stays reachable.
+ */
+describe("OrderStatusControls — receiveBlocked", () => {
+  function renderBlocked(status: OrderStatus, receiveBlocked: boolean | undefined) {
+    return render(
+      <ToastProvider>
+        <OrderStatusControls orderId="o1" status={status} canAssign receiveBlocked={receiveBlocked} />
+      </ToastProvider>,
+    );
+  }
+
+  it("disables Recibir, keeps Cancelar enabled and points Recibir at the hint", () => {
+    renderBlocked("booked", true);
+
+    expect(screen.getByRole("button", { name: "Recibir" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Recibir" })).toHaveAttribute("aria-describedby", STATUS_HINT_ID);
+    expect(screen.getByRole("button", { name: "Cancelar" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Cancelar" })).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("sends nothing when the disabled Recibir is clicked", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    renderBlocked("booked", true);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Recibir" }));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([false, undefined])("leaves Recibir enabled and undescribed when receiveBlocked is %s", (value) => {
+    renderBlocked("booked", value);
+
+    expect(screen.getByRole("button", { name: "Recibir" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Recibir" })).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("touches no other button on any other status", () => {
+    renderBlocked("in_progress", true);
+
+    for (const button of screen.getAllByRole("button")) {
+      expect(button).toBeEnabled();
+      expect(button).not.toHaveAttribute("aria-describedby");
+    }
   });
 });
