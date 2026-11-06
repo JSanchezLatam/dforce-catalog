@@ -357,7 +357,7 @@ export default async function CustomersPage({
                   {item.deactivatedAt ? (
                     <span className={`shrink-0 ${DEACTIVATED_CHIP}`}>Desactivado</span>
                   ) : (
-                    // `done` is the success tone (green on a tint); only the word differs.
+                    // `completed` is the success tone (green on a tint), not an order status; only the word differs.
                     <StatusBadge status="completed" label="Activo" className="shrink-0" />
                   )}
                 </div>
