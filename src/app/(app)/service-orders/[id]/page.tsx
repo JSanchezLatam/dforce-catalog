@@ -245,7 +245,7 @@ export default async function ServiceOrderDetailPage({
                   Ir a Técnicos
                 </Link>
               )}
-              {hint.action === "edit" && editMode !== "refused" && (
+              {hint.action === "edit" && (
                 /* Same props and 44x44 wrapper as the breadcrumb trigger above. */
                 <div className="[&>button]:min-h-11 [&>button]:min-w-11">
                   <ServiceOrderFormTrigger order={orden} canCreateCustomer={false} motor={vehiculo?.motor ?? null} triggerLabel="Editar orden" />
