@@ -17,7 +17,7 @@ describe("describeDue()", () => {
     expect(describeDue({ kind: "seguro", periodKey: "2026-10-16", state: "due", daysLeft: 12 }, TODAY)).toEqual({
       when: "Seguro — vence 16/10/2026",
       chipLabel: "En 12 días",
-      chipStatus: "in_progress",
+      chipStatus: "warning",
     });
     expect(describeDue({ kind: "seguro", periodKey: "2026-10-05", state: "due", daysLeft: 1 }, TODAY).chipLabel).toBe("En 1 día");
     expect(describeDue({ kind: "seguro", periodKey: "2026-10-04", state: "due", daysLeft: 0 }, TODAY).chipLabel).toBe("Hoy");
@@ -27,7 +27,7 @@ describe("describeDue()", () => {
     expect(describeDue({ kind: "placa", periodKey: "2026-10", state: "due", daysLeft: null }, TODAY)).toEqual({
       when: "Placa — octubre",
       chipLabel: "Este mes",
-      chipStatus: "in_progress",
+      chipStatus: "warning",
     });
     expect(describeDue({ kind: "placa", periodKey: "2026-11", state: "due", daysLeft: null }, TODAY)).toEqual({
       when: "Placa — noviembre",

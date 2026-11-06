@@ -613,7 +613,7 @@ describe("ServiceOrdersPage — phone cards (WU5)", () => {
     expect(within(link).getByText("AB1234")).toHaveClass("font-mono");
     expect(link).toHaveTextContent("Toyota Hilux");
     const chip = within(link).getByText("Recibida");
-    expect(chip).toHaveClass("rounded-full", "bg-zinc-100");
+    expect(chip).toHaveClass("rounded-full", "hue-tint");
     expect(chip.querySelector("svg")).not.toBeNull();
     expect(link).toHaveTextContent(/Cita/);
   });

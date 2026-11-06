@@ -11,6 +11,7 @@ vi.mock("@/components/arc/animated-counter/animated-counter", () => ({
   },
 }));
 
+import { ORDER_HUE } from "@/shared/ui/status-hue";
 import { BacklogCounters } from "./BacklogCounters";
 
 beforeEach(() => arc.mockClear());
@@ -33,6 +34,24 @@ describe("BacklogCounters", () => {
       [0, "es-PA"],
       [2, "es-PA"],
     ]);
+  });
+
+  it("paints each dot with its board hue: board-hue-bar plus --h/--s from ORDER_HUE", () => {
+    render(<BacklogCounters counts={{ booked: 1, open: 7, diagnosing: 3, in_progress: 0, on_hold: 0, ready_for_review: 2 }} />);
+
+    for (const [status, label] of [
+      ["booked", "Agendada"],
+      ["open", "Recibida"],
+      ["diagnosing", "En diagnóstico"],
+      ["in_progress", "En progreso"],
+      ["on_hold", "En espera"],
+      ["ready_for_review", "Lista para revisión"],
+    ] as const) {
+      const dot = screen.getByText(label).querySelector("span") as HTMLElement;
+      expect(dot).toHaveClass("board-hue-bar");
+      expect(dot.style.getPropertyValue("--h")).toBe(String(ORDER_HUE[status].h));
+      expect(dot.style.getPropertyValue("--s")).toBe(ORDER_HUE[status].s);
+    }
   });
 
   it("is a client module taking only plain counts", () => {

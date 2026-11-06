@@ -19,12 +19,12 @@ function chipFor(item: DueItem, todayKey: string): Pick<DueDescription, "chipLab
   if (item.state === "overdue") return { chipLabel: "Vencido", chipStatus: "failed" };
   if (item.kind === "placa") {
     return item.periodKey === todayKey.slice(0, 7)
-      ? { chipLabel: "Este mes", chipStatus: "in_progress" }
+      ? { chipLabel: "Este mes", chipStatus: "warning" }
       : { chipLabel: "Próximo mes", chipStatus: "pending" };
   }
   const days = item.daysLeft ?? 0;
   const chipLabel = days === 0 ? "Hoy" : days === 1 ? "En 1 día" : `En ${days} días`;
-  return { chipLabel, chipStatus: "in_progress" };
+  return { chipLabel, chipStatus: "warning" };
 }
 
 export function describeDue(item: DueItem, todayKey: string): DueDescription {

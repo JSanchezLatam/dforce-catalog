@@ -925,6 +925,7 @@ describe("CustomersPage — phone cards (WU6)", () => {
     ]);
 
     expect(cards.getByText("Activo").className).toContain("bg-green-100");
+    expect(cards.getByText("Activo").className).not.toContain("hue-tint");
     const retired = cards.getByText("Desactivado");
     expect(retired.className).toContain("text-red-700");
     expect(retired.className).toContain("dark:text-red-400");
