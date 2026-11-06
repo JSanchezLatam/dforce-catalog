@@ -85,7 +85,8 @@ export type PdfGeneratePayload = {
 
 /** R12.6 — thrown when the queue already holds MAX_QUEUE_DEPTH jobs. */
 export class QueueFullError extends Error {
-  constructor(message = `Queue is full (max ${MAX_QUEUE_DEPTH} jobs) — try again once a job finishes`) {
+  // Spanish: the generate route returns it and CatalogBuilderForm shows it to the operator as-is.
+  constructor(message = "Cola llena — intentá de nuevo cuando termine un trabajo") {
     super(message);
     this.name = "QueueFullError";
   }

@@ -45,7 +45,8 @@ describe("POST /api/inventory-sync/manual — R2.1/2.5", () => {
     const response = await handleManualSyncTrigger(requestAs("administrador", "POST"), { requestManualSync });
 
     expect(response.status).toBe(409);
-    expect((await response.json()).error).toMatch(/already in progress/i);
+    // ManualSyncButton shows this text as-is, so it must be the Spanish copy.
+    expect((await response.json()).error).toBe("Ya hay una sincronización en curso.");
   });
 });
 

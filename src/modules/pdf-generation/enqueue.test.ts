@@ -88,6 +88,10 @@ describe("enqueueCatalogPdf — Risk-2 depth cap", () => {
     expect(createPendingCatalog).not.toHaveBeenCalled();
   });
 
+  it("carries a Spanish message, because the generate route sends it to the operator as-is", () => {
+    expect(new QueueFullError().message).toBe("Cola llena — intentá de nuevo cuando termine un trabajo");
+  });
+
   it("enqueues right at the boundary (depth = MAX_QUEUE_DEPTH - 1)", async () => {
     const { database } = fakeDatabase(MAX_QUEUE_DEPTH - 1);
     const send = vi.fn().mockResolvedValue("job-124");
