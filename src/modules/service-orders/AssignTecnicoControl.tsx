@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { FIELD_ERROR } from "@/shared/ui/styles";
 import { useToast } from "@/shared/ui/ToastProvider";
+import { ASSIGN_TECNICO_ID } from "./dom-ids";
 
 /**
  * Assigns ONE technician to the order (`POST .../assignments`); staff only, the
@@ -54,10 +55,10 @@ export function AssignTecnicoControl({ orderId, available }: { orderId: string; 
 
   return (
     <div className="grid gap-2">
-      <Label htmlFor="assign-tecnico">Asignar técnico</Label>
+      <Label htmlFor={ASSIGN_TECNICO_ID}>Asignar técnico</Label>
       <div className="flex flex-col gap-2 sm:flex-row">
         <select
-          id="assign-tecnico"
+          id={ASSIGN_TECNICO_ID}
           className="min-h-11 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:max-w-xs"
           value={tecnicoId}
           disabled={isSubmitting}

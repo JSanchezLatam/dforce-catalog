@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { ORDER_HUE } from "@/shared/ui/status-hue";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { useToast } from "@/shared/ui/ToastProvider";
+import { STATUS_HINT_ID } from "./dom-ids";
 import { ESPERA_MOTIVO_LABEL, ORDER_STATUS_LABEL } from "./statuses";
 import { getManualTransitions, type OrderStatus } from "./transitions";
 
@@ -87,11 +88,14 @@ export function OrderStatusControls({
   orderId,
   status,
   canAssign,
+  receiveBlocked = false,
 }: {
   orderId: string;
   status: OrderStatus;
   /** `can(user, "service-orders.assign")`: without it nothing is offered; the route stays the gate. */
   canAssign: boolean;
+  /** An Agendada order missing vehicle or category: Recibir is disabled and described by the page's hint. */
+  receiveBlocked?: boolean;
 }) {
   const router = useRouter();
   const { addToast } = useToast();
@@ -143,6 +147,7 @@ export function OrderStatusControls({
   // The 44x44 floor stays explicit: `hue` carries no `pointer-coarse:` rise of its own to rely on.
   const button = (action: Action) => {
     const Icon = action.icon;
+    const blocked = receiveBlocked && action.to === "open";
     const hue = action.to === "cancelled" ? null : ORDER_HUE[action.to as keyof typeof ORDER_HUE];
     return (
       <Button
@@ -152,7 +157,8 @@ export function OrderStatusControls({
         size="default"
         className={cn("min-h-11 min-w-11 @max-[639px]:w-full", hue && (action.fill ? "hue-fill" : "hue-tint"))}
         style={hue ? ({ "--h": String(hue.h), "--s": hue.s } as CSSProperties) : undefined}
-        disabled={isSubmitting}
+        disabled={isSubmitting || blocked}
+        aria-describedby={blocked ? STATUS_HINT_ID : undefined}
         onClick={() => run(action)}
       >
         <Icon aria-hidden="true" />

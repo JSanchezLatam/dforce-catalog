@@ -2,7 +2,7 @@ import { Fragment, type ReactNode } from "react";
 import { PermissionDenied } from "@/shared/ui/PermissionDenied";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BellRing, Pencil, Printer, TriangleAlert } from "lucide-react";
+import { BellRing, Info, Pencil, Printer, TriangleAlert } from "lucide-react";
 
 import {
   Breadcrumb,
@@ -25,6 +25,8 @@ import { listRemindersForOrder } from "@/modules/reminders/queries";
 import { categoriaLabel } from "@/modules/service-orders/categories";
 import { canChangeOrderPhotos, isClosedStatus, orderEditMode, workLineMode } from "@/modules/service-orders/edit-policy";
 import { FUEL_LABEL, formatKilometraje, intakeInputsFor } from "@/modules/service-orders/intake";
+import { ASSIGN_TECNICO_ID, STATUS_HINT_ID } from "@/modules/service-orders/dom-ids";
+import { statusBarHint } from "@/modules/service-orders/hints";
 import { AssignTecnicoControl } from "@/modules/service-orders/AssignTecnicoControl";
 import { listOrderAssignees, listOrderLines } from "@/modules/service-orders/order-team";
 import { OrderWorkCard } from "@/modules/service-orders/OrderWorkCard";
@@ -38,6 +40,7 @@ import { getOrdenServicioById } from "@/modules/service-orders/queries";
 import { ESPERA_MOTIVO_LABEL, ORDER_STATUS_LABEL } from "@/modules/service-orders/statuses";
 import { findTecnicoByUserId, listTecnicos } from "@/modules/technicians/queries";
 import { formatDateTime } from "@/shared/datetime";
+import { FocusTargetButton } from "@/shared/ui/FocusTargetButton";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 
 export const dynamic = "force-dynamic";
@@ -146,6 +149,19 @@ export default async function ServiceOrderDetailPage({
   // phone. The full id stays in each element's `title`.
   const shortId = orden.id.slice(0, 8);
   const editMode = orderEditMode(user.role, orden.status);
+  // Built from the nullable columns themselves (null only while Agendada, schema CHECK), not assumed.
+  const missing: ("vehiculo" | "categoria")[] = [];
+  if (orden.vehiculoId == null) missing.push("vehiculo");
+  if (orden.categoria == null) missing.push("categoria");
+  // Server-side: the controls get a boolean and the hint row is plain markup, so no function crosses.
+  const hint = statusBarHint({
+    status: orden.status,
+    missing,
+    assignees,
+    assignableCount: assignable.length,
+    canAssign,
+    canManageTechnicians: can(user, "technicians.manage"),
+  });
 
   return (
     <div className="p-4 sm:p-8">
@@ -216,7 +232,27 @@ export default async function ServiceOrderDetailPage({
               <span className="text-sm font-normal text-muted-foreground">Motivo: {ESPERA_MOTIVO_LABEL[orden.esperaMotivo]}</span>
             )}
           </CardTitle>
-          <OrderStatusControls orderId={orden.id} status={orden.status} canAssign={canAssign} />
+          <OrderStatusControls orderId={orden.id} status={orden.status} canAssign={canAssign} receiveBlocked={hint?.action === "edit"} />
+          {hint && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <p id={STATUS_HINT_ID} className="flex items-start gap-1.5 text-sm text-muted-foreground">
+                <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                {hint.text}
+              </p>
+              {hint.action === "assign" && <FocusTargetButton targetId={ASSIGN_TECNICO_ID}>Asignar técnico</FocusTargetButton>}
+              {hint.action === "technicians" && (
+                <Link href="/technicians" className={cn(buttonVariants({ variant: "outline", size: "default" }), "min-h-11 min-w-11")}>
+                  Ir a Técnicos
+                </Link>
+              )}
+              {hint.action === "edit" && editMode !== "refused" && (
+                /* Same props and 44x44 wrapper as the breadcrumb trigger above. */
+                <div className="[&>button]:min-h-11 [&>button]:min-w-11">
+                  <ServiceOrderFormTrigger order={orden} canCreateCustomer={false} motor={vehiculo?.motor ?? null} triggerLabel="Editar orden" />
+                </div>
+              )}
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <dl>
