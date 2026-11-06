@@ -57,11 +57,11 @@ WU5 and WU6 own disjoint files and may be written in parallel (subagents, one pe
 
 ## WU3: Pure hints module (D1)
 
-- [ ] 3.1 RED `transitions.test.ts`: `isAllowedTransition(from,to)` true/false per table, never throws; `assertTransition` still throws. GREEN `transitions.ts`.
-- [ ] 3.2 RED `hints.test.ts` `blockedMoveReason`: "Pasa sola al asignar un técnico" (open→diagnosing), "Pasa sola cuando todos marcan su parte lista" (in_progress→ready_for_review), booked→diagnosing and diagnosing→ready_for_review give "Desde … no se puede pasar a …", open→in_progress. GREEN `hints.ts`.
-- [ ] 3.3 RED `statusBarHint`: open without assignee, assign vs `technicians` action (`assignableCount` 0), no action without `canManageTechnicians`; has assignee → null; in_progress "Faltan" lists only active unmarked in order; deactivated excluded; nobody unmarked → null; Faltan only on in_progress; booked missing vehiculo/categoria → edit action; complete → null. GREEN.
-- [ ] 3.4 RED `workLinesHint`: every table row, jefe vs técnico, diagnosing técnico informational, in_progress/ready_for_review marked, nothing when writable or closed, exact strings. GREEN.
-- [ ] 3.5 Mutation-verify each branch (name the reverted line); gates; GGA; PR. No browser task (pure module).
+- [x] 3.1 RED `transitions.test.ts`: `isAllowedTransition(from,to)` true/false per table, never throws; `assertTransition` still throws. GREEN `transitions.ts`.
+- [x] 3.2 RED `hints.test.ts` `blockedMoveReason`: "Pasa sola al asignar un técnico" (open→diagnosing), "Pasa sola cuando todos marcan su parte lista" (in_progress→ready_for_review), booked→diagnosing and diagnosing→ready_for_review give "Desde … no se puede pasar a …", open→in_progress. GREEN `hints.ts`.
+- [x] 3.3 RED `statusBarHint`: open without assignee, assign vs `technicians` action (`assignableCount` 0), no action without `canManageTechnicians`; has assignee → null; in_progress "Faltan" lists only active unmarked in order; deactivated excluded; nobody unmarked → null; Faltan only on in_progress; booked missing vehiculo/categoria → edit action; complete → null. GREEN.
+- [x] 3.4 RED `workLinesHint`: every table row, jefe vs técnico, diagnosing técnico informational, in_progress/ready_for_review marked, nothing when writable or closed, exact strings. GREEN.
+- [x] 3.5 Mutation-verify each branch (name the reverted line); gates; GGA; PR. No browser task (pure module). (Gates and mutations done; GGA and PR left to the orchestrator. Deviation from the design interface: `workLinesHint` drops `mode` and adds `assignableCount` and `canManageTechnicians`, because role and status already determine the rows and the "Ir a Técnicos" rule needs both.)
 
 ## WU4: Detail hints 1, 2, 3 (D2-D4)
 
