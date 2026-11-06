@@ -46,6 +46,8 @@ function renderCard(props: Props = {}) {
         mode="write"
         viewerTecnicoId={null}
         canManageAll
+        assignableCount={1}
+        canManageTechnicians={false}
         {...props}
       />
     </ToastProvider>,
@@ -113,7 +115,7 @@ describe("OrderWorkCard — what is shown", () => {
   });
 
   it("says there are no lines yet, and that nobody is assigned", () => {
-    renderCard({ lines: [], assignees: [] });
+    renderCard({ lines: [], assignees: [], status: "open", mode: "refused" });
 
     expect(screen.getByText("Todavía no hay líneas de trabajo.")).toBeInTheDocument();
     expect(screen.getByText("Asigná un técnico para poder cargar líneas.")).toBeInTheDocument();
@@ -375,5 +377,107 @@ describe("OrderWorkCard — deleting a line", () => {
     await user.click(screen.getByRole("button", { name: "Eliminar" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo conectar. Revisa tu conexión e intenta de nuevo.");
+  });
+});
+
+describe("OrderWorkCard — blocked-action hints", () => {
+  const ASSIGN = "Asigná un técnico para poder cargar líneas.";
+  const AUTO = "Vas a poder marcar tu parte cuando el jefe de taller pase la orden a En progreso.";
+  const UNMARK = "Desmarcá tu parte lista antes de cambiar líneas de trabajo.";
+
+  it("open, jefe, nobody assigned: hint above the empty state with an Asignar técnico button that focuses #assign-tecnico", async () => {
+    const user = userEvent.setup();
+    const target = document.createElement("select");
+    target.id = "assign-tecnico";
+    document.body.appendChild(target);
+    try {
+      renderCard({ status: "open", mode: "refused", assignees: [], lines: [], assignableCount: 2 });
+
+      const hint = screen.getByText(ASSIGN);
+      const empty = screen.getByText("Todavía no hay líneas de trabajo.");
+      expect(hint.compareDocumentPosition(empty) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      await user.click(screen.getByRole("button", { name: "Asignar técnico" }));
+      expect(target).toHaveFocus();
+    } finally {
+      target.remove();
+    }
+  });
+
+  it("open, jefe, nobody left to assign: a link Ir a Técnicos to /technicians when they manage technicians", () => {
+    renderCard({ status: "open", mode: "refused", assignees: [], lines: [], assignableCount: 0, canManageTechnicians: true });
+
+    expect(screen.getByText(ASSIGN)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Asignar técnico" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ir a Técnicos" })).toHaveAttribute("href", "/technicians");
+  });
+
+  it("open, jefe, nobody left to assign and no technicians.manage: text only", () => {
+    renderCard({ status: "open", mode: "refused", assignees: [], lines: [], assignableCount: 0, canManageTechnicians: false });
+
+    expect(screen.getByText(ASSIGN)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Ir a Técnicos" })).not.toBeInTheDocument();
+  });
+
+  it("booked, jefe: Recibí la orden, no button", () => {
+    renderCard({ status: "booked", mode: "refused" });
+
+    expect(screen.getByText("Recibí la orden para cargar líneas.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Asignar técnico" })).not.toBeInTheDocument();
+  });
+
+  it("booked, assigned técnico: the jefe has to receive it, and the jefe copy is absent", () => {
+    renderCard({ status: "booked", mode: "refused", viewerTecnicoId: "t1", canManageAll: false });
+
+    expect(screen.getByText("El jefe de taller tiene que recibir la orden para cargar líneas.")).toBeInTheDocument();
+    expect(screen.queryByText("Recibí la orden para cargar líneas.")).not.toBeInTheDocument();
+  });
+
+  it("on_hold, jefe", () => {
+    renderCard({ status: "on_hold", mode: "refused" });
+
+    expect(screen.getByText("La orden está en espera; reanudala para cargar líneas.")).toBeInTheDocument();
+  });
+
+  it("on_hold, assigned técnico", () => {
+    renderCard({ status: "on_hold", mode: "refused", viewerTecnicoId: "t1", canManageAll: false });
+
+    expect(screen.getByText("La orden está en espera; el jefe de taller tiene que reanudarla.")).toBeInTheDocument();
+  });
+
+  it("diagnosing, técnico: Agregar línea shows, Mi parte lista does not, the informational hint shows", () => {
+    renderCard({ status: "diagnosing", viewerTecnicoId: "t1", canManageAll: false });
+
+    expect(screen.getByRole("button", { name: "Agregar línea" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Mi parte lista" })).not.toBeInTheDocument();
+    expect(screen.getByText(AUTO)).toBeInTheDocument();
+  });
+
+  it("diagnosing, jefe: no hint", () => {
+    renderCard({ status: "diagnosing" });
+
+    expect(screen.queryByText(AUTO)).not.toBeInTheDocument();
+  });
+
+  it.each(["in_progress", "ready_for_review"] as const)("%s, técnico with a marked part: the unmark hint beside Desmarcar mi parte", (status) => {
+    renderCard({ status, mode: status === "in_progress" ? "write" : "refused", viewerTecnicoId: "t2", canManageAll: false });
+
+    expect(screen.getByRole("button", { name: "Desmarcar mi parte" })).toBeInTheDocument();
+    expect(screen.getByText(UNMARK)).toBeInTheDocument();
+    expect(screen.queryByText(/solo el jefe de taller puede cambiar líneas/)).not.toBeInTheDocument();
+  });
+
+  it("shows no hint when the viewer can write", () => {
+    const { unmount } = renderCard({ status: "in_progress", viewerTecnicoId: "t1", canManageAll: false });
+    expect(screen.queryByText(UNMARK)).not.toBeInTheDocument();
+    expect(screen.queryByText(AUTO)).not.toBeInTheDocument();
+    unmount();
+    renderCard({ status: "ready_for_review", mode: "write" });
+    expect(document.querySelector("svg.lucide-info")).toBeNull();
+  });
+
+  it("shows no hint on a closed order", () => {
+    renderCard({ status: "done", mode: "refused", assignees: [] });
+
+    expect(document.querySelector("svg.lucide-info")).toBeNull();
   });
 });

@@ -1,14 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Info } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogClose, DialogContent, DialogFooter, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
+import { FocusTargetButton } from "@/shared/ui/FocusTargetButton";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { FIELD_ERROR } from "@/shared/ui/styles";
 import { useToast } from "@/shared/ui/ToastProvider";
 import { CorrectionPasswordField } from "./CorrectionPasswordField";
+import { ASSIGN_TECNICO_ID } from "./dom-ids";
+import { workLinesHint } from "./hints";
 import type { OrderAssignee, OrderWorkLine } from "./order-team";
 import type { OrderStatus } from "./transitions";
 import { WorkLineDialog } from "./WorkLineDialog";
@@ -140,6 +146,8 @@ export function OrderWorkCard({
   mode,
   viewerTecnicoId,
   canManageAll,
+  assignableCount,
+  canManageTechnicians,
 }: {
   orderId: string;
   status: OrderStatus;
@@ -148,6 +156,9 @@ export function OrderWorkCard({
   mode: "write" | "correction" | "refused";
   viewerTecnicoId: string | null;
   canManageAll: boolean;
+  /** Technicians still assignable: > 0 means `#assign-tecnico` renders on the page. */
+  assignableCount: number;
+  canManageTechnicians: boolean;
 }) {
   const own = viewerTecnicoId ? assignees.find((a) => a.tecnicoId === viewerTecnicoId) : undefined;
   const correcting = mode === "correction";
@@ -155,6 +166,8 @@ export function OrderWorkCard({
     mode !== "refused" && (canManageAll || (own !== undefined && own.tecnicoId === tecnicoId && !own.parteLista));
   const addable = assignees.filter((a) => canWriteFor(a.tecnicoId));
   const minutesOf = (tecnicoId: string) => lines.filter((l) => l.tecnicoId === tecnicoId).reduce((sum, l) => sum + l.duracionMinutos, 0);
+
+  const hint = workLinesHint({ status, own, assigneeCount: assignees.length, assignableCount, canManageAll, canManageTechnicians });
 
   const showMark = own !== undefined && !own.parteLista && status === "in_progress";
   const showUnmark = own !== undefined && own.parteLista && (status === "in_progress" || status === "ready_for_review");
@@ -193,8 +206,19 @@ export function OrderWorkCard({
           )}
         </div>
       )}
-      {assignees.length === 0 && mode !== "refused" && canManageAll && (
-        <p className="text-sm text-muted-foreground">Asigná un técnico para poder cargar líneas.</p>
+      {hint && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
+            <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            {hint.text}
+          </p>
+          {hint.action === "assign" && <FocusTargetButton targetId={ASSIGN_TECNICO_ID}>Asignar técnico</FocusTargetButton>}
+          {hint.action === "technicians" && (
+            <Link href="/technicians" className={cn(buttonVariants({ variant: "outline", size: "default" }), "min-h-11 min-w-11")}>
+              Ir a Técnicos
+            </Link>
+          )}
+        </div>
       )}
 
       {lines.length === 0 ? (
