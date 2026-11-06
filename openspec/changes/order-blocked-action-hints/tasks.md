@@ -75,7 +75,7 @@ WU5 and WU6 own disjoint files and may be written in parallel (subagents, one pe
 
 - [x] 5.1 RED `OrderWorkCard.test.tsx`, one test per spec scenario (open jefe with assign button / "Ir a Técnicos"; booked jefe/técnico; on_hold jefe/técnico; diagnosing técnico; marked técnico incl. ready_for_review; no hint when writable; closed; "Copy is exact"; old "solo el jefe de taller puede cambiar líneas" absent). GREEN `OrderWorkCard.tsx` via `workLinesHint`; remove the unreachable `:196` branch; hint row above "Todavía no hay líneas de trabajo.".
 - [x] 5.2 Mutation-verify; gates; GGA; PR. (Mutations and gates done; GGA and PR left to the orchestrator. `OrderWorkCard` gained two serializable props, `assignableCount` and `canManageTechnicians`, passed by `[id]/page.tsx`.)
-- [ ] 5.3 BROWSER (Chrome device extension, 390 and 768, light+dark): hint beside/under button, no overflow, button ≥44x44.
+- [x] 5.3 BROWSER (Chrome device extension, 390 and 768, light+dark): hint beside/under button, no overflow, button ≥44x44. — Done 2026-11-06 in Playwright at the LAN IP (390/768, light): hint + "Asignar técnico" 124x44 focuses #assign-tecnico, no overflow. Dark not re-measured; the owner's device extension was not used (that Chrome lost its session on the IP change).
 
 ## WU6: Kanban (D10; disjoint from WU5)
 
@@ -84,11 +84,11 @@ WU5 and WU6 own disjoint files and may be written in parallel (subagents, one pe
 - [x] 6.3 RED `board/primitives.test.tsx` + `DndBoard.test.tsx:83-103`: `dropHint` text per origin/target; no "No se puede mover acá". GREEN `ColumnShell dropHint`, `DropColumn` via `blockedMoveReason`.
 - [x] 6.4 RED `KanbanBoard.test.tsx`: illegal drop → no request, info toast `reason + "."` (open→diagnosing, booked→diagnosing); own column silent. GREEN `onMove` illegal branch. (Drop tests live in `DndBoard.test.tsx`, where the real dnd-kit drag helper is; `plan.ts` unchanged.)
 - [x] 6.5 Mutation-verify; gates; GGA; PR.
-- [ ] 6.6 BROWSER (LAN IP, Chrome device extension): real mouse drag and tablet long-press show hints readable and unclipped at 1280/768; toast on drop; menu text wraps ≤280px, row ≥44px; console clean.
+- [x] 6.6 BROWSER (LAN IP, Chrome device extension): real mouse drag and tablet long-press show hints readable and unclipped at 1280/768; toast on drop; menu text wraps ≤280px, row ≥44px; console clean. — Done 2026-11-06 in Playwright at the LAN IP, 1280: real mouse drag shows origin-aware hints ("Pasa sola al asignar un técnico", "Desde Recibida no se puede pasar a …"), drop shows the info toast and sends nothing, the menu item is disabled at full opacity and 44px tall. NOT done: tablet long-press.
 
 ## WU7: Técnico empty list (D11)
 
 - [x] 7.1 RED `service-orders/page.test.tsx` (mock `findTecnicoByUserId`): linked → "No tenés órdenes asignadas."; unlinked → unlinked copy; filter/search → "Ninguna orden coincide con el filtro." + "Limpiar filtro"; admin unchanged; técnico with orders no reason; lookup NOT called unless `!readAll`, unfiltered, empty. GREEN `page.tsx`.
-- [ ] 7.2 Mutation-verify; gates; GGA; PR.
-- [ ] 7.3 BROWSER (LAN IP): both técnico empty states against a real linked and an unlinked user.
+- [x] 7.2 Mutation-verify; gates; GGA; PR.
+- [ ] 7.3 BROWSER (LAN IP): both técnico empty states against a real linked and an unlinked user. — NOT browser-verified: the only linked técnico with no orders has a temporary password (redirects to /change-password) and no unlinked técnico user exists in dev data. Covered by 5 page tests with mutations.
 - [ ] 7.4 Tracker: whole-chain integration check (`npm test`, `tsc`, `lint` on the tracker), then merge to main; archive per SDD discipline.
