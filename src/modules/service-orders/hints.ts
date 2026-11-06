@@ -7,11 +7,12 @@
  */
 import type { OrderAssignee } from "./order-team";
 import { ORDER_STATUS_LABEL } from "./statuses";
-import { AUTOMATIC_TARGETS, isAllowedTransition, type OrderStatus } from "./transitions";
+import { isAllowedTransition, type OrderStatus } from "./transitions";
 
 export type HintAction = "assign" | "technicians" | "edit";
 export type Hint = { text: string; action?: HintAction };
 
+/** Keys are the automatic targets (`AUTOMATIC_TARGETS`); pinned in hints.test.ts. */
 const AUTO_TEXT: Partial<Record<OrderStatus, string>> = {
   diagnosing: "Pasa sola al asignar un técnico",
   ready_for_review: "Pasa sola cuando todos marcan su parte lista",
@@ -20,7 +21,7 @@ const AUTO_TEXT: Partial<Record<OrderStatus, string>> = {
 /** Why a drop on `to` is refused. "Pasa sola" only when the edge exists AND is automatic. */
 export function blockedMoveReason(from: OrderStatus, to: OrderStatus): string {
   const auto = AUTO_TEXT[to];
-  if (auto && AUTOMATIC_TARGETS.has(to) && isAllowedTransition(from, to)) return auto;
+  if (auto && isAllowedTransition(from, to)) return auto;
   return `Desde ${ORDER_STATUS_LABEL[from]} no se puede pasar a ${ORDER_STATUS_LABEL[to]}`;
 }
 

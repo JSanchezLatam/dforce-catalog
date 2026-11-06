@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { orderStatusEnum } from "@/shared/db/schema";
 import { blockedMoveReason, statusBarHint, workLinesHint } from "./hints";
 import type { OrderAssignee } from "./order-team";
-import { isAllowedTransition, type OrderStatus } from "./transitions";
+import { AUTOMATIC_TARGETS, isAllowedTransition, type OrderStatus } from "./transitions";
 
 const assignee = (nombre: string, over: Partial<OrderAssignee> = {}): OrderAssignee => ({
   tecnicoId: `t-${nombre}`,
@@ -33,6 +33,12 @@ describe("blockedMoveReason", () => {
   });
   it("in_progress -> diagnosing (no edge) says it cannot", () => {
     expect(blockedMoveReason("in_progress", "diagnosing")).toBe("Desde En progreso no se puede pasar a En diagnóstico");
+  });
+  it("has an automatic text for every automatic target and no other", () => {
+    for (const to of orderStatusEnum.enumValues) {
+      const hasText = ["open", "in_progress"].some((from) => blockedMoveReason(from as OrderStatus, to).startsWith("Pasa sola"));
+      expect(hasText, to).toBe(AUTOMATIC_TARGETS.has(to));
+    }
   });
   it("uses the 'Pasa sola' text exactly for the allowed automatic edges, over every pair", () => {
     for (const from of orderStatusEnum.enumValues) {
@@ -165,6 +171,20 @@ describe("workLinesHint", () => {
     for (const status of ["in_progress", "ready_for_review"] as const) {
       const hint = workLinesHint({ ...base, status, canManageAll: false, own: me({ parteLista: true }) });
       expect(hint, status).toEqual({ text: "Desmarcá tu parte lista antes de cambiar líneas de trabajo." });
+    }
+  });
+  it("a jefe who is also assigned and marked still sees no técnico hint", () => {
+    for (const status of ["diagnosing", "in_progress", "ready_for_review"] as const) {
+      expect(workLinesHint({ ...base, status, own: me({ parteLista: true }) }), status).toBeNull();
+    }
+    expect(workLinesHint({ ...base, status: "diagnosing", own: me() })).toBeNull();
+  });
+  it("a técnico with a marked part on diagnosing gets no 'Vas a poder marcar' hint", () => {
+    expect(workLinesHint({ ...base, status: "diagnosing", canManageAll: false, own: me({ parteLista: true }) })).toBeNull();
+  });
+  it("a técnico not assigned to the order sees no booked/on_hold hint", () => {
+    for (const status of ["booked", "on_hold"] as const) {
+      expect(workLinesHint({ ...base, status, canManageAll: false }), status).toBeNull();
     }
   });
   it("nothing when the viewer can write", () => {
