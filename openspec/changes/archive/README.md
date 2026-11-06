@@ -36,8 +36,11 @@ active work. New changes go in `openspec/changes/<name>/`, not here.
 | `agenda-redesign` | 2026-10-28 | 99/99 | — (`workshop-agenda` only, below) | `workshop-agenda`: MODIFIED 9 requirements (Agenda Access, Range Query and Panama Midnights, Which Orders Appear, Chip Content, Day/Week/Month Layout, Combined View, Reprogramar, No se presentó, Booking Dialog), ADDED 4 (Appointment Detail, Agenda Tabs, Search and Type Filter, Agenda Side Column), REMOVED "Vencidas Panel" (replaced by the Vencidas tab); redesigned `/agenda` (appointment cards with type colour and Detail popover/sheet, tabs, search and type filter, side column with mini calendar, Próxima cita and week summary) (PR #283); verify PASS WITH WARNINGS, 0 CRITICAL; follow-ups listed in the archived `tasks.md` |
 | `kanban-board` | 2026-10-28 | 48/49 § | CREATED `openspec/specs/kanban-board/` (10 requirements); `service-orders`: ADDED "Manual Urgent Flag"; `workshop-status-board`: MODIFIED "Full Board Field Whitelist" (adds `urgent`), "Full Board Status Set and Booked Rows" (urgent first, Urgente badge), "Screen Legibility and Rendering" (kanban look) | in-app `/kanban` board with one column per status, drag and menu moves, KPIs and filters, manual Urgente flag (`urgente_at`/`urgente_by`), live polling (PR #305, tracker); verify PASS WITH WARNINGS, 0 CRITICAL; follow-ups listed in the archived `tasks.md` |
 | `sidebar-redesign` | 2026-10-28 | 28/28 | CREATED `openspec/specs/app-sidebar/` (10 requirements) | floating inset panels, active pill, quiet group chevrons, user card, sheet close button, menu search with `/` and rail entry (PRs #325–#329); verify PASS WITH WARNINGS, 0 CRITICAL; follow-ups listed in the archived `tasks.md` |
+| `order-blocked-action-hints` | 2026-11-06 | 35/36 ¶ | ADDED to `service-orders`: "Order Detail Action Bar", "Blocked-Action Hints on Order Detail", "Empty Order List for a Técnico"; MODIFIED `service-orders` "Status Labels, Badge and List Filter", `kanban-board` "Move Rules" and "Card Menu and Urgent Toggle", `order-work-lines` "Work Line and Mark Interface" | hints that say what blocks a status change (on the order detail, the kanban and the work card, with a fix button when reachable), order detail action bar, técnico empty list, status hues unified with `STATUS_HUE` (tracker #335, WUs #336–#342; related #334 Spanish refusal defaults); verify PASS WITH WARNINGS, 0 CRITICAL; follow-ups in the subsection below and the change's `archive-report.md` |
 
 ‡ Task 4.9 (pre-deploy counts on the workshop database) is open by design: it is a deploy-time check, not code. Run it before deploying `main`.
+
+¶ Task 7.3 (both técnico empty states, checked in a browser at the LAN IP) is open by an accepted deviation: no suitable linked or unlinked técnico exists in dev data. The archive ran under that explicit override from the owner's orchestrator, not because the task was done. Task 7.4 was closed by this archive. See the change's `archive-report.md`.
 
 § The one open box, 8.4, is the archive step itself (`sdd-archive`), closed by this very archive; every implementation task is ticked.
 
@@ -272,6 +275,35 @@ before touching that code:
   READ COMMITTED. The window is one INSERT round trip and layer 2
   (`pg_advisory_xact_lock`) still guarantees the customer data; a partial unique
   index on `status = 'running'` would close it structurally. Its own change.
+
+### `order-blocked-action-hints` (archived 2026-11-06)
+
+Full text in `archive/2026-11-06-order-blocked-action-hints/archive-report.md`.
+Verify findings are a snapshot from verification time; the list below is the
+state at close. The ones that matter first:
+
+- **Task 7.3 open (accepted deviation).** Both técnico empty states have never
+  rendered in a browser at the LAN IP. The only linked técnico without orders has
+  a temporary password, and no unlinked técnico exists in dev data. Covered by 5
+  page tests with mutations. Close it with a seeded linked and an unlinked técnico.
+- **Not verified in a browser:** tablet long-press drag (task 6.6); the Recibida
+  menu at tablet and phone widths; dark mode on the work card and the menu item.
+  The owner's Chrome device extension was not used (Playwright at the LAN IP instead).
+- **"Editar orden" is 12.8px** (`size=sm` in `ServiceOrderForm`) beside Imprimir
+  at 14px. Make them match.
+- **`status-hue.test.ts` imports from `modules/`** (the shared-to-modules rule),
+  in a test file only.
+- **Remove the HSTS header** from `next.config.ts:69`.
+- **Standard labor hours** (carried from the close facts).
+- **Verify SUGGESTIONs:** (1) render-assert the marked-técnico hint in
+  `OrderWorkCard`, since only `hints.test.ts` asserts its text; (2) name
+  `jefe_taller` in a test, since the shared `canAssign` path covers it but no test
+  names it; (3) a DndBoard drag test for the "Desde En diagnóstico no se puede pasar
+  a Lista para revisión" copy in the rendered column (the pure function is covered).
+- **Inventory items out of scope:** agenda non-booked items; bulk status
+  explanation; vehicle-with-orders delete; portal code; race and stale generic
+  messages; empty-roster assign copy; account refusals tú→voseo; info-toast
+  contrast at 4.4:1.
 
 ## Where the current spec actually lives
 
