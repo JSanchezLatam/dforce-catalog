@@ -43,7 +43,7 @@ WU5 and WU6 own disjoint files and may be written in parallel (subagents, one pe
 - [x] 1.3 RED `vencimientos/display` test: amber maps to new `"warning"` key; GREEN `display.ts` (+ `StatusBadge` `warning` key with `TONE.warning`).
 - [x] 1.4 RED tests pinning `"completed"` for "Activo" in `TechnicianRoster.tsx:179`, `UsersTable.tsx:323`, `customers/page.tsx:361`; GREEN move all three.
 - [x] 1.5 RED `BacklogCounters` test pins `board-hue-bar` plus `--h/--s` vars; GREEN edit `metrics/charts/BacklogCounters.tsx`.
-- [ ] 1.6 Mutation-verify 1.2-1.5; gates; GGA; PR.
+- [x] 1.6 Mutation-verify 1.2-1.5; gates; GGA; PR.
 - [ ] 1.7 BROWSER (LAN IP, light+dark): badge text ≥4.5:1 incl. Completada at 12px; "Activo"/"Este mes" unchanged; `/tablero/clientes` badges; console clean.
 
 ## WU2: Action bar (D5, D6)
