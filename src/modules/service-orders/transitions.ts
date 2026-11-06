@@ -49,9 +49,14 @@ export function getManualTransitions(from: OrderStatus): OrderStatus[] {
   return ALLOWED_TRANSITIONS[from].filter((next) => !AUTOMATIC_TARGETS.has(next));
 }
 
+/** R21 — whether `from -> to` is in the table (automatic targets included); never throws. */
+export function isAllowedTransition(from: OrderStatus, to: OrderStatus): boolean {
+  return ALLOWED_TRANSITIONS[from].includes(to);
+}
+
 /** R21 — throws OrderTransitionError for any transition not in ALLOWED_TRANSITIONS. */
 export function assertTransition(from: OrderStatus, to: OrderStatus): void {
-  if (!ALLOWED_TRANSITIONS[from].includes(to)) {
+  if (!isAllowedTransition(from, to)) {
     throw new OrderTransitionError(from, to);
   }
 }

@@ -52,18 +52,18 @@ On the order detail, "Editar orden" and "Imprimir" MUST sit on the breadcrumb li
 
 Each status button MUST carry a lucide icon and the color of the status it leads to, from `STATUS_HUE`: tint (light `hsl(H S 92%)` / text `hsl(H S 28%)`; dark `hsl(H S*0.5 18%)` / text `hsl(H S 78%)`), except the normal next step, which MUST be filled (light `hsl(H S 32%)` with white text; dark `hsl(H S 78%)` with the page background as text). Only the normal next step MUST be filled: "Recibir" on `booked`, "Pasar a En progreso" on `diagnosing`, "Reanudar" on `on_hold`, "Completar" on `ready_for_review`. On `open` and `in_progress` no button is filled (the normal next step is automatic, and "Completar" skips review).
 
-Labels, icons and aria-labels (the visible label is short; where it differs from the long action name, the full text MUST be the `aria-label`):
+Labels and icons. The visible label MUST be the accessible name: no `aria-label` (WCAG 2.5.3, Label in Name; decided 2026-11-06, overriding the mockup's aria-label idea):
 
-| Button (visible) | Icon | Leads to | aria-label |
-|---|---|---|---|
-| "Recibir" | `Inbox` | `open` | (same as visible) |
-| "Pasar a En progreso" | `Wrench` | `in_progress` | "Marcar como En progreso" |
-| "En espera · repuesto" | `Pause` | `on_hold` | "Marcar como En espera (repuesto)" |
-| "En espera · aprobación" | `Pause` | `on_hold` | "Marcar como En espera (aprobación del cliente)" |
-| "Completar" | `Check` | `done` | "Marcar como Completada" |
-| "Reanudar" | `Wrench` | `in_progress` | (same as visible) |
-| "Volver a En progreso" | `Wrench` | `in_progress` | "Marcar como En progreso" |
-| "Cancelar" | `Ban` | `cancelled` | "Marcar como Cancelada" |
+| Button (visible = accessible name) | Icon | Leads to |
+|---|---|---|
+| "Recibir" | `Inbox` | `open` |
+| "Pasar a En progreso" | `Wrench` | `in_progress` |
+| "En espera · repuesto" | `Pause` | `on_hold` |
+| "En espera · aprobación" | `Pause` | `on_hold` |
+| "Completar" | `Check` | `done` |
+| "Reanudar" | `Wrench` | `in_progress` |
+| "Volver a En progreso" | `Wrench` | `in_progress` |
+| "Cancelar" | `Ban` | `cancelled` |
 
 "Cancelar" MUST always be last, after a visual divider that is `aria-hidden`, and MUST keep the `destructive` button variant unchanged. Statuses present per order status MUST NOT change (same `getManualTransitions` set): `booked`: Recibir, Cancelar; `open`: Cancelar; `diagnosing`: Pasar a En progreso, Cancelar; `in_progress`: both En espera, Completar, Cancelar; `on_hold`: Reanudar, Cancelar; `ready_for_review`: Completar, Volver a En progreso, Cancelar. Below 640px (container width) the status controls MUST stack in one column at full width, divider horizontal. The status row MUST NOT be clipped by the card at 1280px with the sidebar open. Every control MUST keep a 44x44 minimum hit target.
 
@@ -72,12 +72,11 @@ Labels, icons and aria-labels (the visible label is short; where it differs from
 - WHEN the page renders
 - THEN "Editar orden" and "Imprimir" MUST be in the breadcrumb row and MUST NOT be inside the card header's status controls
 
-#### Scenario: Short label, full accessible name **[unit]**
+#### Scenario: The short label is the accessible name **[unit]**
 - GIVEN an `in_progress` order
 - WHEN the status bar renders
-- THEN `getByRole("button", { name: "Marcar como En espera (aprobación del cliente)" })` MUST resolve to the button whose visible text is "En espera · aprobación"
-- AND `getByRole("button", { name: "Marcar como Completada" })` MUST resolve to the button reading "Completar"
-- AND `getByRole("button", { name: "Marcar como Cancelada" })` MUST resolve to the button reading "Cancelar"
+- THEN `getByRole("button", { name: "En espera · aprobación" })`, `{ name: "Completar" }` and `{ name: "Cancelar" }` MUST each resolve
+- AND no status button MUST carry an `aria-label`
 
 #### Scenario: Only the normal next step is filled **[unit]**
 - GIVEN orders in `booked`, `diagnosing`, `on_hold`, `ready_for_review`, `open` and `in_progress`

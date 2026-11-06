@@ -10,7 +10,7 @@ Source of truth for copy and layout: the approved mockup `mockup/index.html` (ow
 
 ### In Scope
 - **A. Hints (mockup 1-8)**: open order without técnico (detail hint + "Asignar técnico" focusing `#assign-tecnico`, "Ir a Técnicos" variant; disabled item in CardMenu/MoveSheet); kanban drop hint by origin+target plus info toast on illegal drop; "Faltan: {names}" of ACTIVE unmarked assignees on En progreso; técnico hint on En diagnóstico; work-lines refused-by-status hints with role variants (fix the unreachable `OrderWorkCard.tsx:196` condition); técnico hint after Mi parte lista; Agendada missing vehicle/category: Recibir disabled + hint + Editar orden; técnico empty state on `/service-orders` (assigned-none and unlinked-user via `findTecnicoByUserId`).
-- **B. Action bar (mockup 9)**: Editar orden/Imprimir move to the breadcrumb line; status buttons get lucide icon and target-status `STATUS_HUE` color, only the normal next step filled, short label with full text in `aria-label`, Cancelar last after a divider (destructive), phone full-width stack; header overflow fixed.
+- **B. Action bar (mockup 9)**: Editar orden/Imprimir move to the breadcrumb line; status buttons get lucide icon and target-status `STATUS_HUE` color, only the normal next step filled, short visible label that is also the accessible name (no `aria-label`, WCAG 2.5.3 — decided 2026-11-06), Cancelar last after a divider (destructive), phone full-width stack; header overflow fixed.
 - **C. Badge unification**: `StatusBadge` order-status colors follow `STATUS_HUE`; light text at 28% lightness (AA for done). `cancelled` keeps its current treatment (not in `STATUS_HUE`).
 
 ### Out of Scope (follow-ups)
@@ -61,7 +61,7 @@ Presentation-only: no transition, permission or SQL changes. One pure `blockedRe
 | Risk | Likelihood | Mitigation |
 |------|------------|------------|
 | Badge recolor app-wide changes 20 call sites' look | Med | Order statuses only; browser contrast check light/dark |
-| Short labels break `getByRole` tests | Low | Full text kept in `aria-label` |
+| Short labels break `getByRole` tests | Low | Tests query the visible short label (WCAG 2.5.3) |
 | "Faltan" counts inactive técnicos | Med | Spec scenario + test on ACTIVE filter |
 | No test sees rendered height/overflow | High | Browser check at LAN IP, tablet/phone |
 
