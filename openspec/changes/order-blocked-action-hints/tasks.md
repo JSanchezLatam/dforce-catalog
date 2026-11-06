@@ -73,8 +73,8 @@ WU5 and WU6 own disjoint files and may be written in parallel (subagents, one pe
 
 ## WU5: Work-card hints (disjoint from WU6)
 
-- [ ] 5.1 RED `OrderWorkCard.test.tsx`, one test per spec scenario (open jefe with assign button / "Ir a Técnicos"; booked jefe/técnico; on_hold jefe/técnico; diagnosing técnico; marked técnico incl. ready_for_review; no hint when writable; closed; "Copy is exact"; old "solo el jefe de taller puede cambiar líneas" absent). GREEN `OrderWorkCard.tsx` via `workLinesHint`; remove the unreachable `:196` branch; hint row above "Todavía no hay líneas de trabajo.".
-- [ ] 5.2 Mutation-verify; gates; GGA; PR.
+- [x] 5.1 RED `OrderWorkCard.test.tsx`, one test per spec scenario (open jefe with assign button / "Ir a Técnicos"; booked jefe/técnico; on_hold jefe/técnico; diagnosing técnico; marked técnico incl. ready_for_review; no hint when writable; closed; "Copy is exact"; old "solo el jefe de taller puede cambiar líneas" absent). GREEN `OrderWorkCard.tsx` via `workLinesHint`; remove the unreachable `:196` branch; hint row above "Todavía no hay líneas de trabajo.".
+- [x] 5.2 Mutation-verify; gates; GGA; PR. (Mutations and gates done; GGA and PR left to the orchestrator. `OrderWorkCard` gained two serializable props, `assignableCount` and `canManageTechnicians`, passed by `[id]/page.tsx`.)
 - [ ] 5.3 BROWSER (Chrome device extension, 390 and 768, light+dark): hint beside/under button, no overflow, button ≥44x44.
 
 ## WU6: Kanban (D10; disjoint from WU5)

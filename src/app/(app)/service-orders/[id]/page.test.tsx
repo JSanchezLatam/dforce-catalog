@@ -977,7 +977,18 @@ describe("ServiceOrderDetailPage — technicians on the order", () => {
         mode: "write",
         viewerTecnicoId: "t1",
         canManageAll: true,
+        assignableCount: 0,
+        canManageTechnicians: false,
       });
+    });
+
+    it("hands the card how many technicians are still assignable and whether the viewer manages them", async () => {
+      roleCan(["service-orders.read", "service-orders.assign", "service-orders.write", "technicians.manage"]);
+      listTecnicos.mockResolvedValue([tecnicoRow("t8", "Carla Motor"), tecnicoRow("t9", "Beto Frenos")]);
+      render(await renderPage());
+
+      expect(lastProps().assignableCount).toBe(2);
+      expect(lastProps().canManageTechnicians).toBe(true);
     });
 
     it("crosses the RSC boundary as plain data: it survives a JSON round trip unchanged", async () => {

@@ -344,6 +344,8 @@ export default async function ServiceOrderDetailPage({
             mode={workLineMode(user.role, orden.status)}
             viewerTecnicoId={viewerTecnico?.id ?? null}
             canManageAll={canAssign}
+            assignableCount={assignable.length}
+            canManageTechnicians={can(user, "technicians.manage")}
           />
         </CardContent>
       </Card>
