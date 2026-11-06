@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acciones bloqueadas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Tokens copied verbatim from src/app/globals.css (:root and .dark). */
+:root {
+  --radius: 0.5rem;
+  --background: hsl(0 0% 100%); --foreground: hsl(240 10% 3.9%);
+  --card: hsl(0 0% 100%); --card-foreground: hsl(240 10% 3.9%);
+  --popover: hsl(0 0% 100%); --popover-foreground: hsl(240 10% 3.9%);
+  --primary: hsl(240 5.9% 10%); --primary-foreground: hsl(0 0% 98%);
+  --secondary: hsl(240 4.8% 95.9%); --secondary-foreground: hsl(240 5.9% 10%);
+  --muted: hsl(240 4.8% 95.9%); --muted-foreground: hsl(240 3.8% 46.1%);
+  --accent: hsl(240 4.8% 95.9%); --accent-foreground: hsl(240 5.9% 10%);
+  --destructive: hsl(0 84.2% 60.2%);
+  --border: hsl(240 5.9% 90%); --input: hsl(240 5.9% 90%); --ring: hsl(240 5.9% 10%);
+  --board-canvas: hsl(240 5% 97.5%); --board-col: hsl(240 6% 94%); --board-tile: hsl(0 0% 100%);
+  --board-tile-shadow: 0 1px 2px rgb(16 16 24 / .06), 0 2px 8px rgb(16 16 24 / .05);
+  --urgent: hsl(0 72% 51%);
+  --board-warn-bg: hsl(43 96% 94%); --board-warn-border: hsl(40 90% 78%); --board-warn-fg: hsl(28 80% 30%);
+  /* StatusBadge TONE (Tailwind palette values), light */
+  --t-neutral-bg: #f4f4f5; --t-neutral-fg: #3f3f46;
+  --t-info-bg: #e0f2fe; --t-info-fg: #075985;
+  --t-warn-bg: #fef3c7; --t-warn-fg: #92400e;
+  --t-ok-fg: #15803d;
+  --red-fg: #dc2626;
+  /* mockup chrome only */
+  --chrome: hsl(240 5% 92%);
+}
+.dark {
+  --background: hsl(240 10% 3.9%); --foreground: hsl(0 0% 98%);
+  --card: hsl(240 10% 5.9%); --card-foreground: hsl(0 0% 98%);
+  --popover: hsl(240 10% 5.9%); --popover-foreground: hsl(0 0% 98%);
+  --primary: hsl(0 0% 98%); --primary-foreground: hsl(240 5.9% 10%);
+  --secondary: hsl(240 3.7% 15.9%); --secondary-foreground: hsl(0 0% 98%);
+  --muted: hsl(240 3.7% 15.9%); --muted-foreground: hsl(240 5% 64.9%);
+  --accent: hsl(240 3.7% 15.9%); --accent-foreground: hsl(0 0% 98%);
+  --destructive: hsl(0 62.8% 30.6%);
+  --border: hsl(240 3.7% 15.9%); --input: hsl(240 3.7% 15.9%); --ring: hsl(240 4.9% 83.9%);
+  --board-canvas: hsl(240 8% 5.5%); --board-col: hsl(240 6% 9.5%); --board-tile: hsl(240 5% 13%);
+  --board-tile-shadow: 0 1px 0 rgb(255 255 255 / .03) inset, 0 2px 6px rgb(0 0 0 / .35);
+  --board-warn-bg: hsl(38 70% 14%); --board-warn-border: hsl(38 60% 26%); --board-warn-fg: hsl(42 95% 72%);
+  --t-neutral-bg: rgb(161 161 170 / .15); --t-neutral-fg: #d4d4d8;
+  --t-info-bg: rgb(56 189 248 / .15); --t-info-fg: #7dd3fc;
+  --t-warn-bg: rgb(251 191 36 / .15); --t-warn-fg: #fcd34d;
+  --t-ok-fg: #4ade80;
+  --red-fg: #f87171;
+  --chrome: hsl(240 6% 8%);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font-family: "Geist", ui-sans-serif, system-ui, sans-serif; background: var(--chrome); color: var(--foreground); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; }
+svg.i { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s3 { width: 12px; height: 12px; } svg.i.s35 { width: 14px; height: 14px; } svg.i.s45 { width: 18px; height: 18px; } svg.i.s10 { width: 40px; height: 40px; }
+
+/* ---------- mockup chrome ---------- */
+.top { position: sticky; top: 0; z-index: 40; background: var(--background); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.top h1 { font-size: 16px; margin: 0; flex: 1 1 auto; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.seg button { min-height: 44px; min-width: 44px; padding: 0 12px; border: 0; background: transparent; cursor: pointer; font-size: 14px; }
+.seg button[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); font-weight: 600; }
+.intro { max-width: 1280px; margin: 16px auto; padding: 0 16px; font-size: 14px; line-height: 1.55; }
+.intro .note { background: var(--background); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.intro h2 { font-size: 15px; margin: 0 0 6px; }
+.intro p { margin: 6px 0; }
+.stage { overflow-x: auto; padding: 0 16px 48px; }
+.frame { container-type: inline-size; margin: 0 auto; width: 1280px; max-width: none; background: var(--background); color: var(--foreground); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; transition: width .2s; }
+.sec { border-bottom: 8px solid var(--chrome); position: relative; }
+.sec-hd { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 16px; background: var(--muted); border-bottom: 1px solid var(--border); }
+.sec-hd h2 { margin: 0; font-size: 14px; font-weight: 700; flex: 1 1 260px; }
+.sec-hd .who { font-size: 12px; color: var(--foreground); opacity: .8; font-weight: 500; display: block; }
+.sec-note { margin: 0; padding: 10px 16px; font-size: 12px; color: var(--muted-foreground); border-bottom: 1px dashed var(--border); line-height: 1.5; }
+.sec-note b { color: var(--foreground); }
+.sec[data-view="hoy"] .v-prop, .sec[data-view="prop"] .v-hoy { display: none !important; }
+.sub { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted-foreground); margin: 20px 0 8px; }
+.sub:first-child { margin-top: 0; }
+
+/* ---------- app (mirrors the Tailwind classes in the real components) ---------- */
+.page { padding: 16px; } /* p-4 sm:p-8 */
+@container (min-width: 640px) { .page { padding: 32px; } }
+.crumb { font-size: 14px; color: var(--muted-foreground); margin-bottom: 24px; display: flex; gap: 6px; }
+.crumb b { color: var(--foreground); font-weight: 400; }
+.card { background: var(--card); color: var(--card-foreground); border-radius: 12px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--foreground) 10%, transparent); margin-bottom: 24px; }
+.card-hd { padding: 16px 16px 0; display: flex; flex-direction: column; gap: 12px; }
+@container (min-width: 640px) { .card-hd.row { flex-direction: row; align-items: center; justify-content: space-between; gap: 0; } .card-hd.row .ttl { flex: 1; } }
+.card-bd { padding: 16px; }
+.ttl { display: flex; align-items: center; gap: 12px; font-size: 16px; font-weight: 500; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; min-height: 44px; min-width: 44px; padding: 0 10px; border-radius: var(--radius); border: 1px solid transparent; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; background: var(--primary); color: var(--primary-foreground); }
+.btn.outline { background: var(--background); color: var(--foreground); border-color: var(--border); }
+.btn.outline:hover { background: var(--muted); }
+.btn[disabled] { opacity: .5; cursor: not-allowed; pointer-events: none; }
+.badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 500; }
+.t-neutral { background: var(--t-neutral-bg); color: var(--t-neutral-fg); }
+.t-info { background: var(--t-info-bg); color: var(--t-info-fg); }
+.t-warn { background: var(--t-warn-bg); color: var(--t-warn-fg); }
+dl { margin: 0; }
+.f { display: grid; grid-template-columns: 1fr; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.f:last-child { border-bottom: 0; }
+@container (min-width: 640px) { .f { grid-template-columns: 1fr 2fr; gap: 8px; } }
+.f dt { font-weight: 500; color: var(--muted-foreground); } .f dd { margin: 0; }
+.link { color: var(--primary); } .dark .link { text-decoration: underline; text-underline-offset: 2px; }
+.muted { font-size: 14px; color: var(--muted-foreground); margin: 0; }
+.err { flex-basis: 100%; font-size: 14px; color: var(--red-fg); margin: 0; }
+.pill { display: flex; align-items: center; gap: 8px; border: 1px solid var(--input); border-radius: var(--radius); padding: 6px 12px; font-size: 14px; }
+.select { min-height: 44px; width: 100%; border: 1px solid var(--input); border-radius: var(--radius); background: transparent; padding: 0 10px; font: inherit; font-size: 16px; color: var(--foreground); }
+.select:focus-visible, .select.flash { outline: none; border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent); }
+.assign { display: grid; gap: 8px; }
+.assign label { font-size: 14px; font-weight: 500; }
+.assign .r { display: flex; flex-direction: column; gap: 8px; }
+@container (min-width: 640px) { .assign .r { flex-direction: row; } .assign .select { max-width: 320px; } }
+.team { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+@container (min-width: 640px) { .team { grid-template-columns: 1fr 1fr; } }
+.team li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--input); border-radius: var(--radius); padding: 8px 12px; font-size: 14px; }
+.team li b { font-weight: 500; }
+.team .st { display: flex; gap: 12px; }
+.ok { color: var(--t-ok-fg); } .pend { color: var(--muted-foreground); }
+.lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.lines li { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--input); border-radius: var(--radius); padding: 12px; font-size: 14px; }
+@container (min-width: 640px) { .lines li { flex-direction: row; align-items: center; justify-content: space-between; } }
+.lines p { margin: 0; } .lines .n { font-weight: 500; }
+.stack { display: flex; flex-direction: column; gap: 16px; }
+
+/* ---------- THE PROPOSED HINT ---------- */
+.hint { display: flex; align-items: flex-start; gap: 6px; font-size: 14px; line-height: 20px; color: var(--muted-foreground); margin: 0; }
+.hint svg { margin-top: 2px; }
+.hint-row { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.new { position: relative; }
+.new::after { content: "nuevo"; position: absolute; top: -9px; right: 0; font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; background: #7c3aed; color: #fff; border-radius: 999px; padding: 1px 6px; pointer-events: none; }
+.show-new-off .new::after { display: none; }
+
+/* ---------- board (kanban) ---------- */
+.board { background: var(--board-canvas); padding: 16px; position: relative; }
+@container (min-width: 640px) { .board { padding: 24px; } }
+.cols { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 12px; }
+.col { position: relative; width: 280px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; padding: 14px 10px 10px; border-radius: 16px; background: var(--board-col); overflow: hidden; }
+@container (max-width: 767px) { .col { width: 100%; } }
+.col .bar { position: absolute; inset: 0 0 auto 0; height: 4px; background: hsl(var(--h) var(--s) 55%); }
+.col-hd { display: flex; align-items: center; gap: 8px; padding: 0 4px; }
+.tile { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: hsl(var(--h) var(--s) 92%); color: hsl(var(--h) var(--s) 32%); }
+.dark .tile { background: hsl(var(--h) calc(var(--s) * .5) 18%); color: hsl(var(--h) var(--s) 78%); }
+.col-hd h3 { margin: 0; flex: 1; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.count { border-radius: 999px; background: var(--background); padding: 2px 8px; font-size: 12px; font-weight: 700; box-shadow: 0 0 0 1px var(--border); }
+.col.legal { box-shadow: 0 0 0 2px hsl(var(--h) var(--s) 55%); background: hsl(var(--h) var(--s) 55% / .08); }
+.col.illegal > :not([data-hint]) { opacity: .4; filter: grayscale(1); }
+.col.droppable { cursor: copy; }
+.drophint { position: absolute; left: 12px; right: 12px; top: 64px; z-index: 10; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 8px; background: var(--foreground); color: var(--background); padding: 8px 12px; font-size: 12px; font-weight: 600; box-shadow: 0 10px 15px -3px rgb(0 0 0 / .2); text-align: center; }
+.empty { min-height: 96px; display: grid; place-items: center; border: 1px dashed var(--border); border-radius: 12px; font-size: 12px; color: var(--muted-foreground); }
+.kc { list-style: none; position: relative; border: 1px solid var(--border); background: var(--board-tile); box-shadow: var(--board-tile-shadow); border-radius: 12px; padding: 12px; }
+.kc.dragging { opacity: .4; }
+.kc .top-r { display: flex; align-items: flex-start; gap: 6px; }
+.grip { margin: -6px 0 0 -12px; width: 44px; height: 44px; display: grid; place-items: center; color: color-mix(in srgb, var(--muted-foreground) 60%, transparent); }
+@container (max-width: 767px) { .grip { display: none; } }
+.plate { font-size: 15px; line-height: 20px; font-weight: 800; letter-spacing: .05em; }
+.veh { font-size: 12px; color: var(--muted-foreground); margin-top: 2px; }
+.dots { margin: -6px -6px 0 0; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 8px; color: var(--muted-foreground); border: 0; background: transparent; cursor: pointer; }
+.dots:hover, .dots.on { background: var(--muted); }
+.kc .ft { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
+.notech { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted-foreground); }
+.notech span { width: 26px; height: 26px; border-radius: 999px; border: 1px dashed color-mix(in srgb, var(--muted-foreground) 60%, transparent); display: grid; place-items: center; }
+.av { width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center; font-size: 10px; font-weight: 700; background: hsl(var(--h) 70% 90%); color: hsl(var(--h) 55% 28%); box-shadow: 0 0 0 2px var(--board-tile); }
+.dark .av { background: hsl(var(--h) 35% 26%); color: hsl(var(--h) 80% 86%); }
+.avs { display: flex; } .avs .av + .av { margin-left: -4px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; background: var(--muted); color: var(--muted-foreground); padding: 2px 8px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+.alert { margin-top: 8px; display: flex; align-items: center; gap: 8px; border-radius: 8px; border: 1px solid var(--board-warn-border); background: var(--board-warn-bg); color: var(--board-warn-fg); padding: 6px 10px; font-size: 12px; font-weight: 600; }
+
+/* dropdown + sheet */
+.menu-wrap { position: relative; display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+.dd { position: absolute; z-index: 20; top: 52px; left: 160px; min-width: 208px; max-width: 280px; background: var(--popover); color: var(--popover-foreground); border-radius: var(--radius); padding: 4px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--foreground) 10%, transparent), 0 8px 24px rgb(0 0 0 / .15); }
+.mi { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border-radius: 6px; font-size: 14px; cursor: default; }
+.mi:hover { background: var(--accent); }
+.mi.red { color: var(--red-fg); } .mi.red:hover { background: color-mix(in srgb, var(--red-fg) 10%, transparent); }
+.mi.blocked { align-items: flex-start; padding: 10px 12px; color: var(--muted-foreground); font-size: 13px; line-height: 18px; cursor: not-allowed; }
+.mi.blocked:hover { background: transparent; }
+.mi.blocked svg { margin-top: 1px; }
+.sep { height: 1px; background: var(--border); margin: 4px -4px; }
+.sheet { width: 100%; max-width: 420px; background: var(--popover); border-radius: 24px 24px 0 0; padding: 16px 16px 24px; box-shadow: 0 -8px 30px rgb(0 0 0 / .18); display: grid; gap: 8px; }
+.sheet .hd { display: flex; align-items: center; gap: 12px; padding: 0 4px 8px; }
+.sheet .hd b { font-size: 18px; font-weight: 800; } .sheet .hd p { margin: 2px 0 0; font-size: 14px; color: var(--muted-foreground); }
+.sheet .x { width: 44px; height: 44px; border-radius: 999px; background: var(--muted); display: grid; place-items: center; margin-left: auto; border: 0; }
+.srow { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 12px; font-size: 15px; }
+.srow.red { color: var(--red-fg); }
+.srow.blocked { align-items: flex-start; padding: 10px 12px; font-size: 14px; color: var(--muted-foreground); border: 1px dashed var(--border); }
+.only-wide { display: block; } .only-phone { display: none; }
+@container (max-width: 767px) { .only-wide { display: none; } .only-phone { display: block; } .dd { left: 16px; } }
+
+/* toast — Toast.tsx, info = bg-muted text-muted-foreground */
+.toast { position: absolute; right: 16px; bottom: 16px; z-index: 30; display: flex; align-items: center; gap: 8px; border-radius: 8px; padding: 12px 16px; font-size: 14px; background: var(--muted); color: var(--muted-foreground); box-shadow: 0 4px 6px -1px rgb(0 0 0 / .15); max-width: calc(100% - 32px); }
+.toast[hidden] { display: none; }
+
+/* list page */
+.ph { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
+.ph h1 { margin: 0; font-size: 24px; font-weight: 600; }
+.filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; font-size: 14px; }
+.filters .in { min-height: 32px; height: 32px; border: 1px solid var(--input); border-radius: var(--radius); padding: 0 10px; color: var(--muted-foreground); display: flex; align-items: center; min-width: 240px; flex: 1; }
+.filters label { display: grid; gap: 6px; font-weight: 500; }
+.filters .sel { min-height: 32px; border: 1px solid var(--input); border-radius: var(--radius); padding: 0 10px; display: flex; align-items: center; min-width: 120px; font-weight: 400; }
+.es { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 0; text-align: center; }
+.es h2 { margin: 0; font-size: 18px; font-weight: 600; }
+.es svg { color: var(--muted-foreground); }
+.grid2 { display: grid; gap: 16px; }
+@container (min-width: 1000px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+.cap { font-size: 12px; color: var(--muted-foreground); margin: 0 0 6px; }
+.flag { border-left: 3px solid #7c3aed; padding: 6px 10px; background: color-mix(in srgb, #7c3aed 8%, transparent); font-size: 12px; color: var(--foreground); border-radius: 0 6px 6px 0; margin-top: 12px; line-height: 1.5; }
+
+/* ---------- section 9: the order action bar (proposal, applied to 1/3/4/7 too) ---------- */
+/* Secondary actions on the breadcrumb line. */
+.crumb-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-bottom: 24px; }
+.crumb-row .crumb { margin-bottom: 0; }
+.crumb-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Title on its own line, the status bar under it: it never competes with the title for width. */
+.card-hd.stacked { flex-direction: column; align-items: stretch; }
+.sbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sbar .vr { width: 1px; align-self: stretch; margin: 6px 4px; background: var(--border); }
+/* Tint = board/primitives STATUS_HUE + globals.css .board-hue-tile; light text 28% (the tile's 32% is 4.45:1 for done). */
+.sbtn { background: hsl(var(--h) var(--s) 92%); color: hsl(var(--h) var(--s) 28%); }
+.dark .sbtn { background: hsl(var(--h) calc(var(--s) * .5) 18%); color: hsl(var(--h) var(--s) 78%); }
+.sbtn.fill { background: hsl(var(--h) var(--s) 32%); color: #fff; }
+.dark .sbtn.fill { background: hsl(var(--h) var(--s) 78%); color: var(--background); }
+/* Cancelar = button.tsx variant "destructive", unchanged. */
+.sbtn.danger { background: rgb(239 68 68 / .1); color: #b91c1c; }
+.dark .sbtn.danger { background: rgb(239 68 68 / .2); color: #fca5a5; }
+.h-open { --h: 221; --s: 70%; } .h-prog { --h: 290; --s: 50%; } .h-hold { --h: 220; --s: 14%; } .h-done { --h: 142; --s: 55%; }
+@container (max-width: 639px) {
+  .sbar { display: grid; grid-template-columns: 1fr; }
+  .sbar .sbtn { width: 100%; }
+  .sbar .vr { width: auto; height: 1px; margin: 4px 0; }
+}
+/* App shell stub: the real sidebar is 16rem (sidebar.tsx:31) and off-canvas under 1024 (use-mobile.ts:3). */
+.shell { display: flex; }
+.shell > .side { display: none; width: 256px; flex-shrink: 0; background: var(--muted); border-right: 1px solid var(--border); padding: 16px; font-size: 13px; color: var(--foreground); }
+.shell > .main { flex: 1; min-width: 0; }
+@container (min-width: 1024px) {
+  .shell > .side { display: block; }
+  .clip .card { overflow: hidden; }
+  .clip .card-hd.row .actions { flex-wrap: nowrap; flex-shrink: 0; }
+}
+.states { display: grid; gap: 16px; }
+@container (min-width: 1000px) { .states { grid-template-columns: 1fr 1fr; } }
+.states .card { margin-bottom: 0; }
+.cmap { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cmap th, .cmap td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.cmap th { font-weight: 600; color: var(--muted-foreground); font-size: 12px; }
+.cmap-wrap { overflow-x: auto; }
+.sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-right: 6px; background: hsl(var(--h) var(--s) 55%); }
+</style>
+</head>
+<body>
+<!-- Lucide icon sprite (inline paths, no external assets) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-clipcheck" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
+  <symbol id="i-loader" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-userplus" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 24 24"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></symbol>
+  <symbol id="i-printer" viewBox="0 0 24 24"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+</svg>
+
+<div class="top">
+  <h1>Órdenes: decir por qué falta una acción</h1>
+  <div class="seg" role="group" aria-label="Ancho">
+    <button type="button" data-w="1280" aria-pressed="true">Escritorio 1280</button>
+    <button type="button" data-w="768" aria-pressed="false">Tablet 768</button>
+    <button type="button" data-w="390" aria-pressed="false">Celular 390</button>
+  </div>
+  <div class="seg" role="group" aria-label="Vista de todas las secciones">
+    <button type="button" data-all="hoy" aria-pressed="false">Todo: Hoy</button>
+    <button type="button" data-all="prop" aria-pressed="true">Todo: Propuesta</button>
+  </div>
+  <div class="seg" role="group" aria-label="Tema">
+    <button type="button" data-theme-set="light" aria-pressed="true">Claro</button>
+    <button type="button" data-theme-set="dark" aria-pressed="false">Oscuro</button>
+  </div>
+  <div class="seg"><button type="button" id="tag-toggle" aria-pressed="true">Marcar lo nuevo</button></div>
+</div>
+
+<div class="intro">
+  <div class="note">
+    <h2>El patrón</h2>
+    <p>Donde una acción no aparece porque le falta un dato, una línea corta dice <b>qué falta</b>, y si se puede resolver desde ahí, un botón que lo resuelve. Es el mismo patrón que ya funciona en Vencimientos: el botón de WhatsApp deshabilitado con su motivo abajo (<code>ContactDialog.tsx:138</code>), y en el tablero, «Falta vehículo y categoría» más el diálogo <code>IncompleteDialog</code>.</p>
+    <p><b>Por qué silencioso:</b> texto <code>muted-foreground</code> en <code>text-sm</code> con un ícono de info de 16px, sin caja ni color. No es un error: la orden está bien, solo le falta el paso siguiente. Una alerta ámbar acá competiría con la única ámbar que el tablero reserva para «Falta vehículo / Vencida / En espera» (<code>board/primitives.tsx</code>: «amber is only AlertStrip»). La única excepción es el cartel de arrastre del tablero, que ya es oscuro y fuerte porque dura lo que dura el arrastre; ahí solo cambia el texto.</p>
+    <p>Cada sección tiene <b>Hoy</b> (lo que ya existe, copiado del código) y <b>Propuesta</b>. Lo agregado lleva la etiqueta violeta «nuevo», que se apaga con «Marcar lo nuevo». La barra lateral de la app no está dibujada; los cortes de ancho siguen los de Tailwind (<code>sm</code> 640, <code>md</code> 768) sobre el ancho del marco.</p>
+  </div>
+</div>
+
+<div class="stage">
+<div class="frame" id="frame">
+
+<!-- ================= 1 ================= -->
+<section class="sec" data-view="prop" id="s1">
+  <div class="sec-hd">
+    <h2>1 · Recibida sin técnico: no se puede pasar a En diagnóstico<span class="who">Administrador / jefe de taller · detalle de la orden y menú ⋯ del tablero</span></h2>
+    <div class="seg" role="group" aria-label="Vista"><button type="button" data-v="hoy" aria-pressed="false">Hoy</button><button type="button" data-v="prop" aria-pressed="true">Propuesta</button></div>
+  </div>
+  <p class="sec-note">En Diagnóstico es automática: se escribe al asignar el primer técnico (<code>assignments.ts</code>). Por eso <code>getManualTransitions("open")</code> solo deja <b>Marcar como Cancelada</b>, y el operador no tiene cómo saber que el camino es asignar un técnico, dos tarjetas más abajo.</p>
+  <div class="page">
+    <div class="crumb v-hoy">Órdenes de servicio <span>›</span> <b>4c7e21a9</b></div>
+    <div class="crumb-row v-prop"><div class="crumb">Órdenes de servicio <span>›</span> <b>4c7e21a9</b></div><div class="crumb-acts new"><button class="btn outline" type="button"><svg class="i"><use href="#i-pencil"/></svg>Editar orden</button><button class="btn outline" type="button"><svg class="i"><use href="#i-printer"/></svg>Imprimir</button></div></div>
+    <div class="card">
+      <div class="card-hd row v-hoy">
+        <div class="ttl"><span>Orden 4c7e21a9</span><span class="badge t-neutral"><svg class="i s3"><use href="#i-clock"/></svg>Recibida</span></div>
+        <div class="actions">
+          <button class="btn outline" type="button">Editar orden</button>
+          <button class="btn outline" type="button">Imprimir</button>
+          <div class="actions">
+            <button class="btn outline" type="button">Marcar como Cancelada</button>
+          </div>
+        </div>
+      </div>
+      <div class="card-hd stacked v-prop">
+        <div class="ttl"><span>Orden 4c7e21a9</span><span class="badge t-neutral"><svg class="i s3"><use href="#i-clock"/></svg>Recibida</span></div>
+        <div class="sbar new">
+          <button class="btn sbtn danger" type="button" aria-label="Marcar como Cancelada"><svg class="i"><use href="#i-ban"/></svg>Cancelar</button>
+          <div class="hint-row">
+            <p class="hint"><svg class="i"><use href="#i-info"/></svg>Para pasarla a En diagnóstico, asigná un técnico.</p>
+            <button class="btn outline" type="button" data-focus="assign-1">Asignar técnico</button>
+          </div>
+        </div>
+      </div>
+      <div class="card-bd"><dl>
+        <div class="f"><dt>Cliente</dt><dd><span class="link">Transportes Chiriquí S.A.</span></dd></div>
+        <div class="f"><dt>Vehículo</dt><dd><span class="link">PD4410</span></dd></div>
+        <div class="f"><dt>Marca</dt><dd>Toyota</dd></div>
+        <div class="f"><dt>Modelo</dt><dd>Hilux</dd></div>
+        <div class="f"><dt>Categoría</dt><dd>Mantenimiento preventivo</dd></div>
+        <div class="f"><dt>Descripción</dt><dd>Servicio de 40.000 km, ruido en el tren delantero</dd></div>
+      </dl></div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="ttl">Técnicos asignados</div></div>
+      <div class="card-bd stack" style="gap:12px">
+        <p class="muted">Esta orden todavía no tiene técnicos asignados.</p>
+        <div class="assign">
+          <label for="assign-1">Asignar técnico</label>
+          <div class="r">
+            <select class="select" id="assign-1"><option>Elegí un técnico</option><option>Carlos Pérez</option><option>Luis Ríos</option><option>Ana Gómez</option></select>
+            <button class="btn" type="button" disabled>Asignar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="v-prop">
+      <p class="sub">Variante: no queda ningún técnico activo para asignar</p>
+      <p class="cap"><code>AssignTecnicoControl</code> muestra solo este texto y no hay <code>#assign-tecnico</code> al que llevar el foco, así que el botón cambia a un enlace a Técnicos.</p>
+      <div class="card" style="margin-bottom:0">
+        <div class="card-bd">
+          <div class="sbar">
+            <button class="btn sbtn danger" type="button" aria-label="Marcar como Cancelada"><svg class="i"><use href="#i-ban"/></svg>Cancelar</button>
+            <div class="hint-row new">
+              <p class="hint"><svg class="i"><use href="#i-info"/></svg>Para pasarla a En diagnóstico, asigná un técnico.</p>
+              <button class="btn outline" type="button">Ir a Técnicos</button>
+            </div>
+          </div>
+          <p class="muted" style="margin-top:12px">Todos los técnicos activos ya están asignados.</p>
+        </div>
+      </div>
+    </div>
+
+    <p class="sub">Tablero · menú ⋯ de la misma tarjeta</p>
+    <p class="cap only-wide">Para una Recibida, <code>legalTargets("open")</code> está vacío, así que «Mover a…» no aparece. El motivo va arriba, como ítem deshabilitado.</p>
+    <p class="cap only-phone">Debajo de 768px el ⋯ abre la hoja (<code>MoveSheet</code>) en lugar del menú.</p>
+    <div class="board" style="border-radius:12px">
+      <div class="menu-wrap">
+        <div class="col" style="--h:221;--s:70%;min-height:300px">
+          <span class="bar"></span>
+          <div class="col-hd"><span class="tile"><svg class="i"><use href="#i-inbox"/></svg></span><h3>Recibida</h3><span class="count">1</span></div>
+          <ul style="margin:0;padding:0">
+            <li class="kc">
+              <div class="top-r"><span class="grip"><svg class="i"><use href="#i-grip"/></svg></span><div style="flex:1;min-width:0"><div class="plate">PD4410</div><div class="veh">Toyota Hilux</div></div><button class="dots on" type="button" aria-label="Acciones de la orden"><svg class="i s45"><use href="#i-dots"/></svg></button></div>
+              <div style="margin-top:8px"><span class="chip"><svg class="i s3"><use href="#i-wrench"/></svg>Mantenimiento preventivo</span></div>
+              <div class="ft"><span class="notech"><span><svg class="i s35"><use href="#i-userplus"/></svg></span>Sin técnico</span><span class="chip"><svg class="i s3"><use href="#i-clock"/></svg>hace 2 h</span></div>
+            </li>
+          </ul>
+        </div>
+        <div class="dd only-wide" role="menu">
+          <div class="mi blocked v-prop new" aria-disabled="true"><svg class="i"><use href="#i-info"/></svg><span>Para pasarla a En diagnóstico, asigná un técnico.</span></div>
+          <div class="sep v-prop"></div>
+          <div class="mi">Marcar como urgente</div>
+          <div class="mi">Ver orden</div>
+          <div class="sep"></div>
+          <div class="mi red">Cancelar orden</div>
+        </div>
+        <div class="sheet only-phone">
+          <div class="hd"><div><b>PD4410</b><p>Toyota · Hilux · Recibida</p></div><button class="x" type="button" aria-label="Cerrar"><svg class="i s45"><use href="#i-x"/></svg></button></div>
+          <div class="srow blocked v-prop new"><svg class="i"><use href="#i-info"/></svg><span>Para pasarla a En diagnóstico, asigná un técnico.</span></div>
+          <div class="srow"><svg class="i s45"><use href="#i-flag"/></svg>Marcar como urgente</div>
+          <div class="srow"><svg class="i s45"><use href="#i-ext"/></svg>Ver orden</div>
+          <div class="srow red"><svg class="i s45"><use href="#i-trash"/></svg>Cancelar orden</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 2 ================= -->
+<section class="sec" data-view="prop" id="s2">
+  <div class="sec-hd">
+    <h2>2 · Arrastrar a una columna que no acepta la tarjeta<span class="who">Administrador / jefe de taller · tablero, escritorio y tablet (en celular no hay arrastre)</span></h2>
+    <div class="seg" role="group" aria-label="Vista"><button type="button" data-v="hoy" aria-pressed="false">Hoy</button><button type="button" data-v="prop" aria-pressed="true">Propuesta</button></div>
+  </div>
+  <p class="sec-note">El cartel depende de <b>origen y destino</b>, no solo del destino: «Pasa sola…» aparece únicamente cuando el salto existe en la tabla y es automático (Recibida → En diagnóstico, En progreso → Lista para revisión). Arrastrar una Agendada a En diagnóstico dice «Desde Agendada no se puede pasar a En diagnóstico», porque asignarle un técnico no la mueve. <b>Tocá una columna atenuada para simular soltar</b>: hoy no pasa nada; la propuesta muestra un aviso informativo con el mismo texto.</p>
+  <div class="board" id="board">
+    <div class="actions" style="margin-bottom:12px">
+      <span class="muted">Arrastrando:</span>
+      <div class="seg" role="group" aria-label="Tarjeta arrastrada" id="drag-pick">
+        <button type="button" data-src="open" aria-pressed="true">PD4410 · Recibida</button>
+        <button type="button" data-src="in_progress" aria-pressed="false">8B2260 · En progreso</button>
+        <button type="button" data-src="booked" aria-pressed="false">AB1234 · Agendada</button>
+      </div>
+    </div>
+    <p class="cap only-phone">En celular el agarre está oculto y el ⋯ abre la hoja; estos carteles solo se ven desde 768px. Deslizá para ver las columnas.</p>
+    <div class="cols" id="cols"></div>
+    <div class="toast v-prop" id="toast" role="status" hidden><svg class="i s45"><use href="#i-info"/></svg><span id="toast-msg"></span><button type="button" aria-label="Cerrar" style="margin-left:8px;border:0;background:transparent;padding:2px;cursor:pointer" onclick="this.parentElement.hidden=true"><svg class="i"><use href="#i-x"/></svg></button></div>
+  </div>
+</section>
+
+<!-- ================= 3 ================= -->
+<section class="sec" data-view="prop" id="s3">
+  <div class="sec-hd">
+    <h2>3 · En progreso: qué falta para Lista para revisión<span class="who">Administrador / jefe de taller · detalle de la orden</span></h2>
+    <div class="seg" role="group" aria-label="Vista"><button type="button" data-v="hoy" aria-pressed="false">Hoy</button><button type="button" data-v="prop" aria-pressed="true">Propuesta</button></div>
+  </div>
+  <p class="sec-note">Lista para revisión la escribe la última marca «Mi parte lista» (<code>readiness.ts</code>), contando solo técnicos <b>activos</b>: un técnico dado de baja no figura en «Faltan». La lista sale de los mismos datos de la tarjeta Líneas de trabajo.</p>
+  <div class="page">
+    <div class="crumb-row v-prop"><div class="crumb">Órdenes de servicio <span>›</span> <b>8b2260f1</b></div><div class="crumb-acts new"><button class="btn outline" type="button"><svg class="i"><use href="#i-pencil"/></svg>Editar orden</button><button class="btn outline" type="button"><svg class="i"><use href="#i-printer"/></svg>Imprimir</button></div></div>
+    <div class="card">
+      <div class="card-hd row v-hoy">
+        <div class="ttl"><span>Orden 8b2260f1</span><span class="badge t-warn"><svg class="i s3"><use href="#i-loader"/></svg>En progreso</span></div>
+        <div class="actions">
+          <button class="btn outline" type="button">Editar orden</button>
+          <button class="btn outline" type="button">Imprimir</button>
+          <div class="actions">
+            <button class="btn outline" type="button">Marcar como En espera (repuesto)</button>
+            <button class="btn outline" type="button">Marcar como En espera (aprobación del cliente)</button>
+            <button class="btn outline" type="button">Marcar como Completada</button>
+            <button class="btn outline" type="button">Marcar como Cancelada</button>
+          </div>
+        </div>
+      </div>
+      <div class="card-hd stacked v-prop">
+        <div class="ttl"><span>Orden 8b2260f1</span><span class="badge t-warn"><svg class="i s3"><use href="#i-loader"/></svg>En progreso</span></div>
+        <div class="sbar new">
+          <button class="btn sbtn h-hold" type="button" aria-label="Marcar como En espera (repuesto)"><svg class="i"><use href="#i-pause"/></svg>En espera · repuesto</button>
+          <button class="btn sbtn h-hold" type="button" aria-label="Marcar como En espera (aprobación del cliente)"><svg class="i"><use href="#i-pause"/></svg>En espera · aprobación</button>
+          <button class="btn sbtn h-done" type="button" aria-label="Marcar como Completada"><svg class="i"><use href="#i-check"/></svg>Completar</button>
+          <span class="vr" aria-hidden="true"></span>
+          <button class="btn sbtn danger" type="button" aria-label="Marcar como Cancelada"><svg class="i"><use href="#i-ban"/></svg>Cancelar</button>
+          <div class="hint-row">
+            <p class="hint"><svg class="i"><use href="#i-info"/></svg>Pasa a Lista para revisión cuando todos los técnicos marcan «Mi parte lista». Faltan: Luis Ríos, Ana Gómez.</p>
+          </div>
+        </div>
+      </div>
+      <div class="card-bd"><dl>
+        <div class="f"><dt>Vehículo</dt><dd><span class="link">8B2260</span></dd></div>
+        <div class="f"><dt>Marca</dt><dd>Mitsubishi</dd></div>
+        <div class="f"><dt>Modelo</dt><dd>L200</dd></div>
+      </dl></div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-hd"><div class="ttl">Líneas de trabajo</div></div>
+      <div class="card-bd stack">
+        <ul class="team">
+          <li><b>Carlos Pérez</b><span class="st"><span>95 min</span><span class="ok">Parte lista</span></span></li>
+          <li><b>Luis Ríos</b><span class="st"><span>40 min</span><span class="pend">Pendiente</span></span></li>
+          <li><b>Ana Gómez</b><span class="st"><span>0 min</span><span class="pend">Pendiente</span></span></li>
+        </ul>
+        <div class="actions"><button class="btn" type="button">Agregar línea</button></div>
+        <ul class="lines">
+          <li><div><p class="n">Carlos Pérez</p><p>Cambio de pastillas y discos delanteros</p><p class="pend">95 min · 05/11/2026</p></div><div class="actions"><button class="btn outline" type="button">Editar</button><button class="btn outline" type="button">Eliminar</button></div></li>
+          <li><div><p class="n">Luis Ríos</p><p>Diagnóstico de ruido en suspensión delantera</p><p class="pend">40 min · 05/11/2026</p></div><div class="actions"><button class="btn outline" type="button">Editar</button><button class="btn outline" type="button">Eliminar</button></div></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 4 ================= -->
+<section class="sec" data-view="prop" id="s4">
+  <div class="sec-hd">
+    <h2>4 · Técnico en una orden En diagnóstico<span class="who">Técnico (Luis Ríos) · tarjeta Líneas de trabajo</span></h2>
+    <div class="seg" role="group" aria-label="Vista"><button type="button" data-v="hoy" aria-pressed="false">Hoy</button><button type="button" data-v="prop" aria-pressed="true">Propuesta</button></div>
+  </div>
+  <p class="sec-note">El técnico ya puede cargar líneas en En diagnóstico, pero «Mi parte lista» solo aparece en En progreso (<code>OrderWorkCard.tsx:159</code>). Hoy el botón simplemente no está. El encabezado del técnico no tiene controles de estado: los cambia el jefe.</p>
+  <div class="page">
+    <div class="crumb-row v-prop"><div class="crumb">Órdenes de servicio <span>›</span> <b>ca9025b7</b></div><div class="crumb-acts new"><button class="btn outline" type="button"><svg class="i"><use href="#i-pencil"/></svg>Editar orden</button><button class="btn outline" type="button"><svg class="i"><use href="#i-printer"/></svg>Imprimir</button></div></div>
+    <div class="card">
+      <div class="card-hd row">
+        <div class="ttl"><span>Orden ca9025b7</span><span class="badge t-info"><svg class="i s3"><use href="#i-search"/></svg>En diagnóstico</span></div>
+        <div class="actions v-hoy"><button class="btn outline" type="button">Editar orden</button><button class="btn outline" type="button">Imprimir</button></div>
+      </div>
+      <div class="card-bd"><dl><div class="f"><dt>Vehículo</dt><dd><span class="link">CA9025</span></dd></div><div class="f"><dt>Marca</dt><dd>Hyundai</dd></div><div class="f"><dt>Modelo</dt><dd>Tucson</dd></div></dl></div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-hd"><div class="ttl">Líneas de trabajo</div></div>
+      <div class="card-bd stack">
+        <ul class="team"><li><b>Luis Ríos</b><span class="st"><span>30 min</span><span class="pend">Pendiente</span></span></li></ul>
+        <div class="actions">
+          <button class="btn" type="button">Agregar línea</button>
+          <div class="hint-row v-prop new"><p class="hint"><svg class="i"><use href="#i-info"/></svg>Vas a poder marcar tu parte cuando el jefe de taller pase la orden a En progreso.</p></div>
+        </div>
+        <ul class="lines"><li><div><p class="n">Luis Ríos</p><p>Escaneo de códigos, falla intermitente del sensor MAF</p><p class="pend">30 min · 06/11/2026</p></div><div class="actions"><button class="btn outline" type="button">Editar</button><button class="btn outline" type="button">Eliminar</button></div></li></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 5 ================= -->
+<section class="sec" data-view="prop" id="s5">
+  <div class="sec-hd">
+    <h2>5 · Líneas de trabajo rechazadas por el estado<span class="who">Cuatro casos, misma tarjeta</span></h2>
+    <div class="seg" role="group" aria-label="Vista"><button type="button" data-v="hoy" aria-pressed="false">Hoy</button><button type="button" data-v="prop" aria-pressed="true">Propuesta</button></div>
+  </div>
+  <p class="sec-note">Hoy, con <code>workLineMode</code> en <code>refused</code>, la tarjeta muestra solo «Todavía no hay líneas de trabajo.» y nada dice por qué. El texto «Asigná un técnico para poder cargar líneas.» <b>ya existe</b> (<code>OrderWorkCard.tsx:196</code>), pero exige <code>mode !== "refused"</code>, y Recibida siempre es <code>refused</code>: hoy nunca se ve.</p>
+  <div class="page">
+    <div class="grid2">
+      <div>
+        <p class="sub">a · Recibida, sin técnico · administrador / jefe</p>
+        <div class="card" style="margin-bottom:0"><div class="card-hd"><div class="ttl">Líneas de trabajo</div></div><div class="card-bd stack">
+          <div class="hint-row v-prop new"><p class="hint"><svg class="i"><use href="#i-info"/></svg>Asigná un técnico para poder cargar líneas.</p><button class="btn outline" type="button" data-focus="assign-1">Asignar técnico</button></div>
+          <p class="muted">Todavía no hay líneas de trabajo.</p>
+        </div></div>
+      </div>
+      <div>
+        <p class="sub">b · Agendada · administrador / jefe</p>
+        <div class="card" style="margin-bottom:0"><div class="card-hd"><div class="ttl">Líneas de trabajo</div></div><div class="card-bd stack">
+          <ul class="team"><li><b>Carlos Pérez</b><span class="st"><span>0 min</span><span class="pend">Pendiente</span></span></li></ul>
+          <div class="hint-row v-prop new"><p class="hint"><svg class="i"><use href="#i-info"/></svg>Recibí la orden para cargar líneas.</p></div>
+          <p class="muted">Todavía no hay líneas de trabajo.</p>
+        </div></div>
+        <p class="flag v-prop">Sin botón: «Recibir» ya está en el encabezado de la misma página. Un técnico asignado a una Agendada también la ve, y no puede recibirla: para él el texto tendría que ser «El jefe de taller tiene que recibir la orden para cargar líneas.»</p>
+      </div>
+      <div>
+        <p class="sub">c · En espera (repuesto) · administrador / jefe</p>
+        <div class="card" style="margin-bottom:0"><div class="card-hd"><div class="ttl">Líneas de trabajo</div></div><div class="card-bd stack">
+          <ul class="team"><li><b>Ana Gómez</b><span class="st"><span>60 min</span><span class="pend">Pendiente</span></span></li></ul>
+          <div class="hint-row v-prop new"><p class="hint"><svg class="i"><use href="#i-info"/></svg>La orden está en espera; reanudala para cargar líneas.</p></div>
+          <ul class="lines"><li><div><p class="n">Ana Gómez</p><p>Desarme de caja, espera de kit de embrague</p><p class="pend">60 min · 04/11/2026</p></div></li></ul>
+        </div></div>
+        <p class="flag v-prop">Sin botón por la misma razón: «Reanudar» está en el encabezado. El técnico tampoco puede reanudar; su versión sería «La orden está en espera; el jefe de taller tiene que reanudarla.»</p>
+      </div>
+      <div>
+        <p class="sub">d · Lista para revisión · técnico</p>
+        <div class="card" style="margin-bottom:0"><div class="card-hd"><div class="ttl">Líneas de trabajo</div></div><div class="card-bd stack">
+          <ul class="team"><li><b>Luis Ríos</b><span class="st"><span>70 min</span><span class="ok">Parte lista</span></span></li><li><b>Carlos Pérez</b><span class="st"><span>95 min</span><span class="ok">Parte lista</span></span></li></ul>
+          <div class="actions">
+            <button class="btn outline" type="button">Desmarcar mi parte</button>
+            <div class="hint-row v-prop new"><p class="hint"><svg class="i"><use href="#i-info"/></svg>La orden está lista para revisión; solo el jefe de taller puede cambiar líneas.</p></div>
+          </div>
+          <ul class="lines"><li><div><p class="n">Luis Ríos</p><p>Alineación y balanceo</p><p class="pend">70 min · 05/11/2026</p></div></li></ul>
+        </div></div>
+        <p class="flag v-prop">Choca con lo que está al lado: «Desmarcar mi parte» se ofrece en Lista para revisión (<code>OrderWorkCard.tsx:160</code>), y desmarcar devuelve la orden a En progreso (<code>readiness.ts</code>), donde el técnico sí puede cambiar líneas. «Solo el jefe» es falso mientras ese botón esté. Alternativa: usar acá el mismo texto que la sección 6.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 6 ================= -->
+<section class="sec" data-view="prop" id="s6">
+  <div class="sec-hd">
+    <h2>6 · Técnico después de «Mi parte lista»<span class="who">Técnico (Ana Gómez) · orden En progreso</span></h2>
+    <div class="seg" role="group" aria-label="Vista"><button type="button" data-v="hoy" aria-pressed="false">Hoy</button><button type="button" data-v="prop" aria-pressed="true">Propuesta</button></div>
+  </div>
+  <p class="sec-note">Con la parte marcada, <code>canWriteFor</code> devuelve falso: desaparecen «Agregar línea», «Editar» y «Eliminar» de sus propias líneas sin explicación.</p>
+  <div class="page">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-hd"><div class="ttl">Líneas de trabajo</div></div>
+      <div class="card-bd stack">
+        <ul class="team">
+          <li><b>Carlos Pérez</b><span class="st"><span>95 min</span><span class="pend">Pendiente</span></span></li>
+          <li><b>Ana Gómez</b><span class="st"><span>50 min</span><span class="ok">Parte lista</span></span></li>
+        </ul>
+        <div class="actions">
+          <button class="btn outline" type="button">Desmarcar mi parte</button>
+          <div class="hint-row v-prop new" style="flex-basis:auto;flex:1 1 260px"><p class="hint"><svg class="i"><use href="#i-info"/></svg>Desmarcá tu parte lista antes de cambiar líneas de trabajo.</p></div>
+        </div>
+        <ul class="lines">
+          <li><div><p class="n">Carlos Pérez</p><p>Cambio de bomba de agua</p><p class="pend">95 min · 05/11/2026</p></div></li>
+          <li><div><p class="n">Ana Gómez</p><p>Reemplazo de correa de distribución</p><p class="pend">50 min · 05/11/2026</p></div></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 7 ================= -->
+<section class="sec" data-view="prop" id="s7">
+  <div class="sec-hd">
+    <h2>7 · Agendada sin vehículo ni categoría: decirlo antes del clic<span class="who">Administrador / jefe de taller · detalle de la orden</span></h2>
+    <div class="seg" role="group" aria-label="Vista"><button type="button" data-v="hoy" aria-pressed="false">Hoy</button><button type="button" data-v="prop" aria-pressed="true">Propuesta</button></div>
+  </div>
+  <p class="sec-note">Hoy «Recibir» está habilitado; al tocarlo el servidor responde 400 y el texto aparece en rojo debajo (<code>service.ts:142</code>). El tablero ya lo dice antes del clic (<code>IncompleteDialog</code>). La página tiene <code>orden.vehiculoId</code> y <code>orden.categoria</code> para decidirlo sin pedir nada nuevo.</p>
+  <div class="page">
+    <div class="crumb-row v-prop"><div class="crumb">Órdenes de servicio <span>›</span> <b>1e5d0a63</b></div><div class="crumb-acts new"><button class="btn outline" type="button"><svg class="i"><use href="#i-pencil"/></svg>Editar orden</button><button class="btn outline" type="button"><svg class="i"><use href="#i-printer"/></svg>Imprimir</button></div></div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-hd row v-hoy">
+        <div class="ttl"><span>Orden 1e5d0a63</span><span class="badge t-info"><svg class="i s3"><use href="#i-cal"/></svg>Agendada</span></div>
+        <div class="actions">
+          <button class="btn outline" type="button">Editar orden</button>
+          <button class="btn outline" type="button">Imprimir</button>
+          <div class="actions">
+            <button class="btn outline" type="button">Recibir</button>
+            <button class="btn outline" type="button">Marcar como Cancelada</button>
+            <p class="err" role="alert">Completá el vehículo y la categoría antes de recibir la orden <span class="pend" style="font-size:12px">(después de tocar Recibir)</span></p>
+          </div>
+        </div>
+      </div>
+      <div class="card-hd stacked v-prop">
+        <div class="ttl"><span>Orden 1e5d0a63</span><span class="badge t-info"><svg class="i s3"><use href="#i-cal"/></svg>Agendada</span></div>
+        <div class="sbar new">
+          <button class="btn sbtn fill h-open" type="button" disabled><svg class="i"><use href="#i-inbox"/></svg>Recibir</button>
+          <span class="vr" aria-hidden="true"></span>
+          <button class="btn sbtn danger" type="button" aria-label="Marcar como Cancelada"><svg class="i"><use href="#i-ban"/></svg>Cancelar</button>
+          <div class="hint-row"><p class="hint"><svg class="i"><use href="#i-info"/></svg>Completá el vehículo y la categoría antes de recibir la orden.</p><button class="btn outline" type="button">Editar orden</button></div>
+        </div>
+      </div>
+      <div class="card-bd"><dl>
+        <div class="f"><dt>Cliente</dt><dd><span class="link">Agroexport del Pacífico</span></dd></div>
+        <div class="f"><dt>Vehículo</dt><dd>Sin vehículo</dd></div>
+        <div class="f"><dt>Descripción</dt><dd>Cita por llamada: revisión de frenos</dd></div>
+        <div class="f"><dt>Fecha y hora de inicio</dt><dd>07/11/2026 08:30</dd></div>
+      </dl></div>
+    </div>
+    <p class="flag v-prop">Con «Editar orden» arriba, en la línea de la ruta (sección 9), ya no hay dos «Editar orden» en la misma fila: el de la línea abre el mismo diálogo (<code>ServiceOrderFormTrigger</code>) desde donde está leyendo el operador, y el de arriba queda en la ruta. Si se ve redundante, el texto alcanza solo: «Completá el vehículo y la categoría con Editar orden antes de recibirla.» Sin la Categoría la fila no se ve (<code>field()</code> la omite cuando está vacía), así que lo que falta no se ve en la tarjeta.</p>
+  </div>
+</section>
+
+<!-- ================= 8 ================= -->
+<section class="sec" data-view="prop" id="s8">
+  <div class="sec-hd">
+    <h2>8 · Lista de órdenes vacía para un técnico<span class="who">Técnico · /service-orders</span></h2>
+    <div class="seg" role="group" aria-label="Vista"><button type="button" data-v="hoy" aria-pressed="false">Hoy</button><button type="button" data-v="prop" aria-pressed="true">Propuesta</button></div>
+  </div>
+  <p class="sec-note">Un técnico solo ve sus órdenes (<code>scope.ts</code>). Hoy, sin filtro, la lista vacía dice «Todavía no hay órdenes de servicio registradas.», que es falso en un taller con cuarenta. Un técnico sin fila vinculada en Técnicos no ve nada, nunca, y nada se lo dice.</p>
+  <div class="page">
+    <div class="ph"><h1>Órdenes de servicio</h1><button class="btn outline" type="button"><svg class="i"><use href="#i-refresh"/></svg>Actualizar</button></div>
+    <div class="card" style="margin-bottom:16px"><div class="card-bd"><div class="filters">
+      <div class="in">Buscar por nombre, placa o teléfono</div>
+      <label>Estado<span class="sel">Todos</span></label>
+      <label>Filas por página<span class="sel">25</span></label>
+    </div></div></div>
+    <div class="grid2">
+      <div>
+        <p class="sub">a · Técnico vinculado, sin órdenes asignadas</p>
+        <div class="card" style="margin-bottom:0"><div class="card-bd"><div class="es">
+          <svg class="i s10"><use href="#i-wrench"/></svg>
+          <h2>No se encontraron órdenes</h2>
+          <p class="muted v-hoy">Todavía no hay órdenes de servicio registradas.</p>
+          <p class="muted v-prop new">No tenés órdenes asignadas.</p>
+        </div></div></div>
+      </div>
+      <div>
+        <p class="sub">b · Usuario técnico sin fila vinculada en Técnicos</p>
+        <div class="card" style="margin-bottom:0"><div class="card-bd"><div class="es">
+          <svg class="i s10"><use href="#i-wrench"/></svg>
+          <h2>No se encontraron órdenes</h2>
+          <p class="muted v-hoy">Todavía no hay órdenes de servicio registradas.</p>
+          <p class="muted v-prop new" style="max-width:420px">Tu usuario no está vinculado a un técnico. Pedile al administrador que lo vincule en Técnicos.</p>
+        </div></div></div>
+      </div>
+    </div>
+    <p class="flag v-prop">Con un filtro o una búsqueda activa no cambia nada: sigue «Ninguna orden coincide con el filtro. Limpiar filtro». La página no consulta hoy la fila de Técnicos: el caso b necesita <code>findTecnicoByUserId</code>, que el detalle de la orden ya usa. Sin botón: el técnico no tiene permiso para vincularse solo.</p>
+  </div>
+</section>
+
+<!-- ================= 9 ================= -->
+<section class="sec" data-view="prop" id="s9" style="border-bottom:0">
+  <div class="sec-hd">
+    <h2>9 · Botones de acción de la orden<span class="who">Administrador / jefe de taller · encabezado del detalle de la orden</span></h2>
+    <div class="seg" role="group" aria-label="Vista"><button type="button" data-v="hoy" aria-pressed="false">Hoy</button><button type="button" data-v="prop" aria-pressed="true">Propuesta</button></div>
+  </div>
+  <p class="sec-note">Hoy los seis botones son iguales (<code>variant="outline"</code>, <code>OrderStatusControls.tsx:121</code>) y comparten fila con «Editar orden» e «Imprimir» (<code>page.tsx:173–207</code>). <code>Card</code> tiene <code>overflow-hidden</code> (<code>card.tsx:15</code>), así que lo que no entra se corta en vez de verse desbordado. <b>Propuesta:</b> «Editar orden» e «Imprimir» suben a la línea de la ruta; los de estado llevan el ícono y el color del estado al que llevan la orden, con el mismo mapa de colores que las columnas del tablero.</p>
+  <div class="shell">
+    <aside class="side" aria-hidden="true">Barra lateral (16rem)</aside>
+    <div class="main page">
+
+      <!-- Hoy: faithful to the owner's screenshot -->
+      <div class="v-hoy clip">
+        <div class="crumb">Órdenes de servicio <span>›</span> <b>9c651191</b></div>
+        <div class="card">
+          <div class="card-hd row">
+            <div class="ttl"><span>Orden 9c651191</span><span class="badge t-warn"><svg class="i s3"><use href="#i-loader"/></svg>En progreso</span></div>
+            <div class="actions">
+              <button class="btn outline" type="button">Editar orden</button>
+              <button class="btn outline" type="button">Imprimir</button>
+              <div class="actions">
+                <button class="btn outline" type="button">Marcar como En espera (repuesto)</button>
+                <button class="btn outline" type="button">Marcar como En espera (aprobación del cliente)</button>
+                <button class="btn outline" type="button">Marcar como Completada</button>
+                <button class="btn outline" type="button">Marcar como Cancelada</button>
+              </div>
+            </div>
+          </div>
+          <div class="card-bd"><dl>
+            <div class="f"><dt>Cliente</dt><dd><span class="link">Transportes Chiriquí S.A.</span></dd></div>
+            <div class="f"><dt>Vehículo</dt><dd><span class="link">9C6511</span></dd></div>
+          </dl></div>
+        </div>
+        <p class="cap only-wide">A 1280 con la barra lateral se corta más que en la captura, donde la pantalla era más ancha y solo se perdía «Marcar como Cancelada». Debajo de 1024 la barra lateral se oculta y la fila se reparte en varias líneas.</p>
+      </div>
+
+      <!-- Propuesta -->
+      <div class="v-prop">
+        <div class="crumb-row">
+          <div class="crumb">Órdenes de servicio <span>›</span> <b>9c651191</b></div>
+          <div class="crumb-acts new">
+            <button class="btn outline" type="button"><svg class="i"><use href="#i-pencil"/></svg>Editar orden</button>
+            <button class="btn outline" type="button"><svg class="i"><use href="#i-printer"/></svg>Imprimir</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hd stacked">
+            <div class="ttl"><span>Orden 9c651191</span><span class="badge t-warn"><svg class="i s3"><use href="#i-loader"/></svg>En progreso</span></div>
+            <div class="sbar new">
+              <button class="btn sbtn h-hold" type="button" aria-label="Marcar como En espera (repuesto)"><svg class="i"><use href="#i-pause"/></svg>En espera · repuesto</button>
+              <button class="btn sbtn h-hold" type="button" aria-label="Marcar como En espera (aprobación del cliente)"><svg class="i"><use href="#i-pause"/></svg>En espera · aprobación</button>
+              <button class="btn sbtn h-done" type="button" aria-label="Marcar como Completada"><svg class="i"><use href="#i-check"/></svg>Completar</button>
+              <span class="vr" aria-hidden="true"></span>
+              <button class="btn sbtn danger" type="button" aria-label="Marcar como Cancelada"><svg class="i"><use href="#i-ban"/></svg>Cancelar</button>
+            </div>
+          </div>
+          <div class="card-bd"><dl>
+            <div class="f"><dt>Cliente</dt><dd><span class="link">Transportes Chiriquí S.A.</span></dd></div>
+            <div class="f"><dt>Vehículo</dt><dd><span class="link">9C6511</span></dd></div>
+          </dl></div>
+        </div>
+
+        <p class="sub">Los botones de cada estado</p>
+        <p class="cap">Relleno solo el paso siguiente del camino normal. En En progreso ninguno: el camino normal, Lista para revisión, es automático, y Completar se saltea la revisión. El texto completo queda en <code>aria-label</code> («Marcar como En espera (aprobación del cliente)»).</p>
+        <div class="states">
+          <div class="card"><div class="card-hd stacked" style="padding-bottom:16px">
+            <div class="ttl"><span class="badge t-info"><svg class="i s3"><use href="#i-cal"/></svg>Agendada</span></div>
+            <div class="sbar">
+              <button class="btn sbtn fill h-open" type="button"><svg class="i"><use href="#i-inbox"/></svg>Recibir</button>
+              <span class="vr" aria-hidden="true"></span>
+              <button class="btn sbtn danger" type="button" aria-label="Marcar como Cancelada"><svg class="i"><use href="#i-ban"/></svg>Cancelar</button>
+            </div>
+          </div></div>
+          <div class="card"><div class="card-hd stacked" style="padding-bottom:16px">
+            <div class="ttl"><span class="badge t-neutral"><svg class="i s3"><use href="#i-clock"/></svg>Recibida</span></div>
+            <div class="sbar">
+              <button class="btn sbtn danger" type="button" aria-label="Marcar como Cancelada"><svg class="i"><use href="#i-ban"/></svg>Cancelar</button>
+              <div class="hint-row"><p class="hint"><svg class="i"><use href="#i-info"/></svg>Para pasarla a En diagnóstico, asigná un técnico.</p><button class="btn outline" type="button">Asignar técnico</button></div>
+            </div>
+          </div></div>
+          <div class="card"><div class="card-hd stacked" style="padding-bottom:16px">
+            <div class="ttl"><span class="badge t-info"><svg class="i s3"><use href="#i-search"/></svg>En diagnóstico</span></div>
+            <div class="sbar">
+              <button class="btn sbtn fill h-prog" type="button" aria-label="Marcar como En progreso"><svg class="i"><use href="#i-wrench"/></svg>Pasar a En progreso</button>
+              <span class="vr" aria-hidden="true"></span>
+              <button class="btn sbtn danger" type="button" aria-label="Marcar como Cancelada"><svg class="i"><use href="#i-ban"/></svg>Cancelar</button>
+            </div>
+          </div></div>
+          <div class="card"><div class="card-hd stacked" style="padding-bottom:16px">
+            <div class="ttl"><span class="badge t-warn"><svg class="i s3"><use href="#i-loader"/></svg>En progreso</span></div>
+            <div class="sbar">
+              <button class="btn sbtn h-hold" type="button" aria-label="Marcar como En espera (repuesto)"><svg class="i"><use href="#i-pause"/></svg>En espera · repuesto</button>
+              <button class="btn sbtn h-hold" type="button" aria-label="Marcar como En espera (aprobación del cliente)"><svg class="i"><use href="#i-pause"/></svg>En espera · aprobación</button>
+              <button class="btn sbtn h-done" type="button" aria-label="Marcar como Completada"><svg class="i"><use href="#i-check"/></svg>Completar</button>
+              <span class="vr" aria-hidden="true"></span>
+              <button class="btn sbtn danger" type="button" aria-label="Marcar como Cancelada"><svg class="i"><use href="#i-ban"/></svg>Cancelar</button>
+            </div>
+          </div></div>
+          <div class="card"><div class="card-hd stacked" style="padding-bottom:16px">
+            <div class="ttl"><span class="badge t-warn"><svg class="i s3"><use href="#i-pause"/></svg>En espera</span><span class="muted" style="font-weight:400">Motivo: Repuesto</span></div>
+            <div class="sbar">
+              <button class="btn sbtn fill h-prog" type="button"><svg class="i"><use href="#i-wrench"/></svg>Reanudar</button>
+              <span class="vr" aria-hidden="true"></span>
+              <button class="btn sbtn danger" type="button" aria-label="Marcar como Cancelada"><svg class="i"><use href="#i-ban"/></svg>Cancelar</button>
+            </div>
+          </div></div>
+          <div class="card"><div class="card-hd stacked" style="padding-bottom:16px">
+            <div class="ttl"><span class="badge t-warn"><svg class="i s3"><use href="#i-clipcheck"/></svg>Lista para revisión</span></div>
+            <div class="sbar">
+              <button class="btn sbtn fill h-done" type="button" aria-label="Marcar como Completada"><svg class="i"><use href="#i-check"/></svg>Completar</button>
+              <button class="btn sbtn h-prog" type="button" aria-label="Marcar como En progreso"><svg class="i"><use href="#i-wrench"/></svg>Volver a En progreso</button>
+              <span class="vr" aria-hidden="true"></span>
+              <button class="btn sbtn danger" type="button" aria-label="Marcar como Cancelada"><svg class="i"><use href="#i-ban"/></svg>Cancelar</button>
+            </div>
+          </div></div>
+        </div>
+
+        <p class="sub">Colores y contraste del texto (medido)</p>
+        <div class="cmap-wrap"><table class="cmap" id="cmap">
+          <thead><tr><th>Lleva a</th><th>Botones</th><th>Color</th><th>Claro</th><th>Oscuro</th></tr></thead>
+          <tbody>
+            <tr><td><span class="sw h-open"></span>Recibida</td><td>Recibir (relleno)</td><td><code>STATUS_HUE.open</code> 221 70%</td><td data-m="open-fill-l"></td><td data-m="open-fill-d"></td></tr>
+            <tr><td><span class="sw h-prog"></span>En progreso</td><td>Pasar a En progreso, Reanudar (relleno)</td><td><code>STATUS_HUE.in_progress</code> 290 50%</td><td data-m="prog-fill-l"></td><td data-m="prog-fill-d"></td></tr>
+            <tr><td><span class="sw h-prog"></span>En progreso</td><td>Volver a En progreso</td><td>ídem, tinte</td><td data-m="prog-tint-l"></td><td data-m="prog-tint-d"></td></tr>
+            <tr><td><span class="sw h-hold"></span>En espera</td><td>En espera · repuesto / · aprobación</td><td><code>STATUS_HUE.on_hold</code> 220 14%</td><td data-m="hold-tint-l"></td><td data-m="hold-tint-d"></td></tr>
+            <tr><td><span class="sw h-done"></span>Completada</td><td>Completar (desde En progreso)</td><td><code>STATUS_HUE.done</code> 142 55%, tinte</td><td data-m="done-tint-l"></td><td data-m="done-tint-d"></td></tr>
+            <tr><td><span class="sw h-done"></span>Completada</td><td>Completar (desde Lista para revisión, relleno)</td><td>ídem</td><td data-m="done-fill-l"></td><td data-m="done-fill-d"></td></tr>
+            <tr><td><span class="sw" style="background:#ef4444"></span>Cancelada</td><td>Cancelar</td><td><code>button.tsx</code> <code>destructive</code></td><td data-m="cancel-l"></td><td data-m="cancel-d"></td></tr>
+          </tbody>
+        </table></div>
+        <p class="cap" style="margin-top:6px">Calculado en esta página con los colores que el navegador aplica a cada botón, sobre el fondo de la tarjeta. AA pide 4,5:1 para texto de 14px.</p>
+
+        <p class="flag">Choque con el código: la insignia y el tablero no usan el mismo mapa. <code>StatusBadge.tsx:43</code> pinta En progreso, En espera y Lista para revisión de ámbar, Recibida de gris y En diagnóstico de celeste; <code>board/primitives.tsx:17</code> (<code>STATUS_HUE</code>, columnas y hoja «Mover a…») da un tono distinto a cada estado. Los botones siguen al tablero, porque con el mapa de la insignia «En espera» y «Volver a En progreso» serían del mismo ámbar. Consecuencia: en esta misma tarjeta la insignia «En progreso» es ámbar y «Reanudar» es violeta. Que las tres coincidan pide cambiar la insignia, y eso es otra decisión.</p>
+        <p class="flag">El texto en claro es un 28% de luminosidad y no el 32% de <code>.board-hue-tile</code> (<code>globals.css:204</code>): con 32%, el verde de Completada da 4,45:1 y no llega a AA. En el tablero ese color va solo en íconos, donde alcanza 3:1. Cancelar usa el ícono de la insignia de Cancelada (<code>Ban</code>); la hoja del tablero usa <code>Trash2</code> (<code>MoveSheet.tsx:56</code>), que sugiere borrar.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+</div>
+
+<script>
+// Mockup behaviour only: theme, frame width, Hoy/Propuesta tabs, the simulated drag board.
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const press = (group, btn) => $$("button", group).forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+
+$$("[data-w]").forEach((b) => b.addEventListener("click", () => { $("#frame").style.width = b.dataset.w + "px"; press(b.parentElement, b); }));
+$$("[data-theme-set]").forEach((b) => b.addEventListener("click", () => { document.documentElement.classList.toggle("dark", b.dataset.themeSet === "dark"); press(b.parentElement, b); }));
+$("#tag-toggle").addEventListener("click", (e) => { const on = e.currentTarget.getAttribute("aria-pressed") !== "true"; e.currentTarget.setAttribute("aria-pressed", String(on)); document.body.classList.toggle("show-new-off", !on); });
+
+function setView(sec, v) { sec.dataset.view = v; $$(".sec-hd [data-v]", sec).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === v))); if (sec.id === "s2") renderBoard(); }
+$$(".sec").forEach((sec) => $$(".sec-hd [data-v]", sec).forEach((b) => b.addEventListener("click", () => setView(sec, b.dataset.v))));
+$$("[data-all]").forEach((b) => b.addEventListener("click", () => { $$(".sec").forEach((s) => setView(s, b.dataset.all)); press(b.parentElement, b); }));
+
+// "Asignar técnico" focuses the existing select (#assign-tecnico in the app).
+$$("[data-focus]").forEach((b) => b.addEventListener("click", () => {
+  const el = document.getElementById(b.dataset.focus);
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.focus({ preventScroll: true }); el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 1500);
+}));
+
+// ---- board: transitions.ts copied as data ----
+const LABEL = { booked: "Agendada", open: "Recibida", diagnosing: "En diagnóstico", in_progress: "En progreso", on_hold: "En espera", ready_for_review: "Lista para revisión", done: "Completada" };
+const ALLOWED = { booked: ["open", "cancelled"], open: ["diagnosing", "cancelled"], diagnosing: ["in_progress", "cancelled"], in_progress: ["on_hold", "ready_for_review", "done", "cancelled"], on_hold: ["in_progress", "cancelled"], ready_for_review: ["in_progress", "done", "cancelled"], done: [] };
+const AUTOMATIC = new Set(["diagnosing", "ready_for_review"]);
+const AUTO_TEXT = { diagnosing: "Pasa sola al asignar un técnico", ready_for_review: "Pasa sola cuando todos marcan su parte lista" };
+const legal = (s) => ALLOWED[s].filter((t) => !AUTOMATIC.has(t) && t !== "cancelled");
+const HUE = { booked: [188, "70%", "i-cal"], open: [221, "70%", "i-inbox"], diagnosing: [262, "60%", "i-search"], in_progress: [290, "50%", "i-wrench"], on_hold: [220, "14%", "i-pause"], ready_for_review: [168, "60%", "i-eye"], done: [142, "55%", "i-check"] };
+const CARDS = {
+  booked: [{ p: "AB1234", v: "Toyota Hilux", t: [], chip: "07/11 08:30" }, { p: null, v: "Sin vehículo", t: [], chip: "07/11 10:00", alert: "Falta vehículo y categoría" }],
+  open: [{ p: "PD4410", v: "Toyota Hilux", t: [], chip: "hace 2 h" }],
+  diagnosing: [{ p: "CA9025", v: "Hyundai Tucson", t: ["Carlos Pérez"], chip: "hace 40 min" }],
+  in_progress: [{ p: "8B2260", v: "Mitsubishi L200", t: ["Luis Ríos", "Ana Gómez", "Carlos Pérez"], chip: "hace 1 d" }],
+  on_hold: [{ p: "MX3318", v: "Kia Sportage", t: ["Ana Gómez"], chip: "hace 3 d", alert: "En espera · Repuesto" }],
+  ready_for_review: [{ p: "TR5506", v: "Toyota Fortuner", t: ["Luis Ríos"], chip: "hace 25 min" }],
+  done: [],
+};
+const nameHue = (n) => [...n].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
+const ini = (n) => n.split(/\s+/).slice(0, 2).map((w) => w[0].toUpperCase()).join("");
+const ic = (id, cls = "") => `<svg class="i ${cls}"><use href="#${id}"/></svg>`;
+let src = "open";
+
+function why(s, t) { return ALLOWED[s].includes(t) && AUTOMATIC.has(t) ? AUTO_TEXT[t] : `Desde ${LABEL[s]} no se puede pasar a ${LABEL[t]}`; }
+
+function card(c, dragging) {
+  const techs = c.t.length ? `<span class="avs">${c.t.map((n) => `<span class="av" style="--h:${nameHue(n)}">${ini(n)}</span>`).join("")}</span>` : `<span class="notech"><span>${ic("i-userplus", "s35")}</span>Sin técnico</span>`;
+  return `<li class="kc${dragging ? " dragging" : ""}"><div class="top-r"><span class="grip">${ic("i-grip")}</span><div style="flex:1;min-width:0"><div class="plate">${c.p ?? '<i style="font-weight:600;letter-spacing:0;color:var(--muted-foreground)">Sin placa</i>'}</div><div class="veh">${c.v}</div></div><span class="dots">${ic("i-dots", "s45")}</span></div>${c.alert ? `<div class="alert">${ic("i-alert", "s35")}<span>${c.alert}</span></div>` : ""}<div class="ft">${techs}<span class="chip">${ic("i-clock", "s3")}${c.chip}</span></div></li>`;
+}
+
+function renderBoard() {
+  const prop = $("#s2").dataset.view === "prop";
+  $("#toast").hidden = true;
+  $("#cols").innerHTML = Object.keys(LABEL).map((s) => {
+    const [h, sat, icon] = HUE[s];
+    const state = s === src ? "" : legal(src).includes(s) ? "legal" : "illegal";
+    const hint = state === "illegal" ? `<div data-hint class="drophint">${ic("i-lock", "s35")}<span>${prop ? why(src, s) : "No se puede mover acá"}</span></div>` : "";
+    const cards = CARDS[s];
+    const body = cards.length ? `<ul style="margin:0;padding:0;display:flex;flex-direction:column;gap:10px">${cards.map((c, i) => card(c, s === src && i === 0)).join("")}</ul>` : `<div class="empty">Sin órdenes</div>`;
+    return `<section class="col ${state}${state === "illegal" ? " droppable" : ""}" data-col="${s}" aria-label="${LABEL[s]}" style="--h:${h};--s:${sat}">${hint}<span class="bar"></span><div class="col-hd"><span class="tile">${ic(icon)}</span><h3>${LABEL[s]}</h3><span class="count">${cards.length}</span></div>${body}</section>`;
+  }).join("");
+  $$("#cols .col.illegal").forEach((col) => col.addEventListener("click", () => {
+    if (!prop) return; // today: an illegal drop does nothing (DndBoard.test.tsx)
+    $("#toast-msg").textContent = why(src, col.dataset.col) + ".";
+    $("#toast").hidden = false;
+  }));
+}
+$$("#drag-pick button").forEach((b) => b.addEventListener("click", () => { src = b.dataset.src; press(b.parentElement, b); renderBoard(); }));
+renderBoard();
+
+// Section 9: WCAG contrast measured from the colours the browser actually applies, alpha composited over the card.
+(function measureContrast() {
+  const rgba = (s) => { const m = s.match(/[\d.]+/g).map(Number); return { c: m.slice(0, 3), a: m[3] ?? 1 }; };
+  const over = (top, base) => top.c.map((v, i) => v * top.a + base[i] * (1 - top.a));
+  const lum = (c) => { const [r, g, b] = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  const SEL = { "open-fill": ".h-open.fill", "prog-fill": ".h-prog.fill", "prog-tint": ".h-prog:not(.fill)", "hold-tint": ".h-hold", "done-tint": ".h-done:not(.fill)", "done-fill": ".h-done.fill", cancel: ".danger" };
+  const root = document.documentElement, wasDark = root.classList.contains("dark");
+  for (const [suffix, dark] of [["l", false], ["d", true]]) {
+    root.classList.toggle("dark", dark);
+    for (const [key, sel] of Object.entries(SEL)) {
+      const btn = $(`#s9 .states ${sel}`), card = btn.closest(".card");
+      const cardBg = rgba(getComputedStyle(card).backgroundColor).c;
+      const bg = over(rgba(getComputedStyle(btn).backgroundColor), cardBg);
+      const fg = over(rgba(getComputedStyle(btn).color), bg);
+      const r = ratio(fg, bg), cell = $(`#cmap [data-m="${key}-${suffix}"]`);
+      cell.textContent = `${r.toFixed(2).replace(".", ",")}:1 ${r >= 4.5 ? "AA" : "no llega"}`;
+      cell.dataset.ratio = r.toFixed(2);
+    }
+  }
+  root.classList.toggle("dark", wasDark);
+})();
+</script>
+</body>
+</html>
