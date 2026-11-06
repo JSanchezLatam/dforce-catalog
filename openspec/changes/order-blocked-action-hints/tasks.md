@@ -52,8 +52,8 @@ WU5 and WU6 own disjoint files and may be written in parallel (subagents, one pe
 - [x] 2.2 RED: icons per button with `Ban` on Cancelar; exactly one filled button on booked/diagnosing/on_hold/ready_for_review, none on open/in_progress; hue per target; `aria-hidden` divider before Cancelar; Cancelar `destructive`; técnico renders none.
 - [x] 2.3 GREEN `src/components/ui/button.tsx` `hue` variant (no colour utilities); `OrderStatusControls.tsx` short labels, no `aria-label`, `style` vars from `STATUS_HUE[to]`, `hue-tint`/`hue-fill`, order and divider, stacked full-width below 640px container, 44x44.
 - [x] 2.4 RED then GREEN `[id]/page.tsx` header (+test): Editar orden/Imprimir (Pencil, Printer) on the breadcrumb line, same visibility rules; card title row holds only title and badge; controls on their own row.
-- [ ] 2.5 Mutation-verify (fill rule, hue source, divider, order); gates; GGA; PR.
-- [ ] 2.6 BROWSER (LAN IP, light+dark, Chrome device extension for tablet/phone): 1280 with sidebar no clip, 390 full-width stack, ≥44x44, button contrast ≥4.5:1 incl. tinted and filled Completar.
+- [x] 2.5 Mutation-verify (fill rule, hue source, divider, order); gates; GGA; PR.
+- [x] 2.6 BROWSER (LAN IP, light+dark, Chrome device extension for tablet/phone): 1280 with sidebar no clip, 390 full-width stack, ≥44x44, button contrast ≥4.5:1 incl. tinted and filled Completar.
 
 ## WU3: Pure hints module (D1)
 
