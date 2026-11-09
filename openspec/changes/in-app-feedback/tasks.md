@@ -38,9 +38,9 @@ WU3 and WU1/WU2 touch disjoint trees (portal vs workshop) and may be written in 
 
 ## WU1: Workshop schema and service (design §1, D4)
 
-- [ ] 1.1 RED `screen-labels.test.ts`: mapped (`/service-orders/[id]` → "Orden de servicio — Detalle"), unmapped falls back to raw route, query/fragment stripped, completeness walk over `src/app/(app)/**/page.tsx` fails on an unmapped page (specs "Mapped route", "Unmapped route"). GREEN `screen-labels.ts`, `categories.ts`.
-- [ ] 1.2 RED `service.test.ts` (injected seams): `createFeedback` stores author/role from args, trims, 2000 ok / 2001 rejected (spec "Exactly 2000 accepted"); `listOwnFeedback` newest first. GREEN `service.ts`.
-- [ ] 1.3 GREEN `schema.ts` `feedback` table + `feedbackCategoryEnum` + CHECK + both indexes; `npm run db:generate -- --name feedback` → `0037_feedback.sql`.
+- [x] 1.1 RED `screen-labels.test.ts`: mapped (`/service-orders/[id]` → "Orden de servicio — Detalle"), unmapped falls back to raw route, query/fragment stripped, completeness walk over `src/app/(app)/**/page.tsx` fails on an unmapped page (specs "Mapped route", "Unmapped route"). GREEN `screen-labels.ts`, `categories.ts`.
+- [x] 1.2 RED `service.test.ts` (injected seams): `createFeedback` stores author/role from args, trims, 2000 ok / 2001 rejected (spec "Exactly 2000 accepted"); `listOwnFeedback` newest first. GREEN `service.ts`.
+- [x] 1.3 GREEN `schema.ts` `feedback` table + `feedbackCategoryEnum` + CHECK + both indexes; `npm run db:generate -- --name feedback` → `0037_feedback.sql`.
 - [ ] 1.4 Mutation-verify 1.1-1.2 (drop trim, off-by-one on 2000, drop fallback); gates; GGA; PR.
 
 ## WU2: Policy and store-only route (design §4)
