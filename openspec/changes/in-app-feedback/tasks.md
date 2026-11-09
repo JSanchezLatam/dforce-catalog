@@ -71,37 +71,37 @@ WU3 and WU1/WU2 touch disjoint trees (portal vs workshop) and may be written in 
 - [x] 5.1 RED `FeedbackDialog.test.tsx`: nothing preselected, placeholder per category, both missing messages, whitespace text `aria-invalid`, counter 1799/1800 amber, author line "jperez (Técnico)", context read-only, locked while sending, roles/`aria-pressed`, 44px classes. GREEN `FeedbackDialog.tsx` (D5 composition, raw textarea).
 - [x] 5.2 RED toast tests: delivered → success, queued → info, store failure → inline error text kept, toast raised before a throwing `refresh`. GREEN submit path (copy `OrderStatusControls.tsx:111-142`).
 - [x] 5.3 RED `app-sidebar.test.tsx`: item above user card, opens dialog, rail tooltip + name, mobile sheet closes and dialog stays mounted, absent without `feedback.send`; existing sidebar tests unchanged. GREEN `FeedbackProvider.tsx`, `(app)/layout.tsx` (strings only), `app-sidebar.tsx`.
-- [ ] 5.4 Mutation-verify; gates; GGA; PR. (Mutations done: 15, each red by name. Gates green. GGA and PR still open.)
+- [x] 5.4 Mutation-verify; gates; GGA; PR. (Mutations done: 15, each red by name. Gates green. GGA passed; PR #349.)
 - [x] 5.5 BROWSER (LAN IP, second machine; Chrome device extension): 1280/820/390, sheet closes and dialog stays, rail tooltip, measured 44px, console free of RSC/hydration errors, queued toast with portal unreachable, light+dark.
 
 ## WU6: "Mis comentarios" (specs feedback, last requirement set)
 
-- [ ] 6.1 RED `MyFeedbackCard.test.tsx`: newest first, badges Enviado / Pendiente de envío + offline text, empty state, no "Respondido", button opens shared dialog. GREEN `MyFeedbackCard.tsx`, `account/page.tsx` via `listOwnFeedback` gated by `can`.
-- [ ] 6.2 Mutation-verify; gates; GGA; PR.
-- [ ] 6.3 BROWSER (LAN IP): `/account` card, pending flips to Enviado after reconnection, no duplicate in portal.
+- [x] 6.1 RED `MyFeedbackCard.test.tsx`: newest first, badges Enviado / Pendiente de envío + offline text, empty state, no "Respondido", button opens shared dialog. GREEN `MyFeedbackCard.tsx`, `account/page.tsx` via `listOwnFeedback` gated by `can`.
+- [x] 6.2 Mutation-verify; gates; GGA; PR (#350).
+- [x] 6.3 BROWSER (LAN IP): `/account` card, pending flips to Enviado after reconnection, no duplicate in portal.
 
 ## WU7: Portal login, session, throttle (design §6)
 
-- [ ] 7.1 RED `session.test.ts`: sign/verify, tamper, expired, regex precheck, unset env fails closed. GREEN `session.ts` `requireSupport()`.
-- [ ] 7.2 RED `throttle.test.ts` + login handler: 5 failures lock even correct password, expiry, success resets, cookie `httpOnly/secure/sameSite=strict`, "Contraseña incorrecta.", logout clears. GREEN `throttle.ts`, `login`/`logout` routes, login page.
-- [ ] 7.3 RED `guard.test.ts` route inventory; `env-isolation.test.ts` lists both vars; extend `headers.test.ts`. GREEN.
-- [ ] 7.4 E2E `portal/e2e/support.e2e.test.ts`: throttle upsert, window reset, success delete, shared across instances.
-- [ ] 7.5 Mutation-verify (compare non-constant-time, skip lock check); gates; GGA; PR.
+- [x] 7.1 RED `session.test.ts`: sign/verify, tamper, expired, regex precheck, unset env fails closed. GREEN `session.ts` `requireSupport()`.
+- [x] 7.2 RED `throttle.test.ts` + login handler: 5 failures lock even correct password, expiry, success resets, cookie `httpOnly/secure/sameSite=strict`, "Contraseña incorrecta.", logout clears. GREEN `throttle.ts`, `login`/`logout` routes, login page.
+- [x] 7.3 RED `guard.test.ts` route inventory; `env-isolation.test.ts` lists both vars; extend `headers.test.ts`. GREEN.
+- [x] 7.4 E2E `portal/e2e/support.e2e.test.ts`: throttle upsert, window reset, success delete, shared across instances.
+- [x] 7.5 Mutation-verify (compare non-constant-time, skip lock check); gates; GGA; PR (#351, GGA passed on round 2). (Mutations done: 25, each red by name; gates green. Login over `secure` cookie to be checked on a Vercel preview.)
 
 ## WU8: Inbox list (specs support-inbox)
 
-- [ ] 8.1 RED `format.test.ts`: delay flag at 10:00 no, 10:01 yes, 0 no; `dd/MM/yyyy HH:mm` America/Panama. GREEN `format.ts`.
-- [ ] 8.2 RED `queries.test.ts` + page tests: filters AND in SQL, counts "Todos (5)", newest first, empty state, no-results + "Limpiar filtros", list render does not mark read. GREEN `queries.ts`, `app/support/page.tsx`, list/filter components.
-- [ ] 8.3 E2E `support.e2e`: filter WHERE and `GROUP BY` counts.
-- [ ] 8.4 Mutation-verify; gates; GGA; PR.
+- [x] 8.1 RED `format.test.ts`: delay flag at 10:00 no, 10:01 yes, 0 no; `dd/MM/yyyy HH:mm` America/Panama. GREEN `format.ts`.
+- [x] 8.2 RED `queries.test.ts` + page tests: filters AND in SQL, counts "Todos (5)", newest first, empty state, no-results + "Limpiar filtros", list render does not mark read. GREEN `queries.ts`, `app/support/page.tsx`, list/filter components.
+- [x] 8.3 E2E `support.e2e`: filter WHERE and `GROUP BY` counts.
+- [x] 8.4 Mutation-verify; gates; GGA; PR. (Mutations done: 13, each red by name; gates and e2e green. GGA passed; PR #352.)
 
 ## WU9: Inbox detail (D8)
 
-- [ ] 9.1 RED: `?id=` marks only `nuevo` → `leido` (leido/resuelto untouched, no `id` no mark, `prefetch={false}`). GREEN page + mark-read UPDATE.
-- [ ] 9.2 RED PATCH route tests: 401 no session, exact keys, bad status 400, note 2001 400, note replaces. GREEN `app/api/support/feedback/[id]/route.ts`, status/note editor ("Nota guardada.").
-- [ ] 9.3 E2E `support.e2e`: mark-read only from nuevo, PATCH UPDATE.
-- [ ] 9.4 Mutation-verify; gates; GGA; PR.
-- [ ] 9.5 BROWSER (Vercel preview, HTTPS, light+dark): login, lockout, inbox 1280/820/390, 44px, no horizontal scroll, "Volver" on phone.
+- [x] 9.1 RED: `?id=` marks only `nuevo` → `leido` (leido/resuelto untouched, no `id` no mark, `prefetch={false}`). GREEN page + mark-read UPDATE.
+- [x] 9.2 RED PATCH route tests: 401 no session, exact keys, bad status 400, note 2001 400, note replaces. GREEN `app/api/support/feedback/[id]/route.ts`, status/note editor ("Nota guardada.").
+- [x] 9.3 E2E `support.e2e`: mark-read only from nuevo, PATCH UPDATE.
+- [ ] 9.4 Mutation-verify; gates; GGA; PR. (Mutations done: 10, each red by name; gates and e2e green. GGA and PR pending.)
+- [x] 9.5 BROWSER (done on the local portal at http://localhost:3001, where Chrome accepts a Secure cookie; the Vercel-preview pass moves to 10.2 after the owner deploys) (Vercel preview, HTTPS, light+dark): login, lockout, inbox 1280/820/390, 44px, no horizontal scroll, "Volver" on phone.
 
 ## Final integration
 
