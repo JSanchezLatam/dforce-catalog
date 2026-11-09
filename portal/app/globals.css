@@ -300,7 +300,7 @@ dd {
   color: var(--danger);
 }
 
-/* Support inbox: wider than the customer pages, list only (detail comes next). */
+/* Support inbox: wider than the customer pages; list and detail side by side. */
 .page.wide {
   max-width: 72rem;
 }
@@ -466,5 +466,128 @@ dd {
 @media (max-width: 30rem) {
   .logout .btn {
     width: auto;
+  }
+}
+
+/* Detail pane. Side by side from tablet up; on a phone one view at a time, joined by "Volver". */
+.inbox {
+  display: grid;
+  grid-template-columns: minmax(0, 24rem) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.pdet {
+  display: grid;
+  gap: 1rem;
+  overflow-wrap: anywhere;
+}
+.pdet h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+.pdet .hd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.pdet dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.375rem 1rem;
+  margin: 0;
+  font-size: 0.9375rem;
+}
+.pdet dt {
+  color: var(--muted);
+}
+.pdet dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+}
+.pdet .muted {
+  margin: 0;
+}
+.ptext {
+  margin: 0;
+  white-space: pre-wrap;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+.pdet textarea {
+  min-height: 6rem;
+  padding: 0.75rem 0.875rem;
+  font-size: 1rem;
+  font-weight: 400;
+  resize: vertical;
+}
+.pseg button {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding: 0 0.875rem;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 400;
+  cursor: pointer;
+}
+.pseg button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+.pseg button:disabled {
+  cursor: progress;
+}
+.saverow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+.saved {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--chip-terminada-fg, var(--text));
+}
+.back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+@media (min-width: 30.0625rem) {
+  .back {
+    display: none;
+  }
+}
+@media (max-width: 30rem) {
+  .inbox {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  main[data-detail="true"] .filters,
+  main[data-detail="true"] .inbox-list,
+  main[data-detail="false"] .pdet {
+    display: none;
+  }
+  .pdet dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .pdet dd {
+    margin-bottom: 0.5rem;
+  }
+  .saverow .btn {
+    width: 100%;
   }
 }

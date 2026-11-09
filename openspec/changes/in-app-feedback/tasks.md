@@ -93,15 +93,15 @@ WU3 and WU1/WU2 touch disjoint trees (portal vs workshop) and may be written in 
 - [x] 8.1 RED `format.test.ts`: delay flag at 10:00 no, 10:01 yes, 0 no; `dd/MM/yyyy HH:mm` America/Panama. GREEN `format.ts`.
 - [x] 8.2 RED `queries.test.ts` + page tests: filters AND in SQL, counts "Todos (5)", newest first, empty state, no-results + "Limpiar filtros", list render does not mark read. GREEN `queries.ts`, `app/support/page.tsx`, list/filter components.
 - [x] 8.3 E2E `support.e2e`: filter WHERE and `GROUP BY` counts.
-- [ ] 8.4 Mutation-verify; gates; GGA; PR. (Mutations done: 13, each red by name; gates and e2e green. GGA and PR pending.)
+- [x] 8.4 Mutation-verify; gates; GGA; PR. (Mutations done: 13, each red by name; gates and e2e green. GGA passed; PR #352.)
 
 ## WU9: Inbox detail (D8)
 
-- [ ] 9.1 RED: `?id=` marks only `nuevo` → `leido` (leido/resuelto untouched, no `id` no mark, `prefetch={false}`). GREEN page + mark-read UPDATE.
-- [ ] 9.2 RED PATCH route tests: 401 no session, exact keys, bad status 400, note 2001 400, note replaces. GREEN `app/api/support/feedback/[id]/route.ts`, status/note editor ("Nota guardada.").
-- [ ] 9.3 E2E `support.e2e`: mark-read only from nuevo, PATCH UPDATE.
-- [ ] 9.4 Mutation-verify; gates; GGA; PR.
-- [ ] 9.5 BROWSER (Vercel preview, HTTPS, light+dark): login, lockout, inbox 1280/820/390, 44px, no horizontal scroll, "Volver" on phone.
+- [x] 9.1 RED: `?id=` marks only `nuevo` → `leido` (leido/resuelto untouched, no `id` no mark, `prefetch={false}`). GREEN page + mark-read UPDATE.
+- [x] 9.2 RED PATCH route tests: 401 no session, exact keys, bad status 400, note 2001 400, note replaces. GREEN `app/api/support/feedback/[id]/route.ts`, status/note editor ("Nota guardada.").
+- [x] 9.3 E2E `support.e2e`: mark-read only from nuevo, PATCH UPDATE.
+- [ ] 9.4 Mutation-verify; gates; GGA; PR. (Mutations done: 10, each red by name; gates and e2e green. GGA and PR pending.)
+- [x] 9.5 BROWSER (done on the local portal at http://localhost:3001, where Chrome accepts a Secure cookie; the Vercel-preview pass moves to 10.2 after the owner deploys) (Vercel preview, HTTPS, light+dark): login, lockout, inbox 1280/820/390, 44px, no horizontal scroll, "Volver" on phone.
 
 ## Final integration
 
