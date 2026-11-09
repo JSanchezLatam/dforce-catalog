@@ -71,12 +71,12 @@ WU3 and WU1/WU2 touch disjoint trees (portal vs workshop) and may be written in 
 - [x] 5.1 RED `FeedbackDialog.test.tsx`: nothing preselected, placeholder per category, both missing messages, whitespace text `aria-invalid`, counter 1799/1800 amber, author line "jperez (Técnico)", context read-only, locked while sending, roles/`aria-pressed`, 44px classes. GREEN `FeedbackDialog.tsx` (D5 composition, raw textarea).
 - [x] 5.2 RED toast tests: delivered → success, queued → info, store failure → inline error text kept, toast raised before a throwing `refresh`. GREEN submit path (copy `OrderStatusControls.tsx:111-142`).
 - [x] 5.3 RED `app-sidebar.test.tsx`: item above user card, opens dialog, rail tooltip + name, mobile sheet closes and dialog stays mounted, absent without `feedback.send`; existing sidebar tests unchanged. GREEN `FeedbackProvider.tsx`, `(app)/layout.tsx` (strings only), `app-sidebar.tsx`.
-- [ ] 5.4 Mutation-verify; gates; GGA; PR. (Mutations done: 15, each red by name. Gates green. GGA and PR still open.)
+- [x] 5.4 Mutation-verify; gates; GGA; PR. (Mutations done: 15, each red by name. Gates green. GGA passed; PR #349.)
 - [x] 5.5 BROWSER (LAN IP, second machine; Chrome device extension): 1280/820/390, sheet closes and dialog stays, rail tooltip, measured 44px, console free of RSC/hydration errors, queued toast with portal unreachable, light+dark.
 
 ## WU6: "Mis comentarios" (specs feedback, last requirement set)
 
-- [ ] 6.1 RED `MyFeedbackCard.test.tsx`: newest first, badges Enviado / Pendiente de envío + offline text, empty state, no "Respondido", button opens shared dialog. GREEN `MyFeedbackCard.tsx`, `account/page.tsx` via `listOwnFeedback` gated by `can`.
+- [x] 6.1 RED `MyFeedbackCard.test.tsx`: newest first, badges Enviado / Pendiente de envío + offline text, empty state, no "Respondido", button opens shared dialog. GREEN `MyFeedbackCard.tsx`, `account/page.tsx` via `listOwnFeedback` gated by `can`.
 - [ ] 6.2 Mutation-verify; gates; GGA; PR.
 - [ ] 6.3 BROWSER (LAN IP): `/account` card, pending flips to Enviado after reconnection, no duplicate in portal.
 
