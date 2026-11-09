@@ -31,12 +31,19 @@ describe("support area guard inventory", () => {
         "app/support/login/page.tsx",
         "app/api/support/login/route.ts",
         "app/api/support/logout/route.ts",
+        "app/api/support/feedback/[id]/route.ts",
       ]),
     );
   });
 
-  it("only the login page and login route are public", () => {
-    const unguarded = entryPoints.filter((f) => !/\bawait requireSupport\(\)/.test(code(f)));
-    expect(unguarded.sort()).toEqual([...PUBLIC].sort());
+  it("every entry point outside the public list verifies the session itself", () => {
+    // The login page also calls requireSupport (to skip the form when signed in), so
+    // "public" is a list of exceptions to the rule, not "the files that lack the call".
+    const unguarded = entryPoints.filter((f) => !PUBLIC.has(f) && !/\bawait requireSupport\(\)/.test(code(f)));
+    expect(unguarded).toEqual([]);
+  });
+
+  it("the public list names real entry points, so a rename cannot silently widen it", () => {
+    expect([...PUBLIC].filter((f) => !entryPoints.includes(f))).toEqual([]);
   });
 });

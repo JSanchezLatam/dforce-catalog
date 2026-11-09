@@ -1,7 +1,14 @@
+import { redirect } from "next/navigation";
+
+import { requireSupport } from "../../../src/support/session";
 import { LoginForm } from "./LoginForm";
 
-// Public by design (see guard.test.ts). Deliberately carries none of the customer's brand.
-export default function Page() {
+export const dynamic = "force-dynamic";
+
+// Public by design (see guard.test.ts): it only skips the form for someone already signed in.
+// Deliberately carries none of the customer's brand.
+export default async function Page() {
+  if (await requireSupport()) redirect("/support");
   return (
     <>
       <header className="masthead">
