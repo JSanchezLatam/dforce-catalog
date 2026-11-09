@@ -6,6 +6,8 @@ import { feedback, type Feedback } from "@/shared/db/schema";
 import { FEEDBACK_MAX_LENGTH, isFeedbackCategory, type FeedbackCategory } from "./categories";
 import { routeOf, screenLabelFor } from "./screen-labels";
 
+const MAX_ROUTE_LENGTH = 200;
+
 export type FeedbackRow = Feedback;
 
 export type NewFeedback = {
@@ -40,9 +42,12 @@ export async function createFeedback(
   if (!isFeedbackCategory(input.category)) errors.category = "Elegí qué querés contarnos.";
   if (text.length === 0) errors.text = "Escribí tu comentario antes de enviarlo.";
   else if (text.length > FEEDBACK_MAX_LENGTH) errors.text = `El comentario no puede superar los ${FEEDBACK_MAX_LENGTH} caracteres.`;
+  // Portal parse rejects route > 300, no leading "/" and label > 200; an unmapped route is its own label, so cap at 200.
+  const route = typeof input.route === "string" ? routeOf(input.route) : null;
+  if (route === null || !route.startsWith("/") || route.length > MAX_ROUTE_LENGTH) errors.route = "Pantalla inválida.";
   if (Object.keys(errors).length > 0) throw new FeedbackValidationError(errors);
 
-  const row: NewFeedback = { ...input, text, route: routeOf(input.route), screenLabel: screenLabelFor(input.route) };
+  const row: NewFeedback = { ...input, text, route: route as string, screenLabel: screenLabelFor(input.route) };
   const insert =
     deps?.insert ??
     (async (r: NewFeedback) => {

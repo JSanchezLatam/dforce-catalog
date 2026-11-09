@@ -65,6 +65,38 @@ describe("createFeedback", () => {
     expect(deps.insert).not.toHaveBeenCalled();
   });
 
+  it("rejects a route without a leading slash and writes nothing", async () => {
+    const deps = seam();
+    const err = await createFeedback({ ...base, route: "kanban" }, deps).catch((e) => e);
+    expect(err).toBeInstanceOf(FeedbackValidationError);
+    expect(err.errors.route).toBe("Pantalla inválida.");
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("accepts a route of exactly 200 characters", async () => {
+    const deps = seam();
+    await createFeedback({ ...base, route: `/${"a".repeat(199)}` }, deps);
+    expect(deps.insert).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a route of 201 characters and writes nothing", async () => {
+    const deps = seam();
+    await expect(createFeedback({ ...base, route: `/${"a".repeat(200)}` }, deps)).rejects.toBeInstanceOf(FeedbackValidationError);
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
+  it("measures the route length on the stripped pathname", async () => {
+    const deps = seam();
+    await createFeedback({ ...base, route: `/${"a".repeat(199)}?${"q".repeat(500)}` }, deps);
+    expect(deps.insert).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a non-string route with a validation error, not a TypeError", async () => {
+    const deps = seam();
+    await expect(createFeedback({ ...base, route: 42 as never }, deps)).rejects.toBeInstanceOf(FeedbackValidationError);
+    expect(deps.insert).not.toHaveBeenCalled();
+  });
+
   it("rejects an unknown category and writes nothing", async () => {
     const deps = seam();
     await expect(createFeedback({ ...base, category: "spam" as never }, deps)).rejects.toBeInstanceOf(FeedbackValidationError);
