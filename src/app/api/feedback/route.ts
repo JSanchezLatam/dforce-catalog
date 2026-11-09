@@ -3,17 +3,22 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getUserProfile } from "@/modules/account/queries";
 import { can } from "@/modules/auth/policy";
 import { requireSession } from "@/modules/auth/session";
+import { deliverFeedback } from "@/modules/feedback/deliver";
 import { createFeedback, FeedbackValidationError, type CreateFeedbackDeps } from "@/modules/feedback/service";
 
 export type SendFeedbackDeps = {
   /** Resolves the author's username from the session user id; null when the user is gone. */
   getUsername?: (userId: string) => Promise<string | null>;
   createDeps?: CreateFeedbackDeps;
+  deliver?: (id: string, timeoutMs: number) => Promise<"delivered" | "queued">;
 };
+
+/** The inline attempt is bounded: the operator is waiting on the dialog. The sweeper retries with the longer default. */
+const INLINE_TIMEOUT_MS = 5_000;
 
 const defaultGetUsername = async (userId: string) => (await getUserProfile(userId))?.username ?? null;
 
-/** Store-only: persists the row and answers `queued`. The author is the SESSION user, never the body. */
+/** Persists the row, then tries one bounded delivery (never throws) and answers its outcome. The author is the SESSION user, never the body. */
 export async function handleSendFeedback(request: NextRequest, deps: SendFeedbackDeps = {}): Promise<NextResponse> {
   let user;
   try {
@@ -36,7 +41,8 @@ export async function handleSendFeedback(request: NextRequest, deps: SendFeedbac
       { userId: user.id, username, role: user.role, category: body.category, text: body.text, route: body.route },
       deps.createDeps,
     );
-    return NextResponse.json({ id, outcome: "queued" }, { status: 201 });
+    const outcome = await (deps.deliver ?? deliverFeedback)(id, INLINE_TIMEOUT_MS);
+    return NextResponse.json({ id, outcome }, { status: 201 });
   } catch (err) {
     if (err instanceof FeedbackValidationError) {
       return NextResponse.json({ error: "validation_error", errors: err.errors }, { status: 400 });

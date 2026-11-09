@@ -127,8 +127,8 @@ describe("listOwnFeedback", () => {
     expect(select).toHaveBeenCalledWith("u1");
   });
 
-  it("returns newest first", async () => {
-    const select = async () => [row("old", "2026-01-01"), row("new", "2026-03-01"), row("mid", "2026-02-01")];
-    expect((await listOwnFeedback("u1", { select })).map((r) => r.id)).toEqual(["new", "mid", "old"]);
+  it("returns the rows in the order the query gave: newest-first is the SQL's job, proven in the e2e", async () => {
+    const select = async () => [row("old", "2026-01-01"), row("new", "2026-03-01")];
+    expect((await listOwnFeedback("u1", { select })).map((r) => r.id)).toEqual(["old", "new"]);
   });
 });

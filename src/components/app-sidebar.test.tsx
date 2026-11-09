@@ -13,6 +13,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { AppSidebar } from "./app-sidebar";
+import { FeedbackProvider } from "@/modules/feedback/FeedbackProvider";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DEFAULT_NAV_COLLAPSE_STATE, type NavCollapseState } from "@/modules/layout/nav-collapse-state";
 import type { NavGroup } from "@/modules/layout/nav-items";
@@ -27,6 +28,9 @@ vi.mock("next/navigation", () => ({
 vi.mock("next-themes", () => ({
   useTheme: () => ({ resolvedTheme: "light", setTheme: vi.fn() }),
 }));
+
+// The feedback dialog raises toasts; there is no ToastProvider in these trees.
+vi.mock("@/shared/ui/ToastProvider", () => ({ useToast: () => ({ addToast: vi.fn() }) }));
 
 const NAV_GROUPS: NavGroup[] = [
   {
@@ -681,5 +685,77 @@ describe("AppSidebar — menu search (sidebar-redesign WU4a)", () => {
       "Taller Demo", "Clientes", "Vencimientos", "Órdenes de servicio", "Generar Catálogos",
     ]);
     expect(document.querySelector("mark")).toBeNull();
+  });
+});
+
+describe("AppSidebar — Enviar comentario", () => {
+  afterEach(() => {
+    window.innerWidth = 1024;
+  });
+
+  function renderWithFeedback(opts: { role?: string; open?: boolean; provider?: boolean; trigger?: boolean } = {}) {
+    const sidebar = (
+      <SidebarProvider defaultOpen={opts.open ?? true}>
+        {opts.trigger && <SidebarTrigger aria-label="Abrir menú" />}
+        <AppSidebar
+          navGroups={NAV_GROUPS}
+          user={{ id: "u1", role: opts.role ?? "tecnico", name: "Jorge", username: "jperez" }}
+          workshopName="Taller Demo"
+          logoR2Key={null}
+          initialCollapseState={DEFAULT_NAV_COLLAPSE_STATE}
+        />
+      </SidebarProvider>
+    );
+    return render(
+      opts.provider === false ? sidebar : <FeedbackProvider author={{ username: "jperez", roleLabel: "Técnico" }}>{sidebar}</FeedbackProvider>,
+    );
+  }
+
+  it("sits in the footer immediately before the user card", () => {
+    renderWithFeedback();
+    const item = screen.getByRole("button", { name: "Enviar comentario" });
+    const footer = item.closest('[data-sidebar="footer"]');
+    expect(footer).not.toBeNull();
+    const card = within(footer as HTMLElement).getByRole("button", { name: /Jorge/ });
+    expect(item.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Nothing between them: the item's menu row is the card's previous sibling.
+    expect(item.closest("li")?.nextElementSibling).toBe(card.closest("li"));
+  });
+
+  it("opens the feedback dialog", async () => {
+    const user = userEvent.setup();
+    renderWithFeedback();
+    expect(screen.queryByRole("dialog", { name: "Enviar comentario" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Enviar comentario" }));
+    expect(await screen.findByRole("dialog", { name: "Enviar comentario" })).toBeInTheDocument();
+    expect(screen.getByText(/Se envía al equipo de soporte como/)).toHaveTextContent("jperez (Técnico)");
+  });
+
+  it("in the collapsed rail keeps the accessible name and shows the tooltip", async () => {
+    const user = userEvent.setup();
+    renderWithFeedback({ open: false });
+    const item = screen.getByRole("button", { name: "Enviar comentario" });
+    await user.hover(item);
+    // The row's own label plus the tooltip popup.
+    await waitFor(() => expect(screen.getAllByText("Enviar comentario").length).toBeGreaterThan(1));
+  });
+
+  it("closes the mobile sheet and keeps the dialog mounted", async () => {
+    window.innerWidth = 800; // useIsMobile reads innerWidth
+    const user = userEvent.setup();
+    renderWithFeedback({ trigger: true });
+    await user.click(screen.getByRole("button", { name: "Abrir menú" }));
+    expect(await screen.findByRole("dialog", { name: "Menú" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Enviar comentario" }));
+
+    // The open modal dialog hides the sheet from the a11y tree, so look for the sheet's DOM node instead.
+    await waitFor(() => expect(document.querySelector('[data-mobile="true"]')).toBeNull());
+    expect(await screen.findByRole("dialog", { name: "Enviar comentario" })).toBeInTheDocument();
+  });
+
+  it("is absent for a role without feedback.send", () => {
+    renderWithFeedback({ role: "pantalla" });
+    expect(screen.queryByRole("button", { name: "Enviar comentario" })).not.toBeInTheDocument();
   });
 });

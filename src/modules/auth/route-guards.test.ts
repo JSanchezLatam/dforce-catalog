@@ -134,7 +134,7 @@ export const ROUTE_GUARDS: Record<
   "/agenda": { GET: "agenda.manage" },
   "/tablero/clientes": { GET: "board.customer" },
   "/api/board/clientes": { GET: "board.customer" },
-  // in-app-feedback: store-only send; pantalla is refused.
+  // in-app-feedback: send stores then attempts inline delivery; pantalla is refused.
   "/api/feedback": { POST: "feedback.send" },
   "/api/account": { GET: "account.self", PATCH: "account.self" },
   "/api/users": { GET: "users.manage", POST: "users.manage" },
