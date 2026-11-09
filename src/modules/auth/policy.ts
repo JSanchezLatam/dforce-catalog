@@ -40,6 +40,8 @@ export const ACTIONS = [
   "board.customer",
   // workshop-agenda: the appointment calendar and its booking, reschedule and no-show actions.
   "agenda.manage",
+  // in-app-feedback: sending a comment to support. Every staff role; never the big-screen account.
+  "feedback.send",
 ] as const;
 
 export type Action = (typeof ACTIONS)[number];
@@ -85,6 +87,7 @@ export const MATRIX: Record<Role, Grants> = {
     "board.customer": false,
     "board.read": true,
     "agenda.manage": false,
+    "feedback.send": true,
   },
   // The workshop manager: everything the owner holds except user management,
   // workshop and template settings, closed-order corrections and photo deletion.
@@ -120,6 +123,7 @@ export const MATRIX: Record<Role, Grants> = {
     "board.customer": true,
     "board.read": true,
     "agenda.manage": true,
+    "feedback.send": true,
   },
   // The big-screen account: `board.customer` and nothing else. Spelled out cell by cell
   // (no generated row) so a missing grant stays a tsc error.
@@ -155,6 +159,7 @@ export const MATRIX: Record<Role, Grants> = {
     "board.customer": true,
     "board.read": false,
     "agenda.manage": false,
+    "feedback.send": false,
   },
   administrador: {
     "customers.read": true,
@@ -188,6 +193,7 @@ export const MATRIX: Record<Role, Grants> = {
     "board.customer": true,
     "board.read": true,
     "agenda.manage": true,
+    "feedback.send": true,
   },
 };
 

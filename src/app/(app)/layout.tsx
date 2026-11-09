@@ -8,6 +8,8 @@ import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { getNavBadges } from "@/modules/layout/nav-badges";
 import { getNavGroups } from "@/modules/layout/nav-items";
 import { decodeNavCollapseState, NAV_COLLAPSE_COOKIE_NAME } from "@/modules/layout/nav-collapse-state";
+import { ROLE_LABELS } from "@/modules/auth/roles";
+import { FeedbackProvider } from "@/modules/feedback/FeedbackProvider";
 import { getUserProfile } from "@/modules/account/queries";
 import { getWorkshopConfig } from "@/modules/workshop-config/service";
 
@@ -29,6 +31,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const initialCollapseState = decodeNavCollapseState(cookieStore.get(NAV_COLLAPSE_COOKIE_NAME)?.value);
 
   return (
+    <FeedbackProvider author={{ username: profile?.username ?? "usuario", roleLabel: ROLE_LABELS[user.role] }}>
     <SidebarProvider
       defaultOpen={sidebarDefaultOpen}
       className="has-data-[variant=inset]:bg-muted dark:has-data-[variant=inset]:bg-background"
@@ -63,5 +66,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </SidebarInset>
     </SidebarProvider>
+    </FeedbackProvider>
   );
 }

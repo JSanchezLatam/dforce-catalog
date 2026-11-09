@@ -100,4 +100,24 @@ describe("POST /api/ingest", () => {
     const denied = await route.POST(new Request(url, { method: "POST", body: raw }));
     expect(denied.headers.get("cache-control")).toBe("no-store");
   });
+
+  it("feedback: unsigned is 401 and never applied; signed and valid is applied", async () => {
+    const fb: IngestBody = {
+      kind: "feedback",
+      id: "0b8f6f0e-5d0e-4c53-9a53-6f7d2d6f1a11",
+      username: "ana",
+      role: "tecnico",
+      category: "idea",
+      text: "Filtrar por técnico",
+      route: "/",
+      screenLabel: "Tablero",
+      createdAt: "2026-11-01T10:00:00.000Z",
+    };
+    const raw = JSON.stringify(fb);
+    expect((await route.POST(new Request(url, { method: "POST", body: raw }))).status).toBe(401);
+    expect(applyIngest).not.toHaveBeenCalled();
+    const ok = await route.POST(new Request(url, { method: "POST", body: raw, headers: signed(raw) }));
+    expect(ok.status).toBe(200);
+    expect(applyIngest).toHaveBeenCalledWith(fb);
+  });
 });
