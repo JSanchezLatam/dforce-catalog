@@ -55,15 +55,15 @@ WU3 and WU1/WU2 touch disjoint trees (portal vs workshop) and may be written in 
 - [x] 3.2 RED `applyIngest` feedback: insert, status `nuevo`, empty note, `received_at` from portal clock, duplicate keeps first row, unsigned → 401. GREEN `apply.ts` `onConflictDoNothing`.
 - [x] 3.3 GREEN `portal/src/db/schema.ts` `support_feedback` + `support_login_throttle`; `npx drizzle-kit generate --name support_inbox` → `0002_support_inbox.sql`.
 - [x] 3.4 E2E `portal/e2e/ingest.e2e.test.ts`: duplicate id → 1 row untouched (Resuelto + note + different text), concurrent duplicates → 1 row both 2xx, `received_at` from portal clock.
-- [ ] 3.5 Mutation-verify (remove `DO NOTHING`, accept `receivedAt`); gates; GGA; PR.
+- [x] 3.5 Mutation-verify (remove `DO NOTHING`, accept `receivedAt`); gates; GGA; PR (#347).
 
 ## WU4: Outbox delivery (design §3)
 
-- [ ] 4.1 RED `transport.test.ts`: `timeoutMs` 4th param, default unchanged, `PortalServerError.status`, existing 2-arg callers byte-identical. GREEN `transport.ts`.
-- [ ] 4.2 RED `deliver.test.ts`: unconfigured → `"queued"` pre-claim; 2xx sets `delivered_at`; 4xx/5xx/timeout/network leave NULL; `last_error` has class+status, no text; Sentry per failure (id, status, attempt, no text/secret; error vs warning); backoff `min(2^(n-1),60)` monotone and capped; already delivered → no request; same `id` every attempt; recovery after 4xx; never throws; inline timeout 5000. GREEN `deliver.ts`.
-- [ ] 4.3 RED `worker.test.ts`: sweeper returns before query if unconfigured, ≤25 per run oldest first, `singletonKey: id`, `retryLimit 0`, `localConcurrency 1`, cron `* * * * *` tz America/Panama; `instrumentation-node` registers it. GREEN `worker.ts`, `instrumentation-node.ts`; route calls `deliverFeedback(id, 5_000)`.
-- [ ] 4.4 E2E `src/e2e/feedback.e2e.test.ts`: insert + CHECK (2001 fails); concurrent claims → one winner; not-yet-due row → none; sweeper due-only/oldest/LIMIT; delivered UPDATE guard; `listOwnFeedback` WHERE (A vs B).
-- [ ] 4.5 Confirm `portal-sync` and contract tests pass unchanged ("Customer sync untouched").
+- [x] 4.1 RED `transport.test.ts`: `timeoutMs` 4th param, default unchanged, `PortalServerError.status`, existing 2-arg callers byte-identical. GREEN `transport.ts`.
+- [x] 4.2 RED `deliver.test.ts`: unconfigured → `"queued"` pre-claim; 2xx sets `delivered_at`; 4xx/5xx/timeout/network leave NULL; `last_error` has class+status, no text; Sentry per failure (id, status, attempt, no text/secret; error vs warning); backoff `min(2^(n-1),60)` monotone and capped; already delivered → no request; same `id` every attempt; recovery after 4xx; never throws; inline timeout 5000. GREEN `deliver.ts`.
+- [x] 4.3 RED `worker.test.ts`: sweeper returns before query if unconfigured, ≤25 per run oldest first, `singletonKey: id`, `retryLimit 0`, `localConcurrency 1`, cron `* * * * *` tz America/Panama; `instrumentation-node` registers it. GREEN `worker.ts`, `instrumentation-node.ts`; route calls `deliverFeedback(id, 5_000)`.
+- [x] 4.4 E2E `src/e2e/feedback.e2e.test.ts`: insert + CHECK (2001 fails); concurrent claims → one winner; not-yet-due row → none; sweeper due-only/oldest/LIMIT; delivered UPDATE guard; `listOwnFeedback` WHERE (A vs B).
+- [x] 4.5 Confirm `portal-sync` and contract tests pass unchanged ("Customer sync untouched"). Unit + contract suites green; `test:portal-sync` has one failure that is identical on the WU3 base ("shows no plate and no order before the terms are accepted"), not caused by WU4.
 - [ ] 4.6 Mutation-verify (drop `delivered_at IS NULL` from claim, drop lease, drop cap); gates; GGA; PR.
 
 ## WU5: Dialog, provider, sidebar (design §5, D5, D6)
