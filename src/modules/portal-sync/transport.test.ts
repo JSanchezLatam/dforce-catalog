@@ -1,7 +1,7 @@
 import { verify } from "@portal/contract";
 import { describe, expect, it, vi } from "vitest";
 
-import { PortalRejectedError, sendToPortal } from "./transport";
+import { PortalRejectedError, PortalServerError, sendToPortal } from "./transport";
 
 const SECRET = "test-secret";
 const body = { kind: "delete", clienteId: "c1", version: 3 } as const;
@@ -68,5 +68,36 @@ describe("sendToPortal", () => {
   it("completes on a 2xx whatever the body says (a stale acknowledgement is not a failure)", async () => {
     const f = vi.fn(async () => new Response(JSON.stringify({ applied: false }), { status: 200 }));
     await expect(sendToPortal(body, cfg("https://p.example/i"), f)).resolves.toBeUndefined();
+  });
+
+  it("exposes the status on both error classes so a caller can tell 4xx from 5xx", async () => {
+    const rejected = await sendToPortal(body, cfg("https://p.example/i"), fakeFetch(401)).catch((e: unknown) => e);
+    expect(rejected).toBeInstanceOf(PortalRejectedError);
+    expect((rejected as PortalRejectedError).status).toBe(401);
+    const server = await sendToPortal(body, cfg("https://p.example/i"), fakeFetch(503)).catch((e: unknown) => e);
+    expect(server).toBeInstanceOf(PortalServerError);
+    expect((server as PortalServerError).status).toBe(503);
+    expect(server).not.toBeInstanceOf(PortalRejectedError);
+  });
+
+  it("a refused URL carries no status", async () => {
+    const err = await sendToPortal(body, cfg("http://portal.example/x"), fakeFetch(200)).catch((e: unknown) => e);
+    expect((err as PortalRejectedError).status).toBeUndefined();
+  });
+
+  describe("timeout", () => {
+    it("defaults to 15 s for the two-argument callers", async () => {
+      const spy = vi.spyOn(AbortSignal, "timeout");
+      await sendToPortal(body, cfg("https://p.example/i"), fakeFetch(200));
+      expect(spy).toHaveBeenCalledWith(15_000);
+      spy.mockRestore();
+    });
+
+    it("honors an explicit timeoutMs", async () => {
+      const spy = vi.spyOn(AbortSignal, "timeout");
+      await sendToPortal(body, cfg("https://p.example/i"), fakeFetch(200), 5_000);
+      expect(spy).toHaveBeenCalledWith(5_000);
+      spy.mockRestore();
+    });
   });
 });
