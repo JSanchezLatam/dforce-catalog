@@ -39,7 +39,18 @@ export type IngestBody =
       vehicles: PortalVehicle[];
     }
   | { kind: "delete"; clienteId: string; version: number }
-  | { kind: "reconcile"; liveClienteIds: string[]; maxVersion: number };
+  | { kind: "reconcile"; liveClienteIds: string[]; maxVersion: number }
+  | {
+      kind: "feedback";
+      id: string;
+      username: string;
+      role: "tecnico" | "jefe_taller" | "administrador";
+      category: "bug" | "idea" | "other";
+      text: string;
+      route: string;
+      screenLabel: string;
+      createdAt: string;
+    };
 
 export const TIMESTAMP_HEADER = "x-portal-timestamp";
 export const SIGNATURE_HEADER = "x-portal-signature";

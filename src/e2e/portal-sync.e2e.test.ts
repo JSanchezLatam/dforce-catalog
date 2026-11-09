@@ -69,7 +69,7 @@ describe("portal-sync (E2E)", () => {
     const versions: number[] = [];
     for (let i = 0; i < 3; i++) {
       const [body] = await run(id);
-      if (body.kind === "reconcile") throw new Error("unexpected reconcile");
+      if (body.kind === "reconcile" || body.kind === "feedback") throw new Error("unexpected " + body.kind);
       expect(typeof body.version).toBe("number");
       versions.push(body.version);
     }
@@ -167,7 +167,7 @@ describe("portal-sync (E2E)", () => {
     let aInSend!: () => void;
     const aReady = new Promise<void>((r) => (aInSend = r));
     const hallazgosOf = (b: IngestBody) => (b.kind === "upsert" ? b.vehicles[0].orders[0].hallazgos : null);
-    const versionOf = (b: IngestBody) => (b.kind === "reconcile" ? -1 : b.version);
+    const versionOf = (b: IngestBody) => (b.kind === "reconcile" || b.kind === "feedback" ? -1 : b.version);
     const seen: { who: string; version: number; hallazgos: string | null }[] = [];
 
     const a = runPortalSync(id, {
