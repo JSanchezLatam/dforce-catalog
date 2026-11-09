@@ -37,6 +37,7 @@ const adminGrants: Grants = {
   "board.customer": true,
   "board.read": true,
   "agenda.manage": true,
+  "feedback.send": true,
 };
 
 // Every administrador grant except the four the owner keeps for himself, and
@@ -83,6 +84,7 @@ const tecnicoGrants: Grants = {
   "board.customer": false,
   "board.read": true,
   "agenda.manage": false,
+  "feedback.send": true,
 };
 
 // The big-screen account holds `board.customer` and nothing else.

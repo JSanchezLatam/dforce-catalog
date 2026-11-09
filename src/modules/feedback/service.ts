@@ -37,7 +37,7 @@ export async function createFeedback(
   input: CreateFeedbackInput,
   deps?: CreateFeedbackDeps,
 ): Promise<{ id: string }> {
-  const text = input.text.trim();
+  const text = typeof input.text === "string" ? input.text.trim() : ""; // a wire body can omit it
   const errors: Record<string, string> = {};
   if (!isFeedbackCategory(input.category)) errors.category = "Elegí qué querés contarnos.";
   if (text.length === 0) errors.text = "Escribí tu comentario antes de enviarlo.";
