@@ -96,4 +96,60 @@ describe("parseIngest", () => {
     (year.vehicles[0] as { year: unknown }).year = "2015";
     expect(parseIngest(year).ok).toBe(false);
   });
+
+  describe("feedback", () => {
+    const fb = {
+      kind: "feedback",
+      id: "0b8f6f0e-5d0e-4c53-9a53-6f7d2d6f1a11",
+      username: "ana",
+      role: "tecnico",
+      category: "bug",
+      text: "Se rompe al guardar",
+      route: "/service-orders",
+      screenLabel: "Órdenes de servicio",
+      createdAt: "2026-11-01T10:00:00.000Z",
+    } as const satisfies IngestBody;
+
+    it("accepts the exact wire shape and rebuilds it field by field", () => {
+      expect(parseIngest(clone(fb))).toEqual({ ok: true, body: fb });
+    });
+
+    it("accepts the boundaries: 2000 chars, every role and category", () => {
+      expect(parseIngest({ ...fb, text: "x".repeat(2000) }).ok).toBe(true);
+      for (const role of ["tecnico", "jefe_taller", "administrador"]) expect(parseIngest({ ...fb, role }).ok).toBe(true);
+      for (const category of ["bug", "idea", "other"]) expect(parseIngest({ ...fb, category }).ok).toBe(true);
+    });
+
+    it("rejects extra keys the portal must stamp itself", () => {
+      expect(parseIngest({ ...fb, receivedAt: "2026-01-01T00:00:00.000Z" }).ok).toBe(false);
+      expect(parseIngest({ ...fb, status: "resuelto" }).ok).toBe(false);
+    });
+
+    it("rejects a missing field", () => {
+      for (const key of Object.keys(fb).filter((k) => k !== "kind")) {
+        const bad: Record<string, unknown> = clone(fb);
+        delete bad[key];
+        expect(parseIngest(bad).ok, key).toBe(false);
+      }
+    });
+
+    it("rejects bad values", () => {
+      const bad: unknown[] = [
+        { ...fb, role: "vendedor" },
+        { ...fb, category: "praise" },
+        { ...fb, text: "" },
+        { ...fb, text: "x".repeat(2001) },
+        { ...fb, id: "not-a-uuid" },
+        { ...fb, id: "" },
+        { ...fb, route: "service-orders" },
+        { ...fb, route: "/" + "x".repeat(300) },
+        { ...fb, screenLabel: "" },
+        { ...fb, screenLabel: "x".repeat(201) },
+        { ...fb, username: "x".repeat(201) },
+        { ...fb, createdAt: "yesterday" },
+        { ...fb, text: 5 },
+      ];
+      for (const b of bad) expect(parseIngest(b).ok, JSON.stringify(b)).toBe(false);
+    });
+  });
 });

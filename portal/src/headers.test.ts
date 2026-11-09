@@ -26,7 +26,7 @@ describe("portal security headers", () => {
     });
   });
 
-  it.each(["/", "/c", "/api/c/open", "/api/ingest", "/anything/else"])("%s is covered", (path) => {
+  it.each(["/", "/c", "/api/c/open", "/api/ingest", "/support", "/support/login", "/api/support/login", "/api/support/logout", "/api/support/feedback/abc", "/anything/else"])("%s is covered", (path) => {
     expect(new RegExp(`^${ALL}$`).test(path)).toBe(true);
   });
 

@@ -10,9 +10,18 @@
 import { sign, type IngestBody } from "@portal/contract";
 
 export class PortalRejectedError extends Error {
-  constructor(message: string) {
+  /** The HTTP status; absent for a refused URL, which never reached the network. */
+  constructor(message: string, public readonly status?: number) {
     super(message);
     this.name = "PortalRejectedError";
+  }
+}
+
+/** A 5xx: retried by waiting, unlike `PortalRejectedError`. */
+export class PortalServerError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = "PortalServerError";
   }
 }
 
@@ -33,18 +42,23 @@ function assertSafeUrl(raw: string): URL {
   throw new PortalRejectedError("portal-sync: PORTAL_INGEST_URL must be https (http is allowed only for localhost)");
 }
 
-export async function sendToPortal(body: IngestBody, config: PortalConfig, fetchFn: typeof fetch = fetch): Promise<void> {
+export async function sendToPortal(
+  body: IngestBody,
+  config: PortalConfig,
+  fetchFn: typeof fetch = fetch,
+  timeoutMs: number = REQUEST_TIMEOUT_MS,
+): Promise<void> {
   const url = assertSafeUrl(config.url);
   const raw = JSON.stringify(body);
   const response = await fetchFn(url.href, {
     method: "POST",
     headers: { "content-type": "application/json", ...sign(raw, config.secret) },
     body: raw,
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (response.ok) return; // a 2xx the portal ignored as stale is still a success
   if (response.status >= 400 && response.status < 500) {
-    throw new PortalRejectedError(`portal-sync: portal answered ${response.status}`);
+    throw new PortalRejectedError(`portal-sync: portal answered ${response.status}`, response.status);
   }
-  throw new Error(`portal-sync: portal answered ${response.status}`);
+  throw new PortalServerError(`portal-sync: portal answered ${response.status}`, response.status);
 }
