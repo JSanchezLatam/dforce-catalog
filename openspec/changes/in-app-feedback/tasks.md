@@ -77,16 +77,16 @@ WU3 and WU1/WU2 touch disjoint trees (portal vs workshop) and may be written in 
 ## WU6: "Mis comentarios" (specs feedback, last requirement set)
 
 - [x] 6.1 RED `MyFeedbackCard.test.tsx`: newest first, badges Enviado / Pendiente de envío + offline text, empty state, no "Respondido", button opens shared dialog. GREEN `MyFeedbackCard.tsx`, `account/page.tsx` via `listOwnFeedback` gated by `can`.
-- [ ] 6.2 Mutation-verify; gates; GGA; PR.
+- [x] 6.2 Mutation-verify; gates; GGA; PR (#350).
 - [x] 6.3 BROWSER (LAN IP): `/account` card, pending flips to Enviado after reconnection, no duplicate in portal.
 
 ## WU7: Portal login, session, throttle (design §6)
 
-- [ ] 7.1 RED `session.test.ts`: sign/verify, tamper, expired, regex precheck, unset env fails closed. GREEN `session.ts` `requireSupport()`.
-- [ ] 7.2 RED `throttle.test.ts` + login handler: 5 failures lock even correct password, expiry, success resets, cookie `httpOnly/secure/sameSite=strict`, "Contraseña incorrecta.", logout clears. GREEN `throttle.ts`, `login`/`logout` routes, login page.
-- [ ] 7.3 RED `guard.test.ts` route inventory; `env-isolation.test.ts` lists both vars; extend `headers.test.ts`. GREEN.
-- [ ] 7.4 E2E `portal/e2e/support.e2e.test.ts`: throttle upsert, window reset, success delete, shared across instances.
-- [ ] 7.5 Mutation-verify (compare non-constant-time, skip lock check); gates; GGA; PR.
+- [x] 7.1 RED `session.test.ts`: sign/verify, tamper, expired, regex precheck, unset env fails closed. GREEN `session.ts` `requireSupport()`.
+- [x] 7.2 RED `throttle.test.ts` + login handler: 5 failures lock even correct password, expiry, success resets, cookie `httpOnly/secure/sameSite=strict`, "Contraseña incorrecta.", logout clears. GREEN `throttle.ts`, `login`/`logout` routes, login page.
+- [x] 7.3 RED `guard.test.ts` route inventory; `env-isolation.test.ts` lists both vars; extend `headers.test.ts`. GREEN.
+- [x] 7.4 E2E `portal/e2e/support.e2e.test.ts`: throttle upsert, window reset, success delete, shared across instances.
+- [ ] 7.5 Mutation-verify (compare non-constant-time, skip lock check); gates; GGA; PR. (Mutations done: 25, each red by name; gates green. GGA and PR pending. Login over `secure` cookie to be checked on a Vercel preview.)
 
 ## WU8: Inbox list (specs support-inbox)
 

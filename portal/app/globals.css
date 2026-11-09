@@ -19,6 +19,7 @@
   --chip-terminada-fg: #14602f;
   --chip-cancelada-bg: #ebe9e6;
   --chip-cancelada-fg: #4d5257;
+  --danger: #b3261e;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -29,6 +30,7 @@
     --text: #ecebe8;
     --muted: #a2a7ad;
     --line: #2e3236;
+    --danger: #f2b8b5;
     --accent: #6fb1ff;
     --on-accent: #0a1a2b;
     --warn-bg: #3a2c0c;
@@ -256,4 +258,44 @@ dd {
   .pulse {
     animation: none;
   }
+}
+
+/* Support area (login now, inbox later). Same tokens as the rest; nothing customer-branded. */
+.page.narrow {
+  max-width: 26rem;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+}
+.card .title {
+  margin-bottom: 0.25rem;
+}
+.field {
+  display: grid;
+  gap: 0.375rem;
+  margin: 1.25rem 0 1rem;
+}
+.field label {
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+.input {
+  min-height: 3rem;
+  padding: 0 0.875rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+.input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+.error {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--danger);
 }
