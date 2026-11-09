@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { FileSpreadsheet, Package, BookOpen, Settings, GalleryVerticalEnd, ChevronDown, ChevronRight, Users, Wrench, User, UserCog, CalendarClock, CalendarDays, HardHat, BarChart3, Gauge, LayoutDashboard, Columns3 } from "lucide-react"
+import { FileSpreadsheet, Package, BookOpen, Settings, GalleryVerticalEnd, ChevronDown, ChevronRight, Users, Wrench, User, UserCog, CalendarClock, CalendarDays, HardHat, BarChart3, Gauge, LayoutDashboard, Columns3, MessageSquare } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -38,6 +38,8 @@ import { LogoutButton } from "@/modules/layout/LogoutButton"
 import { ThemeToggle } from "@/modules/layout/ThemeToggle"
 import { WorkshopLogo } from "./WorkshopLogo"
 import { ROLE_LABELS } from "@/modules/auth/roles"
+import { can } from "@/modules/auth/policy"
+import { useFeedback } from "@/modules/feedback/FeedbackProvider"
 import type { NavGroup, NavLink, NavParent } from "@/modules/layout/nav-items"
 import {
   decodeNavCollapseState,
@@ -295,6 +297,28 @@ function NavGroupSection({
   )
 }
 
+/** Footer row above the user card. The dialog lives in the shell's provider, so it outlives the mobile sheet this closes. */
+function FeedbackItem({ role }: { role: string }) {
+  const feedback = useFeedback()
+  const { setOpenMobile } = useSidebar()
+  if (!feedback || !can({ role }, "feedback.send")) return null
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        tooltip="Enviar comentario"
+        className="cursor-pointer"
+        onClick={() => {
+          setOpenMobile(false)
+          feedback.openFeedback()
+        }}
+      >
+        <MessageSquare />
+        <span>Enviar comentario</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  )
+}
+
 export function AppSidebar({
   navGroups,
   user,
@@ -379,6 +403,7 @@ export function AppSidebar({
 
       <SidebarFooter>
         <SidebarMenu>
+          <FeedbackItem role={user.role} />
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger
