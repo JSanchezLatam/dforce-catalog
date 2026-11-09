@@ -230,6 +230,19 @@ describe("FeedbackDialog — submit", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it("treats a 2xx whose body cannot be parsed as stored: info toast, closes, no connection error", async () => {
+    const user = userEvent.setup();
+    stubFetch({ json: async () => { throw new SyntaxError("Unexpected end of JSON input"); } });
+    renderDialog();
+    await fill(user);
+    await user.click(sendButton());
+
+    await vi.waitFor(() => expect(mocks.addToast).toHaveBeenCalledWith("info", QUEUED));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
+
   it("locks every control and reads Enviando… while the request is in flight", async () => {
     const user = userEvent.setup();
     let release!: (v: unknown) => void;

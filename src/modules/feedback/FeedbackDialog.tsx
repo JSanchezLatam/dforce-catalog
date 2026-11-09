@@ -76,7 +76,9 @@ export function FeedbackDialog({
         setError(body?.errors?.text ?? body?.errors?.category ?? body?.errors?.form ?? STORE_ERROR);
         return;
       }
-      outcome = (await response.json()).outcome;
+      // A 2xx means the row is stored; an unreadable body must not read as a failure, or a retry duplicates it.
+      const body = await response.json().catch(() => null);
+      outcome = body?.outcome === "delivered" ? "delivered" : "queued";
     } catch {
       // `fetch` rejects on a network failure; the LAN server is the only thing reached here.
       setError(CONNECTION_ERROR);
