@@ -18,7 +18,8 @@ const valid = { category: "bug", text: "Se cayó al guardar", route: "/service-o
 function deps() {
   const insert = vi.fn().mockResolvedValue({ id: "f1" });
   const getUsername = vi.fn().mockResolvedValue("jperez");
-  return { insert, getUsername, deps: { getUsername, createDeps: { insert } } };
+  const deliver = vi.fn<(id: string, timeoutMs: number) => Promise<"delivered" | "queued">>().mockResolvedValue("queued");
+  return { insert, getUsername, deliver, deps: { getUsername, deliver, createDeps: { insert } } };
 }
 
 describe("POST /api/feedback", () => {
@@ -51,6 +52,20 @@ describe("POST /api/feedback", () => {
     const res = await handleSendFeedback(req(valid, role), d);
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ id: "f1", outcome: "queued" });
+  });
+
+  it("delivers inline with a 5 s timeout and answers its outcome", async () => {
+    const { deliver, deps: d } = deps();
+    deliver.mockResolvedValue("delivered");
+    const res = await handleSendFeedback(req(valid), d);
+    expect(deliver).toHaveBeenCalledWith("f1", 5_000);
+    expect(await res.json()).toEqual({ id: "f1", outcome: "delivered" });
+  });
+
+  it("does not attempt delivery for a request it refused", async () => {
+    const { deliver, deps: d } = deps();
+    await handleSendFeedback(req({ ...valid, text: " " }), d);
+    expect(deliver).not.toHaveBeenCalled();
   });
 
   it("stamps author and role from the SESSION and ignores body attempts; label is derived server-side", async () => {
