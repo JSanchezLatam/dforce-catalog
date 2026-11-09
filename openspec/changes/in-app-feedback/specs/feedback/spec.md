@@ -62,7 +62,7 @@ The dialog MUST offer three categories under the legend "¿Qué querés contarno
 
 ### Requirement: Text Limit of 2000 Characters
 
-The comment text MUST be at most 2000 characters, enforced by the textarea (`maxLength`), by the server (400 and nothing persisted beyond it) and by a database check. The dialog MUST show a live counter "N / 2000" that turns amber from 1800 characters. Text MUST be stored as typed, and the 2000 limit MUST be measured on the trimmed value the server stores.
+The comment text MUST be at most 2000 characters, enforced by the textarea (`maxLength`), by the server (400 and nothing persisted beyond it) and by a database check. The dialog MUST show a live counter "N / 2000" that turns amber from 1800 characters. Text MUST be stored trimmed (leading and trailing whitespace removed), and the 2000 limit MUST be measured on that trimmed value.
 
 #### Scenario: Counter
 - GIVEN 1799 then 1800 typed characters

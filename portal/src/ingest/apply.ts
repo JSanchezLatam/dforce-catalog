@@ -9,7 +9,7 @@ import { and, lt, notInArray, sql } from "drizzle-orm";
 
 import type { IngestBody } from "../contract";
 import { db } from "../db/client";
-import { portalCustomer } from "../db/schema";
+import { portalCustomer, supportFeedback } from "../db/schema";
 
 type Snapshot = NonNullable<typeof portalCustomer.$inferInsert.snapshot>;
 
@@ -42,5 +42,16 @@ export async function applyIngest(body: IngestBody): Promise<{ applied: boolean 
         .delete(portalCustomer)
         .where(and(notInArray(portalCustomer.clienteId, body.liveClienteIds), lt(portalCustomer.version, body.maxVersion)));
       return { applied: true };
+    case "feedback": {
+      // status, internal_note and received_at come from the column defaults:
+      // the portal clock stamps arrival, the workshop never dictates it.
+      const { id, username, role, category, text, route, screenLabel, createdAt } = body;
+      const rows = await db
+        .insert(supportFeedback)
+        .values({ id, username, role, category, text, route, screenLabel, createdAt: new Date(createdAt) })
+        .onConflictDoNothing({ target: supportFeedback.id })
+        .returning({ id: supportFeedback.id });
+      return { applied: rows.length > 0 };
+    }
   }
 }

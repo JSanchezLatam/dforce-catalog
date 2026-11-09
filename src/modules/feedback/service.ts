@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 import type { Role } from "@/modules/auth/roles";
 import { db } from "@/shared/db/client";
@@ -37,7 +37,7 @@ export async function createFeedback(
   input: CreateFeedbackInput,
   deps?: CreateFeedbackDeps,
 ): Promise<{ id: string }> {
-  const text = input.text.trim();
+  const text = typeof input.text === "string" ? input.text.trim() : ""; // a wire body can omit it
   const errors: Record<string, string> = {};
   if (!isFeedbackCategory(input.category)) errors.category = "Elegí qué querés contarnos.";
   if (text.length === 0) errors.text = "Escribí tu comentario antes de enviarlo.";
@@ -61,9 +61,10 @@ export type ListOwnFeedbackDeps = {
   select?: (userId: string) => Promise<FeedbackRow[]>;
 };
 
-/** Own rows only, newest first. Sorted here so the order does not depend on the query. */
+/** Own rows only, newest first (`feedback_user_created_idx` serves this exact order). */
 export async function listOwnFeedback(userId: string, deps?: ListOwnFeedbackDeps): Promise<FeedbackRow[]> {
-  const select = deps?.select ?? ((id: string) => db.select().from(feedback).where(eq(feedback.userId, id)));
-  const rows = await select(userId);
-  return [...rows].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const select =
+    deps?.select ??
+    ((id: string) => db.select().from(feedback).where(eq(feedback.userId, id)).orderBy(desc(feedback.createdAt)));
+  return select(userId);
 }

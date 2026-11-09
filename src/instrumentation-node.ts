@@ -21,6 +21,9 @@
  * by `enqueuePortalSync` after each committed mutation, and its nightly
  * reconcile cron at 03:00 America/Panama. Both are inert while
  * `PORTAL_INGEST_URL`/`PORTAL_INGEST_SECRET` are unset.
+ *
+ * The in-app feedback outbox (in-app-feedback WU4) adds its minute sweeper and
+ * deliver worker, inert under the same condition.
  */
 export async function registerNodeWorkers(): Promise<void> {
   const { registerInventorySyncWorker, scheduleWeeklySync } = await import("@/modules/inventory-sync/job");
@@ -29,6 +32,7 @@ export async function registerNodeWorkers(): Promise<void> {
   const { registerReminderWorker } = await import("@/modules/reminders/job");
   const { registerPortalSyncWorker } = await import("@/modules/portal-sync/job");
   const { registerPortalReconcile } = await import("@/modules/portal-sync/reconcile");
+  const { registerFeedbackWorkers } = await import("@/modules/feedback/worker");
 
   await registerInventorySyncWorker();
   await scheduleWeeklySync();
@@ -37,4 +41,5 @@ export async function registerNodeWorkers(): Promise<void> {
   await registerReminderWorker();
   await registerPortalSyncWorker();
   await registerPortalReconcile();
+  await registerFeedbackWorkers();
 }

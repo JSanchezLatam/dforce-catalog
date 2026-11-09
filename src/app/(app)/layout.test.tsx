@@ -21,6 +21,15 @@ vi.mock("@/components/app-sidebar", () => ({
   AppSidebar: ({ navGroups }: { navGroups: unknown }) => <pre data-testid="groups">{JSON.stringify(navGroups)}</pre>,
 }));
 
+// A probe: the real provider mounts the dialog, which needs a router and a toast tree this wiring test does not build.
+vi.mock("@/modules/feedback/FeedbackProvider", () => ({
+  FeedbackProvider: ({ author, children }: { author: unknown; children: React.ReactNode }) => (
+    <div data-testid="feedback-provider" data-author={JSON.stringify(author)}>
+      {children}
+    </div>
+  ),
+}));
+
 import AppLayout from "./layout";
 
 async function renderedLinks() {
@@ -94,5 +103,19 @@ describe("(app)/layout - pantalla never sees the application shell", () => {
     render(await AppLayout({ children: null }));
 
     expect(redirect).not.toHaveBeenCalled();
+  });
+});
+
+describe("(app)/layout - feedback provider", () => {
+  // A Server Component can only hand a client one plain strings: the author, never a function.
+  it("hands the provider the author as plain strings and wraps the sidebar", async () => {
+    getNavBadges.mockResolvedValue({});
+    user.current = { id: "u1", role: "tecnico" };
+
+    render(await AppLayout({ children: null }));
+
+    const provider = screen.getByTestId("feedback-provider");
+    expect(JSON.parse(provider.dataset.author ?? "null")).toEqual({ username: "usuario", roleLabel: "Técnico" });
+    expect(provider).toContainElement(screen.getByTestId("groups"));
   });
 });
