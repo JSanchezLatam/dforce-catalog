@@ -101,7 +101,7 @@ WU3 and WU1/WU2 touch disjoint trees (portal vs workshop) and may be written in 
 - [x] 9.2 RED PATCH route tests: 401 no session, exact keys, bad status 400, note 2001 400, note replaces. GREEN `app/api/support/feedback/[id]/route.ts`, status/note editor ("Nota guardada.").
 - [x] 9.3 E2E `support.e2e`: mark-read only from nuevo, PATCH UPDATE.
 - [ ] 9.4 Mutation-verify; gates; GGA; PR. (Mutations done: 10, each red by name; gates and e2e green. GGA and PR pending.)
-- [ ] 9.5 BROWSER (Vercel preview, HTTPS, light+dark): login, lockout, inbox 1280/820/390, 44px, no horizontal scroll, "Volver" on phone.
+- [x] 9.5 BROWSER (done on the local portal at http://localhost:3001, where Chrome accepts a Secure cookie; the Vercel-preview pass moves to 10.2 after the owner deploys) (Vercel preview, HTTPS, light+dark): login, lockout, inbox 1280/820/390, 44px, no horizontal scroll, "Volver" on phone.
 
 ## Final integration
 
