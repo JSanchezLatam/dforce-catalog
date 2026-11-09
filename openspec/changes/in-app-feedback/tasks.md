@@ -47,14 +47,14 @@ WU3 and WU1/WU2 touch disjoint trees (portal vs workshop) and may be written in 
 
 - [x] 2.1 RED `route-guards.test.ts` + policy test: `feedback.send` true for tecnico/jefe_taller/administrador, false for pantalla (spec "Pantalla cannot send"). GREEN `policy.ts` four maps + `ROUTE_GUARDS["/api/feedback"]` (same PR or `:217-237` fails).
 - [x] 2.2 RED `api/feedback/route.test.ts`: 401 no session, 403 pantalla, 400 missing/unknown category/blank text, 2000 vs 2001, author from session not body, 201 `{id, outcome:"queued"}`, nothing persisted on 4xx. GREEN `route.ts`.
-- [ ] 2.3 Mutation-verify (trust body author, skip `can`, drop length check); gates; GGA; PR.
+- [x] 2.3 Mutation-verify (trust body author, skip `can`, drop length check); gates; GGA; PR.
 
 ## WU3: Portal contract and ingest (design §2, §1 portal)
 
-- [ ] 3.1 RED `parse` tests: feedback accepted; extra key (`receivedAt`/`status`), missing field, bad role/category, empty/2001 text, non-UUID id → 400; unknown kind → 400; customer bodies unchanged; `contract-import.test.ts` stays green. GREEN `contract.ts` 4th member, `parse.ts` `build()` branch.
-- [ ] 3.2 RED `applyIngest` feedback: insert, status `nuevo`, empty note, `received_at` from portal clock, duplicate keeps first row, unsigned → 401. GREEN `apply.ts` `onConflictDoNothing`.
-- [ ] 3.3 GREEN `portal/src/db/schema.ts` `support_feedback` + `support_login_throttle`; `npx drizzle-kit generate --name support_inbox` → `0002_support_inbox.sql`.
-- [ ] 3.4 E2E `portal/e2e/ingest.e2e.test.ts`: duplicate id → 1 row untouched (Resuelto + note + different text), concurrent duplicates → 1 row both 2xx, `received_at` from portal clock.
+- [x] 3.1 RED `parse` tests: feedback accepted; extra key (`receivedAt`/`status`), missing field, bad role/category, empty/2001 text, non-UUID id → 400; unknown kind → 400; customer bodies unchanged; `contract-import.test.ts` stays green. GREEN `contract.ts` 4th member, `parse.ts` `build()` branch.
+- [x] 3.2 RED `applyIngest` feedback: insert, status `nuevo`, empty note, `received_at` from portal clock, duplicate keeps first row, unsigned → 401. GREEN `apply.ts` `onConflictDoNothing`.
+- [x] 3.3 GREEN `portal/src/db/schema.ts` `support_feedback` + `support_login_throttle`; `npx drizzle-kit generate --name support_inbox` → `0002_support_inbox.sql`.
+- [x] 3.4 E2E `portal/e2e/ingest.e2e.test.ts`: duplicate id → 1 row untouched (Resuelto + note + different text), concurrent duplicates → 1 row both 2xx, `received_at` from portal clock.
 - [ ] 3.5 Mutation-verify (remove `DO NOTHING`, accept `receivedAt`); gates; GGA; PR.
 
 ## WU4: Outbox delivery (design §3)
