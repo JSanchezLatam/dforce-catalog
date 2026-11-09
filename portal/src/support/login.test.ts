@@ -17,8 +17,7 @@ beforeEach(() => {
   vi.stubEnv("SUPPORT_SESSION_SECRET", SECRET);
   locked = false;
   store = {
-    isLocked: vi.fn(async () => locked),
-    recordFailure: vi.fn(async () => {}),
+    registerAttempt: vi.fn(async () => !locked),
     clear: vi.fn(async () => {}),
   };
 });
@@ -42,16 +41,16 @@ describe("handleLogin", () => {
     expect(attrs).toEqual(["Max-Age=43200", "Path=/", "HttpOnly", "Secure", "SameSite=Strict"]);
     expect(verifySession(pair.split("=")[1], SECRET, NOW)).toBe(true);
     expect(store.clear).toHaveBeenCalledExactlyOnceWith("203.0.113.7");
-    expect(store.recordFailure).not.toHaveBeenCalled();
+    expect(store.registerAttempt).toHaveBeenCalledExactlyOnceWith("203.0.113.7");
   });
 
-  it("a wrong password answers 401 'Contraseña incorrecta.', sets no cookie and counts one failure", async () => {
+  it("a wrong password answers 401 'Contraseña incorrecta.', sets no cookie and counts exactly one attempt", async () => {
     const res = await login({ password: "nope" });
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: "Contraseña incorrecta." });
     expect(WRONG_PASSWORD).toBe("Contraseña incorrecta.");
     expect(res.headers.get("set-cookie")).toBeNull();
-    expect(store.recordFailure).toHaveBeenCalledExactlyOnceWith("203.0.113.7");
+    expect(store.registerAttempt).toHaveBeenCalledExactlyOnceWith("203.0.113.7");
     expect(store.clear).not.toHaveBeenCalled();
   });
 
@@ -59,7 +58,7 @@ describe("handleLogin", () => {
     const res = await login(body);
     expect(res.status).toBe(401);
     expect(res.headers.get("set-cookie")).toBeNull();
-    expect(store.recordFailure).toHaveBeenCalledTimes(1);
+    expect(store.registerAttempt).toHaveBeenCalledTimes(1);
   });
 
   it("a locked IP is refused with the throttle message even with the correct password", async () => {
@@ -72,16 +71,18 @@ describe("handleLogin", () => {
     expect(store.clear).not.toHaveBeenCalled();
   });
 
-  it("a locked IP with a wrong password does not extend the lock", async () => {
+  it("counts the attempt BEFORE comparing: a refused attempt never reaches the password check", async () => {
     locked = true;
-    expect((await login({ password: "nope" })).status).toBe(429);
-    expect(store.recordFailure).not.toHaveBeenCalled();
+    const order: string[] = [];
+    store.registerAttempt.mockImplementation(async () => (order.push("count"), false));
+    store.clear.mockImplementation(async () => void order.push("clear"));
+    expect((await login({ password: PASSWORD })).status).toBe(429);
+    expect(order).toEqual(["count"]);
   });
 
   it("keys the throttle by the first x-forwarded-for hop", async () => {
     await login({ password: "nope" }, "198.51.100.9");
-    expect(store.isLocked).toHaveBeenCalledWith("198.51.100.9");
-    expect(store.recordFailure).toHaveBeenCalledWith("198.51.100.9");
+    expect(store.registerAttempt).toHaveBeenCalledWith("198.51.100.9");
   });
 
   it.each(["SUPPORT_PASSWORD", "SUPPORT_SESSION_SECRET"])("fails closed with %s unset: 503, no cookie, nothing counted", async (name) => {
@@ -89,7 +90,7 @@ describe("handleLogin", () => {
     const res = await login({ password: PASSWORD });
     expect(res.status).toBe(503);
     expect(res.headers.get("set-cookie")).toBeNull();
-    expect(store.recordFailure).not.toHaveBeenCalled();
+    expect(store.registerAttempt).not.toHaveBeenCalled();
     expect(store.clear).not.toHaveBeenCalled();
   });
 });

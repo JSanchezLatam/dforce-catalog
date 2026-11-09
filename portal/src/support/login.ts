@@ -20,15 +20,13 @@ export async function handleLogin(
   if (!expected || !secret) return reply(503, { error: "unavailable" });
 
   const ip = clientIp(request);
-  // The lock wins over a correct password, and a locked attempt is not counted (no extension).
-  if (await store.isLocked(ip)) return reply(429, { error: THROTTLED });
+  // Count the attempt FIRST, in one atomic statement, so a burst cannot all read "unlocked".
+  // A refused attempt never reaches the password check (the lock wins over a correct one).
+  if (!(await store.registerAttempt(ip))) return reply(429, { error: THROTTLED });
 
   const body: unknown = await request.json().catch(() => null);
   const given = typeof (body as { password?: unknown } | null)?.password === "string" ? (body as { password: string }).password : "";
-  if (!passwordMatches(given, expected)) {
-    await store.recordFailure(ip);
-    return reply(401, { error: WRONG_PASSWORD });
-  }
+  if (!passwordMatches(given, expected)) return reply(401, { error: WRONG_PASSWORD });
 
   await store.clear(ip);
   return reply(200, { ok: true }, { "Set-Cookie": sessionCookie(signSession(secret, Math.floor(now() / 1000))) });

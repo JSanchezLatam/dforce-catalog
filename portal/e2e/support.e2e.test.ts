@@ -66,11 +66,25 @@ describe("support login throttle e2e", () => {
 
   it("a lock that has elapsed lets the correct password in, and the row is gone", async () => {
     await fail(POST, 5);
-    await db.execute(sql`UPDATE support_login_throttle SET locked_until = now() - interval '1 second'`);
+    await db.execute(sql`UPDATE support_login_throttle SET locked_until = now() - interval '1 minute', window_started_at = now() - interval '16 minutes'`);
     const res = await attempt(POST, PASSWORD);
     expect(res.status).toBe(200);
     expect(res.headers.get("set-cookie")).toMatch(/^support_session=\d+\.[0-9a-f]{64}; /);
     expect(await row()).toBeUndefined();
+  });
+
+  it("a live lock outlasts the 15-minute window: locking late in a window still lasts 15 minutes", async () => {
+    await fail(POST, 5);
+    await db.execute(sql`UPDATE support_login_throttle SET window_started_at = now() - interval '16 minutes'`);
+    expect((await attempt(POST, PASSWORD)).status).toBe(429);
+  });
+
+  it("a refused attempt does not extend the lock", async () => {
+    await fail(POST, 5);
+    const before = (await row()).lockedUntil!.getTime();
+    await attempt(POST, "nope");
+    await attempt(POST, PASSWORD);
+    expect((await row()).lockedUntil!.getTime()).toBe(before);
   });
 
   it("a window older than 15 minutes restarts the count at 1 instead of locking", async () => {
@@ -106,6 +120,21 @@ describe("support login throttle e2e", () => {
     expect((await attempt(POST, PASSWORD, "198.51.100.1")).status).toBe(200);
     expect(await row("198.51.100.1")).toBeUndefined();
     expect((await row("198.51.100.2")).failures).toBe(2);
+  });
+
+  it("10 concurrent wrong attempts from one IP: at most 5 are compared, the rest are locked out", async () => {
+    const statuses = (await Promise.all(Array.from({ length: 10 }, () => attempt(POST, "nope")))).map((r) => r.status);
+    expect(statuses.filter((s) => s === 401)).toHaveLength(5);
+    expect(statuses.filter((s) => s === 429)).toHaveLength(5);
+    expect((await attempt(POST, PASSWORD)).status).toBe(429);
+  });
+
+  it("a burst split across two instances is still capped at 5 compared attempts", async () => {
+    vi.resetModules();
+    const second = (await import("../app/api/support/login/route")).POST;
+    const calls = Array.from({ length: 12 }, (_, i) => attempt(i % 2 ? second : POST, "nope"));
+    const statuses = (await Promise.all(calls)).map((r) => r.status);
+    expect(statuses.filter((s) => s === 401)).toHaveLength(5);
   });
 
   it("each IP has its own counter: one locked IP does not lock another", async () => {
