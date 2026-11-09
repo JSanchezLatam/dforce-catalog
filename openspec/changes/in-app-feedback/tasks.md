@@ -72,7 +72,7 @@ WU3 and WU1/WU2 touch disjoint trees (portal vs workshop) and may be written in 
 - [x] 5.2 RED toast tests: delivered → success, queued → info, store failure → inline error text kept, toast raised before a throwing `refresh`. GREEN submit path (copy `OrderStatusControls.tsx:111-142`).
 - [x] 5.3 RED `app-sidebar.test.tsx`: item above user card, opens dialog, rail tooltip + name, mobile sheet closes and dialog stays mounted, absent without `feedback.send`; existing sidebar tests unchanged. GREEN `FeedbackProvider.tsx`, `(app)/layout.tsx` (strings only), `app-sidebar.tsx`.
 - [ ] 5.4 Mutation-verify; gates; GGA; PR. (Mutations done: 15, each red by name. Gates green. GGA and PR still open.)
-- [ ] 5.5 BROWSER (LAN IP, second machine; Chrome device extension): 1280/820/390, sheet closes and dialog stays, rail tooltip, measured 44px, console free of RSC/hydration errors, queued toast with portal unreachable, light+dark.
+- [x] 5.5 BROWSER (LAN IP, second machine; Chrome device extension): 1280/820/390, sheet closes and dialog stays, rail tooltip, measured 44px, console free of RSC/hydration errors, queued toast with portal unreachable, light+dark.
 
 ## WU6: "Mis comentarios" (specs feedback, last requirement set)
 
