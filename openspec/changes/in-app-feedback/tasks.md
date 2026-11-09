@@ -41,12 +41,12 @@ WU3 and WU1/WU2 touch disjoint trees (portal vs workshop) and may be written in 
 - [x] 1.1 RED `screen-labels.test.ts`: mapped (`/service-orders/[id]` → "Orden de servicio — Detalle"), unmapped falls back to raw route, query/fragment stripped, completeness walk over `src/app/(app)/**/page.tsx` fails on an unmapped page (specs "Mapped route", "Unmapped route"). GREEN `screen-labels.ts`, `categories.ts`.
 - [x] 1.2 RED `service.test.ts` (injected seams): `createFeedback` stores author/role from args, trims, 2000 ok / 2001 rejected (spec "Exactly 2000 accepted"); `listOwnFeedback` newest first. GREEN `service.ts`.
 - [x] 1.3 GREEN `schema.ts` `feedback` table + `feedbackCategoryEnum` + CHECK + both indexes; `npm run db:generate -- --name feedback` → `0037_feedback.sql`.
-- [ ] 1.4 Mutation-verify 1.1-1.2 (drop trim, off-by-one on 2000, drop fallback); gates; GGA; PR.
+- [x] 1.4 Mutation-verify 1.1-1.2 (drop trim, off-by-one on 2000, drop fallback); gates; GGA; PR.
 
 ## WU2: Policy and store-only route (design §4)
 
-- [ ] 2.1 RED `route-guards.test.ts` + policy test: `feedback.send` true for tecnico/jefe_taller/administrador, false for pantalla (spec "Pantalla cannot send"). GREEN `policy.ts` four maps + `ROUTE_GUARDS["/api/feedback"]` (same PR or `:217-237` fails).
-- [ ] 2.2 RED `api/feedback/route.test.ts`: 401 no session, 403 pantalla, 400 missing/unknown category/blank text, 2000 vs 2001, author from session not body, 201 `{id, outcome:"queued"}`, nothing persisted on 4xx. GREEN `route.ts`.
+- [x] 2.1 RED `route-guards.test.ts` + policy test: `feedback.send` true for tecnico/jefe_taller/administrador, false for pantalla (spec "Pantalla cannot send"). GREEN `policy.ts` four maps + `ROUTE_GUARDS["/api/feedback"]` (same PR or `:217-237` fails).
+- [x] 2.2 RED `api/feedback/route.test.ts`: 401 no session, 403 pantalla, 400 missing/unknown category/blank text, 2000 vs 2001, author from session not body, 201 `{id, outcome:"queued"}`, nothing persisted on 4xx. GREEN `route.ts`.
 - [ ] 2.3 Mutation-verify (trust body author, skip `can`, drop length check); gates; GGA; PR.
 
 ## WU3: Portal contract and ingest (design §2, §1 portal)
