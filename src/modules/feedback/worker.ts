@@ -18,6 +18,8 @@ export const SWEEP_CRON = "* * * * *";
 export const SWEEP_TZ = "America/Panama";
 /** A bounded batch: a backlog drains over several minutes instead of one burst at the portal. */
 export const SWEEP_BATCH = 25;
+/** The worker has no operator waiting, unlike the route's 5 s inline attempt. */
+const DELIVER_TIMEOUT_MS = 15_000;
 
 /** Oldest first; `feedback_pending_idx` (created_at WHERE delivered_at IS NULL) serves it. */
 const realSelectDue = async (limit: number): Promise<string[]> => {
@@ -48,7 +50,7 @@ export async function runFeedbackSweep(deps: RunFeedbackSweepDeps = {}): Promise
 export type RegisterFeedbackWorkersDeps = {
   getBoss?: typeof getBoss;
   sweep?: typeof runFeedbackSweep;
-  deliver?: (id: string) => Promise<unknown>;
+  deliver?: (id: string, timeoutMs: number) => Promise<unknown>;
 };
 
 /** Mirrors `registerPortalReconcile`: the schedule is idempotent per queue name. */
@@ -69,7 +71,7 @@ export async function registerFeedbackWorkers(deps: RegisterFeedbackWorkersDeps 
     { localConcurrency: 1 },
     withJobCapture<Job>(FEEDBACK_DELIVER_JOB, async ([job]) => {
       // `deliverFeedback` never throws and keeps its own retry state in the row.
-      await (deps.deliver ?? ((id: string) => deliverFeedback(id, 15_000)))((job.data as { id: string }).id);
+      await (deps.deliver ?? deliverFeedback)((job.data as { id: string }).id, DELIVER_TIMEOUT_MS);
     }),
   );
 }

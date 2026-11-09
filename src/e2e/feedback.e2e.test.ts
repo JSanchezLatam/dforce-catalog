@@ -23,14 +23,11 @@ const respond = (status: number) => vi.fn<typeof fetch>(async () => new Response
 const T = (iso: string) => new Date(iso);
 
 describe("feedback outbox (E2E)", () => {
-  const created: string[] = [];
-
   const insertRow = async (extra: Partial<typeof feedback.$inferInsert> = {}) => {
     const [row] = await db
       .insert(feedback)
       .values({ userId: A, username: A, role: "tecnico", category: "bug", text: "e2e", route: "/kanban", screenLabel: "Órdenes en curso", ...extra })
       .returning();
-    created.push(row.id);
     return row;
   };
   const read = async (id: string) => (await db.select().from(feedback).where(eq(feedback.id, id)))[0];

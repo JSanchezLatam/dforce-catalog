@@ -29,7 +29,7 @@ describe("runFeedbackSweep", () => {
 });
 
 describe("registerFeedbackWorkers", () => {
-  async function register(over: { sweep?: () => Promise<void>; deliver?: (id: string) => Promise<unknown> } = {}) {
+  async function register(over: { sweep?: () => Promise<void>; deliver?: (id: string, timeoutMs: number) => Promise<unknown> } = {}) {
     const createQueue = vi.fn(async () => {});
     const schedule = vi.fn(async () => {});
     const handlers = new Map<string, (jobs: { id: string; data: unknown }[]) => Promise<void>>();
@@ -57,10 +57,10 @@ describe("registerFeedbackWorkers", () => {
   });
 
   it("delivers the id the job carries, with the default timeout", async () => {
-    const deliver = vi.fn<(id: string) => Promise<string>>(async () => "queued");
+    const deliver = vi.fn<(id: string, timeoutMs: number) => Promise<string>>(async () => "queued");
     const { handlers } = await register({ deliver });
     await handlers.get("feedback-deliver")!([{ id: "job-1", data: { id: "fb-9" } }]);
-    expect(deliver).toHaveBeenCalledWith("fb-9");
+    expect(deliver).toHaveBeenCalledWith("fb-9", 15_000);
   });
 
   it("runs the sweep from its job", async () => {
