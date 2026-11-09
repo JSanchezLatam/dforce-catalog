@@ -78,7 +78,7 @@ WU3 and WU1/WU2 touch disjoint trees (portal vs workshop) and may be written in 
 
 - [x] 6.1 RED `MyFeedbackCard.test.tsx`: newest first, badges Enviado / Pendiente de envío + offline text, empty state, no "Respondido", button opens shared dialog. GREEN `MyFeedbackCard.tsx`, `account/page.tsx` via `listOwnFeedback` gated by `can`.
 - [ ] 6.2 Mutation-verify; gates; GGA; PR.
-- [ ] 6.3 BROWSER (LAN IP): `/account` card, pending flips to Enviado after reconnection, no duplicate in portal.
+- [x] 6.3 BROWSER (LAN IP): `/account` card, pending flips to Enviado after reconnection, no duplicate in portal.
 
 ## WU7: Portal login, session, throttle (design §6)
 
