@@ -26,7 +26,7 @@ const ICONS: Record<FeedbackCategory, ComponentType<{ className?: string; "aria-
 
 const SENT = "Comentario enviado";
 const QUEUED = "Comentario guardado. Se va a enviar automáticamente cuando vuelva la conexión.";
-const STORE_ERROR = "No se pudo guardar el comentario. Intenta de nuevo.";
+const STORE_ERROR = "No se pudo guardar el comentario. Intentá de nuevo.";
 const NEAR_LIMIT = 1800;
 
 export function FeedbackDialog({

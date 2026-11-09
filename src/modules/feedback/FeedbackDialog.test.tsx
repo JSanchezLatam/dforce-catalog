@@ -255,7 +255,7 @@ describe("FeedbackDialog — submit", () => {
     await fill(user);
     await user.click(sendButton());
 
-    expect(await screen.findByText("No se pudo guardar el comentario. Intenta de nuevo.")).toBeInTheDocument();
+    expect(await screen.findByText("No se pudo guardar el comentario. Intentá de nuevo.")).toBeInTheDocument();
     expect(textarea()).toHaveValue("no guarda la orden");
     expect(textarea()).toBeEnabled();
     expect(mocks.addToast).not.toHaveBeenCalled();
