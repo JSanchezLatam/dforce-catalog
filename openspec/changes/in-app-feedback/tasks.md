@@ -64,14 +64,14 @@ WU3 and WU1/WU2 touch disjoint trees (portal vs workshop) and may be written in 
 - [x] 4.3 RED `worker.test.ts`: sweeper returns before query if unconfigured, ≤25 per run oldest first, `singletonKey: id`, `retryLimit 0`, `localConcurrency 1`, cron `* * * * *` tz America/Panama; `instrumentation-node` registers it. GREEN `worker.ts`, `instrumentation-node.ts`; route calls `deliverFeedback(id, 5_000)`.
 - [x] 4.4 E2E `src/e2e/feedback.e2e.test.ts`: insert + CHECK (2001 fails); concurrent claims → one winner; not-yet-due row → none; sweeper due-only/oldest/LIMIT; delivered UPDATE guard; `listOwnFeedback` WHERE (A vs B).
 - [x] 4.5 Confirm `portal-sync` and contract tests pass unchanged ("Customer sync untouched"). Unit + contract suites green; `test:portal-sync` has one failure that is identical on the WU3 base ("shows no plate and no order before the terms are accepted"), not caused by WU4.
-- [ ] 4.6 Mutation-verify (drop `delivered_at IS NULL` from claim, drop lease, drop cap); gates; GGA; PR.
+- [x] 4.6 Mutation-verify (drop `delivered_at IS NULL` from claim, drop lease, drop cap); gates; GGA; PR (#348).
 
 ## WU5: Dialog, provider, sidebar (design §5, D5, D6)
 
-- [ ] 5.1 RED `FeedbackDialog.test.tsx`: nothing preselected, placeholder per category, both missing messages, whitespace text `aria-invalid`, counter 1799/1800 amber, author line "jperez (Técnico)", context read-only, locked while sending, roles/`aria-pressed`, 44px classes. GREEN `FeedbackDialog.tsx` (D5 composition, raw textarea).
-- [ ] 5.2 RED toast tests: delivered → success, queued → info, store failure → inline error text kept, toast raised before a throwing `refresh`. GREEN submit path (copy `OrderStatusControls.tsx:111-142`).
-- [ ] 5.3 RED `app-sidebar.test.tsx`: item above user card, opens dialog, rail tooltip + name, mobile sheet closes and dialog stays mounted, absent without `feedback.send`; existing sidebar tests unchanged. GREEN `FeedbackProvider.tsx`, `(app)/layout.tsx` (strings only), `app-sidebar.tsx`.
-- [ ] 5.4 Mutation-verify; gates; GGA; PR.
+- [x] 5.1 RED `FeedbackDialog.test.tsx`: nothing preselected, placeholder per category, both missing messages, whitespace text `aria-invalid`, counter 1799/1800 amber, author line "jperez (Técnico)", context read-only, locked while sending, roles/`aria-pressed`, 44px classes. GREEN `FeedbackDialog.tsx` (D5 composition, raw textarea).
+- [x] 5.2 RED toast tests: delivered → success, queued → info, store failure → inline error text kept, toast raised before a throwing `refresh`. GREEN submit path (copy `OrderStatusControls.tsx:111-142`).
+- [x] 5.3 RED `app-sidebar.test.tsx`: item above user card, opens dialog, rail tooltip + name, mobile sheet closes and dialog stays mounted, absent without `feedback.send`; existing sidebar tests unchanged. GREEN `FeedbackProvider.tsx`, `(app)/layout.tsx` (strings only), `app-sidebar.tsx`.
+- [ ] 5.4 Mutation-verify; gates; GGA; PR. (Mutations done: 15, each red by name. Gates green. GGA and PR still open.)
 - [ ] 5.5 BROWSER (LAN IP, second machine; Chrome device extension): 1280/820/390, sheet closes and dialog stays, rail tooltip, measured 44px, console free of RSC/hydration errors, queued toast with portal unreachable, light+dark.
 
 ## WU6: "Mis comentarios" (specs feedback, last requirement set)
