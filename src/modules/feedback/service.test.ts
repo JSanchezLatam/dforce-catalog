@@ -6,7 +6,7 @@ const author = { userId: "u1", username: "jperez", role: "tecnico" as const };
 const base = { ...author, category: "bug" as const, route: "/service-orders/abc", text: "No guarda" };
 
 function seam() {
-  const insert = vi.fn(async (_row: NewFeedback) => ({ id: "fb-1" }));
+  const insert = vi.fn<(row: NewFeedback) => Promise<{ id: string }>>(async () => ({ id: "fb-1" }));
   return { insert };
 }
 
@@ -90,7 +90,7 @@ describe("listOwnFeedback", () => {
   });
 
   it("asks the seam for that user only", async () => {
-    const select = vi.fn(async (_userId: string) => []);
+    const select = vi.fn<(userId: string) => Promise<FeedbackRow[]>>(async () => []);
     await listOwnFeedback("u1", { select });
     expect(select).toHaveBeenCalledWith("u1");
   });
