@@ -105,7 +105,10 @@ WU3 and WU1/WU2 touch disjoint trees (portal vs workshop) and may be written in 
 
 ## Final integration
 
-- [ ] 10.1 Tracker `feat/in-app-feedback`: `npm test`, `tsc`, `lint` on root and `portal/`; `npm run test:portal-sync`; confirm portal-sync untouched; then merge to main and archive per SDD discipline.
+- [x] 10.1 Tracker `feat/in-app-feedback`: `npm test`, `tsc`, `lint` on root and `portal/`; `npm run test:portal-sync`; confirm portal-sync untouched; then merge to main and archive per SDD discipline.
+  - 2026-11-09 on the integrated tracker: root 4669 tests, tsc clean, lint 0 errors / 13 warnings; portal 231 tests, tsc and lint clean.
+  - `test:portal-sync`: 10/11. The one failure ("shows no plate and no order before the terms are accepted") fails identically on `main` (049c797), so it predates this change. Follow-up, not in scope.
+  - Local end-to-end at the LAN IP against the local portal (not yet the deployed one): offline send → "Pendiente de envío" → portal back → "Enviado", one portal row per comment, delay flag in the inbox.
 - [ ] 10.2 End to end at LAN IP against the deployed portal: send offline → "Pendiente de envío" → reconnect → "Enviado"; one portal row; inbox shows delay flag.
 
 ## Owner manual steps (non-code)
