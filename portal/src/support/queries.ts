@@ -66,3 +66,28 @@ export async function statusCounts(): Promise<Record<Status, number>> {
   for (const r of rows) if (r.status in out) out[r.status as Status] = r.n;
   return out;
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The id column is a uuid: anything else would make Postgres throw instead of matching nothing. */
+export const isUuid = (value: unknown): value is string => typeof value === "string" && UUID.test(value);
+
+export interface FeedbackDetail extends FeedbackListRow {
+  text: string;
+  internalNote: string;
+}
+
+/** Opening a Nuevo comment reads it. The status guard in the WHERE is what keeps Leído and Resuelto untouched. */
+export async function markRead(id: string): Promise<void> {
+  await db.update(t).set({ status: "leido" }).where(and(eq(t.id, id), eq(t.status, "nuevo")));
+}
+
+export async function getFeedback(id: string): Promise<FeedbackDetail | undefined> {
+  return (await db.select().from(t).where(eq(t.id, id)))[0];
+}
+
+/** The note REPLACES the previous one. False when no row has that id. */
+export async function updateFeedback(id: string, patch: { status?: Status; note?: string }): Promise<boolean> {
+  const set = { ...(patch.status && { status: patch.status }), ...(patch.note !== undefined && { internalNote: patch.note }) };
+  const rows = await db.update(t).set(set).where(eq(t.id, id)).returning({ id: t.id });
+  return rows.length > 0;
+}

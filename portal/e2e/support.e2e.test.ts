@@ -3,7 +3,8 @@
  *   DATABASE_URL=postgres://dforce:dforce@localhost:5433/dforce_portal_test npm run test:e2e
  * Goes through the real login route: throttle upsert, window reset, lock, success delete
  * and the lock being shared by a second server instance (its own module graph and pool).
- * The inbox list queries (filter WHERE, GROUP BY counts, ORDER BY) run against the real table too.
+ * The inbox list queries (filter WHERE, GROUP BY counts, ORDER BY) and the detail writes
+ * (mark-read, status, note) run against the real table too.
  */
 import { eq, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
@@ -12,7 +13,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 
 import { db } from "../src/db/client";
 import { supportFeedback, supportLoginThrottle } from "../src/db/schema";
-import { listFeedback, statusCounts } from "../src/support/queries";
+import { getFeedback, listFeedback, markRead, statusCounts, updateFeedback } from "../src/support/queries";
 
 type Post = (request: Request) => Promise<Response>;
 const PASSWORD = "e2e-password";
@@ -237,5 +238,78 @@ describe("support inbox list e2e", () => {
     await listFeedback({ status: "nuevo" });
     await statusCounts();
     expect((await db.select().from(supportFeedback).where(eq(supportFeedback.status, "nuevo"))).length).toBe(2);
+  });
+});
+
+describe("support inbox detail e2e", () => {
+  const id = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
+  const status = async (n: number) => (await getFeedback(id(n)))!.status;
+  const note = async (n: number) => (await getFeedback(id(n)))!.internalNote;
+
+  beforeEach(async () => {
+    const base = { username: "u", role: "tecnico", category: "bug", text: "t", route: "/x", screenLabel: "P", createdAt: new Date("2026-11-09T12:00:00Z") };
+    await db.insert(supportFeedback).values([
+      { ...base, id: id(1), status: "nuevo" },
+      { ...base, id: id(2), status: "leido" },
+      { ...base, id: id(3), status: "resuelto", internalNote: "vieja" },
+    ]);
+  });
+
+  it("mark-read turns a nuevo row into leido", async () => {
+    await markRead(id(1));
+    expect(await status(1)).toBe("leido");
+  });
+
+  it("mark-read leaves a resuelto row resuelto (the status guard is in the WHERE)", async () => {
+    await markRead(id(3));
+    expect(await status(3)).toBe("resuelto");
+  });
+
+  it("mark-read leaves a leido row alone and touches no other row", async () => {
+    await markRead(id(2));
+    expect(await statusCounts()).toEqual({ nuevo: 1, leido: 1, resuelto: 1 });
+  });
+
+  it("mark-read is idempotent and an unknown id matches nothing", async () => {
+    await markRead(id(1));
+    await markRead(id(1));
+    await markRead("00000000-0000-4000-8000-0000000000ff");
+    expect(await statusCounts()).toEqual({ nuevo: 0, leido: 2, resuelto: 1 });
+  });
+
+  it("getFeedback returns the full row, and undefined for an unknown id", async () => {
+    expect(await getFeedback(id(3))).toMatchObject({ id: id(3), text: "t", internalNote: "vieja", status: "resuelto" });
+    expect(await getFeedback("00000000-0000-4000-8000-0000000000ff")).toBeUndefined();
+  });
+
+  it("the PATCH UPDATE sets the status on that row only, and may go back to nuevo", async () => {
+    expect(await updateFeedback(id(2), { status: "resuelto" })).toBe(true);
+    expect(await statusCounts()).toEqual({ nuevo: 1, leido: 0, resuelto: 2 });
+    await updateFeedback(id(3), { status: "nuevo" });
+    expect(await status(3)).toBe("nuevo");
+  });
+
+  it("a status-only update keeps the note, and a note-only update keeps the status", async () => {
+    await updateFeedback(id(3), { status: "leido" });
+    expect(await note(3)).toBe("vieja");
+    await updateFeedback(id(3), { note: "nueva" });
+    expect(await status(3)).toBe("leido");
+  });
+
+  it("the note REPLACES the previous one, and an empty note clears it", async () => {
+    await updateFeedback(id(3), { note: "nueva" });
+    expect(await note(3)).toBe("nueva");
+    await updateFeedback(id(3), { note: "" });
+    expect(await note(3)).toBe("");
+  });
+
+  it("stores a 2000-character note whole", async () => {
+    await updateFeedback(id(1), { note: "n".repeat(2000) });
+    expect((await note(1)).length).toBe(2000);
+  });
+
+  it("an update for an unknown id reports false and changes nothing", async () => {
+    expect(await updateFeedback("00000000-0000-4000-8000-0000000000ff", { note: "x" })).toBe(false);
+    expect(await statusCounts()).toEqual({ nuevo: 1, leido: 1, resuelto: 1 });
   });
 });

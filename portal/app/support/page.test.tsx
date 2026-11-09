@@ -2,7 +2,7 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { FeedbackListRow } from "../../src/support/queries";
+import type { FeedbackDetail, FeedbackListRow } from "../../src/support/queries";
 import Page from "./page";
 
 let authed: boolean;
@@ -10,12 +10,16 @@ let rows: FeedbackListRow[];
 let counts: { nuevo: number; leido: number; resuelto: number };
 const listFeedback = vi.fn();
 const statusCounts = vi.fn();
+const markRead = vi.fn();
+const getFeedback = vi.fn();
 
 vi.mock("../../src/support/session", () => ({ requireSupport: async () => authed }));
 vi.mock("../../src/support/queries", async (importActual) => ({
   ...(await importActual<typeof import("../../src/support/queries")>()),
   listFeedback: (f: unknown) => listFeedback(f),
   statusCounts: () => statusCounts(),
+  markRead: (id: string) => markRead(id),
+  getFeedback: (id: string) => getFeedback(id),
 }));
 vi.mock("next/navigation", () => ({
   redirect: (to: string) => {
@@ -50,6 +54,8 @@ beforeEach(() => {
   counts = { nuevo: 2, leido: 2, resuelto: 1 };
   listFeedback.mockReset().mockImplementation(async () => rows);
   statusCounts.mockReset().mockImplementation(async () => counts);
+  markRead.mockReset().mockResolvedValue(undefined);
+  getFeedback.mockReset().mockResolvedValue(undefined);
 });
 afterEach(cleanup);
 
@@ -165,5 +171,112 @@ describe("/support inbox list", () => {
     expect(screen.queryByText("No hay comentarios")).toBeNull();
     expect(screen.getByRole("group", { name: "Filtrar por estado" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Limpiar filtros" }).getAttribute("href")).toBe("/support");
+  });
+});
+
+const ID = "11111111-1111-4111-8111-111111111111";
+const detail = (over: Partial<FeedbackDetail> = {}): FeedbackDetail => ({
+  ...row({ id: ID, status: "leido" }),
+  text: "El botón Guardar no responde\ny pierdo lo escrito.",
+  internalNote: "revisar el martes",
+  ...over,
+});
+
+describe("/support detail pane", () => {
+  it("without ?id= marks nothing, reads no detail and invites to pick one", async () => {
+    await open();
+    expect(markRead).not.toHaveBeenCalled();
+    expect(getFeedback).not.toHaveBeenCalled();
+    expect(screen.getByText("Elegí un comentario de la lista.")).toBeTruthy();
+  });
+
+  it("without ?id= but with filters still marks nothing", async () => {
+    await open({ status: "nuevo" });
+    expect(markRead).not.toHaveBeenCalled();
+  });
+
+  it("with ?id= marks that row read BEFORE reading it back, so the pane shows the new status", async () => {
+    const order: string[] = [];
+    markRead.mockImplementation(async () => void order.push("mark"));
+    getFeedback.mockImplementation(async () => (order.push("get"), detail()));
+    await open({ id: ID });
+    expect(markRead).toHaveBeenCalledWith(ID);
+    expect(getFeedback).toHaveBeenCalledWith(ID);
+    expect(order).toEqual(["mark", "get"]);
+  });
+
+  it("marks and counts in that order too: the chips must see the row already read", async () => {
+    const order: string[] = [];
+    markRead.mockImplementation(async () => void order.push("mark"));
+    statusCounts.mockImplementation(async () => (order.push("counts"), counts));
+    getFeedback.mockResolvedValue(detail());
+    await open({ id: ID });
+    expect(order).toEqual(["mark", "counts"]);
+  });
+
+  it("shows the full text, author and role, screen, both times, the delay flag and the status", async () => {
+    getFeedback.mockResolvedValue(detail());
+    await open({ id: ID });
+    const pane = screen.getByRole("complementary", { name: "Detalle del comentario" });
+    expect(within(pane).getByRole("heading", { name: "Algo no funciona" })).toBeTruthy();
+    expect(pane.querySelector(".chip")?.textContent).toBe("Leído");
+    expect(within(pane).getByText(/El botón Guardar no responde\s+y pierdo lo escrito\./)).toBeTruthy();
+    expect(within(pane).getByText("jperez · Técnico")).toBeTruthy();
+    expect(within(pane).getByText("Orden #1234 — Detalle")).toBeTruthy();
+    expect(within(pane).getByText("09/11/2026 09:12")).toBeTruthy();
+    expect(within(pane).getByText(/09\/11\/2026 14:47/)).toBeTruthy();
+    expect(within(pane).getByText("Llegó con demora: estuvo en cola sin internet")).toBeTruthy();
+  });
+
+  it("shows both times but no delay flag for a prompt comment", async () => {
+    getFeedback.mockResolvedValue(detail({ receivedAt: new Date("2026-11-09T14:22:00Z") }));
+    await open({ id: ID });
+    const pane = within(screen.getByRole("complementary", { name: "Detalle del comentario" }));
+    expect(pane.getByText("09/11/2026 09:22")).toBeTruthy();
+    expect(pane.queryByText(/Llegó con demora/)).toBeNull();
+  });
+
+  it("hands the editor only serializable props: id, status and the saved note", async () => {
+    getFeedback.mockResolvedValue(detail({ status: "resuelto" }));
+    await open({ id: ID });
+    expect((screen.getByLabelText("Nota interna") as HTMLTextAreaElement).value).toBe("revisar el martes");
+    expect(screen.getByRole("button", { name: "Resuelto" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("Volver goes back to the list keeping the current filters", async () => {
+    getFeedback.mockResolvedValue(detail());
+    await open({ id: ID, status: "nuevo", role: "tecnico" });
+    expect(screen.getByRole("link", { name: "Volver" }).getAttribute("href")).toBe("/support?status=nuevo&role=tecnico");
+  });
+
+  it("Volver with no filters is plain /support", async () => {
+    getFeedback.mockResolvedValue(detail());
+    await open({ id: ID });
+    expect(screen.getByRole("link", { name: "Volver" }).getAttribute("href")).toBe("/support");
+  });
+
+  it("an id that is not a uuid shows not-found without touching the database for it", async () => {
+    await open({ id: "no-es-uuid" });
+    expect(markRead).not.toHaveBeenCalled();
+    expect(getFeedback).not.toHaveBeenCalled();
+    expect(screen.getByText("No encontramos ese comentario.")).toBeTruthy();
+  });
+
+  it("a uuid with no row shows not-found, not a crash, with Volver", async () => {
+    getFeedback.mockResolvedValue(undefined);
+    await open({ id: ID, status: "nuevo" });
+    expect(screen.getByText("No encontramos ese comentario.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Volver" }).getAttribute("href")).toBe("/support?status=nuevo");
+  });
+
+  it("a repeated ?id= is ignored like any other malformed value", async () => {
+    await open({ id: [ID, ID] as unknown as string });
+    expect(markRead).not.toHaveBeenCalled();
+  });
+
+  it("without a session marks nothing", async () => {
+    authed = false;
+    await expect(Page({ searchParams: Promise.resolve({ id: ID }) })).rejects.toThrow("REDIRECT");
+    expect(markRead).not.toHaveBeenCalled();
   });
 });

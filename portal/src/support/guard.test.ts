@@ -31,6 +31,7 @@ describe("support area guard inventory", () => {
         "app/support/login/page.tsx",
         "app/api/support/login/route.ts",
         "app/api/support/logout/route.ts",
+        "app/api/support/feedback/[id]/route.ts",
       ]),
     );
   });
