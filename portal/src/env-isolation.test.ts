@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 // portal/ deploys alone (Vercel + Neon): it must never read a workshop
 // variable. Add a name here only when the portal genuinely owns it.
-const PORTAL_VARIABLES = new Set(["DATABASE_URL", "PORTAL_INGEST_SECRET", "NODE_ENV"]);
+const PORTAL_VARIABLES = new Set(["DATABASE_URL", "PORTAL_INGEST_SECRET", "NODE_ENV", "SUPPORT_PASSWORD", "SUPPORT_SESSION_SECRET"]);
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {

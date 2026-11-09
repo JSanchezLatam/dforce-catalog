@@ -1,7 +1,7 @@
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import { portalCustomer, portalTermsAcceptance } from "./schema";
+import { portalCustomer, portalTermsAcceptance, supportFeedback, supportLoginThrottle } from "./schema";
 
 const cols = (t: Parameters<typeof getTableConfig>[0]) =>
   Object.fromEntries(getTableConfig(t).columns.map((c) => [c.name, c]));
@@ -31,5 +31,27 @@ describe("portal schema", () => {
     expect(unique.map((i) => i.config.columns.map((c) => ("name" in c ? c.name : "")))).toEqual([
       ["token_hash", "terms_version"],
     ]);
+  });
+
+  it("support_feedback: the workshop id is the PK, the portal stamps status, note and received_at", () => {
+    const c = cols(supportFeedback);
+    expect(Object.keys(c).sort()).toEqual([
+      "category", "created_at", "id", "internal_note", "received_at", "role", "route", "screen_label", "status", "text", "username",
+    ]);
+    expect(c.id.primary).toBe(true);
+    expect(c.id.columnType).toBe("PgUUID");
+    for (const k of Object.keys(c)) expect(c[k].notNull, k).toBe(true);
+    expect(c.status.default).toBe("nuevo");
+    expect(c.internal_note.default).toBe("");
+    expect(c.received_at.hasDefault).toBe(true);
+    expect(getTableConfig(supportFeedback).checks.map((k) => k.name)).toEqual(["support_feedback_status_check"]);
+  });
+
+  it("support_login_throttle: one row per ip", () => {
+    const c = cols(supportLoginThrottle);
+    expect(Object.keys(c).sort()).toEqual(["failures", "ip", "locked_until", "window_started_at"]);
+    expect(c.ip.primary).toBe(true);
+    expect(c.locked_until.notNull).toBe(false);
+    expect(c.failures.notNull && c.window_started_at.notNull).toBe(true);
   });
 });

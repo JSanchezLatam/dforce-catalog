@@ -7,6 +7,7 @@ import type { IngestBody, PortalOrder, PortalVehicle } from "../contract";
 
 export type ParseResult = { ok: true; body: IngestBody } | { ok: false };
 
+type Feedback = Extract<IngestBody, { kind: "feedback" }>;
 type Obj = Record<string, unknown>;
 
 const STATUSES: ReadonlySet<unknown> = new Set(["Recibida", "En proceso", "Terminada", "Cancelada"]);
@@ -17,6 +18,12 @@ const hasExactKeys = (o: Obj, keys: string[]) =>
 const str = (v: unknown): v is string => typeof v === "string" && v.length > 0;
 const strOrNull = (v: unknown): v is string | null => v === null || typeof v === "string";
 const version = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ROLES: ReadonlySet<unknown> = new Set(["tecnico", "jefe_taller", "administrador"]);
+const CATEGORIES: ReadonlySet<unknown> = new Set(["bug", "idea", "other"]);
+const FEEDBACK_KEYS = ["kind", "id", "username", "role", "category", "text", "route", "screenLabel", "createdAt"];
+const short = (v: unknown): v is string => str(v) && v.length <= 200;
 
 const ORDER_KEYS = [
   "id", "status", "categoria", "createdAt", "appointmentAt", "completedAt",
@@ -74,6 +81,18 @@ function build(b: Obj): IngestBody | null {
   if (b.kind === "reconcile" && hasExactKeys(b, ["kind", "liveClienteIds", "maxVersion"])) {
     if (!Array.isArray(b.liveClienteIds) || !b.liveClienteIds.every(str) || !version(b.maxVersion)) return null;
     return { kind: "reconcile", liveClienteIds: b.liveClienteIds, maxVersion: b.maxVersion };
+  }
+  if (b.kind === "feedback" && hasExactKeys(b, FEEDBACK_KEYS)) {
+    const { id, username, role, category, text, route, screenLabel, createdAt } = b;
+    if (typeof id !== "string" || !UUID.test(id) || !short(username) || !ROLES.has(role) || !CATEGORIES.has(category)) return null;
+    if (!str(text) || text.length > 2000) return null;
+    if (!str(route) || !route.startsWith("/") || route.length > 300 || !short(screenLabel)) return null;
+    if (typeof createdAt !== "string" || Number.isNaN(Date.parse(createdAt))) return null;
+    return {
+      kind: "feedback", id, username, text, route, screenLabel, createdAt,
+      role: role as Feedback["role"],
+      category: category as Feedback["category"],
+    };
   }
   return null;
 }

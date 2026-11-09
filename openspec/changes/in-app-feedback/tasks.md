@@ -38,70 +38,70 @@ WU3 and WU1/WU2 touch disjoint trees (portal vs workshop) and may be written in 
 
 ## WU1: Workshop schema and service (design §1, D4)
 
-- [ ] 1.1 RED `screen-labels.test.ts`: mapped (`/service-orders/[id]` → "Orden de servicio — Detalle"), unmapped falls back to raw route, query/fragment stripped, completeness walk over `src/app/(app)/**/page.tsx` fails on an unmapped page (specs "Mapped route", "Unmapped route"). GREEN `screen-labels.ts`, `categories.ts`.
-- [ ] 1.2 RED `service.test.ts` (injected seams): `createFeedback` stores author/role from args, trims, 2000 ok / 2001 rejected (spec "Exactly 2000 accepted"); `listOwnFeedback` newest first. GREEN `service.ts`.
-- [ ] 1.3 GREEN `schema.ts` `feedback` table + `feedbackCategoryEnum` + CHECK + both indexes; `npm run db:generate -- --name feedback` → `0037_feedback.sql`.
-- [ ] 1.4 Mutation-verify 1.1-1.2 (drop trim, off-by-one on 2000, drop fallback); gates; GGA; PR.
+- [x] 1.1 RED `screen-labels.test.ts`: mapped (`/service-orders/[id]` → "Orden de servicio — Detalle"), unmapped falls back to raw route, query/fragment stripped, completeness walk over `src/app/(app)/**/page.tsx` fails on an unmapped page (specs "Mapped route", "Unmapped route"). GREEN `screen-labels.ts`, `categories.ts`.
+- [x] 1.2 RED `service.test.ts` (injected seams): `createFeedback` stores author/role from args, trims, 2000 ok / 2001 rejected (spec "Exactly 2000 accepted"); `listOwnFeedback` newest first. GREEN `service.ts`.
+- [x] 1.3 GREEN `schema.ts` `feedback` table + `feedbackCategoryEnum` + CHECK + both indexes; `npm run db:generate -- --name feedback` → `0037_feedback.sql`.
+- [x] 1.4 Mutation-verify 1.1-1.2 (drop trim, off-by-one on 2000, drop fallback); gates; GGA; PR.
 
 ## WU2: Policy and store-only route (design §4)
 
-- [ ] 2.1 RED `route-guards.test.ts` + policy test: `feedback.send` true for tecnico/jefe_taller/administrador, false for pantalla (spec "Pantalla cannot send"). GREEN `policy.ts` four maps + `ROUTE_GUARDS["/api/feedback"]` (same PR or `:217-237` fails).
-- [ ] 2.2 RED `api/feedback/route.test.ts`: 401 no session, 403 pantalla, 400 missing/unknown category/blank text, 2000 vs 2001, author from session not body, 201 `{id, outcome:"queued"}`, nothing persisted on 4xx. GREEN `route.ts`.
-- [ ] 2.3 Mutation-verify (trust body author, skip `can`, drop length check); gates; GGA; PR.
+- [x] 2.1 RED `route-guards.test.ts` + policy test: `feedback.send` true for tecnico/jefe_taller/administrador, false for pantalla (spec "Pantalla cannot send"). GREEN `policy.ts` four maps + `ROUTE_GUARDS["/api/feedback"]` (same PR or `:217-237` fails).
+- [x] 2.2 RED `api/feedback/route.test.ts`: 401 no session, 403 pantalla, 400 missing/unknown category/blank text, 2000 vs 2001, author from session not body, 201 `{id, outcome:"queued"}`, nothing persisted on 4xx. GREEN `route.ts`.
+- [x] 2.3 Mutation-verify (trust body author, skip `can`, drop length check); gates; GGA; PR.
 
 ## WU3: Portal contract and ingest (design §2, §1 portal)
 
-- [ ] 3.1 RED `parse` tests: feedback accepted; extra key (`receivedAt`/`status`), missing field, bad role/category, empty/2001 text, non-UUID id → 400; unknown kind → 400; customer bodies unchanged; `contract-import.test.ts` stays green. GREEN `contract.ts` 4th member, `parse.ts` `build()` branch.
-- [ ] 3.2 RED `applyIngest` feedback: insert, status `nuevo`, empty note, `received_at` from portal clock, duplicate keeps first row, unsigned → 401. GREEN `apply.ts` `onConflictDoNothing`.
-- [ ] 3.3 GREEN `portal/src/db/schema.ts` `support_feedback` + `support_login_throttle`; `npx drizzle-kit generate --name support_inbox` → `0002_support_inbox.sql`.
-- [ ] 3.4 E2E `portal/e2e/ingest.e2e.test.ts`: duplicate id → 1 row untouched (Resuelto + note + different text), concurrent duplicates → 1 row both 2xx, `received_at` from portal clock.
-- [ ] 3.5 Mutation-verify (remove `DO NOTHING`, accept `receivedAt`); gates; GGA; PR.
+- [x] 3.1 RED `parse` tests: feedback accepted; extra key (`receivedAt`/`status`), missing field, bad role/category, empty/2001 text, non-UUID id → 400; unknown kind → 400; customer bodies unchanged; `contract-import.test.ts` stays green. GREEN `contract.ts` 4th member, `parse.ts` `build()` branch.
+- [x] 3.2 RED `applyIngest` feedback: insert, status `nuevo`, empty note, `received_at` from portal clock, duplicate keeps first row, unsigned → 401. GREEN `apply.ts` `onConflictDoNothing`.
+- [x] 3.3 GREEN `portal/src/db/schema.ts` `support_feedback` + `support_login_throttle`; `npx drizzle-kit generate --name support_inbox` → `0002_support_inbox.sql`.
+- [x] 3.4 E2E `portal/e2e/ingest.e2e.test.ts`: duplicate id → 1 row untouched (Resuelto + note + different text), concurrent duplicates → 1 row both 2xx, `received_at` from portal clock.
+- [x] 3.5 Mutation-verify (remove `DO NOTHING`, accept `receivedAt`); gates; GGA; PR (#347).
 
 ## WU4: Outbox delivery (design §3)
 
-- [ ] 4.1 RED `transport.test.ts`: `timeoutMs` 4th param, default unchanged, `PortalServerError.status`, existing 2-arg callers byte-identical. GREEN `transport.ts`.
-- [ ] 4.2 RED `deliver.test.ts`: unconfigured → `"queued"` pre-claim; 2xx sets `delivered_at`; 4xx/5xx/timeout/network leave NULL; `last_error` has class+status, no text; Sentry per failure (id, status, attempt, no text/secret; error vs warning); backoff `min(2^(n-1),60)` monotone and capped; already delivered → no request; same `id` every attempt; recovery after 4xx; never throws; inline timeout 5000. GREEN `deliver.ts`.
-- [ ] 4.3 RED `worker.test.ts`: sweeper returns before query if unconfigured, ≤25 per run oldest first, `singletonKey: id`, `retryLimit 0`, `localConcurrency 1`, cron `* * * * *` tz America/Panama; `instrumentation-node` registers it. GREEN `worker.ts`, `instrumentation-node.ts`; route calls `deliverFeedback(id, 5_000)`.
-- [ ] 4.4 E2E `src/e2e/feedback.e2e.test.ts`: insert + CHECK (2001 fails); concurrent claims → one winner; not-yet-due row → none; sweeper due-only/oldest/LIMIT; delivered UPDATE guard; `listOwnFeedback` WHERE (A vs B).
-- [ ] 4.5 Confirm `portal-sync` and contract tests pass unchanged ("Customer sync untouched").
-- [ ] 4.6 Mutation-verify (drop `delivered_at IS NULL` from claim, drop lease, drop cap); gates; GGA; PR.
+- [x] 4.1 RED `transport.test.ts`: `timeoutMs` 4th param, default unchanged, `PortalServerError.status`, existing 2-arg callers byte-identical. GREEN `transport.ts`.
+- [x] 4.2 RED `deliver.test.ts`: unconfigured → `"queued"` pre-claim; 2xx sets `delivered_at`; 4xx/5xx/timeout/network leave NULL; `last_error` has class+status, no text; Sentry per failure (id, status, attempt, no text/secret; error vs warning); backoff `min(2^(n-1),60)` monotone and capped; already delivered → no request; same `id` every attempt; recovery after 4xx; never throws; inline timeout 5000. GREEN `deliver.ts`.
+- [x] 4.3 RED `worker.test.ts`: sweeper returns before query if unconfigured, ≤25 per run oldest first, `singletonKey: id`, `retryLimit 0`, `localConcurrency 1`, cron `* * * * *` tz America/Panama; `instrumentation-node` registers it. GREEN `worker.ts`, `instrumentation-node.ts`; route calls `deliverFeedback(id, 5_000)`.
+- [x] 4.4 E2E `src/e2e/feedback.e2e.test.ts`: insert + CHECK (2001 fails); concurrent claims → one winner; not-yet-due row → none; sweeper due-only/oldest/LIMIT; delivered UPDATE guard; `listOwnFeedback` WHERE (A vs B).
+- [x] 4.5 Confirm `portal-sync` and contract tests pass unchanged ("Customer sync untouched"). Unit + contract suites green; `test:portal-sync` has one failure that is identical on the WU3 base ("shows no plate and no order before the terms are accepted"), not caused by WU4.
+- [x] 4.6 Mutation-verify (drop `delivered_at IS NULL` from claim, drop lease, drop cap); gates; GGA; PR (#348).
 
 ## WU5: Dialog, provider, sidebar (design §5, D5, D6)
 
-- [ ] 5.1 RED `FeedbackDialog.test.tsx`: nothing preselected, placeholder per category, both missing messages, whitespace text `aria-invalid`, counter 1799/1800 amber, author line "jperez (Técnico)", context read-only, locked while sending, roles/`aria-pressed`, 44px classes. GREEN `FeedbackDialog.tsx` (D5 composition, raw textarea).
-- [ ] 5.2 RED toast tests: delivered → success, queued → info, store failure → inline error text kept, toast raised before a throwing `refresh`. GREEN submit path (copy `OrderStatusControls.tsx:111-142`).
-- [ ] 5.3 RED `app-sidebar.test.tsx`: item above user card, opens dialog, rail tooltip + name, mobile sheet closes and dialog stays mounted, absent without `feedback.send`; existing sidebar tests unchanged. GREEN `FeedbackProvider.tsx`, `(app)/layout.tsx` (strings only), `app-sidebar.tsx`.
-- [ ] 5.4 Mutation-verify; gates; GGA; PR.
-- [ ] 5.5 BROWSER (LAN IP, second machine; Chrome device extension): 1280/820/390, sheet closes and dialog stays, rail tooltip, measured 44px, console free of RSC/hydration errors, queued toast with portal unreachable, light+dark.
+- [x] 5.1 RED `FeedbackDialog.test.tsx`: nothing preselected, placeholder per category, both missing messages, whitespace text `aria-invalid`, counter 1799/1800 amber, author line "jperez (Técnico)", context read-only, locked while sending, roles/`aria-pressed`, 44px classes. GREEN `FeedbackDialog.tsx` (D5 composition, raw textarea).
+- [x] 5.2 RED toast tests: delivered → success, queued → info, store failure → inline error text kept, toast raised before a throwing `refresh`. GREEN submit path (copy `OrderStatusControls.tsx:111-142`).
+- [x] 5.3 RED `app-sidebar.test.tsx`: item above user card, opens dialog, rail tooltip + name, mobile sheet closes and dialog stays mounted, absent without `feedback.send`; existing sidebar tests unchanged. GREEN `FeedbackProvider.tsx`, `(app)/layout.tsx` (strings only), `app-sidebar.tsx`.
+- [x] 5.4 Mutation-verify; gates; GGA; PR. (Mutations done: 15, each red by name. Gates green. GGA passed; PR #349.)
+- [x] 5.5 BROWSER (LAN IP, second machine; Chrome device extension): 1280/820/390, sheet closes and dialog stays, rail tooltip, measured 44px, console free of RSC/hydration errors, queued toast with portal unreachable, light+dark.
 
 ## WU6: "Mis comentarios" (specs feedback, last requirement set)
 
-- [ ] 6.1 RED `MyFeedbackCard.test.tsx`: newest first, badges Enviado / Pendiente de envío + offline text, empty state, no "Respondido", button opens shared dialog. GREEN `MyFeedbackCard.tsx`, `account/page.tsx` via `listOwnFeedback` gated by `can`.
-- [ ] 6.2 Mutation-verify; gates; GGA; PR.
-- [ ] 6.3 BROWSER (LAN IP): `/account` card, pending flips to Enviado after reconnection, no duplicate in portal.
+- [x] 6.1 RED `MyFeedbackCard.test.tsx`: newest first, badges Enviado / Pendiente de envío + offline text, empty state, no "Respondido", button opens shared dialog. GREEN `MyFeedbackCard.tsx`, `account/page.tsx` via `listOwnFeedback` gated by `can`.
+- [x] 6.2 Mutation-verify; gates; GGA; PR (#350).
+- [x] 6.3 BROWSER (LAN IP): `/account` card, pending flips to Enviado after reconnection, no duplicate in portal.
 
 ## WU7: Portal login, session, throttle (design §6)
 
-- [ ] 7.1 RED `session.test.ts`: sign/verify, tamper, expired, regex precheck, unset env fails closed. GREEN `session.ts` `requireSupport()`.
-- [ ] 7.2 RED `throttle.test.ts` + login handler: 5 failures lock even correct password, expiry, success resets, cookie `httpOnly/secure/sameSite=strict`, "Contraseña incorrecta.", logout clears. GREEN `throttle.ts`, `login`/`logout` routes, login page.
-- [ ] 7.3 RED `guard.test.ts` route inventory; `env-isolation.test.ts` lists both vars; extend `headers.test.ts`. GREEN.
-- [ ] 7.4 E2E `portal/e2e/support.e2e.test.ts`: throttle upsert, window reset, success delete, shared across instances.
-- [ ] 7.5 Mutation-verify (compare non-constant-time, skip lock check); gates; GGA; PR.
+- [x] 7.1 RED `session.test.ts`: sign/verify, tamper, expired, regex precheck, unset env fails closed. GREEN `session.ts` `requireSupport()`.
+- [x] 7.2 RED `throttle.test.ts` + login handler: 5 failures lock even correct password, expiry, success resets, cookie `httpOnly/secure/sameSite=strict`, "Contraseña incorrecta.", logout clears. GREEN `throttle.ts`, `login`/`logout` routes, login page.
+- [x] 7.3 RED `guard.test.ts` route inventory; `env-isolation.test.ts` lists both vars; extend `headers.test.ts`. GREEN.
+- [x] 7.4 E2E `portal/e2e/support.e2e.test.ts`: throttle upsert, window reset, success delete, shared across instances.
+- [x] 7.5 Mutation-verify (compare non-constant-time, skip lock check); gates; GGA; PR (#351, GGA passed on round 2). (Mutations done: 25, each red by name; gates green. Login over `secure` cookie to be checked on a Vercel preview.)
 
 ## WU8: Inbox list (specs support-inbox)
 
-- [ ] 8.1 RED `format.test.ts`: delay flag at 10:00 no, 10:01 yes, 0 no; `dd/MM/yyyy HH:mm` America/Panama. GREEN `format.ts`.
-- [ ] 8.2 RED `queries.test.ts` + page tests: filters AND in SQL, counts "Todos (5)", newest first, empty state, no-results + "Limpiar filtros", list render does not mark read. GREEN `queries.ts`, `app/support/page.tsx`, list/filter components.
-- [ ] 8.3 E2E `support.e2e`: filter WHERE and `GROUP BY` counts.
-- [ ] 8.4 Mutation-verify; gates; GGA; PR.
+- [x] 8.1 RED `format.test.ts`: delay flag at 10:00 no, 10:01 yes, 0 no; `dd/MM/yyyy HH:mm` America/Panama. GREEN `format.ts`.
+- [x] 8.2 RED `queries.test.ts` + page tests: filters AND in SQL, counts "Todos (5)", newest first, empty state, no-results + "Limpiar filtros", list render does not mark read. GREEN `queries.ts`, `app/support/page.tsx`, list/filter components.
+- [x] 8.3 E2E `support.e2e`: filter WHERE and `GROUP BY` counts.
+- [x] 8.4 Mutation-verify; gates; GGA; PR. (Mutations done: 13, each red by name; gates and e2e green. GGA passed; PR #352.)
 
 ## WU9: Inbox detail (D8)
 
-- [ ] 9.1 RED: `?id=` marks only `nuevo` → `leido` (leido/resuelto untouched, no `id` no mark, `prefetch={false}`). GREEN page + mark-read UPDATE.
-- [ ] 9.2 RED PATCH route tests: 401 no session, exact keys, bad status 400, note 2001 400, note replaces. GREEN `app/api/support/feedback/[id]/route.ts`, status/note editor ("Nota guardada.").
-- [ ] 9.3 E2E `support.e2e`: mark-read only from nuevo, PATCH UPDATE.
-- [ ] 9.4 Mutation-verify; gates; GGA; PR.
-- [ ] 9.5 BROWSER (Vercel preview, HTTPS, light+dark): login, lockout, inbox 1280/820/390, 44px, no horizontal scroll, "Volver" on phone.
+- [x] 9.1 RED: `?id=` marks only `nuevo` → `leido` (leido/resuelto untouched, no `id` no mark, `prefetch={false}`). GREEN page + mark-read UPDATE.
+- [x] 9.2 RED PATCH route tests: 401 no session, exact keys, bad status 400, note 2001 400, note replaces. GREEN `app/api/support/feedback/[id]/route.ts`, status/note editor ("Nota guardada.").
+- [x] 9.3 E2E `support.e2e`: mark-read only from nuevo, PATCH UPDATE.
+- [ ] 9.4 Mutation-verify; gates; GGA; PR. (Mutations done: 10, each red by name; gates and e2e green. GGA and PR pending.)
+- [x] 9.5 BROWSER (done on the local portal at http://localhost:3001, where Chrome accepts a Secure cookie; the Vercel-preview pass moves to 10.2 after the owner deploys) (Vercel preview, HTTPS, light+dark): login, lockout, inbox 1280/820/390, 44px, no horizontal scroll, "Volver" on phone.
 
 ## Final integration
 

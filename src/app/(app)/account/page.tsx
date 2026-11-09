@@ -6,6 +6,9 @@ import { ProfileForm } from "@/modules/account/ProfileForm";
 import { PasswordForm } from "@/modules/account/PasswordForm";
 import { PageHeader } from "@/shared/ui/PageHeader";
 import { ROLE_LABELS } from "@/modules/auth/roles";
+import { listOwnFeedback } from "@/modules/feedback/service";
+import { MyFeedbackCard } from "@/modules/feedback/MyFeedbackCard";
+import { formatDateTime } from "@/shared/datetime";
 
 export default async function AccountPage() {
   const user = await requireSessionFromHeaders();
@@ -27,11 +30,24 @@ export default async function AccountPage() {
     );
   }
 
+  // Strings only across the boundary into the client card: dates are formatted here, in the workshop's zone.
+  const feedbackRows = can(user, "feedback.send")
+    ? (await listOwnFeedback(user.id)).map((r) => ({
+        id: r.id,
+        category: r.category,
+        text: r.text,
+        screenLabel: r.screenLabel,
+        createdAt: formatDateTime(r.createdAt),
+        delivered: r.deliveredAt !== null,
+      }))
+    : null;
+
   return (
     <div className="p-4 sm:p-8 flex flex-col gap-6">
       <PageHeader title="Mi cuenta" description={ROLE_LABELS[user.role] ?? user.role} />
       <ProfileForm username={profile.username} name={profile.name} email={profile.email} />
       <PasswordForm />
+      {feedbackRows && <MyFeedbackCard rows={feedbackRows} />}
     </div>
   );
 }

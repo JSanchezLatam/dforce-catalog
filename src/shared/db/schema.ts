@@ -808,3 +808,41 @@ export const reminder = pgTable(
 );
 
 export type Reminder = typeof reminder.$inferSelect;
+
+export const feedbackCategoryEnum = pgEnum("feedback_category", ["bug", "idea", "other"]);
+
+/**
+ * In-app feedback, and the outbox that delivers it to the support portal: a
+ * row is delivered once `delivered_at` is set. `username`/`role` are
+ * snapshots of the author at send time. `last_error` holds a failure class
+ * and status, never the comment text.
+ */
+export const feedback = pgTable(
+  "feedback",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    username: text("username").notNull(),
+    role: roleEnum("role").notNull(),
+    category: feedbackCategoryEnum("category").notNull(),
+    text: text("text").notNull(),
+    route: text("route").notNull(),
+    screenLabel: text("screen_label").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+    lastError: text("last_error"),
+  },
+  (table) => [
+    check("feedback_text_length", sql`char_length(${table.text}) between 1 and 2000`),
+    index("feedback_pending_idx").on(table.createdAt).where(sql`${table.deliveredAt} is null`),
+    index("feedback_user_created_idx").on(table.userId, table.createdAt.desc()),
+  ],
+);
+
+export type Feedback = typeof feedback.$inferSelect;

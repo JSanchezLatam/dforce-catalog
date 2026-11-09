@@ -11,7 +11,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { POST } from "../app/api/ingest/route";
 import { sign, type IngestBody, type PortalVehicle } from "../src/contract";
 import { db } from "../src/db/client";
-import { portalCustomer } from "../src/db/schema";
+import { portalCustomer, supportFeedback } from "../src/db/schema";
 
 const SECRET = "e2e-secret";
 const HASH_A = "a".repeat(64);
@@ -68,9 +68,11 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await db.delete(portalCustomer);
+  await db.delete(supportFeedback);
 });
 afterAll(async () => {
   await db.delete(portalCustomer);
+  await db.delete(supportFeedback);
 });
 
 describe("ingest e2e", () => {
@@ -195,5 +197,65 @@ describe("ingest e2e", () => {
       expect(r.version, `round ${i}`).toBe(3);
       expect(r.snapshot?.vehicles[0].plate).toBe("HIGH33");
     }
+  });
+
+  describe("feedback", () => {
+    const ID = "0b8f6f0e-5d0e-4c53-9a53-6f7d2d6f1a11";
+    const feedback = (over: Record<string, unknown> = {}) => ({
+      kind: "feedback",
+      id: ID,
+      username: "ana",
+      role: "tecnico",
+      category: "bug",
+      text: "first text",
+      route: "/service-orders",
+      screenLabel: "Órdenes de servicio",
+      createdAt: "2020-01-01T10:00:00.000Z",
+      ...over,
+    });
+    const rows = () => db.select().from(supportFeedback);
+
+    it("inserts a row: nuevo, empty note, received_at from the portal clock, not the workshop's", async () => {
+      const before = Date.now();
+      const res = await post(feedback());
+      expect(await res.json()).toEqual({ applied: true });
+      const [r] = await rows();
+      expect(r.status).toBe("nuevo");
+      expect(r.internalNote).toBe("");
+      expect(r.createdAt.toISOString()).toBe("2020-01-01T10:00:00.000Z");
+      // created_at is 2020; received_at must be "now", proving it was not taken from the body.
+      expect(r.receivedAt.getTime()).toBeGreaterThanOrEqual(before - 5_000);
+      expect(r.receivedAt.getTime()).toBeLessThanOrEqual(Date.now() + 5_000);
+    });
+
+    it("a duplicate id leaves the first row untouched, even after it was worked on", async () => {
+      await post(feedback());
+      await db
+        .update(supportFeedback)
+        .set({ status: "resuelto", internalNote: "called the customer" })
+        .where(eq(supportFeedback.id, ID));
+      const res = await post(feedback({ text: "a different text" }));
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ applied: false });
+      const all = await rows();
+      expect(all).toHaveLength(1);
+      expect(all[0].text).toBe("first text");
+      expect(all[0].status).toBe("resuelto");
+      expect(all[0].internalNote).toBe("called the customer");
+    });
+
+    it("concurrent duplicates end in one row and both answer 2xx", async () => {
+      for (let i = 0; i < 10; i++) {
+        await db.delete(supportFeedback);
+        const res = await Promise.all([post(feedback()), post(feedback())]);
+        expect(res.map((r) => r.status), `round ${i}`).toEqual([200, 200]);
+        expect(await rows()).toHaveLength(1);
+      }
+    });
+
+    it("a body carrying receivedAt is refused and stores nothing", async () => {
+      expect((await post(feedback({ receivedAt: "2030-01-01T00:00:00.000Z" }))).status).toBe(400);
+      expect(await rows()).toEqual([]);
+    });
   });
 });
