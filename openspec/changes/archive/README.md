@@ -37,12 +37,17 @@ active work. New changes go in `openspec/changes/<name>/`, not here.
 | `kanban-board` | 2026-10-28 | 48/49 § | CREATED `openspec/specs/kanban-board/` (10 requirements); `service-orders`: ADDED "Manual Urgent Flag"; `workshop-status-board`: MODIFIED "Full Board Field Whitelist" (adds `urgent`), "Full Board Status Set and Booked Rows" (urgent first, Urgente badge), "Screen Legibility and Rendering" (kanban look) | in-app `/kanban` board with one column per status, drag and menu moves, KPIs and filters, manual Urgente flag (`urgente_at`/`urgente_by`), live polling (PR #305, tracker); verify PASS WITH WARNINGS, 0 CRITICAL; follow-ups listed in the archived `tasks.md` |
 | `sidebar-redesign` | 2026-10-28 | 28/28 | CREATED `openspec/specs/app-sidebar/` (10 requirements) | floating inset panels, active pill, quiet group chevrons, user card, sheet close button, menu search with `/` and rail entry (PRs #325–#329); verify PASS WITH WARNINGS, 0 CRITICAL; follow-ups listed in the archived `tasks.md` |
 | `order-blocked-action-hints` | 2026-11-06 | 35/36 ¶ | ADDED to `service-orders`: "Order Detail Action Bar", "Blocked-Action Hints on Order Detail", "Empty Order List for a Técnico"; MODIFIED `service-orders` "Status Labels, Badge and List Filter", `kanban-board` "Move Rules" and "Card Menu and Urgent Toggle", `order-work-lines` "Work Line and Mark Interface" | hints that say what blocks a status change (on the order detail, the kanban and the work card, with a fix button when reachable), order detail action bar, técnico empty list, status hues unified with `STATUS_HUE` (tracker #335, WUs #336–#342; related #334 Spanish refusal defaults); verify PASS WITH WARNINGS, 0 CRITICAL; follow-ups in the subsection below and the change's `archive-report.md` |
+| `in-app-feedback` | 2026-11-11 | 42/42 | — | in-app "Enviar comentario" dialog with the screen as context, offline outbox forwarded to the portal, "Mis comentarios" card, portal support inbox (login with lockout, filters, read/status/note) (tracker #344, WUs #345–#353); **created `openspec/specs/feedback/` and `openspec/specs/support-inbox/`**; MODIFIED `customer-portal` and `app-sidebar`; verify PASS WITH WARNINGS, 0 CRITICAL; follow-ups in the subsection below |
+| `catalog-cover-templates` | 2026-11-11 | 42/50 ‖ | — | operator-typed catalog title (40 characters, replaces `deriveCatalogTitle`), "Portada completa" second template with full-bleed cover and back page, each template owns its cover image (PRs #147–#150; prerequisite fixes #145–#146 merged the same day); ADDED `catalog-generation` "Operator-Typed Catalog Title"; `template-config`: MODIFIED "Template Gallery Selection (R8.1)", ADDED 3; `workshop-settings`: MODIFIED "Cover Text Ownership"; **code merged 2026-10-03**, open items in the subsection below |
+| `workshop-feedback-round-1` | 2026-11-11 | 32/32 | — | first-week workshop feedback, tracked as a work queue (no delta specs) |
 
 ‡ Task 4.9 (pre-deploy counts on the workshop database) is open by design: it is a deploy-time check, not code. Run it before deploying `main`.
 
 ¶ Task 7.3 (both técnico empty states, checked in a browser at the LAN IP) is open by an accepted deviation: no suitable linked or unlinked técnico exists in dev data. The archive ran under that explicit override from the owner's orchestrator, not because the task was done. Task 7.4 was closed by this archive. See the change's `archive-report.md`.
 
 § The one open box, 8.4, is the archive step itself (`sdd-archive`), closed by this very archive; every implementation task is ticked.
+
+‖ Eight tasks in `catalog-cover-templates` stay unticked (3.1–3.5, 7.3, 8.2 partial, 8.4): browser and PDF checks that were not run, and the GGA gate left to the orchestrator. The archive ran with them open on the orchestrator's explicit instruction, so it is intentional with warnings. Details in that change's subsection below.
 
 † One of C1's 41 is the duplicate-pair merge the owner **dropped**, struck
 through and marked in that `tasks.md` rather than deleted. It counts as closed
@@ -304,6 +309,72 @@ state at close. The ones that matter first:
   explanation; vehicle-with-orders delete; portal code; race and stale generic
   messages; empty-roster assign copy; account refusals tú→voseo; info-toast
   contrast at 4.4:1.
+
+### `in-app-feedback` (archived 2026-11-11)
+
+Full text in `archive/2026-11-11-in-app-feedback/`. `verify-report.md` is a
+snapshot from 2026-11-09 (PASS WITH WARNINGS, 0 CRITICAL). Its W1 and S2 are
+closed: task 9.4 was ticked with PR #353 merged, and task 10.2 was ticked on
+2026-11-11. The list below is the state at close.
+
+- **Task 10.2 caveat.** The owner sent two comments from another workshop PC at
+  the LAN IP and they reached the deployed inbox. The offline → "Pendiente de
+  envío" → "Enviado" leg was verified locally only, not against production.
+- **W2.** Throttle expiry and reset scenarios are tagged `[unit]` but are proven
+  by e2e rows and by `login.test` with a mocked throttle. `throttle.test.ts`
+  covers only IP parsing. Needs a Postgres to run.
+- **W3.** "Flips after reconnection" has no dedicated test; it relies on the
+  badge render test and browser task 6.3.
+- **W4.** "Nothing goes back to the workshop" has no test. It is structurally
+  true: the portal has no workshop client.
+- **S1.** Add an explicit 3-hour `created_at` vs `received_at` e2e assertion for
+  "Queued comment keeps both times".
+- **S3.** `test:portal-sync` has one failure, "shows no plate and no order before
+  the terms are accepted". Per the verify snapshot it is identical on `main`
+  (049c797), so it predates this change and deserves its own change.
+
+### `catalog-cover-templates` (archived 2026-11-11, code merged 2026-10-03)
+
+Code landed as PRs #147 (typed title), #148 ("Portada completa"), #149 (per-template
+cover image) and #150 (per-template slots, workshop cover field removed). Prerequisite
+fixes #145 and #146 touched the same files and are merged. The change folder has no
+`verify-report.md`, so the open items below come from `tasks.md`, which is the record.
+
+Open at close (`tasks.md` as written, not ticked):
+
+- **3.1–3.5** Browser and PDF checks on a throwaway user and DB: a real PDF per
+  template, preview and PDF at the LAN IP with a console read, offline Saira
+  embedding with the network off, logo screen-blend in the PDF, and a 40-character
+  title staying within two lines.
+- **7.3** The GGA gate on PR A's branch. Tests, `tsc` and lint were run during apply;
+  GGA was left to the orchestrator.
+- **8.2** Partial (2026-10-03): uploaded to "Portada completa" at the LAN IP, toast
+  shown, preview followed the radio. Not exercised: the Clásico slot upload and the
+  "Eliminar" click.
+- **8.4** A PDF per template on a throwaway DB: each cover shows its own image, and
+  "Portada completa" without one shows the dark fallback.
+
+Closed by this archive: 4.1 and 8.6 (the merges below) and 4.2 (#145 and #146 confirmed
+merged).
+
+Merge notes:
+
+- ADDED `catalog-generation` "Operator-Typed Catalog Title". This removes
+  `deriveCatalogTitle` from `src/` (`formatCatalogTitle` in
+  `catalog-builder/selection.ts` replaces it), which supersedes the open follow-up
+  in the `catalog-price-tier-choice` subsection above.
+- `template-config`: MODIFIED "Template Gallery Selection (R8.1)" (the single-entry
+  scenario became the two-entry one); ADDED "Per-Template Cover and Back Layout",
+  "Layout Fallback Without a Usable Photo or Logo" and "Per-Template Cover Image".
+- `workshop-settings`: MODIFIED "Cover Text Ownership" (the cover image is the one
+  exception to the form/content rule; scenario "No cover image field in Config. del
+  CRM" added). The `workshop_config.cover_image_*` columns stay in the schema as the
+  source of migration `0020`; no code reads them.
+- Delta preambles were dropped: the catalog-generation note on the missing title
+  requirement and PR #146, the template-config mockup pointer, and the
+  workshop-settings rationale paragraphs. Requirement text is unchanged.
+- No baseline sentence needed correcting: the rest of `openspec/specs/` was grepped
+  for cover-image and title wording and contradicts nothing.
 
 ## Where the current spec actually lives
 

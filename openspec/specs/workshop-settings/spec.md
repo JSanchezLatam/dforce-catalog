@@ -114,7 +114,7 @@ Because SVG logos are permitted, the system MUST mitigate script-execution risk 
 
 ### Requirement: Cover Text Ownership
 
-`coverText` MUST live on `workshop_config`, Administrador-editable independent of the selected template. The template owns the FORM (layout, typography, colors, logo placement); the workshop owns the CONTENT (logo asset, cover text, contact info). Any future question about where a new piece of catalog data belongs resolves by asking which side of that line it is on.
+`coverText` MUST live on `workshop_config`, Administrador-editable independent of the selected template. The template owns the FORM (layout, typography, colors, logo placement); the workshop owns the CONTENT (logo asset, cover text, contact info). The cover image is the one exception. It is template-owned and uploaded in "Configuración de template" (see template-config "Per-Template Cover Image"), because a photo composed for one layout ruins another. Any future question about where a new piece of catalog data belongs resolves by asking which side of that line it is on, and whether it depends on the layout the way the cover photo does.
 
 #### Scenario: Cover text survives a template switch
 
@@ -127,6 +127,12 @@ Because SVG logos are permitted, the system MUST mitigate script-execution risk 
 - GIVEN the Administrador edits and saves `coverText`
 - WHEN the next catalog is generated
 - THEN its cover MUST show the new text
+
+#### Scenario: No cover image field in Config. del CRM
+
+- GIVEN an Administrador opens "Config. del CRM"
+- WHEN the form renders
+- THEN it MUST NOT show a cover image upload field
 
 ### Requirement: Workshop Logo as Single Source for Branding
 
