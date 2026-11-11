@@ -58,8 +58,8 @@ Rule for every task pair: RED test, confirm red, GREEN, then mutation-verify (re
 
 ## Spec archive notes
 
-- [ ] 4.1 At archive, merge the three delta specs; the catalog-generation delta adds a requirement the main spec never had (not a rename).
-- [ ] 4.2 Merge order with PRs #145 and #146 (same `deriveCatalogTitle` lines, form and spec): rebase this change after them.
+- [x] 4.1 At archive, merge the three delta specs; the catalog-generation delta adds a requirement the main spec never had (not a rename).
+- [x] 4.2 Merge order with PRs #145 and #146 (same `deriveCatalogTitle` lines, form and spec): rebase this change after them.
 
 ---
 
@@ -127,4 +127,4 @@ Rule for every pair: RED test, confirm red BY NAME, GREEN, then mutation-verify 
 - [x] 8.3 (measured at 192.168.0.12: file input 256x44, Eliminar 71x44) Measure the file input and "Eliminar" at 44x44 or more in the browser.
 - [ ] 8.4 Generate a PDF per template (throwaway DB); each cover shows its own image, and "Portada completa" without one shows the dark fallback.
 - [x] 8.5 (QA image deleted via DELETE, HeadObject → NotFound; QA user dropped; Clásico keeps covers/1790624572187.jpg) Delete the QA objects from R2 and the throwaway user afterwards; confirm Clásico still has the migrated image.
-- [ ] 8.6 At archive, merge the template-config and workshop-settings deltas (the cover-image field removal is a MODIFIED scenario, not a rename).
+- [x] 8.6 At archive, merge the template-config and workshop-settings deltas (the cover-image field removal is a MODIFIED scenario, not a rename).
