@@ -21,7 +21,19 @@
  * module loads, so the env var is switched between the two dynamic imports.
  */
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+// `undefined` = the shipped TERMS_GATE_ENABLED. The path is the module the open and snapshot handlers import.
+const gate = vi.hoisted(() => ({ on: undefined as boolean | undefined }));
+vi.mock("../../portal/src/terms", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../portal/src/terms")>();
+  return {
+    ...actual,
+    get TERMS_GATE_ENABLED() {
+      return gate.on ?? actual.TERMS_GATE_ENABLED;
+    },
+  };
+});
 
 const workshopUrl = process.env.PORTAL_SYNC_WORKSHOP_URL;
 const portalUrl = process.env.PORTAL_SYNC_PORTAL_URL;
@@ -45,6 +57,7 @@ async function load() {
     job: await import("@/modules/portal-sync/job"),
     reconcile: await import("@/modules/portal-sync/reconcile"),
     transport: await import("@/modules/portal-sync/transport"),
+    feedback: await import("@/modules/feedback/deliver"),
   };
   process.env.DATABASE_URL = portalUrl;
   process.env.PORTAL_INGEST_SECRET = SECRET;
@@ -53,6 +66,8 @@ async function load() {
     open: await import("../../portal/app/api/c/open/route"),
     accept: await import("../../portal/app/api/c/accept/route"),
     snapshot: await import("../../portal/app/api/c/snapshot/route"),
+    db: (await import("../../portal/src/db/client")).db,
+    schema: await import("../../portal/src/db/schema"),
   };
   return { workshop, portal };
 }
@@ -140,17 +155,31 @@ describe("workshop sync -> portal -> customer", () => {
 
   afterAll(async () => {
     const { db, schema } = w;
+    await db.delete(schema.feedback).where(eq(schema.feedback.userId, ADMIN));
     await db.delete(schema.ordenServicio).where(eq(schema.ordenServicio.clienteId, clienteId));
     await db.delete(schema.cliente).where(eq(schema.cliente.id, clienteId));
     await db.delete(schema.users).where(eq(schema.users.id, ADMIN));
   });
 
-  it("shows no plate and no order before the terms are accepted", async () => {
-    const t = await token();
-    for (const route of [p.open, p.snapshot]) {
-      const r = await call(route, t);
-      expect(r.json).toEqual({ state: "terms" });
+  it("gate ON: shows no plate and no order before the terms are accepted", async () => {
+    gate.on = true;
+    try {
+      const t = await token();
+      for (const route of [p.open, p.snapshot]) {
+        const r = await call(route, t);
+        expect(r.json).toEqual({ state: "terms" });
+      }
+    } finally {
+      gate.on = undefined; // never accept with the gate on: that would record an acceptance for every later test
     }
+  });
+
+  it("gate OFF (shipped): a valid token goes straight to the history, before any acceptance", async () => {
+    const t = await token();
+    expect((await call(p.open, t)).json).toEqual({ state: "accepted" });
+    const h = await history(t);
+    expect(h.json.state).toBe("accepted");
+    expect(h.snap?.vehicles.map((v) => v.plate).sort()).toEqual(["AAA-111", "BBB-222"]);
   });
 
   it("serves exactly the whitelisted data after accept: plates, labels, no internal field", async () => {
@@ -263,6 +292,31 @@ describe("workshop sync -> portal -> customer", () => {
     await drain();
     expect(await token()).toBe(t);
     expect((await call(p.open, t)).status).toBe(200);
+  });
+
+  // Last on purpose: its fetch does not record into `bodies`, but keep it clear of the replay test anyway.
+  it("a comment queued 3 hours keeps the workshop's created_at; received_at is the portal's delivery time", async () => {
+    const createdAt = new Date(Date.now() - 3 * 60 * 60_000);
+    const [row] = await w.db
+      .insert(w.schema.feedback)
+      .values({ userId: ADMIN, username: ADMIN, role: "administrador", category: "bug", text: "en cola", route: "/kanban", screenLabel: "Órdenes en curso", createdAt })
+      .returning();
+    const failures: Error[] = [];
+    const toIngest: typeof fetch = async (input, init) => p.ingest.POST(new Request(String(input), init));
+    const before = Date.now();
+    const outcome = await w.feedback.deliverFeedback(row.id, 5_000, { config, fetch: toIngest, report: (e) => void failures.push(e) });
+    expect(failures).toEqual([]);
+    expect(outcome).toBe("delivered");
+
+    const stored = (await p.db.select().from(p.schema.supportFeedback)).find((r) => r.id === row.id)!;
+    expect(stored.createdAt.toISOString()).toBe(createdAt.toISOString());
+    const workshop = await w.db.select().from(w.schema.feedback).where(eq(w.schema.feedback.id, row.id));
+    expect(workshop[0].createdAt.toISOString()).toBe(createdAt.toISOString());
+    expect(stored.receivedAt.getTime()).toBeGreaterThanOrEqual(before - 5_000);
+    expect(stored.receivedAt.getTime()).toBeLessThanOrEqual(Date.now() + 5_000);
+    const hours = (stored.receivedAt.getTime() - stored.createdAt.getTime()) / 3_600_000;
+    expect(hours).toBeGreaterThan(2.99);
+    expect(hours).toBeLessThan(3.01);
   });
 });
 
