@@ -104,6 +104,21 @@ describe("feedback outbox (E2E)", () => {
     expect(minutes).toBeLessThanOrEqual(1);
   });
 
+  it("flips after reconnection: an unreachable portal leaves the row pending, the retry sets delivered_at", async () => {
+    const row = await insertRow();
+    const unreachable = vi.fn<typeof fetch>(async () => {
+      throw new TypeError("fetch failed");
+    });
+    expect(await deliverFeedback(row.id, 5_000, { config, fetch: unreachable, report: () => {} })).toBe("queued");
+    expect(await read(row.id)).toMatchObject({ deliveredAt: null, attempts: 1, lastError: "network" });
+
+    await db.update(feedback).set({ nextAttemptAt: sql`now()` }).where(eq(feedback.id, row.id)); // the backoff has elapsed
+    expect(await deliverFeedback(row.id, 5_000, { config, fetch: respond(200) })).toBe("delivered");
+    const after = await read(row.id);
+    expect(after.deliveredAt).toBeInstanceOf(Date);
+    expect(after).toMatchObject({ attempts: 2, lastError: null });
+  });
+
   it("the delivered guard: a late failure or a second success never overwrites a delivered row", async () => {
     const row = await insertRow({ deliveredAt: T("2026-01-01T00:00:00Z"), lastError: null });
     await markFeedbackFailed(row.id, { lastError: "5xx 503", delayMinutes: 60 });
