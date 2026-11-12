@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uso de la app</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Mockup chrome: workshop tokens (src/app/globals.css), as in the in-app-feedback mockup. */
+:root {
+  --radius: 0.5rem;
+  --background: hsl(0 0% 100%); --foreground: hsl(240 10% 3.9%);
+  --primary: hsl(240 5.9% 10%); --primary-foreground: hsl(0 0% 98%);
+  --muted: hsl(240 4.8% 95.9%); --muted-foreground: hsl(240 3.8% 46.1%);
+  --border: hsl(240 5.9% 90%);
+  --chrome: hsl(240 5% 92%);
+}
+.dark {
+  --background: hsl(240 10% 3.9%); --foreground: hsl(0 0% 98%);
+  --primary: hsl(0 0% 98%); --primary-foreground: hsl(240 5.9% 10%);
+  --muted: hsl(240 3.7% 15.9%); --muted-foreground: hsl(240 5% 64.9%);
+  --border: hsl(240 3.7% 15.9%);
+  --chrome: hsl(240 6% 8%);
+}
+
+/* Portal tokens copied verbatim from portal/app/globals.css (light, and the
+   prefers-color-scheme: dark block). The real portal follows the OS; here Claro/Oscuro drives it. */
+.portal {
+  --bg: #f7f6f3; --surface: #ffffff; --text: #1d1f21; --pmuted: #565b61; --line: #dedbd4;
+  --paccent: #0b5cad; --on-accent: #ffffff;
+  --warn-bg: #fdf1d3; --warn-text: #5c3a00; --warn-line: #e3c36f;
+  --chip-recibida-bg: #e3edf8; --chip-recibida-fg: #0b4a8c;
+  --chip-terminada-bg: #d9f0e1; --chip-terminada-fg: #14602f;
+  --chip-cancelada-bg: #ebe9e6; --chip-cancelada-fg: #4d5257;
+  /* Series colors, taken from existing tokens: Gestión = accent, Técnicos = the "terminada" green. */
+  --s-gestion: var(--paccent); --s-tecnico: var(--chip-terminada-fg);
+}
+.dark .portal {
+  --bg: #121416; --surface: #1b1e21; --text: #ecebe8; --pmuted: #a2a7ad; --line: #2e3236;
+  --paccent: #6fb1ff; --on-accent: #0a1a2b;
+  --warn-bg: #3a2c0c; --warn-text: #f6dfa6; --warn-line: #6d5420;
+  --chip-recibida-bg: #1c3552; --chip-recibida-fg: #b5d6fb;
+  --chip-terminada-bg: #173a25; --chip-terminada-fg: #a5e0b9;
+  --chip-cancelada-bg: #2b2e31; --chip-cancelada-fg: #c4c8cc;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font-family: "Geist", ui-sans-serif, system-ui, sans-serif; background: var(--chrome); color: var(--foreground); -webkit-font-smoothing: antialiased; }
+button, input, select { font: inherit; color: inherit; }
+svg.i { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s3 { width: 12px; height: 12px; } svg.i.s35 { width: 14px; height: 14px; } svg.i.s45 { width: 18px; height: 18px; } svg.i.s10 { width: 40px; height: 40px; }
+
+/* ---------- mockup chrome (same as in-app-feedback) ---------- */
+.top { position: sticky; top: 0; z-index: 60; background: var(--background); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.top h1 { font-size: 20px; margin: 0; flex: 1 1 auto; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: var(--background); }
+.seg button { min-height: 44px; min-width: 44px; padding: 0 12px; border: 0; border-radius: var(--radius); background: transparent; cursor: pointer; font-size: 14px; }
+.seg button[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); font-weight: 600; }
+.intro { max-width: 1280px; margin: 16px auto; padding: 0 16px; font-size: 14px; line-height: 1.55; }
+.note { background: var(--background); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.note h2 { font-size: 15px; margin: 0 0 6px; }
+.note ul { margin: 0; padding-left: 18px; } .note li + li { margin-top: 4px; }
+code { font-size: 12.5px; background: var(--muted); padding: 1px 4px; border-radius: 4px; }
+.blk { margin: 0 auto 40px; padding: 0 16px; max-width: 1312px; }
+.blk-hd { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 8px; }
+.blk-hd h2 { margin: 0; font-size: 17px; flex: 1 1 280px; }
+.blk-hd .who { display: block; font-size: 12px; font-weight: 500; color: color-mix(in srgb, var(--foreground) 72%, var(--chrome)); }
+.rn { margin: 0 0 12px; display: grid; gap: 6px; }
+.rn p { margin: 0; border-left: 3px solid #7c3aed; padding: 6px 10px; background: color-mix(in srgb, #7c3aed 8%, var(--background)); font-size: 13px; line-height: 1.5; border-radius: 0 6px 6px 0; max-width: 1280px; }
+.rn b { font-weight: 600; }
+.stage { overflow-x: auto; padding-bottom: 8px; }
+.frame { position: relative; width: var(--fw, 1280px); margin: 0 auto; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: 0 10px 30px rgb(0 0 0 / .12); }
+.new { position: relative; }
+.new::after { content: "nuevo"; position: absolute; top: -8px; right: 6px; font-size: 9px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; background: #6d28d9; color: #fff; border-radius: 999px; padding: 1px 6px; pointer-events: none; }
+
+/* ---------- portal (system font, portal tokens; classes mirror portal/app/globals.css) ---------- */
+.portal { font: 1rem/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 420px; }
+.portal :focus-visible { outline: 3px solid var(--paccent); outline-offset: 2px; }
+.portal ::selection { background: var(--paccent); color: var(--on-accent); }
+.masthead { border-bottom: 1px solid var(--line); padding: .875rem 1rem; }
+.masthead .in { margin: 0 auto; max-width: 72rem; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.pbrand { font-size: .875rem; font-weight: 600; letter-spacing: .02em; color: var(--pmuted); }
+.ppage { margin: 0 auto; max-width: 72rem; padding: 1.5rem 1rem 3rem; }
+.ptitle { margin: 0 0 .5rem; font-size: 1.5rem; line-height: 1.25; text-wrap: balance; }
+.pmuted { color: var(--pmuted); } .psmall { font-size: .875rem; }
+.pbtn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 2.75rem; min-width: 2.75rem; padding: 0 1rem; border-radius: .5rem; background: transparent; color: var(--text); border: 1px solid var(--line); font-weight: 600; cursor: pointer; text-decoration: none; }
+.pcard { background: var(--surface); border: 1px solid var(--line); border-radius: .75rem; padding: 1.25rem; }
+.pempty { display: grid; justify-items: center; gap: .5rem; text-align: center; padding: 3rem 1rem; }
+.pempty svg { color: var(--pmuted); }
+.pempty p { margin: 0; max-width: 46ch; }
+.pseg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: .5rem; overflow: hidden; background: var(--surface); }
+.pseg button { min-height: 44px; min-width: 44px; padding: 0 .875rem; border: 0; background: transparent; cursor: pointer; font-size: .9375rem; }
+.pseg button[aria-pressed="true"] { background: var(--paccent); color: var(--on-accent); font-weight: 600; }
+.psel { display: grid; gap: 4px; font-size: .8125rem; font-weight: 600; color: var(--pmuted); }
+
+/* support nav: two sections of the same area, in the masthead */
+.snav { display: flex; gap: 4px; margin-right: auto; }
+.snav a { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 .875rem; border-radius: .5rem; color: var(--pmuted); font-size: .9375rem; font-weight: 600; text-decoration: none; }
+.snav a:hover { color: var(--text); background: color-mix(in srgb, var(--paccent) 6%, transparent); }
+.snav a[aria-current="page"] { color: var(--text); background: color-mix(in srgb, var(--paccent) 12%, transparent); box-shadow: inset 0 -2px 0 var(--paccent); }
+.snav .n { padding: 0 .4rem; border-radius: 999px; background: var(--chip-recibida-bg); color: var(--chip-recibida-fg); font-size: .75rem; font-variant-numeric: tabular-nums; }
+.phone .masthead .in { display: grid; grid-template-columns: 1fr auto; }
+.phone .snav { grid-column: 1 / -1; grid-row: 2; margin: 0; }
+.phone .snav a { flex: 1; justify-content: center; }
+
+/* usage page */
+.uhd { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 16px; margin-bottom: 1rem; }
+.uhd .ptitle { margin: 0; }
+.anon { display: flex; align-items: flex-start; gap: 8px; margin: .25rem 0 0; font-size: .875rem; color: var(--pmuted); max-width: 62ch; }
+.anon svg { margin-top: 3px; }
+.stale { display: flex; align-items: flex-start; gap: 10px; border: 1px solid var(--warn-line); border-radius: .5rem; background: var(--warn-bg); color: var(--warn-text); padding: .75rem 1rem; margin-bottom: 1rem; font-size: .9375rem; }
+.stale svg { margin-top: 3px; }
+.stale p { margin: 0; } .stale b { font-weight: 700; }
+.sum { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 20px; margin: 0 0 1rem; font-variant-numeric: tabular-nums; }
+.sum .big { font-size: 1.125rem; font-weight: 700; }
+.sum span { color: var(--pmuted); font-size: .9375rem; }
+.sum b { color: var(--text); }
+.key { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.sw.g { background: var(--s-gestion); } .sw.t { background: var(--s-tecnico); }
+.sw.nd { background: repeating-linear-gradient(135deg, var(--line) 0 2px, transparent 2px 5px); border: 1px solid var(--line); }
+.ugrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 20rem); gap: 1rem; align-items: start; }
+.tablet .ugrid, .phone .ugrid { grid-template-columns: minmax(0, 1fr); }
+.ucol { display: grid; gap: 1rem; min-width: 0; }
+.pcard h2 { margin: 0; font-size: 1.0625rem; }
+.card-hd { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; margin-bottom: .75rem; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .8125rem; color: var(--pmuted); }
+
+/* trend chart: SVG bars, HTML text (so labels never stretch) */
+.chart { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 8px; }
+.yax { position: relative; width: 2rem; height: 160px; font-size: .75rem; color: var(--pmuted); font-variant-numeric: tabular-nums; text-align: right; }
+.yax span { position: absolute; right: 0; transform: translateY(-50%); }
+.plot { position: relative; height: 160px; }
+.plot svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.plot .grid { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.plot .g { fill: var(--s-gestion); } .plot .t { fill: var(--s-tecnico); }
+.plot .today { opacity: .55; }
+.plot .nd { fill: url(#hatch); }
+.plot rect.hit { fill: transparent; }
+.plot rect.hit:hover { fill: color-mix(in srgb, var(--text) 8%, transparent); }
+.xax { grid-column: 2; display: flex; justify-content: space-between; margin-top: 6px; font-size: .75rem; color: var(--pmuted); font-variant-numeric: tabular-nums; }
+.tip { position: absolute; z-index: 2; pointer-events: none; transform: translate(-50%, calc(-100% - 8px)); background: var(--text); color: var(--bg); border-radius: .375rem; padding: .375rem .5rem; font-size: .75rem; line-height: 1.4; white-space: nowrap; box-shadow: 0 4px 12px rgb(0 0 0 / .2); font-variant-numeric: tabular-nums; }
+.tip[hidden] { display: none; }
+details.days { margin-top: .75rem; font-size: .875rem; }
+details.days summary { display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--paccent); font-weight: 600; }
+.dtable { max-height: 16rem; overflow: auto; border: 1px solid var(--line); border-radius: .5rem; }
+
+/* totals table */
+table.ut { width: 100%; border-collapse: collapse; font-size: .9375rem; font-variant-numeric: tabular-nums; }
+.ut th { position: sticky; top: 0; background: var(--surface); text-align: right; font-size: .8125rem; font-weight: 600; color: var(--pmuted); padding: .5rem .625rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.ut th:first-child, .ut td:first-child { text-align: left; padding-left: 0; }
+.dtable .ut th:first-child, .dtable .ut td:first-child { padding-left: .75rem; }
+.ut td { text-align: right; padding: .5rem .625rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ut tr:last-child td { border-bottom: 0; }
+.ut td.tot { font-weight: 700; }
+.ut td.z { color: var(--pmuted); }
+.ut .scr { display: block; font-weight: 500; overflow-wrap: anywhere; }
+.ut .route { display: block; font-size: .75rem; color: var(--pmuted); overflow-wrap: anywhere; }
+.bar { display: flex; height: 6px; margin-top: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--line) 60%, transparent); }
+.bar i { display: block; height: 100%; }
+.bar i.g { background: var(--s-gestion); } .bar i.t { background: var(--s-tecnico); }
+.bar i + i { border-left: 1px solid var(--surface); }
+.phone .ut .route { display: none; }
+.phone .ut th, .phone .ut td { padding-left: .375rem; padding-right: .375rem; }
+
+/* zero list */
+.zl { list-style: none; margin: 0; padding: 0; display: grid; }
+.zl li { display: grid; gap: 2px; padding: .5rem 0; border-top: 1px solid var(--line); font-size: .9375rem; }
+.zl li:first-child { border-top: 0; padding-top: 0; }
+.zl .route { font-size: .75rem; color: var(--pmuted); overflow-wrap: anywhere; }
+.zl .seen { font-size: .8125rem; color: var(--pmuted); }
+.allused { margin: 0; font-size: .9375rem; color: var(--pmuted); }
+.groups { margin: 0; display: grid; gap: .5rem; font-size: .875rem; }
+.groups dt { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.groups dd { margin: 0; color: var(--pmuted); }
+
+/* inbox stub (section 1) */
+.stub { height: 10px; border-radius: 4px; background: var(--line); }
+.plist { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: .75rem; background: var(--surface); overflow: hidden; }
+.plist li { display: grid; gap: 8px; padding: .875rem 1rem; }
+.plist li + li { border-top: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <!-- Lucide paths, inline -->
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M12 20h.01M8.5 16.43a5 5 0 0 1 7 0M2 8.82a15 15 0 0 1 4.17-2.65M10.66 5c4.01-.36 8.14.9 11.34 3.76M16.85 11.25a10 10 0 0 1 2.22 1.68M5 13a10 10 0 0 1 5.24-2.76M2 2l20 20"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9M13 17V5M8 17v-3"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+</svg>
+
+<div class="top">
+  <h1>Uso de la app (portal de soporte) — mockup</h1>
+  <div class="seg" role="group" aria-label="Ancho">
+    <button type="button" data-w="1280" aria-pressed="true">Escritorio 1280</button>
+    <button type="button" data-w="768" aria-pressed="false">Tablet 768</button>
+    <button type="button" data-w="390" aria-pressed="false">Celular 390</button>
+  </div>
+  <div class="seg" role="group" aria-label="Tema">
+    <button type="button" data-theme-set="light" aria-pressed="true">Claro</button>
+    <button type="button" data-theme-set="dark" aria-pressed="false">Oscuro</button>
+  </div>
+</div>
+
+<div class="intro"><div class="note">
+  <h2>Qué se aprueba acá</h2>
+  <ul>
+    <li>Una sección nueva <b>Uso</b> en el portal de soporte (<code>/support/uso</code>), al lado de la bandeja de comentarios, con el mismo login. Solo la ve el desarrollador; en el taller no aparece nada nuevo.</li>
+    <li>Muestra cuántas veces se abrió cada pantalla, separado en dos grupos: <b>Gestión</b> (administrador + jefe de taller) y <b>Técnicos</b>. Nunca por persona: no se guarda quién, solo pantalla, grupo, día y cantidad.</li>
+    <li>Cada sección cambia con <b>Escritorio / Tablet / Celular</b> y <b>Claro / Oscuro</b> arriba. Lo nuevo lleva la etiqueta violeta «nuevo». Los datos son inventados: un taller con 1 administrador, 1 jefe de taller y 6 técnicos, hoy miércoles 11/11/2026.</li>
+    <li>Fuera de este cambio: clics, tiempo en pantalla, recorridos, y las guías por rol (el cambio siguiente).</li>
+  </ul>
+</div></div>
+
+<section class="blk" id="s1">
+  <div class="blk-hd"><h2>1 · Navegación del área de soporte<span class="who">Portal en Vercel · solo el desarrollador</span></h2></div>
+  <div class="rn">
+    <p>El encabezado suma dos pestañas, <b>Comentarios</b> y <b>Uso</b>, entre la marca y «Salir». La bandeja no cambia en nada más; acá se ve en gris. El número junto a «Comentarios» son los nuevos sin leer, para que no se pierdan mientras estás mirando Uso.</p>
+    <p>En celular las pestañas bajan a una fila propia, cada una de medio ancho y 44px de alto.</p>
+  </div>
+  <div class="stage"><div class="frame" id="f1"></div></div>
+</section>
+
+<section class="blk" id="s2">
+  <div class="blk-hd">
+    <h2>2 · Uso: conteos por pantalla y grupo<span class="who">Portal en Vercel · <code>/support/uso</code></span></h2>
+    <div class="seg" role="group" aria-label="Datos" id="ustate">
+      <button type="button" data-s="ok" aria-pressed="true">Al día</button>
+      <button type="button" data-s="stale" aria-pressed="false">Datos atrasados</button>
+      <button type="button" data-s="empty" aria-pressed="false">Sin datos todavía</button>
+    </div>
+  </div>
+  <div class="rn">
+    <p><b>Los números exactos están siempre en la tabla</b>; el gráfico es para ver la forma de la semana. Pasá el mouse (o tocá) una barra para ver el día, y «Ver los números por día» abre la tabla diaria completa.</p>
+    <p><b>Período en días del taller</b> (hora de Panamá), contando hoy. Hoy es un día abierto: su barra va más clara porque todavía puede subir. Cambiá entre 7, 30 y 90 días: «Generar Catálogos» y «Catálogos Generados» se usaron hace unos 50 días, así que figuran con visitas en 90 días y pasan a «Sin visitas» en 30.</p>
+    <p><b>A decidir: un cero por grupo.</b> «Sin visitas en el período» lista solo pantallas que nadie abrió. Un cero de un solo grupo (por ejemplo, Técnicos en «Mis números») queda en la tabla, en gris, pero no en esa lista. Para escribir las guías por rol puede servir listarlo aparte; propongo dejarlo así y ver si hace falta.</p>
+    <p><b>Datos atrasados</b>: si el taller estuvo sin internet, los días que todavía no llegaron se ven rayados y <b>no cuentan como cero</b>. Un día sin datos y un día sin visitas no son lo mismo, y confundirlos haría parecer que nadie trabajó. Cuando vuelve la conexión, el envío siguiente completa esos días solo. El aviso aparece cuando el último dato tiene más de un día.</p>
+    <p><b>Gestión junta a dos personas</b> (administrador y jefe de taller) para que ningún conteo sea el de una sola persona. La contra: no se puede saber cuál de los dos usa una pantalla. Los domingos el taller cierra, por eso las barras en cero.</p>
+  </div>
+  <div class="stage"><div class="frame" id="f2"></div></div>
+</section>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const ic = (id, cls = "") => `<svg class="i ${cls}" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+function press(group, btn) { $$("button", group).forEach((b) => b.setAttribute("aria-pressed", String(b === btn))); }
+const fmt = (n) => n.toLocaleString("es-PA");
+
+let W = 1280;
+const phone = () => W < 640;
+const tablet = () => W >= 640 && W < 1024;
+
+/* ---------- sample data ---------- */
+// Exact labels from src/modules/feedback/screen-labels.ts. Rates are views per full workday: [gestión, técnicos].
+// `window` limits use to a band of days ago (inclusive), to show a screen that drops out of a short range.
+const SCREENS = [
+  ["/kanban", "Órdenes en curso", 9, 22],
+  ["/service-orders/[id]", "Orden de servicio — Detalle", 14, 31],
+  ["/service-orders", "Órdenes de servicio", 8, 6],
+  ["/mis-numeros", "Mis números", 0, 4],
+  ["/agenda", "Agenda", 6, 3],
+  ["/customers", "Clientes", 5, 0],
+  ["/customers/[id]", "Cliente — Detalle", 4, 0],
+  ["/customers/[id]/vehicles/[vehicleId]", "Vehículo — Detalle", 2, 0],
+  ["/service-orders/[id]/print", "Orden de servicio — Hoja impresa", 2.5, 0],
+  ["/inventory", "Inventario", 1.5, 1],
+  ["/inventory/[id]", "Inventario — Detalle", 0.4, 0.2],
+  ["/metrics", "Métricas", 1.2, 0],
+  ["/technicians", "Técnicos", 0.8, 0],
+  ["/account", "Mi cuenta", 0.25, 0.5],
+  ["/vencimientos", "Vencimientos", 0.5, 0],
+  ["/users", "Gestión de usuarios", 0.12, 0],
+  ["/builder", "Generar Catálogos", 1.6, 0, [40, 60]],
+  ["/catalogs", "Catálogos Generados", 0.9, 0, [40, 60]],
+  ["/template-config", "Configuración de plantillas", 0, 0],
+  ["/workshop-config", "Config. del CRM", 0, 0],
+].map(([route, label, g, t, win]) => ({ route, label, g, t, win }));
+
+const TODAY = new Date(2026, 10, 11); // Wed 11/11/2026, workshop local date
+const DAYS = 90;
+let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+const day = (ago) => { const d = new Date(TODAY); d.setDate(d.getDate() - ago); return d; };
+const dm = (d) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+const WD = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+const count = (rate, f) => { const x = rate * f * (0.55 + 0.9 * rnd()); return Math.floor(x) + (rnd() < x % 1 ? 1 : 0); };
+// DATA[ago][screenIndex] = [g, t]
+const DATA = Array.from({ length: DAYS }, (_, ago) => {
+  const wd = day(ago).getDay();
+  const f = (wd === 0 ? 0 : wd === 6 ? 0.5 : 1) * (ago === 0 ? 0.45 : 1); // Sunday closed, Saturday half day, today in progress
+  return SCREENS.map((s) => (s.win && (ago < s.win[0] || ago > s.win[1])) ? [0, 0] : [count(s.g, f), count(s.t, f)]);
+});
+
+/* ---------- state ---------- */
+const U = { range: 30, state: "ok" };
+const STALE_DAYS = 4; // last data received 07/11: 08, 09, 10, 11 have not arrived
+
+/* ---------- portal chrome ---------- */
+function masthead(cur) {
+  const a = (href, label, extra = "") => `<a href="#" aria-current="${cur === href ? "page" : "false"}">${label}${extra}</a>`;
+  return `<header class="masthead"><div class="in">
+    <span class="pbrand">Soporte — Dforce</span>
+    <nav class="snav new" aria-label="Secciones de soporte">${a("inbox", "Comentarios", ` <span class="n" aria-label="2 nuevos">2</span>`)}${a("uso", "Uso")}</nav>
+    <a href="#" class="pbtn">Salir</a></div></header>`;
+}
+function frameClass(f) {
+  f.style.setProperty("--fw", W + "px");
+  f.classList.toggle("phone", phone()); f.classList.toggle("tablet", tablet());
+}
+
+/* ---------- 1 ---------- */
+function render1() {
+  const f = $("#f1"); frameClass(f);
+  const stubRow = (w1, w2) => `<li><div class="stub" style="width:${w1}%"></div><div class="stub" style="width:${w2}%;opacity:.6"></div></li>`;
+  f.innerHTML = `<div class="portal" style="min-height:300px">${masthead("inbox")}
+    <main class="ppage"><h1 class="ptitle">Comentarios del taller</h1>
+    <ul class="plist" aria-hidden="true">${stubRow(40, 70)}${stubRow(32, 60)}${stubRow(45, 55)}</ul></main></div>`;
+}
+
+/* ---------- 2 ---------- */
+function compute() {
+  const missing = U.state === "stale" ? STALE_DAYS : 0;
+  const days = Array.from({ length: U.range }, (_, i) => U.range - 1 - i); // oldest first, as `ago`
+  const totals = SCREENS.map((s, si) => {
+    let g = 0, t = 0, lastAgo = null;
+    for (const ago of days) if (ago >= missing) { g += DATA[ago][si][0]; t += DATA[ago][si][1]; }
+    for (let ago = U.range; ago < DAYS; ago++) if (DATA[ago][si][0] + DATA[ago][si][1] > 0) { lastAgo = ago; break; }
+    return { ...s, g, t, n: g + t, lastAgo };
+  });
+  const daily = days.map((ago) => {
+    if (ago < missing) return { ago, nd: true };
+    let g = 0, t = 0; for (const [a, b] of DATA[ago]) { g += a; t += b; }
+    return { ago, g, t };
+  });
+  return { totals, daily, missing };
+}
+
+function chart(daily) {
+  const max = Math.max(1, ...daily.filter((d) => !d.nd).map((d) => d.g + d.t));
+  const step = max <= 40 ? 10 : max <= 80 ? 20 : 50;
+  const top = Math.ceil(max / step) * step;
+  const n = daily.length, bw = 10, gap = n > 40 ? 2 : n > 10 ? 4 : 8, Wd = n * (bw + gap) - gap, H = 100;
+  const y = (v) => H - (v / top) * H;
+  let bars = "";
+  daily.forEach((d, i) => {
+    const x = i * (bw + gap);
+    if (d.nd) { bars += `<rect class="nd" x="${x}" y="0" width="${bw}" height="${H}" rx="1"/>`; }
+    else {
+      const cls = d.ago === 0 ? " today" : "";
+      const ht = (d.t / top) * H, hg = (d.g / top) * H;
+      if (d.t) bars += `<rect class="t${cls}" x="${x}" y="${H - ht}" width="${bw}" height="${ht}"/>`;
+      if (d.g) bars += `<rect class="g${cls}" x="${x}" y="${H - ht - hg}" width="${bw}" height="${Math.max(0, hg - 0.6)}"/>`;
+    }
+    bars += `<rect class="hit" data-i="${i}" x="${x - gap / 2}" y="0" width="${bw + gap}" height="${H}"/>`;
+  });
+  const ticks = [0, top / 2, top];
+  const grid = ticks.map((v) => `<line class="grid" x1="0" x2="${Wd}" y1="${y(v)}" y2="${y(v)}"/>`).join("");
+  const first = day(daily[0].ago), mid = day(daily[Math.floor(n / 2)].ago);
+  return `<div class="chart">
+    <div class="yax" aria-hidden="true">${ticks.map((v) => `<span style="top:${(1 - v / top) * 100}%">${v}</span>`).join("")}</div>
+    <div class="plot"><svg viewBox="0 0 ${Wd} ${H}" preserveAspectRatio="none" role="img" aria-label="Vistas por día, ${n} días. Los números exactos están en la tabla por día.">
+      <defs><pattern id="hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="4" height="4" fill="transparent"/><line x1="0" y1="0" x2="0" y2="4" stroke="var(--pmuted)" stroke-width="1.5" opacity=".45"/></pattern></defs>
+      ${grid}${bars}</svg><div class="tip" hidden></div></div>
+    <div class="xax" aria-hidden="true"><span>${dm(first)}</span><span>${dm(mid)}</span><span>hoy ${dm(TODAY)}</span></div>
+  </div>`;
+}
+
+function dayTable(daily) {
+  const rows = [...daily].reverse().map((d) => {
+    const dt = day(d.ago);
+    const lbl = `${WD[dt.getDay()]} ${dm(dt)}${d.ago === 0 ? " (hoy, en curso)" : ""}`;
+    return d.nd ? `<tr><td>${lbl}</td><td class="z" colspan="3">Sin datos todavía</td></tr>`
+      : `<tr><td>${lbl}</td><td${d.g ? "" : ' class="z"'}>${fmt(d.g)}</td><td${d.t ? "" : ' class="z"'}>${fmt(d.t)}</td><td class="tot">${fmt(d.g + d.t)}</td></tr>`;
+  }).join("");
+  return `<details class="days"><summary>Ver los números por día</summary><div class="dtable">
+    <table class="ut"><thead><tr><th scope="col">Día</th><th scope="col">Gestión</th><th scope="col">Técnicos</th><th scope="col">Total</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
+}
+
+function render2() {
+  const f = $("#f2"); frameClass(f);
+  const seg = `<div><span class="psel" style="margin-bottom:4px" id="rng-l">Período</span>
+    <div class="pseg" role="group" aria-labelledby="rng-l">${[7, 30, 90].map((r) => `<button type="button" data-range="${r}" aria-pressed="${U.range === r}">${r} días</button>`).join("")}</div></div>`;
+  const head = `<div class="uhd"><div><h1 class="ptitle">Uso de la app</h1>
+    <p class="anon">${ic("shield", "s35")}<span>Conteos anónimos: por pantalla y grupo, nunca por persona.</span></p></div>${U.state === "empty" ? "" : seg}</div>`;
+
+  if (U.state === "empty") {
+    f.innerHTML = `<div class="portal">${masthead("uso")}<main class="ppage">${head}
+      <div class="pcard pempty">${ic("chart", "s10")}<h2 class="ptitle" style="margin-top:.5rem">Todavía no llegaron datos de uso</h2>
+      <p class="pmuted">Los envía el taller una vez por hora cuando tiene internet. Si pasó más de un día, revisá que el taller esté actualizado y conectado.</p></div></main></div>`;
+    return;
+  }
+
+  const { totals, daily, missing } = compute();
+  const used = totals.filter((s) => s.n > 0).sort((a, b) => b.n - a.n || a.label.localeCompare(b.label, "es"));
+  const zero = totals.filter((s) => s.n === 0).sort((a, b) => a.label.localeCompare(b.label, "es"));
+  const G = used.reduce((a, s) => a + s.g, 0), T = used.reduce((a, s) => a + s.t, 0);
+  const maxN = used.length ? used[0].n : 1;
+  const counted = U.range - missing;
+
+  const stale = missing ? `<div class="stale new" role="status">${ic("wifi-off", "s45")}<p><b>El último dato llegó hace ${missing} días</b> (sábado 07/11, 22:00). El taller estuvo sin internet o apagado. Los días que faltan se ven rayados y no cuentan como cero; se completan solos con el próximo envío.</p></div>` : "";
+
+  const sum = `<p class="sum"><span class="big">${fmt(G + T)} vistas</span>
+    <span class="key"><i class="sw g"></i>Gestión <b>${fmt(G)}</b></span>
+    <span class="key"><i class="sw t"></i>Técnicos <b>${fmt(T)}</b></span>
+    <span>${used.length} de ${SCREENS.length} pantallas con visitas${missing ? ` · ${counted} de ${U.range} días con datos` : ""}</span></p>`;
+
+  const trend = `<section class="pcard" aria-labelledby="tr-h"><div class="card-hd"><h2 id="tr-h">Vistas por día</h2>
+    <div class="legend"><span class="key"><i class="sw g"></i>Gestión</span><span class="key"><i class="sw t"></i>Técnicos</span>${missing ? `<span class="key"><i class="sw nd"></i>Sin datos todavía</span>` : ""}</div></div>
+    ${chart(daily)}${dayTable(daily)}</section>`;
+
+  const row = (s) => {
+    const z = (v) => (v ? "" : ' class="z"');
+    return `<tr><td><span class="scr">${s.label}</span><span class="route">${s.route}</span>
+      <span class="bar" style="width:${Math.max(4, (s.n / maxN) * 100)}%" aria-hidden="true"><i class="g" style="width:${(s.g / s.n) * 100}%"></i><i class="t" style="width:${(s.t / s.n) * 100}%"></i></span></td>
+      <td${z(s.g)}>${fmt(s.g)}</td><td${z(s.t)}>${fmt(s.t)}</td><td class="tot">${fmt(s.n)}</td></tr>`;
+  };
+  const table = `<section class="pcard" aria-labelledby="tb-h"><div class="card-hd"><h2 id="tb-h">Por pantalla</h2><span class="psmall pmuted">De más a menos vistas</span></div>
+    <table class="ut"><thead><tr><th scope="col">Pantalla</th><th scope="col">Gestión</th><th scope="col">Técnicos</th><th scope="col">Total</th></tr></thead>
+    <tbody>${used.map(row).join("")}</tbody></table></section>`;
+
+  const seen = (s) => s.lastAgo === null ? "Nunca en los últimos 90 días" : `Última visita: ${dm(day(s.lastAgo))}`;
+  const zeroCard = `<section class="pcard" aria-labelledby="zl-h"><div class="card-hd"><h2 id="zl-h">Sin visitas en el período</h2><span class="psmall pmuted">${zero.length}</span></div>
+    ${zero.length ? `<ul class="zl">${zero.map((s) => `<li><span>${s.label}</span><span class="route">${s.route}</span><span class="seen">${seen(s)}</span></li>`).join("")}</ul>`
+      : `<p class="allused">Todas las pantallas tuvieron al menos una visita.</p>`}</section>`;
+  const groups = `<section class="pcard" aria-labelledby="gr-h"><div class="card-hd"><h2 id="gr-h">Grupos</h2></div><dl class="groups">
+    <div><dt><i class="sw g"></i>Gestión</dt><dd>Administrador y jefe de taller, juntos.</dd></div>
+    <div><dt><i class="sw t"></i>Técnicos</dt><dd>Todos los técnicos, juntos.</dd></div></dl>
+    <p class="psmall pmuted" style="margin:.75rem 0 0">Cuenta cada vez que alguien abre una pantalla. Sin usuario, sin hora, sin datos de la orden o del cliente.</p></section>`;
+
+  f.innerHTML = `<div class="portal">${masthead("uso")}<main class="ppage new">${head}${stale}${sum}
+    <div class="ugrid"><div class="ucol">${trend}${table}</div><div class="ucol">${zeroCard}${groups}</div></div></main></div>`;
+  f._daily = daily;
+}
+
+$("#f2").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-range]"); if (b) { U.range = +b.dataset.range; render2(); return; }
+  if (e.target.closest("a")) e.preventDefault();
+  showTip(e); // tap on a bar
+});
+function showTip(e) {
+  const hit = e.target.closest && e.target.closest("rect.hit"); const tip = $(".tip", $("#f2"));
+  if (!tip) return;
+  if (!hit) { tip.hidden = true; return; }
+  const d = $("#f2")._daily[+hit.dataset.i], dt = day(d.ago);
+  const plot = hit.closest(".plot"), pr = plot.getBoundingClientRect(), hr = hit.getBoundingClientRect();
+  tip.innerHTML = `<b>${WD[dt.getDay()]} ${dm(dt)}${d.ago === 0 ? " (hoy)" : ""}</b><br>` + (d.nd ? "Sin datos todavía" : `Gestión ${d.g} · Técnicos ${d.t} · Total ${d.g + d.t}`);
+  tip.hidden = false;
+  const x = Math.min(Math.max(hr.left + hr.width / 2 - pr.left, 70), pr.width - 70);
+  tip.style.left = x + "px"; tip.style.top = "0px";
+}
+$("#f2").addEventListener("mousemove", showTip);
+$("#f2").addEventListener("mouseleave", () => { const t = $(".tip", $("#f2")); if (t) t.hidden = true; });
+$("#f1").addEventListener("click", (e) => { if (e.target.closest("a")) e.preventDefault(); });
+$("#ustate").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; U.state = b.dataset.s; press($("#ustate"), b); render2(); });
+
+function renderAll() { render1(); render2(); }
+$$(".top [data-w]").forEach((b) => b.addEventListener("click", () => { W = +b.dataset.w; press(b.parentElement, b); renderAll(); }));
+function setTheme(t) { document.documentElement.classList.toggle("dark", t === "dark"); press($(".top [data-theme-set]").parentElement, $(`.top [data-theme-set="${t}"]`)); }
+$$(".top [data-theme-set]").forEach((b) => b.addEventListener("click", () => setTheme(b.dataset.themeSet)));
+const qp = new URLSearchParams(location.search);
+if (qp.get("theme") === "dark") setTheme("dark");
+if (qp.get("w")) { W = +qp.get("w"); press($(".top [data-w]").parentElement, $(`.top [data-w="${W}"]`)); }
+if (qp.get("s")) { U.state = qp.get("s"); press($("#ustate"), $(`#ustate [data-s="${U.state}"]`)); }
+if (qp.get("r")) U.range = +qp.get("r");
+renderAll();
+</script>
+</body>
+</html>
