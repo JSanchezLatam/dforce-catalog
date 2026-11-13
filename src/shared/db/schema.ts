@@ -854,7 +854,7 @@ export type Feedback = typeof feedback.$inferSelect;
 export const usageDaily = pgTable(
   "usage_daily",
   {
-    day: date("day").notNull(),
+    day: date("day", { mode: "string" }).notNull(),
     screen: text("screen").notNull(),
     roleGroup: text("role_group", { enum: ["gestion", "tecnico"] }).notNull(),
     views: integer("views").notNull(),
@@ -870,7 +870,7 @@ export const usageDelivery = pgTable(
   "usage_delivery",
   {
     id: smallint("id").primaryKey(),
-    ackedThrough: date("acked_through"),
+    ackedThrough: date("acked_through", { mode: "string" }),
   },
   (table) => [check("usage_delivery_single_row", sql`${table.id} = 1`)],
 );
