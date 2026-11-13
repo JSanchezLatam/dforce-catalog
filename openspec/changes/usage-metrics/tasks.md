@@ -40,10 +40,10 @@ Every WU: RED first, mutation-verify each new test (red BY NAME), `npm test` + `
 - [x] 3.3 `apply` in one transaction: replace in range, cover every day, replace catalog. Tests via `npm run test:portal-sync` (real portal DB): replace-in-range, empty day covered, resend idempotent.
 
 ## WU4: Delivery job (design §5)
-- [ ] 4.1 `deliver.ts`: windows of ≤31 days from `acked_through + 1` to today; empty days included; catalog from `SCREEN_LABELS`.
-- [ ] 4.2 Watermark advances only on 2xx and never past yesterday; failure stops the loop and reports class/status only.
-- [ ] 4.3 `worker.ts` hourly schedule (`"17 * * * *"`, Panama tz), registered in `instrumentation-node.ts`.
-- [ ] 4.4 `test:portal-sync`: 40-day catch-up = 2 batches, watermark at yesterday; 5xx keeps the watermark.
+- [x] 4.1 `deliver.ts`: windows of ≤31 days from `acked_through + 1` to today; empty days included; catalog from `SCREEN_LABELS`.
+- [x] 4.2 Watermark advances only on 2xx and never past yesterday; failure stops the loop and reports class/status only.
+- [x] 4.3 `worker.ts` hourly schedule (`"17 * * * *"`, Panama tz), registered in `instrumentation-node.ts`.
+- [x] 4.4 `test:portal-sync`: 40-day catch-up = 2 batches, watermark at yesterday; 5xx keeps the watermark.
 
 ## WU5: Usage page and nav (design §6, §7)
 - [ ] 5.1 `portal/src/usage/queries.ts` (range totals, per day, coverage, newest `received_at`, catalog).
