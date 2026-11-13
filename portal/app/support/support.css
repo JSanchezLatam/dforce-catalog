@@ -251,7 +251,6 @@
   align-items: center;
   min-height: 2.75rem;
   cursor: pointer;
-  color: var(--accent);
   font-weight: 600;
 }
 .usage .dtable {
