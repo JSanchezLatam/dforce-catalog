@@ -32,7 +32,7 @@ Every WU: RED first, mutation-verify each new test (red BY NAME), `npm test` + `
 ## WU2: Client counter (design §3)
 - [x] 2.1 `UsageCounter` (jsdom): first mount sends one; re-render/StrictMode sends none; `/service-orders/a` → `/b` sends two; query change sends none; unknown route sends none; failed fetch is silent.
 - [x] 2.2 Mount in `(app)/layout.tsx` beside `FeedbackProvider`; no function props across the RSC boundary.
-- [ ] 2.3 Browser at the LAN IP: a navigation records a row; sitting on `/kanban` while it polls adds nothing.
+- [x] 2.3 Browser at the LAN IP: a navigation records a row; sitting on `/kanban` while it polls adds nothing.
 
 ## WU3: Portal contract and ingest (design §4)
 - [ ] 3.1 `usage` kind in `portal/src/contract.ts`; parse (exact keys, dates, range ≤31, counts inside range, enum, integers) with unit tests.
