@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { CATEGORY_LABELS, ROLE_LABELS, STATUS_LABELS, formatPanama, isDelayed } from "../../src/support/format";
 import { queryString, type FeedbackListRow, type Filters } from "../../src/support/queries";
 
@@ -8,9 +10,8 @@ export function FeedbackList({ rows, filters }: { rows: FeedbackListRow[]; filte
     <ul className="plist">
       {rows.map((r) => (
         <li key={r.id}>
-          {/* A plain link, not next/link: opening ?id= marks a Nuevo row read, so it must never be prefetched,
-              and the full load re-renders the support layout, whose Nuevo counter would otherwise go stale. */}
-          <a href={`/support${queryString(filters, r.id)}`} className={`prow${r.status === "nuevo" ? " unread" : ""}`}>
+          {/* prefetch off: opening ?id= marks a Nuevo row read, so a viewport prefetch must not do it. */}
+          <Link href={`/support${queryString(filters, r.id)}`} prefetch={false} className={`prow${r.status === "nuevo" ? " unread" : ""}`}>
             <span className="l1">
               <span className="cat-t">{label(CATEGORY_LABELS, r.category)}</span>
               <span className="chip" data-status={label(STATUS_LABELS, r.status)}>
@@ -27,7 +28,7 @@ export function FeedbackList({ rows, filters }: { rows: FeedbackListRow[]; filte
               <span>Recibido {formatPanama(r.receivedAt)}</span>
               {isDelayed(r.createdAt, r.receivedAt) && <span className="delay">Llegó con demora · escrito {formatPanama(r.createdAt)}</span>}
             </span>
-          </a>
+          </Link>
         </li>
       ))}
     </ul>

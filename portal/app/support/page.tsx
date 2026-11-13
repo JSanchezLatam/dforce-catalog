@@ -5,11 +5,12 @@ import { requireSupport } from "../../src/support/session";
 import { FeedbackDetailPane } from "./FeedbackDetailPane";
 import { FeedbackList } from "./FeedbackList";
 import { InboxFilters } from "./InboxFilters";
+import { SupportHeader } from "./SupportHeader";
 
 export const dynamic = "force-dynamic";
 
 // Listing never writes: marking a comment read belongs to opening it (?id=), not to this render.
-// Order matters: mark first, so the counts and the pane both read the row as already read.
+// Order matters: mark first, so the counts (chips and header) and the pane all read the row as already read.
 export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   if (!(await requireSupport())) redirect("/support/login");
   const params = await searchParams;
@@ -20,7 +21,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const empty = counts.nuevo + counts.leido + counts.resuelto === 0;
 
   return (
-    <main className="page wide" data-detail={id !== undefined}>
+    <>
+      <SupportHeader nuevo={counts.nuevo} />
+      <main className="page wide" data-detail={id !== undefined}>
       <h1 className="title">Comentarios del taller</h1>
       {empty ? (
         <div className="card pempty">
@@ -47,6 +50,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
           </div>
         </>
       )}
-    </main>
+      </main>
+    </>
   );
 }

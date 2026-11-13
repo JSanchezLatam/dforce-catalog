@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 
 import { formatPanama } from "../../../src/support/format";
+import { statusCounts } from "../../../src/support/queries";
 import { requireSupport } from "../../../src/support/session";
 import { RANGES, isStale, parseRange, usageReport, type UsageDay } from "../../../src/usage/queries";
+import { SupportHeader } from "../SupportHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -89,7 +91,8 @@ function Chart({ days, today }: { days: UsageDay[]; today: string }) {
 export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   if (!(await requireSupport())) redirect("/support/login");
   const range = parseRange((await searchParams).r);
-  const r = await usageReport(range);
+  const [r, { nuevo }] = await Promise.all([usageReport(range), statusCounts()]);
+  const header = <SupportHeader nuevo={nuevo} />;
 
   const head = (
     <div className="uhd">
@@ -117,6 +120,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
 
   if (!r.newest)
     return (
+      <>
+      {header}
       <main className="page wide usage">
         {head}
         <div className="card pempty">
@@ -125,6 +130,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
           <p className="muted">Los envía el taller una vez por hora cuando tiene internet. Si pasó más de un día, revisá que el taller esté actualizado y conectado.</p>
         </div>
       </main>
+      </>
     );
 
   const label = new Map(r.catalog.map((s) => [s.pattern, s.label]));
@@ -143,6 +149,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const ago = r.newestAgeDays ?? 0;
 
   return (
+    <>
+    {header}
     <main className="page wide usage">
       {head}
       {isStale(r.newest, new Date()) && (
@@ -310,5 +318,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
         </div>
       </div>
     </main>
+    </>
   );
 }

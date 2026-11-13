@@ -25,6 +25,7 @@ vi.mock("next/navigation", () => ({
   redirect: (to: string) => {
     throw new Error(`REDIRECT ${to}`);
   },
+  usePathname: () => "/support",
   useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
 }));
 // next/link does not render `prefetch` to the DOM; surface it so a test can see it.
@@ -69,10 +70,11 @@ describe("/support inbox list", () => {
     expect(statusCounts).not.toHaveBeenCalled();
   });
 
-  // The support header and Salir moved to the layout: layout.test.tsx asserts them.
-  it("shows the Comentarios del taller title", async () => {
+  it("shows the support header, the Comentarios del taller title and a Salir button", async () => {
     await open();
+    expect(screen.getByText("Soporte — Dforce")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Comentarios del taller" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Salir" })).toBeTruthy();
   });
 
   it("shows category, status chip, author and role, screen, received time and the unread marker", async () => {
@@ -106,13 +108,12 @@ describe("/support inbox list", () => {
     expect(screen.getAllByRole("listitem").map((li) => li.textContent)).toEqual([expect.stringContaining("primero"), expect.stringContaining("segundo")]);
   });
 
-  // A plain anchor: never prefetched (opening marks read), and a full load refreshes the layout's Nuevo counter.
-  it("links each row to ?id=… with a plain anchor, not next/link, keeping the active filters", async () => {
+  it("links each row to ?id=… with prefetch off, keeping the active filters", async () => {
     rows = [row({ id: "a" }), row({ id: "b" })];
     await open({ status: "nuevo" });
     const links = screen.getAllByRole("link").filter((l) => l.getAttribute("href")?.includes("id="));
     expect(links.map((l) => l.getAttribute("href"))).toEqual(["/support?id=a&status=nuevo", "/support?id=b&status=nuevo"]);
-    expect(links.map((l) => l.hasAttribute("data-prefetch"))).toEqual([false, false]); // the next/link mock adds it
+    expect(links.map((l) => l.getAttribute("data-prefetch"))).toEqual(["false", "false"]);
   });
 
   it("passes only the parsed filters to the query", async () => {
@@ -212,6 +213,17 @@ describe("/support detail pane", () => {
     getFeedback.mockResolvedValue(detail());
     await open({ id: ID });
     expect(order).toEqual(["mark", "counts"]);
+  });
+
+  it("the Comentarios counter shows the count read after opening a comment", async () => {
+    // 2 Nuevo before the open, 1 after: the header must show the count read after markRead.
+    statusCounts.mockImplementation(async () => ({ ...counts, nuevo: markRead.mock.calls.length ? 1 : 2 }));
+    getFeedback.mockResolvedValue(detail());
+    await open({ id: ID });
+    const nav = within(screen.getByRole("navigation", { name: "Secciones de soporte" }));
+    const badge = nav.getByRole("link", { name: /^Comentarios/ }).querySelector(".n");
+    expect(badge?.textContent).toBe("1");
+    expect(badge?.getAttribute("aria-label")).toBe("1 nuevo");
   });
 
   it("shows the full text, author and role, screen, both times, the delay flag and the status", async () => {

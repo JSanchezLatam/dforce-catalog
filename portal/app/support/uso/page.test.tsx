@@ -8,16 +8,20 @@ import Page from "./page";
 let authed: boolean;
 let report: UsageReport;
 const usageReport = vi.fn();
+const statusCounts = vi.fn();
 
 vi.mock("../../../src/support/session", () => ({ requireSupport: async () => authed }));
 vi.mock("../../../src/usage/queries", async (importActual) => ({
   ...(await importActual<typeof import("../../../src/usage/queries")>()),
   usageReport: (r: number) => usageReport(r),
 }));
+vi.mock("../../../src/support/queries", () => ({ statusCounts: () => statusCounts() }));
 vi.mock("next/navigation", () => ({
   redirect: (to: string) => {
     throw new Error(`REDIRECT ${to}`);
   },
+  usePathname: () => "/support/uso",
+  useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
 }));
 
 const NEWEST = new Date("2026-11-08T03:00:00Z"); // Saturday 07/11 22:00 in Panama
@@ -52,6 +56,7 @@ beforeEach(() => {
   authed = true;
   report = base();
   usageReport.mockReset().mockImplementation(async () => report);
+  statusCounts.mockReset().mockResolvedValue({ nuevo: 3, leido: 0, resuelto: 0 });
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(NEWEST.getTime() + 60_000)); // fresh by default
 });
@@ -68,6 +73,16 @@ describe("/support/uso", () => {
     authed = false;
     await expect(Page({ searchParams: Promise.resolve({}) })).rejects.toThrow("REDIRECT /support/login");
     expect(usageReport).not.toHaveBeenCalled();
+    expect(statusCounts).not.toHaveBeenCalled();
+  });
+
+  it("renders the support header with Uso as the current page and the Nuevo count", async () => {
+    await open();
+    const nav = within(screen.getByRole("navigation", { name: "Secciones de soporte" }));
+    expect(nav.getByRole("link", { name: /^Uso$/ }).getAttribute("aria-current")).toBe("page");
+    expect(nav.getByRole("link", { name: /^Comentarios/ }).getAttribute("aria-current")).toBeNull();
+    expect(nav.getByRole("link", { name: /^Comentarios/ }).querySelector(".n")?.textContent).toBe("3");
+    expect(screen.getByRole("button", { name: "Salir" })).toBeTruthy();
   });
 
   it("shows the title and the anonymity line", async () => {
