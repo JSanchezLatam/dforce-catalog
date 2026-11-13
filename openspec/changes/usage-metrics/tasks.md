@@ -30,8 +30,8 @@ Every WU: RED first, mutation-verify each new test (red BY NAME), `npm test` + `
 - [x] 1.4 e2e on a throwaway DB: increment, two roles merge into `gestion`, 20 concurrent views = 20, day is Panama date.
 
 ## WU2: Client counter (design §3)
-- [ ] 2.1 `UsageCounter` (jsdom): first mount sends one; re-render/StrictMode sends none; `/service-orders/a` → `/b` sends two; query change sends none; unknown route sends none; failed fetch is silent.
-- [ ] 2.2 Mount in `(app)/layout.tsx` beside `FeedbackProvider`; no function props across the RSC boundary.
+- [x] 2.1 `UsageCounter` (jsdom): first mount sends one; re-render/StrictMode sends none; `/service-orders/a` → `/b` sends two; query change sends none; unknown route sends none; failed fetch is silent.
+- [x] 2.2 Mount in `(app)/layout.tsx` beside `FeedbackProvider`; no function props across the RSC boundary.
 - [ ] 2.3 Browser at the LAN IP: a navigation records a row; sitting on `/kanban` while it polls adds nothing.
 
 ## WU3: Portal contract and ingest (design §4)

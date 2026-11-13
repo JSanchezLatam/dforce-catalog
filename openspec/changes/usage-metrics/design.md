@@ -32,7 +32,7 @@ Service: `recordView(screen, group, deps?)` with the repo's injected-seam patter
 
 ## 3. Client counter — `UsageCounter`
 
-`"use client"`; `const path = usePathname()`; a `useRef` holds the last counted pathname; in an effect, if `path !== last.current`, set it and `fetch("/api/usage/view", { method: "POST", keepalive: true, body: JSON.stringify({ screen: routeOf(path) }) }).catch(() => {})`. Only when `routeOf(path)` is a `SCREEN_LABELS` key. Renders `null`. Mounted next to `FeedbackProvider` in `(app)/layout.tsx` (a Server Component passing no function prop — the RSC boundary trap).
+`"use client"`; `const path = usePathname()`; a `useRef` holds the last counted pathname; in an effect, if `path !== last.current`, set it and `fetch("/api/usage/view", { method: "POST", keepalive: true, body: JSON.stringify({ screen: patternOf(path) }) }).catch(() => {})`. Only when `routeOf(path)` is a `SCREEN_LABELS` key. Renders `null`. Mounted next to `FeedbackProvider` in `(app)/layout.tsx` (a Server Component passing no function prop — the RSC boundary trap).
 
 ## 4. Contract and portal ingest
 
