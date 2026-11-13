@@ -8,6 +8,15 @@ Decisions: owner grill 2026-11-09 (Engram `feedback-metrics-guide-plan`). Second
 
 **Naming:** this is NOT `metrics-dashboard` (`/metrics`, `metrics.read`: workshop productivity per technician). That change is archived and untouched. This change is called `usage-metrics`, and nothing in the workshop UI uses the word "métricas" for it.
 
+**Owner decisions (2026-11-13):**
+- Mockup approved.
+- Palette **Opción B** for the whole support area: Comentarios and Uso, never the customer portal `/c`. It is 60% `#121417`, 30% `#D9DCE1` and 10% the workshop red `--urgent` (`hsl(0 72% 51%)`). The red never carries text: it measures 3.82:1 on `#121417`.
+- Defaults the owner did not change:
+  - missing days are hatched and do not count as zero;
+  - a zero in one group shows in the table but not in "Sin visitas";
+  - the stale-data notice appears when the newest data is more than one day old.
+- Assumption, not confirmed: support is dark-only. The palette is dark-dominant, and the derived light variant was marked "a decidir".
+
 ## Scope
 
 ### In Scope
@@ -57,7 +66,7 @@ Count on the server, where the session's role is already known. Where exactly is
 |---|---|---|
 | A count leaks identity (a group of one) | Med | Fixed groups `gestión` / `técnico`; no per-user key exists in either database |
 | Counting slows every page | Low | One upsert, off the render's critical path; failures swallowed and reported to Sentry without content |
-| Prefetches, double renders or polling inflate counts | High | `KanbanBoard.tsx` and `CustomerSyncPanel.tsx` poll with `router.refresh()`, which re-renders the page on the server: server-side counting would record every poll as a view. Count only real navigations; decided in design and pinned by a test |
+| Prefetches, refreshes or polling inflate counts | High | The proxy matcher catches `/api/*` (the kanban polls `/api/kanban`) and RSC refreshes (`usePollWhileActive` calls `router.refresh()` on an interval), so proxy- or page-level counting would record them. Count pathname changes on the client instead; pinned by a test |
 | "Sin visitas" wrong across versions | Med | The workshop sends its own screen catalog with each batch |
 | Portal ingest contract change breaks the running workshop | Low | New body kind is additive; old workshop builds never send it |
 | Migration on the workshop PC | Low | Additive table only; applied by the usual update (`standalone.ps1`) |
@@ -68,9 +77,7 @@ Revert the PRs. The aggregate table and the portal table are additive and can st
 
 ## Open questions (for design, not for the owner)
 
-1. Where to count: the proxy (sees every page request, but also prefetches and `router.refresh()` polls) vs. a small server call from the shell on each client navigation (sees real navigations, needs the route pattern).
-2. How often the delivery job runs.
-3. Workshop "day" boundary: America/Panama, matching the rest of the app.
+Resolved in `design.md`: count pathname changes on the client; deliver hourly; the day is the America/Panama date computed in SQL.
 
 ## Success Criteria
 
