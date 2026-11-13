@@ -16,7 +16,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const workshopUrl = process.env.PORTAL_SYNC_WORKSHOP_URL;
 const portalUrl = process.env.PORTAL_SYNC_PORTAL_URL;
-if (!workshopUrl || !portalUrl || /\/dforce_(catalog|portal)$/.test(workshopUrl + portalUrl)) {
+// Each URL on its own: a concatenation would only ever test the portal's database name.
+if (!workshopUrl || !portalUrl || [workshopUrl, portalUrl].some((u) => /\/dforce_(catalog|portal)(\?|$)/.test(u))) {
   throw new Error("test:portal-sync must be run through `npm run test:portal-sync` (it owns the throwaway databases)");
 }
 
