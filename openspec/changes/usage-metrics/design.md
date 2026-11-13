@@ -14,6 +14,7 @@ Specs: `specs/usage-metrics/spec.md`, `specs/support-inbox/spec.md`. Layout and 
 | D6 | The workshop sends its screen catalog in every batch; the portal keeps only the latest | "Sin visitas" must reflect the workshop's RUNNING version, which often lags `main` | Importing `SCREEN_LABELS` into the portal |
 | D7 | No toast, no error UI for a view | A view is not an operator mutation; the toast rule (AGENTS.md, 2026-09-13) covers actions the operator takes. Recorded here so review does not flag it | Toasting or retrying |
 | D8 | Palette as tokens on a `.support` wrapper in a new `portal/app/support/layout.tsx`; dark-only | Scopes to `/support` without touching `:root`, so `/c` is untouched (`portal/app/globals.css:2,26`) | Editing `:root` |
+| D10 | The `/support/uso` chart is hand-made inline SVG, not Arc UI | Owner 2026-11-13: one simple chart; Arc lives only in the workshop app (`src/components/arc/`, brings `motion`) and the portal has neither. Revisit Arc when the support area presents more metrics | Copying Arc + `motion` into `portal/` |
 | D9 | No special case for single-person screens (`/users` is administrador-only) | Owner-default; flagged at the palette checkpoint | Hiding the split per screen |
 
 ## 1. Workshop data

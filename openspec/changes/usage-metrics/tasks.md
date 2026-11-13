@@ -24,10 +24,10 @@ Every WU: RED first, mutation-verify each new test (red BY NAME), `npm test` + `
 | WU6 | Support palette Opción B | ~200 | WU5, owner checkpoint |
 
 ## WU1: Workshop table and view endpoint (design §1, §2)
-- [ ] 1.1 Migration: `usage_daily`, `usage_delivery` (one row, `acked_through` null).
-- [ ] 1.2 `src/modules/usage/groups.ts`: role → group, pure; unit tests (pantalla refused).
-- [ ] 1.3 `recordView` service with seam; route `POST /api/usage/view` (400 unreadable/unknown screen, 401, 403, 204); `ROUTE_GUARDS` entry.
-- [ ] 1.4 e2e on a throwaway DB: increment, two roles merge into `gestion`, 20 concurrent views = 20, day is Panama date.
+- [x] 1.1 Migration: `usage_daily`, `usage_delivery` (one row, `acked_through` null).
+- [x] 1.2 `src/modules/usage/groups.ts`: role → group, pure; unit tests (pantalla refused).
+- [x] 1.3 `recordView` service with seam; route `POST /api/usage/view` (400 unreadable/unknown screen, 401, 403, 204); `ROUTE_GUARDS` entry.
+- [x] 1.4 e2e on a throwaway DB: increment, two roles merge into `gestion`, 20 concurrent views = 20, day is Panama date.
 
 ## WU2: Client counter (design §3)
 - [ ] 2.1 `UsageCounter` (jsdom): first mount sends one; re-render/StrictMode sends none; `/service-orders/a` → `/b` sends two; query change sends none; unknown route sends none; failed fetch is silent.

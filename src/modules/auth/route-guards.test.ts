@@ -136,6 +136,8 @@ export const ROUTE_GUARDS: Record<
   "/api/board/clientes": { GET: "board.customer" },
   // in-app-feedback: send stores then attempts inline delivery; pantalla is refused.
   "/api/feedback": { POST: "feedback.send" },
+  // usage-metrics: session-only; the 403 for pantalla comes from the role → group map, not an Action.
+  "/api/usage/view": { POST: "session-only" },
   "/api/account": { GET: "account.self", PATCH: "account.self" },
   "/api/users": { GET: "users.manage", POST: "users.manage" },
   "/api/users/[id]": { PATCH: "users.manage" },
