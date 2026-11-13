@@ -51,9 +51,9 @@ Every WU: RED first, mutation-verify each new test (red BY NAME), `npm test` + `
 - [x] 5.3 `/support/uso`: range 7/30/90, summary, chart, table, "Sin visitas", stale notice, empty state; copy verbatim from the mockup. Unit tests per spec scenario.
 
 ## WU6: Support palette Opción B (design §7, D8)
-- [ ] 6.0 **Owner checkpoint:** mockup frame of the real inbox list + detail and the login page under Opción B (status chips: red must not silently mean "Nuevo"); `/users` single-person question (default: show as is). Nothing in WU6 is built before approval.
-- [ ] 6.1 Tokens on `.support` (dark-only); `/c` untouched (unit test on the class scope).
-- [ ] 6.2 Browser: every support page in both OS themes; contrast of each text pair ≥4.5:1.
+- [x] 6.0 **Owner checkpoint:** mockup frame of the real inbox list + detail and the login page under Opción B (status chips: red must not silently mean "Nuevo"); `/users` single-person question (default: show as is). Nothing in WU6 is built before approval. Approved 2026-11-13: Opción B with the recommended neutral chips (no red on "Nuevo"); `/users` shown as is (D9 default).
+- [x] 6.1 Tokens on `.support` (dark-only); `/c` untouched (unit test on the class scope).
+- [x] 6.2 Browser: every support page in both OS themes; contrast of each text pair ≥4.5:1.
 
 ## Final integration
 - [ ] 7.1 Deploy the PORTAL first (`vercel env`, migration via `DATABASE_URL_UNPOOLED`, `vercel deploy --prod` from `portal/`), then update the workshop PC (`standalone.ps1`, migration).
