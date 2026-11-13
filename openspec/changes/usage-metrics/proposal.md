@@ -46,7 +46,7 @@ Decisions: owner grill 2026-11-09 (Engram `feedback-metrics-guide-plan`). Second
 
 ## Approach
 
-Count on the server, where the session's role is already known. Where exactly is a design item (see Open questions). Ship the counts as absolute daily totals, so delivery is a stateless "send the last N days" job and the portal stores the last value it received.
+Count each pathname change on the client and record it on the server, which takes the role group from the session (design D1, D2). Ship the counts as absolute daily totals, so delivery is a stateless "send the last N days" job and the portal stores the last value it received.
 
 ## Affected Areas
 
