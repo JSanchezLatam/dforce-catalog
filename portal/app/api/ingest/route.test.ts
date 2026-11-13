@@ -120,4 +120,25 @@ describe("POST /api/ingest", () => {
     expect(ok.status).toBe(200);
     expect(applyIngest).toHaveBeenCalledWith(fb);
   });
+
+  it("usage: unsigned is 401; a signed body with an extra key is 400; signed and valid is applied", async () => {
+    const usage: IngestBody = {
+      kind: "usage",
+      from: "2026-10-05",
+      to: "2026-10-05",
+      screens: [{ pattern: "/kanban", label: "Tablero" }],
+      counts: [{ day: "2026-10-05", screen: "/kanban", group: "gestion", views: 3 }],
+    };
+    const raw = JSON.stringify(usage);
+    expect((await route.POST(new Request(url, { method: "POST", body: raw }))).status).toBe(401);
+    for (const bad of [{ ...usage, username: "ana" }, { ...usage, to: "2026-10-04" }]) {
+      const badRaw = JSON.stringify(bad);
+      const res = await route.POST(new Request(url, { method: "POST", body: badRaw, headers: signed(badRaw) }));
+      expect(res.status, badRaw).toBe(400);
+    }
+    expect(applyIngest).not.toHaveBeenCalled();
+    const ok = await route.POST(new Request(url, { method: "POST", body: raw, headers: signed(raw) }));
+    expect(ok.status).toBe(200);
+    expect(applyIngest).toHaveBeenCalledWith(usage);
+  });
 });

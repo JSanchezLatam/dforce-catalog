@@ -1,7 +1,15 @@
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import { portalCustomer, portalTermsAcceptance, supportFeedback, supportLoginThrottle } from "./schema";
+import {
+  portalCustomer,
+  portalTermsAcceptance,
+  supportFeedback,
+  supportLoginThrottle,
+  usageCount,
+  usageCoverage,
+  usageScreen,
+} from "./schema";
 
 const cols = (t: Parameters<typeof getTableConfig>[0]) =>
   Object.fromEntries(getTableConfig(t).columns.map((c) => [c.name, c]));
@@ -53,5 +61,31 @@ describe("portal schema", () => {
     expect(c.ip.primary).toBe(true);
     expect(c.locked_until.notNull).toBe(false);
     expect(c.failures.notNull && c.window_started_at.notNull).toBe(true);
+  });
+
+  it("usage_count: (day, screen, role_group) is the primary key, role_group checked against the two groups", () => {
+    const c = cols(usageCount);
+    expect(Object.keys(c).sort()).toEqual(["day", "role_group", "screen", "views"]);
+    for (const k of Object.keys(c)) expect(c[k].notNull, k).toBe(true);
+    expect(c.day.columnType).toBe("PgDateString");
+    expect(c.views.columnType).toBe("PgInteger");
+    const cfg = getTableConfig(usageCount);
+    expect(cfg.primaryKeys.map((pk) => pk.columns.map((col) => col.name))).toEqual([["day", "screen", "role_group"]]);
+    expect(cfg.checks.map((k) => k.name)).toEqual(["usage_count_role_group_check"]);
+  });
+
+  it("usage_coverage: one row per day, received_at not null", () => {
+    const c = cols(usageCoverage);
+    expect(Object.keys(c).sort()).toEqual(["day", "received_at"]);
+    expect(c.day.primary).toBe(true);
+    expect(c.day.columnType).toBe("PgDateString");
+    expect(c.received_at.notNull).toBe(true);
+  });
+
+  it("usage_screen: the pattern is the key", () => {
+    const c = cols(usageScreen);
+    expect(Object.keys(c).sort()).toEqual(["label", "pattern"]);
+    expect(c.pattern.primary).toBe(true);
+    expect(c.label.notNull).toBe(true);
   });
 });

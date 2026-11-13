@@ -23,6 +23,8 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { TERMS_GATE_ENABLED } from "../../portal/src/terms";
+
 const workshopUrl = process.env.PORTAL_SYNC_WORKSHOP_URL;
 const portalUrl = process.env.PORTAL_SYNC_PORTAL_URL;
 if (!workshopUrl || !portalUrl || /\/dforce_(catalog|portal)$/.test(workshopUrl + portalUrl)) {
@@ -145,12 +147,18 @@ describe("workshop sync -> portal -> customer", () => {
     await db.delete(schema.users).where(eq(schema.users.id, ADMIN));
   });
 
-  it("shows no plate and no order before the terms are accepted", async () => {
+  // The gate shipped off on 2026-10-07 (64d5f29); this pins whichever value ships instead of failing on the off one.
+  it.runIf(TERMS_GATE_ENABLED)("shows no plate and no order before the terms are accepted", async () => {
     const t = await token();
     for (const route of [p.open, p.snapshot]) {
       const r = await call(route, t);
       expect(r.json).toEqual({ state: "terms" });
     }
+  });
+
+  it.skipIf(TERMS_GATE_ENABLED)("with the terms gate off, open lets the customer straight through", async () => {
+    const r = await call(p.open, await token());
+    expect(r.json).toEqual({ state: "accepted" });
   });
 
   it("serves exactly the whitelisted data after accept: plates, labels, no internal field", async () => {

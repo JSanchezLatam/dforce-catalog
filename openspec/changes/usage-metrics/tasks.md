@@ -35,9 +35,9 @@ Every WU: RED first, mutation-verify each new test (red BY NAME), `npm test` + `
 - [x] 2.3 Browser at the LAN IP: a navigation records a row; sitting on `/kanban` while it polls adds nothing.
 
 ## WU3: Portal contract and ingest (design §4)
-- [ ] 3.1 `usage` kind in `portal/src/contract.ts`; parse (exact keys, dates, range ≤31, counts inside range, enum, integers) with unit tests.
-- [ ] 3.2 Portal migration: `usage_count`, `usage_coverage`, `usage_screen`.
-- [ ] 3.3 `apply` in one transaction: replace in range, cover every day, replace catalog. Tests via `npm run test:portal-sync` (real portal DB): replace-in-range, empty day covered, resend idempotent.
+- [x] 3.1 `usage` kind in `portal/src/contract.ts`; parse (exact keys, dates, range ≤31, counts inside range, enum, integers) with unit tests.
+- [x] 3.2 Portal migration: `usage_count`, `usage_coverage`, `usage_screen`.
+- [x] 3.3 `apply` in one transaction: replace in range, cover every day, replace catalog. Tests via `npm run test:portal-sync` (real portal DB): replace-in-range, empty day covered, resend idempotent.
 
 ## WU4: Delivery job (design §5)
 - [ ] 4.1 `deliver.ts`: windows of ≤31 days from `acked_through + 1` to today; empty days included; catalog from `SCREEN_LABELS`.
