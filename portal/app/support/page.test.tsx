@@ -69,11 +69,10 @@ describe("/support inbox list", () => {
     expect(statusCounts).not.toHaveBeenCalled();
   });
 
-  it("shows the support header, the Comentarios del taller title and a Salir button", async () => {
+  // The support header and Salir moved to the layout: layout.test.tsx asserts them.
+  it("shows the Comentarios del taller title", async () => {
     await open();
-    expect(screen.getByText("Soporte — Dforce")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Comentarios del taller" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Salir" })).toBeTruthy();
   });
 
   it("shows category, status chip, author and role, screen, received time and the unread marker", async () => {
@@ -107,12 +106,13 @@ describe("/support inbox list", () => {
     expect(screen.getAllByRole("listitem").map((li) => li.textContent)).toEqual([expect.stringContaining("primero"), expect.stringContaining("segundo")]);
   });
 
-  it("links each row to ?id=… with prefetch off, keeping the active filters", async () => {
+  // A plain anchor: never prefetched (opening marks read), and a full load refreshes the layout's Nuevo counter.
+  it("links each row to ?id=… with a plain anchor, not next/link, keeping the active filters", async () => {
     rows = [row({ id: "a" }), row({ id: "b" })];
     await open({ status: "nuevo" });
     const links = screen.getAllByRole("link").filter((l) => l.getAttribute("href")?.includes("id="));
     expect(links.map((l) => l.getAttribute("href"))).toEqual(["/support?id=a&status=nuevo", "/support?id=b&status=nuevo"]);
-    expect(links.map((l) => l.getAttribute("data-prefetch"))).toEqual(["false", "false"]);
+    expect(links.map((l) => l.hasAttribute("data-prefetch"))).toEqual([false, false]); // the next/link mock adds it
   });
 
   it("passes only the parsed filters to the query", async () => {

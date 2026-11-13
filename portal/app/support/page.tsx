@@ -5,7 +5,6 @@ import { requireSupport } from "../../src/support/session";
 import { FeedbackDetailPane } from "./FeedbackDetailPane";
 import { FeedbackList } from "./FeedbackList";
 import { InboxFilters } from "./InboxFilters";
-import { LogoutButton } from "./LogoutButton";
 
 export const dynamic = "force-dynamic";
 
@@ -21,41 +20,33 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const empty = counts.nuevo + counts.leido + counts.resuelto === 0;
 
   return (
-    <>
-      <header className="masthead">
-        <div className="bar">
-          <p className="brand">Soporte — Dforce</p>
-          <LogoutButton />
+    <main className="page wide" data-detail={id !== undefined}>
+      <h1 className="title">Comentarios del taller</h1>
+      {empty ? (
+        <div className="card pempty">
+          <h2 className="title">No hay comentarios</h2>
+          <p className="muted">Cuando alguien del taller envíe uno, aparece acá.</p>
         </div>
-      </header>
-      <main className="page wide" data-detail={id !== undefined}>
-        <h1 className="title">Comentarios del taller</h1>
-        {empty ? (
-          <div className="card pempty">
-            <h2 className="title">No hay comentarios</h2>
-            <p className="muted">Cuando alguien del taller envíe uno, aparece acá.</p>
-          </div>
-        ) : (
-          <>
-            <InboxFilters filters={filters} counts={counts} />
-            <div className="inbox">
-              <div className="inbox-list">
-                {rows.length ? (
-                  <FeedbackList rows={rows} filters={filters} />
-                ) : (
-                  <div className="card pempty">
-                    <h2 className="title">Ningún comentario coincide con los filtros</h2>
-                    <a href="/support" className="btn ghost">
-                      Limpiar filtros
-                    </a>
-                  </div>
-                )}
-              </div>
-              <FeedbackDetailPane picked={id !== undefined} row={selected} filters={filters} />
+      ) : (
+        <>
+          <InboxFilters filters={filters} counts={counts} />
+          <div className="inbox">
+            <div className="inbox-list">
+              {rows.length ? (
+                <FeedbackList rows={rows} filters={filters} />
+              ) : (
+                <div className="card pempty">
+                  <h2 className="title">Ningún comentario coincide con los filtros</h2>
+                  <a href="/support" className="btn ghost">
+                    Limpiar filtros
+                  </a>
+                </div>
+              )}
             </div>
-          </>
-        )}
-      </main>
-    </>
+            <FeedbackDetailPane picked={id !== undefined} row={selected} filters={filters} />
+          </div>
+        </>
+      )}
+    </main>
   );
 }

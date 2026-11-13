@@ -1,0 +1,279 @@
+/* Support nav and /support/uso. Current portal tokens only: the support palette is WU6. */
+.snav {
+  display: flex;
+  gap: 0.25rem;
+  margin-right: auto;
+}
+.snav a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0 0.875rem;
+  color: var(--muted);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+.snav a[aria-current="page"] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.snav .n {
+  min-width: 1.25rem;
+  padding: 0 0.375rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  text-align: center;
+}
+@media (max-width: 40rem) {
+  .masthead .bar {
+    flex-wrap: wrap;
+  }
+  .snav {
+    order: 3;
+    width: 100%;
+  }
+  .snav a {
+    flex: 1;
+  }
+}
+
+.usage .uhd {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.usage .anon {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+}
+.usage .uicon {
+  flex: none;
+}
+.usage .stale {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+.usage .stale p {
+  margin: 0;
+}
+.usage .sum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1.25rem;
+  margin: 0 0 1rem;
+  color: var(--muted);
+}
+.usage .sum .big {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.usage .sum b {
+  color: var(--text);
+}
+.usage .key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.usage .sw {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 2px;
+}
+.usage .sw.g,
+.usage .bar .g {
+  background: var(--accent);
+}
+.usage .sw.t,
+.usage .bar .t {
+  background: var(--muted);
+}
+.usage .sw.nd {
+  background: repeating-linear-gradient(45deg, var(--line) 0 2px, transparent 2px 4px);
+  border: 1px solid var(--line);
+}
+.usage .ugrid {
+  display: grid;
+  gap: 1rem;
+}
+@media (min-width: 64rem) {
+  .usage .ugrid {
+    grid-template-columns: 2fr 1fr;
+    align-items: start;
+  }
+}
+.usage .ucol {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.usage .card-hd {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.usage .card-hd h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+.usage .legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.usage .chart {
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  grid-template-rows: 10rem auto;
+}
+.usage .yax {
+  position: relative;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.usage .yax span {
+  position: absolute;
+  right: 0.375rem;
+  transform: translateY(-50%);
+}
+.usage .plot svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.usage .plot .grid {
+  stroke: var(--line);
+  vector-effect: non-scaling-stroke;
+}
+.usage .plot .g {
+  fill: var(--accent);
+}
+.usage .plot .t {
+  fill: var(--muted);
+}
+.usage .plot .today {
+  opacity: 0.55;
+}
+.usage .plot .nd {
+  stroke: var(--line);
+  vector-effect: non-scaling-stroke;
+}
+.usage .xax {
+  grid-column: 2;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.usage details.days summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+.usage .dtable {
+  max-height: 24rem;
+  overflow: auto;
+}
+.usage .ut {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+.usage .ut th {
+  text-align: right;
+  font-size: 0.75rem;
+  color: var(--muted);
+  padding: 0.375rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+.usage .ut td {
+  text-align: right;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+.usage .ut th:first-child,
+.usage .ut td:first-child {
+  text-align: left;
+}
+.usage .ut .z {
+  color: var(--muted);
+}
+.usage .ut .tot {
+  font-weight: 600;
+}
+.usage .scr {
+  display: block;
+}
+.usage .route {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.usage .bar {
+  display: flex;
+  height: 0.25rem;
+  margin-top: 0.25rem;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.usage .zl {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.usage .zl li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.usage .zl .seen {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.usage .allused {
+  margin: 0;
+  color: var(--muted);
+}
+.usage .groups {
+  margin: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.usage .groups dt {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-weight: 600;
+}
+.usage .groups dd {
+  margin: 0 0 0 1.125rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}

@@ -46,9 +46,9 @@ Every WU: RED first, mutation-verify each new test (red BY NAME), `npm test` + `
 - [x] 4.4 `test:portal-sync`: 40-day catch-up = 2 batches, watermark at yesterday; 5xx keeps the watermark.
 
 ## WU5: Usage page and nav (design §6, §7)
-- [ ] 5.1 `portal/src/usage/queries.ts` (range totals, per day, coverage, newest `received_at`, catalog).
-- [ ] 5.2 `portal/app/support/layout.tsx` with the "Comentarios | Uso" nav (`aria-current`, 44px on touch).
-- [ ] 5.3 `/support/uso`: range 7/30/90, summary, chart, table, "Sin visitas", stale notice, empty state; copy verbatim from the mockup. Unit tests per spec scenario.
+- [x] 5.1 `portal/src/usage/queries.ts` (range totals, per day, coverage, newest `received_at`, catalog).
+- [x] 5.2 `portal/app/support/layout.tsx` with the "Comentarios | Uso" nav (`aria-current`, 44px on touch).
+- [x] 5.3 `/support/uso`: range 7/30/90, summary, chart, table, "Sin visitas", stale notice, empty state; copy verbatim from the mockup. Unit tests per spec scenario.
 
 ## WU6: Support palette Opción B (design §7, D8)
 - [ ] 6.0 **Owner checkpoint:** mockup frame of the real inbox list + detail and the login page under Opción B (status chips: red must not silently mean "Nuevo"); `/users` single-person question (default: show as is). Nothing in WU6 is built before approval.
