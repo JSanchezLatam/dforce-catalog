@@ -3,7 +3,21 @@
  * the whitelisted snapshot the workshop pushes — never a raw token.
  */
 import { sql } from "drizzle-orm";
-import { bigint, bigserial, check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  bigserial,
+  check,
+  date,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 import type { PortalVehicle } from "../contract";
 
@@ -57,4 +71,34 @@ export const supportLoginThrottle = pgTable("support_login_throttle", {
   failures: integer("failures").notNull(),
   windowStartedAt: timestamp("window_started_at", { withTimezone: true }).notNull(),
   lockedUntil: timestamp("locked_until", { withTimezone: true }),
+});
+
+/**
+ * Workshop screen views, absolute daily totals per (day, screen, role group).
+ * No user column: the workshop never sends one, and the parser refuses it.
+ */
+export const usageCount = pgTable(
+  "usage_count",
+  {
+    day: date("day", { mode: "string" }).notNull(),
+    screen: text("screen").notNull(),
+    roleGroup: text("role_group", { enum: ["gestion", "tecnico"] }).notNull(),
+    views: integer("views").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.day, t.screen, t.roleGroup] }),
+    check("usage_count_role_group_check", sql`${t.roleGroup} in ('gestion', 'tecnico')`),
+  ],
+);
+
+/** A day the workshop has delivered: present with no counts means zero views, absent means not arrived. */
+export const usageCoverage = pgTable("usage_coverage", {
+  day: date("day", { mode: "string" }).primaryKey(),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** The workshop's running screen catalog, replaced whole on every usage delivery. */
+export const usageScreen = pgTable("usage_screen", {
+  pattern: text("pattern").primaryKey(),
+  label: text("label").notNull(),
 });

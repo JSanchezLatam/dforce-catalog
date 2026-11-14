@@ -8,6 +8,7 @@ import type { IngestBody, PortalOrder, PortalVehicle } from "../contract";
 export type ParseResult = { ok: true; body: IngestBody } | { ok: false };
 
 type Feedback = Extract<IngestBody, { kind: "feedback" }>;
+type Usage = Extract<IngestBody, { kind: "usage" }>;
 type Obj = Record<string, unknown>;
 
 const STATUSES: ReadonlySet<unknown> = new Set(["Recibida", "En proceso", "Terminada", "Cancelada"]);
@@ -24,6 +25,43 @@ const ROLES: ReadonlySet<unknown> = new Set(["tecnico", "jefe_taller", "administ
 const CATEGORIES: ReadonlySet<unknown> = new Set(["bug", "idea", "other"]);
 const FEEDBACK_KEYS = ["kind", "id", "username", "role", "category", "text", "route", "screenLabel", "createdAt"];
 const short = (v: unknown): v is string => str(v) && v.length <= 200;
+
+const USAGE_KEYS = ["kind", "from", "to", "screens", "counts"];
+const GROUPS: ReadonlySet<unknown> = new Set(["gestion", "tecnico"]);
+const MAX_USAGE_DAYS = 31;
+const DAY_MS = 86_400_000;
+const INT4_MAX = 2_147_483_647; // usage_count.views is a Postgres integer
+/** A real calendar day as YYYY-MM-DD: the round trip refuses 2026-02-30 and month 13. */
+const isoDay = (v: unknown): v is string =>
+  typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v;
+
+function usage(b: Obj): Usage | null {
+  const { from, to, screens, counts } = b;
+  if (!isoDay(from) || !isoDay(to) || from > to) return null;
+  if ((Date.parse(to) - Date.parse(from)) / DAY_MS + 1 > MAX_USAGE_DAYS) return null;
+  if (!Array.isArray(screens) || !Array.isArray(counts)) return null;
+  const outScreens: Usage["screens"] = [];
+  const patterns = new Set<string>();
+  for (const s of screens) {
+    if (!isObj(s) || !hasExactKeys(s, ["pattern", "label"]) || !short(s.pattern) || !short(s.label)) return null;
+    if (patterns.has(s.pattern)) return null;
+    patterns.add(s.pattern);
+    outScreens.push({ pattern: s.pattern, label: s.label });
+  }
+  const outCounts: Usage["counts"] = [];
+  const keys = new Set<string>();
+  for (const c of counts) {
+    if (!isObj(c) || !hasExactKeys(c, ["day", "screen", "group", "views"])) return null;
+    const { day, screen, group, views } = c;
+    if (!isoDay(day) || day < from || day > to || !short(screen) || !GROUPS.has(group) || !version(views) || views > INT4_MAX) return null;
+    // The primary key (day, screen, role_group) would refuse a duplicate mid-transaction.
+    const key = JSON.stringify([day, screen, group]);
+    if (keys.has(key)) return null;
+    keys.add(key);
+    outCounts.push({ day, screen, group: group as Usage["counts"][number]["group"], views });
+  }
+  return { kind: "usage", from, to, screens: outScreens, counts: outCounts };
+}
 
 const ORDER_KEYS = [
   "id", "status", "categoria", "createdAt", "appointmentAt", "completedAt",
@@ -94,6 +132,7 @@ function build(b: Obj): IngestBody | null {
       category: category as Feedback["category"],
     };
   }
+  if (b.kind === "usage" && hasExactKeys(b, USAGE_KEYS)) return usage(b);
   return null;
 }
 

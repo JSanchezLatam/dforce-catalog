@@ -25,6 +25,7 @@ vi.mock("next/navigation", () => ({
   redirect: (to: string) => {
     throw new Error(`REDIRECT ${to}`);
   },
+  usePathname: () => "/support",
   useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }),
 }));
 // next/link does not render `prefetch` to the DOM; surface it so a test can see it.
@@ -212,6 +213,17 @@ describe("/support detail pane", () => {
     getFeedback.mockResolvedValue(detail());
     await open({ id: ID });
     expect(order).toEqual(["mark", "counts"]);
+  });
+
+  it("the Comentarios counter shows the count read after opening a comment", async () => {
+    // 2 Nuevo before the open, 1 after: the header must show the count read after markRead.
+    statusCounts.mockImplementation(async () => ({ ...counts, nuevo: markRead.mock.calls.length ? 1 : 2 }));
+    getFeedback.mockResolvedValue(detail());
+    await open({ id: ID });
+    const nav = within(screen.getByRole("navigation", { name: "Secciones de soporte" }));
+    const badge = nav.getByRole("link", { name: /^Comentarios/ }).querySelector(".n");
+    expect(badge?.textContent).toBe("1");
+    expect(badge?.getAttribute("aria-label")).toBe("1 nuevo");
   });
 
   it("shows the full text, author and role, screen, both times, the delay flag and the status", async () => {

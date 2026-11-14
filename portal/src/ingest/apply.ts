@@ -5,11 +5,11 @@
  * re-checks the WHERE against the committed row). A delete is a tombstone: a
  * hard DELETE would let a delayed older upsert resurrect the customer.
  */
-import { and, lt, notInArray, sql } from "drizzle-orm";
+import { and, between, lt, notInArray, sql } from "drizzle-orm";
 
 import type { IngestBody } from "../contract";
 import { db } from "../db/client";
-import { portalCustomer, supportFeedback } from "../db/schema";
+import { portalCustomer, supportFeedback, usageCount, usageCoverage, usageScreen } from "../db/schema";
 
 type Snapshot = NonNullable<typeof portalCustomer.$inferInsert.snapshot>;
 
@@ -24,6 +24,34 @@ async function gatedWrite(clienteId: string, version: number, tokenHash: string 
     })
     .returning({ clienteId: portalCustomer.clienteId });
   return { applied: rows.length > 0 };
+}
+
+/** Every YYYY-MM-DD from `from` to `to`, inclusive (the parser caps it at 31). */
+function daysOf(from: string, to: string): string[] {
+  const days: string[] = [];
+  for (let t = Date.parse(from); t <= Date.parse(to); t += 86_400_000) days.push(new Date(t).toISOString().slice(0, 10));
+  return days;
+}
+
+/**
+ * Absolute totals: the range is replaced, never added to, so a resend is a
+ * no-op. Each day of the range is marked covered, so a day with no counts
+ * reads as zero rather than "not arrived". The catalog is replaced whole.
+ */
+async function applyUsage({ from, to, screens, counts }: Extract<IngestBody, { kind: "usage" }>) {
+  await db.transaction(async (tx) => {
+    await tx.delete(usageCount).where(between(usageCount.day, from, to));
+    if (counts.length > 0) {
+      await tx.insert(usageCount).values(counts.map((c) => ({ day: c.day, screen: c.screen, roleGroup: c.group, views: c.views })));
+    }
+    await tx
+      .insert(usageCoverage)
+      .values(daysOf(from, to).map((day) => ({ day })))
+      .onConflictDoUpdate({ target: usageCoverage.day, set: { receivedAt: sql`now()` } });
+    await tx.delete(usageScreen);
+    if (screens.length > 0) await tx.insert(usageScreen).values(screens);
+  });
+  return { applied: true };
 }
 
 export async function applyIngest(body: IngestBody): Promise<{ applied: boolean }> {
@@ -53,5 +81,7 @@ export async function applyIngest(body: IngestBody): Promise<{ applied: boolean 
         .returning({ id: supportFeedback.id });
       return { applied: rows.length > 0 };
     }
+    case "usage":
+      return applyUsage(body);
   }
 }

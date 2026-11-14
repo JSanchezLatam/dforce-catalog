@@ -50,6 +50,15 @@ export type IngestBody =
       route: string;
       screenLabel: string;
       createdAt: string;
+    }
+  | {
+      /** Absolute daily totals for every day of [from, to] (YYYY-MM-DD, at most 31 days). */
+      kind: "usage";
+      from: string;
+      to: string;
+      /** The workshop's running screen catalog; the portal keeps only the latest. */
+      screens: { pattern: string; label: string }[];
+      counts: { day: string; screen: string; group: "gestion" | "tecnico"; views: number }[];
     };
 
 export const TIMESTAMP_HEADER = "x-portal-timestamp";
