@@ -1,4 +1,63 @@
-/* Support nav and /support/uso. Current portal tokens only: the support palette is WU6. */
+/* Support area: palette Opción B (usage-metrics WU6, design D8), the nav and /support/uso. */
+
+/* Dark-only tokens, scoped here so /c keeps :root's palette. Contrast pairs are pinned by palette.test.tsx. */
+.support {
+  color-scheme: dark;
+  --bg: #121417;
+  --surface: #1b1e22;
+  --text: #d9dce1;
+  --muted: #a3a8b0;
+  --line: #2e3238;
+  --accent: #dc2626;
+  --on-accent: #ffffff;
+  --warn-bg: #2a1618;
+  --warn-text: #f6d4d4;
+  --warn-line: #dc2626;
+  --danger: #f2b8b5;
+  --chip-nuevo-bg: #d9dce1;
+  --chip-nuevo-fg: #121417;
+  --chip-nuevo-edge: transparent;
+  --chip-leido-bg: #2e3238;
+  --chip-leido-fg: #a3a8b0;
+  --chip-leido-edge: transparent;
+  --chip-resuelto-bg: #121417;
+  --chip-resuelto-fg: #d9dce1;
+  --chip-resuelto-edge: #4a4f57;
+  --unread-dot: #d9dce1;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+}
+/* Owner checkpoint: no red on a status, so Nuevo is the brightest neutral. */
+.support .chip[data-status="Nuevo"] {
+  background: var(--chip-nuevo-bg);
+  color: var(--chip-nuevo-fg);
+  box-shadow: inset 0 0 0 1px var(--chip-nuevo-edge);
+}
+.support .chip[data-status="Leído"] {
+  background: var(--chip-leido-bg);
+  color: var(--chip-leido-fg);
+  box-shadow: inset 0 0 0 1px var(--chip-leido-edge);
+}
+.support .chip[data-status="Resuelto"] {
+  background: var(--chip-resuelto-bg);
+  color: var(--chip-resuelto-fg);
+  box-shadow: inset 0 0 0 1px var(--chip-resuelto-edge);
+}
+.support .prow.unread .cat-t::before {
+  background: var(--unread-dot);
+}
+/* Red cannot carry small text (3.8:1 on --bg): links are text colour with a red underline. */
+.support .back,
+.support .usage details.days summary {
+  color: var(--text);
+  text-decoration: underline 2px var(--accent);
+  text-underline-offset: 4px;
+}
+.support .saved {
+  color: var(--text);
+}
+
 .snav {
   display: flex;
   gap: 0.25rem;
@@ -192,7 +251,6 @@
   align-items: center;
   min-height: 2.75rem;
   cursor: pointer;
-  color: var(--accent);
   font-weight: 600;
 }
 .usage .dtable {
