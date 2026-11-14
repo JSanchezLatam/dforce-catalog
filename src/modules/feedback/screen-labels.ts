@@ -22,8 +22,8 @@ export const SCREEN_LABELS: Record<string, string> = {
   "/workshop-config": "Config. del CRM",
 };
 
-const MATCHERS = Object.entries(SCREEN_LABELS).map(
-  ([pattern, label]) => [new RegExp(`^${pattern.replace(/\[[^\]]+\]/g, "[^/]+")}$`), label] as const,
+const MATCHERS = Object.keys(SCREEN_LABELS).map(
+  (pattern) => [new RegExp(`^${pattern.replace(/\[[^\]]+\]/g, "[^/]+")}$`), pattern] as const,
 );
 
 /** The pathname alone: no query string, no fragment. */
@@ -31,9 +31,15 @@ export function routeOf(path: string): string {
   return path.split(/[?#]/)[0];
 }
 
-/** Unmapped routes fall back to the raw route, so a new page never breaks a send. */
-export function screenLabelFor(path: string): string {
+/** The `SCREEN_LABELS` key a concrete path belongs to (`/service-orders/a` → `/service-orders/[id]`), or null. */
+export function patternOf(path: string): string | null {
   const route = routeOf(path);
   const normalized = route.length > 1 ? route.replace(/\/+$/, "") : route;
-  return MATCHERS.find(([re]) => re.test(normalized))?.[1] ?? route;
+  return MATCHERS.find(([re]) => re.test(normalized))?.[1] ?? null;
+}
+
+/** Unmapped routes fall back to the raw route, so a new page never breaks a send. */
+export function screenLabelFor(path: string): string {
+  const pattern = patternOf(path);
+  return pattern === null ? routeOf(path) : SCREEN_LABELS[pattern];
 }
