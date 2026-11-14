@@ -16,6 +16,7 @@ Specs: `specs/usage-metrics/spec.md`, `specs/support-inbox/spec.md`. Layout and 
 | D8 | Palette as tokens on a `.support` wrapper in a new `portal/app/support/layout.tsx`; dark-only | Scopes to `/support` without touching `:root`, so `/c` is untouched (`portal/app/globals.css:2,26`) | Editing `:root` |
 | D9 | No special case for single-person screens (`/users` is administrador-only) | Owner-default; flagged at the palette checkpoint | Hiding the split per screen |
 | D10 | The `/support/uso` chart is hand-made inline SVG, not Arc UI | Owner 2026-11-13: one simple chart; Arc lives only in the workshop app (`src/components/arc/`, brings `motion`) and the portal has neither. Revisit Arc when the support area presents more metrics | Copying Arc + `motion` into `portal/` |
+| D11 | The support header (nav + Nuevo count) is rendered by each page, not by a layout | A layout renders concurrently with its page, so a count it reads can precede the inbox's `markRead`; seen in a browser (list "Leído", nav still "2" after a full load) | A layout that reads `statusCounts()` |
 
 ## 1. Workshop data
 
@@ -32,7 +33,7 @@ Service: `recordView(screen, group, deps?)` with the repo's injected-seam patter
 
 ## 3. Client counter — `UsageCounter`
 
-`"use client"`; `const path = usePathname()`; a `useRef` holds the last counted pathname; in an effect, if `path !== last.current`, set it and `fetch("/api/usage/view", { method: "POST", keepalive: true, body: JSON.stringify({ screen: patternOf(path) }) }).catch(() => {})`. Only when `routeOf(path)` is a `SCREEN_LABELS` key. Renders `null`. Mounted next to `FeedbackProvider` in `(app)/layout.tsx` (a Server Component passing no function prop — the RSC boundary trap).
+`"use client"`; `const path = usePathname()`; a `useRef` holds the last counted pathname; in an effect, if `path !== last.current`, set it and `fetch("/api/usage/view", { method: "POST", keepalive: true, body: JSON.stringify({ screen: patternOf(path) }) }).catch(() => {})`. Only when `patternOf(path)` is not null (it folds `/service-orders/a` to the `/service-orders/[id]` key; `routeOf` alone only strips `?#`). Renders `null`. Mounted next to `FeedbackProvider` in `(app)/layout.tsx` (a Server Component passing no function prop — the RSC boundary trap).
 
 ## 4. Contract and portal ingest
 
@@ -52,7 +53,7 @@ Server component behind the support guard. Queries in `portal/src/usage/queries.
 
 ## 7. Support nav and palette
 
-`portal/app/support/layout.tsx` wraps every support page in `.support` (tokens of Opción B, dark-only) and renders the nav (D8). The login page gets the palette but not the nav. Inbox status chips are recolored within the palette; the red never marks a status as "Nuevo" without the owner seeing it first (palette checkpoint, tasks WU6).
+The header with the nav is a `SupportHeader` that each page renders with the counts it read itself (D11). WU6's `.support` wrapper (tokens of Opción B, dark-only, D8) may still be a layout, because it reads no data. The login page gets the palette but not the nav. Inbox status chips are recolored within the palette; the red never marks a status as "Nuevo" without the owner seeing it first (palette checkpoint, tasks WU6).
 
 ## Testing strategy
 

@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paleta B en soporte</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Mockup chrome: same workshop tokens and conventions as index.html (light chrome only; the frames are dark). */
+:root {
+  --radius: 0.5rem;
+  --background: hsl(0 0% 100%); --foreground: hsl(240 10% 3.9%);
+  --primary: hsl(240 5.9% 10%); --primary-foreground: hsl(0 0% 98%);
+  --muted: hsl(240 4.8% 95.9%); --muted-foreground: hsl(240 3.8% 46.1%);
+  --border: hsl(240 5.9% 90%);
+  --chrome: hsl(240 5% 92%);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font-family: "Geist", ui-sans-serif, system-ui, sans-serif; background: var(--chrome); color: var(--foreground); -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+.top { position: sticky; top: 0; z-index: 60; background: var(--background); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.top h1 { font-size: 20px; margin: 0; flex: 1 1 auto; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); background: var(--background); }
+.seg button { min-height: 44px; min-width: 44px; padding: 0 12px; border: 0; border-radius: var(--radius); background: transparent; cursor: pointer; font-size: 14px; }
+.seg button[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); font-weight: 600; }
+.intro { max-width: 1280px; margin: 16px auto; padding: 0 16px; font-size: 14px; line-height: 1.55; }
+.note { background: var(--background); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.note h2 { font-size: 15px; margin: 0 0 6px; }
+.note ul { margin: 0; padding-left: 18px; } .note li + li { margin-top: 4px; }
+.note.ask { border: 1px solid #7c3aed; }
+code { font-size: 12.5px; background: var(--muted); padding: 1px 4px; border-radius: 4px; }
+.blk { margin: 0 auto 40px; padding: 0 16px; max-width: 1312px; }
+.blk-hd { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 8px; }
+.blk-hd h2 { margin: 0; font-size: 17px; flex: 1 1 280px; }
+.blk-hd .who { display: block; font-size: 12px; font-weight: 500; color: color-mix(in srgb, var(--foreground) 72%, var(--chrome)); }
+.rn { margin: 0 0 12px; display: grid; gap: 6px; }
+.rn p { margin: 0; border: 1px solid color-mix(in srgb, #7c3aed 40%, transparent); padding: 6px 10px; background: color-mix(in srgb, #7c3aed 8%, var(--background)); font-size: 13px; line-height: 1.5; border-radius: 6px; max-width: 1280px; }
+.wlabel { font-size: 12px; font-weight: 600; margin: 16px auto 6px; color: var(--muted-foreground); text-align: center; }
+.stage { overflow-x: auto; padding-bottom: 8px; }
+.frame { position: relative; width: var(--fw, 1280px); margin: 0 auto; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; box-shadow: 0 10px 30px rgb(0 0 0 / .12); }
+
+/* Contrast table (mockup chrome) */
+table.ct { width: 100%; border-collapse: collapse; background: var(--background); font-size: 13px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.ct th, .ct td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+.ct th { font-size: 12px; color: var(--muted-foreground); font-weight: 600; background: var(--muted); }
+.ct td.r { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.ct .ok { color: #14602f; } .ct .bad { color: #b3261e; }
+.ct .sample { display: inline-flex; align-items: center; gap: .4rem; padding: .25rem .75rem; border-radius: 999px; font-size: .875rem; font-weight: 700; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.ct .sample::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; }
+.ct .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--border); vertical-align: -2px; margin-right: 4px; }
+.ct tr.grp td { background: color-mix(in srgb, #7c3aed 6%, var(--background)); font-weight: 600; }
+.tblwrap { overflow-x: auto; }
+
+/* ---------- Opción B, dark-only (support area). Tokens from index.html html.pal-b.dark .portal, named as in portal/app/globals.css ---------- */
+.portal {
+  --bg: #121417; --surface: #1b1e22; --text: #d9dce1; --muted: #a3a8b0; --line: #2e3238;
+  --accent: #dc2626; --on-accent: #ffffff;
+  --warn-bg: #2a1618; --warn-text: #f6d4d4; --warn-line: #dc2626;
+  /* NEW token, outside the 60/30/10: error text. The red itself cannot carry small text (3.8:1). Value = current portal dark --danger. */
+  --danger: #f2b8b5;
+  /* Links that were accent-coloured text ("Volver"): text colour + red underline, as index.html's --plink/--link-deco. */
+  --link: var(--text); --link-deco: var(--accent);
+  /* Chip / unread-dot mapping: set per mode by the script from the single CHIPS source. */
+  font: 1rem/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg); color: var(--text); min-height: 360px;
+}
+.portal :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.portal a { color: inherit; }
+/* classes mirror portal/app/globals.css + app/support/uso/support.css */
+.portal .masthead { border-bottom: 1px solid var(--line); padding: .875rem 1rem; }
+.portal .brand { margin: 0 auto; max-width: 40rem; font-size: .875rem; font-weight: 600; letter-spacing: .02em; color: var(--muted); }
+.portal .masthead .bar { margin: 0 auto; max-width: 72rem; display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.portal .bar .brand { margin: 0; }
+.portal .snav { display: flex; gap: .25rem; margin-right: auto; }
+.portal .snav a { display: inline-flex; align-items: center; justify-content: center; gap: .375rem; min-height: 2.75rem; min-width: 2.75rem; padding: 0 .875rem; color: var(--muted); font-weight: 600; text-decoration: none; border-bottom: 2px solid transparent; }
+.portal .snav a[aria-current="page"] { color: var(--text); border-bottom-color: var(--accent); }
+.portal .snav .n { min-width: 1.25rem; padding: 0 .375rem; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: .75rem; line-height: 1.25rem; text-align: center; }
+.portal .logout { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .5rem; }
+.portal .page { margin: 0 auto; max-width: 40rem; padding: 1.5rem 1rem 3rem; }
+.portal .page.wide { max-width: 72rem; }
+.portal .page.narrow { max-width: 26rem; }
+.portal .title { margin: 0 0 .5rem; font-size: 1.5rem; line-height: 1.25; text-wrap: balance; }
+.portal .muted { color: var(--muted); } .portal .small { font-size: .875rem; }
+.portal .card { background: var(--surface); border: 1px solid var(--line); border-radius: .75rem; padding: 1.5rem; }
+.portal .card .title { margin-bottom: .25rem; }
+.portal .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 3rem; min-width: 2.75rem; padding: 0 1.5rem; border: 0; border-radius: .5rem; background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; }
+.portal .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); padding: 0 1rem; min-height: 2.75rem; }
+.portal .field { display: grid; gap: .375rem; margin: 1.25rem 0 1rem; }
+.portal .field label { font-weight: 600; font-size: .9375rem; }
+.portal .input { min-height: 3rem; padding: 0 .875rem; border: 1px solid var(--line); border-radius: .5rem; background: var(--surface); color: var(--text); font: inherit; }
+.portal .input[aria-invalid="true"] { border-color: var(--danger); }
+.portal .error { margin: 0; font-size: .875rem; color: var(--danger); }
+.portal .chip { display: inline-flex; align-items: center; gap: .4rem; padding: .25rem .75rem; border-radius: 999px; font-size: .875rem; font-weight: 700; }
+.portal .chip::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; }
+.portal .chip[data-status="Nuevo"] { background: var(--chip-nuevo-bg); color: var(--chip-nuevo-fg); box-shadow: inset 0 0 0 1px var(--chip-nuevo-edge); }
+.portal .chip[data-status="Leído"] { background: var(--chip-leido-bg); color: var(--chip-leido-fg); box-shadow: inset 0 0 0 1px var(--chip-leido-edge); }
+.portal .chip[data-status="Resuelto"] { background: var(--chip-resuelto-bg); color: var(--chip-resuelto-fg); box-shadow: inset 0 0 0 1px var(--chip-resuelto-edge); }
+.portal .filters { display: flex; flex-wrap: wrap; gap: .5rem .75rem; align-items: flex-end; margin-bottom: 1rem; }
+.portal .psel { display: grid; gap: .25rem; font-size: .8125rem; font-weight: 600; color: var(--muted); }
+.portal .psel select { min-height: 2.75rem; border: 1px solid var(--line); border-radius: .5rem; background: var(--surface); color: var(--text); padding: 0 .625rem; font: inherit; font-size: .9375rem; font-weight: 400; }
+.portal .pseg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: .5rem; overflow: hidden; background: var(--surface); }
+.portal .pseg a, .portal .pseg button { display: inline-flex; align-items: center; min-height: 2.75rem; min-width: 2.75rem; padding: 0 .875rem; border: 0; background: transparent; color: var(--text); font: inherit; font-size: .9375rem; font-weight: 400; text-decoration: none; cursor: pointer; }
+.portal .pseg a[aria-current="true"], .portal .pseg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.portal .plist { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: .75rem; background: var(--surface); overflow: hidden; }
+.portal .plist li + li { border-top: 1px solid var(--line); }
+.portal .prow { display: grid; gap: .25rem; min-height: 2.75rem; padding: .75rem 1rem; color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
+.portal .prow:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.portal .prow .l1 { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.portal .prow .cat-t { font-weight: 600; }
+.portal .prow.unread .cat-t::before { content: ""; display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; background: var(--unread-dot); margin-right: .4rem; vertical-align: .1rem; }
+.portal .prow .l2, .portal .prow .l3 { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .625rem; font-size: .8125rem; color: var(--muted); }
+.portal .delay { padding: .0625rem .5rem; border-radius: 999px; border: 1px solid var(--warn-line); background: var(--warn-bg); color: var(--warn-text); font-size: .75rem; font-weight: 600; }
+.portal .inbox { display: grid; grid-template-columns: minmax(0, 24rem) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.portal .pdet { display: grid; gap: 1rem; overflow-wrap: anywhere; }
+.portal .pdet h2 { margin: 0; font-size: 1.125rem; }
+.portal .pdet .hd { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
+.portal .pdet dl { display: grid; grid-template-columns: max-content 1fr; gap: .375rem 1rem; margin: 0; font-size: .9375rem; font-variant-numeric: tabular-nums; }
+.portal .pdet dt { color: var(--muted); }
+.portal .pdet dd { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .5rem; }
+.portal .pdet .muted { margin: 0; }
+.portal .ptext { margin: 0; white-space: pre-wrap; padding: 1rem; border-radius: .5rem; background: var(--bg); border: 1px solid var(--line); }
+.portal .pdet textarea { min-height: 6rem; padding: .75rem .875rem; font-size: 1rem; font-weight: 400; resize: vertical; }
+.portal .saverow { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+/* was --chip-terminada-fg (green, outside the palette) */
+.portal .saved { font-size: .875rem; font-weight: 400; color: var(--text); }
+/* was accent-coloured text: red cannot carry small text */
+.portal .back { display: none; align-items: center; min-height: 2.75rem; color: var(--link); font-weight: 600; text-decoration: underline 2px var(--link-deco); text-underline-offset: 4px; }
+
+/* Real breakpoints as frame classes (fixed-width frames do not fire @media). */
+/* max-width: 40rem (640px): nav gets its own row */
+.lt40 .portal .masthead .bar { flex-wrap: wrap; }
+.lt40 .portal .snav { order: 3; width: 100%; }
+.lt40 .portal .snav a { flex: 1; }
+/* max-width: 30rem (480px) */
+.lt30 .portal .btn { width: 100%; }
+.lt30 .portal .logout .btn { width: auto; }
+.lt30 .portal .back { display: inline-flex; }
+.lt30 .portal .inbox { grid-template-columns: minmax(0, 1fr); }
+.lt30 .portal main[data-detail="true"] .filters,
+.lt30 .portal main[data-detail="true"] .inbox-list,
+.lt30 .portal main[data-detail="false"] .pdet { display: none; }
+.lt30 .portal .pdet dl { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.lt30 .portal .pdet dd { margin-bottom: .5rem; }
+.lt30 .portal .saverow .btn { width: 100%; }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>Paleta B sobre la bandeja real — para aprobar</h1>
+  <div class="seg" role="group" aria-label="Chips de estado" id="chipmode">
+    <button type="button" data-mode="gray" aria-pressed="true">Chips: sin rojo (recomendado)</button>
+    <button type="button" data-mode="red" aria-pressed="false">Chips: rojo = Nuevo</button>
+  </div>
+</div>
+
+<div class="intro"><div class="note">
+  <h2>Qué se aprueba acá</h2>
+  <ul>
+    <li>La <b>Opción B</b> (60 % #121417 · 30 % #D9DCE1 · 10 % rojo del taller #DC2626) aplicada a las pantallas <b>reales</b> de soporte: bandeja, detalle con editor y login. Solo oscuro: soporte ignora el tema del sistema operativo.</li>
+    <li>Los <b>colores de los chips de estado</b> (Nuevo, Leído, Resuelto). Por defecto propongo chips <b>sin rojo</b>; «Chips: rojo = Nuevo» arriba muestra la alternativa, que solo se usa si la elegís vos.</li>
+    <li>El rojo rellena botones y pestañas activas con texto blanco (4,8:1); <b>nunca es color de texto chico</b>. Por eso «Volver» pasa a gris claro con subrayado rojo, y los errores usan un rosa claro (#F2B8B5), un color nuevo fuera del 60/30/10.</li>
+    <li>La respuesta a la pregunta sobre <code>/users</code> (más abajo).</li>
+    <li>Las páginas del cliente (<code>/c</code>) <b>mantienen sus colores actuales</b>: la paleta va solo en <code>/support</code>.</li>
+  </ul>
+</div></div>
+
+<section class="blk" id="chips">
+  <div class="blk-hd"><h2>1 · Chips de estado y contraste<span class="who">Cada par texto/fondo calculado con la luminancia relativa WCAG a partir de los colores de abajo; mínimo 4,5:1 (los chips son texto de 14px en negrita, no cuentan como texto grande).</span></h2></div>
+  <div class="rn">
+    <p><b>Hoy</b> el portal sigue el tema del sistema: Nuevo es azul, Leído gris y Resuelto verde, en claro y en oscuro.</p>
+    <p><b>Propuesta sin rojo (por defecto)</b>: Nuevo es el chip más brillante (relleno gris claro #D9DCE1, texto casi negro), Leído queda apagado y Resuelto queda oscuro con borde. Se distinguen por brillo y por la palabra, sin colores fuera de la paleta. El punto de «no leído» en la lista también va gris claro.</p>
+    <p><b>Rojo = Nuevo (a elegir explícitamente)</b>: relleno rojo con texto blanco, y el punto de «no leído» rojo. Cumple el contraste, pero <b>en el taller el rojo significa urgente</b>, y un comentario nuevo no lo es.</p>
+    <p><b>Ojo, igual en las dos</b>: el contador de nuevos junto a «Comentarios» (blanco sobre rojo) ya estaba en el mockup aprobado de Uso; con cualquiera de las dos opciones ese número sigue en rojo. Si preferís que tampoco sea rojo, decilo y pasa a gris claro.</p>
+  </div>
+  <div class="tblwrap"><table class="ct" id="ct">
+    <thead><tr><th>Uso</th><th>Muestra</th><th>Texto</th><th>Fondo</th><th>Contraste</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+</section>
+
+<section class="blk" id="inbox">
+  <div class="blk-hd"><h2>2 · Bandeja (sin comentario elegido)<span class="who">Portal en Vercel · <code>/support</code></span></h2></div>
+  <div class="rn">
+    <p>Tal cual la bandeja de hoy, solo cambian los colores. La pestaña de estado elegida es un relleno rojo con texto blanco. En celular la lista ocupa todo el ancho y el detalle aparece al tocar una fila.</p>
+  </div>
+  <div data-view="inbox"></div>
+</section>
+
+<section class="blk" id="detail">
+  <div class="blk-hd"><h2>3 · Detalle con editor<span class="who">Portal en Vercel · <code>/support?id=…</code></span></h2></div>
+  <div class="rn">
+    <p>Abrir un comentario nuevo lo marca leído (como hoy), por eso el elegido muestra <b>Leído</b> y el contador baja de 2 a 1. Se ve después de guardar la nota: «Nota guardada.» ya no es verde, va en el gris claro del texto.</p>
+    <p>En celular el detalle reemplaza a la lista y «Volver» lleva de vuelta; va en gris claro subrayado en rojo, no en texto rojo.</p>
+  </div>
+  <div data-view="detail"></div>
+</section>
+
+<section class="blk" id="login">
+  <div class="blk-hd"><h2>4 · Login<span class="who">Portal en Vercel · <code>/support/login</code> · sin «Comentarios | Uso»</span></h2></div>
+  <div class="rn">
+    <p>Se muestra con el error «Contraseña incorrecta.» para ver el color de error: rosa claro, no el rojo, que no alcanza contraste como texto. «Entrar» es el botón rojo con texto blanco.</p>
+  </div>
+  <div data-view="login"></div>
+</section>
+
+<section class="blk" id="d9">
+  <div class="intro" style="padding:0;margin:0"><div class="note ask">
+    <h2>Pregunta (D9): Gestión de usuarios en Uso</h2>
+    <p style="margin:0 0 6px"><code>/users</code> (Gestión de usuarios) solo lo usa el administrador, así que en Uso su grupo Gestión es una sola persona. ¿Se muestra igual (recomendado por defecto) o se oculta el desglose?</p>
+    <p style="margin:0"><b>Por defecto: se muestra igual</b>, como cualquier otra pantalla. Si no respondés, queda así.</p>
+  </div></div>
+</section>
+
+<!-- Pure data + WCAG math: no DOM, so it can be run with node to check every pair. -->
+<script id="pairs">
+// Single source for the chip colours: it styles the frames and fills the contrast table.
+const SURFACE_B = "#1b1e22";
+const CHIPS = {
+  cur_light: { label: "Hoy · claro", Nuevo: ["#0b4a8c", "#e3edf8"], "Leído": ["#4d5257", "#ebe9e6"], Resuelto: ["#14602f", "#d9f0e1"] },
+  cur_dark: { label: "Hoy · oscuro", Nuevo: ["#b5d6fb", "#1c3552"], "Leído": ["#c4c8cc", "#2b2e31"], Resuelto: ["#a5e0b9", "#173a25"] },
+  gray: { label: "Opción B sin rojo (recomendado)", Nuevo: ["#121417", "#d9dce1"], "Leído": ["#a3a8b0", "#2e3238"], Resuelto: ["#d9dce1", "#121417", "#4a4f57"], dot: "#d9dce1" },
+  red: { label: "Opción B rojo = Nuevo (solo si lo elegís)", Nuevo: ["#ffffff", "#dc2626"], "Leído": ["#a3a8b0", "#2e3238"], Resuelto: ["#d9dce1", "#121417", "#4a4f57"], dot: "#dc2626" },
+};
+// Other Opción B text pairs used in the frames. `expectFail` = shown only to explain why red is never small text.
+const OTHER = [
+  ["Texto sobre fondo", "#d9dce1", "#121417"],
+  ["Texto sobre tarjeta/lista", "#d9dce1", SURFACE_B],
+  ["Texto secundario sobre tarjeta", "#a3a8b0", SURFACE_B],
+  ["Texto secundario sobre fondo (marca, pestaña inactiva)", "#a3a8b0", "#121417"],
+  ["Blanco sobre rojo (Entrar, estado elegido, contador)", "#ffffff", "#dc2626"],
+  ["«Llegó con demora»", "#f6d4d4", "#2a1618"],
+  ["Error (color nuevo #F2B8B5) sobre tarjeta", "#f2b8b5", SURFACE_B],
+  ["Rojo como texto sobre fondo — NO se usa", "#dc2626", "#121417", true],
+  ["Rojo como texto sobre tarjeta — NO se usa", "#dc2626", SURFACE_B, true],
+];
+function lum(hex) {
+  const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+function ratio(a, b) { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); }
+function allPairs() {
+  const rows = [];
+  for (const [k, m] of Object.entries(CHIPS)) for (const s of ["Nuevo", "Leído", "Resuelto"]) rows.push({ group: m.label, use: `Chip ${s}`, status: s, fg: m[s][0], bg: m[s][1], edge: m[s][2], mode: k });
+  for (const [use, fg, bg, expectFail] of OTHER) rows.push({ group: "Opción B · resto de la pantalla", use, fg, bg, expectFail });
+  return rows.map((r) => ({ ...r, r: ratio(r.fg, r.bg) }));
+}
+if (typeof module !== "undefined") module.exports = { allPairs, CHIPS };
+</script>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+let MODE = "gray";
+
+/* ---------- contrast table ---------- */
+function renderTable() {
+  let last = "";
+  $("#ct tbody").innerHTML = allPairs().map((p) => {
+    const head = p.group !== last ? `<tr class="grp"><td colspan="5">${(last = p.group)}</td></tr>` : "";
+    const pass = p.r >= 4.5;
+    const verdict = pass ? `<span class="ok">${p.r.toFixed(2)}:1 ✓</span>` : `<span class="bad">${p.r.toFixed(2)}:1 ✗${p.expectFail ? " (por eso no se usa)" : ""}</span>`;
+    const sample = p.status
+      ? `<span class="sample" style="background:${p.bg};color:${p.fg};${p.edge ? `box-shadow:inset 0 0 0 1px ${p.edge}` : ""}">${p.status}</span>`
+      : `<span class="sample" style="background:${p.bg};color:${p.fg}">Aa</span>`;
+    return `${head}<tr><td>${p.use}</td><td>${sample}</td><td><span class="sw" style="background:${p.fg}"></span>${p.fg.toUpperCase()}</td><td><span class="sw" style="background:${p.bg}"></span>${p.bg.toUpperCase()}</td><td class="r">${verdict}</td></tr>`;
+  }).join("");
+}
+
+/* ---------- sample data (invented; labels verbatim from portal/src/support/format.ts) ---------- */
+// status keys and labels: STATUS_LABELS = { nuevo: "Nuevo", leido: "Leído", resuelto: "Resuelto" }
+const ROWS = [
+  { cat: "Algo no funciona", user: "rmendoza", role: "Técnico", screen: "Orden de servicio — Detalle", st: "Nuevo", rec: "12/11/2026 16:42", text: "Al guardar la orden con fotos se queda cargando y no avisa nada. Tuve que recargar y las fotos no estaban." },
+  { cat: "Idea o mejora", user: "jperez", role: "Jefe de taller", screen: "Órdenes en curso", st: "Nuevo", rec: "12/11/2026 11:05", delay: "12/11/2026 08:31" },
+  { cat: "Idea o mejora", user: "acastillo", role: "Administrador", screen: "Clientes", st: "Leído", rec: "11/11/2026 17:20" },
+  { cat: "Otra cosa", user: "lvega", role: "Técnico", screen: "Mis números", st: "Leído", rec: "10/11/2026 09:48" },
+  { cat: "Algo no funciona", user: "jperez", role: "Jefe de taller", screen: "Agenda", st: "Leído", rec: "07/11/2026 14:12" },
+  { cat: "Algo no funciona", user: "rmendoza", role: "Técnico", screen: "Inventario", st: "Resuelto", rec: "03/11/2026 10:30" },
+  { cat: "Idea o mejora", user: "acastillo", role: "Administrador", screen: "Métricas", st: "Resuelto", rec: "28/10/2026 15:55" },
+];
+
+function masthead(nuevo) {
+  return `<header class="masthead"><div class="bar">
+    <p class="brand">Soporte — Dforce</p>
+    <nav class="snav" aria-label="Secciones de soporte">
+      <a href="#" aria-current="page">Comentarios${nuevo > 0 ? `<span class="n" aria-label="${nuevo} ${nuevo === 1 ? "nuevo" : "nuevos"}">${nuevo}</span>` : ""}</a>
+      <a href="#">Uso</a>
+    </nav>
+    <div class="logout"><button type="button" class="btn ghost">Salir</button></div>
+  </div></header>`;
+}
+function filters(rows) {
+  const n = (s) => rows.filter((r) => r.st === s).length;
+  const tabs = [["Todos", rows.length, true], ["Nuevo", n("Nuevo")], ["Leído", n("Leído")], ["Resuelto", n("Resuelto")]];
+  const opts = (xs) => `<option value="">Todos</option>` + xs.map((x) => `<option>${x}</option>`).join("");
+  return `<form class="filters" onsubmit="return false">
+    <div class="psel"><span>Estado</span><div class="pseg" role="group" aria-label="Filtrar por estado">${tabs.map(([l, c, cur]) => `<a href="#"${cur ? ' aria-current="true"' : ""}>${l} (${c})</a>`).join("")}</div></div>
+    <label class="psel">Tipo<select>${opts(["Algo no funciona", "Idea o mejora", "Otra cosa"])}</select></label>
+    <label class="psel">Rol<select>${opts(["Técnico", "Jefe de taller", "Administrador"])}</select></label>
+    <button type="submit" class="btn ghost">Filtrar</button>
+  </form>`;
+}
+function list(rows) {
+  return `<ul class="plist">${rows.map((r) => `<li><a href="#" class="prow${r.st === "Nuevo" ? " unread" : ""}">
+    <span class="l1"><span class="cat-t">${r.cat}</span><span class="chip" data-status="${r.st}">${r.st}</span></span>
+    <span class="l2"><span>${r.user} · ${r.role}</span><span>${r.screen}</span></span>
+    <span class="l3"><span>Recibido ${r.rec}</span>${r.delay ? `<span class="delay">Llegó con demora · escrito ${r.delay}</span>` : ""}</span>
+  </a></li>`).join("")}</ul>`;
+}
+function pane(r) {
+  if (!r) return `<aside class="card pdet" aria-label="Detalle del comentario"><p class="muted">Elegí un comentario de la lista.</p></aside>`;
+  return `<aside class="card pdet" aria-label="Detalle del comentario">
+    <a href="#" class="back">Volver</a>
+    <div class="hd"><h2>${r.cat}</h2><span class="chip" data-status="${r.st}">${r.st}</span></div>
+    <dl><dt>Autor</dt><dd>${r.user} · ${r.role}</dd><dt>Pantalla</dt><dd>${r.screen}</dd>
+      <dt>Escrito</dt><dd>12/11/2026 16:41</dd><dt>Recibido</dt><dd>${r.rec}</dd></dl>
+    <p class="ptext">${r.text}</p>
+    <div class="psel"><span>Estado</span><div class="pseg" role="group" aria-label="Estado">${["Nuevo", "Leído", "Resuelto"].map((s) => `<button type="button" aria-pressed="${r.st === s}">${s}</button>`).join("")}</div></div>
+    <div class="psel"><label for="note">Nota interna</label>
+      <textarea id="note" class="input" maxlength="2000" placeholder="Solo la ves vos. No llega al taller.">Pasa con más de 3 fotos. Reproducido en la tablet del taller.</textarea>
+      <div class="saverow"><button type="button" class="btn ghost">Guardar nota</button><span class="saved" role="status">Nota guardada.</span></div>
+    </div>
+  </aside>`;
+}
+function inboxPage(rows, selected) {
+  const nuevo = rows.filter((r) => r.st === "Nuevo").length;
+  return `${masthead(nuevo)}<main class="page wide" data-detail="${!!selected}">
+    <h1 class="title">Comentarios del taller</h1>
+    ${filters(rows)}
+    <div class="inbox"><div class="inbox-list">${list(rows)}</div>${pane(selected)}</div></main>`;
+}
+const VIEWS = {
+  inbox: () => inboxPage(ROWS),
+  detail: () => {
+    // Opening ?id= runs markRead: the Nuevo row becomes Leído before counts and pane are read.
+    const rows = ROWS.map((r, i) => (i === 0 ? { ...r, st: "Leído" } : r));
+    return inboxPage(rows, rows[0]);
+  },
+  login: () => `<header class="masthead"><p class="brand">Soporte — Dforce</p></header>
+    <main class="page narrow"><div class="card">
+      <h1 class="title">Soporte — Dforce</h1>
+      <p class="muted small">Acceso solo para el equipo de desarrollo.</p>
+      <form onsubmit="return false"><div class="field">
+        <label for="pw">Contraseña</label>
+        <input id="pw" name="password" type="password" class="input" autocomplete="current-password" aria-invalid="true" aria-describedby="pw-err" value="••••••••">
+        <p class="error" id="pw-err" role="alert">Contraseña incorrecta.</p>
+      </div><button class="btn" type="submit">Entrar</button></form>
+    </div></main>`,
+};
+const WIDTHS = [[1280, "Escritorio 1280"], [768, "Tablet 768"], [390, "Celular 390"]];
+
+function chipVars() {
+  const m = CHIPS[MODE];
+  const v = { "--unread-dot": m.dot };
+  for (const [s, k] of [["Nuevo", "nuevo"], ["Leído", "leido"], ["Resuelto", "resuelto"]]) {
+    v[`--chip-${k}-fg`] = m[s][0]; v[`--chip-${k}-bg`] = m[s][1]; v[`--chip-${k}-edge`] = m[s][2] || "transparent";
+  }
+  return Object.entries(v).map(([a, b]) => `${a}:${b}`).join(";");
+}
+function render() {
+  const vars = chipVars();
+  $$("[data-view]").forEach((host) => {
+    host.innerHTML = WIDTHS.map(([w, label]) => `<p class="wlabel">${label}</p>
+      <div class="stage"><div class="frame${w <= 480 ? " lt30" : ""}${w < 640 ? " lt40" : ""}" style="--fw:${w}px">
+        <div class="portal" style="${vars}">${VIEWS[host.dataset.view]()}</div>
+      </div></div>`).join("");
+  });
+}
+$$("#chipmode button").forEach((b) => b.addEventListener("click", () => {
+  MODE = b.dataset.mode;
+  $$("#chipmode button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  render();
+}));
+renderTable();
+render();
+</script>
+</body>
+</html>

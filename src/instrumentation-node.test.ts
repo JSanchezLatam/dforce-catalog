@@ -15,6 +15,7 @@ vi.mock("@/modules/reminders/job", () => ({ registerReminderWorker: spy("reminde
 vi.mock("@/modules/portal-sync/job", () => ({ registerPortalSyncWorker: spy("portal-sync") }));
 vi.mock("@/modules/portal-sync/reconcile", () => ({ registerPortalReconcile: spy("portal-reconcile") }));
 vi.mock("@/modules/feedback/worker", () => ({ registerFeedbackWorkers: spy("feedback") }));
+vi.mock("@/modules/usage/worker", () => ({ registerUsageDelivery: spy("usage") }));
 
 describe("registerNodeWorkers", () => {
   it("registers the portal sync worker and the nightly reconcile at boot", async () => {
@@ -27,5 +28,11 @@ describe("registerNodeWorkers", () => {
     const { registerNodeWorkers } = await import("./instrumentation-node");
     await registerNodeWorkers();
     expect(calls).toContain("feedback");
+  });
+
+  it("registers the hourly usage delivery at boot", async () => {
+    const { registerNodeWorkers } = await import("./instrumentation-node");
+    await registerNodeWorkers();
+    expect(calls).toContain("usage");
   });
 });

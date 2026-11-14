@@ -23,7 +23,8 @@
  * `PORTAL_INGEST_URL`/`PORTAL_INGEST_SECRET` are unset.
  *
  * The in-app feedback outbox (in-app-feedback WU4) adds its minute sweeper and
- * deliver worker, inert under the same condition.
+ * deliver worker, inert under the same condition. The usage metrics delivery
+ * (usage-metrics WU4) adds its hourly schedule, inert under the same condition.
  */
 export async function registerNodeWorkers(): Promise<void> {
   const { registerInventorySyncWorker, scheduleWeeklySync } = await import("@/modules/inventory-sync/job");
@@ -33,6 +34,7 @@ export async function registerNodeWorkers(): Promise<void> {
   const { registerPortalSyncWorker } = await import("@/modules/portal-sync/job");
   const { registerPortalReconcile } = await import("@/modules/portal-sync/reconcile");
   const { registerFeedbackWorkers } = await import("@/modules/feedback/worker");
+  const { registerUsageDelivery } = await import("@/modules/usage/worker");
 
   await registerInventorySyncWorker();
   await scheduleWeeklySync();
@@ -42,4 +44,5 @@ export async function registerNodeWorkers(): Promise<void> {
   await registerPortalSyncWorker();
   await registerPortalReconcile();
   await registerFeedbackWorkers();
+  await registerUsageDelivery();
 }

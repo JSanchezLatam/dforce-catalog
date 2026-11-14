@@ -40,20 +40,20 @@ Every WU: RED first, mutation-verify each new test (red BY NAME), `npm test` + `
 - [x] 3.3 `apply` in one transaction: replace in range, cover every day, replace catalog. Tests via `npm run test:portal-sync` (real portal DB): replace-in-range, empty day covered, resend idempotent.
 
 ## WU4: Delivery job (design §5)
-- [ ] 4.1 `deliver.ts`: windows of ≤31 days from `acked_through + 1` to today; empty days included; catalog from `SCREEN_LABELS`.
-- [ ] 4.2 Watermark advances only on 2xx and never past yesterday; failure stops the loop and reports class/status only.
-- [ ] 4.3 `worker.ts` hourly schedule (`"17 * * * *"`, Panama tz), registered in `instrumentation-node.ts`.
-- [ ] 4.4 `test:portal-sync`: 40-day catch-up = 2 batches, watermark at yesterday; 5xx keeps the watermark.
+- [x] 4.1 `deliver.ts`: windows of ≤31 days from `acked_through + 1` to today; empty days included; catalog from `SCREEN_LABELS`.
+- [x] 4.2 Watermark advances only on 2xx and never past yesterday; failure stops the loop and reports class/status only.
+- [x] 4.3 `worker.ts` hourly schedule (`"17 * * * *"`, Panama tz), registered in `instrumentation-node.ts`.
+- [x] 4.4 `test:portal-sync`: 40-day catch-up = 2 batches, watermark at yesterday; 5xx keeps the watermark.
 
 ## WU5: Usage page and nav (design §6, §7)
-- [ ] 5.1 `portal/src/usage/queries.ts` (range totals, per day, coverage, newest `received_at`, catalog).
-- [ ] 5.2 `portal/app/support/layout.tsx` with the "Comentarios | Uso" nav (`aria-current`, 44px on touch).
-- [ ] 5.3 `/support/uso`: range 7/30/90, summary, chart, table, "Sin visitas", stale notice, empty state; copy verbatim from the mockup. Unit tests per spec scenario.
+- [x] 5.1 `portal/src/usage/queries.ts` (range totals, per day, coverage, newest `received_at`, catalog).
+- [x] 5.2 `SupportHeader` rendered by each support page (design D11) with the "Comentarios | Uso" nav (`aria-current`, 44px on touch).
+- [x] 5.3 `/support/uso`: range 7/30/90, summary, chart, table, "Sin visitas", stale notice, empty state; copy verbatim from the mockup. Unit tests per spec scenario.
 
 ## WU6: Support palette Opción B (design §7, D8)
-- [ ] 6.0 **Owner checkpoint:** mockup frame of the real inbox list + detail and the login page under Opción B (status chips: red must not silently mean "Nuevo"); `/users` single-person question (default: show as is). Nothing in WU6 is built before approval.
-- [ ] 6.1 Tokens on `.support` (dark-only); `/c` untouched (unit test on the class scope).
-- [ ] 6.2 Browser: every support page in both OS themes; contrast of each text pair ≥4.5:1.
+- [x] 6.0 **Owner checkpoint:** mockup frame of the real inbox list + detail and the login page under Opción B (status chips: red must not silently mean "Nuevo"); `/users` single-person question (default: show as is). Nothing in WU6 is built before approval. Approved 2026-11-13: Opción B with the recommended neutral chips (no red on "Nuevo"); `/users` shown as is (D9 default).
+- [x] 6.1 Tokens on `.support` (dark-only); `/c` untouched (unit test on the class scope).
+- [x] 6.2 Browser: every support page in both OS themes; contrast of each text pair ≥4.5:1.
 
 ## Final integration
 - [ ] 7.1 Deploy the PORTAL first (`vercel env`, migration via `DATABASE_URL_UNPOOLED`, `vercel deploy --prod` from `portal/`), then update the workshop PC (`standalone.ps1`, migration).
