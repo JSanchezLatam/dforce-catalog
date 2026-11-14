@@ -13,7 +13,8 @@ import type { IngestBody } from "@portal/contract";
 
 const workshopUrl = process.env.PORTAL_SYNC_WORKSHOP_URL;
 const portalUrl = process.env.PORTAL_SYNC_PORTAL_URL;
-if (!workshopUrl || !portalUrl || /\/dforce_(catalog|portal)$/.test(workshopUrl + portalUrl)) {
+// Each URL on its own: a concatenation would only ever test the portal's database name.
+if (!workshopUrl || !portalUrl || [workshopUrl, portalUrl].some((u) => /\/dforce_(catalog|portal)(\?|$)/.test(u))) {
   throw new Error("test:portal-sync must be run through `npm run test:portal-sync` (it owns the throwaway databases)");
 }
 
@@ -27,6 +28,7 @@ const range = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i)
 describe("usage ingest -> portal tables", () => {
   let ingest: typeof import("../../portal/app/api/ingest/route");
   let sign: typeof import("@portal/contract").sign;
+  let apply: typeof import("../../portal/src/ingest/apply");
   const client = new pg.Client({ connectionString: portalUrl });
 
   const post = async (body: unknown) => {
@@ -66,6 +68,7 @@ describe("usage ingest -> portal tables", () => {
     process.env.PORTAL_INGEST_SECRET = SECRET;
     ingest = await import("../../portal/app/api/ingest/route");
     ({ sign } = await import("@portal/contract"));
+    apply = await import("../../portal/src/ingest/apply");
     await client.connect();
   });
   afterAll(async () => {
@@ -154,5 +157,17 @@ describe("usage ingest -> portal tables", () => {
     expect(await post(withUser)).toBe(400);
     expect(await post({ ...seed, username: "ana" })).toBe(400);
     expect(JSON.stringify([await counts(), await coverage(), await screens()])).toBe(snapshot);
+  });
+
+  // Straight to applyIngest, past the parser that would refuse it: a duplicate key fails the INSERT
+  // AFTER the range's DELETE ran, so only the rollback brings days 4–6 back.
+  it("a batch that fails part-way changes nothing: counts, coverage and catalog roll back", async () => {
+    await reset();
+    expect(await post(seed)).toBe(200);
+    const before = { counts: await counts(), coverage: await coverage(), screens: await screens() };
+    const dup = { day: day(5), screen: "/kanban", group: "gestion" as const, views: 1 };
+    const broken: Usage = { kind: "usage", from: day(4), to: day(6), screens: [{ pattern: "/agenda", label: "Agenda" }], counts: [dup, dup] };
+    await expect(apply.applyIngest(broken)).rejects.toThrow();
+    expect({ counts: await counts(), coverage: await coverage(), screens: await screens() }).toEqual(before);
   });
 });
