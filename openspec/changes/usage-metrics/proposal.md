@@ -20,7 +20,7 @@ Decisions: owner grill 2026-11-09 (Engram `feedback-metrics-guide-plan`). Second
 ## Scope
 
 ### In Scope
-- **What is counted:** one view per screen render in the `(app)` shell, keyed by **screen** (a route pattern such as `/service-orders/[id]`, never the concrete URL, so no id, plate or customer name leaves the workshop), **role group** and **day** (workshop local date).
+- **What is counted:** one view per pathname change in the `(app)` shell, keyed by **screen** (a route pattern such as `/service-orders/[id]`, never the concrete URL, so no id, plate or customer name leaves the workshop), **role group** and **day** (workshop local date).
 - **Role groups:** `gestión` (administrador + jefe_taller, merged because each is one person) and `técnico`. `pantalla` (the wall display) is excluded: it never reaches the shell.
 - **Anonymity:** no user id, username, session, IP, timestamp finer than the day, or URL parameter is stored or sent. Only `(day, screen, group, count)`.
 - **Storage (workshop):** a daily aggregate table, upsert-increment per view. No per-view rows.
@@ -34,7 +34,7 @@ Decisions: owner grill 2026-11-09 (Engram `feedback-metrics-guide-plan`). Second
 - A workshop-side view of these counts (the owner sees `/metrics` for productivity; this is support-only).
 - The per-role guides (the next change).
 - Sending to any third party (PostHog, Sentry, analytics SaaS).
-- API route calls: only screen renders count.
+- API route calls, refreshes and prefetches: only pathname changes count.
 
 ## Capabilities
 
@@ -65,7 +65,7 @@ Count each pathname change on the client and record it on the server, which take
 | Risk | Likelihood | Mitigation |
 |---|---|---|
 | A count leaks identity (a group of one) | Med | Fixed groups `gestión` / `técnico`; no per-user key exists in either database |
-| Counting slows every page | Low | One upsert, off the render's critical path; failures swallowed and reported to Sentry without content |
+| Counting slows every page | Low | One upsert, off the render's critical path; failures swallowed by the client; a server-side failure is a 500 that `onRequestError` (`src/instrumentation.ts`) reports to Sentry |
 | Prefetches, refreshes or polling inflate counts | High | The proxy matcher catches `/api/*` (the kanban polls `/api/kanban`) and RSC refreshes (`usePollWhileActive` calls `router.refresh()` on an interval), so proxy- or page-level counting would record them. Count pathname changes on the client instead; pinned by a test |
 | "Sin visitas" wrong across versions | Med | The workshop sends its own screen catalog with each batch |
 | Portal ingest contract change breaks the running workshop | Low | New body kind is additive; old workshop builds never send it |

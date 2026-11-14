@@ -14,7 +14,7 @@ import { POST as snapshot } from "../app/api/c/snapshot/route";
 import { db } from "../src/db/client";
 import { portalCustomer, portalTermsAcceptance } from "../src/db/schema";
 import { hashToken } from "../src/portal/lookup";
-import { TERMS_VERSION } from "../src/terms";
+import { TERMS_GATE_ENABLED, TERMS_VERSION } from "../src/terms";
 
 const snap = (plate: string) => ({
   generatedAt: "2026-10-01T10:00:00.000Z",
@@ -51,7 +51,16 @@ afterAll(async () => {
 });
 
 describe("portal API e2e", () => {
-  it("open without acceptance says terms and carries no customer data; snapshot too", async () => {
+  // The gate shipped off on 2026-10-07 (64d5f29). The gate-on tests run only when it is on;
+  // this one pins what ships instead: straight through, and no acceptance recorded for text never shown.
+  it.skipIf(TERMS_GATE_ENABLED)("with the terms gate off, open and accept go straight to the data and record no acceptance", async () => {
+    await seed("c1", "tok-a");
+    expect(await (await call(open, "tok-a")).json()).toEqual({ state: "accepted" });
+    expect(await (await call(accept, "tok-a")).json()).toEqual({ state: "accepted", snapshot: snap("AB1234") });
+    expect(await acceptances()).toHaveLength(0);
+  });
+
+  it.runIf(TERMS_GATE_ENABLED)("open without acceptance says terms and carries no customer data; snapshot too", async () => {
     await seed("c1", "tok-a");
     const o = await call(open, "tok-a");
     expect(await o.json()).toEqual({ state: "terms" });
@@ -59,7 +68,7 @@ describe("portal API e2e", () => {
     expect(await s.json()).toEqual({ state: "terms" });
   });
 
-  it("accept inserts exactly one row (hash, version, time) and returns the snapshot", async () => {
+  it.runIf(TERMS_GATE_ENABLED)("accept inserts exactly one row (hash, version, time) and returns the snapshot", async () => {
     await seed("c1", "tok-a");
     const res = await call(accept, "tok-a");
     expect(await res.json()).toEqual({ state: "accepted", snapshot: snap("AB1234") });
@@ -71,7 +80,7 @@ describe("portal API e2e", () => {
     expect(JSON.stringify(rows)).not.toContain("tok-a");
   });
 
-  it("two concurrent accepts end with exactly one row and both return the snapshot", async () => {
+  it.runIf(TERMS_GATE_ENABLED)("two concurrent accepts end with exactly one row and both return the snapshot", async () => {
     await seed("c1", "tok-a");
     for (let i = 0; i < 10; i++) {
       await db.delete(portalTermsAcceptance);
@@ -88,7 +97,7 @@ describe("portal API e2e", () => {
     expect(await (await call(snapshot, "tok-a")).json()).toEqual({ state: "accepted", snapshot: snap("AB1234") });
   });
 
-  it("an acceptance of an older terms version re-gates", async () => {
+  it.runIf(TERMS_GATE_ENABLED)("an acceptance of an older terms version re-gates", async () => {
     await seed("c1", "tok-a");
     await db.insert(portalTermsAcceptance).values({ tokenHash: hashToken("tok-a"), termsVersion: "old-version" });
     expect(await (await call(open, "tok-a")).json()).toEqual({ state: "terms" });

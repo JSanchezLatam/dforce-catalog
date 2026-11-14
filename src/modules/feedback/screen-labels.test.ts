@@ -2,7 +2,7 @@ import { readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { routeOf, SCREEN_LABELS, screenLabelFor } from "./screen-labels";
+import { patternOf, routeOf, SCREEN_LABELS, screenLabelFor } from "./screen-labels";
 
 const APP_DIR = path.join(process.cwd(), "src/app/(app)");
 
@@ -39,6 +39,21 @@ describe("screenLabelFor", () => {
 
   it("ignores a trailing slash", () => {
     expect(screenLabelFor("/customers/")).toBe("Clientes");
+  });
+});
+
+describe("patternOf", () => {
+  it.each([
+    ["/service-orders/a?tab=1#x", "/service-orders/[id]"],
+    ["/customers/7/vehicles/9", "/customers/[id]/vehicles/[vehicleId]"],
+    ["/agenda/", "/agenda"],
+    ["/service-orders/a/print", "/service-orders/[id]/print"],
+  ])("maps %s to %s", (path, pattern) => {
+    expect(patternOf(path)).toBe(pattern);
+  });
+
+  it("returns null for a path with no label", () => {
+    expect(patternOf("/nope")).toBeNull();
   });
 });
 

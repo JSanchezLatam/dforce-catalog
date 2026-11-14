@@ -152,4 +152,142 @@ describe("parseIngest", () => {
       for (const b of bad) expect(parseIngest(b).ok, JSON.stringify(b)).toBe(false);
     });
   });
+
+  describe("usage", () => {
+    const usage = {
+      kind: "usage",
+      from: "2026-10-05",
+      to: "2026-10-07",
+      screens: [
+        { pattern: "/kanban", label: "Tablero" },
+        { pattern: "/service-orders/[id]", label: "Orden de servicio" },
+      ],
+      counts: [
+        { day: "2026-10-05", screen: "/kanban", group: "gestion", views: 12 },
+        { day: "2026-10-07", screen: "/service-orders/[id]", group: "tecnico", views: 0 },
+      ],
+    } as const satisfies IngestBody;
+    type Usage = { kind: string; from: string; to: string; screens: Record<string, unknown>[]; counts: Record<string, unknown>[] };
+    const u = (): Usage => clone(usage) as unknown as Usage;
+    const rejects = (b: unknown) => expect(parseIngest(b).ok, JSON.stringify(b)).toBe(false);
+
+    it("accepts the exact wire shape and rebuilds it field by field", () => {
+      expect(parseIngest(u())).toEqual({ ok: true, body: usage });
+    });
+
+    it("accepts a range with no counts and no screens, a single day, and exactly 31 days", () => {
+      expect(parseIngest({ ...u(), counts: [], screens: [] }).ok).toBe(true);
+      expect(parseIngest({ ...u(), from: "2026-10-07", counts: [u().counts[1]] }).ok).toBe(true);
+      expect(parseIngest({ ...u(), from: "2026-10-01", to: "2026-10-31" }).ok).toBe(true);
+      expect(parseIngest({ ...u(), from: "2024-02-29", to: "2024-02-29", counts: [] }).ok).toBe(true);
+    });
+
+    it("rejects an extra top-level key, such as a user field", () => {
+      rejects({ ...u(), username: "ana" });
+      rejects({ ...u(), extra: 1 });
+    });
+
+    it("rejects an extra key in a count, such as a user field", () => {
+      const b = u();
+      b.counts[0].username = "ana";
+      rejects(b);
+    });
+
+    it("rejects an extra key in a screen", () => {
+      const b = u();
+      b.screens[0].icon = "x";
+      rejects(b);
+    });
+
+    it("rejects a missing key at every level", () => {
+      for (const key of ["from", "to", "screens", "counts"]) {
+        const b: Record<string, unknown> = u();
+        delete b[key];
+        rejects(b);
+      }
+      for (const key of ["day", "screen", "group", "views"]) {
+        const b = u();
+        delete b.counts[0][key];
+        rejects(b);
+      }
+      for (const key of ["pattern", "label"]) {
+        const b = u();
+        delete b.screens[0][key];
+        rejects(b);
+      }
+    });
+
+    it("rejects a date that is not YYYY-MM-DD", () => {
+      for (const from of ["2026-10-5", "05/10/2026", "2026-10-05T00:00:00Z", "", 20261005]) rejects({ ...u(), from });
+      rejects({ ...u(), to: "yesterday" });
+      const b = u();
+      b.counts[0].day = "2026-10-5";
+      rejects(b);
+    });
+
+    it("rejects a day that is not on the calendar (Feb 30, month 13, Feb 29 of a non-leap year)", () => {
+      rejects({ ...u(), from: "2026-02-30", to: "2026-03-02", counts: [] });
+      rejects({ ...u(), from: "2026-02-27", to: "2026-02-30", counts: [] });
+      rejects({ ...u(), from: "2026-13-01", to: "2026-13-02", counts: [] });
+      rejects({ ...u(), from: "2025-02-29", to: "2025-03-01", counts: [] });
+    });
+
+    it("rejects from after to", () => {
+      rejects({ ...u(), from: "2026-10-08", to: "2026-10-07", counts: [] });
+    });
+
+    it("rejects a 32-day range", () => {
+      rejects({ ...u(), from: "2026-10-01", to: "2026-11-01" });
+    });
+
+    it("rejects a count whose day is outside the range", () => {
+      for (const day of ["2026-10-04", "2026-10-08"]) {
+        const b = u();
+        b.counts[0].day = day;
+        rejects(b);
+      }
+    });
+
+    it("rejects negative, fractional and non-number views", () => {
+      for (const views of [-1, 1.5, "3", null, 2_147_483_648]) {
+        const b = u();
+        b.counts[0].views = views;
+        rejects(b);
+      }
+    });
+
+    it("accepts views at the integer column's ceiling", () => {
+      const b = u();
+      b.counts[0].views = 2_147_483_647;
+      expect(parseIngest(b).ok).toBe(true);
+    });
+
+    it("rejects a group outside gestion | tecnico, including a raw role", () => {
+      for (const group of ["administrador", "jefe_taller", "pantalla", "", null]) {
+        const b = u();
+        b.counts[0].group = group;
+        rejects(b);
+      }
+    });
+
+    it("rejects empty strings and non-arrays", () => {
+      rejects({ ...u(), screens: {} });
+      rejects({ ...u(), counts: "none" });
+      const s = u();
+      s.screens[0].label = "";
+      rejects(s);
+      const c = u();
+      c.counts[0].screen = "";
+      rejects(c);
+    });
+
+    it("rejects a duplicate count key or screen pattern, which the primary keys would refuse", () => {
+      const c = u();
+      c.counts.push({ ...c.counts[0], views: 1 });
+      rejects(c);
+      const s = u();
+      s.screens.push({ ...s.screens[0], label: "Otro" });
+      rejects(s);
+    });
+  });
 });

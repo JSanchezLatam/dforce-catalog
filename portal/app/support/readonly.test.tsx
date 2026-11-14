@@ -18,7 +18,7 @@ vi.mock("../../src/db/client", () => {
   return { db: { select, update: writes, insert: writes, delete: writes, execute: writes } };
 });
 vi.mock("../../src/support/session", () => ({ requireSupport: async () => true }));
-vi.mock("next/navigation", () => ({ redirect: vi.fn(), useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ redirect: vi.fn(), usePathname: () => "/support", useRouter: () => ({ replace: vi.fn(), refresh: vi.fn() }) }));
 
 afterEach(cleanup);
 
