@@ -846,3 +846,31 @@ export const feedback = pgTable(
 );
 
 export type Feedback = typeof feedback.$inferSelect;
+
+/**
+ * Anonymous screen-view counts: one row per Panama day, screen pattern and role
+ * group. Deliberately nothing finer — no user, session, IP, time or concrete URL.
+ */
+export const usageDaily = pgTable(
+  "usage_daily",
+  {
+    day: date("day", { mode: "string" }).notNull(),
+    screen: text("screen").notNull(),
+    roleGroup: text("role_group", { enum: ["gestion", "tecnico"] }).notNull(),
+    views: integer("views").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.day, table.screen, table.roleGroup] }),
+    check("usage_daily_role_group", sql`${table.roleGroup} in ('gestion', 'tecnico')`),
+  ],
+);
+
+/** The delivery watermark: a single row (`id = 1`); `acked_through` null means nothing acknowledged yet. */
+export const usageDelivery = pgTable(
+  "usage_delivery",
+  {
+    id: smallint("id").primaryKey(),
+    ackedThrough: date("acked_through", { mode: "string" }),
+  },
+  (table) => [check("usage_delivery_single_row", sql`${table.id} = 1`)],
+);

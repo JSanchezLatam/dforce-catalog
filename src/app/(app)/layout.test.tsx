@@ -30,6 +30,11 @@ vi.mock("@/modules/feedback/FeedbackProvider", () => ({
   ),
 }));
 
+// A probe: the real counter calls `usePathname`, which this mock of next/navigation does not provide.
+vi.mock("@/modules/usage/UsageCounter", () => ({
+  UsageCounter: (props: Record<string, unknown>) => <span data-testid="usage-counter" data-props={JSON.stringify(props)} />,
+}));
+
 import AppLayout from "./layout";
 
 async function renderedLinks() {
@@ -117,5 +122,18 @@ describe("(app)/layout - feedback provider", () => {
     const provider = screen.getByTestId("feedback-provider");
     expect(JSON.parse(provider.dataset.author ?? "null")).toEqual({ username: "usuario", roleLabel: "Técnico" });
     expect(provider).toContainElement(screen.getByTestId("groups"));
+  });
+});
+
+describe("(app)/layout - usage counter", () => {
+  // Mounted once in the shell; a Server Component may pass it no function prop, so it gets none at all.
+  it("mounts the usage counter inside the feedback provider with no props", async () => {
+    getNavBadges.mockResolvedValue({});
+
+    render(await AppLayout({ children: null }));
+
+    const counter = screen.getByTestId("usage-counter");
+    expect(counter.dataset.props).toBe("{}");
+    expect(screen.getByTestId("feedback-provider")).toContainElement(counter);
   });
 });
