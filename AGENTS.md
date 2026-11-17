@@ -3,8 +3,8 @@
 Read by coding agents (Claude Code, OpenCode, GGA) working in this repository.
 Standing conventions and decisions only — not a session log, not a war-story
 archive. Rationale and measurements belong next to the code they explain or in
-Engram. Stack/API/DB reference: `STACK.md`. A change's detailed rationale:
-`openspec/changes/<name>/design.md`.
+Engram. Stack/API/DB reference: `STACK.md`. A feature's specs, tasks and
+log: `odd/tasks/<feature>.md`.
 
 ## Cross-tool memory and task sharing (Claude Code ↔ OpenCode)
 
@@ -15,26 +15,100 @@ Verified 2026-07-27 — don't re-litigate without re-checking first.
   is visible to the other with zero config. If cross-tool recall seems broken,
   the server is down (`curl http://127.0.0.1:7437/health` → `{"status":"ok"}`)
   — do not wire up a bridge, one exists.
-- **SDD task state lives in committed files**, not only in Engram. Either tool
-  can pick up a change by pointing at its `openspec/changes/<name>/tasks.md`.
+- **Feature task state lives in committed files**, not only in Engram. Either
+  tool can pick up a feature by pointing at its `odd/tasks/<feature>.md`; the
+  Engram copy under topic `odd/<feature>/tasks` is the recovery mirror.
 - Whether a session *actually* calls `mem_save` depends on its persona. A
   missing memory is more often a session that skipped saving than broken
   plumbing.
 
-## SDD workflow
+## Workflow: ODD (Organic Driven Development)
 
-Substantial changes: `proposal.md` → `spec.md` (delta specs under
-`openspec/changes/<name>/specs/<capability>/`) → `design.md` → `tasks.md`.
-Completed changes merge into the main specs and get archived. Check for an
-`openspec/changes/<name>/` directory before assuming a feature was never
-planned.
+Decided by the owner 2026-11-16, replacing SDD. The protocol itself ships with
+gentle-ai (4.4.0+); this section only records how it maps onto this repo.
+
+- **Small work** (understood, no high-risk item, resumable from `git diff`):
+  done inline, no task document.
+- **Large work** gets ONE document, `odd/tasks/<feature>.md`: a short header,
+  `## Specs` (`S1..Sn`, quoting the owner's words verbatim — never
+  summarized), `## Tasks` (ID, linked `S#`, route, commit), `## Log` (`L1` is
+  the original request verbatim). It is created when implementation is
+  authorized, not while planning, and mirrored to Engram.
+- **Writing is inline by default.** A subagent writer needs a named reason:
+  parallel units with disjoint files, or the long-session backstop.
+- **Mockup first still applies** (see Standing architectural decisions): the
+  mockup is approved before any UI task in the document starts.
+- **Legacy SDD**: `openspec/specs/` stays as the reference spec baseline, and
+  `openspec/changes/archive/` as history. Do not open new `openspec/changes/`.
 
 **Large changes ship as chained PRs**: a draft tracker branch off `main`
-accumulates the feature; each work-unit PR targets the previous PR's branch, in
-order; the tracker merges to `main` only once every child has landed. Template
-for deciding when a change needs this:
-`openspec/changes/archive/crm-workshop-management/tasks.md` (Review Workload
-Forecast).
+accumulates the feature; each work-unit PR (~400 authored lines) targets the
+previous PR's branch, in order; the tracker merges to `main` only once every
+child has landed.
+
+### Feature lifecycle and stop points
+
+Decided by the owner 2026-11-17.
+
+1. **Grill** — one question at a time until no business decision is open.
+2. **Mockup** — approved by the owner before any UI is built.
+3. **Feature document** — `odd/tasks/<feature>.md`, created on the go-ahead.
+4. **Work units** — ~400 lines each, RED test first, chained PRs.
+5. **Per-PR checks** — tests, `tsc`, lint, GGA; the security review below
+   when it applies; browser verification at the LAN IP, never localhost.
+6. **Milestones** — full security audit and k6 load test (see below).
+
+**The agent stops and waits for the owner only at**: mockup approval;
+business decisions that surface mid-way; and anything touching production
+(deploy, migrations on the real database, milestone audits). Everything else —
+merging PRs whose checks passed included — proceeds autonomously and is
+reported.
+
+### Security review
+
+- **Per change**: a change touching auth, permissions, credentials, money or
+  internet exposure is flagged in its feature document, and the
+  `security-audit` skill reviews it in guidance mode before the PR.
+- **Per milestone**: a full `security-audit` before the app is opened to the
+  internet, and again before billing goes to production.
+- Deliberately not a blocking hook on every commit — see GGA below for why
+  automated triggers were dropped here before.
+
+### Performance: k6
+
+`k6` (installed on the dev Mac, `brew install k6`) runs:
+
+- **Smoke test** — a few virtual users through login and the main screens,
+  before every production deploy.
+- **Load test** — once per milestone (internet opening, billing go-live).
+- **Never against the workshop PC during working hours**: it is the app server
+  and the database at once. Run against a copy, or out of hours.
+
+### Frontend: Modern Web Guidance
+
+Frontend work (HTML, CSS, client-side JS) consults the `modern-web-guidance`
+skill (GoogleChrome/modern-web-guidance) before writing. Its guidance yields
+to one rule of this repo: while the app is served over plain HTTP, no
+secure-context-only API ships without a working fallback (see the deployment
+decision and the third known testing limit).
+
+### Lessons every writer carries
+
+Whoever writes — inline or a delegated worker — applies these. Each one shipped
+a defect before it was written down. A delegated writer's prompt must repeat
+the ones that bite on its task, because a subagent does not inherit them.
+
+- **Mutation-verify every fix** — revert it, confirm the test goes red BY NAME.
+  A test that passes with the fix reverted is a placebo: repair it or delete it.
+- **Never write a claim you have not checked**, and that includes types. A
+  `count: number` over a string wire is a lying comment moved into the type
+  system.
+- **A mock more convenient than reality tests the mock, not the code.** Fixture
+  shapes must match the wire; `await response.json()` makes every declared type
+  a claim.
+- **The injected-seam limit**: a green suite proves zero real-SQL coverage, so
+  anything whose value is a `WHERE`, an `UPDATE` or a constraint needs an e2e
+  row.
 
 ## Standing architectural decisions
 
@@ -50,6 +124,42 @@ evidence.
 - **CRM/workshop is built natively**, not by integrating `Hainrixz/auto-crm`
   (SQLite, generic sales-CRM — this app is Postgres and workshop-shaped). See
   `openspec/changes/archive/crm-workshop-management/`.
+- **Architecture: modular monolith, hexagonal-lite inside each module.**
+  Decided by the owner 2026-11-17. One app, one Postgres, split into
+  `src/modules/<domain>/` named after the business (screaming architecture).
+  - **Boundaries**: a module is used by others only through its public
+    `index.ts`, and never reads or writes another module's tables. New modules
+    own their schema in their own file under `src/shared/db/`.
+  - **Inside a module**: *domain* — pure functions holding the business rules
+    (`edit-policy.ts`, `transitions.ts` are the models), unit-tested with no
+    database; *service* — one use case per function, wrapping its writes in
+    one transaction; *adapters* — the database and every external system
+    (Interfuerza, the e-invoicing PAC, Telegram, R2) behind an injected
+    interface, the `deps?.x ?? real` seam this repo already uses.
+  - **Applies to new modules.** Existing modules are brought in line only when
+    a change already touches them; a refactor for its own sake is new scope.
+  - **Not adopted**: full DDD, CQRS, microservices, full event sourcing —
+    ceremony with no payoff at a single workshop's scale.
+- **Tenancy: one install per client, ready for multi-tenant.** Decided by the
+  owner 2026-11-17: the product will be offered to other similar businesses,
+  not only this workshop. Each client gets its own app and database (today's
+  model). New data carries the hierarchy **empresa → sucursal → caja** from
+  day one, each seeded with one row per install, so a later move to one shared
+  multi-tenant platform activates an existing concept instead of retrofitting
+  one. Anything specific to one client (Interfuerza, branding, business data,
+  PAC credentials) is per-install configuration, never hardcoded.
+- **Money and stock rules** (billing, cash, receivables, payables, inventory).
+  Decided by the owner 2026-11-17.
+  - **Append-only movements.** Stock, cash, receivables and payables are rows
+    of movements; a balance is derived from them. A correction is a new
+    reversing movement with who, when and why — never an `UPDATE` or `DELETE`
+    of a past movement.
+  - **Money is integer cents.** Never a JS float; a percentage applied to an
+    amount rounds once, at a named step, with a test pinning the rounding.
+  - **One operation, one transaction.** Invoicing writes its stock, cash and
+    receivable movements in one database transaction: all or nothing. Invoice
+    numbers are gapless, so they are not a Postgres `SEQUENCE` (which skips on
+    rollback); the exact rule waits on the e-invoicing PAC's documentation.
 - **Reminders**: `whatsappOptOut` and `emailOptOut` on `cliente` are two
   independent booleans — legally distinct consent regimes, never collapse them.
   `runReminder` re-checks row status before dispatch (idempotent against
@@ -113,8 +223,8 @@ evidence.
 
 - **Mockup first, for every new module and every changed view.** Decided by
   the owner 2026-10-27, after the agenda shipped without one and its UX was
-  rejected. Before design or apply touches UI, a self-contained HTML mockup
-  (`openspec/changes/<name>/mockup/index.html`, tokens copied from
+  rejected. Before any UI task is built, a self-contained HTML mockup
+  (`odd/mockups/<feature>/index.html`, tokens copied from
   `globals.css`, light and dark, desktop/tablet/phone) goes to the owner, and
   nothing is built until they approve it.
 
@@ -170,7 +280,7 @@ Smallest change that solves the actual ask. Before adding code:
 3. Is this the actual scope, or a speculative future need?
 
 **Do not expand scope silently.** A tempting related improvement goes in the
-change's `tasks.md` as a follow-up and in the PR description — not into the
+feature document's `## Log` as a follow-up and in the PR description — not into the
 current PR. This applies doubly to chained PRs.
 
 One standing exception: Strict TDD is not scaffolding to be trimmed. A change
@@ -237,7 +347,10 @@ waiting for the first employee to open the app from a second machine.
 
 ## Code quality gate
 
-- **`npm test` and `npx tsc --noEmit` clean before a PR.**
+- **`npm test` and `npx tsc --noEmit` clean before a PR.** Tests always pass:
+  nothing merges red, no test is skipped, and no test is deleted or loosened
+  to make a run green. A failure unrelated to the change is fixed first or
+  reported as a blocker — never waved through.
 
   Reading a red run: timeouts cascade, so the failure count is not the defect
   count. A test that blows `testTimeout` keeps running and its `userEvent.type`
