@@ -75,6 +75,7 @@
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -107,6 +108,7 @@
   --popover-foreground: #121417;
   --primary: #dc2626;
   --primary-foreground: #ffffff;
+  --primary-hover: #b91c1c;
   --secondary: #eceef0;
   --secondary-foreground: #121417;
   --muted: #eceef0;
@@ -156,6 +158,7 @@
   --popover-foreground: #d9dce1;
   --primary: #dc2626;
   --primary-foreground: #ffffff;
+  --primary-hover: #b91c1c;
   --secondary: #2e3238;
   --secondary-foreground: #d9dce1;
   --muted: #23272c;
@@ -314,7 +317,7 @@
    * The half that was missing, and it only shows in a real print PREVIEW.
    * `body` carries `bg-background` (globals.css:167) and so does
    * `[data-slot="sidebar-inset"]` (`sidebar.tsx:310`) — in DARK mode that is
-   * `hsl(240 10% 3.9%)`, near black. Hiding the sidebar and zeroing the margin
+   * `#121417`, near black. Hiding the sidebar and zeroing the margin
    * left the sheet white on a black page: the operator printed a black sheet.
    *
    * Forced light rather than left to the browser's "background graphics"

@@ -10,7 +10,7 @@ import logo from "./assets/dforce-logo.png";
 const loginBrandStyle = {
   // The login button follows the app primary; only its hover shade is login-specific.
   "--login-brand": "var(--primary)",
-  "--login-brand-hover": "#b91c1c",
+  "--login-brand-hover": "var(--primary-hover)",
   "--login-brand-foreground": "white",
 } as CSSProperties;
 

@@ -38,6 +38,7 @@ const PAIRS = [
   ["--card-foreground", "--card"],
   ["--popover-foreground", "--popover"],
   ["--primary-foreground", "--primary"],
+  ["--primary-foreground", "--primary-hover"],
   ["--secondary-foreground", "--secondary"],
   ["--muted-foreground", "--muted"],
   ["--muted-foreground", "--background"],
@@ -87,6 +88,13 @@ describe("app palette", () => {
   it("never uses the red primary as a text colour, it fails 4.5:1 on the dark ground", () => {
     const offenders = sourceFiles(srcDir).filter((file) =>
       /(^|[\s"'`:])text-(sidebar-)?primary(?![-\w])/.test(fs.readFileSync(file, "utf8")),
+    );
+    expect(offenders.map((file) => path.relative(srcDir, file))).toEqual([]);
+  });
+
+  it("never tints the red primary for a hover, white text drops below 4.5:1 in light", () => {
+    const offenders = sourceFiles(srcDir).filter((file) =>
+      /hover:bg-primary\/\d/.test(fs.readFileSync(file, "utf8")),
     );
     expect(offenders.map((file) => path.relative(srcDir, file))).toEqual([]);
   });
