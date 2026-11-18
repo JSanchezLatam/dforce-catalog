@@ -17,7 +17,7 @@ export default function AppLoading() {
       </aside>
       <main className="min-w-0 flex-1 p-8 animate-pulse">
         <div className="mb-6 h-[40px] w-48 rounded bg-border/50" />
-        <div className="rounded-2xl bg-card p-6 shadow-md">
+        <div className="rounded-2xl bg-card p-6">
           <div className="flex flex-col gap-3">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="flex gap-4">

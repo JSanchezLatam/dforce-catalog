@@ -86,8 +86,20 @@ describe("app palette", () => {
 
   it("never uses the red primary as a text colour, it fails 4.5:1 on the dark ground", () => {
     const offenders = sourceFiles(srcDir).filter((file) =>
-      /(^|[\s"'`:])text-primary(?![-\w])/.test(fs.readFileSync(file, "utf8")),
+      /(^|[\s"'`:])text-(sidebar-)?primary(?![-\w])/.test(fs.readFileSync(file, "utf8")),
     );
     expect(offenders.map((file) => path.relative(srcDir, file))).toEqual([]);
+  });
+
+  it("gives links the text colour with a red underline", () => {
+    const link = /@utility link-accent \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
+    expect(link).toContain("color: var(--foreground);");
+    expect(link).toContain("text-decoration-color: var(--primary);");
+    expect(link).toContain("&:hover");
+  });
+
+  it("opens in the dark theme", () => {
+    const layout = fs.readFileSync(path.join(srcDir, "app/layout.tsx"), "utf8");
+    expect(layout).toContain('defaultTheme="dark"');
   });
 });

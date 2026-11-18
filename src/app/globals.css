@@ -22,6 +22,10 @@
   text-decoration-color: var(--primary);
   text-decoration-thickness: 2px;
   text-underline-offset: 4px;
+
+  &:hover {
+    text-decoration-thickness: 3px;
+  }
 }
 
 @layer base {

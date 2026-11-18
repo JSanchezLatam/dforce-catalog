@@ -8,8 +8,8 @@ import heroImage from "./assets/login-hero.jpg";
 import logo from "./assets/dforce-logo.png";
 
 const loginBrandStyle = {
-  // Login-only brand accent sampled from the company logo. Do not promote to globals.css.
-  "--login-brand": "#dc2626",
+  // The login button follows the app primary; only its hover shade is login-specific.
+  "--login-brand": "var(--primary)",
   "--login-brand-hover": "#b91c1c",
   "--login-brand-foreground": "white",
 } as CSSProperties;

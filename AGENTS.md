@@ -122,8 +122,10 @@ evidence.
   `#dc2626` as primary. Dark by default, with a derived light theme, both in
   `src/app/globals.css`, toggled via `next-themes`; `globals-theme.test.ts` pins
   the values and contrast. Red is 3.8:1 on the dark ground, so it never carries
-  small text: links use `link-accent` (text colour, red underline). Shadows only
-  on the login screens. This flipped three times before (Kanagawa Dragon, a
+  small text: links use `link-accent` (text colour, red underline). Page surfaces
+  and cards carry no decorative shadow, except the login screens; floating layers
+  (menus, dialogs, toasts, sticky bars) keep theirs. This flipped three times
+  before (Kanagawa Dragon, a
   violet/gold brand palette, shadcn stock neutral) — read the current
   `globals.css` before changing any color.
 - **CRM/workshop is built natively**, not by integrating `Hainrixz/auto-crm`
