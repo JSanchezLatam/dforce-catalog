@@ -17,7 +17,7 @@ const loginBrandStyle = {
 export default function LoginPage() {
   return (
     <main
-      className="grid min-h-dvh grid-cols-1 bg-muted text-foreground lg:grid-cols-2"
+      className="grid min-h-dvh grid-cols-1 bg-muted dark:bg-background text-foreground lg:grid-cols-2"
       style={loginBrandStyle}
     >
       <LoginThemeToggle />
