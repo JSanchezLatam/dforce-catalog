@@ -145,7 +145,7 @@ describe("Sidebar — off-canvas breakpoint (audit #17a)", () => {
 
 /** sidebar-redesign WU1 (D1): the inset variant is a floating, rounded, bordered panel. */
 describe("Sidebar — inset panel (sidebar-redesign D1)", () => {
-  it("the inner panel carries the radius, border and shadow under the inset variant", () => {
+  it("the inner panel carries the radius and border, and no shadow, under the inset variant", () => {
     const { container } = render(
       <SidebarProvider>
         <Sidebar variant="inset">
@@ -159,8 +159,8 @@ describe("Sidebar — inset panel (sidebar-redesign D1)", () => {
       "group-data-[variant=inset]:rounded-2xl",
       "group-data-[variant=inset]:border",
       "group-data-[variant=inset]:border-sidebar-border",
-      "group-data-[variant=inset]:shadow-sm",
     );
+    expect(inner).not.toHaveClass("group-data-[variant=inset]:shadow-sm");
   });
 });
 
