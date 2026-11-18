@@ -36,7 +36,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 
 | ID | Specs | Work unit | Route | Status | Commit |
 |---|---|---|---|---|---|
-| T1 | S8, S9 | Password policy with server enforcement and fixtures | inline | in review | `feat/login-hardening-wu1-password-policy` |
+| T1 | S8, S9 | Password policy with server enforcement and fixtures | inline | done | `e70fe55` |
 | T2 | S6, S7 | Attempts table, IP helper, user and IP lock, shared cookie options | inline | pending | |
 | T3 | S6, S12 | Lock message and admin unlock | inline | pending | |
 | T4 | S10, S12 | Access log screen | inline | pending | |
