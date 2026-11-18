@@ -45,6 +45,34 @@ export const sessions = pgTable("sessions", {
 
 export type Session = typeof sessions.$inferSelect;
 
+export const loginOutcomeEnum = pgEnum("login_outcome", [
+  "success",
+  "bad_password",
+  "unknown_user",
+  "inactive",
+  "locked",
+  "unlocked",
+]);
+
+/** Every login attempt: the source of the locks and of "Registro de accesos". */
+export const loginAttempts = pgTable(
+  "login_attempts",
+  {
+    id: text("id").primaryKey(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    /** Normalized text as typed; it need not match a real user. */
+    username: text("username").notNull(),
+    userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
+    ip: text("ip"),
+    outcome: loginOutcomeEnum("outcome").notNull(),
+  },
+  (table) => [
+    index("login_attempts_username_at_idx").on(table.username, table.at),
+    index("login_attempts_ip_at_idx").on(table.ip, table.at),
+    index("login_attempts_at_idx").on(table.at),
+  ],
+);
+
 /**
  * `workshop_config` — singleton row holding the workshop display name,
  * logo (uploaded to R2, served through /api/workshop-config/logo), and

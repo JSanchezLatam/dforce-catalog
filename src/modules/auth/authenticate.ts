@@ -1,5 +1,7 @@
 import { eq } from "drizzle-orm";
 
+import { reserveLoginAttempt, settleLoginAttempt } from "@/modules/auth/login-attempts";
+import { loginKey } from "@/modules/auth/login-lock";
 import { verifyPassword } from "@/modules/auth/password";
 import { isUserActive, issueSession, type Role } from "@/modules/auth/session";
 import { db } from "@/shared/db/client";
@@ -7,7 +9,10 @@ import { users } from "@/shared/db/schema";
 
 export type AuthResult =
   | { ok: true; token: string; expiresAt: Date; role: Role }
-  | { ok: false };
+  | { ok: false; lockedUntil?: Date };
+
+/** Compared when the user does not exist, so that case costs the same bcrypt time. Matches no password in use. */
+const UNKNOWN_USER_HASH = "$2b$12$dILTUHrTcECh6CwTX1X11eLppcwSd2W9GHXDcAFpMij2ltg.GtwlW";
 
 type AuthenticateUserRow = {
   id: string;
@@ -20,6 +25,8 @@ export type AuthenticateUserDeps = {
   findUser?: (username: string) => Promise<AuthenticateUserRow | undefined>;
   verifyPassword?: typeof verifyPassword;
   issueSession?: typeof issueSession;
+  attempts?: { reserve: typeof reserveLoginAttempt; settle: typeof settleLoginAttempt };
+  ip?: string | null;
 };
 
 async function findUserDefault(username: string): Promise<AuthenticateUserRow | undefined> {
@@ -60,12 +67,24 @@ export async function authenticateUser(
   const findUser = deps.findUser ?? findUserDefault;
   const doVerifyPassword = deps.verifyPassword ?? verifyPassword;
   const doIssueSession = deps.issueSession ?? issueSession;
+  const attempts = deps.attempts ?? { reserve: reserveLoginAttempt, settle: settleLoginAttempt };
+
+  const reserved = await attempts.reserve({ username: loginKey(username), ip: deps.ip ?? null });
+  if ("lockedUntil" in reserved) return { ok: false, lockedUntil: reserved.lockedUntil };
 
   const user = await findUser(username);
-  if (!user || !(await doVerifyPassword(password, user.passwordHash)) || !isUserActive(user)) {
+  const passwordMatches = await doVerifyPassword(password, user?.passwordHash ?? UNKNOWN_USER_HASH);
+
+  if (!user) {
+    await attempts.settle(reserved.attemptId, "unknown_user", null);
+    return { ok: false };
+  }
+  if (!passwordMatches || !isUserActive(user)) {
+    await attempts.settle(reserved.attemptId, passwordMatches ? "inactive" : "bad_password", user.id);
     return { ok: false };
   }
 
   const { token, expiresAt } = await doIssueSession(user.id, user.role);
+  await attempts.settle(reserved.attemptId, "success", user.id);
   return { ok: true, token, expiresAt, role: user.role };
 }
