@@ -70,9 +70,9 @@ describe("technician roster (E2E)", () => {
   });
 
   it("createUser as técnico creates the login and one linked row named from name, then username", async () => {
-    const named = await createUser({ username: `e2e-tech-named-${stamp}`, password: "temporal1", role: "tecnico", name: "Ana Ruiz" });
-    const blank = await createUser({ username: `e2e-tech-blank-${stamp}`, password: "temporal1", role: "tecnico", name: "  " });
-    const admin = await createUser({ username: `e2e-tech-adm-${stamp}`, password: "temporal1", role: "administrador" });
+    const named = await createUser({ username: `e2e-tech-named-${stamp}`, password: "temporal-k7", role: "tecnico", name: "Ana Ruiz" });
+    const blank = await createUser({ username: `e2e-tech-blank-${stamp}`, password: "temporal-k7", role: "tecnico", name: "  " });
+    const admin = await createUser({ username: `e2e-tech-adm-${stamp}`, password: "temporal-k7", role: "administrador" });
     made.push(named.id, blank.id, admin.id);
 
     expect((await rosterOf(named.id)).map((r) => r.nombre)).toEqual(["Ana Ruiz"]);
@@ -85,7 +85,7 @@ describe("technician roster (E2E)", () => {
 
     await expect(
       createUser(
-        { username, password: "temporal1", role: "tecnico" },
+        { username, password: "temporal-k7", role: "tecnico" },
         {
           ensureRosterRow: async () => {
             throw new Error("forced roster failure");

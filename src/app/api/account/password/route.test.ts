@@ -51,12 +51,12 @@ describe("POST /api/account/password", () => {
 
   it("returns the policy message tied to the new password field", async () => {
     const { WeakPasswordError } = await import("@/modules/account/service");
-    mockChangePassword.mockRejectedValue(new WeakPasswordError("Es demasiado común. Elige otra."));
+    mockChangePassword.mockRejectedValue(new WeakPasswordError("Es demasiado común. Elegí otra."));
 
     const res = await POST(req("tecnico", JSON.stringify({ currentPassword: "old", newPassword: "password123" })));
 
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: "Es demasiado común. Elige otra.", field: "newPassword" });
+    expect(await res.json()).toEqual({ error: "Es demasiado común. Elegí otra.", field: "newPassword" });
   });
 
   it.each([

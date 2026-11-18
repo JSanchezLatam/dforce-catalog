@@ -40,22 +40,17 @@ const COMMON_PASSWORDS = new Set([
   "contraseña",
   "contraseña1",
   "contraseña123",
-  "dforce12345",
-  "dforce123456",
-  "dforcecaraudio",
   "football123",
   "iloveyou123",
   "letmein123",
   "mecanico123",
-  "panama12345",
-  "panama123456",
   "passw0rd123",
-  "password1",
   "password12",
   "password123",
   "password1234",
   "password12345",
   "princess123",
+  "qwerty1234",
   "qwerty12345",
   "qwerty123456",
   "qwertyuiop",
@@ -80,5 +75,7 @@ export function passwordPolicyError(password: unknown): string | null {
   if (typeof password !== "string" || password.length < MIN_PASSWORD_LENGTH) {
     return `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`;
   }
-  return COMMON_PASSWORDS.has(password.toLowerCase()) ? "Es demasiado común. Elige otra." : null;
+  const normalized = password.normalize("NFC").trim().toLowerCase();
+  const isCommon = COMMON_PASSWORDS.has(normalized) || new Set(normalized).size <= 1;
+  return isCommon ? "Es demasiado común. Elegí otra." : null;
 }

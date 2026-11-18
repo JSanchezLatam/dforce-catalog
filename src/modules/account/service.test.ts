@@ -146,7 +146,7 @@ describe("changePassword", () => {
 
   it.each([
     ["short", "corta-123", "La contraseña debe tener al menos 10 caracteres."],
-    ["common", "password123", "Es demasiado común. Elige otra."],
+    ["common", "password123", "Es demasiado común. Elegí otra."],
   ])("rejects a %s new password and changes nothing", async (_case, newPassword, message) => {
     const updatePassword = vi.fn();
     const revoke = vi.fn();
@@ -292,7 +292,7 @@ describe("createUser", () => {
     await createUser({ username: "ana", password: "temporal-k7", role: "tecnico" }, d);
 
     const written = d.insert.mock.calls[0][0] as { passwordHash: string };
-    expect(written.passwordHash).not.toBe("temporal1");
+    expect(written.passwordHash).not.toBe("temporal-k7");
     expect(written.passwordHash).toMatch(/^\$2[aby]\$/);
   });
 
@@ -384,7 +384,7 @@ describe("createUser", () => {
     const d = deps();
 
     await expectProfileErrors(createUser({ username: "ana", password: "password123", role: "tecnico" }, d), {
-      password: "Es demasiado común. Elige otra.",
+      password: "Es demasiado común. Elegí otra.",
     });
     expect(d.insert).not.toHaveBeenCalled();
   });
@@ -519,7 +519,7 @@ describe("updateUser", () => {
       const { applyUpdate, revoke, deps } = txDeps();
 
       await expectProfileErrors(updateUser("admin-1", "user-9", { password: "password123" }, deps), {
-        password: "Es demasiado común. Elige otra.",
+        password: "Es demasiado común. Elegí otra.",
       });
       expect(applyUpdate).not.toHaveBeenCalled();
       expect(revoke).not.toHaveBeenCalled();

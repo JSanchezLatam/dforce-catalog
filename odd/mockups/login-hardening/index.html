@@ -155,7 +155,7 @@ select{height:44px;background-color:var(--inset)!important;border:1px solid var(
     <form onsubmit="return false">
       <div class="field">
         <label for="otp">Código de verificación</label>
-        <p id="otp-hint" class="muted small" style="margin:0 0 6px">Abre tu app de autenticación y escribe el código de 6 dígitos.</p>
+        <p id="otp-hint" class="muted small" style="margin:0 0 6px">Abrí tu app de autenticación y escribí el código de 6 dígitos.</p>
         <input class="otp" id="otp" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="\d{6}" maxlength="6" aria-describedby="otp-hint" placeholder="000000" required>
       </div>
       <div class="check"><input type="checkbox" id="trust" checked><label for="trust" style="font-weight:400">Confiar en este dispositivo por 30 días</label></div>
@@ -171,7 +171,7 @@ select{height:44px;background-color:var(--inset)!important;border:1px solid var(
   <div class="login"><div class="left"><div class="card">
     <div class="logo">D<span>FORCE</span></div>
     <div class="center" style="margin-bottom:22px"><h1>Bienvenido de vuelta</h1><p class="muted">Inicia sesión para continuar</p></div>
-    <div class="alert err" role="alert"><b>Demasiados intentos fallidos.</b><br>Por seguridad, el acceso quedó bloqueado. Intenta de nuevo en <b>14 minutos</b> o pide al administrador que te desbloquee.</div>
+    <div class="alert err" role="alert"><b>Demasiados intentos fallidos.</b><br>Por seguridad, el acceso quedó bloqueado. Intentá de nuevo en <b>14 minutos</b> o pedí al administrador que te desbloquee.</div>
     <div class="field"><label for="u">Usuario</label><input id="u" type="text" value="mrodriguez" autocomplete="username"></div>
     <div class="field"><label for="p">Contraseña</label><input id="p" type="password" autocomplete="current-password"></div>
     <button class="btn brand" disabled style="opacity:.5">Iniciar sesión</button>
@@ -182,15 +182,15 @@ select{height:44px;background-color:var(--inset)!important;border:1px solid var(
 <section class="screen" id="s3" data-note="Administrador y jefe de taller sin 2FA: después de la contraseña ven esta pantalla y no pueden entrar a la app hasta terminarla. Al verificar, pasan a ver sus códigos de recuperación (pantalla 4, estado 'recién activado').">
   <div class="login"><div class="left"><div class="card" style="max-width:460px">
     <div class="logo">D<span>FORCE</span></div>
-    <h1>Configura la verificación en dos pasos</h1>
+    <h1>Configurá la verificación en dos pasos</h1>
     <p class="muted" style="margin-bottom:16px">Tu rol de <b>Jefe de taller</b> la requiere. Te toma un minuto.</p>
     <ol class="steps">
-      <li>Instala una app de autenticación (Google Authenticator, Microsoft Authenticator o similar).</li>
-      <li>Escanea este código con la app.</li>
-      <li>Escribe el código de 6 dígitos que te muestra.</li>
+      <li>Instalá una app de autenticación (Google Authenticator, Microsoft Authenticator o similar).</li>
+      <li>Escaneá este código con la app.</li>
+      <li>Escribí el código de 6 dígitos que te muestra.</li>
     </ol>
     <div class="center"><svg class="qr" viewBox="0 0 21 21" shape-rendering="crispEdges" aria-label="Código QR para la app de autenticación" role="img"><path fill="#000" d="M0 0h7v7H0zM1 1v5h5V1zM2 2h3v3H2zM14 0h7v7h-7zM15 1v5h5V1zM16 2h3v3h-3zM0 14h7v7H0zM1 15v5h5v-5zM2 16h3v3H2zM8 0h1v1H8zM10 1h2v1h-2zM9 3h1v2H9zM11 4h2v1h-2zM8 6h1v2H8zM10 8h3v1h-3zM0 8h2v1H0zM3 9h2v1H3zM5 10h1v2H5zM14 8h1v1h-1zM16 9h2v1h-2zM19 8h2v2h-2zM8 10h1v1H8zM12 10h1v2h-1zM15 11h2v1h-2zM18 12h3v1h-3zM8 13h2v1H8zM11 14h1v2h-1zM13 13h2v1h-2zM9 16h1v2H9zM14 15h1v1h-1zM16 14h1v3h-1zM18 15h2v1h-2zM12 17h3v1h-3zM8 19h2v2H8zM11 19h1v1h-1zM13 19h2v2h-2zM17 18h1v3h-1zM19 19h2v1h-2z"/></svg></div>
-    <p class="small muted center" style="margin:6px 0 4px">¿No puedes escanear? Escribe esta clave en la app:</p>
+    <p class="small muted center" style="margin:6px 0 4px">¿No podés escanear? Escribí esta clave en la app:</p>
     <p class="secret center small">JBSW Y3DP EHPK 3PXP</p>
     <div class="field" style="margin-top:14px">
       <label for="otp3">Código de la app</label>
@@ -213,12 +213,12 @@ select{height:44px;background-color:var(--inset)!important;border:1px solid var(
       <button class="btn outline sm" data-st="on">Activo</button>
     </div>
     <div class="card" data-state="off">
-      <div class="row"><div><h2>Verificación en dos pasos</h2><p class="muted">Agrega un código de tu teléfono al iniciar sesión. Es opcional para tu rol.</p></div><span class="badge">Desactivada</span></div>
+      <div class="row"><div><h2>Verificación en dos pasos</h2><p class="muted">Agregá un código de tu teléfono al iniciar sesión. Es opcional para tu rol.</p></div><span class="badge">Desactivada</span></div>
       <div style="margin-top:14px"><button class="btn">Activar</button></div>
     </div>
     <div class="card" data-state="new" hidden>
       <div class="row"><div><h2>Verificación en dos pasos</h2></div><span class="badge ok">Activada</span></div>
-      <div class="alert" style="margin-top:12px"><b>Guarda tus códigos de recuperación.</b> Cada uno sirve una sola vez, si pierdes el teléfono. Es la única vez que los verás.</div>
+      <div class="alert" style="margin-top:12px"><b>Guardá tus códigos de recuperación.</b> Cada uno sirve una sola vez, si pierdes el teléfono. Es la única vez que los verás.</div>
       <div class="codes" aria-label="Códigos de recuperación"><span>7KQM-2XPA</span><span>R9TD-4HWN</span><span>C3LV-8JQE</span><span>M6FB-1ZRT</span><span>P2WN-5KDY</span><span>H8XC-3MVL</span><span>T4JR-9PQB</span><span>A5ZE-6GHN</span><span>W1YK-7CTF</span><span>D9NU-2RLS</span></div>
       <div class="actions"><button class="btn outline">Imprimir</button><button class="btn outline">Descargar .txt</button><button class="btn">Ya los guardé</button></div>
     </div>
@@ -230,14 +230,14 @@ select{height:44px;background-color:var(--inset)!important;border:1px solid var(
       <h2>Cambiar contraseña</h2>
       <p class="muted small" style="margin-bottom:12px">Al cambiarla se cierran tus sesiones en los demás dispositivos.</p>
       <div class="field"><label for="cp">Contraseña actual</label><input id="cp" type="password" autocomplete="current-password"></div>
-      <div class="field"><label for="np">Contraseña nueva</label><p id="np-hint" class="muted small" style="margin:0 0 4px">Mínimo 10 caracteres. No puede ser una contraseña común.</p><input id="np" type="password" autocomplete="new-password" aria-describedby="np-hint np-err" value="12345678"><p id="np-err" class="small err-text" style="margin:4px 0 0">Es demasiado común. Elige otra.</p></div>
+      <div class="field"><label for="np">Contraseña nueva</label><p id="np-hint" class="muted small" style="margin:0 0 4px">Mínimo 10 caracteres. No puede ser una contraseña común.</p><input id="np" type="password" autocomplete="new-password" aria-describedby="np-hint np-err" value="12345678"><p id="np-err" class="small err-text" style="margin:4px 0 0">Es demasiado común. Elegí otra.</p></div>
       <button class="btn">Guardar contraseña</button>
     </div>
   </div></div></div>
 </section>
 
 <!-- 5. Users admin -->
-<section class="screen" id="s5" data-note="Gestión de usuarios: columna nueva '2FA' y estado 'Bloqueado' con su hora de fin. 'Desbloquear' queda a la vista solo si está bloqueado. 'Resetear 2FA' va en el menú ⋮ (ábrelo) y no aparece en la fila del propio administrador. Ambas piden confirmación y avisan con un toast.">
+<section class="screen" id="s5" data-note="Gestión de usuarios: columna nueva '2FA' y estado 'Bloqueado' con su hora de fin. 'Desbloquear' queda a la vista solo si está bloqueado. 'Resetear 2FA' va en el menú ⋮ (abrilo) y no aparece en la fila del propio administrador. Ambas piden confirmación y avisan con un toast.">
   <div class="app"><nav class="side" data-role="admin" data-on="users"></nav>
   <div class="inset" data-crumb="Configuración|Gestión de usuarios"><div class="main">
     <div class="row"><h1>Gestión de usuarios</h1><button class="btn">Nuevo usuario</button></div>

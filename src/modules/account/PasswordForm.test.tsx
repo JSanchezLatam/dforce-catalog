@@ -46,13 +46,13 @@ describe("PasswordForm — password policy", () => {
   });
 
   it("shows a policy rejection on the new password, not on the current one", async () => {
-    mockFetch(400, { error: "Es demasiado común. Elige otra.", field: "newPassword" });
+    mockFetch(400, { error: "Es demasiado común. Elegí otra.", field: "newPassword" });
     const user = userEvent.setup();
     render(<PasswordForm />);
 
     await submit(user, "password123");
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Es demasiado común. Elige otra.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Es demasiado común. Elegí otra.");
     expect(screen.getByLabelText("Nueva contraseña")).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByLabelText("Contraseña actual")).not.toHaveAttribute("aria-invalid", "true");
   });

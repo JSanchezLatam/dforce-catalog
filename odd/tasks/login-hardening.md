@@ -36,7 +36,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 
 | ID | Specs | Work unit | Route | Status | Commit |
 |---|---|---|---|---|---|
-| T1 | S8, S9 | Password policy with server enforcement and fixtures | inline | pending | |
+| T1 | S8, S9 | Password policy with server enforcement and fixtures | inline | in review | `feat/login-hardening-wu1-password-policy` |
 | T2 | S6, S7 | Attempts table, IP helper, user and IP lock, shared cookie options | inline | pending | |
 | T3 | S6, S12 | Lock message and admin unlock | inline | pending | |
 | T4 | S10, S12 | Access log screen | inline | pending | |
@@ -56,6 +56,7 @@ Route evidence: units depend on each other in order, so no writer trigger applie
 - L2 (2026-11-18, owner, on the confirmed scope): "Si, confirmado así".
 - L3 (2026-11-18, owner, on the mockup): "Vale, perfecto. Lo unico es que en el badges de fallido, creo que debe ser una X o un simbolo similar." Applied.
 - L4 (2026-11-18): auth map. `/login*` and `/api/login*` skip `src/proxy.ts`, so 2FA routes must live outside that prefix. `authenticateUser` issues the session at once, so 2FA needs a pending state. Next migration is 0039. `qrcode` is installed; TOTP uses `node:crypto`, no new dependency. Self-service password change has no server-side length check. S9 already exists for passwords; only trusted-device revocation is new.
-- L5 (2026-11-18): the mockup copy uses "tú", as does the current login, while `AGENTS.md` asks for Rioplatense. Kept as approved; to confirm before copy ships.
+- L5 (2026-11-18): the mockup copy used "tú", while `AGENTS.md` and the rest of the app use Rioplatense. The standing rule wins: copy ships in voseo and the mockup was aligned.
 - L6 (2026-11-18, owner): sole-administrator recovery resolved with the emergency command, S13: "Si".
-- Next: T1.
+- Follow-up: `scripts/seed-user.mjs` writes a hash without the policy; it is an install-time CLI, and its default `admin123` should be addressed with T8 enrolment.
+- Next: T2.

@@ -16,13 +16,20 @@ describe("passwordPolicyError", () => {
   it.each(["1234567890", "password123", "contraseña1", "qwertyuiop", "admin12345"])(
     "rejects the common password %s",
     (password) => {
-      expect(passwordPolicyError(password)).toBe("Es demasiado común. Elige otra.");
+      expect(passwordPolicyError(password)).toBe("Es demasiado común. Elegí otra.");
     },
   );
 
   it("ignores letter case when matching the common list", () => {
-    expect(passwordPolicyError("PassWord123")).toBe("Es demasiado común. Elige otra.");
+    expect(passwordPolicyError("PassWord123")).toBe("Es demasiado común. Elegí otra.");
   });
+
+  it.each([" password123 ", "contrasen\u0303a123", "aaaaaaaaaa", "2222222222", "          "])(
+    "normalizes before matching and rejects a repeated character: %j",
+    (password) => {
+      expect(passwordPolicyError(password)).toBe("Es demasiado común. Elegí otra.");
+    },
+  );
 
   it("rejects a value that is not text", () => {
     expect(passwordPolicyError(undefined)).toBe("La contraseña debe tener al menos 10 caracteres.");
