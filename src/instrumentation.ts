@@ -36,9 +36,6 @@ import * as Sentry from "@sentry/nextjs";
 
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { installTrustedClientAddress } = await import("@/modules/auth/trusted-client-address");
-    installTrustedClientAddress();
-
     const dsn = process.env.SENTRY_DSN || undefined;
     if (dsn) {
       Sentry.init({
@@ -55,6 +52,9 @@ export async function register(): Promise<void> {
         dataCollection: { userInfo: false },
       });
     }
+
+    const { installTrustedClientAddress } = await import("@/modules/auth/trusted-client-address");
+    installTrustedClientAddress();
 
     const { registerNodeWorkers } = await import("./instrumentation-node");
     try {

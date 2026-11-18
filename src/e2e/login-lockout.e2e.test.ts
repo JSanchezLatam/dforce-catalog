@@ -5,7 +5,7 @@
 import { execSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-import { inArray, like } from "drizzle-orm";
+import { ilike, inArray } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -47,7 +47,7 @@ describe("login locks against a real database", () => {
   }, 60_000);
 
   afterAll(async () => {
-    await db.delete(loginAttempts).where(like(loginAttempts.username, `${PREFIX}%`));
+    await db.delete(loginAttempts).where(ilike(loginAttempts.username, `${PREFIX}%`));
     await db.delete(users).where(inArray(users.id, made));
     await db.$client.end();
   });
