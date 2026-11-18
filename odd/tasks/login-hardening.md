@@ -30,7 +30,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 - A4. Passwords under 10 characters stay valid until their next change.
 - A5. A 2FA reset also revokes that user's sessions and trusted devices.
 - A6. Recovery codes use the mockup format `7KQM-2XPA`.
-- A7. The IP lock and "Origen" are best-effort: on the direct LAN deployment `x-forwarded-for` can be forged by the client.
+- A7. The client address comes from the connection; `x-forwarded-for` is believed only from a proxy on the server itself (the future tunnel).
 
 ## Tasks
 
