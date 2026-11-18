@@ -5,6 +5,7 @@ import { users } from "@/shared/db/schema";
 import { revokeOtherSessions } from "@/modules/auth/session";
 import { isRole, type Role } from "@/modules/auth/roles";
 import { MIN_PASSWORD_LENGTH } from "./password-policy";
+import { passwordPolicyError } from "./password-rules";
 import { hashPassword, verifyPassword } from "@/modules/auth/password";
 
 /** Mirrors customers/validation.ts's EMAIL_FORMAT convention. */
@@ -88,6 +89,9 @@ export class SamePasswordError extends Error {
   }
 }
 
+/** The new password breaks the policy; `message` is the Spanish text for the operator. */
+export class WeakPasswordError extends Error {}
+
 /** What the single credential read returns — the DB-free test seam's contract. */
 export type Credentials = { passwordHash: string; mustChangePassword: boolean };
 
@@ -131,6 +135,9 @@ export async function changePassword(
   if (credentials.mustChangePassword && newPassword === currentPassword) {
     throw new SamePasswordError();
   }
+
+  const policyError = passwordPolicyError(newPassword);
+  if (policyError) throw new WeakPasswordError(policyError);
 
   const newHash = await hashPassword(newPassword);
 
@@ -193,9 +200,8 @@ export async function createUser(input: CreateUserInput, deps: CreateUserDeps = 
 
   if (!username) errors.username = "El nombre de usuario es obligatorio.";
   if (!isRole(input.role)) errors.role = "El rol debe ser técnico, jefe de taller, pantalla o administrador.";
-  if (!input.password || input.password.length < MIN_PASSWORD_LENGTH) {
-    errors.password = `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`;
-  }
+  const passwordError = passwordPolicyError(input.password);
+  if (passwordError) errors.password = passwordError;
   if (email !== null && !EMAIL_FORMAT.test(email)) {
     errors.email = "El email no es válido.";
   }
@@ -403,9 +409,8 @@ export async function updateUser(
   if (input.role !== undefined && !isRole(input.role)) {
     errors.role = "El rol debe ser técnico, jefe de taller, pantalla o administrador.";
   }
-  if (input.password !== undefined && input.password.length < MIN_PASSWORD_LENGTH) {
-    errors.password = `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`;
-  }
+  const passwordError = input.password === undefined ? null : passwordPolicyError(input.password);
+  if (passwordError) errors.password = passwordError;
   if (email !== undefined && email !== "" && !EMAIL_FORMAT.test(email)) {
     errors.email = "El email no es válido.";
   }

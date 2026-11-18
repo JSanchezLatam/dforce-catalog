@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { requireSession } from "@/modules/auth/session";
-import { changePassword, SamePasswordError } from "@/modules/account/service";
+import { changePassword, SamePasswordError, WeakPasswordError } from "@/modules/account/service";
 
 function getTokenId(request: NextRequest): string | null {
   const cookie = request.cookies.get("session");
@@ -23,6 +23,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No se pudo leer el pedido." }, { status: 400 });
   }
 
+  if (typeof body.currentPassword !== "string" || typeof body.newPassword !== "string") {
+    return NextResponse.json({ error: "No se pudo leer el pedido." }, { status: 400 });
+  }
+
   try {
     await changePassword(user.id, body.currentPassword, body.newPassword, getTokenId(request) ?? "");
     return NextResponse.json({ success: true });
@@ -32,6 +36,9 @@ export async function POST(request: NextRequest) {
         { error: "La nueva contraseña debe ser distinta de la actual." },
         { status: 400 },
       );
+    }
+    if (err instanceof WeakPasswordError) {
+      return NextResponse.json({ error: err.message, field: "newPassword" }, { status: 400 });
     }
     if (err instanceof Error && err.message === "Invalid current password") {
       return NextResponse.json({ error: "Contraseña actual incorrecta." }, { status: 400 });

@@ -7,4 +7,4 @@
  * client, and importing it from a client component would pull the database
  * driver into the browser bundle.
  */
-export const MIN_PASSWORD_LENGTH = 6;
+export const MIN_PASSWORD_LENGTH = 10;

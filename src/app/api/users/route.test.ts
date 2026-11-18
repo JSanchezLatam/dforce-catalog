@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { handleCreateUser, handleListUsers } from "./route";
 
-const VALID = { username: "ana", password: "temporal1", role: "tecnico" };
+const VALID = { username: "ana", password: "temporal-k7", role: "tecnico" };
 
 function req(role: string, init: { body?: unknown; query?: string } = {}) {
   const url = `http://localhost/api/users${init.query ?? ""}`;
