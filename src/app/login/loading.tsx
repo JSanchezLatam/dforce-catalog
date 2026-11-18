@@ -1,6 +1,6 @@
 export default function LoginLoading() {
   return (
-    <main className="grid min-h-dvh grid-cols-1 bg-muted text-foreground lg:grid-cols-2">
+    <main className="grid min-h-dvh grid-cols-1 bg-muted dark:bg-background text-foreground lg:grid-cols-2">
       <section className="flex flex-col items-center px-5 py-10 sm:px-8 lg:px-12">
         {/* No toggle placeholder on purpose. `LoginThemeToggle` returns null
             until it is hydrated, so painting a pill here would show one, drop

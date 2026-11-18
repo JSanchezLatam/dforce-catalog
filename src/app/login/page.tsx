@@ -8,16 +8,16 @@ import heroImage from "./assets/login-hero.jpg";
 import logo from "./assets/dforce-logo.png";
 
 const loginBrandStyle = {
-  // Login-only brand accent sampled from the company logo. Do not promote to globals.css.
-  "--login-brand": "hsl(5 85% 45%)",
-  "--login-brand-hover": "hsl(5 85% 39%)",
+  // Login aliases of the app tokens, so the form and the theme toggle read one set of names.
+  "--login-brand": "var(--primary)",
+  "--login-brand-hover": "var(--primary-hover)",
   "--login-brand-foreground": "white",
 } as CSSProperties;
 
 export default function LoginPage() {
   return (
     <main
-      className="grid min-h-dvh grid-cols-1 bg-muted text-foreground lg:grid-cols-2"
+      className="grid min-h-dvh grid-cols-1 bg-muted dark:bg-background text-foreground lg:grid-cols-2"
       style={loginBrandStyle}
     >
       <LoginThemeToggle />

@@ -137,7 +137,7 @@ export function AgendaDetail({ item, roster = null, onClose }: { item: AgendaIte
       </ul>
       {editable && roster ? <AssignSection item={item} roster={roster} /> : null}
       <div className="flex flex-wrap items-center gap-2">
-        <Link href={item.href} className={`${LINK} bg-primary px-4 text-primary-foreground hover:bg-primary/90`}>
+        <Link href={item.href} className={`${LINK} bg-primary px-4 text-primary-foreground hover:bg-primary-hover`}>
           Abrir orden
         </Link>
         <ItemActions item={item} onSuccess={onClose} />

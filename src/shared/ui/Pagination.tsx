@@ -41,7 +41,7 @@ function buildWindow(current: number, total: number): (number | "ellipsis")[] {
  * and it is not fixable from inside that module. Splitting it would have
  * merged the customers PR with the reported defect still visible.
  */
-const navClassName = "rounded-lg px-3 py-1 text-primary hover:bg-muted transition-colors pointer-coarse:h-11 pointer-coarse:inline-flex pointer-coarse:items-center";
+const navClassName = "rounded-lg px-3 py-1 text-foreground hover:bg-muted transition-colors pointer-coarse:h-11 pointer-coarse:inline-flex pointer-coarse:items-center";
 
 function pageClassName(isActive: boolean): string {
   return `rounded-lg px-3 py-1 text-sm pointer-coarse:h-11 pointer-coarse:min-w-11 pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:justify-center ${

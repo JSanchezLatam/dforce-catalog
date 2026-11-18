@@ -189,7 +189,7 @@ export default async function ServiceOrdersPage({
                 {!unfiltered ? (
                   <>
                     Ninguna orden coincide con el filtro.{" "}
-                    <Link href="/service-orders" className="text-primary hover:underline">
+                    <Link href="/service-orders" className="link-accent">
                       Limpiar filtro
                     </Link>
                   </>

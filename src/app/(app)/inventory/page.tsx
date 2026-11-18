@@ -149,7 +149,7 @@ export default async function InventoryPage({
               <h2 className="text-lg font-semibold text-foreground">No se encontraron productos</h2>
               <p className="text-sm text-muted-foreground">
                 Ningún producto coincide con los filtros seleccionados.{" "}
-                <Link href="/inventory" className="text-primary hover:underline">
+                <Link href="/inventory" className="link-accent">
                   Limpiar filtros
                 </Link>
               </p>
