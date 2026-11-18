@@ -8,7 +8,7 @@ import { authenticateUser } from "@/modules/auth/authenticate";
 import { clientIp } from "@/modules/auth/client-ip";
 import { SESSION_COOKIE } from "@/modules/auth/session";
 
-export type LoginState = { error: string } | null;
+export type LoginState = { error: string; detail?: string; lockedUsername?: string; retryAt?: number } | null;
 
 /**
  * Server Action driving `LoginForm.tsx` via `useActionState` (React
@@ -28,7 +28,10 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
     if (!result.lockedUntil) return { error: "Usuario o contraseña incorrectos." };
     const minutes = Math.ceil((result.lockedUntil.getTime() - Date.now()) / 60_000);
     return {
-      error: `Demasiados intentos fallidos. Por seguridad, el acceso quedó bloqueado. Intentá de nuevo en ${minutes} ${minutes === 1 ? "minuto" : "minutos"} o pedile al administrador que te desbloquee.`,
+      error: "Demasiados intentos fallidos.",
+      detail: `Por seguridad, el acceso quedó bloqueado. Intentá de nuevo en ${minutes} ${minutes === 1 ? "minuto" : "minutos"} o pedí al administrador que te desbloquee.`,
+      lockedUsername: username,
+      retryAt: result.lockedUntil.getTime(),
     };
   }
 

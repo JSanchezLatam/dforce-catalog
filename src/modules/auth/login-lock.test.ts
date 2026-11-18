@@ -62,8 +62,13 @@ describe("lockedUntil", () => {
 });
 
 describe("loginKey", () => {
-  it("treats case and surrounding spaces as the same login", () => {
-    expect(loginKey("  MRodriguez ")).toBe("mrodriguez");
+  // Usernames are case-sensitive: `Ana` and `ana` can be two accounts with separate counters.
+  it("keeps the login exactly as typed", () => {
+    expect(loginKey(" MRodriguez")).toBe(" MRodriguez");
+  });
+
+  it("bounds the stored length", () => {
+    expect(loginKey("a".repeat(500))).toHaveLength(150);
   });
 });
 

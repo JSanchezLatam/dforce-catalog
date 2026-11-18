@@ -110,12 +110,12 @@ describe("authenticateUser() — login attempts and locks", () => {
     };
   }
 
-  it("reserves the attempt under the normalized login and the client IP before comparing", async () => {
+  it("reserves the attempt under the login as typed and the client IP before comparing", async () => {
     const { deps, reserve } = attemptDeps();
 
-    await authenticateUser(" Ana ", "clave", { ...deps, ip: "192.168.1.23" });
+    await authenticateUser("Ana", "clave", { ...deps, ip: "192.168.1.23" });
 
-    expect(reserve).toHaveBeenCalledWith({ username: "ana", ip: "192.168.1.23" });
+    expect(reserve).toHaveBeenCalledWith({ username: "Ana", ip: "192.168.1.23" });
     expect(reserve.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(deps.verifyPassword).mock.invocationCallOrder[0]);
   });
 

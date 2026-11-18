@@ -17,7 +17,8 @@ export const IP_LOCK: LockRule = { threshold: 20, windowMs: FIFTEEN_MINUTES, res
 /** A lock still active now began from failures at most two windows old. */
 export const LOOKBACK_MS = 2 * FIFTEEN_MINUTES;
 
-export const loginKey = (username: string): string => username.trim().toLowerCase().slice(0, 150);
+/** Exactly as typed: usernames are case-sensitive, so `Ana` and `ana` keep separate counters. */
+export const loginKey = (username: string): string => username.slice(0, 150);
 
 /** When the current lock ends, or `null` when these attempts leave the login open. */
 export function lockedUntil(

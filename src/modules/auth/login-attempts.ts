@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, eq, gt, ne, sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { loginAttempts } from "@/shared/db/schema";
@@ -22,16 +22,18 @@ export async function reserveLoginAttempt(input: { username: string; ip: string 
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`login-user:${input.username}`}))`);
     if (input.ip) await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`login-ip:${input.ip}`}))`);
 
+    // Refused attempts never count, and skipping them keeps a hammered login cheap to check.
+    const counted = and(gt(loginAttempts.at, since), ne(loginAttempts.outcome, "locked"));
     const columns = { at: loginAttempts.at, outcome: loginAttempts.outcome };
     const byUser = await tx
       .select(columns)
       .from(loginAttempts)
-      .where(and(eq(loginAttempts.username, input.username), gt(loginAttempts.at, since)));
+      .where(and(eq(loginAttempts.username, input.username), counted));
     const byIp = input.ip
       ? await tx
           .select(columns)
           .from(loginAttempts)
-          .where(and(eq(loginAttempts.ip, input.ip), gt(loginAttempts.at, since)))
+          .where(and(eq(loginAttempts.ip, input.ip), counted))
       : [];
 
     const locks = [lockedUntil(byUser, now, USER_LOCK), lockedUntil(byIp, now, IP_LOCK)].filter(

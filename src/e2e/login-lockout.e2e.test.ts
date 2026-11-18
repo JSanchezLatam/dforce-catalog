@@ -39,7 +39,7 @@ async function createLogin(name: string): Promise<string> {
 }
 
 const rowsFor = (username: string) =>
-  db.select().from(loginAttempts).where(inArray(loginAttempts.username, [username.toLowerCase()]));
+  db.select().from(loginAttempts).where(inArray(loginAttempts.username, [username]));
 
 describe("login locks against a real database", () => {
   beforeAll(() => {
@@ -77,15 +77,14 @@ describe("login locks against a real database", () => {
     expect(statuses.filter((status) => status === 429)).toHaveLength(3);
   });
 
-  it("counts letter-case variants of a login together", async () => {
+  it("keeps accounts that differ only by case on separate counters", async () => {
     const username = await createLogin("case");
     const ip = freshIp();
 
-    for (const variant of [username, username.toUpperCase(), username, username.toUpperCase(), username]) {
-      await login(variant, "incorrecta", ip);
-    }
+    for (let i = 0; i < 5; i += 1) await login(username.toUpperCase(), "incorrecta", ip);
 
-    expect((await login(username, PASSWORD, ip)).status).toBe(429);
+    expect((await login(username.toUpperCase(), PASSWORD, ip)).status).toBe(429);
+    expect((await login(username, PASSWORD, ip)).status).toBe(200);
   });
 
   it("clears the failure count after a successful login and records the user", async () => {

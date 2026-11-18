@@ -47,12 +47,17 @@ describe("loginAction", () => {
   ])("explains a lock with the minutes left", async (remaining, text) => {
     vi.useFakeTimers({ now: new Date("2026-11-18T12:00:00.000Z"), toFake: ["Date"] });
     authenticateUser.mockResolvedValue({ ok: false, lockedUntil: new Date(Date.now() + remaining) });
+    const form = new FormData();
+    form.set("username", "ana");
 
-    const state = await loginAction(null, new FormData());
+    const state = await loginAction(null, form);
     vi.useRealTimers();
 
     expect(state).toEqual({
-      error: `Demasiados intentos fallidos. Por seguridad, el acceso quedó bloqueado. Intentá de nuevo en ${text} o pedile al administrador que te desbloquee.`,
+      error: "Demasiados intentos fallidos.",
+      detail: `Por seguridad, el acceso quedó bloqueado. Intentá de nuevo en ${text} o pedí al administrador que te desbloquee.`,
+      lockedUsername: "ana",
+      retryAt: new Date("2026-11-18T12:00:00.000Z").getTime() + remaining,
     });
   });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { Lock, User } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,17 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [state, formAction, pending] = useActionState(loginAction, initialState);
+
+  const [expiredRetryAt, setExpiredRetryAt] = useState<number | null>(null);
+  const retryAt = state?.retryAt;
+
+  useEffect(() => {
+    if (retryAt === undefined) return;
+    const timer = setTimeout(() => setExpiredRetryAt(retryAt), retryAt - Date.now());
+    return () => clearTimeout(timer);
+  }, [retryAt]);
+
+  const locked = retryAt !== undefined && retryAt !== expiredRetryAt && state?.lockedUsername === username;
 
   function setFieldError(field: string, value: string) {
     setFieldErrors((prev) => ({ ...prev, [field]: validateField(value) }));
@@ -68,17 +79,24 @@ export function LoginForm() {
         </div>
         {fieldErrors.password && <p className={FIELD_ERROR}>{fieldErrors.password}</p>}
       </div>
-      {state?.error && (
-        <p role="alert" className={FIELD_ERROR}>
-          {state.error}
-        </p>
+      {state?.detail ? (
+        <div role="alert" className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2.5 text-sm text-foreground">
+          <p className="font-semibold">{state.error}</p>
+          <p>{state.detail}</p>
+        </div>
+      ) : (
+        state?.error && (
+          <p role="alert" className={FIELD_ERROR}>
+            {state.error}
+          </p>
+        )
       )}
       {/* The `--login-brand*` vars are declared by `<main>` in login/page.tsx, not
           here, so each carries its fallback: rendered anywhere else — a test, a
           future host — the button would otherwise come out transparent. */}
       <Button
         type="submit"
-        disabled={pending || !username || !password}
+        disabled={pending || locked || !username || !password}
         className="h-11 w-full rounded-xl bg-[var(--login-brand,var(--primary))] font-semibold text-[var(--login-brand-foreground,white)] shadow-[0_1px_2px_rgb(0_0_0_/_0.15),0_6px_16px_rgb(220_38_38_/_0.28)] hover:bg-[var(--login-brand-hover,var(--primary-hover))]"
       >
         {pending ? "Iniciando sesión…" : "Iniciar sesión"}
