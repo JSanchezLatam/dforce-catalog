@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   changePassword,
+  WeakPasswordError,
   createUser,
   updateUser,
   DuplicateUsernameError,
@@ -133,7 +134,7 @@ describe("changePassword", () => {
     const { hashPassword } = await import("@/modules/auth/password");
     const realHash = await hashPassword("correct-pass");
 
-    await changePassword("user-1", "correct-pass", "new-pass", "token-1", {
+    await changePassword("user-1", "correct-pass", "nueva-clave-k7", "token-1", {
       getCredentials: async () => ({ passwordHash: realHash, mustChangePassword: false }),
       updatePassword,
       revoke,
@@ -141,6 +142,40 @@ describe("changePassword", () => {
 
     expect(updatePassword).toHaveBeenCalledOnce();
     expect(revoke).toHaveBeenCalledWith("user-1", "token-1");
+  });
+
+  it.each([
+    ["short", "corta-123", "La contraseña debe tener al menos 10 caracteres."],
+    ["common", "password123", "Es demasiado común. Elige otra."],
+  ])("rejects a %s new password and changes nothing", async (_case, newPassword, message) => {
+    const updatePassword = vi.fn();
+    const revoke = vi.fn();
+    const { hashPassword } = await import("@/modules/auth/password");
+    const passwordHash = await hashPassword("correct-pass");
+
+    const attempt = changePassword("user-1", "correct-pass", newPassword, "token-1", {
+      getCredentials: async () => ({ passwordHash, mustChangePassword: false }),
+      updatePassword,
+      revoke,
+    });
+
+    await expect(attempt).rejects.toBeInstanceOf(WeakPasswordError);
+    await expect(attempt).rejects.toThrow(message);
+    expect(updatePassword).not.toHaveBeenCalled();
+    expect(revoke).not.toHaveBeenCalled();
+  });
+
+  it("checks the current password before judging the new one", async () => {
+    const { hashPassword } = await import("@/modules/auth/password");
+    const passwordHash = await hashPassword("correct-pass");
+
+    await expect(
+      changePassword("user-1", "wrong", "corta", "token-1", {
+        getCredentials: async () => ({ passwordHash, mustChangePassword: false }),
+        updatePassword: vi.fn(),
+        revoke: vi.fn(),
+      }),
+    ).rejects.toThrow("Invalid current password");
   });
 
   /**
@@ -210,9 +245,9 @@ describe("changePassword", () => {
     it("leaves self-service untouched — an unflagged user may reuse their current password", async () => {
       const updatePassword = vi.fn();
       const { hashPassword } = await import("@/modules/auth/password");
-      const realHash = await hashPassword("same-pass");
+      const realHash = await hashPassword("misma-clave-k7");
 
-      await changePassword("user-1", "same-pass", "same-pass", "token-1", {
+      await changePassword("user-1", "misma-clave-k7", "misma-clave-k7", "token-1", {
         getCredentials: async () => ({ passwordHash: realHash, mustChangePassword: false }),
         updatePassword,
         revoke: vi.fn(),
@@ -245,7 +280,7 @@ describe("createUser", () => {
   it("always flags the new account for a forced password change", async () => {
     const d = deps();
 
-    await createUser({ username: "ana", password: "temporal1", role: "tecnico" }, d);
+    await createUser({ username: "ana", password: "temporal-k7", role: "tecnico" }, d);
 
     expect(d.insert).toHaveBeenCalledOnce();
     expect(d.insert.mock.calls[0][0]).toMatchObject({ username: "ana", role: "tecnico", mustChangePassword: true });
@@ -254,7 +289,7 @@ describe("createUser", () => {
   it("stores a hash, never the admin-entered plaintext", async () => {
     const d = deps();
 
-    await createUser({ username: "ana", password: "temporal1", role: "tecnico" }, d);
+    await createUser({ username: "ana", password: "temporal-k7", role: "tecnico" }, d);
 
     const written = d.insert.mock.calls[0][0] as { passwordHash: string };
     expect(written.passwordHash).not.toBe("temporal1");
@@ -265,7 +300,7 @@ describe("createUser", () => {
     const d = deps();
 
     await createUser(
-      { username: "ana", password: "temporal1", role: "administrador", name: "Ana Ruiz", email: "ana@taller.com" },
+      { username: "ana", password: "temporal-k7", role: "administrador", name: "Ana Ruiz", email: "ana@taller.com" },
       d,
     );
 
@@ -279,7 +314,7 @@ describe("createUser", () => {
   it("creates with name and email left unset when omitted", async () => {
     const d = deps();
 
-    await createUser({ username: "ana", password: "temporal1", role: "tecnico" }, d);
+    await createUser({ username: "ana", password: "temporal-k7", role: "tecnico" }, d);
 
     expect(d.insert.mock.calls[0][0]).toMatchObject({ name: null, email: null });
   });
@@ -287,7 +322,7 @@ describe("createUser", () => {
   it("ensures a roster row for a new técnico, inside the insert's transaction", async () => {
     const d = deps();
 
-    await createUser({ username: "ana", password: "temporal1", role: "tecnico" }, d);
+    await createUser({ username: "ana", password: "temporal-k7", role: "tecnico" }, d);
 
     expect(d.insert.mock.calls[0][1]).toBe(d.tx);
     expect(d.ensureRosterRow).toHaveBeenCalledExactlyOnceWith(d.tx, "new-user");
@@ -296,7 +331,7 @@ describe("createUser", () => {
   it("does not touch the roster for an administrador or a jefe_taller", async () => {
     for (const role of ["administrador", "jefe_taller"] as const) {
       const d = deps();
-      await createUser({ username: "ana", password: "temporal1", role }, d);
+      await createUser({ username: "ana", password: "temporal-k7", role }, d);
       expect(d.ensureRosterRow).not.toHaveBeenCalled();
     }
   });
@@ -304,14 +339,14 @@ describe("createUser", () => {
   it("propagates a roster failure, so the transaction (and the user insert) rolls back", async () => {
     const d = deps({ ensureRosterRow: vi.fn().mockRejectedValue(new Error("roster down")) });
 
-    await expect(createUser({ username: "ana", password: "temporal1", role: "tecnico" }, d)).rejects.toThrow("roster down");
+    await expect(createUser({ username: "ana", password: "temporal-k7", role: "tecnico" }, d)).rejects.toThrow("roster down");
   });
 
   it("rejects a duplicate username and writes nothing", async () => {
     const d = deps({ findByUsername: async () => ({ id: "existing" }) });
 
     await expect(
-      createUser({ username: "ana", password: "temporal1", role: "tecnico" }, d),
+      createUser({ username: "ana", password: "temporal-k7", role: "tecnico" }, d),
     ).rejects.toThrow(DuplicateUsernameError);
     expect(d.insert).not.toHaveBeenCalled();
   });
@@ -320,7 +355,7 @@ describe("createUser", () => {
     const d = deps({ findByEmail: async () => ({ id: "existing" }) });
 
     await expect(
-      createUser({ username: "ana", password: "temporal1", role: "tecnico", email: "taken@taller.com" }, d),
+      createUser({ username: "ana", password: "temporal-k7", role: "tecnico", email: "taken@taller.com" }, d),
     ).rejects.toThrow(DuplicateEmailError);
     expect(d.insert).not.toHaveBeenCalled();
   });
@@ -328,7 +363,7 @@ describe("createUser", () => {
   it("rejects an empty username in Spanish", async () => {
     const d = deps();
 
-    await expectProfileErrors(createUser({ username: "   ", password: "temporal1", role: "tecnico" }, d), {
+    await expectProfileErrors(createUser({ username: "   ", password: "temporal-k7", role: "tecnico" }, d), {
       username: "El nombre de usuario es obligatorio.",
     });
     expect(d.insert).not.toHaveBeenCalled();
@@ -345,11 +380,20 @@ describe("createUser", () => {
     expect(d.insert).not.toHaveBeenCalled();
   });
 
+  it("rejects a common initial password and creates nothing", async () => {
+    const d = deps();
+
+    await expectProfileErrors(createUser({ username: "ana", password: "password123", role: "tecnico" }, d), {
+      password: "Es demasiado común. Elige otra.",
+    });
+    expect(d.insert).not.toHaveBeenCalled();
+  });
+
   it("Role error copy: rejects an unknown role rather than trusting the caller, in Spanish", async () => {
     const d = deps();
 
     await expectProfileErrors(
-      createUser({ username: "ana", password: "temporal1", role: "superadmin" as never }, d),
+      createUser({ username: "ana", password: "temporal-k7", role: "superadmin" as never }, d),
       { role: "El rol debe ser técnico, jefe de taller, pantalla o administrador." },
     );
     expect(d.insert).not.toHaveBeenCalled();
@@ -359,7 +403,7 @@ describe("createUser", () => {
     const d = deps();
 
     await expectProfileErrors(
-      createUser({ username: "ana", password: "temporal1", role: "tecnico", email: "not-an-email" }, d),
+      createUser({ username: "ana", password: "temporal-k7", role: "tecnico", email: "not-an-email" }, d),
       { email: "El email no es válido." },
     );
     expect(d.insert).not.toHaveBeenCalled();
@@ -466,6 +510,16 @@ describe("updateUser", () => {
 
       await expectProfileErrors(updateUser("admin-1", "user-9", { password: "abc" }, deps), {
         password: `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`,
+      });
+      expect(applyUpdate).not.toHaveBeenCalled();
+      expect(revoke).not.toHaveBeenCalled();
+    });
+
+    it("rejects a common reset password and writes nothing", async () => {
+      const { applyUpdate, revoke, deps } = txDeps();
+
+      await expectProfileErrors(updateUser("admin-1", "user-9", { password: "password123" }, deps), {
+        password: "Es demasiado común. Elige otra.",
       });
       expect(applyUpdate).not.toHaveBeenCalled();
       expect(revoke).not.toHaveBeenCalled();

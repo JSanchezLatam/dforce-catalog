@@ -60,7 +60,7 @@ describe("ForcedPasswordChangeForm — server rejections", () => {
     mockFetch({ status: 400, body: { error: "La nueva contraseña debe ser distinta de la actual." } });
 
     render(<ForcedPasswordChangeForm />);
-    await fillAndSubmit(user, { current: "temp-pass", next: "temp-pass" });
+    await fillAndSubmit(user, { current: "clave-temporal-1", next: "clave-temporal-1" });
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "La nueva contraseña debe ser distinta de la actual.",
@@ -75,7 +75,7 @@ describe("ForcedPasswordChangeForm — network failure", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
 
     render(<ForcedPasswordChangeForm />);
-    await fillAndSubmit(user, { current: "temp-pass", next: "a-new-password" });
+    await fillAndSubmit(user, { current: "clave-temporal-1", next: "a-new-password" });
 
     // The FULL sentence, not a prefix — see the note in `UsersTable.test.tsx`.
     expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo conectar. Revisa tu conexión e intenta de nuevo.");
@@ -86,12 +86,20 @@ describe("ForcedPasswordChangeForm — network failure", () => {
 });
 
 describe("ForcedPasswordChangeForm — client-side validation", () => {
+  it("explains the password policy beside the new password", () => {
+    render(<ForcedPasswordChangeForm />);
+
+    expect(screen.getByLabelText("Nueva contraseña")).toHaveAccessibleDescription(
+      "Mínimo 10 caracteres. No puede ser una contraseña común.",
+    );
+  });
+
   it("rejects a mismatched confirmation without calling the API", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({ status: 200 });
 
     render(<ForcedPasswordChangeForm />);
-    await fillAndSubmit(user, { current: "temp-pass", next: "a-new-password", confirm: "different" });
+    await fillAndSubmit(user, { current: "clave-temporal-1", next: "a-new-password", confirm: "different" });
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Las contraseñas no coinciden.");
     expect(fetchMock).not.toHaveBeenCalled();
@@ -102,9 +110,9 @@ describe("ForcedPasswordChangeForm — client-side validation", () => {
     const fetchMock = mockFetch({ status: 200 });
 
     render(<ForcedPasswordChangeForm />);
-    await fillAndSubmit(user, { current: "temp-pass", next: "abc" });
+    await fillAndSubmit(user, { current: "clave-temporal-1", next: "abc" });
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("al menos 6 caracteres");
+    expect(await screen.findByRole("alert")).toHaveTextContent("al menos 10 caracteres");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -115,7 +123,7 @@ describe("ForcedPasswordChangeForm — client-side validation", () => {
     const fetchMock = mockFetch({ status: 200 });
 
     render(<ForcedPasswordChangeForm />);
-    await fillAndSubmit(user, { current: "temp-pass", next: "temp-pass" });
+    await fillAndSubmit(user, { current: "clave-temporal-1", next: "clave-temporal-1" });
 
     expect(await screen.findByRole("alert")).toHaveTextContent("distinta");
     expect(fetchMock).not.toHaveBeenCalled();
@@ -149,7 +157,7 @@ describe("ForcedPasswordChangeForm — a throwing push is not a connection failu
     process.on("unhandledRejection", capture);
     try {
       render(<ForcedPasswordChangeForm />);
-      await fillAndSubmit(user, { current: "temp-pass", next: "a-new-password" });
+      await fillAndSubmit(user, { current: "clave-temporal-1", next: "a-new-password" });
 
       await vi.waitFor(() => expect(push).toHaveBeenCalledTimes(1));
       await vi.waitFor(() => expect(escaped).toContain(boom));
@@ -167,12 +175,12 @@ describe("ForcedPasswordChangeForm — success", () => {
     const fetchMock = mockFetch({ status: 200, body: { success: true } });
 
     render(<ForcedPasswordChangeForm />);
-    await fillAndSubmit(user, { current: "temp-pass", next: "a-new-password" });
+    await fillAndSubmit(user, { current: "clave-temporal-1", next: "a-new-password" });
 
     expect(fetchMock).toHaveBeenCalledWith("/api/account/password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ currentPassword: "temp-pass", newPassword: "a-new-password" }),
+      body: JSON.stringify({ currentPassword: "clave-temporal-1", newPassword: "a-new-password" }),
     });
 
     // Cleared so a shared or unattended screen does not keep the temporary
@@ -187,7 +195,7 @@ describe("ForcedPasswordChangeForm — success", () => {
     mockFetch({ status: 200, body: { success: true } });
 
     render(<ForcedPasswordChangeForm />);
-    await fillAndSubmit(user, { current: "temp-pass", next: "a-new-password" });
+    await fillAndSubmit(user, { current: "clave-temporal-1", next: "a-new-password" });
 
     // push, not refresh: refreshing /change-password re-renders the same
     // screen, and the proxy would no longer redirect away from it.

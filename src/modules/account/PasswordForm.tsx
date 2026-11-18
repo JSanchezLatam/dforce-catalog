@@ -40,7 +40,8 @@ export function PasswordForm() {
 
     if (res.status === 400) {
       const body = await res.json();
-      setErrors({ currentPassword: body.error ?? "Contraseña actual incorrecta." });
+      const message = body.error ?? "Contraseña actual incorrecta.";
+      setErrors(body.field === "newPassword" ? { newPassword: message } : { currentPassword: message });
       setStatus("idle");
       return;
     }
@@ -63,7 +64,7 @@ export function PasswordForm() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="grid gap-2">
             <Label htmlFor="currentPassword">Contraseña actual</Label>
-            <Input id="currentPassword" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
+            <Input id="currentPassword" aria-invalid={errors.currentPassword ? true : undefined} type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
           </div>
           {errors.currentPassword && (
             <p role="alert" className={FIELD_ERROR}>
@@ -73,7 +74,10 @@ export function PasswordForm() {
 
           <div className="grid gap-2">
             <Label htmlFor="newPassword">Nueva contraseña</Label>
-            <Input id="newPassword" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            <p id="newPassword-hint" className="text-xs text-muted-foreground">
+              Mínimo {MIN_PASSWORD_LENGTH} caracteres. No puede ser una contraseña común.
+            </p>
+            <Input id="newPassword" aria-describedby="newPassword-hint" aria-invalid={errors.newPassword ? true : undefined} type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
           </div>
           {errors.newPassword && (
             <p role="alert" className={FIELD_ERROR}>

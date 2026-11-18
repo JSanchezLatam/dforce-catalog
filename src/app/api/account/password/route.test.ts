@@ -49,6 +49,26 @@ describe("POST /api/account/password", () => {
     expect((await res.json()).error).toBe("La nueva contraseña debe ser distinta de la actual.");
   });
 
+  it("returns the policy message tied to the new password field", async () => {
+    const { WeakPasswordError } = await import("@/modules/account/service");
+    mockChangePassword.mockRejectedValue(new WeakPasswordError("Es demasiado común. Elige otra."));
+
+    const res = await POST(req("tecnico", JSON.stringify({ currentPassword: "old", newPassword: "password123" })));
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "Es demasiado común. Elige otra.", field: "newPassword" });
+  });
+
+  it.each([
+    [{ currentPassword: "old" }],
+    [{ currentPassword: 1, newPassword: "nueva-clave-k7" }],
+  ])("returns 400 without calling the service when a password is not text: %j", async (body) => {
+    const res = await POST(req("tecnico", JSON.stringify(body)));
+
+    expect(res.status).toBe(400);
+    expect(mockChangePassword).not.toHaveBeenCalled();
+  });
+
   // The route is registered "session-only" (design.md Decision 8): a técnico is
   // NOT forbidden here, because this is the only route that can clear a forced
   // rotation. Pinned so nobody re-adds an Action gate.
