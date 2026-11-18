@@ -58,5 +58,6 @@ Route evidence: units depend on each other in order, so no writer trigger applie
 - L4 (2026-11-18): auth map. `/login*` and `/api/login*` skip `src/proxy.ts`, so 2FA routes must live outside that prefix. `authenticateUser` issues the session at once, so 2FA needs a pending state. Next migration is 0039. `qrcode` is installed; TOTP uses `node:crypto`, no new dependency. Self-service password change has no server-side length check. S9 already exists for passwords; only trusted-device revocation is new.
 - L5 (2026-11-18): the mockup copy used "tú", while `AGENTS.md` and the rest of the app use Rioplatense. The standing rule wins: copy ships in voseo and the mockup was aligned.
 - L6 (2026-11-18, owner): sole-administrator recovery resolved with the emergency command, S13: "Si".
+- L7 (2026-11-18, T1): `security-audit` in guidance mode found no boundary violation: the change is scoped to the session user and the current password is checked before the new one is judged. An independent verifier confirmed S8 and S9.
 - Follow-up: `scripts/seed-user.mjs` writes a hash without the policy; it is an install-time CLI, and its default `admin123` should be addressed with T8 enrolment.
 - Next: T2.

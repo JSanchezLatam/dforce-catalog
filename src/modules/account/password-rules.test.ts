@@ -24,10 +24,17 @@ describe("passwordPolicyError", () => {
     expect(passwordPolicyError("PassWord123")).toBe("Es demasiado común. Elegí otra.");
   });
 
-  it.each([" password123 ", "contrasen\u0303a123", "aaaaaaaaaa", "2222222222", "          "])(
+  it.each([" password123 ", "contrasen\u0303a123", "aaaaaaaaaa", "2222222222"])(
     "normalizes before matching and rejects a repeated character: %j",
     (password) => {
       expect(passwordPolicyError(password)).toBe("Es demasiado común. Elegí otra.");
+    },
+  );
+
+  it.each(["123456    ", "  qwerty  ", "password  ", "          "])(
+    "does not count surrounding spaces toward the minimum: %j",
+    (password) => {
+      expect(passwordPolicyError(password)).toBe("La contraseña debe tener al menos 10 caracteres.");
     },
   );
 

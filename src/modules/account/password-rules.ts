@@ -3,7 +3,8 @@ import { MIN_PASSWORD_LENGTH } from "./password-policy";
 /**
  * Server-side password rules. The common-password list stays out of
  * `password-policy.ts` so it never reaches the browser bundle. Only entries of
- * at least `MIN_PASSWORD_LENGTH` characters matter: shorter ones already fail.
+ * at least `MIN_PASSWORD_LENGTH` characters matter: length is checked first, on
+ * the same trimmed value the list is matched against.
  */
 const COMMON_PASSWORDS = new Set([
   "0000000000",
@@ -72,10 +73,10 @@ const COMMON_PASSWORDS = new Set([
 
 /** The Spanish message for a password that breaks the policy, or `null` when it passes. */
 export function passwordPolicyError(password: unknown): string | null {
-  if (typeof password !== "string" || password.length < MIN_PASSWORD_LENGTH) {
+  const normalized = typeof password === "string" ? password.normalize("NFC").trim().toLowerCase() : "";
+  if (normalized.length < MIN_PASSWORD_LENGTH) {
     return `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`;
   }
-  const normalized = password.normalize("NFC").trim().toLowerCase();
-  const isCommon = COMMON_PASSWORDS.has(normalized) || new Set(normalized).size <= 1;
+  const isCommon = COMMON_PASSWORDS.has(normalized) || new Set(normalized).size === 1;
   return isCommon ? "Es demasiado común. Elegí otra." : null;
 }
