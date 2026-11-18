@@ -79,7 +79,7 @@ export function LoginForm() {
       <Button
         type="submit"
         disabled={pending || !username || !password}
-        className="h-11 w-full rounded-xl bg-[var(--login-brand,var(--primary))] font-semibold text-[var(--login-brand-foreground,white)] shadow-[0_1px_2px_rgb(0_0_0_/_0.15),0_6px_16px_hsl(5_85%_45%_/_0.28)] hover:bg-[var(--login-brand-hover,#b91c1c)]"
+        className="h-11 w-full rounded-xl bg-[var(--login-brand,var(--primary))] font-semibold text-[var(--login-brand-foreground,white)] shadow-[0_1px_2px_rgb(0_0_0_/_0.15),0_6px_16px_rgb(220_38_38_/_0.28)] hover:bg-[var(--login-brand-hover,var(--primary-hover))]"
       >
         {pending ? "Iniciando sesión…" : "Iniciar sesión"}
       </Button>

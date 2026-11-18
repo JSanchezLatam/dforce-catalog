@@ -8,7 +8,7 @@ import heroImage from "./assets/login-hero.jpg";
 import logo from "./assets/dforce-logo.png";
 
 const loginBrandStyle = {
-  // The login button follows the app primary; only its hover shade is login-specific.
+  // Login aliases of the app tokens, so the form and the theme toggle read one set of names.
   "--login-brand": "var(--primary)",
   "--login-brand-hover": "var(--primary-hover)",
   "--login-brand-foreground": "white",

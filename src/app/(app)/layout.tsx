@@ -37,7 +37,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <UsageCounter />
     <SidebarProvider
       defaultOpen={sidebarDefaultOpen}
-      className="has-data-[variant=inset]:bg-sidebar"
     >
       <AppSidebar
         navGroups={navGroups}
