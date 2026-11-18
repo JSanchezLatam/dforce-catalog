@@ -22,7 +22,7 @@ export async function reserveLoginAttempt(input: { username: string; ip: string 
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`login-user:${input.username}`}))`);
     if (input.ip) await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`login-ip:${input.ip}`}))`);
 
-    // Refused attempts never count, and skipping them keeps a hammered login cheap to check.
+    // Refused attempts never count toward a lock, so this read leaves them out.
     const counted = and(gt(loginAttempts.at, since), ne(loginAttempts.outcome, "locked"));
     const columns = { at: loginAttempts.at, outcome: loginAttempts.outcome };
     const byUser = await tx

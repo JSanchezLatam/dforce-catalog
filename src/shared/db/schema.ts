@@ -60,7 +60,7 @@ export const loginAttempts = pgTable(
   {
     id: text("id").primaryKey(),
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
-    /** Normalized text as typed; it need not match a real user. */
+    /** Text as typed, cut to 150 characters; it need not match a real user. */
     username: text("username").notNull(),
     userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
     ip: text("ip"),
