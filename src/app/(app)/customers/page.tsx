@@ -195,7 +195,7 @@ export default async function CustomersPage({
                       // the pagination links beside it — it kept `pageSize`
                       // and this one had dropped it.
                       href={buildPageHref({ ...params, status: "all" }, 1, sort)}
-                      className="text-primary hover:underline"
+                      className="link-accent"
                     >
                       Buscar también entre los desactivados
                     </Link>
@@ -203,7 +203,7 @@ export default async function CustomersPage({
                 ) : filters.search ? (
                   <>
                     Ningún cliente coincide con la búsqueda.{" "}
-                    <Link href="/customers" className="text-primary hover:underline">
+                    <Link href="/customers" className="link-accent">
                       Limpiar filtro
                     </Link>
                   </>
@@ -218,7 +218,7 @@ export default async function CustomersPage({
                     {/* Through `buildPageHref`, like the widen-search link
                         above — hardcoded, this one dropped `pageSize`, which
                         is the defect WU14.2 fixed one branch over. */}
-                    <Link href={buildPageHref({ ...params, status: "inactive" }, 1, sort)} className="text-primary hover:underline">
+                    <Link href={buildPageHref({ ...params, status: "inactive" }, 1, sort)} className="link-accent">
                       Ver desactivados
                     </Link>
                   </>
@@ -232,7 +232,7 @@ export default async function CustomersPage({
                     Ningún cliente desactivado.{" "}
                     <Link
                       href={buildPageHref({ ...params, status: "active" }, 1, sort)}
-                      className="text-primary hover:underline"
+                      className="link-accent"
                     >
                       Ver los activos
                     </Link>

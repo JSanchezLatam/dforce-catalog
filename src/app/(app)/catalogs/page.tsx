@@ -30,7 +30,7 @@ export default async function CatalogsPage() {
           <p className="max-w-sm text-sm text-muted-foreground">
             Todavía no creaste ningún catálogo. Generá el primero para verlo listado acá.
           </p>
-          <Link href="/builder" className="text-sm text-primary hover:underline">
+          <Link href="/builder" className="text-sm link-accent">
             Crear catálogo
           </Link>
         </div>

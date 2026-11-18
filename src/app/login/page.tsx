@@ -9,8 +9,8 @@ import logo from "./assets/dforce-logo.png";
 
 const loginBrandStyle = {
   // Login-only brand accent sampled from the company logo. Do not promote to globals.css.
-  "--login-brand": "hsl(5 85% 45%)",
-  "--login-brand-hover": "hsl(5 85% 39%)",
+  "--login-brand": "#dc2626",
+  "--login-brand-hover": "#b91c1c",
   "--login-brand-foreground": "white",
 } as CSSProperties;
 

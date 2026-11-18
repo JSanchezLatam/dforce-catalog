@@ -37,7 +37,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <UsageCounter />
     <SidebarProvider
       defaultOpen={sidebarDefaultOpen}
-      className="has-data-[variant=inset]:bg-muted dark:has-data-[variant=inset]:bg-background"
+      className="has-data-[variant=inset]:bg-sidebar"
     >
       <AppSidebar
         navGroups={navGroups}
@@ -46,7 +46,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         logoR2Key={config?.logoR2Key ?? null}
         initialCollapseState={initialCollapseState}
       />
-      <SidebarInset className="dark:bg-card lg:rounded-2xl lg:border">
+      <SidebarInset className="lg:rounded-2xl lg:border">
         {/* Below `lg` the sidebar is an off-canvas Sheet with no other way to open
             it, so phones get this bar. `aria-label` replaces shadcn's English
             sr-only "Toggle Sidebar"; `min-h-11 min-w-11` is the 44x44 rule. */}

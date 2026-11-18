@@ -65,7 +65,7 @@ export function SelectionBar({ children }: { children?: ReactNode }) {
               tick-time map, so a row selected on page 1 is still named on
               page 3 where nothing renders it. */}
           <details className="text-sm">
-            <summary className="inline-flex min-h-11 cursor-pointer items-center text-primary hover:underline">
+            <summary className="inline-flex min-h-11 cursor-pointer items-center link-accent">
               Ver seleccionados
             </summary>
             <ul className="mt-2 list-disc pl-5 text-muted-foreground">

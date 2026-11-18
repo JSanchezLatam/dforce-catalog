@@ -117,9 +117,14 @@ evidence.
 
 - **Auth**: DB-backed opaque session tokens (`users`/`sessions`,
   `src/modules/auth/session.ts`) — not JWT. No signing-secret class of bug here.
-- **Theme**: shadcn stock neutral palette, light and dark in
-  `src/app/globals.css`, toggled via `next-themes`. This flipped twice before
-  (Kanagawa Dragon, then a violet/gold brand palette) — read the current
+- **Theme**: the support area's palette Opción B across the whole app, decided
+  by the owner 2026-11-18: graphite ground, light grey text, workshop red
+  `#dc2626` as primary. Dark by default, with a derived light theme, both in
+  `src/app/globals.css`, toggled via `next-themes`; `globals-theme.test.ts` pins
+  the values and contrast. Red is 3.8:1 on the dark ground, so it never carries
+  small text: links use `link-accent` (text colour, red underline). Shadows only
+  on the login screens. This flipped three times before (Kanagawa Dragon, a
+  violet/gold brand palette, shadcn stock neutral) — read the current
   `globals.css` before changing any color.
 - **CRM/workshop is built natively**, not by integrating `Hainrixz/auto-crm`
   (SQLite, generic sales-CRM — this app is Postgres and workshop-shaped). See
