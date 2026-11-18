@@ -30,15 +30,15 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 - A4. Passwords under 10 characters stay valid until their next change.
 - A5. A 2FA reset also revokes that user's sessions and trusted devices.
 - A6. Recovery codes use the mockup format `7KQM-2XPA`.
-- A7. The IP lock and "Origen" are best-effort: on the direct LAN deployment `x-forwarded-for` can be forged by the client.
+- A7. The client address comes from the connection; `x-forwarded-for` is believed only from a proxy on the server itself (the future tunnel).
 
 ## Tasks
 
 | ID | Specs | Work unit | Route | Status | Commit |
 |---|---|---|---|---|---|
 | T1 | S8, S9 | Password policy with server enforcement and fixtures | inline | done | `e70fe55` |
-| T2 | S6, S7 | Attempts table, IP helper, user and IP lock, shared cookie options | inline | pending | |
-| T3 | S6, S12 | Lock message and admin unlock | inline | pending | |
+| T2 | S6, S7, S12 | Attempts table, IP helper, user and IP lock, lock message | inline | in review | `feat/login-hardening-wu2-lockout` |
+| T3 | S6, S12 | Admin unlock | inline | pending | |
 | T4 | S10, S12 | Access log screen | inline | pending | |
 | T5 | S2, S4 | TOTP core, secret encryption, recovery hashes, env key | inline | pending | |
 | T6 | S2 | Pending session, proxy gate, e2e fixtures | inline | pending | |
@@ -60,4 +60,7 @@ Route evidence: units depend on each other in order, so no writer trigger applie
 - L6 (2026-11-18, owner): sole-administrator recovery resolved with the emergency command, S13: "Si".
 - L7 (2026-11-18, T1): `security-audit` in guidance mode found no boundary violation: the change is scoped to the session user and the current password is checked before the new one is judged. An independent verifier confirmed S8 and S9.
 - Follow-up: `scripts/seed-user.mjs` writes a hash without the policy; it is an install-time CLI, and its default `admin123` should be addressed with T8 enrolment.
-- Next: T2.
+- L8 (2026-11-18, T2): `security-audit` guidance and an independent verifier ran against real Postgres. Locks count before the password comparison under advisory locks. Anyone who knows a username can lock it for 15 minutes; S6 accepts this and T3 adds the admin unlock.
+- Follow-up for T4: `login_attempts` needs the 90-day retention, and a password typed into the username field must not be shown to administrators.
+- L9 (2026-11-18, T2): the Gentle AI review found that a client could forge its address. The server now takes it from the connection and believes `x-forwarded-for` only from a local proxy; checked against the running server. Non-blocking follow-ups: refused attempts still add log rows, the lock countdown uses the browser clock, and concurrent logins wait on the database pool.
+- Next: T3.

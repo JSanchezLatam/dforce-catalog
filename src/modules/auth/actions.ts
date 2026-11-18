@@ -1,13 +1,14 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { landingPathFor } from "@/modules/auth/landing";
 import { authenticateUser } from "@/modules/auth/authenticate";
+import { clientIp } from "@/modules/auth/client-ip";
 import { SESSION_COOKIE } from "@/modules/auth/session";
 
-export type LoginState = { error: string } | null;
+export type LoginState = { error: string; detail?: string; lockedUsername?: string; retryAt?: number } | null;
 
 /**
  * Server Action driving `LoginForm.tsx` via `useActionState` (React
@@ -22,9 +23,16 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
   const username = String(formData.get("username") ?? "");
   const password = String(formData.get("password") ?? "");
 
-  const result = await authenticateUser(username, password);
+  const result = await authenticateUser(username, password, { ip: clientIp(await headers()) });
   if (!result.ok) {
-    return { error: "Usuario o contraseña incorrectos." };
+    if (!result.lockedUntil) return { error: "Usuario o contraseña incorrectos." };
+    const minutes = Math.ceil((result.lockedUntil.getTime() - Date.now()) / 60_000);
+    return {
+      error: "Demasiados intentos fallidos.",
+      detail: `Por seguridad, el acceso quedó bloqueado. Intentá de nuevo en ${minutes} ${minutes === 1 ? "minuto" : "minutos"} o pedí al administrador que te desbloquee.`,
+      lockedUsername: username,
+      retryAt: result.lockedUntil.getTime(),
+    };
   }
 
   const cookieStore = await cookies();

@@ -53,6 +53,9 @@ export async function register(): Promise<void> {
       });
     }
 
+    const { installTrustedClientAddress } = await import("@/modules/auth/trusted-client-address");
+    installTrustedClientAddress();
+
     const { registerNodeWorkers } = await import("./instrumentation-node");
     try {
       await registerNodeWorkers();

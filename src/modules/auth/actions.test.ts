@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 // both throw outside a request scope.
 const set = vi.hoisted(() => vi.fn());
 const redirect = vi.hoisted(() => vi.fn());
-vi.mock("next/headers", () => ({ cookies: vi.fn().mockResolvedValue({ set }) }));
+vi.mock("next/headers", () => ({
+  cookies: vi.fn().mockResolvedValue({ set }),
+  headers: vi.fn().mockResolvedValue(new Headers({ "x-forwarded-for": "192.168.1.23" })),
+}));
 vi.mock("next/navigation", () => ({ redirect }));
 
 const authenticateUser = vi.hoisted(() => vi.fn());
@@ -25,6 +28,37 @@ describe("loginAction", () => {
     const state = await loginAction(null, new FormData());
 
     expect(state).toEqual({ error: "Usuario o contraseña incorrectos." });
+  });
+
+  it("passes the client IP to the credential check", async () => {
+    authenticateUser.mockResolvedValue({ ok: false });
+    const form = new FormData();
+    form.set("username", "ana");
+    form.set("password", "clave");
+
+    await loginAction(null, form);
+
+    expect(authenticateUser).toHaveBeenLastCalledWith("ana", "clave", { ip: "192.168.1.23" });
+  });
+
+  it.each([
+    [14 * 60_000 + 1, "15 minutos"],
+    [30_000, "1 minuto"],
+  ])("explains a lock with the minutes left", async (remaining, text) => {
+    vi.useFakeTimers({ now: new Date("2026-11-18T12:00:00.000Z"), toFake: ["Date"] });
+    authenticateUser.mockResolvedValue({ ok: false, lockedUntil: new Date(Date.now() + remaining) });
+    const form = new FormData();
+    form.set("username", "ana");
+
+    const state = await loginAction(null, form);
+    vi.useRealTimers();
+
+    expect(state).toEqual({
+      error: "Demasiados intentos fallidos.",
+      detail: `Por seguridad, el acceso quedó bloqueado. Intentá de nuevo en ${text} o pedí al administrador que te desbloquee.`,
+      lockedUsername: "ana",
+      retryAt: new Date("2026-11-18T12:00:00.000Z").getTime() + remaining,
+    });
   });
 
   it.each([

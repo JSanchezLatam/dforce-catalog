@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { authenticateUser } from "@/modules/auth/authenticate";
+import { clientIp } from "@/modules/auth/client-ip";
 import { SESSION_COOKIE } from "@/modules/auth/session";
 
 /**
@@ -22,7 +23,11 @@ export async function POST(request: NextRequest) {
   const username = typeof body?.username === "string" ? body.username : "";
   const password = typeof body?.password === "string" ? body.password : "";
 
-  const result = await authenticateUser(username, password);
+  const result = await authenticateUser(username, password, { ip: clientIp(request.headers) });
+  if (!result.ok && result.lockedUntil) {
+    const retryAfter = Math.ceil((result.lockedUntil.getTime() - Date.now()) / 1000);
+    return NextResponse.json({ error: "locked" }, { status: 429, headers: { "Retry-After": String(retryAfter) } });
+  }
   if (!result.ok) {
     return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
   }

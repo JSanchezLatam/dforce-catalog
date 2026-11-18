@@ -274,6 +274,13 @@
       "when": 1794563016422,
       "tag": "0038_usage_metrics",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1795038255683,
+      "tag": "0039_login_attempts",
+      "breakpoints": true
     }
   ]
 }
