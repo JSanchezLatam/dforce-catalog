@@ -13,7 +13,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 - S3. A trusted device skips the code for 30 days.
 - S4. 10 single-use recovery codes, shown once.
 - S5. An administrator resets other users' 2FA, never their own.
-- S6. 5 failed attempts lock the user for 15 minutes; an administrator can unlock sooner.
+- S6. 5 failed attempts lock the user. Owner, 2026-11-19: "el que crece: 15 min, 1 hora, después admin" — the first lock lasts 15 minutes, the next one 1 hour, and the one after that lasts until an administrator unlocks. A successful login or an administrator unlock starts the count over. An administrator can unlock sooner. Unknown usernames lock the same way, so a lock never tells whether a user exists.
 - S7. 20 failed attempts from one IP in 15 minutes lock that IP.
 - S8. Passwords need at least 10 characters and cannot be on a common-password list.
 - S9. Changing a password revokes the user's other sessions.
@@ -39,6 +39,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T1 | S8, S9 | Password policy with server enforcement and fixtures | inline | done | `e70fe55` |
 | T2 | S6, S7, S12 | Attempts table, IP helper, user and IP lock, lock message | inline | done | `ca92976` |
 | T3 | S6, S12 | Admin unlock | inline | done | `12604ae`, `30e156a` |
+| T3b | S6, S12 | Escalating user lock (15 min, 1 h, until unlocked) | inline | in progress | |
 | T4 | S10, S12 | Access log screen | inline | pending | |
 | T5 | S2, S4 | TOTP core, secret encryption, recovery hashes, env key | inline | pending | |
 | T6 | S2 | Pending session, proxy gate, e2e fixtures | inline | pending | |
@@ -68,4 +69,5 @@ Route evidence: units depend on each other in order, so no writer trigger applie
 - Follow-up for T4: the unlocked row does not record which administrator acted (that needs a migration), and the mockup's "Resultado" filter has no entry for unlocks.
 - L11 (2026-11-19, T3): an independent verifier passed S6 and S12 with no blockers. It confirmed through the running server that forged `x-user-*` headers never reach the route, and that `userLocks` and `reserveLoginAttempt` agree on case variants, long names and a concurrent unlock. GGA passed. The Gentle AI review (risk, reliability) was approved with two advisories: the lock badge is computed at page render, and the unlock relies on the counter-reset rule in `login-lock.ts`.
 - Follow-up: `reserveLoginAttempt` reads the clock before taking its advisory lock, so an attempt queued behind an unlock can be stamped earlier and be cleared by it (at most one failure per concurrent unlock). A direct POST also resets up to four earlier failures on a login that is not locked; it needs an admin session.
-- Next: T4.
+- L12 (2026-11-19, owner): "Okey, creo que el bloqueo debe ser por mas tiempo. y tambien me di cuenta que si pongo un usuario que no existe tambien lo bloquea. creo que el bloqueo debe ser diferente". Explained that locking unknown usernames prevents user enumeration (OWASP); the owner kept it and chose the escalation: "el que crece: 15 min, 1 hora, después admin". S6 rewritten, T3b opened. The IP lock stays at 15 minutes.
+- Next: T3b, then T4.

@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { isUntilUnlocked } from "@/modules/auth/login-lock";
 import { ROLE_LABELS } from "@/modules/auth/roles";
 import { BulkResultPanel } from "@/shared/ui/selection/BulkResultPanel";
 import { RecordCard, RecordCardList } from "@/shared/ui/RecordCard";
@@ -39,14 +40,18 @@ export type UserRow = {
 };
 
 /** A deactivated user cannot log in anyway, so only an active row shows its lock. */
-const lockOf = (user: UserRow): string | null =>
-  user.deactivatedAt === null && user.lockedUntil !== null ? formatTime(new Date(user.lockedUntil)) : null;
+/** The lock's label, or `null` when the login is open; a lock only an unlock lifts has no hour. */
+function lockOf(user: UserRow): string | null {
+  if (user.deactivatedAt !== null || user.lockedUntil === null) return null;
+  const until = new Date(user.lockedUntil);
+  return isUntilUnlocked(until) ? "Bloqueado" : `Bloqueado hasta ${formatTime(until)}`;
+}
 
-function LockedBadge({ until, className }: { until: string; className?: string }) {
+function LockedBadge({ label, className }: { label: string; className?: string }) {
   return (
     <Badge variant="destructive" className={className}>
       <Lock aria-hidden="true" />
-      Bloqueado hasta {until}
+      {label}
     </Badge>
   );
 }
@@ -312,7 +317,7 @@ export function UsersTable({ users }: { users: UserRow[] }) {
                             closed 14-member union for one column is a migration this
                             change does not own. */}
                         {lock !== null ? (
-                          <LockedBadge until={lock} />
+                          <LockedBadge label={lock} />
                         ) : (
                           <Badge variant={inactive ? "outline" : "secondary"}>
                             {inactive ? "Desactivado" : "Activo"}
@@ -342,7 +347,7 @@ export function UsersTable({ users }: { users: UserRow[] }) {
                     {user.name && <div className="text-xs text-muted-foreground">{user.name}</div>}
                   </div>
                   {lock !== null ? (
-                    <LockedBadge until={lock} className="shrink-0" />
+                    <LockedBadge label={lock} className="shrink-0" />
                   ) : user.deactivatedAt !== null ? (
                     <span className={`shrink-0 ${DEACTIVATED_CHIP}`}>Desactivado</span>
                   ) : (

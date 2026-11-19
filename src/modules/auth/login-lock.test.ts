@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { clientIp } from "./client-ip";
-import { IP_LOCK, lockedUntil, loginKey, USER_LOCK } from "./login-lock";
+import { IP_LOCK, lockedUntil, loginKey, UNTIL_UNLOCKED, USER_LOCK } from "./login-lock";
 
 const NOW = new Date("2026-11-18T12:00:00.000Z");
 const minutesAgo = (minutes: number) => new Date(NOW.getTime() - minutes * 60_000);
@@ -47,6 +47,36 @@ describe("lockedUntil", () => {
     const attempts = [failure(9), failure(8), failure(7), failure(6), failure(5), { at: minutesAgo(4), outcome }];
 
     expect(lockedUntil(attempts, NOW, USER_LOCK)).toBeNull();
+  });
+
+  describe("escalation (S6: 15 min, 1 hora, después admin)", () => {
+    // Five failures one minute apart, the last one `minutes` ago: one lock each.
+    const run = (minutes: number) => [4, 3, 2, 1, 0].map((offset) => failure(minutes + offset));
+
+    it("locks for one hour the second time in a row", () => {
+      const attempts = [...run(100), ...run(10)];
+
+      expect(lockedUntil(attempts, NOW, USER_LOCK)).toEqual(new Date(minutesAgo(10).getTime() + 60 * 60_000));
+    });
+
+    it("locks until an administrator unlocks the third time, however long ago", () => {
+      const attempts = [...run(5000), ...run(4000), ...run(3000)];
+
+      expect(lockedUntil(attempts, NOW, USER_LOCK)).toBe(UNTIL_UNLOCKED);
+    });
+
+    it.each(["success", "unlocked"] as const)("starts the count over after %s", (outcome) => {
+      const attempts = [...run(5000), ...run(4000), { at: minutesAgo(3000), outcome }, ...run(10)];
+
+      expect(lockedUntil(attempts, NOW, USER_LOCK)).toEqual(new Date(minutesAgo(10).getTime() + 15 * 60_000));
+    });
+
+    it("keeps an IP lock at 15 minutes however often it repeats", () => {
+      const ipRun = (minutes: number) => Array.from({ length: 20 }, (_, i) => failure(minutes + i * 0.1));
+      const attempts = [...ipRun(200), ...ipRun(100), ...ipRun(10)];
+
+      expect(lockedUntil(attempts, NOW, IP_LOCK)).toEqual(new Date(minutesAgo(10).getTime() + 15 * 60_000));
+    });
   });
 
   it("locks an IP on the twentieth failure, and a success does not clear it", () => {

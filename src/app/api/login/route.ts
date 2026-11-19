@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { authenticateUser } from "@/modules/auth/authenticate";
 import { clientIp } from "@/modules/auth/client-ip";
+import { isUntilUnlocked } from "@/modules/auth/login-lock";
 import { SESSION_COOKIE } from "@/modules/auth/session";
 
 /**
@@ -25,6 +26,7 @@ export async function POST(request: NextRequest) {
 
   const result = await authenticateUser(username, password, { ip: clientIp(request.headers) });
   if (!result.ok && result.lockedUntil) {
+    if (isUntilUnlocked(result.lockedUntil)) return NextResponse.json({ error: "locked" }, { status: 429 });
     const retryAfter = Math.ceil((result.lockedUntil.getTime() - Date.now()) / 1000);
     return NextResponse.json({ error: "locked" }, { status: 429, headers: { "Retry-After": String(retryAfter) } });
   }

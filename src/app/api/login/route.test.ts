@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 const authenticateUser = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/auth/authenticate", () => ({ authenticateUser }));
 
+import { UNTIL_UNLOCKED } from "@/modules/auth/login-lock";
+
 import { POST } from "./route";
 
 const login = () =>
@@ -29,6 +31,16 @@ describe("POST /api/login", () => {
     expect(await response.json()).toEqual({ error: "locked" });
     expect(Number(response.headers.get("retry-after"))).toBeGreaterThan(0);
     expect(response.cookies.get("session")).toBeUndefined();
+  });
+
+  it("answers a login locked until an unlock with 429 and no Retry-After", async () => {
+    authenticateUser.mockResolvedValue({ ok: false, lockedUntil: UNTIL_UNLOCKED });
+
+    const response = await login();
+
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual({ error: "locked" });
+    expect(response.headers.get("retry-after")).toBeNull();
   });
 
   it("passes the client IP to the credential check", async () => {

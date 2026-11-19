@@ -7,6 +7,15 @@ import { loginAttempts } from "@/shared/db/schema";
 
 import { IP_LOCK, lockedUntil, loginKey, LOOKBACK_MS, USER_LOCK, type LoginOutcome } from "./login-lock";
 
+/**
+ * A login's counted rows reach back to its last success or unlock, not a fixed
+ * window: the escalation (S6) needs every lock since, however old.
+ */
+const sinceLastReset = sql`${loginAttempts.at} >= coalesce(
+  (select max(r.at) from login_attempts r
+   where r.username = ${loginAttempts.username} and r.outcome in ('success', 'unlocked')),
+  '-infinity')`;
+
 export type ReservedAttempt = { attemptId: string } | { lockedUntil: Date };
 
 /**
@@ -22,18 +31,18 @@ export async function reserveLoginAttempt(input: { username: string; ip: string 
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`login-user:${input.username}`}))`);
     if (input.ip) await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`login-ip:${input.ip}`}))`);
 
-    // Refused attempts never count toward a lock, so this read leaves them out.
-    const counted = and(gt(loginAttempts.at, since), ne(loginAttempts.outcome, "locked"));
+    // Refused attempts never count toward a lock, so these reads leave them out.
+    const counted = ne(loginAttempts.outcome, "locked");
     const columns = { at: loginAttempts.at, outcome: loginAttempts.outcome };
     const byUser = await tx
       .select(columns)
       .from(loginAttempts)
-      .where(and(eq(loginAttempts.username, input.username), counted));
+      .where(and(eq(loginAttempts.username, input.username), counted, sinceLastReset));
     const byIp = input.ip
       ? await tx
           .select(columns)
           .from(loginAttempts)
-          .where(and(eq(loginAttempts.ip, input.ip), counted))
+          .where(and(eq(loginAttempts.ip, input.ip), counted, gt(loginAttempts.at, since)))
       : [];
 
     const locks = [lockedUntil(byUser, now, USER_LOCK), lockedUntil(byIp, now, IP_LOCK)].filter(
@@ -94,8 +103,8 @@ export async function userLocks(usernames: readonly string[]): Promise<Map<strin
     .where(
       and(
         inArray(loginAttempts.username, keys),
-        gt(loginAttempts.at, new Date(now.getTime() - LOOKBACK_MS)),
         ne(loginAttempts.outcome, "locked"),
+        sinceLastReset,
       ),
     );
 

@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { POST } from "@/app/api/login/route";
 import { POST as UNLOCK } from "@/app/api/users/[id]/unlock/route";
 import { userLocks } from "@/modules/auth/login-attempts";
+import { UNTIL_UNLOCKED } from "@/modules/auth/login-lock";
 import { hashPassword } from "@/modules/auth/password";
 import { db } from "@/shared/db/client";
 import { loginAttempts, users } from "@/shared/db/schema";
@@ -87,6 +88,52 @@ describe("login locks against a real database", () => {
     const row = (await rowsFor(username)).find((attempt) => attempt.outcome === "unlocked");
     expect(row).toMatchObject({ userId: id, ip: "10.77.9.9" });
     expect((await login(username, PASSWORD, ip)).status).toBe(200);
+  });
+
+  describe("escalation (S6: 15 min, 1 hora, después admin)", () => {
+    const DAY = 24 * 60 * 60_000;
+    // Five failures a minute apart, `daysAgo` days back: one past lock, already over.
+    const pastLock = (username: string, daysAgo: number) =>
+      Array.from({ length: 5 }, (_, i) => ({
+        id: randomUUID(),
+        at: new Date(Date.now() - daysAgo * DAY + i * 60_000),
+        username,
+        ip: "10.77.8.8",
+        outcome: "bad_password" as const,
+      }));
+
+    it("locks until an administrator unlocks the third time, however old the earlier locks", async () => {
+      const username = await createLogin("third");
+      const ip = freshIp();
+      await db.insert(loginAttempts).values([
+        { id: randomUUID(), at: new Date(Date.now() - 4 * DAY), username, ip, outcome: "success" },
+        ...pastLock(username, 3),
+        ...pastLock(username, 2),
+      ]);
+
+      for (let i = 0; i < 5; i += 1) expect((await login(username, "incorrecta", ip)).status).toBe(401);
+      const refused = await login(username, PASSWORD, ip);
+
+      expect(refused.status).toBe(429);
+      expect(refused.headers.get("retry-after")).toBeNull();
+      expect((await userLocks([username])).get(username)).toBe(UNTIL_UNLOCKED);
+    });
+
+    it("starts over after a successful login between the locks", async () => {
+      const username = await createLogin("restart");
+      const ip = freshIp();
+      await db.insert(loginAttempts).values([
+        ...pastLock(username, 3),
+        ...pastLock(username, 2),
+        { id: randomUUID(), at: new Date(Date.now() - DAY), username, ip, outcome: "success" },
+      ]);
+
+      for (let i = 0; i < 5; i += 1) await login(username, "incorrecta", ip);
+      const until = (await userLocks([username])).get(username);
+
+      expect(until).toBeInstanceOf(Date);
+      expect(until!.getTime() - Date.now()).toBeLessThanOrEqual(15 * 60_000);
+    });
   });
 
   it("does not let parallel guesses pass the limit", async () => {
