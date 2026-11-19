@@ -27,7 +27,7 @@ describe("POST /api/users/[id]/unlock", () => {
     expect(d.unlockLogin).not.toHaveBeenCalled();
   });
 
-  it("unlocks the user's exact login and records who asked from where", async () => {
+  it("unlocks the user's exact login, recording the address the request came from", async () => {
     const d = deps("MRodriguez");
 
     const response = await handleUnlockUser(req("administrador"), "user-9", d);
