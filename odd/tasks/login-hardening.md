@@ -38,7 +38,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 |---|---|---|---|---|---|
 | T1 | S8, S9 | Password policy with server enforcement and fixtures | inline | done | `e70fe55` |
 | T2 | S6, S7, S12 | Attempts table, IP helper, user and IP lock, lock message | inline | done | `ca92976` |
-| T3 | S6, S12 | Admin unlock | inline | pending | |
+| T3 | S6, S12 | Admin unlock | inline | done | `12604ae`, `30e156a` |
 | T4 | S10, S12 | Access log screen | inline | pending | |
 | T5 | S2, S4 | TOTP core, secret encryption, recovery hashes, env key | inline | pending | |
 | T6 | S2 | Pending session, proxy gate, e2e fixtures | inline | pending | |
@@ -63,4 +63,9 @@ Route evidence: units depend on each other in order, so no writer trigger applie
 - L8 (2026-11-18, T2): `security-audit` guidance and an independent verifier ran against real Postgres. Locks count before the password comparison under advisory locks. Anyone who knows a username can lock it for 15 minutes; S6 accepts this and T3 adds the admin unlock.
 - Follow-up for T4: `login_attempts` needs the 90-day retention, and a password typed into the username field must not be shown to administrators.
 - L9 (2026-11-18, T2): the Gentle AI review found that a client could forge its address. The server now takes it from the connection and believes `x-forwarded-for` only from a local proxy; checked against the running server. Non-blocking follow-ups: refused attempts still add log rows, the lock countdown uses the browser clock, and concurrent logins wait on the database pool.
-- Next: T3.
+- L10 (2026-11-19, T3): `POST /api/users/[id]/unlock` (`users.manage`) records an `unlocked` attempt under the per-login advisory lock; Gestión de usuarios shows "Bloqueado hasta HH:MM" (workshop clock) and Desbloquear behind a confirmation. RED observed by name, six mutations caught, real-SQL e2e plus one SQL mutation, checked at the LAN IP on desktop and phone, dark and light. The session cookie is `SameSite=lax`, so a cross-site POST carries no session.
+- Follow-up: an IP lock is invisible on this screen. A user refused by the IP lock shows "Activo" with no button, and when both locks are active the toast says "Usuario desbloqueado" while login still returns 429.
+- Follow-up for T4: the unlocked row does not record which administrator acted (that needs a migration), and the mockup's "Resultado" filter has no entry for unlocks.
+- L11 (2026-11-19, T3): an independent verifier passed S6 and S12 with no blockers. It confirmed through the running server that forged `x-user-*` headers never reach the route, and that `userLocks` and `reserveLoginAttempt` agree on case variants, long names and a concurrent unlock. GGA passed. The Gentle AI review (risk, reliability) was approved with two advisories: the lock badge is computed at page render, and the unlock relies on the counter-reset rule in `login-lock.ts`.
+- Follow-up: `reserveLoginAttempt` reads the clock before taking its advisory lock, so an attempt queued behind an unlock can be stamped earlier and be cleared by it (at most one failure per concurrent unlock). A direct POST also resets up to four earlier failures on a login that is not locked; it needs an admin session.
+- Next: T4.

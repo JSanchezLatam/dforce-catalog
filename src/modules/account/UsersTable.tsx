@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, Lock } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,9 +19,11 @@ import { SelectionProvider } from "@/shared/ui/selection/SelectionProvider";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 import { DEACTIVATED_CHIP, FIELD_ERROR } from "@/shared/ui/styles";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
+import { formatTime } from "@/shared/datetime";
 import { useToast } from "@/shared/ui/ToastProvider";
 import { REFUSAL_MESSAGES } from "./refusals";
 import { UserBulkActions } from "./UserBulkActions";
+import { UnlockUserButton } from "./UnlockUserButton";
 import { UserForm } from "./UserForm";
 
 export type UserRow = {
@@ -32,7 +34,22 @@ export type UserRow = {
   role: string;
   /** Serialised over the RSC boundary, so a string rather than a Date. */
   deactivatedAt: string | null;
+  /** When the login lock ends (ISO), or `null` when the user can log in. */
+  lockedUntil: string | null;
 };
+
+/** A deactivated user cannot log in anyway, so only an active row shows its lock. */
+const lockOf = (user: UserRow): string | null =>
+  user.deactivatedAt === null && user.lockedUntil !== null ? formatTime(new Date(user.lockedUntil)) : null;
+
+function LockedBadge({ until, className }: { until: string; className?: string }) {
+  return (
+    <Badge variant="destructive" className={className}>
+      <Lock aria-hidden="true" />
+      Bloqueado hasta {until}
+    </Badge>
+  );
+}
 
 /**
  * `role` crosses the RSC boundary as a plain `string`, so the lookup is cast
@@ -180,22 +197,25 @@ export function UsersTable({ users }: { users: UserRow[] }) {
   function rowActions(user: UserRow) {
     const inactive = user.deactivatedAt !== null;
     return (
-      <RowActions label={`Acciones de ${user.username}`}>
-        {/* Editing a deactivated user is not offered: reactivate
-            first, so the row's state stays unambiguous. */}
-        {!inactive && <DropdownMenuItem onClick={() => setEditing(user)}>Editar</DropdownMenuItem>}
-        {/* A plain item with `onClick`, NOT `render={<button/>}`.
-            Measured in jsdom against base-ui 1.6: with `render`,
-            ArrowDown+Enter activates the item 0 times out of 1 —
-            Enter reaches base-ui's own item handler, and
-            rendering a real `<button>` replaces it. That is the
-            REVERSE of unit 2's link item, where `render` was the
-            fix; what decides it is whether the thing has to stay
-            an anchor, not the `render` prop itself. */}
-        <DropdownMenuItem disabled={pendingId === user.id} onClick={() => toggleActive(user)}>
-          {inactive ? "Reactivar" : "Desactivar"}
-        </DropdownMenuItem>
-      </RowActions>
+      <div className="flex items-center justify-end gap-2">
+        {lockOf(user) !== null && <UnlockUserButton user={user} />}
+        <RowActions label={`Acciones de ${user.username}`}>
+          {/* Editing a deactivated user is not offered: reactivate
+              first, so the row's state stays unambiguous. */}
+          {!inactive && <DropdownMenuItem onClick={() => setEditing(user)}>Editar</DropdownMenuItem>}
+          {/* A plain item with `onClick`, NOT `render={<button/>}`.
+              Measured in jsdom against base-ui 1.6: with `render`,
+              ArrowDown+Enter activates the item 0 times out of 1 —
+              Enter reaches base-ui's own item handler, and
+              rendering a real `<button>` replaces it. That is the
+              REVERSE of unit 2's link item, where `render` was the
+              fix; what decides it is whether the thing has to stay
+              an anchor, not the `render` prop itself. */}
+          <DropdownMenuItem disabled={pendingId === user.id} onClick={() => toggleActive(user)}>
+            {inactive ? "Reactivar" : "Desactivar"}
+          </DropdownMenuItem>
+        </RowActions>
+      </div>
     );
   }
 
@@ -275,6 +295,7 @@ export function UsersTable({ users }: { users: UserRow[] }) {
               <TableBody>
                 {rows.map((user) => {
                   const inactive = user.deactivatedAt !== null;
+                  const lock = lockOf(user);
                   return (
                     <TableRow key={user.id} className={inactive ? "text-muted-foreground" : undefined}>
                       <TableCell>
@@ -290,14 +311,16 @@ export function UsersTable({ users }: { users: UserRow[] }) {
                             since D8; `StatusBadge` is untouched, because widening its
                             closed 14-member union for one column is a migration this
                             change does not own. */}
-                        <Badge variant={inactive ? "outline" : "secondary"}>
-                          {inactive ? "Desactivado" : "Activo"}
-                        </Badge>
+                        {lock !== null ? (
+                          <LockedBadge until={lock} />
+                        ) : (
+                          <Badge variant={inactive ? "outline" : "secondary"}>
+                            {inactive ? "Desactivado" : "Activo"}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end">
-                          {rowActions(user)}
-                        </div>
+                        {rowActions(user)}
                       </TableCell>
                     </TableRow>
                   );
@@ -306,26 +329,31 @@ export function UsersTable({ users }: { users: UserRow[] }) {
             </Table>
           </CardContent>
         </Card>
-        {/* No `href`: `/users` has no detail page, so the card's one control is
-            the kebab, in the `action` slot outside any link. */}
+        {/* No `href`: `/users` has no detail page, so the card's controls (the
+            kebab, and Desbloquear on a locked row) sit in the `action` slot. */}
         <RecordCardList testId="users-cards">
-          {rows.map((user) => (
-            <RecordCard key={user.id} action={<div className="flex justify-end">{rowActions(user)}</div>}>
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="font-medium">{user.username}</div>
-                  {user.name && <div className="text-xs text-muted-foreground">{user.name}</div>}
+          {rows.map((user) => {
+            const lock = lockOf(user);
+            return (
+              <RecordCard key={user.id} action={rowActions(user)}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-medium">{user.username}</div>
+                    {user.name && <div className="text-xs text-muted-foreground">{user.name}</div>}
+                  </div>
+                  {lock !== null ? (
+                    <LockedBadge until={lock} className="shrink-0" />
+                  ) : user.deactivatedAt !== null ? (
+                    <span className={`shrink-0 ${DEACTIVATED_CHIP}`}>Desactivado</span>
+                  ) : (
+                    // `completed` is the success tone (green on a tint); only the word differs.
+                    <StatusBadge status="completed" label="Activo" className="shrink-0" />
+                  )}
                 </div>
-                {user.deactivatedAt !== null ? (
-                  <span className={`shrink-0 ${DEACTIVATED_CHIP}`}>Desactivado</span>
-                ) : (
-                  // `completed` is the success tone (green on a tint); only the word differs.
-                  <StatusBadge status="completed" label="Activo" className="shrink-0" />
-                )}
-              </div>
-              <div className="text-sm text-muted-foreground">{roleLabel(user.role)}</div>
-            </RecordCard>
-          ))}
+                <div className="text-sm text-muted-foreground">{roleLabel(user.role)}</div>
+              </RecordCard>
+            );
+          })}
         </RecordCardList>
       </SelectionProvider>
 

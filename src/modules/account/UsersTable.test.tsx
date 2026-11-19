@@ -51,6 +51,7 @@ const ACTIVE = {
   email: "ana@taller.com",
   role: "administrador",
   deactivatedAt: null,
+  lockedUntil: null,
 };
 const INACTIVE = {
   id: "u-2",
@@ -59,6 +60,7 @@ const INACTIVE = {
   email: null,
   role: "tecnico",
   deactivatedAt: "2026-01-01T00:00:00.000Z",
+  lockedUntil: null,
 };
 
 function mockFetch(response: { status: number; body?: unknown }) {
@@ -772,6 +774,7 @@ describe("UsersTable — bulk activate/deactivate (WU5)", () => {
     email: null,
     role: "administrador",
     deactivatedAt: active ? null : "2026-01-01T00:00:00.000Z",
+    lockedUntil: null,
   });
   const tech = (id: string, username: string, active = true): UserRow => ({
     ...admin(id, username, active),
@@ -1047,5 +1050,62 @@ describe("UsersTable — 'Mostrar inactivos' hit area on touch (mobile-responsiv
     expect(label.tagName).toBe("LABEL");
     expect(label).toHaveAttribute("for", screen.getByLabelText("Mostrar inactivos").id);
     expect(label).toHaveClass("pointer-coarse:min-h-11");
+  });
+});
+
+describe("UsersTable — a locked login (login-hardening S6)", () => {
+  // 15:41 UTC is 10:41 in Panama: the hour the workshop reads, whatever zone renders it.
+  const LOCKED = { ...ACTIVE, id: "u-3", username: "mrodriguez", name: "Marta Rodríguez", email: null, role: "jefe_taller", lockedUntil: "2026-11-18T15:41:00.000Z" };
+
+  it("shows until when the login is locked, in the table and the phone card", () => {
+    render(<UsersTable users={[LOCKED]} />);
+
+    expect(within(rowFor("mrodriguez")).getByText("Bloqueado hasta 10:41")).toBeInTheDocument();
+    expect(within(screen.getByTestId("users-cards")).getByText("Bloqueado hasta 10:41")).toBeInTheDocument();
+  });
+
+  it("offers Desbloquear only on a locked row", () => {
+    render(<UsersTable users={[ACTIVE, LOCKED]} />);
+
+    expect(within(rowFor("mrodriguez")).getByRole("button", { name: "Desbloquear" })).toBeInTheDocument();
+    expect(within(rowFor("ana")).queryByRole("button", { name: "Desbloquear" })).not.toBeInTheDocument();
+    expect(within(rowFor("ana")).getByText("Activo")).toBeInTheDocument();
+  });
+
+  it("unlocks after confirmation and says so", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { success: true } });
+    render(<UsersTable users={[LOCKED]} />);
+
+    await user.click(within(rowFor("mrodriguez")).getByRole("button", { name: "Desbloquear" }));
+    expect(fetchMock).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("dialog", { name: "¿Desbloquear a mrodriguez?" });
+    await user.click(within(dialog).getByRole("button", { name: "Sí, desbloquear" }));
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/users/u-3/unlock", { method: "POST" });
+    expect(await screen.findByText("Usuario desbloqueado")).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("keeps the dialog open with the reason when the server refuses", async () => {
+    const user = userEvent.setup();
+    mockFetch({ status: 404, body: { error: "not_found" } });
+    render(<UsersTable users={[LOCKED]} />);
+
+    await user.click(within(rowFor("mrodriguez")).getByRole("button", { name: "Desbloquear" }));
+    await user.click(screen.getByRole("button", { name: "Sí, desbloquear" }));
+
+    const dialog = screen.getByRole("dialog", { name: "¿Desbloquear a mrodriguez?" });
+    await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent("No se pudo desbloquear al usuario."));
+    expect(screen.queryByText("Usuario desbloqueado")).not.toBeInTheDocument();
+  });
+
+  it("shows Desactivado, not the lock, on a deactivated row", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable users={[{ ...INACTIVE, lockedUntil: LOCKED.lockedUntil }]} />);
+    await user.click(screen.getByLabelText("Mostrar inactivos"));
+
+    expect(within(rowFor("beto")).queryByText(/Bloqueado/)).not.toBeInTheDocument();
+    expect(within(rowFor("beto")).queryByRole("button", { name: "Desbloquear" })).not.toBeInTheDocument();
   });
 });
