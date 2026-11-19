@@ -11,7 +11,7 @@ type UnlockUserDeps = {
   unlockLogin?: typeof unlockLoginService;
 };
 
-/** Lets an administrator open a locked login before its 15 minutes run out. */
+/** Lets an administrator open a locked login before its lock ends, or a lock that never ends on its own. */
 export async function handleUnlockUser(
   request: NextRequest,
   id: string,

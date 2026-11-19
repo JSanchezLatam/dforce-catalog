@@ -39,8 +39,11 @@ export type UserRow = {
   lockedUntil: string | null;
 };
 
-/** A deactivated user cannot log in anyway, so only an active row shows its lock. */
-/** The lock's label, or `null` when the login is open; a lock only an unlock lifts has no hour. */
+/**
+ * The lock's label, or `null` when the login is open; a lock only an unlock
+ * lifts has no hour. A deactivated user cannot log in anyway, so only an
+ * active row shows its lock.
+ */
 function lockOf(user: UserRow): string | null {
   if (user.deactivatedAt !== null || user.lockedUntil === null) return null;
   const until = new Date(user.lockedUntil);
