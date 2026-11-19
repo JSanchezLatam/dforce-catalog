@@ -2,6 +2,7 @@ import { can } from "@/modules/auth/policy";
 import { PermissionDenied } from "@/shared/ui/PermissionDenied";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { listUsers } from "@/modules/account/queries";
+import { userLocks } from "@/modules/auth/login-attempts";
 import { UserFormTrigger } from "@/modules/account/UserFormTrigger";
 import { UsersTable } from "@/modules/account/UsersTable";
 import { PageHeader } from "@/shared/ui/PageHeader";
@@ -24,6 +25,7 @@ export default async function UsersPage() {
   }
 
   const users = await listUsers({ includeInactive: true });
+  const locks = await userLocks(users.map((u) => u.username));
 
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-8">
@@ -31,7 +33,11 @@ export default async function UsersPage() {
       <UsersTable
         // Dates do not survive the RSC boundary as Date instances — serialise
         // here so the client component's prop type is honest about what it gets.
-        users={users.map((u) => ({ ...u, deactivatedAt: u.deactivatedAt?.toISOString() ?? null }))}
+        users={users.map((u) => ({
+          ...u,
+          deactivatedAt: u.deactivatedAt?.toISOString() ?? null,
+          lockedUntil: locks.get(u.username)?.toISOString() ?? null,
+        }))}
       />
     </div>
   );

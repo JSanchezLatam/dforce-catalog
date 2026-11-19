@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq, gt, ne, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { loginAttempts } from "@/shared/db/schema";
 
-import { IP_LOCK, lockedUntil, LOOKBACK_MS, USER_LOCK, type LoginOutcome } from "./login-lock";
+import { IP_LOCK, lockedUntil, loginKey, LOOKBACK_MS, USER_LOCK, type LoginOutcome } from "./login-lock";
 
 export type ReservedAttempt = { attemptId: string } | { lockedUntil: Date };
 
@@ -60,4 +60,49 @@ export async function settleLoginAttempt(
   userId: string | null,
 ): Promise<void> {
   await db.update(loginAttempts).set({ outcome, userId }).where(eq(loginAttempts.id, attemptId));
+}
+
+/**
+ * An administrator's unlock: an `unlocked` row resets the user counter, so the
+ * next attempt is judged as if the earlier failures never happened. It takes
+ * the same per-login lock as an attempt, so it cannot interleave with one.
+ * The IP lock is untouched: an address guessing across logins stays locked.
+ */
+export async function unlockLogin(input: { userId: string; username: string; ip: string | null }): Promise<void> {
+  const username = loginKey(input.username);
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`login-user:${username}`}))`);
+    await tx.insert(loginAttempts).values({
+      id: randomUUID(),
+      at: new Date(),
+      username,
+      userId: input.userId,
+      ip: input.ip,
+      outcome: "unlocked",
+    });
+  });
+}
+
+/** The logins among `usernames` locked right now, with the end of each lock. */
+export async function userLocks(usernames: readonly string[]): Promise<Map<string, Date>> {
+  const now = new Date();
+  const keys = usernames.map(loginKey);
+  if (keys.length === 0) return new Map();
+  const rows = await db
+    .select({ username: loginAttempts.username, at: loginAttempts.at, outcome: loginAttempts.outcome })
+    .from(loginAttempts)
+    .where(
+      and(
+        inArray(loginAttempts.username, keys),
+        gt(loginAttempts.at, new Date(now.getTime() - LOOKBACK_MS)),
+        ne(loginAttempts.outcome, "locked"),
+      ),
+    );
+
+  const locks = new Map<string, Date>();
+  for (const username of usernames) {
+    const until = lockedUntil(rows.filter((row) => row.username === loginKey(username)), now, USER_LOCK);
+    if (until) locks.set(username, until);
+  }
+  return locks;
 }

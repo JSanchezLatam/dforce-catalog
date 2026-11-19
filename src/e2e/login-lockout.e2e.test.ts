@@ -5,11 +5,13 @@
 import { execSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
-import { ilike, inArray } from "drizzle-orm";
+import { eq, ilike, inArray } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { POST } from "@/app/api/login/route";
+import { POST as UNLOCK } from "@/app/api/users/[id]/unlock/route";
+import { userLocks } from "@/modules/auth/login-attempts";
 import { hashPassword } from "@/modules/auth/password";
 import { db } from "@/shared/db/client";
 import { loginAttempts, users } from "@/shared/db/schema";
@@ -63,6 +65,28 @@ describe("login locks against a real database", () => {
     expect(locked.cookies.get("session")).toBeUndefined();
     const outcomes = (await rowsFor(username)).map((row) => row.outcome).sort();
     expect(outcomes).toEqual(["bad_password", "bad_password", "bad_password", "bad_password", "bad_password", "locked"]);
+  });
+
+  it("opens a locked login at once when an administrator unlocks it", async () => {
+    const username = await createLogin("unlock");
+    const ip = freshIp();
+    const [{ id }] = await db.select({ id: users.id }).from(users).where(eq(users.username, username));
+    for (let i = 0; i < 5; i += 1) await login(username, "incorrecta", ip);
+    expect((await userLocks([username])).get(username)).toBeInstanceOf(Date);
+
+    const unlocked = await UNLOCK(
+      new NextRequest(`http://localhost/api/users/${id}/unlock`, {
+        method: "POST",
+        headers: { "x-user-id": made[0], "x-user-role": "administrador", "x-forwarded-for": "10.77.9.9" },
+      }),
+      { params: Promise.resolve({ id }) },
+    );
+
+    expect(unlocked.status).toBe(200);
+    expect((await userLocks([username])).has(username)).toBe(false);
+    const row = (await rowsFor(username)).find((attempt) => attempt.outcome === "unlocked");
+    expect(row).toMatchObject({ userId: id, ip: "10.77.9.9" });
+    expect((await login(username, PASSWORD, ip)).status).toBe(200);
   });
 
   it("does not let parallel guesses pass the limit", async () => {

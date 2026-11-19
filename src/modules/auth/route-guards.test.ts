@@ -141,6 +141,7 @@ export const ROUTE_GUARDS: Record<
   "/api/account": { GET: "account.self", PATCH: "account.self" },
   "/api/users": { GET: "users.manage", POST: "users.manage" },
   "/api/users/[id]": { PATCH: "users.manage" },
+  "/api/users/[id]/unlock": { POST: "users.manage" },
   // technicians-and-work-lines: roster writes need `technicians.manage`; naming a
   // login (`userId`) additionally needs `users.manage`, so both are declared and
   // the "actually evaluated" test below proves each is checked in the file.
