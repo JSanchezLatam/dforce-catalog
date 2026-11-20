@@ -281,6 +281,13 @@
       "when": 1795038255683,
       "tag": "0039_login_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1795204094639,
+      "tag": "0040_login_attempt_actor",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,5 @@
 import { and, count, desc, eq, gt, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "@/shared/db/client";
 import { loginAttempts, users } from "@/shared/db/schema";
@@ -6,8 +7,20 @@ import { loginAttempts, users } from "@/shared/db/schema";
 import { RESULT_OUTCOMES, type AccessLogFilters } from "./access-log";
 import type { LoginOutcome } from "./login-lock";
 
-/** `username` is null when the typed login matches no user: that text may be a password (S10, L16). */
-export type AccessLogRow = { id: string; at: Date; username: string | null; ip: string | null; outcome: LoginOutcome };
+/**
+ * `username` is null when the typed login matches no user: that text may be a
+ * password (S10, L16). `actor` is the administrator who unlocked.
+ */
+export type AccessLogRow = {
+  id: string;
+  at: Date;
+  username: string | null;
+  ip: string | null;
+  outcome: LoginOutcome;
+  actor: string | null;
+};
+
+const actors = alias(users, "actor");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -35,9 +48,11 @@ export async function listAccessLog(
         username: users.username,
         ip: loginAttempts.ip,
         outcome: loginAttempts.outcome,
+        actor: actors.username,
       })
       .from(loginAttempts)
       .leftJoin(users, eq(users.username, loginAttempts.username))
+      .leftJoin(actors, eq(actors.id, loginAttempts.actorId))
       .where(matching(filters, now))
       .orderBy(desc(loginAttempts.at), desc(loginAttempts.id))
       .limit(window.limit)

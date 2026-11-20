@@ -75,7 +75,7 @@ export default async function AccessLogPage({
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const view = rows.map((row: AccessLogRow) => ({
     ...row,
-    ...describeAttempt(row.outcome),
+    ...describeAttempt(row.outcome, row.actor),
     when: formatDateTime(row.at),
     origin: originOf(row.ip),
   }));

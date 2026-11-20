@@ -32,7 +32,7 @@ describe("Registro de accesos against a real database", () => {
       // Refused rows carry no user_id even for a real user.
       { id: randomUUID(), at: daysAgo(0.3), username: KNOWN, userId: null, ip: "192.168.1.23", outcome: "locked" },
       { id: randomUUID(), at: daysAgo(0.4), username: TYPED, userId: null, ip: "45.12.0.9", outcome: "unknown_user" },
-      { id: randomUUID(), at: daysAgo(10), username: KNOWN, userId, ip: null, outcome: "unlocked" },
+      { id: randomUUID(), at: daysAgo(10), username: KNOWN, userId, ip: null, outcome: "unlocked", actorId: userId },
     ]);
   }, 60_000);
 
@@ -68,6 +68,8 @@ describe("Registro de accesos against a real database", () => {
     expect((await listAccessLog({ days: 30, user: KNOWN, result: "unlocked" }, page, NOW)).map((r) => r.outcome)).toEqual([
       "unlocked",
     ]);
+    expect((await listAccessLog({ days: 30, result: "unlocked" }, page, NOW))[0].actor).toBe(KNOWN);
+    expect((await listAccessLog({ days: 7, result: "success" }, page, NOW))[0].actor).toBeNull();
     expect(await countAccessLog({ days: 30, user: KNOWN }, NOW)).toBe(4);
   });
 

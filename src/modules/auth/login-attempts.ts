@@ -77,7 +77,12 @@ export async function settleLoginAttempt(
  * the same per-login lock as an attempt, so it cannot interleave with one.
  * The IP lock is untouched: an address guessing across logins stays locked.
  */
-export async function unlockLogin(input: { userId: string; username: string; ip: string | null }): Promise<void> {
+export async function unlockLogin(input: {
+  userId: string;
+  username: string;
+  ip: string | null;
+  actorId: string;
+}): Promise<void> {
   const username = loginKey(input.username);
   await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`login-user:${username}`}))`);
@@ -88,6 +93,7 @@ export async function unlockLogin(input: { userId: string; username: string; ip:
       userId: input.userId,
       ip: input.ip,
       outcome: "unlocked",
+      actorId: input.actorId,
     });
   });
 }

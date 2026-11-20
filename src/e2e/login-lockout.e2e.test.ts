@@ -87,7 +87,7 @@ describe("login locks against a real database", () => {
     expect(unlocked.status).toBe(200);
     expect((await userLocks([username])).has(username)).toBe(false);
     const row = (await rowsFor(username)).find((attempt) => attempt.outcome === "unlocked");
-    expect(row).toMatchObject({ userId: id, ip: "10.77.9.9" });
+    expect(row).toMatchObject({ userId: id, ip: "10.77.9.9", actorId: made[0] });
     expect((await login(username, PASSWORD, ip)).status).toBe(200);
   });
 
@@ -169,7 +169,7 @@ describe("login locks against a real database", () => {
 
       expect((await userLocks([username])).has(username)).toBe(false);
       const row = (await rowsFor(username)).find((attempt) => attempt.outcome === "unlocked");
-      expect(row).toMatchObject({ userId: made[made.length - 1], ip: null });
+      expect(row).toMatchObject({ userId: made[made.length - 1], ip: null, actorId: null });
       expect((await login(username, PASSWORD, ip)).status).toBe(200);
     });
 
