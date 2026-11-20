@@ -93,6 +93,13 @@ Route evidence: units depend on each other in order, so no writer trigger applie
   - Test vectors were fetched from the RFC texts (4226 Appendix D, 6238 Appendix B), including leading zeros.
   - Checks: RED observed, and mutations caught by name (AAD removed, replay allowed, any code shape, no O→0, unkeyed hash, leading zeros lost, no clock drift). Suite 4914/4914, `tsc` clean, lint 0 errors (13 warnings).
   - `security-audit` guidance, inline: no boundary is crossed yet, because nothing calls this code. Advisories: `base32Decode("")` yields an empty HMAC key, so callers must only pass generated secrets; Node's base64 decoding is lenient and only the length check guards the key. Process gap: the T4a and T4b log entries record verifier, GGA and review passes but no separate `security-audit` guidance pass.
+- L25 (2026-11-20, T5): GGA passed. An independent verifier passed S2 and S4 with no blockers. Its probes confirmed:
+  - every RFC 4226 and 6238 vector, on a separate implementation;
+  - base32 against an independent encoder for every length from 0 to 40 bytes;
+  - an unbiased alphabet over 160k symbols;
+  - the ±1 window, and replay refusal at every boundary.
+
+  Fixed from its advisories, RED first: `openSecret` accepted a GCM tag cut to 4 bytes (Node's default), so the tag length is now pinned to 16; it also accepted extra `:` fields. Left as is: a time before the epoch throws (unrealistic); the key parser accepts base64url and padding variants (usability only); a server clock set back refuses codes until it catches up, and recovery codes cover that.
 - Follow-ups recorded now, built later:
   - T7: a wrong second-step code must count toward the user lock, or six digits can be guessed (likely a new `login_outcome` value, so a migration).
   - T8: on an install with no key, a mandatory role cannot finish login, so who generates the key on the workshop PC is the owner's call before T8 ships. WINDOWS.md and WINDOWS.es.md get the key and backup note with T8.

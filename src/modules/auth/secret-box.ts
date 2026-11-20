@@ -10,6 +10,8 @@ import { env } from "@/shared/config/env";
 const VERSION = "v1";
 const KEY_BYTES = 32;
 const IV_BYTES = 12;
+// Pinned: Node accepts a GCM tag as short as 4 bytes unless told its length.
+const TAG_BYTES = 16;
 
 export function parseTotpKey(raw: string | undefined): Buffer {
   const key = raw ? Buffer.from(raw, "base64") : Buffer.alloc(0);
@@ -30,7 +32,7 @@ export function deriveKey(key: Buffer, purpose: "totp-secret" | "recovery-code")
 /** The user id is authenticated data: one user's sealed secret does not open as another's. */
 export function sealSecret(plain: string, userId: string, key: Buffer): string {
   const iv = randomBytes(IV_BYTES);
-  const cipher = createCipheriv("aes-256-gcm", deriveKey(key, "totp-secret"), iv);
+  const cipher = createCipheriv("aes-256-gcm", deriveKey(key, "totp-secret"), iv, { authTagLength: TAG_BYTES });
   cipher.setAAD(Buffer.from(userId));
   const ciphertext = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
   return [VERSION, iv, cipher.getAuthTag(), ciphertext].map((part) => (typeof part === "string" ? part : part.toString("base64url"))).join(":");
@@ -38,9 +40,14 @@ export function sealSecret(plain: string, userId: string, key: Buffer): string {
 
 /** Throws on a wrong key, a wrong user or any tampering. */
 export function openSecret(sealed: string, userId: string, key: Buffer): string {
-  const [version, iv, tag, ciphertext] = sealed.split(":");
-  if (version !== VERSION || !iv || !tag || !ciphertext) throw new Error("Unknown sealed secret format");
-  const decipher = createDecipheriv("aes-256-gcm", deriveKey(key, "totp-secret"), Buffer.from(iv, "base64url"));
+  const parts = sealed.split(":");
+  const [version, iv, tag, ciphertext] = parts;
+  if (parts.length !== 4 || version !== VERSION || !iv || !tag || !ciphertext) {
+    throw new Error("Unknown sealed secret format");
+  }
+  const decipher = createDecipheriv("aes-256-gcm", deriveKey(key, "totp-secret"), Buffer.from(iv, "base64url"), {
+    authTagLength: TAG_BYTES,
+  });
   decipher.setAAD(Buffer.from(userId));
   decipher.setAuthTag(Buffer.from(tag, "base64url"));
   return Buffer.concat([decipher.update(Buffer.from(ciphertext, "base64url")), decipher.final()]).toString("utf8");

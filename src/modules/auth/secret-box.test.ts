@@ -45,6 +45,17 @@ describe("sealSecret / openSecret", () => {
     expect(() => openSecret(tamper(sealSecret("GEZDGNBVGY3TQOJQ", "user-1", key), part), "user-1", key)).toThrow();
   });
 
+  it("refuses a truncated tag, which GCM would otherwise accept down to 4 bytes", () => {
+    const parts = sealSecret("GEZDGNBVGY3TQOJQ", "user-1", key).split(":");
+    parts[2] = Buffer.from(parts[2], "base64url").subarray(0, 4).toString("base64url");
+
+    expect(() => openSecret(parts.join(":"), "user-1", key)).toThrow();
+  });
+
+  it("refuses extra fields", () => {
+    expect(() => openSecret(`${sealSecret("x", "user-1", key)}:extra`, "user-1", key)).toThrow();
+  });
+
   it("refuses an unknown format version", () => {
     expect(() => openSecret(sealSecret("x", "user-1", key).replace(/^v1:/, "v9:"), "user-1", key)).toThrow();
   });
