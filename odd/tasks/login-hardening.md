@@ -45,7 +45,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T4b | S10 | 90-day retention that keeps the rows a standing lock needs; unlock actor column | inline | done | `f86feb0`, `ee680ed`, `dada2e1` (PR #371, merged `e2781b3`) |
 | T5 | S2, S4 | TOTP core, secret encryption, recovery hashes, env key (library only; storage lands with T6/T8) | inline | done | `a2718ad`, `168cfa3`, `30eb200` (PR #372, merged `823402f`) |
 | T6 | S2 | Pending session, proxy gate, e2e fixtures | delegated (context backstop, L28) | done | `a038c74`, `5e34740`, `02c1d5c` (PR #373, merged `edb0cb0`) |
-| T7 | S4, S12 | Second-step page and recovery-code path | inline | pending | |
+| T7 | S4, S6, S12 | Second-step page and recovery-code path | delegated (context backstop, L28) | done | `bde0eb3`, `780b8f2`, `a7c1bc1` |
 | T8 | S2, S4, S12 | Enrolment, QR, codes, mandatory roles enforced | inline | pending | |
 | T9 | S3, S9 | Trusted device, revoked on password change | inline | pending | |
 | T10 | S5, S13 | Admin 2FA reset, self-reset refusal, emergency command | inline | pending | |
@@ -191,3 +191,63 @@ Route evidence: units depend on each other in order, so no writer trigger applie
   - The `enroll` gate must land in the same change that first issues `enroll` (T8).
   - The verify route must read `pending` from the database (T7).
 - L32 (2026-11-20, T6): Gentle AI review (risk + reliability, granted under L27) APPROVED and acknowledged. Its advisory R1 is applied after the review, RED first: the proxy now gates any non-null `pending`, not only `verify`, so a later state (T8's `enroll`) fails closed. R3 (`/two-factor` is a 404 until T7) is expected and is closed by T7.
+- L33 (2026-11-20, T7 design refinement, before writing): the code comparison is fast (HMAC), unlike bcrypt, so the whole second step runs in ONE transaction holding the user and IP advisory locks, in this order:
+  1. Read the pending session from the database, never from headers.
+  2. Refuse while either lock holds.
+  3. Compare.
+  4. A wrong code or recovery code inserts a `bad_code` row, which counts as a failure.
+  5. A right one updates that session's `password_ok` row to `success`, with `at = now()` and `second_factor` set. That row is the user's latest `password_ok` at or before the session's `created_at`.
+  6. Single use: `last_step < step` and `used_at IS NULL`, checked by row count.
+  7. Revoke the pending session and issue a full one.
+
+  A missing `TOTP_ENCRYPTION_KEY` fails closed with a clear Spanish message. "Confiar en este dispositivo por 30 días" is T9, not T7.
+- L34 (2026-11-20, T7), written by a bounded writer. The parent read `second-factor.ts` and the `login-attempts.ts` refactor in full.
+  - **Locks.** `takeLoginLocks` and `currentLock` are now shared by the password step and the second step.
+  - **`verifySecondFactor` (L33):**
+    - runs in one transaction;
+    - reads the session from the database and again under the locks;
+    - refuses while locked;
+    - counts a wrong code as `bad_code`;
+    - enforces single use with a guarded UPDATE checked by row count;
+    - turns the `password_ok` row into a success stamped after the locks;
+    - revokes the pending session and issues a full one after commit;
+    - answers 503 with a missing key, and writes nothing when it does.
+  - **Screen and API.** `/two-factor` and `POST /api/two-factor/verify` are both registered as `session-only`.
+  - **Writer's checks:**
+    - mutations caught by name: single use (both layers together), lock refusal, the `bad_code` insert, `at = now`, the database pending check, and the missing key;
+    - suite 4995/4995, `tsc` exit 0, lint 0 errors;
+    - e2e 37/37 on `dforce_e2e`.
+  - **Parent's browser check at the LAN IP** (QA user with a sealed secret; the dev `.env` now holds a generated `TOTP_ENCRYPTION_KEY`, not printed):
+    - phone in dark mode: the screen matches mockup `s1`; the field has `inputmode` numeric, `autocomplete` one-time-code and a 44px height; every control is 44px; no horizontal scroll;
+    - a wrong code shows "Código incorrecto. Revisá la app e intentá de nuevo.";
+    - a right code lands in the app;
+    - desktop in dark mode: the recovery path accepts "7kqm 2xpa" once and marks it used;
+    - the rows read `bad_code`, `success`/`totp`, `success`/`recovery`;
+    - the pending sessions were revoked.
+
+    QA rows removed.
+  - **Recorded:**
+    - Each of the two single-use layers hides the other, so only both together are pinned.
+    - A refusal while locked writes no row.
+    - `STACK.md` still lacks the new tables (T8 or T10).
+- L35 (2026-11-20, T7). GGA passed.
+  - **Verifier result.** The independent verifier found one blocker, B1. Everything else passed:
+    - 15 parallel wrong codes across 3 pending sessions wrote exactly 5 `bad_code` rows;
+    - alternating password logins and wrong codes still locked;
+    - concurrent replay of a TOTP code and of a recovery code gave one win each;
+    - the session swap held;
+    - the lock refactor matches the previous code.
+  - **B1.** With a key that no longer opens the secret, the recovery-code path counted each try as `bad_code`, because a wrong key and a wrong code both fail to match the HMAC. A restore without `.env` would then lock the administrator out through the very codes meant to get them in.
+  - **Fix.** RED first, by name, with the verifier's probe as an e2e: the key is checked by opening the TOTP secret before either path, so the answer is 503 with nothing written.
+  - **Advisories kept:**
+    - a failed `issueSession` after commit spends the code (fails closed);
+    - refusals while locked write no row;
+    - two racing logins may pair a session with the other login's `password_ok` row; both become `success`, so no harm.
+- L36 (2026-11-20, T7): Gentle AI review (risk, reliability and resilience, granted under L27) was APPROVED and acknowledged.
+  - **Applied after the review, RED first:**
+    - A pending session whose 2FA was reset midway is revoked and answers `no_pending_session`, with nothing counted. It used to count every try as `bad_code`.
+    - A key failure now logs its reason on the server, never the key: "2FA unavailable: TOTP_ENCRYPTION_KEY must be 32 bytes in base64".
+  - **Recorded:**
+    - A failed `issueSession` after commit spends the code.
+    - A missing `password_ok` match skips the reset. App and database share one machine in the workshop.
+    - An empty body counts as a wrong code.
