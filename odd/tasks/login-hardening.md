@@ -243,3 +243,11 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - a failed `issueSession` after commit spends the code (fails closed);
     - refusals while locked write no row;
     - two racing logins may pair a session with the other login's `password_ok` row; both become `success`, so no harm.
+- L36 (2026-11-20, T7): Gentle AI review (risk, reliability and resilience, granted under L27) was APPROVED and acknowledged.
+  - **Applied after the review, RED first:**
+    - A pending session whose 2FA was reset midway is revoked and answers `no_pending_session`, with nothing counted. It used to count every try as `bad_code`.
+    - A key failure now logs its reason on the server, never the key: "2FA unavailable: TOTP_ENCRYPTION_KEY must be 32 bytes in base64".
+  - **Recorded:**
+    - A failed `issueSession` after commit spends the code.
+    - A missing `password_ok` match skips the reset. App and database share one machine in the workshop.
+    - An empty body counts as a wrong code.

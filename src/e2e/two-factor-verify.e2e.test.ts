@@ -254,6 +254,20 @@ describe("2FA second step against a real database", () => {
     expect(await outcomesFor(username)).toEqual(["password_ok"]);
   });
 
+  // 2FA reset between the password and the code: nothing can pass, so it is not a guess.
+  it("sends a pending session whose 2FA is gone back to the login, counting nothing", async () => {
+    const { id, username } = await createLogin("reset-midway");
+    const pending = await pendingToken(username);
+    await db.delete(userTotp).where(eq(userTotp.userId, id));
+
+    const response = await verify(pending, { code: rightCode() });
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "no_pending_session" });
+    expect(await outcomesFor(username)).toEqual(["password_ok"]);
+    expect((await sessionRow(pending)).revokedAt).toBeInstanceOf(Date);
+  });
+
   it("answers no_pending_session for an expired pending session", async () => {
     const { username } = await createLogin("expired");
     const pending = await pendingToken(username);

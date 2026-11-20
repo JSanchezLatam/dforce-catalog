@@ -64,19 +64,21 @@ async function consume(
   input: { userId: string; code?: string; recoveryCode?: string },
   key: Buffer,
   now: Date,
-): Promise<Passed | "wrong" | "unavailable"> {
+): Promise<Passed | "wrong" | "unavailable" | "gone"> {
   const [totp] = await tx
     .select({ secretSealed: userTotp.secretSealed, lastStep: userTotp.lastStep })
     .from(userTotp)
     .where(and(eq(userTotp.userId, input.userId), isNotNull(userTotp.enabledAt)));
-  if (!totp) return "wrong";
+  // 2FA reset between the password and the code: no code can pass, so it is not a guess.
+  if (!totp) return "gone";
   // Checked for both paths: a key that no longer opens the secret is an install
   // problem, not a guess, and it must not lock anyone. A recovery code alone
   // cannot tell, because a wrong key and a wrong code both just fail to match.
   let secret: string;
   try {
     secret = openSecret(totp.secretSealed, input.userId, key);
-  } catch {
+  } catch (error) {
+    console.error("2FA unavailable:", error instanceof Error ? error.message : "secret cannot be opened");
     return "unavailable";
   }
 
@@ -119,7 +121,9 @@ export async function verifySecondFactor(
   let key: Buffer;
   try {
     key = (deps.key ?? totpKey)();
-  } catch {
+  } catch (error) {
+    // The message names the problem (missing or wrong length), never the key.
+    console.error("2FA unavailable:", error instanceof Error ? error.message : "key cannot be read");
     return { ok: false, reason: "unavailable" };
   }
   const transaction = deps.transaction ?? db.transaction.bind(db);
@@ -140,6 +144,10 @@ export async function verifySecondFactor(
 
     const passed = await consume(tx, { ...input, userId: session.userId }, key, now);
     if (passed === "unavailable") return { ok: false as const, reason: "unavailable" as const };
+    if (passed === "gone") {
+      await tx.update(sessions).set({ revokedAt: now }).where(eq(sessions.id, input.token));
+      return { ok: false as const, reason: "no_pending_session" as const };
+    }
     if (passed === "wrong") {
       await tx.insert(loginAttempts).values({
         id: randomUUID(),
