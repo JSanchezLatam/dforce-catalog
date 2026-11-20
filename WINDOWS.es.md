@@ -469,6 +469,7 @@ día sin respaldo externo hasta la siguiente corrida exitosa.
 
 | Síntoma | Causa | Solución |
 |---------|-------|----------|
+| El login dice `Pedí al administrador que te desbloquee.` y el bloqueado **es** el único administrador | Tercer bloqueo seguido por contraseña incorrecta: dura hasta que un administrador desbloquee, y no queda ninguno con sesión | En esta PC, desde la carpeta del proyecto: `node scripts\emergency.mjs unlock <usuario>` (lee `DATABASE_URL` del `.env`). El usuario respeta mayúsculas y minúsculas |
 | `FATAL: password authentication failed for user "postgres"` | PostgreSQL se instaló con `winget`, que nunca mostró la pantalla de contraseña | "Postgres instalado con winget" más abajo |
 | Todas las pantallas funcionan pero la sincronización de inventario/clientes no trae nada | La IP pública de esta máquina no está en la lista de permitidos de Interfuerza | "Interfuerza necesita la IP pública de esta máquina en su lista de permitidos" más abajo |
 | `npm : File ...\npm.ps1 cannot be loaded because running scripts is disabled` | `npm` se resuelve a `npm.ps1`, que la política de ejecución por defecto bloquea | Use `npm.cmd` en su lugar: mismo programa, wrapper por lotes, ninguna configuración de máquina cambiada |

@@ -444,6 +444,7 @@ backup until the next successful run.
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
+| Login says `Pedí al administrador que te desbloquee.` and the locked user **is** the only administrator | Third lock in a row from wrong passwords: it lasts until an administrator unlocks, and none is signed in | On this PC, from the checkout: `node scripts\emergency.mjs unlock <username>` (reads `DATABASE_URL` from `.env`). The username is case-sensitive |
 | `FATAL: password authentication failed for user "postgres"` | PostgreSQL was installed with `winget`, which never showed the password screen | "Postgres installed with winget" above |
 | Every screen works but inventory/customer sync brings nothing | This machine's public IP is not on Interfuerza's allowlist | "Interfuerza needs this machine's public IP allowlisted" above |
 | `npm : File ...\npm.ps1 cannot be loaded because running scripts is disabled` | `npm` resolves to `npm.ps1`, which the default execution policy blocks | Use `npm.cmd` instead — same program, batch wrapper, no machine setting changed |

@@ -13,6 +13,7 @@ import { POST } from "@/app/api/login/route";
 import { POST as UNLOCK } from "@/app/api/users/[id]/unlock/route";
 import { userLocks } from "@/modules/auth/login-attempts";
 import { UNTIL_UNLOCKED } from "@/modules/auth/login-lock";
+import { unlockUser } from "../../scripts/emergency.mjs";
 import { hashPassword } from "@/modules/auth/password";
 import { db } from "@/shared/db/client";
 import { loginAttempts, users } from "@/shared/db/schema";
@@ -133,6 +134,49 @@ describe("login locks against a real database", () => {
 
       expect(until).toBeInstanceOf(Date);
       expect(until!.getTime() - Date.now()).toBeLessThanOrEqual(15 * 60_000);
+    });
+  });
+
+  describe("emergency command (S13: unlock on the workshop PC)", () => {
+    // One checked-out connection, as the command's own `pg.Client` is.
+    async function emergencyUnlock(username: string): Promise<boolean> {
+      const client = await db.$client.connect();
+      try {
+        return await unlockUser(client, username);
+      } finally {
+        client.release();
+      }
+    }
+
+    it("opens a login locked until an unlock, and records the user it unlocked", async () => {
+      const username = await createLogin("emergency");
+      const ip = freshIp();
+      for (let lock = 0; lock < 3; lock += 1) {
+        await db.insert(loginAttempts).values(
+          Array.from({ length: 5 }, (_, i) => ({
+            id: randomUUID(),
+            at: new Date(Date.now() - (3 - lock) * 24 * 60 * 60_000 + i * 60_000),
+            username,
+            ip,
+            outcome: "bad_password" as const,
+          })),
+        );
+      }
+      expect((await userLocks([username])).get(username)).toBe(UNTIL_UNLOCKED);
+
+      expect(await emergencyUnlock(username)).toBe(true);
+
+      expect((await userLocks([username])).has(username)).toBe(false);
+      const row = (await rowsFor(username)).find((attempt) => attempt.outcome === "unlocked");
+      expect(row).toMatchObject({ userId: made[made.length - 1], ip: null });
+      expect((await login(username, PASSWORD, ip)).status).toBe(200);
+    });
+
+    it("refuses a username that does not exist and records nothing", async () => {
+      const username = `${PREFIX}-ghost`;
+
+      expect(await emergencyUnlock(username)).toBe(false);
+      expect(await rowsFor(username)).toHaveLength(0);
     });
   });
 

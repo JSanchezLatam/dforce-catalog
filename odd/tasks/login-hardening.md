@@ -20,7 +20,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 - S10. Administrators see a log of login attempts at "Registro de accesos", under Configuración, below "Gestión de usuarios".
 - S11. The `secure` cookie is enabled only once the HTTPS tunnel exists (deferred).
 - S12. The screens, states and copy follow the approved mockup. Code input: one field, `inputmode="numeric"`, `autocomplete="one-time-code"`.
-- S13. If the sole administrator loses the phone and the recovery codes, an emergency command that runs only on the workshop PC resets that user's 2FA. Owner, asked "¿Hago el comando de emergencia en la PC del taller?": "Si".
+- S13. If the sole administrator loses the phone and the recovery codes, an emergency command that runs only on the workshop PC resets that user's 2FA. Owner, asked "¿Hago el comando de emergencia en la PC del taller?": "Si". Owner, 2026-11-19, asked "¿Agrego al comando de emergencia de la PC del taller la opción de desbloquear un usuario?": "Si, agregalo al comando de emergencia". The same command also unlocks a user, so a sole administrator locked until unlock (S6) can recover.
 
 ### Assumptions (not owner decisions yet)
 
@@ -39,7 +39,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T1 | S8, S9 | Password policy with server enforcement and fixtures | inline | done | `e70fe55` |
 | T2 | S6, S7, S12 | Attempts table, IP helper, user and IP lock, lock message | inline | done | `ca92976` |
 | T3 | S6, S12 | Admin unlock | inline | done | `12604ae`, `30e156a` |
-| T3b | S6, S12 | Escalating user lock (15 min, 1 h, until unlocked) | inline | in progress | |
+| T3b | S6, S12, S13 | Escalating user lock (15 min, 1 h, until unlocked) and the emergency command's unlock | inline | in progress | `f50ef51`, `93d9e13` |
 | T4 | S10, S12 | Access log screen | inline | pending | |
 | T5 | S2, S4 | TOTP core, secret encryption, recovery hashes, env key | inline | pending | |
 | T6 | S2 | Pending session, proxy gate, e2e fixtures | inline | pending | |
@@ -70,4 +70,5 @@ Route evidence: units depend on each other in order, so no writer trigger applie
 - L11 (2026-11-19, T3): an independent verifier passed S6 and S12 with no blockers. It confirmed through the running server that forged `x-user-*` headers never reach the route, and that `userLocks` and `reserveLoginAttempt` agree on case variants, long names and a concurrent unlock. GGA passed. The Gentle AI review (risk, reliability) was approved with two advisories: the lock badge is computed at page render, and the unlock relies on the counter-reset rule in `login-lock.ts`.
 - Follow-up: `reserveLoginAttempt` reads the clock before taking its advisory lock, so an attempt queued behind an unlock can be stamped earlier and be cleared by it (at most one failure per concurrent unlock). A direct POST also resets up to four earlier failures on a login that is not locked; it needs an admin session.
 - L12 (2026-11-19, owner): "Okey, creo que el bloqueo debe ser por mas tiempo. y tambien me di cuenta que si pongo un usuario que no existe tambien lo bloquea. creo que el bloqueo debe ser diferente". Explained that locking unknown usernames prevents user enumeration (OWASP); the owner kept it and chose the escalation: "el que crece: 15 min, 1 hora, después admin". S6 rewritten, T3b opened. The IP lock stays at 15 minutes.
-- Next: T3b, then T4.
+- L13 (2026-11-19, T3b): GGA and an independent verifier both flagged that a lock lasting until an unlock leaves a sole administrator with no way back in the app. Owner: "Si, agregalo al comando de emergencia". S13 extended; the command's `unlock` ships with T3b, its 2FA reset stays in T10. GGA's two stale-comment findings fixed in `93d9e13`. Verifier: PASS on S6, S7, S12, no blockers.
+- Next: T3b (emergency unlock), then T4.
