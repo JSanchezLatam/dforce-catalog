@@ -42,7 +42,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T3b | S6, S12, S13 | Escalating user lock (15 min, 1 h, until unlocked) and the emergency command's unlock | inline | done | `f50ef51`, `93d9e13`, `48bff30`, `2438e3d` (PR #369, merged `282c9d1`) |
 | T4a | S10, S12 | Access log screen, read-only, typed text of unknown logins hidden | inline | done | `281cc09`, `eca7ca9` (PR #370, merged `5acd6d3`) |
 | T4b | S10 | 90-day retention that keeps the rows a standing lock needs; unlock actor column | inline | done | `f86feb0`, `ee680ed`, `dada2e1` (PR #371, merged `e2781b3`) |
-| T5 | S2, S4 | TOTP core, secret encryption, recovery hashes, env key | inline | pending | |
+| T5 | S2, S4 | TOTP core, secret encryption, recovery hashes, env key (library only; storage lands with T6/T8) | inline | done | (this commit) |
 | T6 | S2 | Pending session, proxy gate, e2e fixtures | inline | pending | |
 | T7 | S4, S12 | Second-step page and recovery-code path | inline | pending | |
 | T8 | S2, S4, S12 | Enrolment, QR, codes, mandatory roles enforced | inline | pending | |
@@ -85,4 +85,14 @@ Route evidence: units depend on each other in order, so no writer trigger applie
   - The purge's "unknown login" test is an exact match against `users.username`, so a real username over 150 characters (`loginKey` truncation) would lose its old lock rows. `createUser` sets no length cap; capping usernames at 150 is the fix.
   - Unlocks with a null actor read as emergency ones: pre-0040 dev rows and hard-deleted administrators only.
   - A renamed user starts with no history under the new name; this predates T4b.
-- Next: T5 (TOTP core).
+- L24 (2026-11-20, T5): a library only, with no tables. Per `schema.ts`, a table lands with the code that first reads it (T6, T8), and when it does it stays off `users`, which is selected whole.
+  - `totp.ts`: RFC 6238 over RFC 4226 (SHA-1, 6 digits, 30 s) on `node:crypto`. The window is one step either side. `verifyTotp` returns the matched step and refuses any step at or before the last accepted one, so a code works once. It accepts six digits only and compares in constant time. The `otpauth` issuer is a parameter (per-install config).
+  - `secret-box.ts`: AES-256-GCM with a fresh IV and a `v1:` prefix. The user id is AAD, so sealed secrets cannot be swapped between users. HKDF derives separate subkeys per use.
+  - `recovery-codes.ts`: 10 Crockford codes `XXXX-XXXX` with no I/L/O/U and no modulo bias. Typed input forgives case, spaces and dashes, and reads O as 0 and I or L as 1. Codes are stored as HMAC-SHA256 under a derived key, not bcrypt: ten bcrypt checks at cost 12 per attempt would cost seconds of CPU on the PC that is also the database, and the key keeps a database copy alone from brute-forcing 40-bit codes. Losing the key loses the codes too, and S13 covers that.
+  - `TOTP_ENCRYPTION_KEY` is optional at boot (`env.ts`), read when 2FA needs it, sensitive, and validated to exactly 32 bytes. `env.example` leaves it blank on purpose, because `standalone.ps1` copies that file verbatim.
+  - Test vectors were fetched from the RFC texts (4226 Appendix D, 6238 Appendix B), including leading zeros.
+  - Checks: RED observed, and mutations caught by name (AAD removed, replay allowed, any code shape, no O→0, unkeyed hash, leading zeros lost, no clock drift). Suite 4914/4914, `tsc` clean, lint 0 errors (13 warnings).
+  - `security-audit` guidance, inline: no boundary is crossed yet, because nothing calls this code. Advisories: `base32Decode("")` yields an empty HMAC key, so callers must only pass generated secrets; Node's base64 decoding is lenient and only the length check guards the key. Process gap: the T4a and T4b log entries record verifier, GGA and review passes but no separate `security-audit` guidance pass.
+- Follow-ups recorded now, built later:
+  - T7: a wrong second-step code must count toward the user lock, or six digits can be guessed (likely a new `login_outcome` value, so a migration).
+  - T8: on an install with no key, a mandatory role cannot finish login, so who generates the key on the workshop PC is the owner's call before T8 ships. WINDOWS.md and WINDOWS.es.md get the key and backup note with T8.
