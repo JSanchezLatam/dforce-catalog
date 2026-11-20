@@ -69,7 +69,7 @@ describe("2FA password step against a real database", () => {
     await db.$client.end();
   });
 
-  it("answers a 2FA user's right password with a pending verify session of ten minutes at most", async () => {
+  it("answers a 2FA user's right password with a pending verify session of ten minutes", async () => {
     const username = await createLogin("pending", "enabled");
     const before = Date.now();
 
@@ -80,7 +80,8 @@ describe("2FA password step against a real database", () => {
     const token = response.cookies.get(SESSION_COOKIE)!.value;
     const row = await sessionRow(token);
     expect(row.pending).toBe("verify");
-    expect(row.expiresAt.getTime()).toBeGreaterThan(before);
+    // Bounded both ways: a 1-second session would also be "10 minutes or less".
+    expect(row.expiresAt.getTime()).toBeGreaterThanOrEqual(before + TEN_MINUTES);
     expect(row.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + TEN_MINUTES);
     expect(await outcomesFor(username)).toEqual(["password_ok"]);
   });

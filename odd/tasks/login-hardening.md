@@ -44,7 +44,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T4a | S10, S12 | Access log screen, read-only, typed text of unknown logins hidden | inline | done | `281cc09`, `eca7ca9` (PR #370, merged `5acd6d3`) |
 | T4b | S10 | 90-day retention that keeps the rows a standing lock needs; unlock actor column | inline | done | `f86feb0`, `ee680ed`, `dada2e1` (PR #371, merged `e2781b3`) |
 | T5 | S2, S4 | TOTP core, secret encryption, recovery hashes, env key (library only; storage lands with T6/T8) | inline | done | `a2718ad`, `168cfa3`, `30eb200` (PR #372, merged `823402f`) |
-| T6 | S2 | Pending session, proxy gate, e2e fixtures | delegated (context backstop, L28) | done | (this commit) |
+| T6 | S2 | Pending session, proxy gate, e2e fixtures | delegated (context backstop, L28) | done | `a038c74`, next commit |
 | T7 | S4, S12 | Second-step page and recovery-code path | inline | pending | |
 | T8 | S2, S4, S12 | Enrolment, QR, codes, mandatory roles enforced | inline | pending | |
 | T9 | S3, S9 | Trusted device, revoked on password change | inline | pending | |
@@ -179,3 +179,14 @@ Route evidence: units depend on each other in order, so no writer trigger applie
 
       A user without 2FA still gets a full session. QA rows were removed.
   - **Notes for T7.** `/two-factor` returns 404 until T7. Exempt paths forward `x-user-*`, so the verify route must read `pending` from the database, not from headers. `sinceLastReset` holds a second copy of the reset list in SQL. `STACK.md` should list the new tables.
+- L31 (2026-11-20, T6). GGA passed. An independent verifier passed S2 (T6 scope) and S6 with no blockers. Its checks:
+  - Path variants (trailing slash, case, encoding, `..`) against `handleProxy` with forged `x-user-id`: all blocked, with no identity forwarded.
+  - Paths sent to the running server at the LAN IP: none reached a handler without the proxy.
+  - Server actions: `loginAction` is the only one.
+  - Migrations 0000–0041 on a fresh database, and `drizzle-kit check`.
+
+  Fixed from its advisories: the pending TTL e2e now bounds the TTL from below too. A 1-second TTL fails it by name.
+
+  Recorded for later:
+  - The `enroll` gate must land in the same change that first issues `enroll` (T8).
+  - The verify route must read `pending` from the database (T7).
