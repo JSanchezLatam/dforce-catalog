@@ -34,7 +34,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
   }
 
-  const response = NextResponse.json({ ok: true, role: result.role });
+  // The cookie below carries the pending session's 10-minute expiry as is.
+  const response = NextResponse.json(
+    result.pending ? { ok: true, role: result.role, pending: result.pending } : { ok: true, role: result.role },
+  );
   response.cookies.set(SESSION_COOKIE, result.token, {
     httpOnly: true,
     sameSite: "lax",

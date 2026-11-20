@@ -44,7 +44,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T4a | S10, S12 | Access log screen, read-only, typed text of unknown logins hidden | inline | done | `281cc09`, `eca7ca9` (PR #370, merged `5acd6d3`) |
 | T4b | S10 | 90-day retention that keeps the rows a standing lock needs; unlock actor column | inline | done | `f86feb0`, `ee680ed`, `dada2e1` (PR #371, merged `e2781b3`) |
 | T5 | S2, S4 | TOTP core, secret encryption, recovery hashes, env key (library only; storage lands with T6/T8) | inline | done | `a2718ad`, `168cfa3`, `30eb200` (PR #372, merged `823402f`) |
-| T6 | S2 | Pending session, proxy gate, e2e fixtures | inline | pending | |
+| T6 | S2 | Pending session, proxy gate, e2e fixtures | delegated (context backstop, L28) | done | (this commit) |
 | T7 | S4, S12 | Second-step page and recovery-code path | inline | pending | |
 | T8 | S2, S4, S12 | Enrolment, QR, codes, mandatory roles enforced | inline | pending | |
 | T9 | S3, S9 | Trusted device, revoked on password change | inline | pending | |
@@ -150,3 +150,32 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - `navigator.clipboard` has no plain-HTTP support, so any copy button needs a fallback.
     - A missing key at the code step fails closed with a clear message.
     - Check mockup screen 4 for disable and regenerate actions, which need re-authentication. Mandatory roles cannot disable.
+- L30 (2026-11-20, T6), written by a bounded writer; the parent read the `proxy.ts`, `session.ts` and `authenticate.ts` diffs in full.
+  - **Storage.** Migration 0041 adds:
+    - the `user_totp` and `recovery_codes` tables;
+    - `sessions.pending` (`session_pending`);
+    - `login_attempts.second_factor`;
+    - the `password_ok` and `bad_code` outcomes.
+
+    It does not use the new enum values, and it runs on a fresh database and on the dev database at 0040.
+  - **Password step.** A correct password for a user with an enabled `user_totp` gets a 10-minute `verify` session and a `password_ok` attempt.
+  - **Proxy gate.**
+    - It runs before the forced change and alone decides a pending session, so the two screens cannot loop.
+    - It matches exactly `/two-factor`, `/api/two-factor/verify` and `/api/logout`.
+    - Blocked requests forward no identity.
+  - **Access log.** It reads `password_ok` and `bad_code` as Fallido, and a success's `second_factor` as its detail.
+  - **Checks.**
+    - RED was observed by name for every rule except the `password_ok` lock test, which passed on its first run and is backed by a mutation.
+    - Nine mutations were caught by name.
+    - The 5 login e2e files pass 85/85 on `dforce_e2e`.
+    - The suite passes 4962/4962, `tsc` is clean and lint shows 0 errors.
+    - At the LAN IP, with curl and a QA user carrying an enabled `user_totp`:
+      - the login returned `pending: "verify"`;
+      - `/inventory` returned 307 to `/two-factor`;
+      - `/api/account` returned 403 `second_factor_required`;
+      - the attempt was `password_ok`;
+      - the session was `verify` with 10 minutes left;
+      - logout returned 200.
+
+      A user without 2FA still gets a full session. QA rows were removed.
+  - **Notes for T7.** `/two-factor` returns 404 until T7. Exempt paths forward `x-user-*`, so the verify route must read `pending` from the database, not from headers. `sinceLastReset` holds a second copy of the reset list in SQL. `STACK.md` should list the new tables.

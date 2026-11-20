@@ -38,6 +38,8 @@ describe("Registro de accesos against a real database", () => {
       { id: randomUUID(), at: daysAgo(0.3), username: KNOWN, userId: null, ip: "192.168.1.23", outcome: "locked" },
       { id: randomUUID(), at: daysAgo(0.4), username: TYPED, userId: null, ip: "45.12.0.9", outcome: "unknown_user" },
       { id: randomUUID(), at: daysAgo(10), username: KNOWN, userId, ip: null, outcome: "unlocked", actorId: adminId },
+      // Outside the 30-day window, so the counts above stay as they are.
+      { id: randomUUID(), at: daysAgo(50), username: KNOWN, userId, ip: "192.168.1.23", outcome: "success", secondFactor: "totp" },
     ]);
   }, 60_000);
 
@@ -63,6 +65,12 @@ describe("Registro de accesos against a real database", () => {
     const rows = await listAccessLog({ days: 90 }, page, NOW);
 
     expect(JSON.stringify(rows)).not.toContain("Clave.Secreta9");
+  });
+
+  it("reads how a success passed its second step", async () => {
+    const rows = await listAccessLog({ days: 90, result: "success" }, page, NOW);
+
+    expect(rows.map((r) => r.secondFactor)).toEqual([null, "totp"]);
   });
 
   it("filters by user, result and period", async () => {

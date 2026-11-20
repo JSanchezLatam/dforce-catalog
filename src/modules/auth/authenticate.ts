@@ -1,14 +1,14 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 
 import { reserveLoginAttempt, settleLoginAttempt } from "@/modules/auth/login-attempts";
 import { loginKey } from "@/modules/auth/login-lock";
 import { verifyPassword } from "@/modules/auth/password";
 import { isUserActive, issueSession, type Role } from "@/modules/auth/session";
 import { db } from "@/shared/db/client";
-import { users } from "@/shared/db/schema";
+import { users, userTotp } from "@/shared/db/schema";
 
 export type AuthResult =
-  | { ok: true; token: string; expiresAt: Date; role: Role }
+  | { ok: true; token: string; expiresAt: Date; role: Role; pending?: "verify" }
   | { ok: false; lockedUntil?: Date };
 
 /** Compared when the user does not exist, so that case costs the same bcrypt time. Matches no password in use. */
@@ -25,6 +25,8 @@ export type AuthenticateUserDeps = {
   findUser?: (username: string) => Promise<AuthenticateUserRow | undefined>;
   verifyPassword?: typeof verifyPassword;
   issueSession?: typeof issueSession;
+  /** Whether the user finished enrolling (`enabled_at` set); a row mid-enrolment does not count. */
+  hasTwoFactor?: (userId: string) => Promise<boolean>;
   attempts?: { reserve: typeof reserveLoginAttempt; settle: typeof settleLoginAttempt };
   ip?: string | null;
 };
@@ -41,6 +43,15 @@ async function findUserDefault(username: string): Promise<AuthenticateUserRow | 
     .where(eq(users.username, username))
     .limit(1);
   return rows[0];
+}
+
+async function hasTwoFactorDefault(userId: string): Promise<boolean> {
+  const rows = await db
+    .select({ userId: userTotp.userId })
+    .from(userTotp)
+    .where(and(eq(userTotp.userId, userId), isNotNull(userTotp.enabledAt)))
+    .limit(1);
+  return rows.length > 0;
 }
 
 /**
@@ -67,6 +78,7 @@ export async function authenticateUser(
   const findUser = deps.findUser ?? findUserDefault;
   const doVerifyPassword = deps.verifyPassword ?? verifyPassword;
   const doIssueSession = deps.issueSession ?? issueSession;
+  const hasTwoFactor = deps.hasTwoFactor ?? hasTwoFactorDefault;
   const attempts = deps.attempts ?? { reserve: reserveLoginAttempt, settle: settleLoginAttempt };
 
   const reserved = await attempts.reserve({ username: loginKey(username), ip: deps.ip ?? null });
@@ -82,6 +94,14 @@ export async function authenticateUser(
   if (!passwordMatches || !isUserActive(user)) {
     await attempts.settle(reserved.attemptId, passwordMatches ? "inactive" : "bad_password", user.id);
     return { ok: false };
+  }
+
+  // The password alone is not a success: a success resets the lock counter, and
+  // the code step must keep counting toward it (L28).
+  if (await hasTwoFactor(user.id)) {
+    const { token, expiresAt } = await doIssueSession(user.id, user.role, { pending: "verify" });
+    await attempts.settle(reserved.attemptId, "password_ok", user.id);
+    return { ok: true, token, expiresAt, role: user.role, pending: "verify" };
   }
 
   const { token, expiresAt } = await doIssueSession(user.id, user.role);

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { CHANGE_PASSWORD_PATH, isPasswordChangeExempt } from "@/modules/auth/forced-change";
 import { SESSION_COOKIE, validateSession } from "@/modules/auth/session";
+import { isSecondFactorExempt, TWO_FACTOR_PATH } from "@/modules/auth/two-factor-gate";
 
 /**
  * Blanket route guard (NFR-5) — every route except /login (page + its own
@@ -87,7 +88,18 @@ export async function handleProxy(
   // The API-vs-page split is the same one denyAccess() already makes, for the
   // same reason: fetch() cannot usefully follow a redirect, and a browser tab
   // cannot render a JSON body.
-  if (user.mustChangePassword && !isPasswordChangeExempt(request.nextUrl.pathname)) {
+  // Second factor still owed (T6, L28). Runs before the forced change and
+  // decides a pending session alone: an exempt path skips the forced-change
+  // check too, or /two-factor and /change-password would redirect to each
+  // other forever. Blocked requests return before any identity is forwarded.
+  const pending = user.pending === "verify";
+  if (pending && !isSecondFactorExempt(request.nextUrl.pathname)) {
+    return isApiRoute
+      ? NextResponse.json({ error: "second_factor_required" }, { status: 403 })
+      : NextResponse.redirect(new URL(TWO_FACTOR_PATH, request.url));
+  }
+
+  if (!pending && user.mustChangePassword && !isPasswordChangeExempt(request.nextUrl.pathname)) {
     return isApiRoute
       ? NextResponse.json({ error: "password_change_required" }, { status: 403 })
       : NextResponse.redirect(new URL(CHANGE_PASSWORD_PATH, request.url));

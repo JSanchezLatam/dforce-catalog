@@ -76,6 +76,7 @@ describe("authenticateUser() — deactivation refusal (design.md Decision 7)", (
       }),
       verifyPassword: vi.fn().mockResolvedValue(true),
       issueSession: vi.fn().mockResolvedValue({ token: "tok", expiresAt: new Date() }),
+      hasTwoFactor: vi.fn().mockResolvedValue(false),
       attempts,
     };
 
@@ -105,6 +106,7 @@ describe("authenticateUser() — login attempts and locks", () => {
         findUser: vi.fn().mockResolvedValue(activeUser),
         verifyPassword: vi.fn().mockResolvedValue(true),
         issueSession: vi.fn().mockResolvedValue({ token: "t", expiresAt: new Date(0) }),
+        hasTwoFactor: vi.fn().mockResolvedValue(false),
         ...overrides,
       } satisfies AuthenticateUserDeps,
     };
@@ -162,5 +164,55 @@ describe("authenticateUser() — login attempts and locks", () => {
     expect(await authenticateUser("nadie", "clave", deps)).toEqual({ ok: false });
     expect(deps.verifyPassword).toHaveBeenCalledOnce();
     expect(settle).toHaveBeenCalledWith("attempt-1", "unknown_user", null);
+  });
+
+  describe("a user with 2FA enabled (T6, L28)", () => {
+    const pendingExpiry = new Date("2026-11-20T12:10:00.000Z");
+    const twoFactorDeps = () =>
+      attemptDeps({
+        hasTwoFactor: vi.fn().mockResolvedValue(true),
+        issueSession: vi.fn().mockResolvedValue({ token: "pending-token", expiresAt: pendingExpiry }),
+      });
+
+    it("issues a pending verify session, not a full one", async () => {
+      const { deps } = twoFactorDeps();
+
+      const result = await authenticateUser("ana", "correct", deps);
+
+      expect(deps.hasTwoFactor).toHaveBeenCalledWith("user-1");
+      expect(deps.issueSession).toHaveBeenCalledWith("user-1", "tecnico", { pending: "verify" });
+      expect(result).toEqual({ ok: true, token: "pending-token", expiresAt: pendingExpiry, role: "tecnico", pending: "verify" });
+    });
+
+    // A success resets the lock counter; the password alone must not.
+    it("settles the attempt as password_ok, not success", async () => {
+      const { deps, settle } = twoFactorDeps();
+
+      await authenticateUser("ana", "correct", deps);
+
+      expect(settle).toHaveBeenCalledWith("attempt-1", "password_ok", "user-1");
+      expect(settle).not.toHaveBeenCalledWith("attempt-1", "success", expect.anything());
+    });
+
+    it("still records a wrong password and issues nothing", async () => {
+      const { deps, settle } = attemptDeps({
+        hasTwoFactor: vi.fn().mockResolvedValue(true),
+        verifyPassword: vi.fn().mockResolvedValue(false),
+      });
+
+      expect(await authenticateUser("ana", "wrong", deps)).toEqual({ ok: false });
+      expect(settle).toHaveBeenCalledWith("attempt-1", "bad_password", "user-1");
+      expect(deps.issueSession).not.toHaveBeenCalled();
+    });
+
+    it("leaves a user without 2FA on a full session and success", async () => {
+      const { deps, settle } = attemptDeps();
+
+      const result = await authenticateUser("ana", "correct", deps);
+
+      expect(deps.issueSession).toHaveBeenCalledWith("user-1", "tecnico");
+      expect(settle).toHaveBeenCalledWith("attempt-1", "success", "user-1");
+      expect(result).toEqual({ ok: true, token: "t", expiresAt: new Date(0), role: "tecnico" });
+    });
   });
 });

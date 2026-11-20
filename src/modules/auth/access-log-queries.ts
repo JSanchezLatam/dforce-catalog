@@ -4,12 +4,13 @@ import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/shared/db/client";
 import { loginAttempts, users } from "@/shared/db/schema";
 
-import { RESULT_OUTCOMES, type AccessLogFilters } from "./access-log";
+import { RESULT_OUTCOMES, type AccessLogFilters, type SecondFactor } from "./access-log";
 import type { LoginOutcome } from "./login-lock";
 
 /**
  * `username` is null when the typed login matches no user: that text may be a
- * password (S10, L16). `actor` is the administrator who unlocked.
+ * password (S10, L16). `actor` is the administrator who unlocked;
+ * `secondFactor` how a success passed 2FA.
  */
 export type AccessLogRow = {
   id: string;
@@ -18,6 +19,7 @@ export type AccessLogRow = {
   ip: string | null;
   outcome: LoginOutcome;
   actor: string | null;
+  secondFactor: SecondFactor | null;
 };
 
 const actors = alias(users, "actor");
@@ -49,6 +51,7 @@ export async function listAccessLog(
         ip: loginAttempts.ip,
         outcome: loginAttempts.outcome,
         actor: actors.username,
+        secondFactor: loginAttempts.secondFactor,
       })
       .from(loginAttempts)
       .leftJoin(users, eq(users.username, loginAttempts.username))

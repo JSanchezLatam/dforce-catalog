@@ -6,7 +6,7 @@
  * here in PR8 (catalog-storage) — see design.md → "Database Schema Outline".
  * Each table is added alongside the code that first needs it.
  */
-import { boolean, check, date, foreignKey, index, integer, jsonb, pgEnum, pgSequence, pgTable, primaryKey, real, smallint, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { bigint, boolean, check, date, foreignKey, index, integer, jsonb, pgEnum, pgSequence, pgTable, primaryKey, real, smallint, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 /** R9.6 / NFR-8 — single `role` column, extensible without an RBAC library. */
@@ -31,6 +31,9 @@ export const users = pgTable("users", {
 
 export type User = typeof users.$inferSelect;
 
+/** A session still waiting on its second factor; null is a full session. `enroll` is gated with T8. */
+export const sessionPendingEnum = pgEnum("session_pending", ["verify", "enroll"]);
+
 export const sessions = pgTable("sessions", {
   /** Opaque random token — see modules/auth/session.ts. Not a JWT (design.md). */
   id: text("id").primaryKey(),
@@ -41,6 +44,7 @@ export const sessions = pgTable("sessions", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   /** Set on explicit logout/revocation (R9.3); NULL = still active. */
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  pending: sessionPendingEnum("pending"),
 });
 
 export type Session = typeof sessions.$inferSelect;
@@ -52,7 +56,13 @@ export const loginOutcomeEnum = pgEnum("login_outcome", [
   "inactive",
   "locked",
   "unlocked",
+  /** Right password, second factor still owed: neither a failure nor a reset. */
+  "password_ok",
+  /** Wrong second-step code: a failure toward the user lock (S6). */
+  "bad_code",
 ]);
+
+export const secondFactorEnum = pgEnum("second_factor", ["totp", "recovery", "trusted_device"]);
 
 /** Every login attempt: the source of the locks and of "Registro de accesos". */
 export const loginAttempts = pgTable(
@@ -67,12 +77,42 @@ export const loginAttempts = pgTable(
     outcome: loginOutcomeEnum("outcome").notNull(),
     /** Who unlocked, on `unlocked` rows; null for the workshop PC's emergency command. */
     actorId: text("actor_id").references(() => users.id, { onDelete: "set null" }),
+    /** How a `success` passed its second step; null without 2FA. */
+    secondFactor: secondFactorEnum("second_factor"),
   },
   (table) => [
     index("login_attempts_username_at_idx").on(table.username, table.at),
     index("login_attempts_ip_at_idx").on(table.ip, table.at),
     index("login_attempts_at_idx").on(table.at),
   ],
+);
+
+/**
+ * TOTP enrolment (S2), kept off `users`, which is selected whole. `enabled_at`
+ * is null while enrolling; `last_step` is the last accepted TOTP step.
+ */
+export const userTotp = pgTable("user_totp", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  secretSealed: text("secret_sealed").notNull(),
+  enabledAt: timestamp("enabled_at", { withTimezone: true }),
+  lastStep: bigint("last_step", { mode: "number" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Single-use recovery codes (S4), stored as keyed hashes. */
+export const recoveryCodes = pgTable(
+  "recovery_codes",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    codeHash: text("code_hash").notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+  },
+  (table) => [index("recovery_codes_user_id_idx").on(table.userId)],
 );
 
 /**

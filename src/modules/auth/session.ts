@@ -3,7 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 
 import { db } from "@/shared/db/client";
-import { sessions, users } from "@/shared/db/schema";
+import { sessions, type sessionPendingEnum, users } from "@/shared/db/schema";
 
 /** Cookie name shared by `proxy.ts` (reads it) and `/api/login` (sets it) — single source of truth. */
 export const SESSION_COOKIE = "session";
@@ -11,6 +11,9 @@ export const SESSION_COOKIE = "session";
 import type { Role } from "./roles";
 
 export type { Role };
+
+/** A session still owing its second factor (T6); null is a full session. */
+export type SessionPending = (typeof sessionPendingEnum.enumValues)[number];
 
 /** Minimal identity `can()` and route handlers need — not the full `users` row. */
 export type SessionUser = {
@@ -24,6 +27,8 @@ export type SessionUser = {
    * interception itself is WU3 scope, not this one.
    */
   mustChangePassword?: boolean;
+  /** Only set by `validateSession()`; the proxy gates a `verify` session. */
+  pending?: SessionPending | null;
 };
 
 /** Row shape `validateSession()`'s default query returns — the DB-free test seam's contract. */
@@ -34,6 +39,7 @@ export type SessionRow = {
   revokedAt: Date | null;
   deactivatedAt: Date | null;
   mustChangePassword: boolean;
+  pending: SessionPending | null;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -62,10 +68,18 @@ export function isUserActive(user: { deactivatedAt: Date | null }): boolean {
   return user.deactivatedAt === null;
 }
 
-export async function issueSession(userId: string, role: Role): Promise<{ token: string; expiresAt: Date }> {
+/** A session waiting on its code lives only long enough to type it (L28). */
+export const PENDING_SESSION_TTL_MS = 10 * 60 * 1000;
+
+export async function issueSession(
+  userId: string,
+  role: Role,
+  options: { pending?: SessionPending } = {},
+): Promise<{ token: string; expiresAt: Date }> {
   const token = generateToken();
-  const expiresAt = new Date(Date.now() + sessionTtlMs(role));
-  await db.insert(sessions).values({ id: token, userId, expiresAt });
+  const pending = options.pending ?? null;
+  const expiresAt = new Date(Date.now() + (pending ? PENDING_SESSION_TTL_MS : sessionTtlMs(role)));
+  await db.insert(sessions).values({ id: token, userId, expiresAt, pending });
   return { token, expiresAt };
 }
 
@@ -78,6 +92,7 @@ async function queryDefaultSessionRow(token: string): Promise<SessionRow | undef
       revokedAt: sessions.revokedAt,
       deactivatedAt: users.deactivatedAt,
       mustChangePassword: users.mustChangePassword,
+      pending: sessions.pending,
     })
     .from(sessions)
     .innerJoin(users, eq(sessions.userId, users.id))
@@ -106,7 +121,7 @@ export async function validateSession(
     return null;
   }
 
-  return { id: row.userId, role: row.role, mustChangePassword: row.mustChangePassword };
+  return { id: row.userId, role: row.role, mustChangePassword: row.mustChangePassword, pending: row.pending };
 }
 
 export async function revokeSession(token: string): Promise<void> {

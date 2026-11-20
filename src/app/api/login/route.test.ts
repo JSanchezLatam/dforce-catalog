@@ -22,6 +22,23 @@ describe("POST /api/login", () => {
     expect(cookie?.expires).toEqual(expiresAt);
   });
 
+  it("answers a full login with ok and the role only", async () => {
+    authenticateUser.mockResolvedValue({ ok: true, token: "t", expiresAt: new Date(Date.now() + 60_000), role: "tecnico" });
+
+    expect(await (await login()).json()).toEqual({ ok: true, role: "tecnico" });
+  });
+
+  it("answers a 2FA user's right password with a pending session that expires with it", async () => {
+    const expiresAt = new Date("2026-11-20T12:10:00.000Z");
+    authenticateUser.mockResolvedValue({ ok: true, token: "p", expiresAt, role: "administrador", pending: "verify" });
+
+    const response = await login();
+
+    expect(await response.json()).toEqual({ ok: true, role: "administrador", pending: "verify" });
+    expect(response.cookies.get("session")?.value).toBe("p");
+    expect(response.cookies.get("session")?.expires).toEqual(expiresAt);
+  });
+
   it("answers a locked login with 429, the wait, and no cookie", async () => {
     authenticateUser.mockResolvedValue({ ok: false, lockedUntil: new Date(Date.now() + 90_000) });
 
