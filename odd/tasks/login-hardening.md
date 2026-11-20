@@ -45,7 +45,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T4b | S10 | 90-day retention that keeps the rows a standing lock needs; unlock actor column | inline | done | `f86feb0`, `ee680ed`, `dada2e1` (PR #371, merged `e2781b3`) |
 | T5 | S2, S4 | TOTP core, secret encryption, recovery hashes, env key (library only; storage lands with T6/T8) | inline | done | `a2718ad`, `168cfa3`, `30eb200` (PR #372, merged `823402f`) |
 | T6 | S2 | Pending session, proxy gate, e2e fixtures | delegated (context backstop, L28) | done | `a038c74`, `5e34740`, `02c1d5c` (PR #373, merged `edb0cb0`) |
-| T7 | S4, S12 | Second-step page and recovery-code path | inline | pending | |
+| T7 | S4, S6, S12 | Second-step page and recovery-code path | delegated (context backstop, L28) | done | (this commit) |
 | T8 | S2, S4, S12 | Enrolment, QR, codes, mandatory roles enforced | inline | pending | |
 | T9 | S3, S9 | Trusted device, revoked on password change | inline | pending | |
 | T10 | S5, S13 | Admin 2FA reset, self-reset refusal, emergency command | inline | pending | |
@@ -201,3 +201,32 @@ Route evidence: units depend on each other in order, so no writer trigger applie
   7. Revoke the pending session and issue a full one.
 
   A missing `TOTP_ENCRYPTION_KEY` fails closed with a clear Spanish message. "Confiar en este dispositivo por 30 días" is T9, not T7.
+- L34 (2026-11-20, T7), written by a bounded writer. The parent read `second-factor.ts` and the `login-attempts.ts` refactor in full.
+  - **Locks.** `takeLoginLocks` and `currentLock` are now shared by the password step and the second step.
+  - **`verifySecondFactor` (L33):**
+    - runs in one transaction;
+    - reads the session from the database and again under the locks;
+    - refuses while locked;
+    - counts a wrong code as `bad_code`;
+    - enforces single use with a guarded UPDATE checked by row count;
+    - turns the `password_ok` row into a success stamped after the locks;
+    - revokes the pending session and issues a full one after commit;
+    - answers 503 with a missing key, and writes nothing when it does.
+  - **Screen and API.** `/two-factor` and `POST /api/two-factor/verify` are both registered as `session-only`.
+  - **Writer's checks:**
+    - mutations caught by name: single use (both layers together), lock refusal, the `bad_code` insert, `at = now`, the database pending check, and the missing key;
+    - suite 4995/4995, `tsc` exit 0, lint 0 errors;
+    - e2e 37/37 on `dforce_e2e`.
+  - **Parent's browser check at the LAN IP** (QA user with a sealed secret; the dev `.env` now holds a generated `TOTP_ENCRYPTION_KEY`, not printed):
+    - phone in dark mode: the screen matches mockup `s1`; the field has `inputmode` numeric, `autocomplete` one-time-code and a 44px height; every control is 44px; no horizontal scroll;
+    - a wrong code shows "Código incorrecto. Revisá la app e intentá de nuevo.";
+    - a right code lands in the app;
+    - desktop in dark mode: the recovery path accepts "7kqm 2xpa" once and marks it used;
+    - the rows read `bad_code`, `success`/`totp`, `success`/`recovery`;
+    - the pending sessions were revoked.
+
+    QA rows removed.
+  - **Recorded:**
+    - Each of the two single-use layers hides the other, so only both together are pinned.
+    - A refusal while locked writes no row.
+    - `STACK.md` still lacks the new tables (T8 or T10).
