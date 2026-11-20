@@ -92,7 +92,7 @@ export async function handleProxy(
   // decides a pending session alone: an exempt path skips the forced-change
   // check too, or /two-factor and /change-password would redirect to each
   // other forever. Blocked requests return before any identity is forwarded.
-  const pending = user.pending === "verify";
+  const pending = user.pending != null;
   if (pending && !isSecondFactorExempt(request.nextUrl.pathname)) {
     return isApiRoute
       ? NextResponse.json({ error: "second_factor_required" }, { status: 403 })

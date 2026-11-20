@@ -190,3 +190,4 @@ Route evidence: units depend on each other in order, so no writer trigger applie
   Recorded for later:
   - The `enroll` gate must land in the same change that first issues `enroll` (T8).
   - The verify route must read `pending` from the database (T7).
+- L32 (2026-11-20, T6): Gentle AI review (risk + reliability, granted under L27) APPROVED and acknowledged. Its advisory R1 is applied after the review, RED first: the proxy now gates any non-null `pending`, not only `verify`, so a later state (T8's `enroll`) fails closed. R3 (`/two-factor` is a 404 until T7) is expected and is closed by T7.

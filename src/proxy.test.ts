@@ -187,6 +187,17 @@ describe("handleProxy() — session still owing its second factor (T6, L28)", ()
     expect(response.headers.get("location")).toBeNull();
   });
 
+  // Fails closed: any pending state is a partial session, not only `verify`,
+  // so a later state (T8's `enroll`) cannot slip through as a full one.
+  it("gates a session pending in any other state too", async () => {
+    const validateSession = vi.fn().mockResolvedValue({ ...pending, pending: "enroll" });
+
+    const response = await handleProxy(apiRequest("/api/customers", "pending-token"), { validateSession });
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get("x-middleware-request-x-user-id")).toBeNull();
+  });
+
   // Exempt paths still overwrite the identity headers, so a forged client value never reaches the route.
   it("overwrites forged identity headers on an exempt path", async () => {
     const validateSession = vi.fn().mockResolvedValue(pending);
