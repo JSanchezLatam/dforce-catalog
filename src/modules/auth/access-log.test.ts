@@ -33,9 +33,20 @@ describe("describeAttempt", () => {
     ["inactive", "failed", "Usuario desactivado"],
     // A refused row does not say which lock refused it (user or IP).
     ["locked", "locked", "Rechazado: acceso bloqueado"],
-    ["unlocked", "unlocked", "Desbloqueo manual"],
   ] as const)("%s reads as %s", (outcome, result, detail) => {
-    expect(describeAttempt(outcome)).toEqual({ result, detail });
+    expect(describeAttempt(outcome, null)).toEqual({ result, detail });
+  });
+
+  it("names the administrator who unlocked", () => {
+    expect(describeAttempt("unlocked", "jsanchez")).toEqual({ result: "unlocked", detail: "Desbloqueado por jsanchez" });
+  });
+
+  // Only the workshop PC's emergency command unlocks without a session (S13).
+  it("reads an unlock with no administrator as the emergency command", () => {
+    expect(describeAttempt("unlocked", null)).toEqual({
+      result: "unlocked",
+      detail: "Desbloqueo de emergencia desde la PC del taller",
+    });
   });
 });
 

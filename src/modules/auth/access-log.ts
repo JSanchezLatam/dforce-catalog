@@ -52,10 +52,12 @@ const DETAIL: Record<LoginOutcome, string> = {
   inactive: "Usuario desactivado",
   // The row does not record which lock refused it, so the copy names neither.
   locked: "Rechazado: acceso bloqueado",
-  unlocked: "Desbloqueo manual",
+  // Only the emergency command unlocks without a session (S13); an admin unlock names its actor.
+  unlocked: "Desbloqueo de emergencia desde la PC del taller",
 };
 
-export function describeAttempt(outcome: LoginOutcome): { result: AccessLogResult; detail: string } {
+/** `actor` is the administrator who unlocked, on `unlocked` rows. */
+export function describeAttempt(outcome: LoginOutcome, actor: string | null): { result: AccessLogResult; detail: string } {
   const result = (Object.keys(RESULT_OUTCOMES) as AccessLogResult[]).find((r) => RESULT_OUTCOMES[r].includes(outcome))!;
-  return { result, detail: DETAIL[outcome] };
+  return { result, detail: outcome === "unlocked" && actor ? `Desbloqueado por ${actor}` : DETAIL[outcome] };
 }

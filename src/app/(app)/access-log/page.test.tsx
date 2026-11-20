@@ -40,9 +40,9 @@ beforeEach(() => {
   listUsers.mockResolvedValue([{ username: "mrodriguez" }, { username: "jsanchez" }]);
   q.countAccessLog.mockResolvedValue(3);
   q.listAccessLog.mockResolvedValue([
-    { id: "1", at, username: "mrodriguez", ip: "192.168.1.23", outcome: "locked" },
-    { id: "2", at, username: "jsanchez", ip: "181.197.4.20", outcome: "success" },
-    { id: "3", at, username: null, ip: "45.12.0.9", outcome: "unknown_user" },
+    { id: "1", at, username: "mrodriguez", ip: "192.168.1.23", outcome: "locked", actor: null },
+    { id: "2", at, username: "jsanchez", ip: "181.197.4.20", outcome: "success", actor: null },
+    { id: "3", at, username: null, ip: "45.12.0.9", outcome: "unknown_user", actor: null },
   ]);
 });
 

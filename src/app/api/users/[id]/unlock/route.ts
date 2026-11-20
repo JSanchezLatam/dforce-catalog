@@ -25,7 +25,12 @@ export async function handleUnlockUser(
   const user = await (deps.findUser ?? getUserProfile)(id);
   if (!user) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-  await (deps.unlockLogin ?? unlockLoginService)({ userId: id, username: user.username, ip: clientIp(request.headers) });
+  await (deps.unlockLogin ?? unlockLoginService)({
+    userId: id,
+    username: user.username,
+    ip: clientIp(request.headers),
+    actorId: actor.id,
+  });
   return NextResponse.json({ success: true });
 }
 

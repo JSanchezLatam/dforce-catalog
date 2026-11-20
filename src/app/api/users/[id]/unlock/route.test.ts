@@ -27,7 +27,7 @@ describe("POST /api/users/[id]/unlock", () => {
     expect(d.unlockLogin).not.toHaveBeenCalled();
   });
 
-  it("unlocks the user's exact login, recording the address the request came from", async () => {
+  it("unlocks the user's exact login, recording the address and the administrator who did it", async () => {
     const d = deps("MRodriguez");
 
     const response = await handleUnlockUser(req("administrador"), "user-9", d);
@@ -35,7 +35,7 @@ describe("POST /api/users/[id]/unlock", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ success: true });
     expect(d.findUser).toHaveBeenCalledWith("user-9");
-    expect(d.unlockLogin).toHaveBeenCalledWith({ userId: "user-9", username: "MRodriguez", ip: "192.168.1.5" });
+    expect(d.unlockLogin).toHaveBeenCalledWith({ userId: "user-9", username: "MRodriguez", ip: "192.168.1.5", actorId: "admin-1" });
   });
 
   it("returns 404 for a user that does not exist", async () => {

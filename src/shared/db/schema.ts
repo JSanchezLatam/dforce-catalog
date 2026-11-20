@@ -65,6 +65,8 @@ export const loginAttempts = pgTable(
     userId: text("user_id").references(() => users.id, { onDelete: "set null" }),
     ip: text("ip"),
     outcome: loginOutcomeEnum("outcome").notNull(),
+    /** Who unlocked, on `unlocked` rows; null for the workshop PC's emergency command. */
+    actorId: text("actor_id").references(() => users.id, { onDelete: "set null" }),
   },
   (table) => [
     index("login_attempts_username_at_idx").on(table.username, table.at),
