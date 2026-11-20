@@ -46,7 +46,8 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T5 | S2, S4 | TOTP core, secret encryption, recovery hashes, env key (library only; storage lands with T6/T8) | inline | done | `a2718ad`, `168cfa3`, `30eb200` (PR #372, merged `823402f`) |
 | T6 | S2 | Pending session, proxy gate, e2e fixtures | delegated (context backstop, L28) | done | `a038c74`, `5e34740`, `02c1d5c` (PR #373, merged `edb0cb0`) |
 | T7 | S4, S6, S12 | Second-step page and recovery-code path | delegated (context backstop, L28) | done | `bde0eb3`, `780b8f2`, `a7c1bc1` (PR #374, merged `d2e0eaf`) |
-| T8 | S2, S4, S12 | Enrolment, QR, codes, mandatory roles enforced | inline | pending | |
+| T8a | S2, S4, S12, S14 | Enrolment from Mi cuenta, recovery codes, regenerate, disable; key generation in `standalone.ps1` | delegated (context backstop) | in progress | |
+| T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | pending | |
 | T9 | S3, S9 | Trusted device, revoked on password change | inline | pending | |
 | T10 | S5, S13 | Admin 2FA reset, self-reset refusal, emergency command | inline | pending | |
 | T11 | S11 | `secure` cookie | inline | deferred until the tunnel | |
@@ -251,3 +252,26 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - A failed `issueSession` after commit spends the code.
     - A missing `password_ok` match skips the reset. App and database share one machine in the workshop.
     - An empty body counts as a wrong code.
+- L37 (2026-11-20, T8 design, from mockup screens `s3` and `s4`). T8 is split: T8a covers enrolment from Mi cuenta and S14; T8b covers the mandatory gate.
+
+  **Enrolment service.**
+  - Start enrolment: writes a new sealed secret with `enabled_at` null, replacing any unfinished one, and returns the otpauth URI, a QR rendered server-side with `qrcode`, and the base32 key grouped in fours. It is refused when 2FA is already enabled.
+  - Confirm: verifies a code against the unfinished secret. It then sets `enabled_at` and `last_step`, replaces the recovery codes with 10 new ones, and returns them in plain text once.
+  - Issuer: the workshop name from `workshop_config`, falling back to "DForce".
+
+  **Mi cuenta, section "Verificación en dos pasos", copy from `s4`.**
+  - Disabled: "Agregá un código de tu teléfono al iniciar sesión. Es opcional para tu rol." with Activar.
+  - Just enabled: the codes alert, the 10 codes, and Imprimir, Descargar .txt and "Ya los guardé".
+  - Active: "Activada el <fecha>. Te quedan N de 10 códigos de recuperación." with "Generar códigos nuevos" and Desactivar.
+  - "Generar códigos nuevos" and Desactivar ask for a current app code first: re-authentication. Desactivar is not offered to `administrador` or `jefe_taller` (S2).
+  - "Olvidar dispositivos de confianza" lands with T9.
+
+  **Platform constraints.** No clipboard: Descargar .txt uses a Blob plus `a[download]`, and Imprimir uses `window.print`, both of which work over plain HTTP.
+
+  **Missing key.** Activar answers with "La verificación en dos pasos no está disponible. Avisá al administrador."
+
+  **S14 key generation.**
+  - `standalone.ps1` writes a random 32-byte base64 `TOTP_ENCRYPTION_KEY` once, when `.env` lacks it or has it blank, with the same UTF-8-without-BOM writer, and tells the operator to keep a copy of `.env`.
+  - `scripts/macos/dev.sh` does the same for the dev Mac.
+  - WINDOWS.md and WINDOWS.es.md explain the key and the copy.
+  - STACK.md lists the new tables.
