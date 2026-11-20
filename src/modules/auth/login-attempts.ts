@@ -104,9 +104,14 @@ export const RETENTION_DAYS = 90;
  * S10 retention: deletes attempts older than 90 days that no lock reads any
  * more. That means refused attempts, which no lock counts, and rows strictly
  * before a later success or unlock of the same login (`sinceLastReset` starts
- * there). The IP lock reads only minutes back. A standing lock therefore keeps
- * every row it is computed from, however old, and the result cannot change
- * under a concurrent attempt: the last reset only moves forward.
+ * there). The IP lock reads only minutes back. A standing lock on a real user
+ * therefore keeps every row it is computed from, however old, and the result
+ * cannot change under a concurrent attempt: the last reset only moves forward.
+ *
+ * A login that matches no user loses its old rows even while locked. The owner
+ * chose this on 2026-11-20 ("Borrarlos a los 90 días"), because the typed text
+ * may be a password. The cost is a slow oracle: a name locked until unlock
+ * opens again after 90 days only if no such user exists.
  */
 export async function purgeOldLoginAttempts(now = new Date()): Promise<number> {
   const cutoff = new Date(now.getTime() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
@@ -115,11 +120,13 @@ export async function purgeOldLoginAttempts(now = new Date()): Promise<number> {
     .where(
       and(
         lt(loginAttempts.at, cutoff),
-        sql`(${loginAttempts.outcome} = 'locked' or exists (
-          select 1 from login_attempts s
-          where s.username = ${loginAttempts.username}
-            and s.outcome in ('success', 'unlocked')
-            and s.at > ${loginAttempts.at}))`,
+        sql`(${loginAttempts.outcome} = 'locked'
+          or not exists (select 1 from users u where u.username = ${loginAttempts.username})
+          or exists (
+            select 1 from login_attempts s
+            where s.username = ${loginAttempts.username}
+              and s.outcome in ('success', 'unlocked')
+              and s.at > ${loginAttempts.at}))`,
       ),
     )
     .returning({ id: loginAttempts.id });
