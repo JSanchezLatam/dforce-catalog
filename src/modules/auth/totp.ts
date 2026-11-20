@@ -9,6 +9,8 @@ const PERIOD_SECONDS = 30;
 /** One step either side: a phone clock up to about 30 seconds off still works. */
 const DRIFT_STEPS = 1;
 const SECRET_BYTES = 20;
+/** RFC 4226 §4 minimum; below it, a blank or damaged stored secret would give guessable codes. */
+const MIN_SECRET_BYTES = 16;
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
@@ -73,6 +75,7 @@ export function totpAt(secret: string, now: Date): string {
 export function verifyTotp(secret: string, code: string, now: Date, lastStep?: number): number | null {
   if (!/^\d{6}$/.test(code)) return null;
   const key = base32Decode(secret);
+  if (key.length < MIN_SECRET_BYTES) return null;
   const typed = Buffer.from(code);
   const current = stepAt(now);
   for (let step = current - DRIFT_STEPS; step <= current + DRIFT_STEPS; step += 1) {

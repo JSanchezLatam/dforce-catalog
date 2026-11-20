@@ -82,7 +82,7 @@ describe("totpKey", () => {
     vi.resetModules();
   });
 
-  it("reads TOTP_ENCRYPTION_KEY from the environment when asked, not at boot", async () => {
+  it("checks TOTP_ENCRYPTION_KEY when 2FA asks for it, so a missing key does not stop the boot", async () => {
     vi.stubEnv("TOTP_ENCRYPTION_KEY", "");
     vi.resetModules();
     const box = await import("./secret-box");

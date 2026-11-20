@@ -73,6 +73,11 @@ describe("verifyTotp", () => {
     expect(verifyTotp(RFC_SECRET, totpAt(RFC_SECRET, at(1111111111 + 30)), now, 37037037)).toBe(37037038);
   });
 
+  // An empty key's codes are computable by anyone: a blank or damaged stored secret must match nothing.
+  it.each(["", "   ", "GEZDGNBV"])("refuses every code for a missing or short secret: %j", (secret) => {
+    expect(verifyTotp(secret, totpAt(secret, now), now)).toBeNull();
+  });
+
   it.each(["", "05047", "0504711", "05047a", " 050471"])("refuses anything but six digits: %j", (code) => {
     expect(verifyTotp(RFC_SECRET, code, now)).toBeNull();
   });
