@@ -35,7 +35,8 @@ export async function unlockUser(client, username) {
     );
     await client.query("COMMIT");
   } catch (error) {
-    await client.query("ROLLBACK");
+    // A failed ROLLBACK (a dropped connection) must not hide why the unlock failed.
+    await client.query("ROLLBACK").catch(() => {});
     throw error;
   }
   return true;
@@ -58,7 +59,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.error("Uso: node scripts/emergency.mjs unlock <usuario>");
     process.exit(1);
   }
-  const client = new pg.Client({ connectionString: databaseUrl() });
+  const connectionString = databaseUrl();
+  if (!connectionString) {
+    // Without it, pg falls back to libpq defaults and could reach another database.
+    console.error("Falta DATABASE_URL: corré el comando desde la carpeta del proyecto, donde está el .env.");
+    process.exit(1);
+  }
+  const client = new pg.Client({ connectionString });
   await client.connect();
   try {
     if (await unlockUser(client, username)) {

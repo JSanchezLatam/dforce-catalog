@@ -134,6 +134,7 @@ describe("login locks against a real database", () => {
 
       expect(until).toBeInstanceOf(Date);
       expect(until!.getTime() - Date.now()).toBeLessThanOrEqual(15 * 60_000);
+      expect(until!.getTime() - Date.now()).toBeGreaterThan(14 * 60_000);
     });
   });
 
