@@ -4,17 +4,33 @@ export type LoginOutcome = "success" | "bad_password" | "unknown_user" | "inacti
 export type LockRule = {
   threshold: number;
   windowMs: number;
+  /** How long each lock in a row lasts; the last entry repeats. */
+  durationsMs: readonly number[];
   resetsOn: readonly LoginOutcome[];
 };
 
 const FIFTEEN_MINUTES = 15 * 60_000;
 const FAILURES: readonly LoginOutcome[] = ["bad_password", "unknown_user", "inactive"];
 
-export const USER_LOCK: LockRule = { threshold: 5, windowMs: FIFTEEN_MINUTES, resetsOn: ["success", "unlocked"] };
+/** 15 minutes, then 1 hour, then until an administrator unlocks (S6); a success or an unlock starts over. */
+export const USER_LOCK: LockRule = {
+  threshold: 5,
+  windowMs: FIFTEEN_MINUTES,
+  durationsMs: [FIFTEEN_MINUTES, 4 * FIFTEEN_MINUTES, Infinity],
+  resetsOn: ["success", "unlocked"],
+};
 /** A success does not clear an IP: one valid account must not reset a guessing run from that address. */
-export const IP_LOCK: LockRule = { threshold: 20, windowMs: FIFTEEN_MINUTES, resetsOn: [] };
+export const IP_LOCK: LockRule = { threshold: 20, windowMs: FIFTEEN_MINUTES, durationsMs: [FIFTEEN_MINUTES], resetsOn: [] };
 
-/** A lock still active now began from failures at most two windows old. */
+/**
+ * The end of a lock only an administrator can lift: the latest instant a Date
+ * holds. Callers compare against it with `isUntilUnlocked` and never wait on it
+ * (a `setTimeout` past 2^31 ms fires at once).
+ */
+export const UNTIL_UNLOCKED = new Date(8.64e15);
+export const isUntilUnlocked = (until: Date): boolean => until.getTime() === UNTIL_UNLOCKED.getTime();
+
+/** An IP lock still active now began from failures at most two windows old. */
 export const LOOKBACK_MS = 2 * FIFTEEN_MINUTES;
 
 /** Exactly as typed: usernames are case-sensitive, so `Ana` and `ana` keep separate counters. */
@@ -28,20 +44,24 @@ export function lockedUntil(
 ): Date | null {
   let failures: number[] = [];
   let until: number | null = null;
+  let locks = 0;
 
   for (const { at, outcome } of [...attempts].sort((a, b) => a.at.getTime() - b.at.getTime())) {
     if (rule.resetsOn.includes(outcome)) {
       failures = [];
       until = null;
+      locks = 0;
     } else if (FAILURES.includes(outcome) && (until === null || at.getTime() >= until)) {
       failures.push(at.getTime());
       const first = failures[failures.length - rule.threshold];
       if (first !== undefined && at.getTime() - first <= rule.windowMs) {
-        until = at.getTime() + rule.windowMs;
+        until = at.getTime() + rule.durationsMs[Math.min(locks, rule.durationsMs.length - 1)];
+        locks += 1;
         failures = [];
       }
     }
   }
 
-  return until !== null && until > now.getTime() ? new Date(until) : null;
+  if (until === null || until <= now.getTime()) return null;
+  return until === Infinity ? UNTIL_UNLOCKED : new Date(until);
 }

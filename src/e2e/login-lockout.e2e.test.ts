@@ -12,6 +12,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { POST } from "@/app/api/login/route";
 import { POST as UNLOCK } from "@/app/api/users/[id]/unlock/route";
 import { userLocks } from "@/modules/auth/login-attempts";
+import { UNTIL_UNLOCKED } from "@/modules/auth/login-lock";
+import { unlockUser } from "../../scripts/emergency.mjs";
 import { hashPassword } from "@/modules/auth/password";
 import { db } from "@/shared/db/client";
 import { loginAttempts, users } from "@/shared/db/schema";
@@ -87,6 +89,96 @@ describe("login locks against a real database", () => {
     const row = (await rowsFor(username)).find((attempt) => attempt.outcome === "unlocked");
     expect(row).toMatchObject({ userId: id, ip: "10.77.9.9" });
     expect((await login(username, PASSWORD, ip)).status).toBe(200);
+  });
+
+  describe("escalation (S6: 15 min, 1 hora, después admin)", () => {
+    const DAY = 24 * 60 * 60_000;
+    // Five failures a minute apart, `daysAgo` days back: one past lock, already over.
+    const pastLock = (username: string, daysAgo: number) =>
+      Array.from({ length: 5 }, (_, i) => ({
+        id: randomUUID(),
+        at: new Date(Date.now() - daysAgo * DAY + i * 60_000),
+        username,
+        ip: "10.77.8.8",
+        outcome: "bad_password" as const,
+      }));
+
+    it("locks until an administrator unlocks the third time, however old the earlier locks", async () => {
+      const username = await createLogin("third");
+      const ip = freshIp();
+      await db.insert(loginAttempts).values([
+        { id: randomUUID(), at: new Date(Date.now() - 4 * DAY), username, ip, outcome: "success" },
+        ...pastLock(username, 3),
+        ...pastLock(username, 2),
+      ]);
+
+      for (let i = 0; i < 5; i += 1) expect((await login(username, "incorrecta", ip)).status).toBe(401);
+      const refused = await login(username, PASSWORD, ip);
+
+      expect(refused.status).toBe(429);
+      expect(refused.headers.get("retry-after")).toBeNull();
+      expect((await userLocks([username])).get(username)).toBe(UNTIL_UNLOCKED);
+    });
+
+    it("starts over after a successful login between the locks", async () => {
+      const username = await createLogin("restart");
+      const ip = freshIp();
+      await db.insert(loginAttempts).values([
+        ...pastLock(username, 3),
+        ...pastLock(username, 2),
+        { id: randomUUID(), at: new Date(Date.now() - DAY), username, ip, outcome: "success" },
+      ]);
+
+      for (let i = 0; i < 5; i += 1) await login(username, "incorrecta", ip);
+      const until = (await userLocks([username])).get(username);
+
+      expect(until).toBeInstanceOf(Date);
+      expect(until!.getTime() - Date.now()).toBeLessThanOrEqual(15 * 60_000);
+      expect(until!.getTime() - Date.now()).toBeGreaterThan(14 * 60_000);
+    });
+  });
+
+  describe("emergency command (S13: unlock on the workshop PC)", () => {
+    // One checked-out connection, as the command's own `pg.Client` is.
+    async function emergencyUnlock(username: string): Promise<boolean> {
+      const client = await db.$client.connect();
+      try {
+        return await unlockUser(client, username);
+      } finally {
+        client.release();
+      }
+    }
+
+    it("opens a login locked until an unlock, and records the user it unlocked", async () => {
+      const username = await createLogin("emergency");
+      const ip = freshIp();
+      for (let lock = 0; lock < 3; lock += 1) {
+        await db.insert(loginAttempts).values(
+          Array.from({ length: 5 }, (_, i) => ({
+            id: randomUUID(),
+            at: new Date(Date.now() - (3 - lock) * 24 * 60 * 60_000 + i * 60_000),
+            username,
+            ip,
+            outcome: "bad_password" as const,
+          })),
+        );
+      }
+      expect((await userLocks([username])).get(username)).toBe(UNTIL_UNLOCKED);
+
+      expect(await emergencyUnlock(username)).toBe(true);
+
+      expect((await userLocks([username])).has(username)).toBe(false);
+      const row = (await rowsFor(username)).find((attempt) => attempt.outcome === "unlocked");
+      expect(row).toMatchObject({ userId: made[made.length - 1], ip: null });
+      expect((await login(username, PASSWORD, ip)).status).toBe(200);
+    });
+
+    it("refuses a username that does not exist and records nothing", async () => {
+      const username = `${PREFIX}-ghost`;
+
+      expect(await emergencyUnlock(username)).toBe(false);
+      expect(await rowsFor(username)).toHaveLength(0);
+    });
   });
 
   it("does not let parallel guesses pass the limit", async () => {

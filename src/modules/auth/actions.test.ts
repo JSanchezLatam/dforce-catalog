@@ -14,6 +14,7 @@ const authenticateUser = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/auth/authenticate", () => ({ authenticateUser }));
 
 import { loginAction } from "./actions";
+import { UNTIL_UNLOCKED } from "./login-lock";
 
 describe("loginAction", () => {
   /**
@@ -58,6 +59,17 @@ describe("loginAction", () => {
       detail: `Por seguridad, el acceso quedó bloqueado. Intentá de nuevo en ${text} o pedí al administrador que te desbloquee.`,
       lockedUsername: "ana",
       retryAt: new Date("2026-11-18T12:00:00.000Z").getTime() + remaining,
+    });
+  });
+
+  it("sends a login locked until an unlock to the administrator, with no time to wait", async () => {
+    authenticateUser.mockResolvedValue({ ok: false, lockedUntil: UNTIL_UNLOCKED });
+
+    const state = await loginAction(null, new FormData());
+
+    expect(state).toEqual({
+      error: "Demasiados intentos fallidos.",
+      detail: "Por seguridad, el acceso quedó bloqueado. Pedí al administrador que te desbloquee.",
     });
   });
 

@@ -8,6 +8,7 @@ import { render as rtlRender, screen, waitFor, within } from "@testing-library/r
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 
+import { UNTIL_UNLOCKED } from "@/modules/auth/login-lock";
 import { ToastProvider } from "@/shared/ui/ToastProvider";
 import { checkAdminSafety } from "./service";
 import { UsersTable, type UserRow } from "./UsersTable";
@@ -1062,6 +1063,14 @@ describe("UsersTable — a locked login (login-hardening S6)", () => {
 
     expect(within(rowFor("mrodriguez")).getByText("Bloqueado hasta 10:41")).toBeInTheDocument();
     expect(within(screen.getByTestId("users-cards")).getByText("Bloqueado hasta 10:41")).toBeInTheDocument();
+  });
+
+  it("shows a lock only an administrator can lift with no hour, and offers Desbloquear", () => {
+    render(<UsersTable users={[{ ...LOCKED, lockedUntil: UNTIL_UNLOCKED.toISOString() }]} />);
+
+    expect(within(rowFor("mrodriguez")).getByText("Bloqueado")).toBeInTheDocument();
+    expect(within(screen.getByTestId("users-cards")).getByText("Bloqueado")).toBeInTheDocument();
+    expect(within(rowFor("mrodriguez")).getByRole("button", { name: "Desbloquear" })).toBeInTheDocument();
   });
 
   it("offers Desbloquear only on a locked row", () => {
