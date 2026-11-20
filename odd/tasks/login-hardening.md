@@ -107,3 +107,46 @@ Route evidence: units depend on each other in order, so no writer trigger applie
   - T8: on an install with no key, a mandatory role cannot finish login, so who generates the key on the workshop PC is the owner's call before T8 ships. WINDOWS.md and WINDOWS.es.md get the key and backup note with T8.
 - Next: T6 (pending session, proxy gate, e2e fixtures).
 - L27 (2026-11-20, owner): "Si, opción 1, y seguí con todo lo que falta, solo detente cuando necesites algo, corre todas las revisiones necesarias, no me preguntes." Standing consent for every Gentle AI review of the remaining units; key generation becomes S14, built with T8.
+- L28 (2026-11-20, design for T6–T10, before any write). Grounded in `authenticate.ts`, `session.ts`, `proxy.ts`, `forced-change.ts`, `actions.ts` and `api/login/route.ts`.
+  - **Storage (T6, migration 0041).**
+    - `user_totp`: `user_id` PK, FK cascade. `secret_sealed`. `enabled_at`: null while enrolling. `last_step` bigint.
+    - `recovery_codes`: `id`, `user_id` FK cascade, `code_hash`, `used_at`.
+    - `sessions.pending`: null, `verify` or `enroll`.
+    - `login_attempts.second_factor`: null, `totp`, `recovery` or `trusted_device`.
+    - New `login_outcome` values: `password_ok` and `bad_code`.
+    - Nothing is added to `users`, which is selected whole.
+  - **Password step (T6).**
+    - A correct password for a user with an enabled `user_totp` settles the attempt as `password_ok`, not `success`. A `success` resets the lock counter (S6), and an attacker who knows the password could otherwise alternate password and code guesses forever.
+    - `password_ok` is neither a failure nor a reset in `lockedUntil`.
+    - The session is issued with `pending = 'verify'` and a 10-minute expiry.
+    - The `enroll` state and its gate land with T8, not T6 (L29).
+  - **Proxy gate (T6).** This mirrors the forced password change.
+    - `pending = 'verify'` comes first. Pages redirect to `/two-factor`. APIs answer 403 `second_factor_required`, except `/two-factor`, its API and `/api/logout`.
+    - Then `mustChangePassword`.
+    - These routes live outside `/login*`, which skips the proxy (L4).
+  - **Second step (T7).**
+    - A right code or an unused recovery code revokes the pending session and issues a fresh full one (no session fixation).
+    - It updates the `password_ok` row to `success`, setting `at` to the verification time (L29) and `second_factor` (`totp` or `recovery`). It stores the TOTP step in `last_step` and marks the recovery code used.
+    - The step has the same shape as `reserveLoginAttempt` (L29): it takes the user and IP advisory locks, refuses while either lock holds, and counts the attempt as a failure before it compares. A wrong code or recovery code then settles as `bad_code`, which counts toward the user lock (S6).
+    - The access log reads `password_ok` as Fallido "Falta el código de verificación" and `bad_code` as Fallido "Código incorrecto". A success with `second_factor` reads "Con 2FA", "Con código de recuperación" or "Dispositivo de confianza".
+  - **Enrolment (T8).**
+    - `/two-factor/setup` and the `/account` section show a QR (`qrcode`, issuer = workshop name from `workshop_config`) and the base32 secret, then a code check, then the 10 recovery codes, shown once.
+    - Optional for every role (S2) from `/account`, mandatory for `administrador` and `jefe_taller`. `pantalla` has none (A1).
+    - S14: `standalone.ps1` creates `TOTP_ENCRYPTION_KEY` once, plus the WINDOWS.md and WINDOWS.es.md note on keeping a copy of `.env`.
+  - **Trusted device (T9).** S3: "Recordar este dispositivo por 30 días" sets an httpOnly cookie holding a random token, stored hashed with `user_id` and `expires_at`. It skips the code and records `second_factor = 'trusted_device'`. A password change (S9) and a 2FA reset revoke every token (A5).
+  - **Reset (T10).**
+    - `POST /api/users/[id]/two-factor/reset` (`users.manage`) is refused for the caller's own id (S5). It deletes `user_totp` and `recovery_codes`, revokes sessions and trusted devices (A5), and logs a toast.
+    - Gestión de usuarios gets a 2FA column (Activada, Desactivada, Pendiente) per the mockup.
+    - `scripts/emergency.mjs reset-2fa <usuario>` does the same from the workshop PC (S13).
+  - **Route.** The context backstop holds: this session is long. Each unit goes to one bounded writer, in order, because each depends on the previous one. The parent verifies, runs the reviews and merges.
+- L29 (2026-11-20): the advisor's corrections to L28, applied above.
+  - **A success is stamped at verification time.** The `password_ok` row turns into `success` with `at = now()`. Otherwise `bad_code` rows typed after the password would still count after a correct login, because `sinceLastReset` counts rows at or after the reset. Pin it with an e2e: two wrong codes, then a right one, leave the counter empty.
+  - **The second step reserves before it compares and refuses while locked.** A pending session lives 10 minutes and several can exist. Single use is enforced in SQL: `last_step < step` and `used_at IS NULL`, checked by row count, with a concurrent e2e pair.
+  - **The `enroll` gate moves to T8.** In T6 it would lock every `administrador` and `jefe_taller` out of the branch until enrolment exists. When it lands, it applies only while `mustChangePassword` is false, so the two screens cannot redirect to each other forever.
+  - **T6 must find every caller of `validateSession` and every reader of the session cookie outside the proxy**, so none treats a pending session as full. Exempt paths match exactly. The verify action checks that its session is pending.
+  - **Migration 0041 does not use the new enum values in the same migration.** Run it on a fresh database and on the dev database at 0040.
+  - **Recorded for T8:**
+    - `scripts/macos/dev.sh` and `standalone.sh` also copy `env.example`. e2e needs the key stubbed.
+    - `navigator.clipboard` has no plain-HTTP support, so any copy button needs a fallback.
+    - A missing key at the code step fails closed with a clear message.
+    - Check mockup screen 4 for disable and regenerate actions, which need re-authentication. Mandatory roles cannot disable.
