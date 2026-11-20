@@ -14,7 +14,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 function matching(filters: AccessLogFilters, now: Date) {
   return and(
     gt(loginAttempts.at, new Date(now.getTime() - filters.days * DAY_MS)),
-    filters.user ? eq(loginAttempts.username, filters.user) : undefined,
+    // Through the join: matching the typed text would confirm a guess of it (L16).
+    filters.user ? eq(users.username, filters.user) : undefined,
     filters.result ? inArray(loginAttempts.outcome, [...RESULT_OUTCOMES[filters.result]]) : undefined,
   );
 }
@@ -45,6 +46,10 @@ export async function listAccessLog(
 }
 
 export async function countAccessLog(filters: AccessLogFilters, now = new Date()): Promise<number> {
-  const [row] = await db.select({ n: count() }).from(loginAttempts).where(matching(filters, now));
+  const [row] = await db
+    .select({ n: count() })
+    .from(loginAttempts)
+    .leftJoin(users, eq(users.username, loginAttempts.username))
+    .where(matching(filters, now));
   return row.n;
 }

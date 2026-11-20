@@ -19,6 +19,10 @@ describe("parseAccessLogFilters", () => {
   it("falls back to the default on values the screen does not offer", () => {
     expect(parseAccessLogFilters({ result: "everything", days: "365", user: "" })).toEqual({ days: 7 });
   });
+
+  it.each(["toString", "constructor", "__proto__"])("ignores the inherited name %s as a result", (result) => {
+    expect(parseAccessLogFilters({ result })).toEqual({ days: 7 });
+  });
 });
 
 describe("describeAttempt", () => {

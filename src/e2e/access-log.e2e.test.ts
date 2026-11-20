@@ -69,7 +69,12 @@ describe("Registro de accesos against a real database", () => {
       "unlocked",
     ]);
     expect(await countAccessLog({ days: 30, user: KNOWN }, NOW)).toBe(4);
-    expect(await listAccessLog({ days: 1, user: TYPED }, page, NOW)).toHaveLength(1);
+  });
+
+  // Filtering by the typed text would confirm a guess of it (L16): only a real login matches.
+  it("matches the user filter only against real logins", async () => {
+    expect(await listAccessLog({ days: 1, user: TYPED }, page, NOW)).toEqual([]);
+    expect(await countAccessLog({ days: 1, user: TYPED }, NOW)).toBe(0);
   });
 
   it("pages with limit and offset", async () => {

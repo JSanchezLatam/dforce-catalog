@@ -33,15 +33,15 @@ export type AccessLogFilters = { user?: string; result?: AccessLogResult; days: 
 type SearchParams = Record<string, string | string[] | undefined>;
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
 
-/** A stale or hand-typed link falls back to the default instead of an error page. */
+/** A stale or hand-typed link falls back to the default instead of an error page; `hasOwn`, so `toString` is not a result. */
 export function parseAccessLogFilters(params: SearchParams): AccessLogFilters {
   const user = first(params.user);
   const result = first(params.result);
   const days = Number(first(params.days));
   return {
     ...(user ? { user } : {}),
-    ...(result && result in ACCESS_LOG_RESULTS ? { result: result as AccessLogResult } : {}),
-    days: days in ACCESS_LOG_PERIODS ? (days as AccessLogPeriod) : DEFAULT_PERIOD,
+    ...(result && Object.hasOwn(ACCESS_LOG_RESULTS, result) ? { result: result as AccessLogResult } : {}),
+    days: Object.hasOwn(ACCESS_LOG_PERIODS, days) ? (days as AccessLogPeriod) : DEFAULT_PERIOD,
   };
 }
 
