@@ -33,8 +33,18 @@ describe("describeAttempt", () => {
     ["inactive", "failed", "Usuario desactivado"],
     // A refused row does not say which lock refused it (user or IP).
     ["locked", "locked", "Rechazado: acceso bloqueado"],
+    ["password_ok", "failed", "Falta el código de verificación"],
+    ["bad_code", "failed", "Código incorrecto"],
   ] as const)("%s reads as %s", (outcome, result, detail) => {
     expect(describeAttempt(outcome, null)).toEqual({ result, detail });
+  });
+
+  it.each([
+    ["totp", "Con 2FA"],
+    ["recovery", "Con código de recuperación"],
+    ["trusted_device", "Dispositivo de confianza"],
+  ] as const)("a success through %s reads %s", (secondFactor, detail) => {
+    expect(describeAttempt("success", null, secondFactor)).toEqual({ result: "success", detail });
   });
 
   it("names the administrator who unlocked", () => {

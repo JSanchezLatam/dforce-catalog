@@ -1,5 +1,14 @@
 /** Login lock rules: pure functions over the attempt log, no database. */
-export type LoginOutcome = "success" | "bad_password" | "unknown_user" | "inactive" | "locked" | "unlocked";
+export type LoginOutcome =
+  | "success"
+  | "bad_password"
+  | "unknown_user"
+  | "inactive"
+  | "locked"
+  | "unlocked"
+  // Right password, code still owed: neither a failure nor a reset (L28).
+  | "password_ok"
+  | "bad_code";
 
 export type LockRule = {
   threshold: number;
@@ -10,7 +19,7 @@ export type LockRule = {
 };
 
 const FIFTEEN_MINUTES = 15 * 60_000;
-const FAILURES: readonly LoginOutcome[] = ["bad_password", "unknown_user", "inactive"];
+const FAILURES: readonly LoginOutcome[] = ["bad_password", "unknown_user", "inactive", "bad_code"];
 
 /** 15 minutes, then 1 hour, then until an administrator unlocks (S6); a success or an unlock starts over. */
 export const USER_LOCK: LockRule = {

@@ -12,6 +12,7 @@ type FakeRow = {
   revokedAt: Date | null;
   deactivatedAt: Date | null;
   mustChangePassword: boolean;
+  pending: "verify" | "enroll" | null;
 };
 
 function activeRow(overrides: Partial<FakeRow> = {}): FakeRow {
@@ -22,6 +23,7 @@ function activeRow(overrides: Partial<FakeRow> = {}): FakeRow {
     revokedAt: null,
     deactivatedAt: null,
     mustChangePassword: false,
+    pending: null,
     ...overrides,
   };
 }
@@ -78,7 +80,7 @@ describe("validateSession() — DB-free via injected queryFn", () => {
     const result = await validateSession("token-1", queryFn);
 
     expect(queryFn).toHaveBeenCalledWith("token-1");
-    expect(result).toEqual({ id: "user-1", role: "administrador", mustChangePassword: false });
+    expect(result).toEqual({ id: "user-1", role: "administrador", mustChangePassword: false, pending: null });
   });
 
   it("returns null when no row is found (unknown token)", async () => {
@@ -118,6 +120,20 @@ describe("validateSession() — DB-free via injected queryFn", () => {
     const result = await validateSession("token-1", queryFn);
 
     expect(result?.mustChangePassword).toBe(true);
+  });
+});
+
+describe("validateSession() — a session still owing its second factor (T6)", () => {
+  it("carries pending verify, so the proxy can gate it", async () => {
+    const queryFn = vi.fn().mockResolvedValue(activeRow({ pending: "verify" }));
+
+    expect((await validateSession("token-1", queryFn))?.pending).toBe("verify");
+  });
+
+  it("still refuses an expired pending session", async () => {
+    const queryFn = vi.fn().mockResolvedValue(activeRow({ pending: "verify", expiresAt: new Date(Date.now() - 1) }));
+
+    expect(await validateSession("token-1", queryFn)).toBeNull();
   });
 });
 

@@ -96,6 +96,19 @@ describe("loginAction", () => {
     expect(set).toHaveBeenCalledWith("session", "t", expect.objectContaining({ expires: expiresAt }));
   });
 
+  // A right password for a 2FA user is only half a login (T6).
+  it("sends a pending verify login to the code screen, not the role's landing", async () => {
+    const expiresAt = new Date("2026-11-20T12:10:00.000Z");
+    authenticateUser.mockResolvedValue({ ok: true, token: "p", expiresAt, role: "administrador", pending: "verify" });
+    redirect.mockClear();
+    set.mockClear();
+
+    await loginAction(null, new FormData());
+
+    expect(redirect).toHaveBeenCalledWith("/two-factor");
+    expect(set).toHaveBeenCalledWith("session", "p", expect.objectContaining({ expires: expiresAt }));
+  });
+
   // The no-enumeration property (R9.1/9.2) is NOT tested here. It lives in
   // `authenticateUser`, which has three failure causes to keep identical —
   // unknown username, wrong password, deactivated account — and

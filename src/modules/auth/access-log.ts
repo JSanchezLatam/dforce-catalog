@@ -23,7 +23,7 @@ export const DEFAULT_PERIOD: AccessLogPeriod = 7;
 
 export const RESULT_OUTCOMES: Record<AccessLogResult, readonly LoginOutcome[]> = {
   success: ["success"],
-  failed: ["bad_password", "unknown_user", "inactive"],
+  failed: ["bad_password", "unknown_user", "inactive", "password_ok", "bad_code"],
   locked: ["locked"],
   unlocked: ["unlocked"],
 };
@@ -54,10 +54,27 @@ const DETAIL: Record<LoginOutcome, string> = {
   locked: "Rechazado: acceso bloqueado",
   // Only the emergency command unlocks without a session (S13); an admin unlock names its actor.
   unlocked: "Desbloqueo de emergencia desde la PC del taller",
+  // The second step was never passed: the row stays as the password left it.
+  password_ok: "Falta el código de verificación",
+  bad_code: "Código incorrecto",
 };
 
-/** `actor` is the administrator who unlocked, on `unlocked` rows. */
-export function describeAttempt(outcome: LoginOutcome, actor: string | null): { result: AccessLogResult; detail: string } {
+export type SecondFactor = "totp" | "recovery" | "trusted_device";
+
+const SECOND_FACTOR: Record<SecondFactor, string> = {
+  totp: "Con 2FA",
+  recovery: "Con código de recuperación",
+  trusted_device: "Dispositivo de confianza",
+};
+
+/** `actor` is the administrator who unlocked, on `unlocked` rows; `secondFactor` how a success passed 2FA. */
+export function describeAttempt(
+  outcome: LoginOutcome,
+  actor: string | null,
+  secondFactor: SecondFactor | null = null,
+): { result: AccessLogResult; detail: string } {
   const result = (Object.keys(RESULT_OUTCOMES) as AccessLogResult[]).find((r) => RESULT_OUTCOMES[r].includes(outcome))!;
-  return { result, detail: outcome === "unlocked" && actor ? `Desbloqueado por ${actor}` : DETAIL[outcome] };
+  if (outcome === "unlocked" && actor) return { result, detail: `Desbloqueado por ${actor}` };
+  if (outcome === "success" && secondFactor) return { result, detail: SECOND_FACTOR[secondFactor] };
+  return { result, detail: DETAIL[outcome] };
 }

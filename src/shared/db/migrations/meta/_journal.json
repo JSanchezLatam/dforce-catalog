@@ -288,6 +288,13 @@
       "when": 1795204094639,
       "tag": "0040_login_attempt_actor",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1795214194110,
+      "tag": "0041_two_factor",
+      "breakpoints": true
     }
   ]
 }

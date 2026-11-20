@@ -49,6 +49,22 @@ describe("lockedUntil", () => {
     expect(lockedUntil(attempts, NOW, USER_LOCK)).toBeNull();
   });
 
+  // A right password still owing its code must not reset the count (L28), or
+  // password and code guesses could alternate forever.
+  it("neither counts nor resets on password_ok: four failures and a password_ok do not lock, a fifth failure does", () => {
+    const attempts = [failure(10), failure(9), failure(8), failure(7), { at: minutesAgo(6), outcome: "password_ok" as const }];
+
+    expect(lockedUntil(attempts, NOW, USER_LOCK)).toBeNull();
+    expect(lockedUntil([...attempts, failure(5)], NOW, USER_LOCK)).toEqual(new Date(minutesAgo(5).getTime() + 15 * 60_000));
+  });
+
+  it("counts a wrong second-step code toward the lock", () => {
+    const code = (minutes: number) => ({ at: minutesAgo(minutes), outcome: "bad_code" as const });
+    const attempts = [failure(10), code(9), code(8), code(7), code(6)];
+
+    expect(lockedUntil(attempts, NOW, USER_LOCK)).toEqual(new Date(minutesAgo(6).getTime() + 15 * 60_000));
+  });
+
   describe("escalation (S6: 15 min, 1 hora, después admin)", () => {
     // Five failures one minute apart, the last one `minutes` ago: one lock each.
     const run = (minutes: number) => [4, 3, 2, 1, 0].map((offset) => failure(minutes + offset));

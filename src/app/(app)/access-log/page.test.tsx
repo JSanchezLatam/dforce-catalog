@@ -40,9 +40,9 @@ beforeEach(() => {
   listUsers.mockResolvedValue([{ username: "mrodriguez" }, { username: "jsanchez" }]);
   q.countAccessLog.mockResolvedValue(3);
   q.listAccessLog.mockResolvedValue([
-    { id: "1", at, username: "mrodriguez", ip: "192.168.1.23", outcome: "locked", actor: null },
-    { id: "2", at, username: "jsanchez", ip: "181.197.4.20", outcome: "success", actor: null },
-    { id: "3", at, username: null, ip: "45.12.0.9", outcome: "unknown_user", actor: null },
+    { id: "1", at, username: "mrodriguez", ip: "192.168.1.23", outcome: "locked", actor: null, secondFactor: null },
+    { id: "2", at, username: "jsanchez", ip: "181.197.4.20", outcome: "success", actor: null, secondFactor: null },
+    { id: "3", at, username: null, ip: "45.12.0.9", outcome: "unknown_user", actor: null, secondFactor: null },
   ]);
 });
 
@@ -93,6 +93,17 @@ describe("Registro de accesos", () => {
       "Fallido",
       "Usuario desconocido",
     ]);
+  });
+
+  it("says how a success passed its second step", async () => {
+    q.listAccessLog.mockResolvedValue([
+      { id: "4", at, username: "jsanchez", ip: "192.168.1.23", outcome: "success", actor: null, secondFactor: "totp" },
+    ]);
+
+    await open();
+
+    const row = within(screen.getByTestId("access-log-table")).getAllByRole("row")[1];
+    expect(within(row).getAllByRole("cell").map((c) => c.textContent).slice(2, 4)).toEqual(["Exitoso", "Con 2FA"]);
   });
 
   it("reads the filters from the address and offers the users as options", async () => {

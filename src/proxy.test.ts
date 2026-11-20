@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { CHANGE_PASSWORD_PATH } from "@/modules/auth/forced-change";
 import { SESSION_COOKIE } from "@/modules/auth/session";
+import { TWO_FACTOR_PATH } from "@/modules/auth/two-factor-gate";
 import { handleProxy } from "./proxy";
 
 function pageRequest(path: string, token?: string) {
@@ -151,6 +152,113 @@ describe("handleProxy() — forced password change (design.md Decision 8)", () =
 
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ error: "Unauthorized" });
+  });
+});
+
+describe("handleProxy() — session still owing its second factor (T6, L28)", () => {
+  const pending = { id: "user-1", role: "administrador", mustChangePassword: false, pending: "verify" };
+
+  it("redirects a page navigation to the code screen and forwards no identity", async () => {
+    const validateSession = vi.fn().mockResolvedValue(pending);
+
+    const response = await handleProxy(pageRequest("/inventory", "pending-token"), { validateSession });
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(`http://localhost${TWO_FACTOR_PATH}`);
+    expect(response.headers.get("x-middleware-request-x-user-id")).toBeNull();
+  });
+
+  it("returns 403 second_factor_required for an API route and forwards no identity", async () => {
+    const validateSession = vi.fn().mockResolvedValue(pending);
+
+    const response = await handleProxy(apiRequest("/api/customers", "pending-token"), { validateSession });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ error: "second_factor_required" });
+    expect(response.headers.get("x-middleware-request-x-user-id")).toBeNull();
+  });
+
+  it.each([TWO_FACTOR_PATH, "/api/two-factor/verify", "/api/logout"])("lets the exempt path %s through", async (path) => {
+    const validateSession = vi.fn().mockResolvedValue(pending);
+
+    const response = await handleProxy(pageRequest(path, "pending-token"), { validateSession });
+
+    expect(response.status).not.toBe(403);
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  // Fails closed: any pending state is a partial session, not only `verify`,
+  // so a later state (T8's `enroll`) cannot slip through as a full one.
+  it("gates a session pending in any other state too", async () => {
+    const validateSession = vi.fn().mockResolvedValue({ ...pending, pending: "enroll" });
+
+    const response = await handleProxy(apiRequest("/api/customers", "pending-token"), { validateSession });
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get("x-middleware-request-x-user-id")).toBeNull();
+  });
+
+  // Exempt paths still overwrite the identity headers, so a forged client value never reaches the route.
+  it("overwrites forged identity headers on an exempt path", async () => {
+    const validateSession = vi.fn().mockResolvedValue(pending);
+    const request = new NextRequest(`http://localhost${TWO_FACTOR_PATH}`, {
+      headers: { cookie: `${SESSION_COOKIE}=pending-token`, "x-user-id": "forged", "x-user-role": "tecnico" },
+    });
+
+    const response = await handleProxy(request, { validateSession });
+
+    expect(response.headers.get("x-middleware-request-x-user-id")).toBe("user-1");
+    expect(response.headers.get("x-middleware-request-x-user-role")).toBe("administrador");
+  });
+
+  // The verify gate comes before the forced password change and decides a
+  // pending session alone: chaining both would bounce /two-factor and
+  // /change-password into each other forever.
+  describe("with a forced password change too", () => {
+    const both = { ...pending, mustChangePassword: true };
+
+    it.each([TWO_FACTOR_PATH, "/api/two-factor/verify"])("lets %s through, with no redirect loop", async (path) => {
+      const validateSession = vi.fn().mockResolvedValue(both);
+
+      const response = await handleProxy(pageRequest(path, "pending-token"), { validateSession });
+
+      expect(response.status).not.toBe(403);
+      expect(response.headers.get("location")).toBeNull();
+    });
+
+    it("sends the change-password screen to the code screen first", async () => {
+      const validateSession = vi.fn().mockResolvedValue(both);
+
+      const response = await handleProxy(pageRequest(CHANGE_PASSWORD_PATH, "pending-token"), { validateSession });
+
+      expect(response.headers.get("location")).toBe(`http://localhost${TWO_FACTOR_PATH}`);
+    });
+
+    it("answers the password API with second_factor_required", async () => {
+      const validateSession = vi.fn().mockResolvedValue(both);
+
+      const response = await handleProxy(apiRequest("/api/account/password", "pending-token"), { validateSession });
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: "second_factor_required" });
+    });
+  });
+
+  it("denies an invalid session on the code screen like any other path", async () => {
+    const validateSession = vi.fn().mockResolvedValue(null);
+
+    const response = await handleProxy(pageRequest(TWO_FACTOR_PATH, "bad-token"), { validateSession });
+
+    expect(response.headers.get("location")).toBe("http://localhost/login");
+  });
+
+  it("leaves a full session (pending null) unaffected", async () => {
+    const validateSession = vi.fn().mockResolvedValue({ ...pending, pending: null });
+
+    const response = await handleProxy(pageRequest("/inventory", "good-token"), { validateSession });
+
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("x-middleware-request-x-user-id")).toBe("user-1");
   });
 });
 
