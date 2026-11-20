@@ -16,6 +16,7 @@ vi.mock("@/modules/portal-sync/job", () => ({ registerPortalSyncWorker: spy("por
 vi.mock("@/modules/portal-sync/reconcile", () => ({ registerPortalReconcile: spy("portal-reconcile") }));
 vi.mock("@/modules/feedback/worker", () => ({ registerFeedbackWorkers: spy("feedback") }));
 vi.mock("@/modules/usage/worker", () => ({ registerUsageDelivery: spy("usage") }));
+vi.mock("@/modules/auth/retention-worker", () => ({ registerLoginAttemptsRetention: spy("login-retention") }));
 
 describe("registerNodeWorkers", () => {
   it("registers the portal sync worker and the nightly reconcile at boot", async () => {
@@ -34,5 +35,11 @@ describe("registerNodeWorkers", () => {
     const { registerNodeWorkers } = await import("./instrumentation-node");
     await registerNodeWorkers();
     expect(calls).toContain("usage");
+  });
+
+  it("registers the daily login attempts retention at boot", async () => {
+    const { registerNodeWorkers } = await import("./instrumentation-node");
+    await registerNodeWorkers();
+    expect(calls).toContain("login-retention");
   });
 });

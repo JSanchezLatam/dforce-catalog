@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, lt, ne, sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { loginAttempts } from "@/shared/db/schema";
@@ -90,6 +90,34 @@ export async function unlockLogin(input: { userId: string; username: string; ip:
       outcome: "unlocked",
     });
   });
+}
+
+export const RETENTION_DAYS = 90;
+
+/**
+ * S10 retention: deletes attempts older than 90 days that no lock reads any
+ * more. That means refused attempts, which no lock counts, and rows strictly
+ * before a later success or unlock of the same login (`sinceLastReset` starts
+ * there). The IP lock reads only minutes back. A standing lock therefore keeps
+ * every row it is computed from, however old, and the result cannot change
+ * under a concurrent attempt: the last reset only moves forward.
+ */
+export async function purgeOldLoginAttempts(now = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const deleted = await db
+    .delete(loginAttempts)
+    .where(
+      and(
+        lt(loginAttempts.at, cutoff),
+        sql`(${loginAttempts.outcome} = 'locked' or exists (
+          select 1 from login_attempts s
+          where s.username = ${loginAttempts.username}
+            and s.outcome in ('success', 'unlocked')
+            and s.at > ${loginAttempts.at}))`,
+      ),
+    )
+    .returning({ id: loginAttempts.id });
+  return deleted.length;
 }
 
 /** The logins among `usernames` locked right now, with the end of each lock. */
