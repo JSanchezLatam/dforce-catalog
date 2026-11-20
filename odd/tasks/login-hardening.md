@@ -39,7 +39,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T1 | S8, S9 | Password policy with server enforcement and fixtures | inline | done | `e70fe55` |
 | T2 | S6, S7, S12 | Attempts table, IP helper, user and IP lock, lock message | inline | done | `ca92976` |
 | T3 | S6, S12 | Admin unlock | inline | done | `12604ae`, `30e156a` |
-| T3b | S6, S12, S13 | Escalating user lock (15 min, 1 h, until unlocked) and the emergency command's unlock | inline | done | `f50ef51`, `93d9e13`, `48bff30` |
+| T3b | S6, S12, S13 | Escalating user lock (15 min, 1 h, until unlocked) and the emergency command's unlock | inline | done | `f50ef51`, `93d9e13`, `48bff30`, `2438e3d` (PR #369, merged `282c9d1`) |
 | T4 | S10, S12 | Access log screen | inline | pending | |
 | T5 | S2, S4 | TOTP core, secret encryption, recovery hashes, env key | inline | pending | |
 | T6 | S2 | Pending session, proxy gate, e2e fixtures | inline | pending | |
