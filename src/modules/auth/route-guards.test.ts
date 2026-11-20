@@ -119,6 +119,7 @@ export const ROUTE_GUARDS: Record<
   "/workshop-config": { GET: "workshop.edit" },
   "/account": { GET: "account.self" },
   "/users": { GET: "users.manage" },
+  "/access-log": { GET: "users.manage" },
   "/technicians": { GET: "technicians.manage" },
   // metrics-dashboard: admin and jefe read `/metrics`; the técnico reads only `/mis-numeros`.
   "/metrics": { GET: "metrics.read" },
