@@ -65,6 +65,21 @@ async function consume(
   key: Buffer,
   now: Date,
 ): Promise<Passed | "wrong" | "unavailable"> {
+  const [totp] = await tx
+    .select({ secretSealed: userTotp.secretSealed, lastStep: userTotp.lastStep })
+    .from(userTotp)
+    .where(and(eq(userTotp.userId, input.userId), isNotNull(userTotp.enabledAt)));
+  if (!totp) return "wrong";
+  // Checked for both paths: a key that no longer opens the secret is an install
+  // problem, not a guess, and it must not lock anyone. A recovery code alone
+  // cannot tell, because a wrong key and a wrong code both just fail to match.
+  let secret: string;
+  try {
+    secret = openSecret(totp.secretSealed, input.userId, key);
+  } catch {
+    return "unavailable";
+  }
+
   if (input.recoveryCode !== undefined) {
     const unused = await tx
       .select({ id: recoveryCodes.id, codeHash: recoveryCodes.codeHash })
@@ -80,18 +95,6 @@ async function consume(
     return used.length === 1 ? { secondFactor: "recovery" } : "wrong";
   }
 
-  const [totp] = await tx
-    .select({ secretSealed: userTotp.secretSealed, lastStep: userTotp.lastStep })
-    .from(userTotp)
-    .where(and(eq(userTotp.userId, input.userId), isNotNull(userTotp.enabledAt)));
-  if (!totp) return "wrong";
-  let secret: string;
-  try {
-    secret = openSecret(totp.secretSealed, input.userId, key);
-  } catch {
-    // A key that no longer opens the secret is an install problem, not a guess: it must not lock anyone.
-    return "unavailable";
-  }
   const step = verifyTotp(secret, input.code ?? "", now, totp.lastStep ?? undefined);
   if (step === null) return "wrong";
   const stored = await tx

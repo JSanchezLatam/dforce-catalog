@@ -236,6 +236,24 @@ describe("2FA second step against a real database", () => {
     expect(await outcomesFor(username)).toEqual(["password_ok"]);
   });
 
+  // B1: a wrong recovery code and a key that no longer matches look alike to the
+  // HMAC, so the recovery path must check the key too, or a restore without .env
+  // locks the administrator out through the very codes meant to get them in.
+  it("answers 503 and writes no bad_code for a recovery code when the key does not open the user's secret", async () => {
+    const { id, username } = await createLogin("rekeyed-recovery");
+    const oldKey = Buffer.alloc(32, 9);
+    const [code] = generateRecoveryCodes(1);
+    await db.update(userTotp).set({ secretSealed: sealSecret(SECRET, id, oldKey) }).where(eq(userTotp.userId, id));
+    await db.insert(recoveryCodes).values({ id: randomUUID(), userId: id, codeHash: hashRecoveryCode(code, oldKey) });
+    const pending = await pendingToken(username);
+
+    const response = await verify(pending, { recoveryCode: code });
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "unavailable" });
+    expect(await outcomesFor(username)).toEqual(["password_ok"]);
+  });
+
   it("answers no_pending_session for an expired pending session", async () => {
     const { username } = await createLogin("expired");
     const pending = await pendingToken(username);

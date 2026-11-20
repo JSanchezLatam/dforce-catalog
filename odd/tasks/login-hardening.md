@@ -230,3 +230,16 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - Each of the two single-use layers hides the other, so only both together are pinned.
     - A refusal while locked writes no row.
     - `STACK.md` still lacks the new tables (T8 or T10).
+- L35 (2026-11-20, T7). GGA passed.
+  - **Verifier result.** The independent verifier found one blocker, B1. Everything else passed:
+    - 15 parallel wrong codes across 3 pending sessions wrote exactly 5 `bad_code` rows;
+    - alternating password logins and wrong codes still locked;
+    - concurrent replay of a TOTP code and of a recovery code gave one win each;
+    - the session swap held;
+    - the lock refactor matches the previous code.
+  - **B1.** With a key that no longer opens the secret, the recovery-code path counted each try as `bad_code`, because a wrong key and a wrong code both fail to match the HMAC. A restore without `.env` would then lock the administrator out through the very codes meant to get them in.
+  - **Fix.** RED first, by name, with the verifier's probe as an e2e: the key is checked by opening the TOTP secret before either path, so the answer is 503 with nothing written.
+  - **Advisories kept:**
+    - a failed `issueSession` after commit spends the code (fails closed);
+    - refusals while locked write no row;
+    - two racing logins may pair a session with the other login's `password_ok` row; both become `success`, so no harm.
