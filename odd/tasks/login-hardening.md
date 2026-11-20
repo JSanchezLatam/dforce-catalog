@@ -20,6 +20,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 - S10. Administrators see a log of login attempts at "Registro de accesos", under Configuración, below "Gestión de usuarios". Owner, 2026-11-20, on what a login matching no user shows: "Ocultarlo (Recomendado)". Owner, 2026-11-20, on its old rows: "Borrarlos a los 90 días (Recomendado)" — they go after 90 days like the rest, even if that name is still locked.
 - S11. The `secure` cookie is enabled only once the HTTPS tunnel exists (deferred).
 - S12. The screens, states and copy follow the approved mockup. Code input: one field, `inputmode="numeric"`, `autocomplete="one-time-code"`.
+- S14. Owner, 2026-11-20, asked who generates `TOTP_ENCRYPTION_KEY` on the workshop PC: "Si, opción 1" — the install script (`standalone.ps1`) creates it once, when `.env` lacks it, and says so. The owner keeps a copy of `.env` outside the PC, because the R2 backup holds the database, not the key.
 - S13. If the sole administrator loses the phone and the recovery codes, an emergency command that runs only on the workshop PC resets that user's 2FA. Owner, asked "¿Hago el comando de emergencia en la PC del taller?": "Si". Owner, 2026-11-19, asked "¿Agrego al comando de emergencia de la PC del taller la opción de desbloquear un usuario?": "Si, agregalo al comando de emergencia". The same command also unlocks a user, so a sole administrator locked until unlock (S6) can recover.
 
 ### Assumptions (not owner decisions yet)
@@ -105,3 +106,4 @@ Route evidence: units depend on each other in order, so no writer trigger applie
   - T7: a wrong second-step code must count toward the user lock, or six digits can be guessed (likely a new `login_outcome` value, so a migration).
   - T8: on an install with no key, a mandatory role cannot finish login, so who generates the key on the workshop PC is the owner's call before T8 ships. WINDOWS.md and WINDOWS.es.md get the key and backup note with T8.
 - Next: T6 (pending session, proxy gate, e2e fixtures).
+- L27 (2026-11-20, owner): "Si, opción 1, y seguí con todo lo que falta, solo detente cuando necesites algo, corre todas las revisiones necesarias, no me preguntes." Standing consent for every Gentle AI review of the remaining units; key generation becomes S14, built with T8.
