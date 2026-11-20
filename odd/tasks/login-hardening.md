@@ -41,7 +41,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T3 | S6, S12 | Admin unlock | inline | done | `12604ae`, `30e156a` |
 | T3b | S6, S12, S13 | Escalating user lock (15 min, 1 h, until unlocked) and the emergency command's unlock | inline | done | `f50ef51`, `93d9e13`, `48bff30`, `2438e3d` (PR #369, merged `282c9d1`) |
 | T4a | S10, S12 | Access log screen, read-only, typed text of unknown logins hidden | inline | done | `281cc09`, `eca7ca9` (PR #370, merged `5acd6d3`) |
-| T4b | S10 | 90-day retention that keeps the rows a standing lock needs; unlock actor column | inline | done | `f86feb0`, `ee680ed`, `dada2e1` |
+| T4b | S10 | 90-day retention that keeps the rows a standing lock needs; unlock actor column | inline | done | `f86feb0`, `ee680ed`, `dada2e1` (PR #371, merged `e2781b3`) |
 | T5 | S2, S4 | TOTP core, secret encryption, recovery hashes, env key | inline | pending | |
 | T6 | S2 | Pending session, proxy gate, e2e fixtures | inline | pending | |
 | T7 | S4, S12 | Second-step page and recovery-code path | inline | pending | |
@@ -85,3 +85,4 @@ Route evidence: units depend on each other in order, so no writer trigger applie
   - The purge's "unknown login" test is an exact match against `users.username`, so a real username over 150 characters (`loginKey` truncation) would lose its old lock rows. `createUser` sets no length cap; capping usernames at 150 is the fix.
   - Unlocks with a null actor read as emergency ones: pre-0040 dev rows and hard-deleted administrators only.
   - A renamed user starts with no history under the new name; this predates T4b.
+- Next: T5 (TOTP core).
