@@ -7,22 +7,30 @@
  * so this module is unit-testable with injected fakes and no live Postgres
  * connection.
  */
-import { and, count, desc, eq, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, exists, gte, lt, or, sql } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { unaccentIlike } from "@/shared/db/text-search";
-import { cliente, ordenServicio, ordenServicioItem, vehiculo, type OrdenServicio, type OrdenServicioItem } from "@/shared/db/schema";
+import { cliente, ordenServicio, ordenServicioItem, ordenTecnico, vehiculo, type OrdenServicio, type OrdenServicioItem } from "@/shared/db/schema";
 import type { OrderScope } from "./scope";
 import type { OrderStatus } from "./transitions";
 
 export const DEFAULT_PAGE_SIZE = 10;
 
-export type OrdenServicioFilters = { status?: OrderStatus; search?: string };
+/**
+ * `tecnicoId` and `closedIn` (a `YYYY-MM` key) are admin/jefe filters: the page
+ * only reads them for a caller who sees every order. `closedIn` counts exactly
+ * what Métricas' `closedByTecnicoMonth` counts, so its link lands on the same rows.
+ */
+export type OrdenServicioFilters = { status?: OrderStatus; search?: string; tecnicoId?: string; closedIn?: string };
+
+// A constant, not input — the same inlined zone metrics/queries.ts buckets months in.
+const PANAMA = sql.raw("'America/Panama'");
 
 export type OrdenServicioDetail = { orden: OrdenServicio; items: OrdenServicioItem[] };
 
 /** Mirrors ClienteListItem: a Pick plus the joined fields, nothing wider (D9). */
-export type OrdenServicioListItem = Pick<OrdenServicio, "id" | "status" | "appointmentAt"> & {
+export type OrdenServicioListItem = Pick<OrdenServicio, "id" | "status" | "appointmentAt" | "completedAt"> & {
   clienteName: string;
   /** Null while an Agendada order has no vehicle yet (the `vehiculo` join is a left join). */
   vehiculoPlate: string | null;
@@ -45,8 +53,21 @@ export function buildOrdenServicioWhere(filters: OrdenServicioFilters, scope: Or
   const search = term
     ? or(unaccentIlike(cliente.name, pattern), unaccentIlike(cliente.phone, pattern), unaccentIlike(vehiculo.plate, pattern))
     : undefined;
-  // The scope is ANDed with the search, never ORed: a search must not reach an order the caller cannot see.
-  return and(scope.where, status, search);
+  const assigned = filters.tecnicoId
+    ? exists(
+        db
+          .select({ one: ordenTecnico.ordenId })
+          .from(ordenTecnico)
+          .where(and(eq(ordenTecnico.ordenId, ordenServicio.id), eq(ordenTecnico.tecnicoId, filters.tecnicoId))),
+      )
+    : undefined;
+  const monthStart = sql`(${`${filters.closedIn}-01`}::timestamp AT TIME ZONE ${PANAMA})`;
+  const nextMonthStart = sql`((${`${filters.closedIn}-01`}::timestamp + interval '1 month') AT TIME ZONE ${PANAMA})`;
+  const closed = filters.closedIn
+    ? and(eq(ordenServicio.status, "done"), gte(ordenServicio.completedAt, monthStart), lt(ordenServicio.completedAt, nextMonthStart))
+    : undefined;
+  // The scope is ANDed with every filter, never ORed: no filter may reach an order the caller cannot see.
+  return and(scope.where, status, search, assigned, closed);
 }
 
 /**
@@ -164,6 +185,7 @@ export function ordenServicioListQuery(
       id: ordenServicio.id,
       status: ordenServicio.status,
       appointmentAt: ordenServicio.appointmentAt,
+      completedAt: ordenServicio.completedAt,
       clienteName: cliente.name,
       vehiculoPlate: vehiculo.plate,
       vehiculoMake: vehiculo.make,

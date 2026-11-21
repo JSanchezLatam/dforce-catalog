@@ -1,5 +1,7 @@
 "use client";
 
+import { X } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -29,10 +31,17 @@ const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
 export function ServiceOrderFilters({
   selected,
   pageSize,
+  tecnicos = [],
+  closedInLabel,
 }: {
-  selected: { search?: string; status?: OrderStatus };
+  selected: { search?: string; status?: OrderStatus; tecnicoId?: string; closedIn?: string };
   pageSize: number;
+  /** Admin/jefe only — the page passes an empty roster to everyone else, and no roster means no select. */
+  tecnicos?: readonly { id: string; nombre: string }[];
+  /** `Noviembre 2026` while the month filter Métricas links to is on. */
+  closedInLabel?: string;
 }) {
+  const tecnicoItems = tecnicos.map(({ id, nombre }) => ({ value: id, label: nombre }));
   const { text, setText, applyFilter, clearAll, hasTypedText } = useUrlFilters({ search: selected.search ?? "" });
 
   return (
@@ -61,7 +70,25 @@ export function ServiceOrderFilters({
           </SelectContent>
         </Select>
       </div>
-      {(hasTypedText || selected.search || selected.status) && (
+      {tecnicoItems.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <Label>Técnico</Label>
+          <Select items={tecnicoItems} value={selected.tecnicoId ?? ""} onValueChange={(v) => applyFilter("tecnico", v ?? "")}>
+            <SelectTrigger className="w-48" aria-label="Técnico">
+              <SelectValue placeholder="Todos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">Todos</SelectItem>
+              {tecnicoItems.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      {(hasTypedText || selected.search || selected.status || selected.tecnicoId || selected.closedIn) && (
         <Button type="button" variant="outline" size="default" onClick={clearAll}>
           Limpiar
         </Button>
@@ -81,6 +108,21 @@ export function ServiceOrderFilters({
           </SelectContent>
         </Select>
       </div>
+      {closedInLabel && (
+        <div className="basis-full">
+          <span className="inline-flex items-center gap-1 rounded-full bg-muted py-0.5 pr-0.5 pl-3 text-sm">
+            Cerradas en {closedInLabel.toLowerCase()}
+            <button
+              type="button"
+              aria-label="Quitar filtro de mes"
+              onClick={() => applyFilter("mes", "")}
+              className="grid size-7 place-items-center rounded-full hover:bg-accent pointer-coarse:size-11"
+            >
+              <X className="size-3.5" aria-hidden="true" />
+            </button>
+          </span>
+        </div>
+      )}
     </div>
   );
 }

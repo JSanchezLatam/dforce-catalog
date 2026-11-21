@@ -20,8 +20,9 @@ const createTrigger = vi.hoisted(() => vi.fn(() => null));
 vi.mock("@/modules/service-orders/ServiceOrderFormTrigger", () => ({
   ServiceOrderFormTrigger: createTrigger,
 }));
+const filtersProps = vi.hoisted(() => vi.fn<(props: Record<string, unknown>) => null>(() => null));
 vi.mock("@/modules/service-orders/ServiceOrderFilters", () => ({
-  ServiceOrderFilters: () => null,
+  ServiceOrderFilters: filtersProps,
 }));
 // WU6's bulk status action calls `router.refresh()` after the run, exactly as
 // the row-level `OrderStatusControls` already does, and `RefreshListButton`
@@ -40,7 +41,12 @@ vi.mock("@/modules/service-orders/queries", async (importOriginal) => {
   return { ...actual, listOrdenesServicio, countOrdenesServicio };
 });
 
-const listTecnicos = vi.hoisted(() => vi.fn(async () => [{ id: "t1", nombre: "Ana Mecánica", userId: null, deactivatedAt: null, createdAt: new Date("2026-01-01") }]));
+type RosterRow = { id: string; nombre: string; userId: string | null; deactivatedAt: Date | null; createdAt: Date };
+const listTecnicos = vi.hoisted(() =>
+  vi.fn<(options?: { includeInactive?: boolean }) => Promise<RosterRow[]>>(async () => [
+    { id: "t1", nombre: "Ana Mecánica", userId: null, deactivatedAt: null, createdAt: new Date("2026-01-01") },
+  ]),
+);
 // Real return shape: `{ id } | null` (technicians/queries.ts).
 const findTecnicoByUserId = vi.hoisted(() => vi.fn<(userId: string) => Promise<{ id: string } | null>>(async () => null));
 vi.mock("@/modules/technicians/queries", () => ({ listTecnicos, findTecnicoByUserId }));
@@ -51,6 +57,7 @@ vi.mock("@/modules/inventory-view/queries", async (importOriginal) => {
   return { ...actual, listInventory };
 });
 
+import { formatDateTime } from "@/shared/datetime";
 import { ToastProvider } from "@/shared/ui/ToastProvider";
 import ServiceOrdersPage from "./page";
 
@@ -919,17 +926,22 @@ describe("ServiceOrdersPage — technicians and ready_for_review", () => {
   });
 
   it("hands the create form the ACTIVE roster as plain id/nombre pairs", async () => {
+    // The whole roster is read once (the admin/jefe filter needs the deactivated
+    // too); a deactivated technician is still never offered for new work.
+    listTecnicos.mockResolvedValueOnce([
+      { id: "t1", nombre: "Ana Mecánica", userId: null, deactivatedAt: null, createdAt: new Date("2026-01-01") },
+      { id: "t0", nombre: "Baja Vieja", userId: null, deactivatedAt: new Date("2026-02-01"), createdAt: new Date("2026-01-01") },
+    ]);
     render(await ServiceOrdersPage({ searchParams: Promise.resolve({}) }));
 
-    // No `includeInactive`: a deactivated technician is never offered for new work.
-    expect(listTecnicos).toHaveBeenCalledWith();
+    expect(listTecnicos).toHaveBeenCalledTimes(1);
     const props = (createTrigger.mock.calls as unknown as [Record<string, unknown>][])[0][0];
     // RSC boundary: plain data only, nothing the roster row carries beyond what the picker shows.
     expect(props.tecnicos).toEqual([{ id: "t1", nombre: "Ana Mecánica" }]);
   });
 
-  it("reads no roster for a caller who cannot create an order", async () => {
-    can.mockImplementation((_user, action) => action !== "service-orders.create");
+  it("reads no roster for a caller who can neither create an order nor see every order", async () => {
+    can.mockImplementation((_user, action) => action !== "service-orders.create" && action !== "service-orders.readAll");
     render(await ServiceOrdersPage({ searchParams: Promise.resolve({}) }));
 
     expect(listTecnicos).not.toHaveBeenCalled();
@@ -963,5 +975,105 @@ describe("ServiceOrdersPage — an Agendada order with no vehicle yet", () => {
     expect(cards.getByText("Sin vehículo")).toBeInTheDocument();
     expect(screen.getByTestId("service-orders-table")).not.toHaveTextContent("null");
     expect(screen.getByTestId("service-orders-cards")).not.toHaveTextContent("null");
+  });
+});
+
+/**
+ * technician-orders — the "Técnico" filter and the "closed in month" filter
+ * Métricas links to. Admin/jefe only (owner, 2026-11-21): for anyone without
+ * `service-orders.readAll` both params are dropped before they reach a query.
+ */
+describe("ServiceOrdersPage — técnico and month filters", () => {
+  const ROSTER = [
+    { id: "t1", nombre: "Luis Pérez", userId: null, deactivatedAt: null, createdAt: new Date("2026-01-01") },
+    { id: "t9", nombre: "Ex Técnico", userId: null, deactivatedAt: new Date("2026-05-01"), createdAt: new Date("2026-01-01") },
+  ];
+
+  beforeEach(() => {
+    listOrdenesServicio.mockClear();
+    countOrdenesServicio.mockClear();
+    filtersProps.mockClear();
+    listTecnicos.mockResolvedValue(ROSTER);
+  });
+  afterEach(() => {
+    can.mockImplementation(() => true);
+  });
+
+  it("hands tecnicoId and closedIn to both the list and the count for admin/jefe", async () => {
+    render(await renderPage({ tecnico: "t1", mes: "2026-11", status: "done" }));
+
+    const expected = { status: "done", tecnicoId: "t1", closedIn: "2026-11" };
+    expect(listOrdenesServicio.mock.calls[0][0]).toEqual(expected);
+    expect(countOrdenesServicio.mock.calls[0][0]).toEqual(expected);
+  });
+
+  it("drops both params for a técnico: they never reach the query, and no roster reaches the filter", async () => {
+    can.mockImplementation((_user, action) => action !== "service-orders.readAll" && action !== "service-orders.create");
+    render(await renderPage({ tecnico: "t1", mes: "2026-11" }));
+
+    expect(listOrdenesServicio.mock.calls[0][0]).toEqual({});
+    expect(countOrdenesServicio.mock.calls[0][0]).toEqual({});
+    expect(filtersProps.mock.calls[0][0].tecnicos).toEqual([]);
+  });
+
+  it("ignores a técnico id outside the roster and a malformed month", async () => {
+    render(await renderPage({ tecnico: "nope", mes: "2026-13" }));
+    expect(listOrdenesServicio.mock.calls[0][0]).toEqual({});
+
+    listOrdenesServicio.mockClear();
+    render(await renderPage({ mes: "0000-01" }));
+    expect(listOrdenesServicio.mock.calls[0][0]).toEqual({});
+  });
+
+  it("offers every roster técnico in the filter, deactivated ones included, so history stays reachable", async () => {
+    render(await renderPage({}));
+
+    expect(listTecnicos).toHaveBeenCalledWith({ includeInactive: true });
+    expect(filtersProps.mock.calls[0][0].tecnicos).toEqual([
+      { id: "t1", nombre: "Luis Pérez" },
+      { id: "t9", nombre: "Ex Técnico" },
+    ]);
+  });
+
+  it("passes the month label to the filter strip and links back to Métricas on that month", async () => {
+    render(await renderPage({ tecnico: "t1", mes: "2026-11" }));
+
+    expect(filtersProps.mock.calls[0][0].closedInLabel).toBe("Noviembre 2026");
+    expect(screen.getByRole("link", { name: /Volver a Métricas/ })).toHaveAttribute("href", "/metrics?mes=2026-11");
+  });
+
+  it("keeps tecnico and mes on the pagination and sort links", async () => {
+    render(await renderPage({ tecnico: "t1", mes: "2026-11" }));
+
+    const hrefs = [
+      ...screen.getAllByRole("link").map((a) => a.getAttribute("href")!),
+    ].filter((h) => h.startsWith("/service-orders?") && (h.includes("page=") || h.includes("sort=")));
+    expect(hrefs.length).toBeGreaterThan(0);
+    for (const href of hrefs) {
+      const url = new URL(href, "http://localhost");
+      expect(url.searchParams.get("tecnico")).toBe("t1");
+      expect(url.searchParams.get("mes")).toBe("2026-11");
+    }
+  });
+
+  it("shows the Cerrada column instead of Cita while the month filter is on", async () => {
+    const completedAt = new Date("2026-11-14T15:00:00Z");
+    const appointmentAt = new Date("2026-11-03T14:00:00Z");
+    listOrdenesServicio.mockResolvedValueOnce([orden({ status: "done", completedAt, appointmentAt })]);
+    countOrdenesServicio.mockResolvedValueOnce(1);
+    render(await ServiceOrdersPage({ searchParams: Promise.resolve({ tecnico: "t1", mes: "2026-11" }) }));
+
+    expect(screen.getByRole("columnheader", { name: "Cerrada" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Cita" })).not.toBeInTheDocument();
+    // The cell and the phone card both show the closing date, never the appointment.
+    const table = screen.getByTestId("service-orders-table");
+    const cards = screen.getByTestId("service-orders-cards");
+    // ICU puts a narrow no-break space before "a. m."; toHaveTextContent collapses the element's whitespace, not ours.
+    const shown = (date: Date) => formatDateTime(date).replace(/\s+/g, " ");
+    for (const region of [table, cards]) {
+      expect(region).toHaveTextContent(shown(completedAt));
+      expect(region).not.toHaveTextContent(shown(appointmentAt));
+    }
+    expect(within(cards).getByText("Cerrada")).toBeInTheDocument();
   });
 });
