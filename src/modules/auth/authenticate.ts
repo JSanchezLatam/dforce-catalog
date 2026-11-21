@@ -5,6 +5,7 @@ import { reserveLoginAttempt, settleLoginAttempt } from "@/modules/auth/login-at
 import { loginKey } from "@/modules/auth/login-lock";
 import { verifyPassword } from "@/modules/auth/password";
 import { isUserActive, issueSession, type Role } from "@/modules/auth/session";
+import { isTrustedDevice } from "@/modules/auth/trusted-device";
 import { db } from "@/shared/db/client";
 import { users, userTotp } from "@/shared/db/schema";
 
@@ -30,6 +31,9 @@ export type AuthenticateUserDeps = {
   hasTwoFactor?: (userId: string) => Promise<boolean>;
   attempts?: { reserve: typeof reserveLoginAttempt; settle: typeof settleLoginAttempt };
   ip?: string | null;
+  /** The `trusted_device` cookie's value, if the browser sent one (T9). */
+  trustedDeviceToken?: string | null;
+  isTrustedDevice?: typeof isTrustedDevice;
 };
 
 async function findUserDefault(username: string): Promise<AuthenticateUserRow | undefined> {
@@ -100,6 +104,12 @@ export async function authenticateUser(
   // The password alone is not a success: a success resets the lock counter, and
   // the code step must keep counting toward it (L28).
   if (await hasTwoFactor(user.id)) {
+    // S3: a device this same user trusted, still unexpired, stands in for the code.
+    if (deps.trustedDeviceToken && (await (deps.isTrustedDevice ?? isTrustedDevice)(user.id, deps.trustedDeviceToken))) {
+      const { token, expiresAt } = await doIssueSession(user.id, user.role);
+      await attempts.settle(reserved.attemptId, "success", user.id, "trusted_device");
+      return { ok: true, token, expiresAt, role: user.role };
+    }
     const { token, expiresAt } = await doIssueSession(user.id, user.role, { pending: "verify" });
     await attempts.settle(reserved.attemptId, "password_ok", user.id);
     return { ok: true, token, expiresAt, role: user.role, pending: "verify" };

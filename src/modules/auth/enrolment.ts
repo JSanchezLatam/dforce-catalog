@@ -13,6 +13,7 @@ import { generateRecoveryCodes, hashRecoveryCode } from "./recovery-codes";
 import type { Role } from "./roles";
 import { openSecret, sealSecret, totpKey } from "./secret-box";
 import { generateTotpSecret, otpauthUri, verifyTotp } from "./totp";
+import { revokeTrustedDevices } from "./trusted-device";
 
 /**
  * 2FA enrolment from Mi cuenta (T8a, L37): start, confirm, regenerate the
@@ -271,8 +272,9 @@ export async function regenerateRecoveryCodes(
 
 /**
  * Needs a current app code and a role 2FA is optional for (S2). Removes the
- * secret and the codes and revokes every session but `currentToken`, in one
- * transaction: 2FA is never off with the other sessions still open.
+ * secret, the codes and the trusted devices, and revokes every session but
+ * `currentToken`, in one transaction: 2FA is never off with the other
+ * sessions still open.
  */
 export async function disableTwoFactor(
   userId: string,
@@ -293,6 +295,7 @@ export async function disableTwoFactor(
     if (failure) return failure;
     await tx.delete(recoveryCodes).where(eq(recoveryCodes.userId, userId));
     await tx.delete(userTotp).where(eq(userTotp.userId, userId));
+    await revokeTrustedDevices(userId, tx);
     // revokeOtherSessions' predicate, on `tx`: that helper writes through `db`, outside this transaction.
     await tx.execute(
       sql`UPDATE sessions SET revoked_at = ${now} WHERE user_id = ${userId} AND revoked_at IS NULL AND id <> ${currentToken}`,

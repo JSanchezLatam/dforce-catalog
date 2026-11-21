@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/shared/db/client";
 import { users } from "@/shared/db/schema";
 import { revokeOtherSessions } from "@/modules/auth/session";
+import { revokeTrustedDevices } from "@/modules/auth/trusted-device";
 import { isRole, type Role } from "@/modules/auth/roles";
 import { MIN_PASSWORD_LENGTH } from "./password-policy";
 import { passwordPolicyError } from "./password-rules";
@@ -147,11 +148,13 @@ export async function changePassword(
     // One UPDATE, both columns: a rotated password can never commit while the
     // flag stays set, which would lock the user out of the app they just
     // unlocked. Clearing the flag for an already-unflagged user is a harmless
-    // no-op, so this needs no conditional.
-    await db
-      .update(users)
-      .set({ passwordHash: newHash, mustChangePassword: false })
-      .where(eq(users.id, userId));
+    // no-op, so this needs no conditional. The trusted devices go in the same
+    // transaction (S9, L45): a new password never commits with an old device
+    // still skipping the code.
+    await db.transaction(async (tx) => {
+      await tx.update(users).set({ passwordHash: newHash, mustChangePassword: false }).where(eq(users.id, userId));
+      await revokeTrustedDevices(userId, tx);
+    });
   }
 
   if (deps?.revoke) {
@@ -377,6 +380,7 @@ export type UpdateUserDeps = {
   applyUpdate?: (tx: TxLike, targetId: string, patch: UserPatch) => Promise<void>;
   ensureRosterRow?: typeof ensureRosterRow;
   revokeOtherSessions?: typeof revokeOtherSessions;
+  revokeTrustedDevices?: typeof revokeTrustedDevices;
 };
 
 async function getTargetTx(tx: TxLike, targetId: string) {
@@ -458,6 +462,8 @@ export async function updateUser(
     }
 
     await applyUpdate(tx, targetId, patch);
+    // S9: the reset password is known to the administrator, so no device keeps skipping the code.
+    if (passwordHash !== undefined) await (deps.revokeTrustedDevices ?? revokeTrustedDevices)(targetId, tx as never);
 
     // Promotion only. Runs after the UPDATE so the roster name reads the new
     // `users.name`; a failure aborts the whole edit.

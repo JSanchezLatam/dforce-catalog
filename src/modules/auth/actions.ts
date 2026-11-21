@@ -8,6 +8,7 @@ import { authenticateUser } from "@/modules/auth/authenticate";
 import { clientIp } from "@/modules/auth/client-ip";
 import { isUntilUnlocked } from "@/modules/auth/login-lock";
 import { SESSION_COOKIE } from "@/modules/auth/session";
+import { TRUSTED_DEVICE_COOKIE } from "@/modules/auth/trusted-device";
 import { TWO_FACTOR_PATH, TWO_FACTOR_SETUP_PATH } from "@/modules/auth/two-factor-gate";
 
 export type LoginState = { error: string; detail?: string; lockedUsername?: string; retryAt?: number } | null;
@@ -25,7 +26,11 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
   const username = String(formData.get("username") ?? "");
   const password = String(formData.get("password") ?? "");
 
-  const result = await authenticateUser(username, password, { ip: clientIp(await headers()) });
+  const cookieStore = await cookies();
+  const result = await authenticateUser(username, password, {
+    ip: clientIp(await headers()),
+    trustedDeviceToken: cookieStore.get(TRUSTED_DEVICE_COOKIE)?.value,
+  });
   if (!result.ok) {
     if (!result.lockedUntil) return { error: "Usuario o contraseña incorrectos." };
     if (isUntilUnlocked(result.lockedUntil)) {
@@ -43,7 +48,6 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
     };
   }
 
-  const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, result.token, {
     httpOnly: true,
     sameSite: "lax",

@@ -5,6 +5,7 @@ import { landingPathFor } from "@/modules/auth/landing";
 import { isUntilUnlocked } from "@/modules/auth/login-lock";
 import { verifySecondFactor } from "@/modules/auth/second-factor";
 import { SESSION_COOKIE } from "@/modules/auth/session";
+import { TRUSTED_DEVICE_COOKIE } from "@/modules/auth/trusted-device";
 
 /**
  * The second step of a 2FA login (T7). The proxy lets a pending session reach
@@ -24,8 +25,10 @@ export async function handleVerify(
     typeof body?.recoveryCode === "string"
       ? { recoveryCode: body.recoveryCode as string }
       : { code: typeof body?.code === "string" ? (body.code as string) : "" };
+  // Only an explicit true: the box is unchecked by default (L45).
+  const trust = body?.trustDevice === true ? { trustDevice: true } : {};
 
-  const result = await (deps.verify ?? verifySecondFactor)({ token, ...typed, ip: clientIp(request.headers) });
+  const result = await (deps.verify ?? verifySecondFactor)({ token, ...typed, ip: clientIp(request.headers), ...trust });
   if (result.ok) {
     const response = NextResponse.json({ ok: true, redirect: landingPathFor(result.role) });
     response.cookies.set(SESSION_COOKIE, result.token, {
@@ -34,6 +37,14 @@ export async function handleVerify(
       expires: result.expiresAt,
       path: "/",
     });
+    if (result.trustedDevice) {
+      response.cookies.set(TRUSTED_DEVICE_COOKIE, result.trustedDevice.token, {
+        httpOnly: true,
+        sameSite: "lax",
+        expires: result.trustedDevice.expiresAt,
+        path: "/",
+      });
+    }
     return response;
   }
   if (result.lockedUntil) {

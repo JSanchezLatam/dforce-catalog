@@ -116,6 +116,24 @@ export const recoveryCodes = pgTable(
 );
 
 /**
+ * Trusted devices (S3): a browser that skips the code for 30 days. Only the
+ * SHA-256 of its cookie token is stored, so a database copy cannot replay it.
+ */
+export const trustedDevices = pgTable(
+  "trusted_devices",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("trusted_devices_user_id_idx").on(table.userId)],
+);
+
+/**
  * `workshop_config` — singleton row holding the workshop display name,
  * logo (uploaded to R2, served through /api/workshop-config/logo), and
  * contact info shown on generated catalogs (catalog-templates-and-workshop-info

@@ -420,9 +420,11 @@ describe("updateUser", () => {
   function txDeps(overrides: Record<string, unknown> = {}) {
     const applyUpdate = vi.fn().mockResolvedValue(undefined);
     const revoke = vi.fn().mockResolvedValue(undefined);
+    const revokeDevices = vi.fn().mockResolvedValue(undefined);
     return {
       applyUpdate,
       revoke,
+      revokeDevices,
       deps: {
         // Structurally matches the module's execute-only TxLike seam, so the
         // transaction boundary is exercised without a live Postgres.
@@ -435,6 +437,7 @@ describe("updateUser", () => {
         findByEmail: async () => null,
         applyUpdate,
         revokeOtherSessions: revoke,
+        revokeTrustedDevices: revokeDevices,
         ...overrides,
       },
     };
@@ -493,10 +496,11 @@ describe("updateUser", () => {
 
   describe("admin password reset", () => {
     it("re-arms the forced change and kills every session of the target", async () => {
-      const { applyUpdate, revoke, deps } = txDeps();
+      const { applyUpdate, revoke, revokeDevices, deps } = txDeps();
 
       await updateUser("admin-1", "user-9", { password: "nuevatemp1" }, deps);
 
+      expect(revokeDevices).toHaveBeenCalledWith("user-9", expect.anything());
       const patch = applyUpdate.mock.calls[0][2] as { passwordHash: string; mustChangePassword: boolean };
       expect(patch.mustChangePassword).toBe(true);
       expect(patch.passwordHash).not.toBe("nuevatemp1");

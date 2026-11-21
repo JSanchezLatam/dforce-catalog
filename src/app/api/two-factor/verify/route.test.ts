@@ -49,6 +49,49 @@ describe("POST /api/two-factor/verify", () => {
     expect(new Date(cookie.expires!).getTime()).toBe(expiresAt.getTime());
   });
 
+  it("asks to trust the device only when the body says exactly true", async () => {
+    const verify = respondWith({ ok: false });
+
+    await handleVerify(request({ code: "123456", trustDevice: true }), { verify });
+    await handleVerify(request({ recoveryCode: "7KQM-2XPA", trustDevice: true }), { verify });
+    await handleVerify(request({ code: "123456", trustDevice: "true" }), { verify });
+
+    expect(verify).toHaveBeenNthCalledWith(1, { token: "pending-token", code: "123456", ip: "192.168.1.40", trustDevice: true });
+    expect(verify).toHaveBeenNthCalledWith(2, {
+      token: "pending-token",
+      recoveryCode: "7KQM-2XPA",
+      ip: "192.168.1.40",
+      trustDevice: true,
+    });
+    expect(verify.mock.calls[2][0]).not.toHaveProperty("trustDevice");
+  });
+
+  it("sets the trusted_device cookie for 30 days when the check stored a device", async () => {
+    const expiresAt = new Date("2026-12-20T12:00:00.000Z");
+    const verify = respondWith({
+      ok: true,
+      token: "full-token",
+      expiresAt: new Date("2026-11-27T12:00:00.000Z"),
+      role: "tecnico",
+      trustedDevice: { token: "device-token", expiresAt },
+    });
+
+    const response = await handleVerify(request({ code: "123456", trustDevice: true }), { verify });
+
+    expect(await response.json()).toEqual({ ok: true, redirect: "/inventory" });
+    const cookie = response.cookies.get("trusted_device")!;
+    expect(cookie).toMatchObject({ value: "device-token", httpOnly: true, sameSite: "lax", path: "/" });
+    expect(new Date(cookie.expires!).getTime()).toBe(expiresAt.getTime());
+  });
+
+  it("sets no trusted_device cookie when no device was stored", async () => {
+    const verify = respondWith({ ok: true, token: "full-token", expiresAt: new Date(), role: "tecnico" });
+
+    const response = await handleVerify(request({ code: "123456" }), { verify });
+
+    expect(response.cookies.get("trusted_device")).toBeUndefined();
+  });
+
   it("answers a wrong code with 401 invalid_code", async () => {
     const response = await handleVerify(request({ code: "000000" }), { verify: respondWith({ ok: false }) });
 

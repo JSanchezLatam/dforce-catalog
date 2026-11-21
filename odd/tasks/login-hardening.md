@@ -48,7 +48,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T7 | S4, S6, S12 | Second-step page and recovery-code path | delegated (context backstop, L28) | done | `bde0eb3`, `780b8f2`, `a7c1bc1` (PR #374, merged `d2e0eaf`) |
 | T8a | S2, S4, S12, S14 | Enrolment from Mi cuenta, recovery codes, regenerate, disable; key generation in `standalone.ps1` | delegated (context backstop) | done | `fe8097b`, `e1968c7`, `d68500d` (PR #375, merged `93d3bfc`) |
 | T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | done | `aadc097` (PR #376, merged `73c3112`) |
-| T9 | S3, S9 | Trusted device, revoked on password change | delegated (context backstop) | in progress | |
+| T9 | S3, S9 | Trusted device, revoked on password change | delegated (context backstop) | done | (this commit) |
 | T10 | S5, S13 | Admin 2FA reset, self-reset refusal, emergency command | inline | pending | |
 | T11 | S11 | `secure` cookie | inline | deferred until the tunnel | |
 
@@ -372,3 +372,23 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - when 2FA is reset (T10);
     - from Mi cuenta "Olvidar dispositivos de confianza", with a toast.
   - **One cookie per browser.** When two users trust the same browser, the second overwrites the first. That is accepted and recorded, because the workshop PCs are shared.
+- L46 (2026-11-21, T9), written by a bounded writer.
+  - **What was built:**
+    - migration 0042, `trusted_devices`, which stores a SHA-256 hash only;
+    - a checkbox, unchecked by default (the mockup shows it checked; L45 decides);
+    - a 30-day httpOnly `trusted_device` cookie, set only after a right code with the box checked;
+    - the login skips the code only for the same user, an unexpired row and enabled 2FA, after the password passes, and records `trusted_device`.
+  - **Revocation:** a password change (same transaction), disable, "Olvidar dispositivos de confianza" (`account.self`, with a toast), and the daily retention deletes expired devices.
+  - **Writer's checks:** RED by name for most rules; 11 mutations caught; the full e2e suite passes 489/489 on a recreated `dforce_e2e`; the suite passes 5177/5177; `tsc` and lint are clean.
+  - **Parent fix:** an administrator's password reset (`updateUser`) did not revoke devices. S9 covers it, because the administrator now knows the password. It now revokes them inside its transaction. The e2e went RED by name first, and the unit test asserts the revoke.
+  - **Migration:** 0042 was applied to the dev database.
+  - **Browser check at the LAN IP (phone):**
+    - the box is unchecked by default;
+    - with the box checked, a right code set `trusted_device` (httpOnly, 30 days);
+    - after logout, the next login skipped the code and landed on `/inventory`;
+    - "Olvidar dispositivos de confianza" toasted, and the login after it asked for the code again;
+    - QA rows were removed.
+  - **Recorded:**
+    - the cookie is not cleared on logout or forget, and once revoked it matches nothing;
+    - one cookie per browser;
+    - forget asks for no code, because it only removes access.

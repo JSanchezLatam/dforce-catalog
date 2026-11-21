@@ -11,11 +11,12 @@ import { matchRecoveryCode } from "./recovery-codes";
 import { openSecret, totpKey } from "./secret-box";
 import { isSessionActive, isUserActive, issueSession, type Role, type SessionPending } from "./session";
 import { verifyTotp } from "./totp";
+import { trustDevice } from "./trusted-device";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export type SecondFactorResult =
-  | { ok: true; token: string; expiresAt: Date; role: Role }
+  | { ok: true; token: string; expiresAt: Date; role: Role; trustedDevice?: { token: string; expiresAt: Date } }
   | { ok: false; reason?: "no_pending_session" | "unavailable"; lockedUntil?: Date };
 
 export type SecondFactorDeps = {
@@ -115,7 +116,7 @@ async function consume(
  * before it fall behind the reset. The full session is issued after commit.
  */
 export async function verifySecondFactor(
-  input: { token: string; code?: string; recoveryCode?: string; ip: string | null },
+  input: { token: string; code?: string; recoveryCode?: string; ip: string | null; trustDevice?: boolean },
   deps: SecondFactorDeps = {},
 ): Promise<SecondFactorResult> {
   let key: Buffer;
@@ -179,10 +180,14 @@ export async function verifySecondFactor(
         .where(eq(loginAttempts.id, passwordOk.id));
     }
     await tx.update(sessions).set({ revokedAt: now }).where(eq(sessions.id, input.token));
-    return { ok: true as const, userId: session.userId, role: session.role };
+    // S3: stored with the success it rides on, so a rolled-back code never leaves a device behind.
+    const trustedDevice = input.trustDevice === true ? await trustDevice(session.userId, tx, now) : undefined;
+    return { ok: true as const, userId: session.userId, role: session.role, trustedDevice };
   });
 
   if (!outcome.ok) return outcome;
   const { token, expiresAt } = await (deps.issueSession ?? issueSession)(outcome.userId, outcome.role);
-  return { ok: true, token, expiresAt, role: outcome.role };
+  return outcome.trustedDevice
+    ? { ok: true, token, expiresAt, role: outcome.role, trustedDevice: outcome.trustedDevice }
+    : { ok: true, token, expiresAt, role: outcome.role };
 }

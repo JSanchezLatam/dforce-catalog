@@ -295,6 +295,13 @@
       "when": 1795214194110,
       "tag": "0041_two_factor",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1795222656257,
+      "tag": "0042_trusted_devices",
+      "breakpoints": true
     }
   ]
 }

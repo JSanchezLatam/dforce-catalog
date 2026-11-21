@@ -6,6 +6,7 @@ const confirmEnrolment = vi.hoisted(() => vi.fn());
 const regenerateRecoveryCodes = vi.hoisted(() => vi.fn());
 const disableTwoFactor = vi.hoisted(() => vi.fn());
 const getWorkshopConfig = vi.hoisted(() => vi.fn());
+const revokeTrustedDevices = vi.hoisted(() => vi.fn());
 
 vi.mock("@/modules/auth/enrolment", async (original) => ({
   ...(await original<typeof import("@/modules/auth/enrolment")>()),
@@ -15,9 +16,11 @@ vi.mock("@/modules/auth/enrolment", async (original) => ({
   disableTwoFactor,
 }));
 vi.mock("@/modules/workshop-config/service", () => ({ getWorkshopConfig }));
+vi.mock("@/modules/auth/trusted-device", () => ({ revokeTrustedDevices }));
 
 import { POST as CONFIRM } from "./confirm/route";
 import { POST as DISABLE } from "./disable/route";
+import { POST as FORGET_DEVICES } from "./forget-devices/route";
 import { POST as RECOVERY_CODES } from "./recovery-codes/route";
 import { POST as START } from "./start/route";
 
@@ -40,6 +43,7 @@ describe("account.self gate", () => {
     ["confirm", CONFIRM, confirmEnrolment],
     ["recovery-codes", RECOVERY_CODES, regenerateRecoveryCodes],
     ["disable", DISABLE, disableTwoFactor],
+    ["forget-devices", FORGET_DEVICES, revokeTrustedDevices],
   ] as const)("%s answers 403 for pantalla and never reaches the service", async (path, handler, service) => {
     const res = await handler(req(path, "pantalla", { code: "123456" }));
     expect(res.status).toBe(403);
@@ -169,5 +173,17 @@ describe("POST /api/account/two-factor/disable", () => {
     const res = await DISABLE(req("disable", "administrador", { code: "123456" }));
     expect(res.status).toBe(status);
     expect(await res.json()).toEqual({ error: reason });
+  });
+});
+
+describe("POST /api/account/two-factor/forget-devices", () => {
+  it("forgets every trusted device of the session user, never one named in the body", async () => {
+    revokeTrustedDevices.mockResolvedValue(undefined);
+
+    const res = await FORGET_DEVICES(req("forget-devices", "tecnico", { userId: "someone-else" }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true });
+    expect(revokeTrustedDevices).toHaveBeenCalledWith("user-1");
   });
 });

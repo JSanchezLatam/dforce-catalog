@@ -4,6 +4,7 @@ import { authenticateUser } from "@/modules/auth/authenticate";
 import { clientIp } from "@/modules/auth/client-ip";
 import { isUntilUnlocked } from "@/modules/auth/login-lock";
 import { SESSION_COOKIE } from "@/modules/auth/session";
+import { TRUSTED_DEVICE_COOKIE } from "@/modules/auth/trusted-device";
 
 /**
  * R9.1/9.2 — login. `proxy.ts` already excludes `/login`/`/api/login` from
@@ -24,7 +25,10 @@ export async function POST(request: NextRequest) {
   const username = typeof body?.username === "string" ? body.username : "";
   const password = typeof body?.password === "string" ? body.password : "";
 
-  const result = await authenticateUser(username, password, { ip: clientIp(request.headers) });
+  const result = await authenticateUser(username, password, {
+    ip: clientIp(request.headers),
+    trustedDeviceToken: request.cookies.get(TRUSTED_DEVICE_COOKIE)?.value,
+  });
   if (!result.ok && result.lockedUntil) {
     if (isUntilUnlocked(result.lockedUntil)) return NextResponse.json({ error: "locked" }, { status: 429 });
     const retryAfter = Math.ceil((result.lockedUntil.getTime() - Date.now()) / 1000);

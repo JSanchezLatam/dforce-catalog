@@ -3,12 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 import { registerLoginAttemptsRetention } from "./retention-worker";
 
 describe("registerLoginAttemptsRetention", () => {
-  async function register(purge: () => Promise<number> = async () => 0) {
+  async function register(purge: () => Promise<number> = async () => 0, purgeTrustedDevices: () => Promise<number> = async () => 0) {
     const createQueue = vi.fn(async () => {});
     const schedule = vi.fn(async () => {});
     const handlers = new Map<string, (jobs: { id: string; data: unknown }[]) => Promise<void>>();
     const work = vi.fn(async (name: string, _o: unknown, h: never) => void handlers.set(name, h));
-    await registerLoginAttemptsRetention({ getBoss: async () => ({ createQueue, schedule, work }) as never, purge });
+    await registerLoginAttemptsRetention({ getBoss: async () => ({ createQueue, schedule, work }) as never, purge, purgeTrustedDevices });
     return { createQueue, schedule, work, handlers };
   }
 
@@ -28,5 +28,14 @@ describe("registerLoginAttemptsRetention", () => {
     await handlers.get("login-attempts-retention")!([{ id: "job-1", data: {} }]);
 
     expect(purge).toHaveBeenCalledOnce();
+  });
+
+  it("also deletes the expired trusted devices from the same run", async () => {
+    const purgeTrustedDevices = vi.fn(async () => 2);
+    const { handlers } = await register(undefined, purgeTrustedDevices);
+
+    await handlers.get("login-attempts-retention")!([{ id: "job-1", data: {} }]);
+
+    expect(purgeTrustedDevices).toHaveBeenCalledOnce();
   });
 });

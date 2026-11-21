@@ -155,6 +155,7 @@ export const ROUTE_GUARDS: Record<
   "/api/account/two-factor/confirm": { POST: "account.self" },
   "/api/account/two-factor/recovery-codes": { POST: "account.self" },
   "/api/account/two-factor/disable": { POST: "account.self" },
+  "/api/account/two-factor/forget-devices": { POST: "account.self" },
   "/api/users": { GET: "users.manage", POST: "users.manage" },
   "/api/users/[id]": { PATCH: "users.manage" },
   "/api/users/[id]/unlock": { POST: "users.manage" },

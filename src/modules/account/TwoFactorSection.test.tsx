@@ -301,4 +301,31 @@ describe("TwoFactorSection — Activa", () => {
     await waitFor(() => expect(addToast).toHaveBeenCalledWith("success", "Verificación en dos pasos desactivada"));
     expect(order).toEqual(["toast", "refresh"]);
   });
+
+  it("Olvidar dispositivos de confianza forgets them and toasts, with no refresh needed", async () => {
+    const user = userEvent.setup();
+    render(<TwoFactorSection {...ON} />);
+    reply({ body: { success: true } });
+
+    await user.click(screen.getByRole("button", { name: "Olvidar dispositivos de confianza" }));
+
+    expect(sentTo(0)).toEqual(["/api/account/two-factor/forget-devices", null]);
+    await waitFor(() => expect(addToast).toHaveBeenCalledWith("success", "Dispositivos de confianza olvidados"));
+  });
+
+  it("says inline when forgetting the devices fails, with no toast", async () => {
+    const user = userEvent.setup();
+    render(<TwoFactorSection {...ON} />);
+    reply({ status: 500, body: {} });
+
+    await user.click(screen.getByRole("button", { name: "Olvidar dispositivos de confianza" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo completar. Recargá la página e intentá de nuevo.");
+    expect(addToast).not.toHaveBeenCalled();
+  });
+
+  it("offers Olvidar dispositivos de confianza only while 2FA is active", () => {
+    render(<TwoFactorSection {...OFF} />);
+    expect(screen.queryByRole("button", { name: "Olvidar dispositivos de confianza" })).not.toBeInTheDocument();
+  });
 });
