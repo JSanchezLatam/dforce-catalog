@@ -51,7 +51,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T9 | S3, S9 | Trusted device, revoked on password change | delegated (context backstop) | done | `6732117`, `3576b8d` (PR #377, merged `4d96813`) |
 | T10 | S5, S12, S13 | Admin 2FA reset, self-reset refusal, emergency command | delegated (context backstop) | done | `61b3c0a`, `e948274` (PR #378, merged `ed33082`) |
 | T11 | S11 | `secure` cookie per HTTPS request; tunnel setup guide | delegated (parallel with T12) | done | (T11 commit) |
-| T12 | S2, S5, S13 | Follow-ups: setup retry, emergency CLI process test and in-transaction lookup, reset takes the login lock | delegated (parallel with T11) | in progress | |
+| T12 | S2, S5, S13 | Follow-ups: setup retry, emergency CLI process test and in-transaction lookup, reset takes the login lock | delegated (parallel with T11) | done | (T12 commit) |
 
 Route evidence: units depend on each other in order, so no writer trigger applies.
 
@@ -495,3 +495,9 @@ Route evidence: units depend on each other in order, so no writer trigger applie
 
     The access log recorded the forwarded client address only for the loopback request.
   - **Deployment note:** a change to the trusted-proxy patch takes effect only after the app restarts. `standalone.ps1` restarts it on update.
+- L56 (2026-11-21, T12, written by a bounded writer).
+  - **Setup screen.** "Reintentar" appears beside "Cerrar sesión" after a generic start failure. It does not appear for a missing key or an expired setup, and Strict Mode still starts only once.
+  - **Emergency `reset-2fa`.** The user lookup now runs inside its transaction. No test can see this change, because the writes key on the id, as L52 said.
+  - **Reset lock.** `resetTwoFactor` and the emergency `reset-2fa` both take the target's login advisory lock, so a reset cannot interleave with a code check. Two e2e tests hold the lock on another connection and prove the reset waits.
+  - **New `src/e2e/emergency-cli.e2e.test.ts`.** It spawns the real command for usage, `unlock` (real and unknown user) and `reset-2fa` (mandatory role, optional role, unknown user), checking exact output and exit codes.
+  - **Checks.** RED by name. 12 of 13 mutations caught; the uncaught one is the lookup order above. Auth unit tests 348/348, e2e 40/40.

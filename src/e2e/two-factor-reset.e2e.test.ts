@@ -179,6 +179,50 @@ describe("2FA reset against a real database", () => {
     expectUntouched(await stateOf(jefe.id));
   });
 
+  // A second-step code check holds the target's login lock (L33); a reset must wait for it,
+  // or a check already past its lock could issue a session just after the reset commits (L50).
+  describe("waits for the target's login lock (T12)", () => {
+    async function whileLocked(username: string, reset: () => Promise<unknown>) {
+      const holder = await db.$client.connect();
+      try {
+        await holder.query("BEGIN");
+        await holder.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`login-user:${username}`]);
+        let settled = false;
+        const pending = reset().finally(() => {
+          settled = true;
+        });
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const during = { settled, state: await stateOf((await db.select().from(users).where(eq(users.username, username)))[0].id) };
+        await holder.query("COMMIT");
+        await pending;
+        return during;
+      } finally {
+        holder.release();
+      }
+    }
+
+    it("resetTwoFactor commits nothing until the lock holder's transaction ends", async () => {
+      const admin = await createEnrolled("admin-lock", "administrador");
+      const jefe = await createEnrolled("jefe-lock");
+
+      const during = await whileLocked(jefe.username, () => resetTwoFactor(admin.id, jefe.id));
+
+      expect(during.settled).toBe(false);
+      expectUntouched(during.state);
+      expectReset(await stateOf(jefe.id));
+    });
+
+    it("the emergency reset-2fa does the same", async () => {
+      const jefe = await createEnrolled("emergency-lock");
+
+      const during = await whileLocked(jefe.username, () => emergencyReset(jefe.username));
+
+      expect(during.settled).toBe(false);
+      expectUntouched(during.state);
+      expectReset(await stateOf(jefe.id));
+    });
+  });
+
   describe("emergency command (S13: reset-2fa on the workshop PC)", () => {
     it("does the same reset by username and returns the role", async () => {
       const jefe = await createEnrolled("emergency");

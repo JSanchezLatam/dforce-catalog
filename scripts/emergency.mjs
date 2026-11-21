@@ -10,7 +10,7 @@
 // (only Next.js loads `.env`; the operator should not have to set it by hand).
 // shortcut: `unlockUser` repeats `unlockLogin` (src/modules/auth/login-attempts.ts)
 // in plain SQL to avoid a TS runner, like seed-user.mjs; a change to the
-// `unlocked` row or the advisory-lock key must be made in both places. Likewise
+// `unlocked` row or the advisory-lock key (`takeLoginLocks`) must be made in both places. Likewise
 // `resetTwoFactorByUsername` repeats `resetTwoFactor` (src/modules/auth/two-factor-reset.ts)
 // and `MANDATORY_ROLES` repeats `requiresTwoFactor` (src/modules/auth/enrolment.ts).
 import { randomUUID } from "node:crypto";
@@ -54,23 +54,27 @@ const MANDATORY_ROLES = ["administrador", "jefe_taller"];
  * role, or `null` when no such user exists. `client` is ONE connection.
  */
 export async function resetTwoFactorByUsername(client, username) {
-  const { rows } = await client.query("SELECT id, role FROM users WHERE username = $1", [username]);
-  if (rows.length === 0) return null;
-  const { id, role } = rows[0];
-
   try {
     await client.query("BEGIN");
+    const { rows } = await client.query("SELECT id, username, role FROM users WHERE username = $1", [username]);
+    if (rows.length === 0) {
+      await client.query("ROLLBACK");
+      return null;
+    }
+    const { id, role } = rows[0];
+    // The login lock a second-step code check holds, so the two cannot interleave.
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`login-user:${rows[0].username.slice(0, 150)}`]);
     await client.query("DELETE FROM recovery_codes WHERE user_id = $1", [id]);
     await client.query("DELETE FROM user_totp WHERE user_id = $1", [id]);
     await client.query("DELETE FROM trusted_devices WHERE user_id = $1", [id]);
     await client.query("UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL", [id]);
     await client.query("COMMIT");
+    return role;
   } catch (error) {
     // A failed ROLLBACK (a dropped connection) must not hide why the reset failed.
     await client.query("ROLLBACK").catch(() => {});
     throw error;
   }
-  return role;
 }
 
 /** `DATABASE_URL` from the environment, else from `.env` beside `scripts/`. */

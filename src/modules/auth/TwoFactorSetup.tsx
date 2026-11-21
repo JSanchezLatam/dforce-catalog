@@ -12,7 +12,7 @@ import { useToast } from "@/shared/ui/ToastProvider";
 type View =
   | { kind: "starting" }
   | { kind: "unavailable" }
-  | { kind: "failed"; message: string }
+  | { kind: "failed"; message: string; retry: boolean }
   | { kind: "ready"; secret: string; qrDataUrl: string }
   | { kind: "codes"; codes: string[]; redirect: string };
 
@@ -54,19 +54,27 @@ export function TwoFactorSetup({ roleLabel, available }: { roleLabel: string; av
   const started = useRef(false);
   const { addToast } = useToast();
 
+  async function start() {
+    setView({ kind: "starting" });
+    const result = await post("/api/two-factor/setup/start");
+    if (result.ok) {
+      setView({ kind: "ready", secret: String(result.json.secret), qrDataUrl: String(result.json.qrDataUrl) });
+    } else if (result.json.error === "unavailable") {
+      // A missing key cannot fix itself, so this view offers no retry.
+      setView({ kind: "unavailable" });
+    } else {
+      const message = errorText(result.json.error);
+      // An expired setup needs a new login, not another start.
+      setView({ kind: "failed", message, retry: message === errorText(undefined) });
+    }
+  }
+
   // Once per mount, even under Strict Mode's double effect: each start replaces
   // the secret, so a second one would leave the QR on screen out of date.
   useEffect(() => {
     if (!available || started.current) return;
     started.current = true;
-    void post("/api/two-factor/setup/start").then((result) => {
-      // A 503 `unavailable` reads as the missing-key message through errorText.
-      if (result.ok) {
-        setView({ kind: "ready", secret: String(result.json.secret), qrDataUrl: String(result.json.qrDataUrl) });
-      } else {
-        setView({ kind: "failed", message: errorText(result.json.error) });
-      }
-    });
+    void start();
   }, [available]);
 
   async function confirm(event: FormEvent<HTMLFormElement>) {
@@ -183,7 +191,14 @@ export function TwoFactorSetup({ roleLabel, available }: { roleLabel: string; av
         </>
       )}
 
-      <div className="flex justify-center">{logoutButton}</div>
+      <div className="flex justify-center gap-2">
+        {view.kind === "failed" && view.retry && (
+          <Button type="button" variant="outline" className="h-11 min-h-11 min-w-11 rounded-xl" onClick={() => void start()}>
+            Reintentar
+          </Button>
+        )}
+        {logoutButton}
+      </div>
     </div>
   );
 }
