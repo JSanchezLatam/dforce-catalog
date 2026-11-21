@@ -510,3 +510,7 @@ Route evidence: units depend on each other in order, so no writer trigger applie
   - **Advisory: L56 overstated the reset lock.** The second step issued the full session after its commit, so a reset could still land in between. `issueSession` now takes an executor, and the second step issues the session inside its locked transaction. The e2e saw RED by name. This also removes T7's "code spent but no session" gap (L34).
   - **Advisory: the guide's `ingress validate`.** It now passes `--config` for the service's `config.yml`.
   - **Process note.** Restarting the app dev server with `pkill -f next-server` also killed the portal dev server on :3001. It was restarted at once (`cd portal && npx next dev -p 3001 -H 0.0.0.0`). Next time, kill by port.
+- L58 (2026-11-21): Gentle AI review (risk + reliability, granted under L27) APPROVED and acknowledged.
+  - The key-parity warning is already covered: `loginKey` only slices to 150 characters, which is the same string the CLI builds. The verifier checked this in L57.
+  - Follow-up: the lock e2e proves the wait with a 500 ms sample; checking `pg_locks` for a waiting backend would be deterministic.
+  - T11 is done as far as code can go. The tunnel itself, the DNS and the internet-opening `security-audit` wait for the owner's domain.
