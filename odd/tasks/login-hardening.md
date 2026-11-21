@@ -49,7 +49,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T8a | S2, S4, S12, S14 | Enrolment from Mi cuenta, recovery codes, regenerate, disable; key generation in `standalone.ps1` | delegated (context backstop) | done | `fe8097b`, `e1968c7`, `d68500d` (PR #375, merged `93d3bfc`) |
 | T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | done | `aadc097` (PR #376, merged `73c3112`) |
 | T9 | S3, S9 | Trusted device, revoked on password change | delegated (context backstop) | done | `6732117`, `3576b8d` (PR #377, merged `4d96813`) |
-| T10 | S5, S13 | Admin 2FA reset, self-reset refusal, emergency command | inline | pending | |
+| T10 | S5, S13 | Admin 2FA reset, self-reset refusal, emergency command | delegated (context backstop) | in progress | |
 | T11 | S11 | `secure` cookie | inline | deferred until the tunnel | |
 
 Route evidence: units depend on each other in order, so no writer trigger applies.
@@ -407,3 +407,11 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - `changePassword` revokes other sessions after commit, which predates this unit.
     - T10's reset must call the device revoke inside its own transaction.
 - L48 (2026-11-21, T9): Gentle AI review (risk + reliability, granted under L27) APPROVED and acknowledged. Its notes are already recorded: on plain HTTP the cookie has no `secure` flag, which is deferred to T11 with the session cookie; expired-device cleanup waits on the attempts purge.
+- L49 (2026-11-21, T10 design; mockup `s5`).
+  - **Gestión de usuarios** gets a "2FA" column: "Activada", "Desactivada", or "Pendiente" (title "Obligatoria para su rol") for a mandatory role without 2FA. `pantalla` shows "—".
+  - **"Resetear 2FA".**
+    - It sits in the row's ⋮ menu, only for users with 2FA enabled (or enrolling), and never on the administrator's own row (S5).
+    - It asks for confirmation and shows a toast.
+    - It calls `POST /api/users/[id]/two-factor/reset` (`users.manage`). For the caller's own id the route answers 403 "No podés resetear tu propia verificación en dos pasos."
+  - **What a reset does, in one transaction (A5):** delete `user_totp`, `recovery_codes` and `trusted_devices`, and revoke every session. A mandatory role then enrols again at its next sign-in (T8b).
+  - **Emergency command (S13):** `node scripts/emergency.mjs reset-2fa <usuario>` does the same from the workshop PC, with plain `pg` and Spanish messages, mirroring `unlock`. WINDOWS.md and WINDOWS.es.md replace "arrives in a later update" with the command.
