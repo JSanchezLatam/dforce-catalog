@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { isHttpsRequest } from "@/modules/auth/cookie-security";
 import { revokeSession, SESSION_COOKIE } from "@/modules/auth/session";
 
 /**
@@ -26,6 +27,7 @@ export async function handleLogout(
     sameSite: "lax",
     expires: new Date(0),
     path: "/",
+    secure: isHttpsRequest(request.headers),
   });
   return response;
 }

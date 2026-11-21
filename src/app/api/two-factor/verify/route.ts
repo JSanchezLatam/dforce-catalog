@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { clientIp } from "@/modules/auth/client-ip";
+import { isHttpsRequest } from "@/modules/auth/cookie-security";
 import { landingPathFor } from "@/modules/auth/landing";
 import { isUntilUnlocked } from "@/modules/auth/login-lock";
 import { verifySecondFactor } from "@/modules/auth/second-factor";
@@ -36,6 +37,7 @@ export async function handleVerify(
       sameSite: "lax",
       expires: result.expiresAt,
       path: "/",
+      secure: isHttpsRequest(request.headers),
     });
     if (result.trustedDevice) {
       response.cookies.set(TRUSTED_DEVICE_COOKIE, result.trustedDevice.token, {
@@ -43,6 +45,7 @@ export async function handleVerify(
         sameSite: "lax",
         expires: result.trustedDevice.expiresAt,
         path: "/",
+        secure: isHttpsRequest(request.headers),
       });
     }
     return response;

@@ -50,7 +50,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | done | `aadc097` (PR #376, merged `73c3112`) |
 | T9 | S3, S9 | Trusted device, revoked on password change | delegated (context backstop) | done | `6732117`, `3576b8d` (PR #377, merged `4d96813`) |
 | T10 | S5, S12, S13 | Admin 2FA reset, self-reset refusal, emergency command | delegated (context backstop) | done | `61b3c0a`, `e948274` (PR #378, merged `ed33082`) |
-| T11 | S11 | `secure` cookie per HTTPS request; tunnel setup guide | delegated (parallel with T12) | in progress | |
+| T11 | S11 | `secure` cookie per HTTPS request; tunnel setup guide | delegated (parallel with T12) | done | (T11 commit) |
 | T12 | S2, S5, S13 | Follow-ups: setup retry, emergency CLI process test and in-transaction lookup, reset takes the login lock | delegated (parallel with T11) | in progress | |
 
 Route evidence: units depend on each other in order, so no writer trigger applies.
@@ -478,3 +478,20 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - `resetTwoFactor` takes the target's login advisory lock, so it cannot interleave with a code check.
   - **Left as is.** "Último acceso" keeps the app-wide date format (convention over mockup). The permanent lock remains the owner's choice (S6).
   - **Owner-only (stop points).** Creating the tunnel and DNS needs the owner's Cloudflare account and domain. The full `security-audit` milestone (AGENTS.md) must run before the app is opened to the internet.
+- L55 (2026-11-21, T11, written by a bounded writer in parallel with T12).
+  - **What changed:**
+    - `x-forwarded-proto` is believed only from a loopback peer; any other peer gets the connection's own protocol. This is `trustedForwardedProto`.
+    - `isHttpsRequest` decides `secure` for every cookie the app sets: `session` and `trusted_device` on login, the login action, verify, setup confirm, and the cleared cookie on logout.
+    - WINDOWS.md and WINDOWS.es.md have the Cloudflare Tunnel guide. It notes that the Windows service needs the files copied into the system profile, as Cloudflare documents; `service install` alone is not enough.
+  - **Writer's checks:** RED by name for 23 tests; 6 mutations caught; unit 1044/1044; e2e 96/96.
+  - **Parent's runtime check against the dev server.** The first run showed a LAN request with a forged `x-forwarded-proto: https` getting `Secure`. The cause: the dev server had loaded `instrumentation.ts` before the change, and Next does not hot-reload it. After a restart:
+
+    | Request | `Secure` |
+    |---|---|
+    | LAN, plain | no |
+    | LAN, forged `https` | no |
+    | Loopback with `https`, as `cloudflared` | yes |
+    | Loopback, plain | no |
+
+    The access log recorded the forwarded client address only for the loopback request.
+  - **Deployment note:** a change to the trusted-proxy patch takes effect only after the app restarts. `standalone.ps1` restarts it on update.

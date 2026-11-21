@@ -7,8 +7,8 @@ import { SESSION_COOKIE } from "@/modules/auth/session";
 
 import { handleVerify } from "./route";
 
-function request(body: unknown, token: string | null = "pending-token") {
-  const headers: Record<string, string> = { "x-forwarded-for": "192.168.1.40" };
+function request(body: unknown, token: string | null = "pending-token", extra: Record<string, string> = {}) {
+  const headers: Record<string, string> = { "x-forwarded-for": "192.168.1.40", ...extra };
   if (token) headers.cookie = `${SESSION_COOKIE}=${token}`;
   return new NextRequest("http://localhost/api/two-factor/verify", {
     method: "POST",
@@ -82,6 +82,32 @@ describe("POST /api/two-factor/verify", () => {
     const cookie = response.cookies.get("trusted_device")!;
     expect(cookie).toMatchObject({ value: "device-token", httpOnly: true, sameSite: "lax", path: "/" });
     expect(new Date(cookie.expires!).getTime()).toBe(expiresAt.getTime());
+  });
+
+  // S11: both cookies are secure over the HTTPS tunnel and plain on the LAN.
+  it.each([
+    ["secure over the HTTPS tunnel", { "x-forwarded-proto": "https" }, true],
+    ["not secure on the plain-HTTP LAN", { "x-forwarded-proto": "http" }, false],
+    ["not secure with no forwarded protocol", {}, false],
+  ])("sets the session and trusted_device cookies %s", async (_label, headers, secure) => {
+    const sessionExpires = new Date("2026-11-27T12:00:00.000Z");
+    const deviceExpires = new Date("2026-12-20T12:00:00.000Z");
+    const verify = respondWith({
+      ok: true,
+      token: "full-token",
+      expiresAt: sessionExpires,
+      role: "tecnico",
+      trustedDevice: { token: "device-token", expiresAt: deviceExpires },
+    });
+
+    const response = await handleVerify(request({ code: "123456", trustDevice: true }, "pending-token", headers), { verify });
+
+    const session = response.cookies.get(SESSION_COOKIE)!;
+    const device = response.cookies.get("trusted_device")!;
+    expect(session).toMatchObject({ value: "full-token", httpOnly: true, sameSite: "lax", path: "/", secure });
+    expect(new Date(session.expires!).getTime()).toBe(sessionExpires.getTime());
+    expect(device).toMatchObject({ value: "device-token", httpOnly: true, sameSite: "lax", path: "/", secure });
+    expect(new Date(device.expires!).getTime()).toBe(deviceExpires.getTime());
   });
 
   it("sets no trusted_device cookie when no device was stored", async () => {

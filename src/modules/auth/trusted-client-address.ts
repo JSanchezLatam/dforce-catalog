@@ -1,4 +1,5 @@
 import http from "node:http";
+import type { TLSSocket } from "node:tls";
 
 const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 const INSTALLED = Symbol.for("dforce.trustedClientAddress");
@@ -14,7 +15,20 @@ export function trustedForwardedFor(socketAddress: string | undefined, header: s
   return socketAddress && LOOPBACK.has(socketAddress) ? header : socketAddress;
 }
 
-/** Next keeps a client-sent `x-forwarded-for`, so the value is corrected before Next reads the request. */
+/**
+ * The protocol the app may believe, by the same rule as the address: only a
+ * proxy on the server itself (the HTTPS tunnel) may say the request was https.
+ */
+export function trustedForwardedProto(
+  socketAddress: string | undefined,
+  header: string | undefined,
+  encrypted: boolean,
+): string {
+  if (socketAddress && LOOPBACK.has(socketAddress) && header) return header;
+  return encrypted ? "https" : "http";
+}
+
+/** Next keeps a client-sent `x-forwarded-for` and `x-forwarded-proto`, so both are corrected before Next reads the request. */
 export function installTrustedClientAddress(): void {
   const prototype = http.Server.prototype as TrustedServerPrototype;
   if (prototype[INSTALLED]) return;
@@ -30,6 +44,11 @@ export function installTrustedClientAddress(): void {
       );
       if (address) request.headers["x-forwarded-for"] = address;
       else delete request.headers["x-forwarded-for"];
+      request.headers["x-forwarded-proto"] = trustedForwardedProto(
+        request.socket.remoteAddress,
+        request.headers["x-forwarded-proto"] as string | undefined,
+        Boolean((request.socket as TLSSocket).encrypted),
+      );
     }
     return Reflect.apply(emit, this, [event, ...args]) as boolean;
   } as typeof prototype.emit;

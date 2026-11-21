@@ -5,10 +5,12 @@ import { describe, expect, it, vi } from "vitest";
 const set = vi.hoisted(() => vi.fn());
 const get = vi.hoisted(() => vi.fn());
 const redirect = vi.hoisted(() => vi.fn());
+const headers = vi.hoisted(() => vi.fn());
 vi.mock("next/headers", () => ({
   cookies: vi.fn().mockResolvedValue({ set, get }),
-  headers: vi.fn().mockResolvedValue(new Headers({ "x-forwarded-for": "192.168.1.23" })),
+  headers,
 }));
+headers.mockResolvedValue(new Headers({ "x-forwarded-for": "192.168.1.23" }));
 vi.mock("next/navigation", () => ({ redirect }));
 
 const authenticateUser = vi.hoisted(() => vi.fn());
@@ -111,6 +113,22 @@ describe("loginAction", () => {
     await loginAction(null, new FormData());
 
     expect(set).toHaveBeenCalledWith("session", "t", expect.objectContaining({ expires: expiresAt }));
+  });
+
+  // S11: secure over the HTTPS tunnel, plain on the LAN, every other attribute as before.
+  it.each([
+    ["secure over the HTTPS tunnel", { "x-forwarded-proto": "https" }, true],
+    ["not secure on the plain-HTTP LAN", { "x-forwarded-proto": "http" }, false],
+    ["not secure with no forwarded protocol", {}, false],
+  ])("sets the session cookie %s", async (_label, extra, secure) => {
+    const expiresAt = new Date("2027-04-24T15:00:00.000Z");
+    authenticateUser.mockResolvedValue({ ok: true, token: "t", expiresAt, role: "pantalla" });
+    headers.mockResolvedValueOnce(new Headers({ "x-forwarded-for": "192.168.1.23", ...extra }));
+    set.mockClear();
+
+    await loginAction(null, new FormData());
+
+    expect(set).toHaveBeenCalledWith("session", "t", { httpOnly: true, sameSite: "lax", expires: expiresAt, path: "/", secure });
   });
 
   // A right password for a 2FA user is only half a login (T6).

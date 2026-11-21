@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { authenticateUser } from "@/modules/auth/authenticate";
 import { clientIp } from "@/modules/auth/client-ip";
+import { isHttpsRequest } from "@/modules/auth/cookie-security";
 import { isUntilUnlocked } from "@/modules/auth/login-lock";
 import { SESSION_COOKIE } from "@/modules/auth/session";
 import { TRUSTED_DEVICE_COOKIE } from "@/modules/auth/trusted-device";
@@ -47,6 +48,7 @@ export async function POST(request: NextRequest) {
     sameSite: "lax",
     expires: result.expiresAt,
     path: "/",
+    secure: isHttpsRequest(request.headers),
   });
   return response;
 }
