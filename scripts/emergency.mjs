@@ -4,12 +4,15 @@
 // when the only administrator is locked out. Run it from the checkout:
 //
 //   node scripts/emergency.mjs unlock <usuario>
+//   node scripts/emergency.mjs reset-2fa <usuario>
 //
 // DATABASE_URL comes from the environment, or else from the checkout's `.env`
 // (only Next.js loads `.env`; the operator should not have to set it by hand).
 // shortcut: `unlockUser` repeats `unlockLogin` (src/modules/auth/login-attempts.ts)
 // in plain SQL to avoid a TS runner, like seed-user.mjs; a change to the
-// `unlocked` row or the advisory-lock key must be made in both places.
+// `unlocked` row or the advisory-lock key must be made in both places. Likewise
+// `resetTwoFactorByUsername` repeats `resetTwoFactor` (src/modules/auth/two-factor-reset.ts)
+// and `MANDATORY_ROLES` repeats `requiresTwoFactor` (src/modules/auth/enrolment.ts).
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -42,6 +45,34 @@ export async function unlockUser(client, username) {
   return true;
 }
 
+/** S2's mandatory roles: they enrol again at their next login. */
+const MANDATORY_ROLES = ["administrador", "jefe_taller"];
+
+/**
+ * Deletes the user's app secret, recovery codes and trusted devices and
+ * revokes every session, in one transaction (S13, A5). Returns the user's
+ * role, or `null` when no such user exists. `client` is ONE connection.
+ */
+export async function resetTwoFactorByUsername(client, username) {
+  const { rows } = await client.query("SELECT id, role FROM users WHERE username = $1", [username]);
+  if (rows.length === 0) return null;
+  const { id, role } = rows[0];
+
+  try {
+    await client.query("BEGIN");
+    await client.query("DELETE FROM recovery_codes WHERE user_id = $1", [id]);
+    await client.query("DELETE FROM user_totp WHERE user_id = $1", [id]);
+    await client.query("DELETE FROM trusted_devices WHERE user_id = $1", [id]);
+    await client.query("UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL", [id]);
+    await client.query("COMMIT");
+  } catch (error) {
+    // A failed ROLLBACK (a dropped connection) must not hide why the reset failed.
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  }
+  return role;
+}
+
 /** `DATABASE_URL` from the environment, else from `.env` beside `scripts/`. */
 function databaseUrl() {
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
@@ -55,8 +86,8 @@ function databaseUrl() {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [command, username] = process.argv.slice(2);
-  if (command !== "unlock" || !username) {
-    console.error("Uso: node scripts/emergency.mjs unlock <usuario>");
+  if (!["unlock", "reset-2fa"].includes(command) || !username) {
+    console.error("Uso:\n  node scripts/emergency.mjs unlock <usuario>\n  node scripts/emergency.mjs reset-2fa <usuario>");
     process.exit(1);
   }
   const connectionString = databaseUrl();
@@ -68,11 +99,24 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const client = new pg.Client({ connectionString });
   await client.connect();
   try {
-    if (await unlockUser(client, username)) {
-      console.log(`Usuario "${username}" desbloqueado. Ya puede volver a entrar.`);
+    if (command === "unlock") {
+      if (await unlockUser(client, username)) {
+        console.log(`Usuario "${username}" desbloqueado. Ya puede volver a entrar.`);
+      } else {
+        console.error(`No existe el usuario "${username}". Revisá mayúsculas y minúsculas.`);
+        process.exitCode = 1;
+      }
     } else {
-      console.error(`No existe el usuario "${username}". Revisá mayúsculas y minúsculas.`);
-      process.exitCode = 1;
+      const role = await resetTwoFactorByUsername(client, username);
+      if (role === null) {
+        console.error(`No existe el usuario "${username}". Revisá mayúsculas y minúsculas.`);
+        process.exitCode = 1;
+      } else {
+        const next = MANDATORY_ROLES.includes(role)
+          ? "La próxima vez que entre la va a tener que configurar de nuevo."
+          : "Va a poder activarla de nuevo desde Mi cuenta.";
+        console.log(`2FA de "${username}" reseteada. ${next}`);
+      }
     }
   } finally {
     await client.end();

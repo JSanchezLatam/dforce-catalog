@@ -49,7 +49,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T8a | S2, S4, S12, S14 | Enrolment from Mi cuenta, recovery codes, regenerate, disable; key generation in `standalone.ps1` | delegated (context backstop) | done | `fe8097b`, `e1968c7`, `d68500d` (PR #375, merged `93d3bfc`) |
 | T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | done | `aadc097` (PR #376, merged `73c3112`) |
 | T9 | S3, S9 | Trusted device, revoked on password change | delegated (context backstop) | done | `6732117`, `3576b8d` (PR #377, merged `4d96813`) |
-| T10 | S5, S13 | Admin 2FA reset, self-reset refusal, emergency command | delegated (context backstop) | in progress | |
+| T10 | S5, S12, S13 | Admin 2FA reset, self-reset refusal, emergency command | delegated (context backstop) | done | (this commit) |
 | T11 | S11 | `secure` cookie | inline | deferred until the tunnel | |
 
 Route evidence: units depend on each other in order, so no writer trigger applies.
@@ -415,3 +415,25 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - It calls `POST /api/users/[id]/two-factor/reset` (`users.manage`). For the caller's own id the route answers 403 "No podés resetear tu propia verificación en dos pasos."
   - **What a reset does, in one transaction (A5):** delete `user_totp`, `recovery_codes` and `trusted_devices`, and revoke every session. A mandatory role then enrols again at its next sign-in (T8b).
   - **Emergency command (S13):** `node scripts/emergency.mjs reset-2fa <usuario>` does the same from the workshop PC, with plain `pg` and Spanish messages, mirroring `unlock`. WINDOWS.md and WINDOWS.es.md replace "arrives in a later update" with the command.
+- L50 (2026-11-21, T10), written by a bounded writer.
+  - **Reset service and route.** `resetTwoFactor` refuses the actor's own id (`self_reset`, S5). In one transaction it deletes `user_totp`, `recovery_codes` and `trusted_devices`, and revokes every session (A5). `POST /api/users/[id]/two-factor/reset` is guarded by `users.manage`.
+  - **Gestión de usuarios.**
+    - New 2FA column: Activada, Desactivada, or Pendiente with "Obligatoria para su rol"; `pantalla` shows "—".
+    - New Último acceso column, read in batch.
+    - "Resetear 2FA" in the ⋮ menu, never on the viewer's own row. It asks for confirmation and shows a toast.
+  - **Emergency command.** `node scripts/emergency.mjs reset-2fa <usuario>` (S13). WINDOWS.md and WINDOWS.es.md document it.
+  - **Writer's checks.** RED by name; about 20 mutations caught; full e2e 499/499 on a recreated `dforce_e2e`; suite 5203/5203; `tsc` and lint clean.
+  - **Parent's browser check at the LAN IP** found two defects:
+    - **Hydration mismatch on Último acceso.** It was formatted inside the client table, and Node's and the browser's ICU differ in the space before "p. m.". It is now formatted on the server and passed as a label.
+    - **The ⋮ menu was pushed out of view on a tablet (820px).** Nombre and Email now hide below xl, as on the customers table; the phone cards and the edit dialog still show them.
+  - **After the fixes, verified:**
+    - no hydration error;
+    - no table scroll on the tablet, with all nine columns visible on desktop;
+    - the own row offers Editar and Desactivar only, and a jefe with 2FA also gets Resetear 2FA;
+    - the confirmation dialog, then the toast "2FA reseteada para qa-jefe", and the row reads Pendiente;
+    - the emergency command on the QA jefe printed the mandatory-role message with exit 0, and an unknown user gave exit 1;
+    - QA rows removed.
+  - **Recorded.**
+    - A transient `aria-hidden` focus warning appeared once, when confirming from the menu-opened dialog, and did not reproduce.
+    - A second-step check already past its lock can still issue a session just after a reset commits.
+    - Último acceso uses the app's `formatDateTime`, not the mockup's "Hoy 08:12".

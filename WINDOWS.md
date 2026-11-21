@@ -368,8 +368,8 @@ update.
 email. The R2 backup holds the database, not `.env`. A restore onto a new
 machine without the original key leaves every 2FA secret and recovery code
 unreadable: users with 2FA cannot finish signing in and need a 2FA emergency
-reset from this PC before they can enrol again (that command arrives in a later
-update). An administrator or jefe de taller without 2FA cannot get past the
+reset from this PC before they can enrol again:
+`node scripts\emergency.mjs reset-2fa <username>`. An administrator or jefe de taller without 2FA cannot get past the
 mandatory setup screen until the key is back, because enrolling needs it too.
 Other users without 2FA are not affected. Never generate a new key over a
 working one for the same reason.
@@ -467,6 +467,7 @@ backup until the next successful run.
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Login says `Pedí al administrador que te desbloquee.` and the locked user **is** the only administrator | Third lock in a row from wrong passwords: it lasts until an administrator unlocks, and none is signed in | On this PC, from the checkout: `node scripts\emergency.mjs unlock <username>` (reads `DATABASE_URL` from `.env`). The username is case-sensitive |
+| The only administrator lost the phone with the 2FA app **and** the recovery codes, or a restore left the 2FA secrets unreadable | No administrator can sign in to reset the 2FA from Gestión de usuarios | On this PC, from the checkout: `node scripts\emergency.mjs reset-2fa <username>`. It deletes the user's 2FA, recovery codes and trusted devices and closes their sessions; an administrator or jefe de taller sets 2FA up again at the next sign-in. The username is case-sensitive |
 | `FATAL: password authentication failed for user "postgres"` | PostgreSQL was installed with `winget`, which never showed the password screen | "Postgres installed with winget" above |
 | Every screen works but inventory/customer sync brings nothing | This machine's public IP is not on Interfuerza's allowlist | "Interfuerza needs this machine's public IP allowlisted" above |
 | `npm : File ...\npm.ps1 cannot be loaded because running scripts is disabled` | `npm` resolves to `npm.ps1`, which the default execution policy blocks | Use `npm.cmd` instead — same program, batch wrapper, no machine setting changed |
