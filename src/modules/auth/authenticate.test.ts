@@ -71,7 +71,8 @@ describe("authenticateUser() — deactivation refusal (design.md Decision 7)", (
       findUser: vi.fn().mockResolvedValue({
         id: "user-3",
         passwordHash: "hash",
-        role: "administrador" as const,
+        // Not a mandatory 2FA role: an administrador without 2FA now gets an enroll session (T8b).
+        role: "tecnico" as const,
         deactivatedAt: null,
       }),
       verifyPassword: vi.fn().mockResolvedValue(true),
@@ -82,8 +83,8 @@ describe("authenticateUser() — deactivation refusal (design.md Decision 7)", (
 
     const result = await authenticateUser("active-admin", "correct-password", deps);
 
-    expect(result).toEqual({ ok: true, token: "tok", expiresAt: expect.any(Date), role: "administrador" });
-    expect(deps.issueSession).toHaveBeenCalledWith("user-3", "administrador");
+    expect(result).toEqual({ ok: true, token: "tok", expiresAt: expect.any(Date), role: "tecnico" });
+    expect(deps.issueSession).toHaveBeenCalledWith("user-3", "tecnico");
   });
 });
 
@@ -213,6 +214,51 @@ describe("authenticateUser() — login attempts and locks", () => {
       expect(deps.issueSession).toHaveBeenCalledWith("user-1", "tecnico");
       expect(settle).toHaveBeenCalledWith("attempt-1", "success", "user-1");
       expect(result).toEqual({ ok: true, token: "t", expiresAt: new Date(0), role: "tecnico" });
+    });
+  });
+  describe("a mandatory 2FA role without 2FA (T8b, L41)", () => {
+    const enrollExpiry = new Date("2026-11-20T12:30:00.000Z");
+    const mandatoryDeps = (role: "administrador" | "jefe_taller", hasTwoFactor = false) =>
+      attemptDeps({
+        findUser: vi.fn().mockResolvedValue({ ...activeUser, role }),
+        hasTwoFactor: vi.fn().mockResolvedValue(hasTwoFactor),
+        issueSession: vi.fn().mockResolvedValue({ token: "enroll-token", expiresAt: enrollExpiry }),
+      });
+
+    it.each(["administrador", "jefe_taller"] as const)("gives %s an enroll session, not a full one", async (role) => {
+      const { deps } = mandatoryDeps(role);
+
+      const result = await authenticateUser("ana", "correct", deps);
+
+      expect(deps.issueSession).toHaveBeenCalledWith("user-1", role, { pending: "enroll" });
+      expect(result).toEqual({ ok: true, token: "enroll-token", expiresAt: enrollExpiry, role, pending: "enroll" });
+    });
+
+    // No second factor exists yet, so the password is the whole login: it resets the counter.
+    it("settles the attempt as success", async () => {
+      const { deps, settle } = mandatoryDeps("administrador");
+
+      await authenticateUser("ana", "correct", deps);
+
+      expect(settle).toHaveBeenCalledWith("attempt-1", "success", "user-1");
+    });
+
+    it("still sends a mandatory role that has 2FA to the code step", async () => {
+      const { deps } = mandatoryDeps("jefe_taller", true);
+
+      const result = await authenticateUser("ana", "correct", deps);
+
+      expect(deps.issueSession).toHaveBeenCalledWith("user-1", "jefe_taller", { pending: "verify" });
+      expect(result).toMatchObject({ pending: "verify" });
+    });
+
+    it.each(["tecnico", "pantalla"] as const)("leaves %s without 2FA on a full session", async (role) => {
+      const { deps } = attemptDeps({ findUser: vi.fn().mockResolvedValue({ ...activeUser, role }) });
+
+      const result = await authenticateUser("ana", "correct", deps);
+
+      expect(deps.issueSession).toHaveBeenCalledWith("user-1", role);
+      expect(result).not.toHaveProperty("pending");
     });
   });
 });

@@ -1,5 +1,6 @@
 import { and, eq, isNotNull } from "drizzle-orm";
 
+import { requiresTwoFactor } from "@/modules/auth/enrolment";
 import { reserveLoginAttempt, settleLoginAttempt } from "@/modules/auth/login-attempts";
 import { loginKey } from "@/modules/auth/login-lock";
 import { verifyPassword } from "@/modules/auth/password";
@@ -8,7 +9,7 @@ import { db } from "@/shared/db/client";
 import { users, userTotp } from "@/shared/db/schema";
 
 export type AuthResult =
-  | { ok: true; token: string; expiresAt: Date; role: Role; pending?: "verify" }
+  | { ok: true; token: string; expiresAt: Date; role: Role; pending?: "verify" | "enroll" }
   | { ok: false; lockedUntil?: Date };
 
 /** Compared when the user does not exist, so that case costs the same bcrypt time. Matches no password in use. */
@@ -102,6 +103,14 @@ export async function authenticateUser(
     const { token, expiresAt } = await doIssueSession(user.id, user.role, { pending: "verify" });
     await attempts.settle(reserved.attemptId, "password_ok", user.id);
     return { ok: true, token, expiresAt, role: user.role, pending: "verify" };
+  }
+
+  // S2: a mandatory role without 2FA must set it up before anything else (L41). The
+  // password is the whole login here, as no second factor exists yet, so it is a success.
+  if (requiresTwoFactor(user.role)) {
+    const { token, expiresAt } = await doIssueSession(user.id, user.role, { pending: "enroll" });
+    await attempts.settle(reserved.attemptId, "success", user.id);
+    return { ok: true, token, expiresAt, role: user.role, pending: "enroll" };
   }
 
   const { token, expiresAt } = await doIssueSession(user.id, user.role);

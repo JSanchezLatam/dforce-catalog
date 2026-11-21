@@ -8,7 +8,7 @@ import { authenticateUser } from "@/modules/auth/authenticate";
 import { clientIp } from "@/modules/auth/client-ip";
 import { isUntilUnlocked } from "@/modules/auth/login-lock";
 import { SESSION_COOKIE } from "@/modules/auth/session";
-import { TWO_FACTOR_PATH } from "@/modules/auth/two-factor-gate";
+import { TWO_FACTOR_PATH, TWO_FACTOR_SETUP_PATH } from "@/modules/auth/two-factor-gate";
 
 export type LoginState = { error: string; detail?: string; lockedUsername?: string; retryAt?: number } | null;
 
@@ -51,5 +51,7 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
     path: "/",
   });
 
-  redirect(result.pending === "verify" ? TWO_FACTOR_PATH : landingPathFor(result.role));
+  if (result.pending === "verify") redirect(TWO_FACTOR_PATH);
+  if (result.pending === "enroll") redirect(TWO_FACTOR_SETUP_PATH);
+  redirect(landingPathFor(result.role));
 }

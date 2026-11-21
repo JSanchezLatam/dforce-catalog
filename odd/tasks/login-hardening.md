@@ -47,7 +47,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T6 | S2 | Pending session, proxy gate, e2e fixtures | delegated (context backstop, L28) | done | `a038c74`, `5e34740`, `02c1d5c` (PR #373, merged `edb0cb0`) |
 | T7 | S4, S6, S12 | Second-step page and recovery-code path | delegated (context backstop, L28) | done | `bde0eb3`, `780b8f2`, `a7c1bc1` (PR #374, merged `d2e0eaf`) |
 | T8a | S2, S4, S12, S14 | Enrolment from Mi cuenta, recovery codes, regenerate, disable; key generation in `standalone.ps1` | delegated (context backstop) | done | `fe8097b`, `e1968c7`, `d68500d` (PR #375, merged `93d3bfc`) |
-| T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | pending | |
+| T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | done | `aadc097` |
 | T9 | S3, S9 | Trusted device, revoked on password change | inline | pending | |
 | T10 | S5, S13 | Admin 2FA reset, self-reset refusal, emergency command | inline | pending | |
 | T11 | S11 | `secure` cookie | inline | deferred until the tunnel | |
@@ -319,3 +319,46 @@ Route evidence: units depend on each other in order, so no writer trigger applie
   - **Recorded:**
     - The section can show "Desactivada" for a moment if "Ya los guardé" beats the refresh.
     - A lost single-use race at the SQL guard still counts as `bad_code`.
+- L41 (2026-11-20, T8b design, mockup `s3`).
+  - **Password step.** A correct password for `administrador` or `jefe_taller` with no enabled 2FA issues a session with `pending = 'enroll'`, valid for 30 minutes, which leaves time for a forced password change first (A2). The attempt settles as `success`, because no second factor exists yet. Already-open sessions are not cut (A3). `tecnico` and `pantalla` are unaffected.
+  - **Proxy order.**
+    1. A `verify` session is gated as T6 built it.
+    2. Otherwise, `mustChangePassword` sends to `/change-password` first (A2).
+    3. Otherwise, an `enroll` session is confined to exactly `/two-factor/setup`, `/api/two-factor/setup/start`, `/api/two-factor/setup/confirm` and `/api/logout`. Pages redirect to `/two-factor/setup`; APIs answer 403 `second_factor_required`.
+
+    This order cannot loop: while `mustChangePassword` holds, the setup paths go to `/change-password`, and the change-password paths are not redirected to setup.
+  - **`/two-factor/setup`.**
+    - The screen follows `s3` and the login layout. Copy: "Configurá la verificación en dos pasos", "Tu rol de <Rol> la requiere. Te toma un minuto.", the three steps, the QR, "¿No podés escanear? Escribí esta clave en la app:", "Código de la app", "Activar y continuar" and "Cerrar sesión".
+    - Its two APIs act only on a database-read `enroll` session. There is no password field, because the session comes from a password typed at most 30 minutes earlier.
+    - They reuse T8a's start and confirm logic without the password check.
+    - Confirm enables 2FA, revokes the `enroll` session, issues a full session (cookie set like `/api/login`), and returns the 10 codes, shown once with Imprimir, Descargar .txt and "Ya los guardé". "Ya los guardé" then goes to the role's landing page.
+  - **Missing key.** Setup shows "La verificación en dos pasos no está disponible. Avisá al administrador." with only "Cerrar sesión".
+- L42 (2026-11-20, T8b), written by a bounded writer. The parent read the `proxy.ts` diff in full.
+  - **Enroll session.** An `administrador` or `jefe_taller` without 2FA gets a 30-minute `enroll` session, and the attempt is recorded as `success`. The proxy follows the L41 order (verify gate; then a forced password change; then `enroll` confined to four exact paths). A unit test follows the redirects from every start page and finds no loop.
+  - **Setup screen.** `/two-factor/setup` and its start and confirm APIs act only on a session the database shows as `enroll`. Confirm swaps that session for a full one once, through a guarded revoke. The recovery codes block is shared with Mi cuenta (`RecoveryCodes.tsx`).
+  - **Existing e2e adapted without weakening the gate.** In `two-factor-pending`, the full-session cases log in as `tecnico`. In `pantalla-role`, the TTL comparison now uses `tecnico`. In `board-routes`, the `jefe_taller` really enrols.
+  - **Writer's checks.** RED was observed by name. 13 mutations were caught; a redundant 503 branch was removed. The full e2e suite passes 477/477 on a recreated `dforce_e2e`. The suite passes 5156/5156, and `tsc` and lint are clean.
+  - **Parent's changes.** The parent corrected WINDOWS.md and WINDOWS.es.md, which said users without 2FA are unaffected by a lost key: a mandatory role cannot get past setup without it.
+  - **Browser check at the LAN IP** (phone, dark theme, a QA `administrador`):
+    - The login lands on `/two-factor/setup`, and `/inventory` bounces back there.
+    - The screen matches `s3` ("Tu rol de Administrador la requiere.", the steps, the QR, the grouped key). There is no horizontal scroll.
+    - A real code shows the 10 codes, and "Ya los guardé" lands on `/inventory`.
+    - In the database, the `enroll` session is revoked, the full session is active, 2FA is enabled and there are 10 codes. QA rows removed.
+  - **Recorded.**
+    - Reloading the setup page replaces the secret, so a QR scanned earlier stops working.
+    - A second `enroll` session of the same user stays confined until it expires.
+    - The new copy not in the mockup: "La configuración venció. Volvé a iniciar sesión." and "No se pudo completar. Intentá de nuevo."
+  - **Owner impact.** Once this reaches the workshop PC, every `administrador` and `jefe_taller` sets up 2FA at their next sign-in. Sessions already open are not cut (A3).
+- L43 (2026-11-20, T8b): GGA passed. An independent verifier passed S2 and S12 with no blockers.
+  - **Probes:**
+    - 12 parallel confirms on one `enroll` token produced one full session.
+    - When two `enroll` tokens raced, one won and the loser's start answered `no_pending_session`.
+    - A body `userId` naming another user had no effect.
+    - An `enroll` session was blocked on path variants and on the Mi cuenta and password routes, and forwarded no identity.
+    - The role and TTL matrix came out right, including an unfinished `user_totp` and a deactivated user.
+  - **Adapted e2e:** the verifier confirmed none was weakened.
+  - **Advisories kept:**
+    - The access log cannot tell a setup login from a password-only one.
+    - Setup confirm has no attempt limit; the secret belongs to that session.
+    - The proxy matcher's `login` lookahead skips any path starting with `login`. That predates this unit, and no such route exists.
+- L44 (2026-11-20, T8b): Gentle AI review (risk + reliability, granted under L27) APPROVED and acknowledged. Follow-ups: if the session swap fails after confirm (a logout or an expiry won the race), 2FA stays on and the codes are lost, and the user regenerates them from Mi cuenta; a failed setup start offers no retry button, only a reload or Cerrar sesión.

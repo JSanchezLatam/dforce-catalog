@@ -109,6 +109,19 @@ describe("loginAction", () => {
     expect(set).toHaveBeenCalledWith("session", "p", expect.objectContaining({ expires: expiresAt }));
   });
 
+  // A mandatory role without 2FA sets it up before anything else (T8b, L41).
+  it("sends an enroll login to the setup screen, not the role's landing", async () => {
+    const expiresAt = new Date("2026-11-20T12:30:00.000Z");
+    authenticateUser.mockResolvedValue({ ok: true, token: "e", expiresAt, role: "administrador", pending: "enroll" });
+    redirect.mockClear();
+    set.mockClear();
+
+    await loginAction(null, new FormData());
+
+    expect(redirect).toHaveBeenCalledWith("/two-factor/setup");
+    expect(set).toHaveBeenCalledWith("session", "e", expect.objectContaining({ expires: expiresAt }));
+  });
+
   // The no-enumeration property (R9.1/9.2) is NOT tested here. It lives in
   // `authenticateUser`, which has three failure causes to keep identical —
   // unknown username, wrong password, deactivated account — and

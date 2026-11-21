@@ -18,3 +18,19 @@ const EXEMPT_PATHS: readonly string[] = [TWO_FACTOR_PATH, "/api/two-factor/verif
 export function isSecondFactorExempt(pathname: string): boolean {
   return EXEMPT_PATHS.includes(pathname);
 }
+
+/** The setup screen a mandatory role without 2FA is confined to (T8b, L41). */
+export const TWO_FACTOR_SETUP_PATH = "/two-factor/setup";
+
+/** The only paths a session at `pending = 'enroll'` may reach: the setup screen, its two POST targets, and logout. */
+const ENROLMENT_PATHS: readonly string[] = [
+  TWO_FACTOR_SETUP_PATH,
+  "/api/two-factor/setup/start",
+  "/api/two-factor/setup/confirm",
+  "/api/logout",
+];
+
+/** Exact match, as `isSecondFactorExempt`. */
+export function isEnrolmentExempt(pathname: string): boolean {
+  return ENROLMENT_PATHS.includes(pathname);
+}

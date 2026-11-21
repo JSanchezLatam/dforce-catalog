@@ -39,6 +39,17 @@ describe("POST /api/login", () => {
     expect(response.cookies.get("session")?.expires).toEqual(expiresAt);
   });
 
+  it("answers a mandatory role without 2FA with an enroll session that expires with it", async () => {
+    const expiresAt = new Date("2026-11-20T12:30:00.000Z");
+    authenticateUser.mockResolvedValue({ ok: true, token: "e", expiresAt, role: "jefe_taller", pending: "enroll" });
+
+    const response = await login();
+
+    expect(await response.json()).toEqual({ ok: true, role: "jefe_taller", pending: "enroll" });
+    expect(response.cookies.get("session")?.value).toBe("e");
+    expect(response.cookies.get("session")?.expires).toEqual(expiresAt);
+  });
+
   it("answers a locked login with 429, the wait, and no cookie", async () => {
     authenticateUser.mockResolvedValue({ ok: false, lockedUntil: new Date(Date.now() + 90_000) });
 
