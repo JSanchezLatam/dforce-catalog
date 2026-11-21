@@ -114,8 +114,12 @@ export function ForcedPasswordChangeForm() {
 
       <div className="grid gap-2">
         <Label htmlFor="newPassword">Nueva contraseña</Label>
+        <p id="newPassword-hint" className="text-xs text-muted-foreground">
+          Mínimo {MIN_PASSWORD_LENGTH} caracteres. No puede ser una contraseña común.
+        </p>
         <Input
           id="newPassword"
+          aria-describedby="newPassword-hint"
           type="password"
           autoComplete="new-password"
           value={newPassword}

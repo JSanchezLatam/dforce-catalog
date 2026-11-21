@@ -93,6 +93,14 @@ export const env = {
    */
   PORTAL_INGEST_URL: optional("PORTAL_INGEST_URL"),
   PORTAL_INGEST_SECRET: optional("PORTAL_INGEST_SECRET"),
+  /**
+   * 32 random bytes in base64 that encrypt each user's 2FA secret and key the
+   * recovery code hashes (login-hardening S2, S4). Server-side only, never
+   * logged. Optional at boot, so an install without it still starts; 2FA
+   * refuses to run until it is set. Losing it makes every 2FA secret
+   * unreadable, so it is backed up with `.env`, never with the database.
+   */
+  TOTP_ENCRYPTION_KEY: optional("TOTP_ENCRYPTION_KEY"),
 } as const;
 
 /** Keys that must never be included in logs, error messages, or responses. */
@@ -105,4 +113,5 @@ export const SENSITIVE_ENV_KEYS = [
   "KAPSO_API_KEY",
   "SENTRY_DSN",
   "PORTAL_INGEST_SECRET",
+  "TOTP_ENCRYPTION_KEY",
 ] as const;

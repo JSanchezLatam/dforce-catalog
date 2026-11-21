@@ -18,6 +18,7 @@ export const SCREEN_LABELS: Record<string, string> = {
   "/technicians": "Técnicos",
   "/template-config": "Configuración de plantillas",
   "/users": "Gestión de usuarios",
+  "/access-log": "Registro de accesos",
   "/vencimientos": "Vencimientos",
   "/workshop-config": "Config. del CRM",
 };

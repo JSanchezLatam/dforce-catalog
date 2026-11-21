@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { ROLES } from "./roles";
-import { isSessionActive, isUserActive, requireSession, revokeOtherSessions, sessionTtlMs, validateSession } from "./session";
+import {
+  isSessionActive,
+  isUserActive,
+  pendingSessionTtlMs,
+  requireSession,
+  revokeOtherSessions,
+  sessionTtlMs,
+  validateSession,
+} from "./session";
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -12,6 +20,7 @@ type FakeRow = {
   revokedAt: Date | null;
   deactivatedAt: Date | null;
   mustChangePassword: boolean;
+  pending: "verify" | "enroll" | null;
 };
 
 function activeRow(overrides: Partial<FakeRow> = {}): FakeRow {
@@ -22,6 +31,7 @@ function activeRow(overrides: Partial<FakeRow> = {}): FakeRow {
     revokedAt: null,
     deactivatedAt: null,
     mustChangePassword: false,
+    pending: null,
     ...overrides,
   };
 }
@@ -78,7 +88,7 @@ describe("validateSession() — DB-free via injected queryFn", () => {
     const result = await validateSession("token-1", queryFn);
 
     expect(queryFn).toHaveBeenCalledWith("token-1");
-    expect(result).toEqual({ id: "user-1", role: "administrador", mustChangePassword: false });
+    expect(result).toEqual({ id: "user-1", role: "administrador", mustChangePassword: false, pending: null });
   });
 
   it("returns null when no row is found (unknown token)", async () => {
@@ -121,6 +131,20 @@ describe("validateSession() — DB-free via injected queryFn", () => {
   });
 });
 
+describe("validateSession() — a session still owing its second factor (T6)", () => {
+  it("carries pending verify, so the proxy can gate it", async () => {
+    const queryFn = vi.fn().mockResolvedValue(activeRow({ pending: "verify" }));
+
+    expect((await validateSession("token-1", queryFn))?.pending).toBe("verify");
+  });
+
+  it("still refuses an expired pending session", async () => {
+    const queryFn = vi.fn().mockResolvedValue(activeRow({ pending: "verify", expiresAt: new Date(Date.now() - 1) }));
+
+    expect(await validateSession("token-1", queryFn)).toBeNull();
+  });
+});
+
 describe("revokeOtherSessions()", () => {
   it("revokes all sessions except the current one when keepTokenId is provided", async () => {
     const fn = vi.fn();
@@ -140,5 +164,16 @@ describe("Lifetime per role — sessionTtlMs()", () => {
 
   it.each(ROLES)("%s gets the lifetime its role calls for", (role) => {
     expect(sessionTtlMs(role)).toBe(role === "pantalla" ? 180 * DAY_MS : 7 * DAY_MS);
+  });
+});
+
+describe("Lifetime of a pending session — pendingSessionTtlMs() (L28, L41)", () => {
+  it("gives a verify session ten minutes to type the code", () => {
+    expect(pendingSessionTtlMs("verify")).toBe(10 * 60 * 1000);
+  });
+
+  // Long enough for a forced password change before the setup (A2).
+  it("gives an enroll session thirty minutes", () => {
+    expect(pendingSessionTtlMs("enroll")).toBe(30 * 60 * 1000);
   });
 });

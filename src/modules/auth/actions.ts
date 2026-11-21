@@ -1,13 +1,17 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { landingPathFor } from "@/modules/auth/landing";
 import { authenticateUser } from "@/modules/auth/authenticate";
+import { clientIp } from "@/modules/auth/client-ip";
+import { isUntilUnlocked } from "@/modules/auth/login-lock";
 import { SESSION_COOKIE } from "@/modules/auth/session";
+import { TRUSTED_DEVICE_COOKIE } from "@/modules/auth/trusted-device";
+import { TWO_FACTOR_PATH, TWO_FACTOR_SETUP_PATH } from "@/modules/auth/two-factor-gate";
 
-export type LoginState = { error: string } | null;
+export type LoginState = { error: string; detail?: string; lockedUsername?: string; retryAt?: number } | null;
 
 /**
  * Server Action driving `LoginForm.tsx` via `useActionState` (React
@@ -22,12 +26,28 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
   const username = String(formData.get("username") ?? "");
   const password = String(formData.get("password") ?? "");
 
-  const result = await authenticateUser(username, password);
+  const cookieStore = await cookies();
+  const result = await authenticateUser(username, password, {
+    ip: clientIp(await headers()),
+    trustedDeviceToken: cookieStore.get(TRUSTED_DEVICE_COOKIE)?.value,
+  });
   if (!result.ok) {
-    return { error: "Usuario o contraseña incorrectos." };
+    if (!result.lockedUntil) return { error: "Usuario o contraseña incorrectos." };
+    if (isUntilUnlocked(result.lockedUntil)) {
+      return {
+        error: "Demasiados intentos fallidos.",
+        detail: "Por seguridad, el acceso quedó bloqueado. Pedí al administrador que te desbloquee.",
+      };
+    }
+    const minutes = Math.ceil((result.lockedUntil.getTime() - Date.now()) / 60_000);
+    return {
+      error: "Demasiados intentos fallidos.",
+      detail: `Por seguridad, el acceso quedó bloqueado. Intentá de nuevo en ${minutes} ${minutes === 1 ? "minuto" : "minutos"} o pedí al administrador que te desbloquee.`,
+      lockedUsername: username,
+      retryAt: result.lockedUntil.getTime(),
+    };
   }
 
-  const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, result.token, {
     httpOnly: true,
     sameSite: "lax",
@@ -35,5 +55,7 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
     path: "/",
   });
 
+  if (result.pending === "verify") redirect(TWO_FACTOR_PATH);
+  if (result.pending === "enroll") redirect(TWO_FACTOR_SETUP_PATH);
   redirect(landingPathFor(result.role));
 }

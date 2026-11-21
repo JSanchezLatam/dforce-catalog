@@ -117,10 +117,10 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     expect(cat.items.map((i) => i.label)).not.toContain("Inventario");
   });
 
-  it("admin sees Configuración with four children: Config. del CRM + Config. de catálogos (with nested Configuración de plantillas) + Gestión de usuarios + Técnicos", () => {
+  it("admin sees Configuración with five children: Config. del CRM + Config. de catálogos (with nested Configuración de plantillas) + Gestión de usuarios + Registro de accesos + Técnicos", () => {
     const groups = getNavGroups(admin);
     const cfg = groups.find((g) => g.label === "Configuración")!;
-    expect(cfg.items).toHaveLength(4);
+    expect(cfg.items).toHaveLength(5);
     expect(cfg.items[0]).toEqual({ kind: "link", href: "/workshop-config", label: "Config. del CRM", icon: "template-config", action: "workshop.edit" });
     const parent = cfg.items[1];
     expect(parent.kind).toBe("parent");
@@ -130,7 +130,9 @@ describe("getNavGroups() — grouped sidebar nav", () => {
       expect(parent.children[0].label).toBe("Configuración de plantillas");
     }
     expect(cfg.items[2]).toEqual({ kind: "link", href: "/users", label: "Gestión de usuarios", icon: "users", action: "users.manage" });
-    expect(cfg.items[3]).toEqual({ kind: "link", href: "/technicians", label: "Técnicos", icon: "technicians", action: "technicians.manage" });
+    // S10: below Gestión de usuarios, behind the same action as the page.
+    expect(cfg.items[3]).toEqual({ kind: "link", href: "/access-log", label: "Registro de accesos", icon: "access-log", action: "users.manage" });
+    expect(cfg.items[4]).toEqual({ kind: "link", href: "/technicians", label: "Técnicos", icon: "technicians", action: "technicians.manage" });
   });
 
   // technicians-and-work-lines WU3: the jefe keeps CRM, Catálogo and "Técnicos";
@@ -188,10 +190,10 @@ describe("getNavGroups() — grouped sidebar nav", () => {
     expect(totalItems).toBe(6);
   });
 
-  it("admin sees 13 total items across 4 groups", () => {
+  it("admin sees 14 total items across 4 groups", () => {
     const groups = getNavGroups(admin);
     const totalItems = groups.reduce((s, g) => s + g.items.length, 0);
-    expect(totalItems).toBe(13);
+    expect(totalItems).toBe(14);
   });
 
   // Stable ids decouple sidebar-group-collapse cookie state from display

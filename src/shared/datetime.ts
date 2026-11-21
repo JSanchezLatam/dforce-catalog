@@ -55,6 +55,16 @@ export function formatDate(value: Date): string {
   return value.toLocaleDateString(WORKSHOP_LOCALE, { timeZone: WORKSHOP_TIME_ZONE });
 }
 
+/** `HH:MM` on a 24-hour workshop clock, e.g. the end of a login lock. */
+export function formatTime(value: Date): string {
+  return value.toLocaleTimeString(WORKSHOP_LOCALE, {
+    timeZone: WORKSHOP_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+}
+
 /**
  * Today (or any instant) as the workshop's calendar day, `YYYY-MM-DD`. A STRING
  * on purpose: the due rules compare date keys lexically and never build a

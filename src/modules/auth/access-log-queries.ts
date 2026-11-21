@@ -1,0 +1,73 @@
+import { and, count, desc, eq, gt, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+
+import { db } from "@/shared/db/client";
+import { loginAttempts, users } from "@/shared/db/schema";
+
+import { RESULT_OUTCOMES, type AccessLogFilters, type SecondFactor } from "./access-log";
+import type { LoginOutcome } from "./login-lock";
+
+/**
+ * `username` is null when the typed login matches no user: that text may be a
+ * password (S10, L16). `actor` is the administrator who unlocked;
+ * `secondFactor` how a success passed 2FA.
+ */
+export type AccessLogRow = {
+  id: string;
+  at: Date;
+  username: string | null;
+  ip: string | null;
+  outcome: LoginOutcome;
+  actor: string | null;
+  secondFactor: SecondFactor | null;
+};
+
+const actors = alias(users, "actor");
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function matching(filters: AccessLogFilters, now: Date) {
+  return and(
+    gt(loginAttempts.at, new Date(now.getTime() - filters.days * DAY_MS)),
+    // Through the join: matching the typed text would confirm a guess of it (L16).
+    filters.user ? eq(users.username, filters.user) : undefined,
+    filters.result ? inArray(loginAttempts.outcome, [...RESULT_OUTCOMES[filters.result]]) : undefined,
+  );
+}
+
+export async function listAccessLog(
+  filters: AccessLogFilters,
+  window: { offset: number; limit: number },
+  now = new Date(),
+): Promise<AccessLogRow[]> {
+  return (
+    db
+      // The join, not the row's `user_id`: refused and emergency-unlock rows of
+      // a real user carry no `user_id`. Only the matched user's name is read.
+      .select({
+        id: loginAttempts.id,
+        at: loginAttempts.at,
+        username: users.username,
+        ip: loginAttempts.ip,
+        outcome: loginAttempts.outcome,
+        actor: actors.username,
+        secondFactor: loginAttempts.secondFactor,
+      })
+      .from(loginAttempts)
+      .leftJoin(users, eq(users.username, loginAttempts.username))
+      .leftJoin(actors, eq(actors.id, loginAttempts.actorId))
+      .where(matching(filters, now))
+      .orderBy(desc(loginAttempts.at), desc(loginAttempts.id))
+      .limit(window.limit)
+      .offset(window.offset)
+  );
+}
+
+export async function countAccessLog(filters: AccessLogFilters, now = new Date()): Promise<number> {
+  const [row] = await db
+    .select({ n: count() })
+    .from(loginAttempts)
+    .leftJoin(users, eq(users.username, loginAttempts.username))
+    .where(matching(filters, now));
+  return row.n;
+}

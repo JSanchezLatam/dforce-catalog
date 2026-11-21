@@ -130,9 +130,10 @@ describe("pantalla role (E2E)", () => {
     expect(await rosterOf(boss.id)).toHaveLength(0);
   });
 
-  it("session lifetime follows the role: pantalla 180 days, administrador 7", async () => {
+  // A tecnico for the 7 days: an administrador without 2FA now gets a 30-minute enroll session (T8b).
+  it("session lifetime follows the role: pantalla 180 days, tecnico 7", async () => {
     const tv = await mk("ttl-tv", "pantalla");
-    const boss = await mk("ttl-admin", "administrador");
+    const boss = await mk("ttl-tecnico", "tecnico");
     const [tvLogin, bossLogin] = [await login(tv), await login(boss)];
     const [tvRow] = await db.select().from(sessions).where(eq(sessions.id, tvLogin.token));
     const [bossRow] = await db.select().from(sessions).where(eq(sessions.id, bossLogin.token));

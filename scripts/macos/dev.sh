@@ -3,9 +3,10 @@
 # Bring up the full local stack: Postgres (docker), Drizzle migrations, and
 # the Next.js app in dev mode.
 #
-# Orchestrator only: it never installs dependencies and never writes .env
-# files. When a prerequisite is missing it prints exactly what is wrong and
-# the exact command that fixes it, then exits non-zero.
+# Orchestrator only: it never installs dependencies, and the one thing it writes
+# to .env is a missing TOTP_ENCRYPTION_KEY, once. When a prerequisite is missing
+# it prints exactly what is wrong and the exact command that fixes it, then
+# exits non-zero.
 #
 # Usage:  ./scripts/macos/dev.sh
 # Env:    APP_PORT (default 3000), SKIP_TYPECHECK=1 to skip the tsc gate,
@@ -125,6 +126,32 @@ falla: conecta igual, contra la base equivocada, y la app se ve vacía." \
   DATABASE_URL=postgres://dforce:dforce@localhost:$DB_HOST_PORT/dforce_catalog"
     ;;
 esac
+
+# S14 (login-hardening): the 2FA key is created once, when .env lacks it or has
+# it blank; an existing value is never touched and never printed.
+if [ -n "$(env_value "$ROOT/.env" TOTP_ENCRYPTION_KEY)" ]; then
+  ok "TOTP_ENCRYPTION_KEY definida"
+else
+  TOTP_KEY="$(openssl rand -base64 32)" && [ -n "$TOTP_KEY" ] || fail \
+    "No pude generar TOTP_ENCRYPTION_KEY con openssl." \
+    "Agregala a mano en .env:
+
+  TOTP_ENCRYPTION_KEY=\$(openssl rand -base64 32)"
+  # Fills a blank assignment in place (env.example ships one); appends otherwise.
+  sed -i '' -E "s|^[[:space:]]*TOTP_ENCRYPTION_KEY[[:space:]]*=[[:space:]]*([\"']{2})?[[:space:]]*$|TOTP_ENCRYPTION_KEY=$TOTP_KEY|" "$ROOT/.env"
+  if [ -z "$(env_value "$ROOT/.env" TOTP_ENCRYPTION_KEY)" ]; then
+    [ -n "$(tail -c1 "$ROOT/.env")" ] && printf '\n' >> "$ROOT/.env"
+    printf 'TOTP_ENCRYPTION_KEY=%s\n' "$TOTP_KEY" >> "$ROOT/.env"
+  fi
+  unset TOTP_KEY
+  [ -n "$(env_value "$ROOT/.env" TOTP_ENCRYPTION_KEY)" ] || fail \
+    "Intenté generar TOTP_ENCRYPTION_KEY en .env y no quedó escrita." \
+    "Agregala a mano en .env:
+
+  TOTP_ENCRYPTION_KEY=\$(openssl rand -base64 32)"
+  ok "TOTP_ENCRYPTION_KEY generada en .env (clave de la verificación en dos pasos)"
+  warn "Guardá una copia de .env fuera de esta máquina: sin la clave, quien tenga 2FA necesita el reset de emergencia."
+fi
 
 # --------------------------------------------------------------------------
 # 3. Dependencies (checked, never installed)

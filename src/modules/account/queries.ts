@@ -78,3 +78,4 @@ export async function listActiveAdminIds(
 ): Promise<string[]> {
   return queryFn();
 }
+

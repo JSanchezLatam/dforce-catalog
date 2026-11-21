@@ -1,7 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { authenticateUser } from "@/modules/auth/authenticate";
+import { clientIp } from "@/modules/auth/client-ip";
+import { isUntilUnlocked } from "@/modules/auth/login-lock";
 import { SESSION_COOKIE } from "@/modules/auth/session";
+import { TRUSTED_DEVICE_COOKIE } from "@/modules/auth/trusted-device";
 
 /**
  * R9.1/9.2 — login. `proxy.ts` already excludes `/login`/`/api/login` from
@@ -22,12 +25,23 @@ export async function POST(request: NextRequest) {
   const username = typeof body?.username === "string" ? body.username : "";
   const password = typeof body?.password === "string" ? body.password : "";
 
-  const result = await authenticateUser(username, password);
+  const result = await authenticateUser(username, password, {
+    ip: clientIp(request.headers),
+    trustedDeviceToken: request.cookies.get(TRUSTED_DEVICE_COOKIE)?.value,
+  });
+  if (!result.ok && result.lockedUntil) {
+    if (isUntilUnlocked(result.lockedUntil)) return NextResponse.json({ error: "locked" }, { status: 429 });
+    const retryAfter = Math.ceil((result.lockedUntil.getTime() - Date.now()) / 1000);
+    return NextResponse.json({ error: "locked" }, { status: 429, headers: { "Retry-After": String(retryAfter) } });
+  }
   if (!result.ok) {
     return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
   }
 
-  const response = NextResponse.json({ ok: true, role: result.role });
+  // The cookie below carries a pending session's expiry as is: 10 minutes for `verify`, 30 for `enroll`.
+  const response = NextResponse.json(
+    result.pending ? { ok: true, role: result.role, pending: result.pending } : { ok: true, role: result.role },
+  );
   response.cookies.set(SESSION_COOKIE, result.token, {
     httpOnly: true,
     sameSite: "lax",

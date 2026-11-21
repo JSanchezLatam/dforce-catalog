@@ -2,13 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, Lock } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { isUntilUnlocked } from "@/modules/auth/login-lock";
 import { ROLE_LABELS } from "@/modules/auth/roles";
 import { BulkResultPanel } from "@/shared/ui/selection/BulkResultPanel";
 import { RecordCard, RecordCardList } from "@/shared/ui/RecordCard";
@@ -19,9 +20,12 @@ import { SelectionProvider } from "@/shared/ui/selection/SelectionProvider";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 import { DEACTIVATED_CHIP, FIELD_ERROR } from "@/shared/ui/styles";
 import { CONNECTION_ERROR } from "@/shared/ui/messages";
+import { formatTime } from "@/shared/datetime";
 import { useToast } from "@/shared/ui/ToastProvider";
 import { REFUSAL_MESSAGES } from "./refusals";
 import { UserBulkActions } from "./UserBulkActions";
+import { ResetTwoFactorDialog } from "./ResetTwoFactorButton";
+import { UnlockUserButton } from "./UnlockUserButton";
 import { UserForm } from "./UserForm";
 
 export type UserRow = {
@@ -32,7 +36,53 @@ export type UserRow = {
   role: string;
   /** Serialised over the RSC boundary, so a string rather than a Date. */
   deactivatedAt: string | null;
+  /** When the login lock ends (ISO), or `null` when the user can log in. */
+  lockedUntil: string | null;
+  /** The user's `user_totp` row: `enrolling` until its first code is confirmed. */
+  twoFactor: "enabled" | "enrolling" | null;
+  /** S2's mandatory roles, decided on the server so this client file never imports the enrolment module. */
+  twoFactorRequired: boolean;
+  /** Already formatted on the server ("—" when none), so server and browser render the same text. */
+  lastAccess: string;
 };
+
+/** Mockup `s5`'s 2FA chip; `pantalla` has no 2FA (A1). */
+function TwoFactorChip({ user, className }: { user: UserRow; className?: string }) {
+  if (user.role === "pantalla") return <span className={className}>—</span>;
+  if (user.twoFactor === "enabled") return <StatusBadge status="completed" label="Activada" className={className} />;
+  if (user.twoFactorRequired) {
+    return (
+      <span title="Obligatoria para su rol" className={className}>
+        <StatusBadge status="warning" label="Pendiente" />
+      </span>
+    );
+  }
+  return (
+    <Badge variant="outline" className={className}>
+      Desactivada
+    </Badge>
+  );
+}
+
+/**
+ * The lock's label, or `null` when the login is open; a lock only an unlock
+ * lifts has no hour. A deactivated user cannot log in anyway, so only an
+ * active row shows its lock.
+ */
+function lockOf(user: UserRow): string | null {
+  if (user.deactivatedAt !== null || user.lockedUntil === null) return null;
+  const until = new Date(user.lockedUntil);
+  return isUntilUnlocked(until) ? "Bloqueado" : `Bloqueado hasta ${formatTime(until)}`;
+}
+
+function LockedBadge({ label, className }: { label: string; className?: string }) {
+  return (
+    <Badge variant="destructive" className={className}>
+      <Lock aria-hidden="true" />
+      {label}
+    </Badge>
+  );
+}
 
 /**
  * `role` crosses the RSC boundary as a plain `string`, so the lookup is cast
@@ -90,6 +140,14 @@ function compare(a: UserRow, b: UserRow, sort: Sort): number {
   return SORTERS[sort.key](a, b) * (sort.dir === "asc" ? 1 : -1);
 }
 
+/**
+ * Nombre and Email give way below xl, as on the customers table: with the 2FA
+ * and Último acceso columns a tablet otherwise pushes the ⋮ menu out of view.
+ * The phone cards and the edit dialog still show both.
+ */
+const HIDE_BELOW_XL = "hidden xl:table-cell";
+const HIDDEN_BELOW_XL: ReadonlySet<SortKey> = new Set(["name", "email"] as SortKey[]);
+
 const COLUMNS: readonly { label: string; key: SortKey }[] = [
   { label: "Usuario", key: "username" },
   { label: "Nombre", key: "name" },
@@ -98,7 +156,8 @@ const COLUMNS: readonly { label: string; key: SortKey }[] = [
   { label: "Estado", key: "estado" },
 ];
 
-export function UsersTable({ users }: { users: UserRow[] }) {
+/** `currentUserId` is the viewer: their own row never offers "Resetear 2FA" (S5). */
+export function UsersTable({ users, currentUserId }: { users: UserRow[]; currentUserId: string }) {
   const [showInactive, setShowInactive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -107,6 +166,8 @@ export function UsersTable({ users }: { users: UserRow[] }) {
   // it has to know which row opened it. The comment on its JSX below says why
   // it cannot live inside the row's own kebab.
   const [editing, setEditing] = useState<UserRow | null>(null);
+  // Mounted outside the menus for the same reason as `editing`.
+  const [resetting, setResetting] = useState<UserRow | null>(null);
   const router = useRouter();
   const { addToast } = useToast();
 
@@ -180,22 +241,29 @@ export function UsersTable({ users }: { users: UserRow[] }) {
   function rowActions(user: UserRow) {
     const inactive = user.deactivatedAt !== null;
     return (
-      <RowActions label={`Acciones de ${user.username}`}>
-        {/* Editing a deactivated user is not offered: reactivate
-            first, so the row's state stays unambiguous. */}
-        {!inactive && <DropdownMenuItem onClick={() => setEditing(user)}>Editar</DropdownMenuItem>}
-        {/* A plain item with `onClick`, NOT `render={<button/>}`.
-            Measured in jsdom against base-ui 1.6: with `render`,
-            ArrowDown+Enter activates the item 0 times out of 1 —
-            Enter reaches base-ui's own item handler, and
-            rendering a real `<button>` replaces it. That is the
-            REVERSE of unit 2's link item, where `render` was the
-            fix; what decides it is whether the thing has to stay
-            an anchor, not the `render` prop itself. */}
-        <DropdownMenuItem disabled={pendingId === user.id} onClick={() => toggleActive(user)}>
-          {inactive ? "Reactivar" : "Desactivar"}
-        </DropdownMenuItem>
-      </RowActions>
+      <div className="flex items-center justify-end gap-2">
+        {lockOf(user) !== null && <UnlockUserButton user={user} />}
+        <RowActions label={`Acciones de ${user.username}`}>
+          {/* Editing a deactivated user is not offered: reactivate
+              first, so the row's state stays unambiguous. */}
+          {!inactive && <DropdownMenuItem onClick={() => setEditing(user)}>Editar</DropdownMenuItem>}
+          {/* Offered while enrolling too: an unfinished secret is still one to clear. */}
+          {user.twoFactor !== null && user.id !== currentUserId && (
+            <DropdownMenuItem onClick={() => setResetting(user)}>Resetear 2FA</DropdownMenuItem>
+          )}
+          {/* A plain item with `onClick`, NOT `render={<button/>}`.
+              Measured in jsdom against base-ui 1.6: with `render`,
+              ArrowDown+Enter activates the item 0 times out of 1 —
+              Enter reaches base-ui's own item handler, and
+              rendering a real `<button>` replaces it. That is the
+              REVERSE of unit 2's link item, where `render` was the
+              fix; what decides it is whether the thing has to stay
+              an anchor, not the `render` prop itself. */}
+          <DropdownMenuItem disabled={pendingId === user.id} onClick={() => toggleActive(user)}>
+            {inactive ? "Reactivar" : "Desactivar"}
+          </DropdownMenuItem>
+        </RowActions>
+      </div>
     );
   }
 
@@ -251,6 +319,7 @@ export function UsersTable({ users }: { users: UserRow[] }) {
                     return (
                       <TableHead
                         key={column.key}
+                        className={HIDDEN_BELOW_XL.has(column.key) ? HIDE_BELOW_XL : undefined}
                         aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : undefined}
                       >
                         {/* A real <button>, not an <a>: this component is already
@@ -269,20 +338,24 @@ export function UsersTable({ users }: { users: UserRow[] }) {
                       </TableHead>
                     );
                   })}
+                  {/* Not sortable: neither column was asked to be. */}
+                  <TableHead>2FA</TableHead>
+                  <TableHead>Último acceso</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((user) => {
                   const inactive = user.deactivatedAt !== null;
+                  const lock = lockOf(user);
                   return (
                     <TableRow key={user.id} className={inactive ? "text-muted-foreground" : undefined}>
                       <TableCell>
                         <RowCheckbox id={user.id} label={user.username} />
                       </TableCell>
                       <TableCell>{user.username}</TableCell>
-                      <TableCell>{user.name ?? "—"}</TableCell>
-                      <TableCell>{user.email ?? "—"}</TableCell>
+                      <TableCell className={HIDE_BELOW_XL}>{user.name ?? "—"}</TableCell>
+                      <TableCell className={HIDE_BELOW_XL}>{user.email ?? "—"}</TableCell>
                       <TableCell>{roleLabel(user.role)}</TableCell>
                       <TableCell>
                         {/* Text, not colour alone — a greyed row is indistinguishable
@@ -290,14 +363,20 @@ export function UsersTable({ users }: { users: UserRow[] }) {
                             since D8; `StatusBadge` is untouched, because widening its
                             closed 14-member union for one column is a migration this
                             change does not own. */}
-                        <Badge variant={inactive ? "outline" : "secondary"}>
-                          {inactive ? "Desactivado" : "Activo"}
-                        </Badge>
+                        {lock !== null ? (
+                          <LockedBadge label={lock} />
+                        ) : (
+                          <Badge variant={inactive ? "outline" : "secondary"}>
+                            {inactive ? "Desactivado" : "Activo"}
+                          </Badge>
+                        )}
                       </TableCell>
+                      <TableCell>
+                        <TwoFactorChip user={user} />
+                      </TableCell>
+                      <TableCell>{user.lastAccess}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end">
-                          {rowActions(user)}
-                        </div>
+                        {rowActions(user)}
                       </TableCell>
                     </TableRow>
                   );
@@ -306,26 +385,41 @@ export function UsersTable({ users }: { users: UserRow[] }) {
             </Table>
           </CardContent>
         </Card>
-        {/* No `href`: `/users` has no detail page, so the card's one control is
-            the kebab, in the `action` slot outside any link. */}
+        {/* No `href`: `/users` has no detail page, so the card's controls (the
+            kebab, and Desbloquear on a locked row) sit in the `action` slot. */}
         <RecordCardList testId="users-cards">
-          {rows.map((user) => (
-            <RecordCard key={user.id} action={<div className="flex justify-end">{rowActions(user)}</div>}>
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="font-medium">{user.username}</div>
-                  {user.name && <div className="text-xs text-muted-foreground">{user.name}</div>}
+          {rows.map((user) => {
+            const lock = lockOf(user);
+            return (
+              <RecordCard key={user.id} action={rowActions(user)}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-medium">{user.username}</div>
+                    {user.name && <div className="text-xs text-muted-foreground">{user.name}</div>}
+                  </div>
+                  {lock !== null ? (
+                    <LockedBadge label={lock} className="shrink-0" />
+                  ) : user.deactivatedAt !== null ? (
+                    <span className={`shrink-0 ${DEACTIVATED_CHIP}`}>Desactivado</span>
+                  ) : (
+                    // `completed` is the success tone (green on a tint); only the word differs.
+                    <StatusBadge status="completed" label="Activo" className="shrink-0" />
+                  )}
                 </div>
-                {user.deactivatedAt !== null ? (
-                  <span className={`shrink-0 ${DEACTIVATED_CHIP}`}>Desactivado</span>
-                ) : (
-                  // `completed` is the success tone (green on a tint); only the word differs.
-                  <StatusBadge status="completed" label="Activo" className="shrink-0" />
-                )}
-              </div>
-              <div className="text-sm text-muted-foreground">{roleLabel(user.role)}</div>
-            </RecordCard>
-          ))}
+                <div className="text-sm text-muted-foreground">{roleLabel(user.role)}</div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                  {user.role === "pantalla" ? (
+                    <span>2FA: —</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1">
+                      2FA: <TwoFactorChip user={user} />
+                    </span>
+                  )}
+                  <span>Último acceso: {user.lastAccess}</span>
+                </div>
+              </RecordCard>
+            );
+          })}
         </RecordCardList>
       </SelectionProvider>
 
@@ -349,6 +443,8 @@ export function UsersTable({ users }: { users: UserRow[] }) {
           `UserForm` rather than `UserFormTrigger`: that wrapper exists only to
           supply `onSaved` from a Server Component, and this file is already
           `"use client"` with a router of its own. */}
+      {resetting && <ResetTwoFactorDialog user={resetting} onClose={() => setResetting(null)} />}
+
       {editing && (
         <UserForm
           user={editing}

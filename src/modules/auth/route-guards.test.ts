@@ -30,6 +30,15 @@ export const ROUTE_GUARDS: Record<
   "/change-password": { GET: "session-only" },
   "/api/login": { POST: "session-only" },
   "/api/logout": { POST: "session-only" },
+  // The 2FA second step (login-hardening T7): reached by a pending session the
+  // proxy lets through, so session-only like the forced-change screen.
+  "/two-factor": { GET: "session-only" },
+  "/api/two-factor/verify": { POST: "session-only" },
+  // The mandatory 2FA setup (login-hardening T8b): reached by an enroll session
+  // the proxy confines here, and its only way out, so session-only for the same reason.
+  "/two-factor/setup": { GET: "session-only" },
+  "/api/two-factor/setup/start": { POST: "session-only" },
+  "/api/two-factor/setup/confirm": { POST: "session-only" },
   // POST also evaluates `vencimientos.read`: a body whose vehicles carry the
   // internal renewal fields is refused with 403 when the caller lacks it.
   "/api/customers": { GET: "customers.read", POST: ["customers.write", "vencimientos.read"] },
@@ -119,6 +128,7 @@ export const ROUTE_GUARDS: Record<
   "/workshop-config": { GET: "workshop.edit" },
   "/account": { GET: "account.self" },
   "/users": { GET: "users.manage" },
+  "/access-log": { GET: "users.manage" },
   "/technicians": { GET: "technicians.manage" },
   // metrics-dashboard: admin and jefe read `/metrics`; the técnico reads only `/mis-numeros`.
   "/metrics": { GET: "metrics.read" },
@@ -139,8 +149,17 @@ export const ROUTE_GUARDS: Record<
   // usage-metrics: session-only; the 403 for pantalla comes from the role → group map, not an Action.
   "/api/usage/view": { POST: "session-only" },
   "/api/account": { GET: "account.self", PATCH: "account.self" },
+  // login-hardening T8a: 2FA from Mi cuenta, the same Action as the rest of the
+  // account. Not session-only: `pantalla` has no 2FA (A1) and no Mi cuenta.
+  "/api/account/two-factor/start": { POST: "account.self" },
+  "/api/account/two-factor/confirm": { POST: "account.self" },
+  "/api/account/two-factor/recovery-codes": { POST: "account.self" },
+  "/api/account/two-factor/disable": { POST: "account.self" },
+  "/api/account/two-factor/forget-devices": { POST: "account.self" },
   "/api/users": { GET: "users.manage", POST: "users.manage" },
   "/api/users/[id]": { PATCH: "users.manage" },
+  "/api/users/[id]/unlock": { POST: "users.manage" },
+  "/api/users/[id]/two-factor/reset": { POST: "users.manage" },
   // technicians-and-work-lines: roster writes need `technicians.manage`; naming a
   // login (`userId`) additionally needs `users.manage`, so both are declared and
   // the "actually evaluated" test below proves each is checked in the file.
@@ -254,6 +273,11 @@ describe("lockout safety — the unlock path is never Action-gated", () => {
     ["/api/logout", "POST"],
     ["/api/account/password", "POST"],
     ["/change-password", "GET"],
+    ["/two-factor", "GET"],
+    ["/api/two-factor/verify", "POST"],
+    ["/two-factor/setup", "GET"],
+    ["/api/two-factor/setup/start", "POST"],
+    ["/api/two-factor/setup/confirm", "POST"],
   ];
 
   it.each(NEVER_ACTION_GATED)("%s [%s] stays session-only", (urlPath, method) => {

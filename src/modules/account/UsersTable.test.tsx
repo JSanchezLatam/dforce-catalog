@@ -8,6 +8,7 @@ import { render as rtlRender, screen, waitFor, within } from "@testing-library/r
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 
+import { UNTIL_UNLOCKED } from "@/modules/auth/login-lock";
 import { ToastProvider } from "@/shared/ui/ToastProvider";
 import { checkAdminSafety } from "./service";
 import { UsersTable, type UserRow } from "./UsersTable";
@@ -51,6 +52,10 @@ const ACTIVE = {
   email: "ana@taller.com",
   role: "administrador",
   deactivatedAt: null,
+  lockedUntil: null,
+  twoFactor: "enabled" as const,
+  twoFactorRequired: true,
+  lastAccess: "—",
 };
 const INACTIVE = {
   id: "u-2",
@@ -59,6 +64,10 @@ const INACTIVE = {
   email: null,
   role: "tecnico",
   deactivatedAt: "2026-01-01T00:00:00.000Z",
+  lockedUntil: null,
+  twoFactor: null,
+  twoFactorRequired: false,
+  lastAccess: "—",
 };
 
 function mockFetch(response: { status: number; body?: unknown }) {
@@ -130,7 +139,7 @@ beforeEach(() => {
 
 describe("UsersTable — which rows are visible", () => {
   it("hides deactivated users until asked", () => {
-    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE, INACTIVE]} />);
 
     const table = within(screen.getByTestId("users-table"));
     expect(table.getByText("ana")).toBeInTheDocument();
@@ -139,7 +148,7 @@ describe("UsersTable — which rows are visible", () => {
 
   it("reveals them when 'Mostrar inactivos' is switched on", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE, INACTIVE]} />);
 
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
@@ -148,7 +157,7 @@ describe("UsersTable — which rows are visible", () => {
 
   it("hides them again when switched back off", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE, INACTIVE]} />);
     const toggle = screen.getByLabelText("Mostrar inactivos");
 
     await user.click(toggle);
@@ -165,7 +174,7 @@ describe("UsersTable — which rows are visible", () => {
   // the string — bare text would satisfy `getByText` forever.
   it("marks a deactivated row with a visible Desactivado badge", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
     expect(within(rowFor("beto")).getByText("Desactivado")).toHaveAttribute("data-slot", "badge");
@@ -187,7 +196,7 @@ describe("UsersTable — which rows are visible", () => {
 describe("UsersTable — the role label it renders", () => {
   it("renders the Spanish role label from the shared constant, not a raw enum value", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
     expect(within(rowFor("ana")).getByText("Administrador")).toBeInTheDocument();
@@ -196,14 +205,14 @@ describe("UsersTable — the role label it renders", () => {
   });
 
   it("shows Pantalla, not the raw pantalla, in the table row", () => {
-    render(<UsersTable users={[{ ...ACTIVE, id: "u-10", username: "tv", role: "pantalla" }]} />);
+    render(<UsersTable currentUserId="viewer" users={[{ ...ACTIVE, id: "u-10", username: "tv", role: "pantalla" }]} />);
 
     expect(within(rowFor("tv")).getByText("Pantalla")).toBeInTheDocument();
     expect(screen.queryByText("pantalla")).not.toBeInTheDocument();
   });
 
   it("shows Jefe de taller, not the raw jefe_taller, in the table row and the phone card", () => {
-    render(<UsersTable users={[{ ...ACTIVE, id: "u-9", username: "jefa", role: "jefe_taller" }]} />);
+    render(<UsersTable currentUserId="viewer" users={[{ ...ACTIVE, id: "u-9", username: "jefa", role: "jefe_taller" }]} />);
 
     expect(within(rowFor("jefa")).getByText("Jefe de taller")).toBeInTheDocument();
     expect(within(screen.getByTestId("users-cards")).getByText("Jefe de taller")).toBeInTheDocument();
@@ -214,7 +223,7 @@ describe("UsersTable — the role label it renders", () => {
 describe("UsersTable — the action each row offers", () => {
   it("offers Desactivar on an active row", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     await openRowMenu(user, "ana");
 
@@ -223,7 +232,7 @@ describe("UsersTable — the action each row offers", () => {
 
   it("offers Reactivar on a deactivated row", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
     await openRowMenu(user, "beto");
@@ -233,7 +242,7 @@ describe("UsersTable — the action each row offers", () => {
 
   it("offers Editar on an active row", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     await openRowMenu(user, "ana");
 
@@ -244,7 +253,7 @@ describe("UsersTable — the action each row offers", () => {
   // ambiguous whether the save was supposed to bring the user back.
   it("does not offer Editar on a deactivated row", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
     await openRowMenu(user, "beto");
@@ -259,7 +268,7 @@ describe("UsersTable — the action each row offers", () => {
   // and an ambiguous accessible name makes `getByRole` throw.
   it("names each row's kebab after that row's user", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
     expect(within(rowFor("ana")).getByRole("button", { name: "Acciones de ana" })).toBeInTheDocument();
@@ -269,7 +278,7 @@ describe("UsersTable — the action each row offers", () => {
   it("sends active:false and refreshes on a successful deactivate", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({ status: 200, body: { success: true } });
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     await clickRowAction(user, "ana", "Desactivar");
 
@@ -284,7 +293,7 @@ describe("UsersTable — the action each row offers", () => {
   it("sends active:true on a reactivate", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({ status: 200, body: { success: true } });
-    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
     await clickRowAction(user, "beto", "Reactivar");
@@ -294,7 +303,7 @@ describe("UsersTable — the action each row offers", () => {
 
   it("opens the edit dialog from the kebab", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     await clickRowAction(user, "ana", "Editar");
 
@@ -312,7 +321,7 @@ describe("UsersTable — a mutation the operator can see", () => {
   it("says the user was deactivated", async () => {
     const user = userEvent.setup();
     mockFetch({ status: 200, body: { success: true } });
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     await clickRowAction(user, "ana", "Desactivar");
 
@@ -322,7 +331,7 @@ describe("UsersTable — a mutation the operator can see", () => {
   it("says the user was reactivated", async () => {
     const user = userEvent.setup();
     mockFetch({ status: 200, body: { success: true } });
-    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
     await clickRowAction(user, "beto", "Reactivar");
@@ -337,7 +346,7 @@ describe("UsersTable — a mutation the operator can see", () => {
   it("says the user was updated after the hoisted edit dialog saves", async () => {
     const user = userEvent.setup();
     mockFetch({ status: 200, body: { user: { id: "u-1" } } });
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     await clickRowAction(user, "ana", "Editar");
     await user.click(await screen.findByRole("button", { name: "Guardar" }));
@@ -348,7 +357,7 @@ describe("UsersTable — a mutation the operator can see", () => {
   it("says nothing when the server refuses the toggle", async () => {
     const user = userEvent.setup();
     mockFetch({ status: 400, body: { error: "last_active_admin" } });
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     await clickRowAction(user, "ana", "Desactivar");
 
@@ -382,7 +391,7 @@ describe("UsersTable — a mutation the operator can see", () => {
 describe("UsersTable — every kebab item is activatable from the keyboard", () => {
   it("ArrowDown then Enter activates Editar", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
     await openRowMenu(user, "ana");
 
     await user.keyboard("{ArrowDown}{Enter}");
@@ -393,7 +402,7 @@ describe("UsersTable — every kebab item is activatable from the keyboard", () 
   it("ArrowUp then Enter activates Desactivar, the last item", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({ status: 200, body: {} });
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
     await openRowMenu(user, "ana");
 
     await user.keyboard("{ArrowUp}{Enter}");
@@ -408,7 +417,7 @@ describe("UsersTable — every kebab item is activatable from the keyboard", () 
   // typeahead, which swallows them. Nothing about the markup shows that.
   it("the dialog opened from the kebab still accepts typing", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
     await clickRowAction(user, "ana", "Editar");
     await screen.findByRole("dialog");
 
@@ -445,7 +454,7 @@ describe("UsersTable — a throwing refresh is not a connection failure", () => 
     const capture = (reason: unknown) => escaped.push(reason);
     process.on("unhandledRejection", capture);
     try {
-      render(<UsersTable users={[ACTIVE]} />);
+      render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
       await clickRowAction(user, "ana", "Desactivar");
 
       await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
@@ -462,7 +471,7 @@ describe("UsersTable — when the safety guard refuses", () => {
   it("surfaces last_active_admin inline and leaves the row active", async () => {
     const user = userEvent.setup();
     mockFetch({ status: 400, body: { error: "last_active_admin" } });
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     await clickRowAction(user, "ana", "Desactivar");
 
@@ -478,7 +487,7 @@ describe("UsersTable — when the safety guard refuses", () => {
   it("translates self_deactivate rather than echoing the raw code", async () => {
     const user = userEvent.setup();
     mockFetch({ status: 400, body: { error: "self_deactivate" } });
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     await clickRowAction(user, "ana", "Desactivar");
 
@@ -490,7 +499,7 @@ describe("UsersTable — when the safety guard refuses", () => {
   it("falls back to a readable message for an unrecognised code", async () => {
     const user = userEvent.setup();
     mockFetch({ status: 500, body: {} });
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     await clickRowAction(user, "ana", "Desactivar");
 
@@ -500,7 +509,7 @@ describe("UsersTable — when the safety guard refuses", () => {
   it("recovers from a rejected fetch instead of leaving the button disabled", async () => {
     const user = userEvent.setup();
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     await clickRowAction(user, "ana", "Desactivar");
 
@@ -527,7 +536,7 @@ describe("UsersTable — column sorting", () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({ status: 200 });
     render(
-      <UsersTable
+      <UsersTable currentUserId="viewer"
         users={[
           activeUser({ id: "s-1", username: "zoe" }),
           activeUser({ id: "s-2", username: "ana" }),
@@ -545,7 +554,7 @@ describe("UsersTable — column sorting", () => {
   it("toggles the same column to descending and marks it with aria-sort", async () => {
     const user = userEvent.setup();
     render(
-      <UsersTable
+      <UsersTable currentUserId="viewer"
         users={[
           activeUser({ id: "s-1", username: "zoe" }),
           activeUser({ id: "s-2", username: "ana" }),
@@ -570,7 +579,7 @@ describe("UsersTable — column sorting", () => {
   it("sorts 'Ángela' before 'Bruno' by name, which a code-point compare does not", async () => {
     const user = userEvent.setup();
     render(
-      <UsersTable
+      <UsersTable currentUserId="viewer"
         users={[
           activeUser({ id: "s-1", username: "bruno", name: "Bruno Paz" }),
           activeUser({ id: "s-2", username: "angela", name: "Ángela Sosa" }),
@@ -592,7 +601,7 @@ describe("UsersTable — column sorting", () => {
     Object.assign(roleLabels, { administrador: "Zulú", tecnico: "Alfa" });
     try {
       render(
-        <UsersTable
+        <UsersTable currentUserId="viewer"
           users={[
             activeUser({ id: "s-1", username: "ana", role: "administrador" }),
             activeUser({ id: "s-2", username: "beto", role: "tecnico" }),
@@ -619,7 +628,7 @@ describe("UsersTable — column sorting", () => {
   it("sorts the Email column with the missing email last, ascending AND descending", async () => {
     const user = userEvent.setup();
     render(
-      <UsersTable
+      <UsersTable currentUserId="viewer"
         users={[
           activeUser({ id: "s-1", username: "zoe", email: "zoe@taller.com" }),
           activeUser({ id: "s-2", username: "ana", email: "ana@taller.com" }),
@@ -640,7 +649,7 @@ describe("UsersTable — column sorting", () => {
   it("sorts the Nombre column with the missing name last, ascending AND descending", async () => {
     const user = userEvent.setup();
     render(
-      <UsersTable
+      <UsersTable currentUserId="viewer"
         users={[
           activeUser({ id: "s-1", username: "zoe", name: "Zoe Paz" }),
           activeUser({ id: "s-2", username: "nadie", name: null }),
@@ -663,7 +672,7 @@ describe("UsersTable — column sorting", () => {
   // against the "Activo"/"Desactivado" labels the column actually shows.
   it("sorts the Estado column with the active rows first", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[INACTIVE, ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[INACTIVE, ACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
     expect(usernamesInOrder()).toEqual(["beto", "ana"]);
 
@@ -674,7 +683,7 @@ describe("UsersTable — column sorting", () => {
   });
 
   it("offers no sort control on Acciones", () => {
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     const acciones = screen.getByRole("columnheader", { name: "Acciones" });
     expect(acciones).toBeInTheDocument();
@@ -772,10 +781,15 @@ describe("UsersTable — bulk activate/deactivate (WU5)", () => {
     email: null,
     role: "administrador",
     deactivatedAt: active ? null : "2026-01-01T00:00:00.000Z",
+    lockedUntil: null,
+    twoFactor: null,
+    twoFactorRequired: true,
+    lastAccess: "—",
   });
   const tech = (id: string, username: string, active = true): UserRow => ({
     ...admin(id, username, active),
     role: "tecnico",
+    twoFactorRequired: false,
   });
 
   async function select(user: User, ...usernames: string[]) {
@@ -796,7 +810,7 @@ describe("UsersTable — bulk activate/deactivate (WU5)", () => {
    */
   it("offers Activar and Desactivar as two separate, always-available actions", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
     await select(user, "ana", "beto");
@@ -828,7 +842,7 @@ describe("UsersTable — bulk activate/deactivate (WU5)", () => {
       { id: "u-2", role: "administrador", active: true },
     ]);
 
-    render(<UsersTable users={[admin("u-1", "ana"), admin("u-2", "beto")]} />);
+    render(<UsersTable currentUserId="viewer" users={[admin("u-1", "ana"), admin("u-2", "beto")]} />);
     await select(user, "ana", "beto");
     await user.click(screen.getByRole("button", { name: "Desactivar" }));
 
@@ -865,7 +879,7 @@ describe("UsersTable — bulk activate/deactivate (WU5)", () => {
     ]);
 
     render(
-      <UsersTable
+      <UsersTable currentUserId="viewer"
         users={[
           admin("u-1", "ana"),
           tech("u-2", "beto"),
@@ -904,7 +918,7 @@ describe("UsersTable — bulk activate/deactivate (WU5)", () => {
     ]);
 
     render(
-      <UsersTable users={[admin("u-1", "ana"), tech("u-2", "beto"), tech("u-3", "caro", false)]} />,
+      <UsersTable currentUserId="viewer" users={[admin("u-1", "ana"), tech("u-2", "beto"), tech("u-3", "caro", false)]} />,
     );
     await user.click(screen.getByLabelText("Mostrar inactivos"));
     await select(user, "beto", "caro");
@@ -933,14 +947,14 @@ describe("UsersTable — phone cards (WU8)", () => {
   const cards = () => within(screen.getByTestId("users-cards"));
 
   it("hides the table below md and the card list from md up", () => {
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     expect(screen.getByTestId("users-table")).toHaveClass("hidden", "md:block");
     expect(screen.getByTestId("users-cards")).toHaveClass("md:hidden");
   });
 
   it("shows username, name, role label and an Activo chip on a card, and no email", () => {
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     const card = cards().getByRole("listitem");
     expect(within(card).getByText("ana")).toBeInTheDocument();
@@ -951,7 +965,7 @@ describe("UsersTable — phone cards (WU8)", () => {
   });
 
   it("keeps the Activo chip green: it is not an order status, so it takes no order hue", () => {
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     const chip = within(cards().getByRole("listitem")).getByText("Activo");
     expect(chip).toHaveClass("bg-green-100");
@@ -960,7 +974,7 @@ describe("UsersTable — phone cards (WU8)", () => {
 
   it("marks a deactivated user's card Desactivado, not Activo", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE, INACTIVE]} />);
     await user.click(screen.getByLabelText("Mostrar inactivos"));
 
     const card = cards().getByText("beto").closest("li") as HTMLElement;
@@ -972,14 +986,14 @@ describe("UsersTable — phone cards (WU8)", () => {
   // `/users` has no detail page, so the card is NOT a link: a link to a 404
   // would be worse than no link. The row's only affordance is its kebab.
   it("is not a link: /users has no detail page", () => {
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     expect(cards().queryByRole("link")).not.toBeInTheDocument();
   });
 
   it("holds the existing kebab in the card, offering Editar and Desactivar", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     await user.click(cards().getByRole("button", { name: "Acciones de ana" }));
     await screen.findByRole("menu");
@@ -991,7 +1005,7 @@ describe("UsersTable — phone cards (WU8)", () => {
   it("runs the same deactivate from the card's kebab as from the table's", async () => {
     const user = userEvent.setup();
     const fetchMock = mockFetch({ status: 200, body: { success: true } });
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
 
     await user.click(cards().getByRole("button", { name: "Acciones de ana" }));
     await user.click(await screen.findByRole("menuitem", { name: "Desactivar" }));
@@ -1000,7 +1014,7 @@ describe("UsersTable — phone cards (WU8)", () => {
   });
 
   it("carries no checkbox on a card: selection is tablet-plus only", () => {
-    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE, INACTIVE]} />);
 
     expect(cards().queryByRole("checkbox")).not.toBeInTheDocument();
     // The positive half: the table does carry them, so the absence is the card's.
@@ -1008,7 +1022,7 @@ describe("UsersTable — phone cards (WU8)", () => {
   });
 
   it("renders the same number of users in the table and in the cards", () => {
-    render(<UsersTable users={[ACTIVE, activeUser({ id: "u-3", username: "caro" })]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE, activeUser({ id: "u-3", username: "caro" })]} />);
 
     // `slice(1)` drops the header row.
     expect(table().getAllByRole("row").slice(1)).toHaveLength(2);
@@ -1017,7 +1031,7 @@ describe("UsersTable — phone cards (WU8)", () => {
 
   it("keeps the two counts equal with 'Mostrar inactivos' on", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE, INACTIVE]} />);
     expect(cards().getAllByRole("listitem")).toHaveLength(1);
 
     await user.click(screen.getByLabelText("Mostrar inactivos"));
@@ -1028,7 +1042,7 @@ describe("UsersTable — phone cards (WU8)", () => {
 
   it("wraps the selection bar so it shows from md only", async () => {
     const user = userEvent.setup();
-    render(<UsersTable users={[ACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE]} />);
     await user.click(table().getByRole("checkbox", { name: "Seleccionar ana" }));
 
     const bar = screen.getByText("1 seleccionado").closest("[role='status']") as HTMLElement;
@@ -1041,11 +1055,222 @@ describe("UsersTable — 'Mostrar inactivos' hit area on touch (mobile-responsiv
   // only widened it, never made it taller. jsdom matches no media query, so
   // this reads the class that carries the floor.
   it("the label that toggles the checkbox is 44px tall on a touch screen", () => {
-    render(<UsersTable users={[ACTIVE, INACTIVE]} />);
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE, INACTIVE]} />);
 
     const label = screen.getByText("Mostrar inactivos");
     expect(label.tagName).toBe("LABEL");
     expect(label).toHaveAttribute("for", screen.getByLabelText("Mostrar inactivos").id);
     expect(label).toHaveClass("pointer-coarse:min-h-11");
+  });
+});
+
+describe("UsersTable — a locked login (login-hardening S6)", () => {
+  // 15:41 UTC is 10:41 in Panama: the hour the workshop reads, whatever zone renders it.
+  const LOCKED = { ...ACTIVE, id: "u-3", username: "mrodriguez", name: "Marta Rodríguez", email: null, role: "jefe_taller", lockedUntil: "2026-11-18T15:41:00.000Z" };
+
+  it("shows until when the login is locked, in the table and the phone card", () => {
+    render(<UsersTable currentUserId="viewer" users={[LOCKED]} />);
+
+    expect(within(rowFor("mrodriguez")).getByText("Bloqueado hasta 10:41")).toBeInTheDocument();
+    expect(within(screen.getByTestId("users-cards")).getByText("Bloqueado hasta 10:41")).toBeInTheDocument();
+  });
+
+  it("shows a lock only an administrator can lift with no hour, and offers Desbloquear", () => {
+    render(<UsersTable currentUserId="viewer" users={[{ ...LOCKED, lockedUntil: UNTIL_UNLOCKED.toISOString() }]} />);
+
+    expect(within(rowFor("mrodriguez")).getByText("Bloqueado")).toBeInTheDocument();
+    expect(within(screen.getByTestId("users-cards")).getByText("Bloqueado")).toBeInTheDocument();
+    expect(within(rowFor("mrodriguez")).getByRole("button", { name: "Desbloquear" })).toBeInTheDocument();
+  });
+
+  it("offers Desbloquear only on a locked row", () => {
+    render(<UsersTable currentUserId="viewer" users={[ACTIVE, LOCKED]} />);
+
+    expect(within(rowFor("mrodriguez")).getByRole("button", { name: "Desbloquear" })).toBeInTheDocument();
+    expect(within(rowFor("ana")).queryByRole("button", { name: "Desbloquear" })).not.toBeInTheDocument();
+    expect(within(rowFor("ana")).getByText("Activo")).toBeInTheDocument();
+  });
+
+  it("unlocks after confirmation and says so", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { success: true } });
+    render(<UsersTable currentUserId="viewer" users={[LOCKED]} />);
+
+    await user.click(within(rowFor("mrodriguez")).getByRole("button", { name: "Desbloquear" }));
+    expect(fetchMock).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("dialog", { name: "¿Desbloquear a mrodriguez?" });
+    await user.click(within(dialog).getByRole("button", { name: "Sí, desbloquear" }));
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/users/u-3/unlock", { method: "POST" });
+    expect(await screen.findByText("Usuario desbloqueado")).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("keeps the dialog open with the reason when the server refuses", async () => {
+    const user = userEvent.setup();
+    mockFetch({ status: 404, body: { error: "not_found" } });
+    render(<UsersTable currentUserId="viewer" users={[LOCKED]} />);
+
+    await user.click(within(rowFor("mrodriguez")).getByRole("button", { name: "Desbloquear" }));
+    await user.click(screen.getByRole("button", { name: "Sí, desbloquear" }));
+
+    const dialog = screen.getByRole("dialog", { name: "¿Desbloquear a mrodriguez?" });
+    await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent("No se pudo desbloquear al usuario."));
+    expect(screen.queryByText("Usuario desbloqueado")).not.toBeInTheDocument();
+  });
+
+  it("shows Desactivado, not the lock, on a deactivated row", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable currentUserId="viewer" users={[{ ...INACTIVE, lockedUntil: LOCKED.lockedUntil }]} />);
+    await user.click(screen.getByLabelText("Mostrar inactivos"));
+
+    expect(within(rowFor("beto")).queryByText(/Bloqueado/)).not.toBeInTheDocument();
+    expect(within(rowFor("beto")).queryByRole("button", { name: "Desbloquear" })).not.toBeInTheDocument();
+  });
+});
+
+/** login-hardening T10 (S5, S12, mockup `s5`): the 2FA column, "Último acceso", and "Resetear 2FA". */
+describe("2FA and last access", () => {
+  const JEFE: UserRow = {
+    ...ACTIVE,
+    id: "u-4",
+    username: "mrodriguez",
+    name: null,
+    email: null,
+    role: "jefe_taller",
+    twoFactor: "enabled",
+    twoFactorRequired: true,
+    lastAccess: "11/18/2026, 5:55:00 p. m.",
+  };
+
+  it.each([
+    ["enabled", true, "jefe_taller", "Activada"],
+    ["enabled", false, "tecnico", "Activada"],
+    [null, false, "tecnico", "Desactivada"],
+    ["enrolling", false, "tecnico", "Desactivada"],
+    [null, true, "jefe_taller", "Pendiente"],
+    ["enrolling", true, "administrador", "Pendiente"],
+    [null, false, "pantalla", "—"],
+  ] as const)("twoFactor %s, required %s, role %s reads %s in the table and the card", (twoFactor, twoFactorRequired, role, label) => {
+    render(<UsersTable currentUserId="viewer" users={[{ ...JEFE, twoFactor, twoFactorRequired, role, lastAccess: "—" }]} />);
+
+    const twoFactorCell = within(rowFor("mrodriguez")).getAllByRole("cell")[6];
+    expect(twoFactorCell).toHaveTextContent(label);
+    expect(within(screen.getByTestId("users-cards")).getByText(label === "—" ? /2FA: —/ : label)).toBeInTheDocument();
+  });
+
+  it("titles Pendiente with why it is pending", () => {
+    render(<UsersTable currentUserId="viewer" users={[{ ...JEFE, twoFactor: null }]} />);
+
+    expect(within(rowFor("mrodriguez")).getByTitle("Obligatoria para su rol")).toHaveTextContent("Pendiente");
+  });
+
+  it("shows the latest access on the workshop clock, or a dash when there is none", () => {
+    render(<UsersTable currentUserId="viewer" users={[JEFE, { ...ACTIVE, lastAccess: "—" }]} />);
+
+    const formatted = JEFE.lastAccess;
+    // Compared exactly: es-PA puts a narrow no-break space before "p. m.", which the text matchers collapse.
+    expect(within(rowFor("mrodriguez")).getAllByRole("cell")[7].textContent).toBe(formatted);
+    expect(within(rowFor("ana")).getAllByRole("cell")[7].textContent).toBe("—");
+    expect(
+      within(screen.getByTestId("users-cards")).getByText((_, element) => element?.textContent === `Último acceso: ${formatted}`),
+    ).toBeInTheDocument();
+  });
+
+  it("labels the new columns 2FA and Último acceso", () => {
+    render(<UsersTable currentUserId="viewer" users={[JEFE]} />);
+
+    expect(screen.getByRole("columnheader", { name: "2FA" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Último acceso" })).toBeInTheDocument();
+  });
+
+  it("offers Resetear 2FA for a user with a 2FA row, an unfinished one included", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable currentUserId="viewer" users={[{ ...JEFE, twoFactor: "enrolling" }]} />);
+
+    await openRowMenu(user, "mrodriguez");
+
+    expect(screen.getByRole("menuitem", { name: "Resetear 2FA" })).toBeInTheDocument();
+  });
+
+  it("does not offer Resetear 2FA to a user without 2FA", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable currentUserId="viewer" users={[{ ...JEFE, twoFactor: null }]} />);
+
+    await openRowMenu(user, "mrodriguez");
+
+    expect(screen.getByRole("menuitem", { name: "Desactivar" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Resetear 2FA" })).not.toBeInTheDocument();
+  });
+
+  it("never offers Resetear 2FA on the viewer's own row (S5)", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable currentUserId="u-4" users={[JEFE]} />);
+
+    await openRowMenu(user, "mrodriguez");
+
+    expect(screen.getByRole("menuitem", { name: "Desactivar" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Resetear 2FA" })).not.toBeInTheDocument();
+  });
+
+  it("resets after confirmation, telling a mandatory role it sets 2FA up again, and says so", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ status: 200, body: { success: true } });
+    render(<UsersTable currentUserId="viewer" users={[JEFE]} />);
+
+    await clickRowAction(user, "mrodriguez", "Resetear 2FA");
+    expect(fetchMock).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("dialog", { name: "¿Resetear la verificación en dos pasos de mrodriguez?" });
+    expect(dialog).toHaveTextContent(
+      "Se borran su app y sus códigos de recuperación, y se cierran sus sesiones. La próxima vez que entre la va a tener que configurar de nuevo.",
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Sí, resetear" }));
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/users/u-4/two-factor/reset", { method: "POST" });
+    expect(await screen.findByText("2FA reseteada para mrodriguez")).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("tells an optional role it can turn 2FA on again from Mi cuenta", async () => {
+    const user = userEvent.setup();
+    render(<UsersTable currentUserId="viewer" users={[{ ...JEFE, role: "tecnico", twoFactorRequired: false }]} />);
+
+    await clickRowAction(user, "mrodriguez", "Resetear 2FA");
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent(
+      "Se borran su app y sus códigos de recuperación, y se cierran sus sesiones. Va a poder activarla de nuevo desde Mi cuenta.",
+    );
+  });
+
+  it("keeps the dialog open with the self-reset refusal inline and no toast", async () => {
+    const user = userEvent.setup();
+    mockFetch({ status: 403, body: { error: "self_reset" } });
+    render(<UsersTable currentUserId="viewer" users={[JEFE]} />);
+
+    await clickRowAction(user, "mrodriguez", "Resetear 2FA");
+    await user.click(await screen.findByRole("button", { name: "Sí, resetear" }));
+
+    const dialog = screen.getByRole("dialog");
+    await waitFor(() =>
+      expect(within(dialog).getByRole("alert")).toHaveTextContent("No podés resetear tu propia verificación en dos pasos."),
+    );
+    expect(screen.queryByText("2FA reseteada para mrodriguez")).not.toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("shows a generic refusal for any other failure", async () => {
+    const user = userEvent.setup();
+    mockFetch({ status: 404, body: { error: "not_found" } });
+    render(<UsersTable currentUserId="viewer" users={[JEFE]} />);
+
+    await clickRowAction(user, "mrodriguez", "Resetear 2FA");
+    await user.click(await screen.findByRole("button", { name: "Sí, resetear" }));
+
+    await waitFor(() =>
+      expect(within(screen.getByRole("dialog")).getByRole("alert")).toHaveTextContent(
+        "No se pudo resetear la verificación en dos pasos.",
+      ),
+    );
   });
 });

@@ -3,8 +3,10 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/shared/db/client";
 import { users } from "@/shared/db/schema";
 import { revokeOtherSessions } from "@/modules/auth/session";
+import { revokeTrustedDevices } from "@/modules/auth/trusted-device";
 import { isRole, type Role } from "@/modules/auth/roles";
 import { MIN_PASSWORD_LENGTH } from "./password-policy";
+import { passwordPolicyError } from "./password-rules";
 import { hashPassword, verifyPassword } from "@/modules/auth/password";
 
 /** Mirrors customers/validation.ts's EMAIL_FORMAT convention. */
@@ -88,6 +90,9 @@ export class SamePasswordError extends Error {
   }
 }
 
+/** The new password breaks the policy; `message` is the Spanish text for the operator. */
+export class WeakPasswordError extends Error {}
+
 /** What the single credential read returns — the DB-free test seam's contract. */
 export type Credentials = { passwordHash: string; mustChangePassword: boolean };
 
@@ -132,6 +137,9 @@ export async function changePassword(
     throw new SamePasswordError();
   }
 
+  const policyError = passwordPolicyError(newPassword);
+  if (policyError) throw new WeakPasswordError(policyError);
+
   const newHash = await hashPassword(newPassword);
 
   if (deps?.updatePassword) {
@@ -140,11 +148,13 @@ export async function changePassword(
     // One UPDATE, both columns: a rotated password can never commit while the
     // flag stays set, which would lock the user out of the app they just
     // unlocked. Clearing the flag for an already-unflagged user is a harmless
-    // no-op, so this needs no conditional.
-    await db
-      .update(users)
-      .set({ passwordHash: newHash, mustChangePassword: false })
-      .where(eq(users.id, userId));
+    // no-op, so this needs no conditional. The trusted devices go in the same
+    // transaction (S9, L45): a new password never commits with an old device
+    // still skipping the code.
+    await db.transaction(async (tx) => {
+      await tx.update(users).set({ passwordHash: newHash, mustChangePassword: false }).where(eq(users.id, userId));
+      await revokeTrustedDevices(userId, tx);
+    });
   }
 
   if (deps?.revoke) {
@@ -193,9 +203,8 @@ export async function createUser(input: CreateUserInput, deps: CreateUserDeps = 
 
   if (!username) errors.username = "El nombre de usuario es obligatorio.";
   if (!isRole(input.role)) errors.role = "El rol debe ser técnico, jefe de taller, pantalla o administrador.";
-  if (!input.password || input.password.length < MIN_PASSWORD_LENGTH) {
-    errors.password = `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`;
-  }
+  const passwordError = passwordPolicyError(input.password);
+  if (passwordError) errors.password = passwordError;
   if (email !== null && !EMAIL_FORMAT.test(email)) {
     errors.email = "El email no es válido.";
   }
@@ -371,6 +380,7 @@ export type UpdateUserDeps = {
   applyUpdate?: (tx: TxLike, targetId: string, patch: UserPatch) => Promise<void>;
   ensureRosterRow?: typeof ensureRosterRow;
   revokeOtherSessions?: typeof revokeOtherSessions;
+  revokeTrustedDevices?: typeof revokeTrustedDevices;
 };
 
 async function getTargetTx(tx: TxLike, targetId: string) {
@@ -403,9 +413,8 @@ export async function updateUser(
   if (input.role !== undefined && !isRole(input.role)) {
     errors.role = "El rol debe ser técnico, jefe de taller, pantalla o administrador.";
   }
-  if (input.password !== undefined && input.password.length < MIN_PASSWORD_LENGTH) {
-    errors.password = `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`;
-  }
+  const passwordError = input.password === undefined ? null : passwordPolicyError(input.password);
+  if (passwordError) errors.password = passwordError;
   if (email !== undefined && email !== "" && !EMAIL_FORMAT.test(email)) {
     errors.email = "El email no es válido.";
   }
@@ -453,6 +462,8 @@ export async function updateUser(
     }
 
     await applyUpdate(tx, targetId, patch);
+    // S9: the reset password is known to the administrator, so no device keeps skipping the code.
+    if (passwordHash !== undefined) await (deps.revokeTrustedDevices ?? revokeTrustedDevices)(targetId, tx);
 
     // Promotion only. Runs after the UPDATE so the roster name reads the new
     // `users.name`; a failure aborts the whole edit.
@@ -493,6 +504,7 @@ export async function deactivateUser(
     listActiveAdminIds?: (tx: TxLike) => Promise<string[]>;
     setDeactivatedAt?: (tx: TxLike, targetId: string, deactivatedAt: Date) => Promise<void>;
     revokeOtherSessions?: typeof revokeOtherSessions;
+    revokeTrustedDevices?: typeof revokeTrustedDevices;
   } = {},
 ): Promise<void> {
   const database = deps.database ?? db;
@@ -506,6 +518,8 @@ export async function deactivateUser(
       throw new AdminSafetyError(violation);
     }
     await setDeactivatedAt(tx, targetId, new Date());
+    // A5: a reactivated user must not skip the code with a cookie from before.
+    await (deps.revokeTrustedDevices ?? revokeTrustedDevices)(targetId, tx);
   });
 
   const revoke = deps.revokeOtherSessions ?? revokeOtherSessions;

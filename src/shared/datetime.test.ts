@@ -10,7 +10,7 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 
-import { formatDateTime, formatDate, toWorkshopDateKey } from "./datetime";
+import { formatDateTime, formatDate, formatTime, toWorkshopDateKey } from "./datetime";
 
 const REAL_TZ = process.env.TZ;
 afterEach(() => {
@@ -76,5 +76,13 @@ describe("toWorkshopDateKey", () => {
     process.env.TZ = "UTC";
     expect(toWorkshopDateKey(new Date("2026-10-01T05:00:00Z"))).toBe("2026-10-01");
     expect(toWorkshopDateKey(new Date("2027-03-05T12:00:00Z"))).toBe("2027-03-05");
+  });
+});
+
+describe("formatTime", () => {
+  it("reads the hour on the workshop clock, 24-hour and zero-padded", () => {
+    expect(formatTime(new Date("2026-11-18T15:41:00Z"))).toBe("10:41");
+    expect(formatTime(new Date("2026-11-18T23:05:00Z"))).toBe("18:05");
+    expect(formatTime(new Date("2026-11-19T04:30:00Z"))).toBe("23:30");
   });
 });

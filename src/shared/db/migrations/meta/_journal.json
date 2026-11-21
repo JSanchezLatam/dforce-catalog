@@ -274,6 +274,34 @@
       "when": 1794563016422,
       "tag": "0038_usage_metrics",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1795038255683,
+      "tag": "0039_login_attempts",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1795204094639,
+      "tag": "0040_login_attempt_actor",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1795214194110,
+      "tag": "0041_two_factor",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1795222656257,
+      "tag": "0042_trusted_devices",
+      "breakpoints": true
     }
   ]
 }
