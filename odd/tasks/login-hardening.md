@@ -49,7 +49,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T8a | S2, S4, S12, S14 | Enrolment from Mi cuenta, recovery codes, regenerate, disable; key generation in `standalone.ps1` | delegated (context backstop) | done | `fe8097b`, `e1968c7`, `d68500d` (PR #375, merged `93d3bfc`) |
 | T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | done | `aadc097` (PR #376, merged `73c3112`) |
 | T9 | S3, S9 | Trusted device, revoked on password change | delegated (context backstop) | done | `6732117`, `3576b8d` (PR #377, merged `4d96813`) |
-| T10 | S5, S12, S13 | Admin 2FA reset, self-reset refusal, emergency command | delegated (context backstop) | done | `61b3c0a`, next commit |
+| T10 | S5, S12, S13 | Admin 2FA reset, self-reset refusal, emergency command | delegated (context backstop) | done | `61b3c0a`, `e948274` |
 | T11 | S11 | `secure` cookie | inline | deferred until the tunnel | |
 
 Route evidence: units depend on each other in order, so no writer trigger applies.
@@ -448,3 +448,4 @@ Route evidence: units depend on each other in order, so no writer trigger applie
   - Module boundaries. `account/queries.ts` read auth's `user_totp` and `login_attempts`; `userAccessFacts` now lives in `src/modules/auth/access-facts.ts`. `account/service.ts` also held a second copy of the device revoke in raw SQL. `revokeTrustedDevices` is now the only implementation and takes any executor with `execute`, so the account service's execute-only transaction seam and Drizzle transactions both call it.
 
   A mutation that made the revoke delete every user's devices failed two tests by name. Unit 1233/1233, the 2FA e2e 37/37, lint clean.
+- L52 (2026-11-21, T10): Gentle AI review (risk + reliability, granted under L27) APPROVED and acknowledged, with two suggestions left as follow-ups. The emergency `reset-2fa` looks up the user before `BEGIN`, which is harmless because the writes key on the id. The CLI branch's printed message and exit code are pinned only by manual runs; a spawned-process e2e would pin them.
