@@ -18,7 +18,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 - S8. Passwords need at least 10 characters and cannot be on a common-password list.
 - S9. Changing a password revokes the user's other sessions.
 - S10. Administrators see a log of login attempts at "Registro de accesos", under Configuración, below "Gestión de usuarios". Owner, 2026-11-20, on what a login matching no user shows: "Ocultarlo (Recomendado)". Owner, 2026-11-20, on its old rows: "Borrarlos a los 90 días (Recomendado)" — they go after 90 days like the rest, even if that name is still locked.
-- S11. The `secure` cookie is enabled only once the HTTPS tunnel exists (deferred).
+- S11. The `secure` cookie is enabled only once the HTTPS tunnel exists (deferred). Owner, 2026-11-21: "Resuelve lo que queda pendiente, lo del tunel HTTPS. no lo podemos hacer y dejarlo listo para el dominio?" — the cookie becomes `secure` per request whenever the request arrived over HTTPS through a proxy on the server itself, so the LAN keeps plain HTTP and the tunnel gets secure cookies with no switch to flip; the tunnel setup is documented for when the domain exists.
 - S12. The screens, states and copy follow the approved mockup. Code input: one field, `inputmode="numeric"`, `autocomplete="one-time-code"`.
 - S14. Owner, 2026-11-20, asked who generates `TOTP_ENCRYPTION_KEY` on the workshop PC: "Si, opción 1" — the install script (`standalone.ps1`) creates it once, when `.env` lacks it, and says so. The owner keeps a copy of `.env` outside the PC, because the R2 backup holds the database, not the key.
 - S13. If the sole administrator loses the phone and the recovery codes, an emergency command that runs only on the workshop PC resets that user's 2FA. Owner, asked "¿Hago el comando de emergencia en la PC del taller?": "Si". Owner, 2026-11-19, asked "¿Agrego al comando de emergencia de la PC del taller la opción de desbloquear un usuario?": "Si, agregalo al comando de emergencia". The same command also unlocks a user, so a sole administrator locked until unlock (S6) can recover.
@@ -50,7 +50,8 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | done | `aadc097` (PR #376, merged `73c3112`) |
 | T9 | S3, S9 | Trusted device, revoked on password change | delegated (context backstop) | done | `6732117`, `3576b8d` (PR #377, merged `4d96813`) |
 | T10 | S5, S12, S13 | Admin 2FA reset, self-reset refusal, emergency command | delegated (context backstop) | done | `61b3c0a`, `e948274` (PR #378, merged `ed33082`) |
-| T11 | S11 | `secure` cookie | inline | deferred until the tunnel | |
+| T11 | S11 | `secure` cookie per HTTPS request; tunnel setup guide | delegated (parallel with T12) | in progress | |
+| T12 | S2, S5, S13 | Follow-ups: setup retry, emergency CLI process test and in-transaction lookup, reset takes the login lock | delegated (parallel with T11) | in progress | |
 
 Route evidence: units depend on each other in order, so no writer trigger applies.
 
@@ -466,4 +467,14 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - the setup page has no retry button;
     - a reset can race a code check;
     - "Último acceso" uses the app date format.
-
+- L54 (2026-11-21, owner): "Resuelve lo que queda pendiente, lo del tunel HTTPS. no lo podemos hacer y dejarlo listo para el dominio?"
+  - **Design.** There is no domain, so T11 makes the app tunnel-ready:
+    - `x-forwarded-proto` is believed only from a loopback peer, exactly like `x-forwarded-for` (A7). Any other peer's header is replaced by the connection's own protocol.
+    - Every cookie the app sets carries `secure` exactly when that request is HTTPS: `session`, `trusted_device`, and the cleared cookie on logout.
+    - WINDOWS.md and WINDOWS.es.md get a Cloudflare Tunnel guide (Cloudflare already hosts R2): `cloudflared` as a Windows service on the workshop PC, ingress to `http://localhost:3000`, and the DNS route for the domain.
+  - **T12, parallel with T11 (disjoint files).** It closes the feature follow-ups:
+    - a retry button on the setup screen;
+    - the emergency `reset-2fa` user lookup moves inside its transaction, and a spawned-process e2e covers both CLI commands;
+    - `resetTwoFactor` takes the target's login advisory lock, so it cannot interleave with a code check.
+  - **Left as is.** "Último acceso" keeps the app-wide date format (convention over mockup). The permanent lock remains the owner's choice (S6).
+  - **Owner-only (stop points).** Creating the tunnel and DNS needs the owner's Cloudflare account and domain. The full `security-audit` milestone (AGENTS.md) must run before the app is opened to the internet.
