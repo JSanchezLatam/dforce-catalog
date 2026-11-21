@@ -5,10 +5,10 @@ import { SESSION_COOKIE } from "@/modules/auth/session";
 
 import { handleConfirm } from "./route";
 
-function request(body: unknown, token: string | null = "enroll-token") {
+function request(body: unknown, token: string | null = "enroll-token", extra: Record<string, string> = {}) {
   return new NextRequest("http://localhost/api/two-factor/setup/confirm", {
     method: "POST",
-    headers: token ? { cookie: `${SESSION_COOKIE}=${token}` } : {},
+    headers: token ? { cookie: `${SESSION_COOKIE}=${token}`, ...extra } : extra,
     body: JSON.stringify(body),
   });
 }
@@ -44,6 +44,19 @@ describe("POST /api/two-factor/setup/confirm", () => {
     expect(await response.json()).toEqual({ codes, redirect: "/inventory" });
     const cookie = response.cookies.get(SESSION_COOKIE)!;
     expect(cookie).toMatchObject({ value: "full-token", httpOnly: true, sameSite: "lax", path: "/" });
+    expect(new Date(cookie.expires!).getTime()).toBe(expiresAt.getTime());
+  });
+
+  // S11: the full session cookie is secure over the HTTPS tunnel and plain on the LAN.
+  it.each([
+    ["secure over the HTTPS tunnel", { "x-forwarded-proto": "https" }, true],
+    ["not secure on the plain-HTTP LAN", { "x-forwarded-proto": "http" }, false],
+    ["not secure with no forwarded protocol", {}, false],
+  ])("sets the full session cookie %s", async (_label, headers, secure) => {
+    const response = await handleConfirm(request({ code: "123456" }, "enroll-token", headers), deps());
+
+    const cookie = response.cookies.get(SESSION_COOKIE)!;
+    expect(cookie).toMatchObject({ value: "full-token", httpOnly: true, sameSite: "lax", path: "/", secure });
     expect(new Date(cookie.expires!).getTime()).toBe(expiresAt.getTime());
   });
 

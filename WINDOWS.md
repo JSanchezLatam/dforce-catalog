@@ -565,6 +565,98 @@ Regenerating the token is immediate and has no grace period — the API "comienz
 a denegar cualquier integración que no use el nuevo Token", so every machine
 using it has to be updated in the same sitting.
 
+## HTTPS with Cloudflare Tunnel (when the domain exists)
+
+Not set up yet: it waits on a domain. This section is the plan for that day.
+
+**Why a tunnel.** `cloudflared` runs on this PC and opens an outbound
+connection to Cloudflare, so no port is opened on the router. Cloudflare
+already hosts the R2 backups, so it adds no new provider.
+
+**Before any of this, the owner must have:**
+
+1. the domain, added to a Cloudflare account;
+2. that Cloudflare account, the one that will own the tunnel;
+3. the full `security-audit` milestone passed (AGENTS.md). The tunnel opens
+   the app to the internet, and the audit comes first.
+
+**What the app already does by itself.** Nothing in `.env` changes:
+
+- A request that came through the tunnel gets **secure cookies**: the session
+  and the trusted device are sent only over HTTPS.
+- The LAN keeps working over plain HTTP at `http://192.168.x.x:3000`, with the
+  same cookies as today.
+- The login locks see the **real client address**. `cloudflared` connects to
+  the app from this same PC (loopback), and only a loopback proxy is believed
+  when it reports the client's address and protocol. From it, the app reads
+  `CF-Connecting-IP`, which Cloudflare always overwrites, or else the **last**
+  entry of `X-Forwarded-For`, the one Cloudflare appended. The first entry is
+  whatever the client sent, so it is never used. Any other machine that sends
+  those headers gets them replaced by its own connection's values.
+
+**Steps on the workshop PC.** These follow Cloudflare's guide for a
+locally-managed tunnel run as a Windows service
+(<https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/as-a-service/windows/>).
+Read it on the day: Cloudflare may have changed a step. Run everything in an
+**administrator** console. `dforce` is the tunnel's name, and
+`app.example.com` stands for the real subdomain.
+
+1. Download `cloudflared-windows-amd64.exe` (or the `.msi`) from
+   <https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/>,
+   save it as `C:\Cloudflared\bin\cloudflared.exe`, and work from that folder.
+2. Install the service, create its folder, and log in (a browser opens;
+   choose the domain):
+
+   ```bat
+   cloudflared.exe service install
+   mkdir C:\Windows\System32\config\systemprofile\.cloudflared
+   cloudflared.exe tunnel login
+   copy C:\Users\%USERNAME%\.cloudflared\cert.pem C:\Windows\System32\config\systemprofile\.cloudflared\cert.pem
+   ```
+
+3. Create the tunnel. It prints its ID and writes `<Tunnel-ID>.json`, the
+   tunnel's credentials. Copy that file into the service's folder too:
+
+   ```bat
+   cloudflared.exe tunnel create dforce
+   copy C:\Users\%USERNAME%\.cloudflared\<Tunnel-ID>.json C:\Windows\System32\config\systemprofile\.cloudflared\<Tunnel-ID>.json
+   ```
+
+4. Write `C:\Windows\System32\config\systemprofile\.cloudflared\config.yml`.
+   The last rule, `http_status:404`, answers anything that is not the app's
+   subdomain:
+
+   ```yaml
+   tunnel: <Tunnel-ID>
+   credentials-file: C:\Windows\System32\config\systemprofile\.cloudflared\<Tunnel-ID>.json
+   ingress:
+     - hostname: app.example.com
+       service: http://localhost:3000
+     - service: http_status:404
+   ```
+
+5. Check the rules, and point the subdomain at the tunnel:
+
+   ```bat
+   cloudflared.exe tunnel --config C:\Windows\System32\config\systemprofile\.cloudflared\config.yml ingress validate
+   cloudflared.exe tunnel route dns dforce app.example.com
+   ```
+
+6. Cloudflare's guide then sets the service's `ImagePath` in the registry
+   (`HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\Cloudflared`) to the
+   line below, with no extra spaces, and starts it with `sc start cloudflared`:
+
+   ```text
+   C:\Cloudflared\bin\cloudflared.exe --config=C:\Windows\System32\config\systemprofile\.cloudflared\config.yml tunnel run
+   ```
+
+   After a change to `config.yml`, run `sc stop cloudflared` and then
+   `sc start cloudflared`.
+
+Then open `https://app.example.com` from a phone off the workshop Wi-Fi,
+log in, and check Registro de accesos: the row should show the phone's
+public address under "Internet", not `127.0.0.1`.
+
 ## What is not covered here
 
 - No import from a Docker container. The macOS script has one because that Mac

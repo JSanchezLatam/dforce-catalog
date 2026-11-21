@@ -127,6 +127,69 @@ describe("TwoFactorSetup — mockup s3 (S12)", () => {
   });
 });
 
+describe("TwoFactorSetup — a failed start (L44)", () => {
+  const GENERIC = "No se pudo completar. Intentá de nuevo.";
+  const QR = { name: "Código QR para la app de autenticación" };
+
+  it("offers Reintentar beside Cerrar sesión, and one click starts again and shows the QR", async () => {
+    const user = userEvent.setup();
+    reply(500, { error: "boom" });
+    render(<TwoFactorSetup roleLabel="Jefe de taller" available />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(GENERIC);
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Reintentar", "Cerrar sesión"]);
+
+    reply(200, START_OK);
+    await user.click(screen.getByRole("button", { name: "Reintentar" }));
+
+    expect(await screen.findByRole("img", QR)).toHaveAttribute("src", START_OK.qrDataUrl);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sentTo(1)).toEqual(["/api/two-factor/setup/start", "POST", undefined]);
+    expect(screen.queryByRole("button", { name: "Reintentar" })).not.toBeInTheDocument();
+  });
+
+  it("keeps offering Reintentar while the start keeps failing, one start per click", async () => {
+    const user = userEvent.setup();
+    reply(500, { error: "boom" });
+    render(<TwoFactorSetup roleLabel="Jefe de taller" available />);
+    await screen.findByRole("button", { name: "Reintentar" });
+
+    reply(500, { error: "boom" });
+    await user.click(screen.getByRole("button", { name: "Reintentar" }));
+
+    expect(await screen.findByRole("button", { name: "Reintentar" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(GENERIC);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not offer Reintentar once the setup expired", async () => {
+    reply(401, { error: "no_pending_session" });
+    render(<TwoFactorSetup roleLabel="Jefe de taller" available />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("La configuración venció. Volvé a iniciar sesión.");
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Cerrar sesión"]);
+  });
+
+  it("starts only once under Strict Mode even after a failure", async () => {
+    reply(500, { error: "boom" });
+    reply(200, START_OK);
+    render(<TwoFactorSetup roleLabel="Jefe de taller" available />, { wrapper: StrictMode });
+
+    await screen.findByRole("button", { name: "Reintentar" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // The 44x44 rule (AGENTS.md): jsdom measures nothing, so the class is the evidence.
+  it("gives Reintentar a 44px hit target", async () => {
+    reply(500, { error: "boom" });
+    render(<TwoFactorSetup roleLabel="Jefe de taller" available />);
+
+    const retry = await screen.findByRole("button", { name: "Reintentar" });
+    expect(retry.className).toMatch(/\bmin-h-11\b/);
+    expect(retry.className).toMatch(/\bmin-w-11\b/);
+  });
+});
+
 describe("TwoFactorSetup — no usable key", () => {
   const MESSAGE = "La verificación en dos pasos no está disponible. Avisá al administrador.";
 

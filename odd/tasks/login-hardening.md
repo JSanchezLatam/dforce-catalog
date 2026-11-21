@@ -18,7 +18,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 - S8. Passwords need at least 10 characters and cannot be on a common-password list.
 - S9. Changing a password revokes the user's other sessions.
 - S10. Administrators see a log of login attempts at "Registro de accesos", under Configuración, below "Gestión de usuarios". Owner, 2026-11-20, on what a login matching no user shows: "Ocultarlo (Recomendado)". Owner, 2026-11-20, on its old rows: "Borrarlos a los 90 días (Recomendado)" — they go after 90 days like the rest, even if that name is still locked.
-- S11. The `secure` cookie is enabled only once the HTTPS tunnel exists (deferred).
+- S11. The `secure` cookie is enabled only once the HTTPS tunnel exists (deferred). Owner, 2026-11-21: "Resuelve lo que queda pendiente, lo del tunel HTTPS. no lo podemos hacer y dejarlo listo para el dominio?" — the cookie becomes `secure` per request whenever the request arrived over HTTPS through a proxy on the server itself, so the LAN keeps plain HTTP and the tunnel gets secure cookies with no switch to flip; the tunnel setup is documented for when the domain exists.
 - S12. The screens, states and copy follow the approved mockup. Code input: one field, `inputmode="numeric"`, `autocomplete="one-time-code"`.
 - S14. Owner, 2026-11-20, asked who generates `TOTP_ENCRYPTION_KEY` on the workshop PC: "Si, opción 1" — the install script (`standalone.ps1`) creates it once, when `.env` lacks it, and says so. The owner keeps a copy of `.env` outside the PC, because the R2 backup holds the database, not the key.
 - S13. If the sole administrator loses the phone and the recovery codes, an emergency command that runs only on the workshop PC resets that user's 2FA. Owner, asked "¿Hago el comando de emergencia en la PC del taller?": "Si". Owner, 2026-11-19, asked "¿Agrego al comando de emergencia de la PC del taller la opción de desbloquear un usuario?": "Si, agregalo al comando de emergencia". The same command also unlocks a user, so a sole administrator locked until unlock (S6) can recover.
@@ -50,7 +50,8 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | done | `aadc097` (PR #376, merged `73c3112`) |
 | T9 | S3, S9 | Trusted device, revoked on password change | delegated (context backstop) | done | `6732117`, `3576b8d` (PR #377, merged `4d96813`) |
 | T10 | S5, S12, S13 | Admin 2FA reset, self-reset refusal, emergency command | delegated (context backstop) | done | `61b3c0a`, `e948274` (PR #378, merged `ed33082`) |
-| T11 | S11 | `secure` cookie | inline | deferred until the tunnel | |
+| T11 | S11 | `secure` cookie per HTTPS request; tunnel setup guide | delegated (parallel with T12) | done | `36e1d4a`, `40b1e67` |
+| T12 | S2, S5, S13 | Follow-ups: setup retry, emergency CLI process test and in-transaction lookup, reset takes the login lock | delegated (parallel with T11) | done | `fdf11b0` |
 
 Route evidence: units depend on each other in order, so no writer trigger applies.
 
@@ -466,4 +467,50 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - the setup page has no retry button;
     - a reset can race a code check;
     - "Último acceso" uses the app date format.
+- L54 (2026-11-21, owner): "Resuelve lo que queda pendiente, lo del tunel HTTPS. no lo podemos hacer y dejarlo listo para el dominio?"
+  - **Design.** There is no domain, so T11 makes the app tunnel-ready:
+    - `x-forwarded-proto` is believed only from a loopback peer, exactly like `x-forwarded-for` (A7). Any other peer's header is replaced by the connection's own protocol.
+    - Every cookie the app sets carries `secure` exactly when that request is HTTPS: `session`, `trusted_device`, and the cleared cookie on logout.
+    - WINDOWS.md and WINDOWS.es.md get a Cloudflare Tunnel guide (Cloudflare already hosts R2): `cloudflared` as a Windows service on the workshop PC, ingress to `http://localhost:3000`, and the DNS route for the domain.
+  - **T12, parallel with T11 (disjoint files).** It closes the feature follow-ups:
+    - a retry button on the setup screen;
+    - the emergency `reset-2fa` user lookup moves inside its transaction, and a spawned-process e2e covers both CLI commands;
+    - `resetTwoFactor` takes the target's login advisory lock, so it cannot interleave with a code check.
+  - **Left as is.** "Último acceso" keeps the app-wide date format (convention over mockup). The permanent lock remains the owner's choice (S6).
+  - **Owner-only (stop points).** Creating the tunnel and DNS needs the owner's Cloudflare account and domain. The full `security-audit` milestone (AGENTS.md) must run before the app is opened to the internet.
+- L55 (2026-11-21, T11, written by a bounded writer in parallel with T12).
+  - **What changed:**
+    - `x-forwarded-proto` is believed only from a loopback peer; any other peer gets the connection's own protocol. This is `trustedForwardedProto`.
+    - `isHttpsRequest` decides `secure` for every cookie the app sets: `session` and `trusted_device` on login, the login action, verify, setup confirm, and the cleared cookie on logout.
+    - WINDOWS.md and WINDOWS.es.md have the Cloudflare Tunnel guide. It notes that the Windows service needs the files copied into the system profile, as Cloudflare documents; `service install` alone is not enough.
+  - **Writer's checks:** RED by name for 23 tests; 6 mutations caught; unit 1044/1044; e2e 96/96.
+  - **Parent's runtime check against the dev server.** The first run showed a LAN request with a forged `x-forwarded-proto: https` getting `Secure`. The cause: the dev server had loaded `instrumentation.ts` before the change, and Next does not hot-reload it. After a restart:
 
+    | Request | `Secure` |
+    |---|---|
+    | LAN, plain | no |
+    | LAN, forged `https` | no |
+    | Loopback with `https`, as `cloudflared` | yes |
+    | Loopback, plain | no |
+
+    The access log recorded the forwarded client address only for the loopback request.
+  - **Deployment note:** a change to the trusted-proxy patch takes effect only after the app restarts. `standalone.ps1` restarts it on update.
+- L56 (2026-11-21, T12, written by a bounded writer).
+  - **Setup screen.** "Reintentar" appears beside "Cerrar sesión" after a generic start failure. It does not appear for a missing key or an expired setup, and Strict Mode still starts only once.
+  - **Emergency `reset-2fa`.** The user lookup now runs inside its transaction. No test can see this change, because the writes key on the id, as L52 said.
+  - **Reset lock.** `resetTwoFactor` and the emergency `reset-2fa` both take the target's login advisory lock, so a reset cannot interleave with a code check. Two e2e tests hold the lock on another connection and prove the reset waits.
+  - **New `src/e2e/emergency-cli.e2e.test.ts`.** It spawns the real command for usage, `unlock` (real and unknown user) and `reset-2fa` (mandatory role, optional role, unknown user), checking exact output and exit codes.
+  - **Checks.** RED by name. 12 of 13 mutations caught; the uncaught one is the lookup order above. Auth unit tests 348/348, e2e 40/40.
+- L57 (2026-11-21, T11 and T12).
+  - **Review results.** GGA passed. The seam check after the two parallel writers passed: full e2e 507/507, suite 5235/5235, `tsc` and lint clean. The independent verifier found one blocker, B1, and two advisories, all fixed RED first.
+  - **B1, the client address behind Cloudflare.** Cloudflare appends the real client to a client-sent `X-Forwarded-For`, and the app took the FIRST element, the client's own choice. Through the tunnel that would have dodged the IP lock or locked out someone else's address.
+    - Fix: from a loopback proxy, the app now reads `CF-Connecting-IP` (Cloudflare overwrites it), or else the LAST `X-Forwarded-For` element.
+    - Both guides now say so.
+    - Live check against the restarted dev server: loopback `192.168.0.5, 181.197.4.20` was recorded as `181.197.4.20`; loopback with `CF-Connecting-IP: 181.197.4.21` as `.21`; LAN forgeries as the connection's own `192.168.0.9`.
+  - **Advisory: L56 overstated the reset lock.** The second step issued the full session after its commit, so a reset could still land in between. `issueSession` now takes an executor, and the second step issues the session inside its locked transaction. The e2e saw RED by name. This also removes T7's "code spent but no session" gap (L34).
+  - **Advisory: the guide's `ingress validate`.** It now passes `--config` for the service's `config.yml`.
+  - **Process note.** Restarting the app dev server with `pkill -f next-server` also killed the portal dev server on :3001. It was restarted at once (`cd portal && npx next dev -p 3001 -H 0.0.0.0`). Next time, kill by port.
+- L58 (2026-11-21): Gentle AI review (risk + reliability, granted under L27) APPROVED and acknowledged.
+  - The key-parity warning is already covered: `loginKey` only slices to 150 characters, which is the same string the CLI builds. The verifier checked this in L57.
+  - Follow-up: the lock e2e proves the wait with a 500 ms sample; checking `pg_locks` for a waiting backend would be deterministic.
+  - T11 is done as far as code can go. The tunnel itself, the DNS and the internet-opening `security-audit` wait for the owner's domain.

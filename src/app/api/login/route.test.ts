@@ -8,8 +8,14 @@ import { UNTIL_UNLOCKED } from "@/modules/auth/login-lock";
 
 import { POST } from "./route";
 
-const login = () =>
-  POST(new NextRequest("http://192.168.0.7:3000/api/login", { method: "POST", body: JSON.stringify({ username: "u", password: "p" }) }));
+const login = (headers: Record<string, string> = {}) =>
+  POST(
+    new NextRequest("http://192.168.0.7:3000/api/login", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ username: "u", password: "p" }),
+    }),
+  );
 
 describe("POST /api/login", () => {
   it("Cookie follows expiry: the session cookie expires with the issued session", async () => {
@@ -19,6 +25,21 @@ describe("POST /api/login", () => {
     const cookie = (await login()).cookies.get("session");
 
     expect(cookie?.value).toBe("t");
+    expect(cookie?.expires).toEqual(expiresAt);
+  });
+
+  // S11: the tunnel's requests get a secure cookie; the plain-HTTP LAN must not, or no browser would send it back.
+  it.each([
+    ["secure over the HTTPS tunnel", { "x-forwarded-proto": "https" }, true],
+    ["not secure on the plain-HTTP LAN", { "x-forwarded-proto": "http" }, false],
+    ["not secure with no forwarded protocol", {}, false],
+  ])("sets the session cookie %s", async (_label, headers, secure) => {
+    const expiresAt = new Date("2027-04-24T15:00:00.000Z");
+    authenticateUser.mockResolvedValue({ ok: true, token: "t", expiresAt, role: "pantalla" });
+
+    const cookie = (await login(headers)).cookies.get("session");
+
+    expect(cookie).toMatchObject({ value: "t", httpOnly: true, sameSite: "lax", path: "/", secure });
     expect(cookie?.expires).toEqual(expiresAt);
   });
 

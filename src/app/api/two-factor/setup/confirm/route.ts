@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { isHttpsRequest } from "@/modules/auth/cookie-security";
 import { confirmEnrolment } from "@/modules/auth/enrolment";
 import { landingPathFor } from "@/modules/auth/landing";
 import { replaceEnrollSession, SESSION_COOKIE } from "@/modules/auth/session";
@@ -40,6 +41,7 @@ export async function handleConfirm(
     sameSite: "lax",
     expires: full.expiresAt,
     path: "/",
+    secure: isHttpsRequest(request.headers),
   });
   return response;
 }

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { landingPathFor } from "@/modules/auth/landing";
 import { authenticateUser } from "@/modules/auth/authenticate";
 import { clientIp } from "@/modules/auth/client-ip";
+import { isHttpsRequest } from "@/modules/auth/cookie-security";
 import { isUntilUnlocked } from "@/modules/auth/login-lock";
 import { SESSION_COOKIE } from "@/modules/auth/session";
 import { TRUSTED_DEVICE_COOKIE } from "@/modules/auth/trusted-device";
@@ -27,8 +28,9 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
   const password = String(formData.get("password") ?? "");
 
   const cookieStore = await cookies();
+  const requestHeaders = await headers();
   const result = await authenticateUser(username, password, {
-    ip: clientIp(await headers()),
+    ip: clientIp(requestHeaders),
     trustedDeviceToken: cookieStore.get(TRUSTED_DEVICE_COOKIE)?.value,
   });
   if (!result.ok) {
@@ -53,6 +55,7 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
     sameSite: "lax",
     expires: result.expiresAt,
     path: "/",
+    secure: isHttpsRequest(requestHeaders),
   });
 
   if (result.pending === "verify") redirect(TWO_FACTOR_PATH);

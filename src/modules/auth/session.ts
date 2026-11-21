@@ -82,11 +82,13 @@ export async function issueSession(
   userId: string,
   role: Role,
   options: { pending?: SessionPending } = {},
+  /** A transaction, so the session commits with the step that earned it. */
+  executor: Pick<typeof db, "insert"> = db,
 ): Promise<{ token: string; expiresAt: Date }> {
   const token = generateToken();
   const pending = options.pending ?? null;
   const expiresAt = new Date(Date.now() + (pending ? pendingSessionTtlMs(pending) : sessionTtlMs(role)));
-  await db.insert(sessions).values({ id: token, userId, expiresAt, pending });
+  await executor.insert(sessions).values({ id: token, userId, expiresAt, pending });
   return { token, expiresAt };
 }
 
