@@ -144,6 +144,12 @@ export const ROUTE_GUARDS: Record<
   // usage-metrics: session-only; the 403 for pantalla comes from the role → group map, not an Action.
   "/api/usage/view": { POST: "session-only" },
   "/api/account": { GET: "account.self", PATCH: "account.self" },
+  // login-hardening T8a: 2FA from Mi cuenta, the same Action as the rest of the
+  // account. Not session-only: `pantalla` has no 2FA (A1) and no Mi cuenta.
+  "/api/account/two-factor/start": { POST: "account.self" },
+  "/api/account/two-factor/confirm": { POST: "account.self" },
+  "/api/account/two-factor/recovery-codes": { POST: "account.self" },
+  "/api/account/two-factor/disable": { POST: "account.self" },
   "/api/users": { GET: "users.manage", POST: "users.manage" },
   "/api/users/[id]": { PATCH: "users.manage" },
   "/api/users/[id]/unlock": { POST: "users.manage" },

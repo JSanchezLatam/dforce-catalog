@@ -219,7 +219,10 @@ secciones. Incluye indicador de sesión y botón de logout.
 | Tabla             | Propósito                                               |
 | ----------------- | ------------------------------------------------------- |
 | `users`           | Usuarios del sistema (username, password_hash, role)    |
-| `sessions`        | Sesiones activas (opaque token, expires_at, revoked_at) |
+| `sessions`        | Sesiones activas (opaque token, expires_at, revoked_at, `pending`: null, `verify` o `enroll` mientras falta el segundo paso) |
+| `login_attempts`  | Intentos de login para los bloqueos y el Registro de accesos; `second_factor`: `totp`, `recovery` o `trusted_device` en un éxito con 2FA |
+| `user_totp`       | Secreto TOTP de cada usuario, cifrado con `TOTP_ENCRYPTION_KEY`; `enabled_at` null mientras se activa, `last_step` para el uso único |
+| `recovery_codes`  | Códigos de recuperación de 2FA, 10 por usuario, guardados como HMAC; `used_at` al usarse |
 | `producto`        | Productos sincronizados desde Interfuerza               |
 | `sync_runs`       | Auditoría de sincronizaciones                           |
 | `template_config` | Configuración de branding (singleton row)               |

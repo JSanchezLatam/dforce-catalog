@@ -46,7 +46,8 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T5 | S2, S4 | TOTP core, secret encryption, recovery hashes, env key (library only; storage lands with T6/T8) | inline | done | `a2718ad`, `168cfa3`, `30eb200` (PR #372, merged `823402f`) |
 | T6 | S2 | Pending session, proxy gate, e2e fixtures | delegated (context backstop, L28) | done | `a038c74`, `5e34740`, `02c1d5c` (PR #373, merged `edb0cb0`) |
 | T7 | S4, S6, S12 | Second-step page and recovery-code path | delegated (context backstop, L28) | done | `bde0eb3`, `780b8f2`, `a7c1bc1` (PR #374, merged `d2e0eaf`) |
-| T8 | S2, S4, S12 | Enrolment, QR, codes, mandatory roles enforced | inline | pending | |
+| T8a | S2, S4, S12, S14 | Enrolment from Mi cuenta, recovery codes, regenerate, disable; key generation in `standalone.ps1` | delegated (context backstop) | done | `fe8097b`, `e1968c7`, `d68500d` |
+| T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | pending | |
 | T9 | S3, S9 | Trusted device, revoked on password change | inline | pending | |
 | T10 | S5, S13 | Admin 2FA reset, self-reset refusal, emergency command | inline | pending | |
 | T11 | S11 | `secure` cookie | inline | deferred until the tunnel | |
@@ -251,3 +252,70 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - A failed `issueSession` after commit spends the code.
     - A missing `password_ok` match skips the reset. App and database share one machine in the workshop.
     - An empty body counts as a wrong code.
+- L37 (2026-11-20, T8 design, from mockup screens `s3` and `s4`). T8 is split: T8a covers enrolment from Mi cuenta and S14; T8b covers the mandatory gate.
+
+  **Enrolment service.**
+  - Start enrolment: writes a new sealed secret with `enabled_at` null, replacing any unfinished one, and returns the otpauth URI, a QR rendered server-side with `qrcode`, and the base32 key grouped in fours. It is refused when 2FA is already enabled.
+  - Confirm: verifies a code against the unfinished secret. It then sets `enabled_at` and `last_step`, replaces the recovery codes with 10 new ones, and returns them in plain text once.
+  - Issuer: the workshop name from `workshop_config`, falling back to "DForce".
+
+  **Mi cuenta, section "Verificación en dos pasos", copy from `s4`.**
+  - Disabled: "Agregá un código de tu teléfono al iniciar sesión. Es opcional para tu rol." with Activar.
+  - Just enabled: the codes alert, the 10 codes, and Imprimir, Descargar .txt and "Ya los guardé".
+  - Active: "Activada el <fecha>. Te quedan N de 10 códigos de recuperación." with "Generar códigos nuevos" and Desactivar.
+  - "Generar códigos nuevos" and Desactivar ask for a current app code first: re-authentication. Desactivar is not offered to `administrador` or `jefe_taller` (S2).
+  - "Olvidar dispositivos de confianza" lands with T9.
+
+  **Platform constraints.** No clipboard: Descargar .txt uses a Blob plus `a[download]`, and Imprimir uses `window.print`, both of which work over plain HTTP.
+
+  **Missing key.** Activar answers with "La verificación en dos pasos no está disponible. Avisá al administrador."
+
+  **S14 key generation.**
+  - `standalone.ps1` writes a random 32-byte base64 `TOTP_ENCRYPTION_KEY` once, when `.env` lacks it or has it blank, with the same UTF-8-without-BOM writer, and tells the operator to keep a copy of `.env`.
+  - `scripts/macos/dev.sh` does the same for the dev Mac.
+  - WINDOWS.md and WINDOWS.es.md explain the key and the copy.
+  - STACK.md lists the new tables.
+- L38 (2026-11-20, T8a), written by a bounded writer.
+  - **Service.** `enrolment.ts` covers start, confirm, regenerate and disable. Refusals are enforced in SQL. Re-authentication goes through T7's single-use `last_step` update. A wrong key answers `unavailable` and writes nothing.
+  - **Routes.** Four routes under `/api/account/two-factor/` are guarded by `account.self`, like `/api/account`, so `pantalla` gets no 2FA (A1).
+  - **Mi cuenta.** The `s4` states are built. The dd/mm/aaaa date is rebuilt, because `es-PA` puts the month first. Descargar .txt uses a Blob with `a[download]`, so there is no clipboard API anywhere.
+  - **S14.** `standalone.ps1` and `dev.sh` write the key once, never over a value already set. The `.ps1` change has never been executed, because there is no PowerShell here. The Windows docs and STACK.md are updated.
+  - **Writer's checks.** RED was observed by name. Ten mutations were caught. The suite passes 5052/5052, `tsc` and lint are clean, and the 2FA e2e passes 27/27.
+  - **Parent fix before commit.** The writer flagged that regenerate and disable gave unlimited guesses at the app code, so a stolen session could brute-force six digits. Re-authentication now takes the login advisory locks, refuses while locked, and counts a wrong code as `bad_code` (S6). It returns `locked` (429), and the UI says "Demasiados códigos incorrectos. Por seguridad, el acceso quedó bloqueado por un rato." The e2e saw RED by name. The UI test was written after the code and is backed by a mutation.
+  - **Browser check at the LAN IP.**
+    - Phone, dark theme: Activar shows a 240px QR and the grouped key. A real code confirms, the 10 codes appear, Descargar .txt saves `codigos-de-recuperacion.txt`, the "Verificación en dos pasos activada" toast appears, and the state reads "Activada el 20/11/2026. Te quedan 10 de 10 códigos de recuperación." There is no horizontal scroll.
+    - Desktop: "Generar códigos nuevos" refuses a wrong code inline in its dialog, then a right code shows new codes with their toast.
+    - QA rows removed.
+  - **Recorded.**
+    - Imprimir prints the whole page.
+    - A failed revoke after a committed disable leaves the other sessions open.
+    - `scripts/macos/standalone.sh` also copies `env.example` without a key.
+- L39 (2026-11-20, T8a). GGA passed. The independent verifier passed S2, S4, S12 and S14 with no blockers.
+  - **Probes (all passed).**
+    - 15 parallel wrong re-authentication codes wrote exactly 5 `bad_code` rows.
+    - A code is single use across the login and re-authentication.
+    - In 40 races, confirm never enabled a secret other than the one it checked.
+    - Disable revokes pending sessions too.
+    - A missing or wrong key writes nothing.
+  - **PowerShell.** Read line by line against 5.1: a set key is never overwritten; it uses a CSPRNG; it handles CRLF and blank lines; it writes UTF-8 without BOM; it runs on install, `-SetupOnly` and start; the key is never printed. `dev.sh` was run on six scratch `.env` shapes.
+  - **Mutations that survived the suite.** Two survived (confirm's exact-secret guard, and the re-authentication advisory lock). The verifier's probes P1 and P4 are now committed as e2e tests, and both mutations fail them by name.
+  - **Advisories kept.**
+    - Start and confirm need no re-authentication, so a stolen session of a user without 2FA can enrol its own secret. That needs an admin reset (T10) and is by design in L37.
+    - In the `.ps1`: a lowercase blank key line reaches `Fail` (safe); `.env` backups are named to the second; an ANSI `.env` with non-ASCII bytes is decoded as UTF-8 after the backup; `KEY= # comment` counts as set.
+- L40 (2026-11-20, T8a): Gentle AI review (risk, reliability and resilience, granted under L27) approved and acknowledged.
+  - **Fixed after the review by a bounded writer**, each with RED by name:
+    - Activar asks for the current password first ("Contraseña actual", wrong: "Contraseña incorrecta.", not counted toward the lock, like the password change). A stolen session can no longer enrol its own secret without it.
+    - Disable revokes the other sessions inside its own transaction.
+    - A right code already used answers `code_used` (409, "Ese código ya se usó. Esperá el siguiente en la app.") and writes no `bad_code`.
+    - The `.txt` download revokes its URL after the click's task.
+    - Route tests now cover `locked`, `invalid_password` and `code_used`.
+  - **Mutations caught by name:**
+    - the password check removed;
+    - a revoke through `db` or after commit;
+    - `code_used` removed;
+    - `code_used` still writing `bad_code`.
+  - **Checks:** suite 5065/5065, `tsc` and lint clean, e2e 28/28.
+  - **Browser check at the LAN IP (phone):** a wrong current password is refused inline, and the right one shows the QR.
+  - **Recorded:**
+    - The section can show "Desactivada" for a moment if "Ya los guardé" beats the refresh.
+    - A lost single-use race at the SQL guard still counts as `bad_code`.

@@ -352,6 +352,26 @@ Postgres on 5432 and `.env` still pointing at 5433 (or the reverse), the app
 connects successfully to the *wrong* database and simply renders as empty.
 Nothing logs an error. `standalone.ps1 status` prints which one `.env` points at.
 
+## The 2FA key: keep a copy of `.env` off this PC
+
+Two-step verification needs `TOTP_ENCRYPTION_KEY` in `.env`: 32 random bytes in
+base64 that encrypt every user's authenticator secret and key their recovery
+codes. `env.example` ships it blank on purpose, so no two installs share a key.
+The setup step of `standalone.ps1` (the first install, and `-SetupOnly` in
+"The update" above) generates one when it finds it missing or blank, writes it
+in place (UTF-8, no BOM, after a `.env.bak-*` copy), prints
+`TOTP_ENCRYPTION_KEY generada en .env` and never prints the value. An existing
+value is never touched. An install that predates 2FA gets its key on its next
+update.
+
+**Keep a copy of `.env` somewhere other than this PC**: a USB stick or your own
+email. The R2 backup holds the database, not `.env`. A restore onto a new
+machine without the original key leaves every 2FA secret and recovery code
+unreadable: users with 2FA cannot finish signing in and need a 2FA emergency
+reset from this PC before they can enrol again (that command arrives in a later
+update). Users without 2FA are not affected. Never generate a new key over a
+working one for the same reason.
+
 ## Backups
 
 Automatic. `install-service` registers `DforceCatalogoBackup` — a Task

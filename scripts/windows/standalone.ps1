@@ -498,7 +498,61 @@ Si el servidor escucha en otro puerto, decímelo y la dejo en paz:
 "@
     }
 
+    Initialize-TotpKey
+
     $script:DatabaseUrl = $dbUrl
+}
+
+# S14: the 2FA key is created here once, when .env lacks it or has it blank,
+# and an existing value is never touched. The R2 backup holds the database, not
+# .env, so a restore without this key leaves every 2FA user needing the
+# emergency reset. The value is never printed.
+function Initialize-TotpKey {
+    if (Get-EnvValue $EnvFile 'TOTP_ENCRYPTION_KEY') {
+        Ok 'TOTP_ENCRYPTION_KEY ya está definida'
+        return
+    }
+
+    # .NET Framework (PowerShell 5.1) has no static GetBytes(int) or Fill.
+    $bytes = New-Object byte[] 32
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+    $line = 'TOTP_ENCRYPTION_KEY=' + [Convert]::ToBase64String($bytes)
+
+    $backup = Join-Path $Root (".env.bak-" + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    Copy-Item -LiteralPath $EnvFile -Destination $backup -ErrorAction SilentlyContinue
+    if (-not (Test-Path -LiteralPath $backup)) {
+        Fail 'No pude respaldar .env antes de editarlo, así que no lo edité.' @"
+Revisá permisos en $Root y reintentá.
+"@
+    }
+
+    # ReadAllText decodes UTF-8 (env.example has an em dash in its comments);
+    # Get-Content -Raw in 5.1 reads a BOM-less file as the ANSI code page.
+    $text = [System.IO.File]::ReadAllText($EnvFile)
+    # Only a blank assignment is replaced ([ \t], not \s, so the match never
+    # runs into the next line); every other line stays byte for byte.
+    $blank = '(?m)^[ \t]*TOTP_ENCRYPTION_KEY[ \t]*=[ \t]*(""|'''')?[ \t]*(?=\r?\n|\z)'
+    if ($text -match $blank) {
+        $text = [regex]::Replace($text, $blank, $line)
+    }
+    else {
+        $nl = if ($text -match "`r`n") { "`r`n" } else { "`n" }
+        if ($text -and -not $text.EndsWith("`n")) { $text += $nl }
+        $text += $line + $nl
+    }
+    Write-TextNoBom $EnvFile $text
+
+    if (-not (Get-EnvValue $EnvFile 'TOTP_ENCRYPTION_KEY')) {
+        Fail 'Intenté generar TOTP_ENCRYPTION_KEY en .env y no quedó escrita.' @'
+Agregala a mano: una línea TOTP_ENCRYPTION_KEY= seguida de 32 bytes al azar en base64.
+'@
+    }
+    Ok 'TOTP_ENCRYPTION_KEY generada en .env (la clave de la verificación en dos pasos)'
+    Note "respaldo del .env anterior: $(Split-Path -Leaf $backup)"
+    Warn 'Guardá una copia de .env fuera de esta PC: un pendrive o un correo propio.'
+    Note 'El respaldo de R2 guarda la base de datos, no esta clave. Sin ella, quien'
+    Note 'tenga la verificación en dos pasos activada necesita el reset de emergencia.'
 }
 
 # --------------------------------------------------------------------------
