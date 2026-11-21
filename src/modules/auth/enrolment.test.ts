@@ -6,6 +6,8 @@ import {
   regenerateRecoveryCodes,
   requiresTwoFactor,
   startEnrolment,
+  startRequiredEnrolment,
+  twoFactorAvailable,
 } from "./enrolment";
 
 // Everything past the shape, role and key checks is SQL: `src/e2e/two-factor-enrolment.e2e.test.ts`.
@@ -73,6 +75,7 @@ describe("disableTwoFactor for a mandatory role (S2)", () => {
 describe("enrolment without a usable key", () => {
   it.each([
     ["startEnrolment", (deps: object) => startEnrolment("u1", "clave", "Taller", deps)],
+    ["startRequiredEnrolment", (deps: object) => startRequiredEnrolment("u1", "Taller", deps)],
     ["confirmEnrolment", (deps: object) => confirmEnrolment("u1", "123456", deps)],
     ["regenerateRecoveryCodes", (deps: object) => regenerateRecoveryCodes("u1", "123456", deps)],
     ["disableTwoFactor", (deps: object) => disableTwoFactor("u1", "tecnico", "123456", "t", deps)],
@@ -86,6 +89,20 @@ describe("enrolment without a usable key", () => {
     });
     expect(transaction).not.toHaveBeenCalled();
     // The reason, never the key.
+    expect(error).toHaveBeenCalledWith("2FA unavailable:", "TOTP_ENCRYPTION_KEY must be 32 bytes in base64");
+    error.mockRestore();
+  });
+});
+
+describe("twoFactorAvailable", () => {
+  it("is true when the key reads", () => {
+    expect(twoFactorAvailable({ key: () => Buffer.alloc(32) })).toBe(true);
+  });
+
+  it("is false when it does not, and logs the reason, never the key", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    expect(twoFactorAvailable({ key: brokenKey })).toBe(false);
     expect(error).toHaveBeenCalledWith("2FA unavailable:", "TOTP_ENCRYPTION_KEY must be 32 bytes in base64");
     error.mockRestore();
   });

@@ -47,7 +47,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T6 | S2 | Pending session, proxy gate, e2e fixtures | delegated (context backstop, L28) | done | `a038c74`, `5e34740`, `02c1d5c` (PR #373, merged `edb0cb0`) |
 | T7 | S4, S6, S12 | Second-step page and recovery-code path | delegated (context backstop, L28) | done | `bde0eb3`, `780b8f2`, `a7c1bc1` (PR #374, merged `d2e0eaf`) |
 | T8a | S2, S4, S12, S14 | Enrolment from Mi cuenta, recovery codes, regenerate, disable; key generation in `standalone.ps1` | delegated (context backstop) | done | `fe8097b`, `e1968c7`, `d68500d` (PR #375, merged `93d3bfc`) |
-| T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | in progress | |
+| T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | done | (this commit) |
 | T9 | S3, S9 | Trusted device, revoked on password change | inline | pending | |
 | T10 | S5, S13 | Admin 2FA reset, self-reset refusal, emergency command | inline | pending | |
 | T11 | S11 | `secure` cookie | inline | deferred until the tunnel | |
@@ -333,3 +333,19 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - They reuse T8a's start and confirm logic without the password check.
     - Confirm enables 2FA, revokes the `enroll` session, issues a full session (cookie set like `/api/login`), and returns the 10 codes, shown once with Imprimir, Descargar .txt and "Ya los guardé". "Ya los guardé" then goes to the role's landing page.
   - **Missing key.** Setup shows "La verificación en dos pasos no está disponible. Avisá al administrador." with only "Cerrar sesión".
+- L42 (2026-11-20, T8b), written by a bounded writer. The parent read the `proxy.ts` diff in full.
+  - **Enroll session.** An `administrador` or `jefe_taller` without 2FA gets a 30-minute `enroll` session, and the attempt is recorded as `success`. The proxy follows the L41 order (verify gate; then a forced password change; then `enroll` confined to four exact paths). A unit test follows the redirects from every start page and finds no loop.
+  - **Setup screen.** `/two-factor/setup` and its start and confirm APIs act only on a session the database shows as `enroll`. Confirm swaps that session for a full one once, through a guarded revoke. The recovery codes block is shared with Mi cuenta (`RecoveryCodes.tsx`).
+  - **Existing e2e adapted without weakening the gate.** In `two-factor-pending`, the full-session cases log in as `tecnico`. In `pantalla-role`, the TTL comparison now uses `tecnico`. In `board-routes`, the `jefe_taller` really enrols.
+  - **Writer's checks.** RED was observed by name. 13 mutations were caught; a redundant 503 branch was removed. The full e2e suite passes 477/477 on a recreated `dforce_e2e`. The suite passes 5156/5156, and `tsc` and lint are clean.
+  - **Parent's changes.** The parent corrected WINDOWS.md and WINDOWS.es.md, which said users without 2FA are unaffected by a lost key: a mandatory role cannot get past setup without it.
+  - **Browser check at the LAN IP** (phone, dark theme, a QA `administrador`):
+    - The login lands on `/two-factor/setup`, and `/inventory` bounces back there.
+    - The screen matches `s3` ("Tu rol de Administrador la requiere.", the steps, the QR, the grouped key). There is no horizontal scroll.
+    - A real code shows the 10 codes, and "Ya los guardé" lands on `/inventory`.
+    - In the database, the `enroll` session is revoked, the full session is active, 2FA is enabled and there are 10 codes. QA rows removed.
+  - **Recorded.**
+    - Reloading the setup page replaces the secret, so a QR scanned earlier stops working.
+    - A second `enroll` session of the same user stays confined until it expires.
+    - The new copy not in the mockup: "La configuración venció. Volvé a iniciar sesión." and "No se pudo completar. Intentá de nuevo."
+  - **Owner impact.** Once this reaches the workshop PC, every `administrador` and `jefe_taller` sets up 2FA at their next sign-in. Sessions already open are not cut (A3).

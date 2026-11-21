@@ -34,6 +34,11 @@ export const ROUTE_GUARDS: Record<
   // proxy lets through, so session-only like the forced-change screen.
   "/two-factor": { GET: "session-only" },
   "/api/two-factor/verify": { POST: "session-only" },
+  // The mandatory 2FA setup (login-hardening T8b): reached by an enroll session
+  // the proxy confines here, and its only way out, so session-only for the same reason.
+  "/two-factor/setup": { GET: "session-only" },
+  "/api/two-factor/setup/start": { POST: "session-only" },
+  "/api/two-factor/setup/confirm": { POST: "session-only" },
   // POST also evaluates `vencimientos.read`: a body whose vehicles carry the
   // internal renewal fields is refused with 403 when the caller lacks it.
   "/api/customers": { GET: "customers.read", POST: ["customers.write", "vencimientos.read"] },
@@ -268,6 +273,9 @@ describe("lockout safety — the unlock path is never Action-gated", () => {
     ["/change-password", "GET"],
     ["/two-factor", "GET"],
     ["/api/two-factor/verify", "POST"],
+    ["/two-factor/setup", "GET"],
+    ["/api/two-factor/setup/start", "POST"],
+    ["/api/two-factor/setup/confirm", "POST"],
   ];
 
   it.each(NEVER_ACTION_GATED)("%s [%s] stays session-only", (urlPath, method) => {

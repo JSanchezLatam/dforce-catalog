@@ -369,7 +369,9 @@ email. The R2 backup holds the database, not `.env`. A restore onto a new
 machine without the original key leaves every 2FA secret and recovery code
 unreadable: users with 2FA cannot finish signing in and need a 2FA emergency
 reset from this PC before they can enrol again (that command arrives in a later
-update). Users without 2FA are not affected. Never generate a new key over a
+update). An administrator or jefe de taller without 2FA cannot get past the
+mandatory setup screen until the key is back, because enrolling needs it too.
+Other users without 2FA are not affected. Never generate a new key over a
 working one for the same reason.
 
 ## Backups

@@ -144,18 +144,21 @@ async function reauthenticate(
   return stored.length === 1 ? null : wrong();
 }
 
+type Started = { ok: true; secret: string; otpauthUri: string; qrDataUrl: string };
+
 /**
  * Writes a fresh sealed secret with `enabled_at` null, replacing any unfinished
  * one. The upsert's `setWhere` is the refusal once enabled, so a race with a
- * confirm can never swap an enabled secret.
+ * confirm can never swap an enabled secret. `password` is null only for the
+ * mandatory setup (T8b), whose enroll session comes from a password typed at
+ * most 30 minutes earlier (L41); everything else is the same code.
  */
-export async function startEnrolment(
+async function beginEnrolment(
   userId: string,
-  password: string,
+  password: string | null,
   issuer: string,
-  deps: EnrolmentDeps = {},
-): Promise<{ ok: true; secret: string; otpauthUri: string; qrDataUrl: string } | EnrolmentFailure> {
-  if (!password) return fail("invalid_password");
+  deps: EnrolmentDeps,
+): Promise<Started | EnrolmentFailure> {
   const key = readKey(deps);
   if (!key) return fail("unavailable");
   const transaction = deps.transaction ?? db.transaction.bind(db);
@@ -168,7 +171,8 @@ export async function startEnrolment(
       .select({ username: users.username, passwordHash: users.passwordHash })
       .from(users)
       .where(eq(users.id, userId));
-    if (!user || !(await verifyPassword(password, user.passwordHash))) return fail("invalid_password");
+    if (!user) return fail("invalid_password");
+    if (password !== null && !(await verifyPassword(password, user.passwordHash))) return fail("invalid_password");
     const written = await tx
       .insert(userTotp)
       .values({ userId, secretSealed, enabledAt: null, lastStep: null, createdAt: now })
@@ -186,6 +190,31 @@ export async function startEnrolment(
   // Black on white with a quiet zone whatever the theme, or phones fail to scan it on the dark ground.
   const qrDataUrl = await QRCode.toDataURL(uri, { margin: 2, width: 240 });
   return { ok: true, secret: secret.match(/.{1,4}/g)!.join(" "), otpauthUri: uri, qrDataUrl };
+}
+
+/** "Activar" in Mi cuenta: the current password first, so a stolen session cannot enrol its own secret. */
+export async function startEnrolment(
+  userId: string,
+  password: string,
+  issuer: string,
+  deps: EnrolmentDeps = {},
+): Promise<Started | EnrolmentFailure> {
+  if (!password) return fail("invalid_password");
+  return beginEnrolment(userId, password, issuer, deps);
+}
+
+/** The mandatory setup's start (T8b). Callers must have checked the session is a database-read `enroll` one. */
+export async function startRequiredEnrolment(
+  userId: string,
+  issuer: string,
+  deps: EnrolmentDeps = {},
+): Promise<Started | EnrolmentFailure> {
+  return beginEnrolment(userId, null, issuer, deps);
+}
+
+/** Whether the key reads, so a screen can say 2FA is unavailable before anyone types a code. */
+export function twoFactorAvailable(deps: Pick<EnrolmentDeps, "key"> = {}): boolean {
+  return readKey(deps) !== null;
 }
 
 /** Verifies the code against the unfinished secret, enables 2FA and returns the 10 codes, the only time they are shown. */

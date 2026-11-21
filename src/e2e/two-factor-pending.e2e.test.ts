@@ -37,10 +37,14 @@ const login = (username: string, password: string, ip = freshIp()) =>
   );
 
 /** `twoFactor`: "enabled" seeds a finished enrolment, "enrolling" one with `enabled_at` still null. */
-async function createLogin(name: string, twoFactor: "enabled" | "enrolling" | "none"): Promise<string> {
+async function createLogin(
+  name: string,
+  twoFactor: "enabled" | "enrolling" | "none",
+  role: "administrador" | "tecnico" = "administrador",
+): Promise<string> {
   const username = `${PREFIX}-${name}`;
   const id = randomUUID();
-  await db.insert(users).values({ id, username, passwordHash: await hashPassword(PASSWORD), role: "administrador" });
+  await db.insert(users).values({ id, username, passwordHash: await hashPassword(PASSWORD), role });
   made.push(id);
   if (twoFactor !== "none") {
     // Nothing decrypts the secret in T6; it only has to be a real sealed value.
@@ -104,12 +108,14 @@ describe("2FA password step against a real database", () => {
     expect(logout.headers.get("location")).toBeNull();
   });
 
+  // A tecnico, for whom 2FA is optional: a mandatory role without it gets an enroll session (T8b,
+  // `two-factor-setup.e2e.test.ts`).
   it.each(["none", "enrolling"] as const)("gives a user with 2FA %s a full session and a success", async (twoFactor) => {
-    const username = await createLogin(`full-${twoFactor}`, twoFactor);
+    const username = await createLogin(`full-${twoFactor}`, twoFactor, "tecnico");
 
     const response = await login(username, PASSWORD);
 
-    expect(await response.json()).toEqual({ ok: true, role: "administrador" });
+    expect(await response.json()).toEqual({ ok: true, role: "tecnico" });
     const token = response.cookies.get(SESSION_COOKIE)!.value;
     expect((await sessionRow(token)).pending).toBeNull();
     expect(await outcomesFor(username)).toEqual(["success"]);

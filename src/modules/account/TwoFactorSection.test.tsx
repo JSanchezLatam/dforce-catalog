@@ -212,8 +212,8 @@ describe("TwoFactorSection — enrolling", () => {
   });
 
   // Plain HTTP over the LAN is an insecure context: no clipboard API (AGENTS.md).
-  it("never reaches for the clipboard", () => {
-    const source = fs.readFileSync(path.join(import.meta.dirname, "TwoFactorSection.tsx"), "utf8");
+  it.each(["TwoFactorSection.tsx", "RecoveryCodes.tsx"])("never reaches for the clipboard in %s", (file) => {
+    const source = fs.readFileSync(path.join(import.meta.dirname, file), "utf8");
     expect(source).not.toMatch(/navigator\s*\.\s*clipboard|execCommand/);
   });
 });

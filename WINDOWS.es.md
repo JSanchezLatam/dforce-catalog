@@ -391,9 +391,11 @@ restauración en una máquina nueva sin la clave original deja ilegibles todos
 los secretos de 2FA y los códigos de recuperación: los usuarios con 2FA no
 pueden terminar de iniciar sesión y necesitan un reseteo de emergencia de 2FA
 desde esta PC antes de volver a activarla (ese comando llega en una
-actualización posterior). Los
-usuarios sin 2FA no se ven afectados. Por la misma razón, nunca genere una clave
-nueva encima de una que funciona.
+actualización posterior). Un administrador o jefe de taller sin 2FA tampoco puede
+pasar de la pantalla de configuración obligatoria hasta que vuelva la clave,
+porque activarla también la necesita. Los demás usuarios sin 2FA no se ven
+afectados. Por la misma razón, nunca genere una clave nueva encima de una que
+funciona.
 
 ## Respaldos
 

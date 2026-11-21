@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { ROLES } from "./roles";
-import { isSessionActive, isUserActive, requireSession, revokeOtherSessions, sessionTtlMs, validateSession } from "./session";
+import {
+  isSessionActive,
+  isUserActive,
+  pendingSessionTtlMs,
+  requireSession,
+  revokeOtherSessions,
+  sessionTtlMs,
+  validateSession,
+} from "./session";
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -156,5 +164,16 @@ describe("Lifetime per role — sessionTtlMs()", () => {
 
   it.each(ROLES)("%s gets the lifetime its role calls for", (role) => {
     expect(sessionTtlMs(role)).toBe(role === "pantalla" ? 180 * DAY_MS : 7 * DAY_MS);
+  });
+});
+
+describe("Lifetime of a pending session — pendingSessionTtlMs() (L28, L41)", () => {
+  it("gives a verify session ten minutes to type the code", () => {
+    expect(pendingSessionTtlMs("verify")).toBe(10 * 60 * 1000);
+  });
+
+  // Long enough for a forced password change before the setup (A2).
+  it("gives an enroll session thirty minutes", () => {
+    expect(pendingSessionTtlMs("enroll")).toBe(30 * 60 * 1000);
   });
 });

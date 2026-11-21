@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
-import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,6 +22,8 @@ import { CONNECTION_ERROR } from "@/shared/ui/messages";
 import { StatusBadge } from "@/shared/ui/StatusBadge";
 import { FIELD_ERROR } from "@/shared/ui/styles";
 import { useToast } from "@/shared/ui/ToastProvider";
+
+import { RecoveryCodes } from "./RecoveryCodes";
 
 /** Data only across the Server Component boundary: the date arrives formatted, `mandatory` as a boolean. */
 type Props = { enabled: boolean; enabledOn: string | null; codesLeft: number; mandatory: boolean };
@@ -154,18 +155,6 @@ function CodeDialog(props: {
       </DialogContent>
     </Dialog>
   );
-}
-
-/** Blob plus `a[download]`: works over plain HTTP, unlike the clipboard (AGENTS.md). */
-function downloadCodes(codes: string[]) {
-  const text = `Códigos de recuperación. Cada uno sirve una sola vez.\n\n${codes.join("\n")}\n`;
-  const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "codigos-de-recuperacion.txt";
-  link.click();
-  // Revoked in a later task: revoking in the click's own task can cancel the download.
-  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 /** Mi cuenta → "Verificación en dos pasos" (T8a), mockup screen `s4`. */
@@ -309,34 +298,7 @@ export function TwoFactorSection({ enabled, enabledOn, codesLeft, mandatory }: P
           </form>
         )}
 
-        {view.kind === "codes" && (
-          <>
-            <Alert>
-              <p>
-                <b className="text-foreground">Guardá tus códigos de recuperación.</b> Cada uno sirve una sola vez, si perdés el
-                teléfono. Es la única vez que los verás.
-              </p>
-            </Alert>
-            <ul aria-label="Códigos de recuperación" className="grid grid-cols-2 gap-2 font-mono text-sm sm:max-w-md">
-              {view.codes.map((c) => (
-                <li key={c} className="rounded-md border bg-muted px-3 py-2 text-center text-foreground">
-                  {c}
-                </li>
-              ))}
-            </ul>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={() => window.print()}>
-                Imprimir
-              </Button>
-              <Button type="button" variant="outline" onClick={() => downloadCodes(view.codes)}>
-                Descargar .txt
-              </Button>
-              <Button type="button" onClick={cancel}>
-                Ya los guardé
-              </Button>
-            </div>
-          </>
-        )}
+        {view.kind === "codes" && <RecoveryCodes codes={view.codes} onDone={cancel} />}
 
         {view.kind === "status" && on && (
           <div className="flex flex-wrap gap-2">

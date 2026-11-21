@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { CHANGE_PASSWORD_PATH } from "@/modules/auth/forced-change";
 import { SESSION_COOKIE } from "@/modules/auth/session";
-import { TWO_FACTOR_PATH } from "@/modules/auth/two-factor-gate";
+import { TWO_FACTOR_PATH, TWO_FACTOR_SETUP_PATH } from "@/modules/auth/two-factor-gate";
 import { handleProxy } from "./proxy";
 
 function pageRequest(path: string, token?: string) {
@@ -187,14 +187,18 @@ describe("handleProxy() — session still owing its second factor (T6, L28)", ()
     expect(response.headers.get("location")).toBeNull();
   });
 
-  // Fails closed: any pending state is a partial session, not only `verify`,
-  // so a later state (T8's `enroll`) cannot slip through as a full one.
-  it("gates a session pending in any other state too", async () => {
-    const validateSession = vi.fn().mockResolvedValue({ ...pending, pending: "enroll" });
+  // Fails closed: a pending state the proxy does not know is a partial session,
+  // gated like `verify`, never let through as a full one.
+  it.each([
+    ["an API route", apiRequest("/api/customers", "pending-token"), 403, null],
+    ["a page", pageRequest("/inventory", "pending-token"), 307, `http://localhost${TWO_FACTOR_PATH}`],
+  ])("gates a session pending in an unknown state on %s", async (_label, request, status, location) => {
+    const validateSession = vi.fn().mockResolvedValue({ ...pending, pending: "something-new" });
 
-    const response = await handleProxy(apiRequest("/api/customers", "pending-token"), { validateSession });
+    const response = await handleProxy(request, { validateSession });
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(status);
+    expect(response.headers.get("location")).toBe(location);
     expect(response.headers.get("x-middleware-request-x-user-id")).toBeNull();
   });
 
@@ -259,6 +263,110 @@ describe("handleProxy() — session still owing its second factor (T6, L28)", ()
 
     expect(response.headers.get("location")).toBeNull();
     expect(response.headers.get("x-middleware-request-x-user-id")).toBe("user-1");
+  });
+});
+
+describe("handleProxy() — mandatory 2FA not set up yet (T8b, L41)", () => {
+  const enroll = { id: "user-1", role: "jefe_taller", mustChangePassword: false, pending: "enroll" };
+
+  it("redirects a page navigation to the setup screen and forwards no identity", async () => {
+    const validateSession = vi.fn().mockResolvedValue(enroll);
+
+    const response = await handleProxy(pageRequest("/inventory", "enroll-token"), { validateSession });
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(`http://localhost${TWO_FACTOR_SETUP_PATH}`);
+    expect(response.headers.get("x-middleware-request-x-user-id")).toBeNull();
+  });
+
+  it.each(["/api/customers", "/api/two-factor/verify", "/api/account/two-factor/start"])(
+    "answers %s with 403 second_factor_required and forwards no identity",
+    async (path) => {
+      const validateSession = vi.fn().mockResolvedValue(enroll);
+
+      const response = await handleProxy(apiRequest(path, "enroll-token"), { validateSession });
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: "second_factor_required" });
+      expect(response.headers.get("x-middleware-request-x-user-id")).toBeNull();
+    },
+  );
+
+  it.each([TWO_FACTOR_PATH, CHANGE_PASSWORD_PATH, "/account"])("sends the page %s to the setup screen", async (path) => {
+    const validateSession = vi.fn().mockResolvedValue(enroll);
+
+    const response = await handleProxy(pageRequest(path, "enroll-token"), { validateSession });
+
+    expect(response.headers.get("location")).toBe(`http://localhost${TWO_FACTOR_SETUP_PATH}`);
+  });
+
+  it.each([TWO_FACTOR_SETUP_PATH, "/api/two-factor/setup/start", "/api/two-factor/setup/confirm", "/api/logout"])(
+    "lets %s through with the identity",
+    async (path) => {
+      const validateSession = vi.fn().mockResolvedValue(enroll);
+
+      const response = await handleProxy(pageRequest(path, "enroll-token"), { validateSession });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("location")).toBeNull();
+      expect(response.headers.get("x-middleware-request-x-user-id")).toBe("user-1");
+    },
+  );
+
+  // A2: the password change comes first. Its paths are never sent to setup, and
+  // the setup paths go to the change, so the two screens cannot loop.
+  describe("with a forced password change too", () => {
+    const both = { ...enroll, mustChangePassword: true };
+
+    it.each([TWO_FACTOR_SETUP_PATH, "/inventory"])("sends the page %s to the change-password screen", async (path) => {
+      const validateSession = vi.fn().mockResolvedValue(both);
+
+      const response = await handleProxy(pageRequest(path, "enroll-token"), { validateSession });
+
+      expect(response.headers.get("location")).toBe(`http://localhost${CHANGE_PASSWORD_PATH}`);
+    });
+
+    it("answers the setup API with password_change_required", async () => {
+      const validateSession = vi.fn().mockResolvedValue(both);
+
+      const response = await handleProxy(apiRequest("/api/two-factor/setup/start", "enroll-token"), { validateSession });
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: "password_change_required" });
+    });
+
+    it.each([CHANGE_PASSWORD_PATH, "/api/account/password", "/api/logout"])(
+      "lets %s through, with no redirect loop",
+      async (path) => {
+        const validateSession = vi.fn().mockResolvedValue(both);
+
+        const response = await handleProxy(pageRequest(path, "enroll-token"), { validateSession });
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get("location")).toBeNull();
+      },
+    );
+
+    // Follows the redirects from any page: it must settle on one screen, never cycle.
+    it("settles on the change-password screen, then on setup once the change is done", async () => {
+      const follow = async (user: object, start: string) => {
+        const validateSession = vi.fn().mockResolvedValue(user);
+        let path = start;
+        for (let hop = 0; hop < 5; hop += 1) {
+          const location = (await handleProxy(pageRequest(path, "enroll-token"), { validateSession })).headers.get(
+            "location",
+          );
+          if (!location) return path;
+          path = new URL(location).pathname;
+        }
+        throw new Error(`redirect loop from ${start}`);
+      };
+
+      for (const start of ["/inventory", TWO_FACTOR_SETUP_PATH, CHANGE_PASSWORD_PATH, TWO_FACTOR_PATH]) {
+        expect(await follow(both, start)).toBe(CHANGE_PASSWORD_PATH);
+        expect(await follow(enroll, start)).toBe(TWO_FACTOR_SETUP_PATH);
+      }
+    });
   });
 });
 

@@ -2,7 +2,12 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { CHANGE_PASSWORD_PATH, isPasswordChangeExempt } from "@/modules/auth/forced-change";
 import { SESSION_COOKIE, validateSession } from "@/modules/auth/session";
-import { isSecondFactorExempt, TWO_FACTOR_PATH } from "@/modules/auth/two-factor-gate";
+import {
+  isEnrolmentExempt,
+  isSecondFactorExempt,
+  TWO_FACTOR_PATH,
+  TWO_FACTOR_SETUP_PATH,
+} from "@/modules/auth/two-factor-gate";
 
 /**
  * Blanket route guard (NFR-5) — every route except /login (page + its own
@@ -88,21 +93,34 @@ export async function handleProxy(
   // The API-vs-page split is the same one denyAccess() already makes, for the
   // same reason: fetch() cannot usefully follow a redirect, and a browser tab
   // cannot render a JSON body.
-  // Second factor still owed (T6, L28). Runs before the forced change and
-  // decides a pending session alone: an exempt path skips the forced-change
-  // check too, or /two-factor and /change-password would redirect to each
-  // other forever. Blocked requests return before any identity is forwarded.
-  const pending = user.pending != null;
-  if (pending && !isSecondFactorExempt(request.nextUrl.pathname)) {
+  // The order is L41's, and it cannot loop:
+  // 1. `verify` (and, failing closed, any pending state this code does not know)
+  //    is gated as T6 built it, and decides alone: an exempt path skips the
+  //    forced-change check too, or /two-factor and /change-password would
+  //    redirect to each other forever.
+  // 2. Otherwise a forced password change comes first (A2), `enroll` included.
+  // 3. Otherwise `enroll` is confined to the setup paths. It never sees the
+  //    change-password paths while the change is owed, as step 2 decides those.
+  // Blocked requests return before any identity is forwarded.
+  const path = request.nextUrl.pathname;
+  const pending = user.pending ?? null;
+  const owesCode = pending !== null && pending !== "enroll";
+  if (owesCode && !isSecondFactorExempt(path)) {
     return isApiRoute
       ? NextResponse.json({ error: "second_factor_required" }, { status: 403 })
       : NextResponse.redirect(new URL(TWO_FACTOR_PATH, request.url));
   }
 
-  if (!pending && user.mustChangePassword && !isPasswordChangeExempt(request.nextUrl.pathname)) {
+  if (!owesCode && user.mustChangePassword) {
+    if (!isPasswordChangeExempt(path)) {
+      return isApiRoute
+        ? NextResponse.json({ error: "password_change_required" }, { status: 403 })
+        : NextResponse.redirect(new URL(CHANGE_PASSWORD_PATH, request.url));
+    }
+  } else if (pending === "enroll" && !isEnrolmentExempt(path)) {
     return isApiRoute
-      ? NextResponse.json({ error: "password_change_required" }, { status: 403 })
-      : NextResponse.redirect(new URL(CHANGE_PASSWORD_PATH, request.url));
+      ? NextResponse.json({ error: "second_factor_required" }, { status: 403 })
+      : NextResponse.redirect(new URL(TWO_FACTOR_SETUP_PATH, request.url));
   }
 
   // Forward the resolved identity so route handlers can call can(requireSession(req), action)

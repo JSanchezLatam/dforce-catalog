@@ -9,12 +9,20 @@ import { eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const forged = vi.hoisted(() => ({ headers: {} as Record<string, string> }));
+// The jefe_taller logins below finish the mandatory 2FA setup (T8b), which needs the key;
+// `env` reads process.env when its module loads, and static imports hoist above any plain statement.
+vi.hoisted(() => {
+  process.env.TOTP_ENCRYPTION_KEY = Buffer.from(Array.from({ length: 32 }, () => Math.floor(Math.random() * 256))).toString(
+    "base64",
+  );
+});
 vi.mock("next/headers", () => ({ headers: async () => new Headers(forged.headers) }));
 vi.mock("next/navigation", () => ({ redirect: () => {} }));
 
 import { NextRequest, type NextResponse } from "next/server";
 import { authenticateUser } from "@/modules/auth/authenticate";
 import { SESSION_COOKIE } from "@/modules/auth/session";
+import { totpAt } from "@/modules/auth/totp";
 import { CustomerBoard } from "@/modules/board/CustomerBoard";
 import { WorkshopBoard } from "@/modules/board/WorkshopBoard";
 import { db } from "@/shared/db/client";
@@ -22,6 +30,8 @@ import { cliente, ordenServicio, sessions, tecnico, users, vehiculo } from "@/sh
 import { PermissionDenied } from "@/shared/ui/PermissionDenied";
 import { GET as fullBoardGET } from "../app/api/board/route";
 import { GET as boardGET } from "../app/api/board/clientes/route";
+import { POST as setupConfirm } from "../app/api/two-factor/setup/confirm/route";
+import { POST as setupStart } from "../app/api/two-factor/setup/start/route";
 import BoardPage from "../app/tablero/page";
 import CustomerBoardPage from "../app/tablero/clientes/page";
 import { changePassword, createUser, updateUser } from "../modules/account/service";
@@ -45,13 +55,27 @@ describe("board routes (E2E)", () => {
     made.push(id);
     return { id, username, role };
   };
-  /** A session that already passed the forced password change, as a screen in service has. */
+  /**
+   * A session that already passed the forced password change, as a screen in service has. A
+   * jefe_taller's login is an enroll session until it finishes the mandatory 2FA setup (T8b), so
+   * it goes through the real setup routes and holds the full session their confirm issues.
+   */
   const loggedIn = async (suffix: string, role: "tecnico" | "jefe_taller" | "pantalla") => {
     const user = await mk(suffix, role);
     const r = await authenticateUser(user.username, PASSWORD);
     if (!r.ok) throw new Error("login refused");
     await changePassword(user.id, PASSWORD, "otra-clave-456", r.token);
-    return { ...user, token: r.token };
+    if (r.pending !== "enroll") return { ...user, token: r.token };
+    const setup = (path: string, body?: object) =>
+      new NextRequest(`http://localhost/api/two-factor/setup/${path}`, {
+        method: "POST",
+        headers: { cookie: `${SESSION_COOKIE}=${r.token}` },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    const { secret } = await (await setupStart(setup("start"))).json();
+    const confirmed = await setupConfirm(setup("confirm", { code: totpAt(secret.replace(/ /g, ""), new Date()) }));
+    if (confirmed.status !== 200) throw new Error(`2FA setup refused: ${confirmed.status}`);
+    return { ...user, token: confirmed.cookies.get(SESSION_COOKIE)!.value };
   };
   const request = (pathname: string, token?: string) =>
     new NextRequest(`http://localhost${pathname}`, { headers: token ? { cookie: `${SESSION_COOKIE}=${token}` } : {} });
