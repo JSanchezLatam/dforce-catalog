@@ -27,7 +27,7 @@ import {
 } from "@/modules/auth/enrolment";
 import { hashPassword } from "@/modules/auth/password";
 import { hashRecoveryCode, matchRecoveryCode } from "@/modules/auth/recovery-codes";
-import { totpKey } from "@/modules/auth/secret-box";
+import { openSecret, totpKey } from "@/modules/auth/secret-box";
 import { verifySecondFactor } from "@/modules/auth/second-factor";
 import { issueSession, SESSION_COOKIE } from "@/modules/auth/session";
 import { totpAt } from "@/modules/auth/totp";
@@ -219,6 +219,49 @@ describe("2FA enrolment against a real database", () => {
       reason: "locked",
     });
     expect(await twoFactorStatus(id)).toMatchObject({ enabled: true });
+  });
+
+  // Pins the advisory locks in re-authentication: without them parallel guesses each pass the lock check.
+  it("counts at most five of fifteen parallel wrong re-authentication codes", async () => {
+    const { id, username } = await createUser("reauth-parallel", "tecnico");
+    const { secret } = await enrol(id);
+    const wrong = wrongOf(totpAt(secret, at(1)));
+
+    await Promise.all(
+      Array.from({ length: 15 }, (_, i) =>
+        i % 2 ? regenerateRecoveryCodes(id, wrong, nowAt(1)) : disableTwoFactor(id, "tecnico", wrong, "k", nowAt(1)),
+      ),
+    );
+
+    const rows = await db.select().from(loginAttempts).where(eq(loginAttempts.username, username));
+    expect(rows.filter((row) => row.outcome === "bad_code")).toHaveLength(5);
+  });
+
+  // Pins confirm's guard on the exact secret it checked: a restart racing it must never get enabled.
+  it("never enables a secret other than the one confirm checked, when a restart races it", async () => {
+    for (let i = 0; i < 20; i += 1) {
+      const { id } = await createUser(`confirm-race-${i}`, "tecnico");
+      const started = await startEnrolment(id, "Taller E2E", nowAt(0));
+      if (!started.ok) throw new Error(started.reason);
+      const secret = started.secret.replace(/ /g, "");
+
+      const [confirmed, restarted] = await Promise.all([
+        confirmEnrolment(id, totpAt(secret, at(0)), nowAt(0)),
+        startEnrolment(id, "Taller E2E", nowAt(0)),
+      ]);
+
+      const row = await totpRow(id);
+      const codes = await codeRows(id);
+      if (row.enabledAt) {
+        expect(openSecret(row.secretSealed, id, totpKey())).toBe(secret);
+        expect(confirmed.ok).toBe(true);
+        expect(restarted.ok).toBe(false);
+        expect(codes).toHaveLength(10);
+      } else {
+        expect(confirmed.ok).toBe(false);
+        expect(codes).toHaveLength(0);
+      }
+    }
   });
 
   it("refuses to disable an administrador even with a right code, and keeps everything", async () => {

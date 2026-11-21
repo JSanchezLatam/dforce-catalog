@@ -290,3 +290,15 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - Imprimir prints the whole page.
     - A failed revoke after a committed disable leaves the other sessions open.
     - `scripts/macos/standalone.sh` also copies `env.example` without a key.
+- L39 (2026-11-20, T8a). GGA passed. The independent verifier passed S2, S4, S12 and S14 with no blockers.
+  - **Probes (all passed).**
+    - 15 parallel wrong re-authentication codes wrote exactly 5 `bad_code` rows.
+    - A code is single use across the login and re-authentication.
+    - In 40 races, confirm never enabled a secret other than the one it checked.
+    - Disable revokes pending sessions too.
+    - A missing or wrong key writes nothing.
+  - **PowerShell.** Read line by line against 5.1: a set key is never overwritten; it uses a CSPRNG; it handles CRLF and blank lines; it writes UTF-8 without BOM; it runs on install, `-SetupOnly` and start; the key is never printed. `dev.sh` was run on six scratch `.env` shapes.
+  - **Mutations that survived the suite.** Two survived (confirm's exact-secret guard, and the re-authentication advisory lock). The verifier's probes P1 and P4 are now committed as e2e tests, and both mutations fail them by name.
+  - **Advisories kept.**
+    - Start and confirm need no re-authentication, so a stolen session of a user without 2FA can enrol its own secret. That needs an admin reset (T10) and is by design in L37.
+    - In the `.ps1`: a lowercase blank key line reaches `Fail` (safe); `.env` backups are named to the second; an ANSI `.env` with non-ASCII bytes is decoded as UTF-8 after the backup; `KEY= # comment` counts as set.
