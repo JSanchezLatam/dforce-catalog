@@ -47,7 +47,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T6 | S2 | Pending session, proxy gate, e2e fixtures | delegated (context backstop, L28) | done | `a038c74`, `5e34740`, `02c1d5c` (PR #373, merged `edb0cb0`) |
 | T7 | S4, S6, S12 | Second-step page and recovery-code path | delegated (context backstop, L28) | done | `bde0eb3`, `780b8f2`, `a7c1bc1` (PR #374, merged `d2e0eaf`) |
 | T8a | S2, S4, S12, S14 | Enrolment from Mi cuenta, recovery codes, regenerate, disable; key generation in `standalone.ps1` | delegated (context backstop) | done | `fe8097b`, `e1968c7`, `d68500d` (PR #375, merged `93d3bfc`) |
-| T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | pending | |
+| T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | in progress | |
 | T9 | S3, S9 | Trusted device, revoked on password change | inline | pending | |
 | T10 | S5, S13 | Admin 2FA reset, self-reset refusal, emergency command | inline | pending | |
 | T11 | S11 | `secure` cookie | inline | deferred until the tunnel | |
@@ -319,3 +319,17 @@ Route evidence: units depend on each other in order, so no writer trigger applie
   - **Recorded:**
     - The section can show "Desactivada" for a moment if "Ya los guardé" beats the refresh.
     - A lost single-use race at the SQL guard still counts as `bad_code`.
+- L41 (2026-11-20, T8b design, mockup `s3`).
+  - **Password step.** A correct password for `administrador` or `jefe_taller` with no enabled 2FA issues a session with `pending = 'enroll'`, valid for 30 minutes, which leaves time for a forced password change first (A2). The attempt settles as `success`, because no second factor exists yet. Already-open sessions are not cut (A3). `tecnico` and `pantalla` are unaffected.
+  - **Proxy order.**
+    1. A `verify` session is gated as T6 built it.
+    2. Otherwise, `mustChangePassword` sends to `/change-password` first (A2).
+    3. Otherwise, an `enroll` session is confined to exactly `/two-factor/setup`, `/api/two-factor/setup/start`, `/api/two-factor/setup/confirm` and `/api/logout`. Pages redirect to `/two-factor/setup`; APIs answer 403 `second_factor_required`.
+
+    This order cannot loop: while `mustChangePassword` holds, the setup paths go to `/change-password`, and the change-password paths are not redirected to setup.
+  - **`/two-factor/setup`.**
+    - The screen follows `s3` and the login layout. Copy: "Configurá la verificación en dos pasos", "Tu rol de <Rol> la requiere. Te toma un minuto.", the three steps, the QR, "¿No podés escanear? Escribí esta clave en la app:", "Código de la app", "Activar y continuar" and "Cerrar sesión".
+    - Its two APIs act only on a database-read `enroll` session. There is no password field, because the session comes from a password typed at most 30 minutes earlier.
+    - They reuse T8a's start and confirm logic without the password check.
+    - Confirm enables 2FA, revokes the `enroll` session, issues a full session (cookie set like `/api/login`), and returns the 10 codes, shown once with Imprimir, Descargar .txt and "Ya los guardé". "Ya los guardé" then goes to the role's landing page.
+  - **Missing key.** Setup shows "La verificación en dos pasos no está disponible. Avisá al administrador." with only "Cerrar sesión".
