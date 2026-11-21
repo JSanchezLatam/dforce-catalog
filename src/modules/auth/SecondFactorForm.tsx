@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FIELD_ERROR } from "@/shared/ui/styles";
@@ -41,6 +42,7 @@ async function failureOf(response: Response): Promise<Failure> {
 export function SecondFactorForm() {
   const [mode, setMode] = useState<Mode>("totp");
   const [value, setValue] = useState("");
+  const [trust, setTrust] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
 
@@ -58,7 +60,10 @@ export function SecondFactorForm() {
       const response = await fetch("/api/two-factor/verify", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(mode === "totp" ? { code: value } : { recoveryCode: value }),
+        body: JSON.stringify({
+          ...(mode === "totp" ? { code: value } : { recoveryCode: value }),
+          ...(trust ? { trustDevice: true } : {}),
+        }),
       });
       if (response.ok) {
         const body = await response.json();
@@ -125,6 +130,10 @@ export function SecondFactorForm() {
             />
           )}
         </div>
+        <label className="flex min-h-11 items-center gap-3 text-sm text-foreground">
+          <Checkbox checked={trust} onCheckedChange={(checked) => setTrust(checked === true)} />
+          Confiar en este dispositivo por 30 días
+        </label>
         {failure && <FailureMessage failure={failure} mode={mode} />}
         <Button
           type="submit"

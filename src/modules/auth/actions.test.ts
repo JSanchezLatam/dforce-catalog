@@ -3,9 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 // `actions.ts` imports these at module load even on the path under test, and
 // both throw outside a request scope.
 const set = vi.hoisted(() => vi.fn());
+const get = vi.hoisted(() => vi.fn());
 const redirect = vi.hoisted(() => vi.fn());
 vi.mock("next/headers", () => ({
-  cookies: vi.fn().mockResolvedValue({ set }),
+  cookies: vi.fn().mockResolvedValue({ set, get }),
   headers: vi.fn().mockResolvedValue(new Headers({ "x-forwarded-for": "192.168.1.23" })),
 }));
 vi.mock("next/navigation", () => ({ redirect }));
@@ -40,6 +41,22 @@ describe("loginAction", () => {
     await loginAction(null, form);
 
     expect(authenticateUser).toHaveBeenLastCalledWith("ana", "clave", { ip: "192.168.1.23" });
+  });
+
+  it("passes the trusted_device cookie to the credential check", async () => {
+    authenticateUser.mockResolvedValue({ ok: false });
+    get.mockImplementation((name: string) => (name === "trusted_device" ? { value: "device-token" } : undefined));
+    const form = new FormData();
+    form.set("username", "ana");
+    form.set("password", "clave");
+
+    await loginAction(null, form);
+
+    expect(authenticateUser).toHaveBeenLastCalledWith("ana", "clave", {
+      ip: "192.168.1.23",
+      trustedDeviceToken: "device-token",
+    });
+    get.mockReset();
   });
 
   it.each([

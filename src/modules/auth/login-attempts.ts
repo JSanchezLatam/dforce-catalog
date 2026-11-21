@@ -82,8 +82,9 @@ export async function settleLoginAttempt(
   attemptId: string,
   outcome: LoginOutcome,
   userId: string | null,
+  secondFactor?: "trusted_device",
 ): Promise<void> {
-  await db.update(loginAttempts).set({ outcome, userId }).where(eq(loginAttempts.id, attemptId));
+  await db.update(loginAttempts).set({ outcome, userId, secondFactor }).where(eq(loginAttempts.id, attemptId));
 }
 
 /**

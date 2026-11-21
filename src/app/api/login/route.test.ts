@@ -85,6 +85,23 @@ describe("POST /api/login", () => {
     expect(authenticateUser).toHaveBeenLastCalledWith("ana", "clave", { ip: "192.168.1.23" });
   });
 
+  it("passes the trusted_device cookie to the credential check", async () => {
+    authenticateUser.mockResolvedValue({ ok: false });
+
+    await POST(
+      new NextRequest("http://192.168.0.7:3000/api/login", {
+        method: "POST",
+        headers: { "x-forwarded-for": "192.168.1.23", cookie: "trusted_device=device-token" },
+        body: JSON.stringify({ username: "ana", password: "clave" }),
+      }),
+    );
+
+    expect(authenticateUser).toHaveBeenLastCalledWith("ana", "clave", {
+      ip: "192.168.1.23",
+      trustedDeviceToken: "device-token",
+    });
+  });
+
   it("refuses bad credentials with 401 and sets no cookie", async () => {
     authenticateUser.mockResolvedValue({ ok: false });
 

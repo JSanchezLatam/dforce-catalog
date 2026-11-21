@@ -45,7 +45,7 @@ function errorText(error: unknown): string {
   return "No se pudo completar. Recargá la página e intentá de nuevo.";
 }
 
-/** POSTs to one of the four routes; the parsed body, or the inline message to show. */
+/** POSTs to one of the five routes; the parsed body, or the inline message to show. */
 async function post(path: string, body?: object): Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; message: string }> {
   let res: Response;
   try {
@@ -204,6 +204,19 @@ export function TwoFactorSection({ enabled, enabledOn, codesLeft, mandatory }: P
     router.refresh();
   }
 
+  // Nothing on this page lists the devices, so the toast alone confirms it; no refresh to wait on.
+  async function forgetDevices() {
+    setBusy(true);
+    setError(null);
+    const result = await post("forget-devices");
+    setBusy(false);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+    addToast("success", "Dispositivos de confianza olvidados");
+  }
+
   function cancel() {
     setView({ kind: "status" });
     setPassword("");
@@ -310,6 +323,9 @@ export function TwoFactorSection({ enabled, enabledOn, codesLeft, mandatory }: P
               path="recovery-codes"
               onDone={(body) => showCodes(body, "Códigos de recuperación generados")}
             />
+            <Button type="button" variant="outline" disabled={busy} onClick={forgetDevices}>
+              Olvidar dispositivos de confianza
+            </Button>
             {!mandatory && (
               <CodeDialog
                 trigger="Desactivar"
@@ -326,6 +342,7 @@ export function TwoFactorSection({ enabled, enabledOn, codesLeft, mandatory }: P
             )}
           </div>
         )}
+        {view.kind === "status" && on && <InlineError message={error} />}
       </CardContent>
     </Card>
   );

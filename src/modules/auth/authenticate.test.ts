@@ -216,6 +216,59 @@ describe("authenticateUser() — login attempts and locks", () => {
       expect(result).toEqual({ ok: true, token: "t", expiresAt: new Date(0), role: "tecnico" });
     });
   });
+
+  describe("a trusted device cookie (T9, L45)", () => {
+    const trustedDeps = (overrides: Partial<AuthenticateUserDeps> = {}) =>
+      attemptDeps({
+        hasTwoFactor: vi.fn().mockResolvedValue(true),
+        trustedDeviceToken: "device-token",
+        isTrustedDevice: vi.fn().mockResolvedValue(true),
+        ...overrides,
+      });
+
+    it("skips the code with a full session, settled as a success through the trusted device", async () => {
+      const { deps, settle } = trustedDeps();
+
+      const result = await authenticateUser("ana", "correct", deps);
+
+      expect(deps.isTrustedDevice).toHaveBeenCalledWith("user-1", "device-token");
+      expect(deps.issueSession).toHaveBeenCalledWith("user-1", "tecnico");
+      expect(settle).toHaveBeenCalledWith("attempt-1", "success", "user-1", "trusted_device");
+      expect(result).toEqual({ ok: true, token: "t", expiresAt: new Date(0), role: "tecnico" });
+    });
+
+    it("asks for the code when the cookie matches no device of this user", async () => {
+      const { deps, settle } = trustedDeps({ isTrustedDevice: vi.fn().mockResolvedValue(false) });
+
+      const result = await authenticateUser("ana", "correct", deps);
+
+      expect(deps.issueSession).toHaveBeenCalledWith("user-1", "tecnico", { pending: "verify" });
+      expect(settle).toHaveBeenCalledWith("attempt-1", "password_ok", "user-1");
+      expect(result).toMatchObject({ pending: "verify" });
+    });
+
+    it("never looks at the cookie on a wrong password, which still counts", async () => {
+      const { deps, settle } = trustedDeps({ verifyPassword: vi.fn().mockResolvedValue(false) });
+
+      expect(await authenticateUser("ana", "wrong", deps)).toEqual({ ok: false });
+      expect(settle).toHaveBeenCalledWith("attempt-1", "bad_password", "user-1");
+      expect(deps.isTrustedDevice).not.toHaveBeenCalled();
+      expect(deps.issueSession).not.toHaveBeenCalled();
+    });
+
+    it("leaves a mandatory role without 2FA on enroll, whatever the cookie", async () => {
+      const { deps } = trustedDeps({
+        findUser: vi.fn().mockResolvedValue({ ...activeUser, role: "administrador" }),
+        hasTwoFactor: vi.fn().mockResolvedValue(false),
+      });
+
+      const result = await authenticateUser("ana", "correct", deps);
+
+      expect(deps.issueSession).toHaveBeenCalledWith("user-1", "administrador", { pending: "enroll" });
+      expect(result).toMatchObject({ pending: "enroll" });
+    });
+  });
+
   describe("a mandatory 2FA role without 2FA (T8b, L41)", () => {
     const enrollExpiry = new Date("2026-11-20T12:30:00.000Z");
     const mandatoryDeps = (role: "administrador" | "jefe_taller", hasTwoFactor = false) =>

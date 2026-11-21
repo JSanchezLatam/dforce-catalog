@@ -48,7 +48,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T7 | S4, S6, S12 | Second-step page and recovery-code path | delegated (context backstop, L28) | done | `bde0eb3`, `780b8f2`, `a7c1bc1` (PR #374, merged `d2e0eaf`) |
 | T8a | S2, S4, S12, S14 | Enrolment from Mi cuenta, recovery codes, regenerate, disable; key generation in `standalone.ps1` | delegated (context backstop) | done | `fe8097b`, `e1968c7`, `d68500d` (PR #375, merged `93d3bfc`) |
 | T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | done | `aadc097` (PR #376, merged `73c3112`) |
-| T9 | S3, S9 | Trusted device, revoked on password change | inline | pending | |
+| T9 | S3, S9 | Trusted device, revoked on password change | delegated (context backstop) | done | `6732117`, `3576b8d` |
 | T10 | S5, S13 | Admin 2FA reset, self-reset refusal, emergency command | inline | pending | |
 | T11 | S11 | `secure` cookie | inline | deferred until the tunnel | |
 
@@ -362,3 +362,48 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - Setup confirm has no attempt limit; the secret belongs to that session.
     - The proxy matcher's `login` lookahead skips any path starting with `login`. That predates this unit, and no such route exists.
 - L44 (2026-11-20, T8b): Gentle AI review (risk + reliability, granted under L27) APPROVED and acknowledged. Follow-ups: if the session swap fails after confirm (a logout or an expiry won the race), 2FA stays on and the codes are lost, and the user regenerates them from Mi cuenta; a failed setup start offers no retry button, only a reload or Cerrar sesión.
+- L45 (2026-11-20, T9 design; mockup `s1` "Confiar en este dispositivo por 30 días", `s4` "Olvidar dispositivos de confianza").
+  - **Storage.** Migration 0042 adds `trusted_devices`: `id`; `user_id` (FK, cascade); `token_hash` (SHA-256 of a random 32-byte token, unique); `expires_at`; `created_at`.
+  - **Second step.** On `/two-factor`, a checkbox "Confiar en este dispositivo por 30 días" (unchecked by default). After a right code or recovery code it stores a new device and sets an httpOnly, `sameSite` lax, `path /` cookie `trusted_device` that expires in 30 days.
+  - **Password step.** A user with enabled 2FA whose request carries a `trusted_device` cookie matching an unexpired row for that same user gets a full session at once. The attempt is recorded as `success` with `second_factor = 'trusted_device'`. A cookie that belongs to another user, or has expired, is ignored, and the code is asked for as usual.
+  - **Revocation (S9, A5).** Every device of the user is deleted:
+    - on a password change (self-service or forced);
+    - when 2FA is disabled (T8a);
+    - when 2FA is reset (T10);
+    - from Mi cuenta "Olvidar dispositivos de confianza", with a toast.
+  - **One cookie per browser.** When two users trust the same browser, the second overwrites the first. That is accepted and recorded, because the workshop PCs are shared.
+- L46 (2026-11-21, T9), written by a bounded writer.
+  - **What was built:**
+    - migration 0042, `trusted_devices`, which stores a SHA-256 hash only;
+    - a checkbox, unchecked by default (the mockup shows it checked; L45 decides);
+    - a 30-day httpOnly `trusted_device` cookie, set only after a right code with the box checked;
+    - the login skips the code only for the same user, an unexpired row and enabled 2FA, after the password passes, and records `trusted_device`.
+  - **Revocation:** a password change (same transaction), disable, "Olvidar dispositivos de confianza" (`account.self`, with a toast), and the daily retention deletes expired devices.
+  - **Writer's checks:** RED by name for most rules; 11 mutations caught; the full e2e suite passes 489/489 on a recreated `dforce_e2e`; the suite passes 5177/5177; `tsc` and lint are clean.
+  - **Parent fix:** an administrator's password reset (`updateUser`) did not revoke devices. S9 covers it, because the administrator now knows the password. It now revokes them inside its transaction. The e2e went RED by name first, and the unit test asserts the revoke.
+  - **Migration:** 0042 was applied to the dev database.
+  - **Browser check at the LAN IP (phone):**
+    - the box is unchecked by default;
+    - with the box checked, a right code set `trusted_device` (httpOnly, 30 days);
+    - after logout, the next login skipped the code and landed on `/inventory`;
+    - "Olvidar dispositivos de confianza" toasted, and the login after it asked for the code again;
+    - QA rows were removed.
+  - **Recorded:**
+    - the cookie is not cleared on logout or forget, and once revoked it matches nothing;
+    - one cookie per browser;
+    - forget asks for no code, because it only removes access.
+- L47 (2026-11-21, T9).
+  - **GGA:** passed.
+  - **Independent verifier:** S3 and S9 pass with no blockers. Its probes:
+    - Another user's cookie, an expired row, a forged token and the stored hash all fail to skip the code. So does a device revoked then re-enabled.
+    - A wrong password, a locked user and a deactivated user are all refused even with a valid cookie.
+    - Only a literal `true` with a right code sets the cookie.
+    - Every password-writing path revokes its devices.
+  - **Applied after it, RED first:**
+    - Deactivating a user revokes their devices inside the same transaction (A5). A reactivated user could otherwise skip the code with an old cookie.
+    - GGA's advisory: `updateUser` no longer casts its transaction (`as never`). Both paths share a `TxLike` helper.
+  - **Recorded:**
+    - The device purge depends on the attempts purge succeeding that day.
+    - `changePassword` revokes other sessions after commit, which predates this unit.
+    - T10's reset must call the device revoke inside its own transaction.
+- L48 (2026-11-21, T9): Gentle AI review (risk + reliability, granted under L27) APPROVED and acknowledged. Its notes are already recorded: on plain HTTP the cookie has no `secure` flag, which is deferred to T11 with the session cookie; expired-device cleanup waits on the attempts purge.

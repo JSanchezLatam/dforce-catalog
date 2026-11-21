@@ -55,6 +55,39 @@ describe("SecondFactorForm", () => {
     await vi.waitFor(() => expect(assign).toHaveBeenCalledWith("/inventory"));
   });
 
+  it("offers to trust the device, unchecked, with a 44px row (S3)", () => {
+    render(<SecondFactorForm />);
+
+    const box = screen.getByRole("checkbox", { name: "Confiar en este dispositivo por 30 días" });
+    expect(box).not.toBeChecked();
+    expect(box.closest("label")).toHaveClass("min-h-11");
+  });
+
+  it("asks to trust the device only when the box is checked", async () => {
+    reply(200, { ok: true, redirect: "/inventory" });
+    const user = userEvent.setup();
+    render(<SecondFactorForm />);
+
+    await user.click(screen.getByRole("checkbox", { name: "Confiar en este dispositivo por 30 días" }));
+    await user.type(screen.getByLabelText("Código de verificación"), "123456");
+    await user.click(screen.getByRole("button", { name: "Verificar" }));
+
+    expect(fetchMock.mock.calls[0][1].body).toBe(JSON.stringify({ code: "123456", trustDevice: true }));
+  });
+
+  it("keeps the trust box for a recovery code", async () => {
+    reply(200, { ok: true, redirect: "/inventory" });
+    const user = userEvent.setup();
+    render(<SecondFactorForm />);
+
+    await user.click(screen.getByRole("button", { name: "¿Perdiste el teléfono? Usar un código de recuperación" }));
+    await user.click(screen.getByRole("checkbox", { name: "Confiar en este dispositivo por 30 días" }));
+    await user.type(screen.getByLabelText("Código de recuperación"), "7KQM-2XPA");
+    await user.click(screen.getByRole("button", { name: "Verificar" }));
+
+    expect(fetchMock.mock.calls[0][1].body).toBe(JSON.stringify({ recoveryCode: "7KQM-2XPA", trustDevice: true }));
+  });
+
   it("switches to a recovery code field and back to the app code", async () => {
     const user = userEvent.setup();
     render(<SecondFactorForm />);
