@@ -11,7 +11,8 @@ const session = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders: session }));
 
 const q = vi.hoisted(() => ({ listUsers: vi.fn(), userAccessFacts: vi.fn() }));
-vi.mock("@/modules/account/queries", () => q);
+vi.mock("@/modules/account/queries", () => ({ listUsers: q.listUsers }));
+vi.mock("@/modules/auth/access-facts", () => ({ userAccessFacts: q.userAccessFacts }));
 
 const userLocks = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/auth/login-attempts", () => ({ userLocks }));

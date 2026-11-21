@@ -49,7 +49,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T8a | S2, S4, S12, S14 | Enrolment from Mi cuenta, recovery codes, regenerate, disable; key generation in `standalone.ps1` | delegated (context backstop) | done | `fe8097b`, `e1968c7`, `d68500d` (PR #375, merged `93d3bfc`) |
 | T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | done | `aadc097` (PR #376, merged `73c3112`) |
 | T9 | S3, S9 | Trusted device, revoked on password change | delegated (context backstop) | done | `6732117`, `3576b8d` (PR #377, merged `4d96813`) |
-| T10 | S5, S12, S13 | Admin 2FA reset, self-reset refusal, emergency command | delegated (context backstop) | done | (this commit) |
+| T10 | S5, S12, S13 | Admin 2FA reset, self-reset refusal, emergency command | delegated (context backstop) | done | `61b3c0a`, next commit |
 | T11 | S11 | `secure` cookie | inline | deferred until the tunnel | |
 
 Route evidence: units depend on each other in order, so no writer trigger applies.
@@ -437,3 +437,14 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - A transient `aria-hidden` focus warning appeared once, when confirming from the menu-opened dialog, and did not reproduce.
     - A second-step check already past its lock can still issue a session just after a reset commits.
     - Último acceso uses the app's `formatDateTime`, not the mockup's "Hoy 08:12".
+- L51 (2026-11-21, T10). The independent verifier passed S5, S12 and S13 with no blockers. Its checks:
+  - Self-reset is refused by the session id. A case variant of the id cannot match, because `users.id` is text.
+  - The reset is complete and touches only the target user, including pending sessions.
+  - The emergency command was run on `dforce_e2e`: usage, an unknown user, a real reset, and a repeat run.
+  - Eight mutations each failed a test by name.
+
+  GGA failed on two findings, both fixed:
+  - A stale `lastAccess` doc comment ("ISO, or null") above the formatted label.
+  - Module boundaries. `account/queries.ts` read auth's `user_totp` and `login_attempts`; `userAccessFacts` now lives in `src/modules/auth/access-facts.ts`. `account/service.ts` also held a second copy of the device revoke in raw SQL. `revokeTrustedDevices` is now the only implementation and takes any executor with `execute`, so the account service's execute-only transaction seam and Drizzle transactions both call it.
+
+  A mutation that made the revoke delete every user's devices failed two tests by name. Unit 1233/1233, the 2FA e2e 37/37, lint clean.

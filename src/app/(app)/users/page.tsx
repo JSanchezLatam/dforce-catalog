@@ -1,7 +1,8 @@
 import { can } from "@/modules/auth/policy";
 import { PermissionDenied } from "@/shared/ui/PermissionDenied";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
-import { listUsers, userAccessFacts } from "@/modules/account/queries";
+import { listUsers } from "@/modules/account/queries";
+import { userAccessFacts } from "@/modules/auth/access-facts";
 import { requiresTwoFactor } from "@/modules/auth/enrolment";
 import type { Role } from "@/modules/auth/roles";
 import { userLocks } from "@/modules/auth/login-attempts";

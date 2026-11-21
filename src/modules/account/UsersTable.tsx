@@ -42,7 +42,6 @@ export type UserRow = {
   twoFactor: "enabled" | "enrolling" | null;
   /** S2's mandatory roles, decided on the server so this client file never imports the enrolment module. */
   twoFactorRequired: boolean;
-  /** Latest successful login (ISO), or `null` when there is none. */
   /** Already formatted on the server ("—" when none), so server and browser render the same text. */
   lastAccess: string;
 };

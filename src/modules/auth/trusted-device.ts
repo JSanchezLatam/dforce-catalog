@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
-import { and, eq, gt, lte } from "drizzle-orm";
+import { and, eq, gt, lte, sql, type SQL } from "drizzle-orm";
 
 import { db } from "@/shared/db/client";
 import { trustedDevices } from "@/shared/db/schema";
@@ -52,9 +52,17 @@ export async function isTrustedDevice(userId: string, token: string, now = new D
   return rows.length > 0;
 }
 
-/** Forgets every device of the user: password change (S9), 2FA disable, 2FA reset (A5), "Olvidar". */
-export async function revokeTrustedDevices(userId: string, executor: Executor = db): Promise<void> {
-  await executor.delete(trustedDevices).where(eq(trustedDevices.userId, userId));
+/**
+ * Forgets every device of the user: password change (S9), 2FA disable, 2FA reset
+ * (A5), deactivation, "Olvidar". The one implementation every path calls: it
+ * only needs `execute`, so a Drizzle transaction and the account service's
+ * execute-only transaction seam both fit.
+ */
+export async function revokeTrustedDevices(
+  userId: string,
+  executor: { execute: (query: SQL) => Promise<unknown> } = db,
+): Promise<void> {
+  await executor.execute(sql`DELETE FROM ${trustedDevices} WHERE ${trustedDevices.userId} = ${userId}`);
 }
 
 /** The daily retention's half for devices: only expired rows go. */

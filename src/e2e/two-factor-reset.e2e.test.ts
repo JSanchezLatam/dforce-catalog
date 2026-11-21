@@ -19,7 +19,7 @@ vi.hoisted(() => {
 });
 
 import { POST as LOGIN } from "@/app/api/login/route";
-import { userAccessFacts } from "@/modules/account/queries";
+import { userAccessFacts } from "@/modules/auth/access-facts";
 import { hashPassword } from "@/modules/auth/password";
 import type { Role } from "@/modules/auth/roles";
 import { sealSecret, totpKey } from "@/modules/auth/secret-box";
