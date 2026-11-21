@@ -22,6 +22,7 @@ import { POST as VERIFY } from "@/app/api/two-factor/verify/route";
 import { userLocks } from "@/modules/auth/login-attempts";
 import { hashPassword } from "@/modules/auth/password";
 import { generateRecoveryCodes, hashRecoveryCode } from "@/modules/auth/recovery-codes";
+import { verifySecondFactor } from "@/modules/auth/second-factor";
 import { sealSecret, totpKey } from "@/modules/auth/secret-box";
 import { issueSession, SESSION_COOKIE } from "@/modules/auth/session";
 import { totpAt } from "@/modules/auth/totp";
@@ -266,6 +267,30 @@ describe("2FA second step against a real database", () => {
     expect(await response.json()).toEqual({ error: "no_pending_session" });
     expect(await outcomesFor(username)).toEqual(["password_ok"]);
     expect((await sessionRow(pending)).revokedAt).toBeInstanceOf(Date);
+  });
+
+  // Issued inside the code's transaction, under the login lock a 2FA reset also
+  // takes: a reset can no longer slip between the check and the new session.
+  it("issues the full session inside the transaction that checked the code", async () => {
+    const { id, username } = await createLogin("issue-inside");
+    const pending = await pendingToken(username);
+    let fullSessionsInside = -1;
+
+    const result = await verifySecondFactor(
+      { token: pending, code: rightCode(), ip: freshIp() },
+      {
+        transaction: ((fn: Parameters<typeof db.transaction>[0]) =>
+          db.transaction(async (tx) => {
+            const value = await fn(tx);
+            const rows = await tx.select().from(sessions).where(eq(sessions.userId, id));
+            fullSessionsInside = rows.filter((row) => row.pending === null && row.revokedAt === null).length;
+            return value;
+          })) as typeof db.transaction,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(fullSessionsInside).toBe(1);
   });
 
   it("answers no_pending_session for an expired pending session", async () => {

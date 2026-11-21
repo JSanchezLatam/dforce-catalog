@@ -625,8 +625,11 @@ Cloudflare ya aloja los respaldos de R2, así que no suma un proveedor nuevo.
 - Los bloqueos de inicio de sesión ven la **dirección real del cliente**.
   `cloudflared` se conecta a la aplicación desde esta misma PC (loopback), y
   solo se le cree a un proxy de loopback cuando informa la dirección y el
-  protocolo del cliente. A cualquier otra máquina que envíe esos encabezados se
-  le reemplazan por los valores de su propia conexión.
+  protocolo del cliente. De ese proxy, la aplicación lee `CF-Connecting-IP`,
+  que Cloudflare siempre reescribe, o si falta, la **última** entrada de
+  `X-Forwarded-For`, la que agregó Cloudflare. La primera es la que envió el
+  cliente, así que nunca se usa. A cualquier otra máquina que envíe esos
+  encabezados se le reemplazan por los valores de su propia conexión.
 
 **Pasos en la PC del taller.** Siguen la guía de Cloudflare para un túnel
 administrado localmente que corre como servicio de Windows
@@ -673,7 +676,7 @@ consola de **administrador**. `dforce` es el nombre del túnel, y
 5. Verifique las reglas y apunte el subdominio al túnel:
 
    ```bat
-   cloudflared.exe tunnel ingress validate
+   cloudflared.exe tunnel --config C:\Windows\System32\config\systemprofile\.cloudflared\config.yml ingress validate
    cloudflared.exe tunnel route dns dforce app.example.com
    ```
 

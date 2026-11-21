@@ -17,6 +17,21 @@ describe("trustedForwardedFor", () => {
     expect(trustedForwardedFor(address, "181.197.1.1")).toBe("181.197.1.1");
   });
 
+  // B1 (L57): Cloudflare appends the real client to whatever the client sent, so
+  // behind the tunnel the FIRST element is the client's choice.
+  it("takes the last address from a local proxy, the one the proxy itself appended", () => {
+    expect(trustedForwardedFor("127.0.0.1", "192.168.0.5, 181.197.1.1")).toBe("181.197.1.1");
+  });
+
+  it("prefers Cloudflare's CF-Connecting-IP from a local proxy", () => {
+    expect(trustedForwardedFor("127.0.0.1", "192.168.0.5, 172.70.1.1", "181.197.1.1")).toBe("181.197.1.1");
+  });
+
+  it("ignores a CF-Connecting-IP that is not an address, and one from a LAN client", () => {
+    expect(trustedForwardedFor("127.0.0.1", "181.197.1.1", "nope")).toBe("181.197.1.1");
+    expect(trustedForwardedFor("192.168.1.23", "10.0.0.9", "181.197.1.1")).toBe("192.168.1.23");
+  });
+
   it("drops the header when the connection address is unknown", () => {
     expect(trustedForwardedFor(undefined, "10.0.0.9")).toBeUndefined();
   });

@@ -113,7 +113,7 @@ async function consume(
  * same advisory locks as `reserveLoginAttempt`: it refuses while the user or IP
  * lock holds, a wrong code counts as `bad_code`, and a right one turns this
  * session's `password_ok` row into a success stamped now, so the bad codes
- * before it fall behind the reset. The full session is issued after commit.
+ * before it fall behind the reset. The full session is issued in the same transaction.
  */
 export async function verifySecondFactor(
   input: { token: string; code?: string; recoveryCode?: string; ip: string | null; trustDevice?: boolean },
@@ -182,11 +182,14 @@ export async function verifySecondFactor(
     await tx.update(sessions).set({ revokedAt: now }).where(eq(sessions.id, input.token));
     // S3: stored with the success it rides on, so a rolled-back code never leaves a device behind.
     const trustedDevice = input.trustDevice === true ? await trustDevice(session.userId, tx, now) : undefined;
-    return { ok: true as const, userId: session.userId, role: session.role, trustedDevice };
+    // Inside the transaction, under the login lock a 2FA reset also takes, so a
+    // reset cannot land between this check and the new session.
+    const issued = await (deps.issueSession ?? issueSession)(session.userId, session.role, {}, tx);
+    return { ok: true as const, role: session.role, trustedDevice, ...issued };
   });
 
   if (!outcome.ok) return outcome;
-  const { token, expiresAt } = await (deps.issueSession ?? issueSession)(outcome.userId, outcome.role);
+  const { token, expiresAt } = outcome;
   return outcome.trustedDevice
     ? { ok: true, token, expiresAt, role: outcome.role, trustedDevice: outcome.trustedDevice }
     : { ok: true, token, expiresAt, role: outcome.role };

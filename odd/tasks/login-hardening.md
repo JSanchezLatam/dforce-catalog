@@ -50,8 +50,8 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | done | `aadc097` (PR #376, merged `73c3112`) |
 | T9 | S3, S9 | Trusted device, revoked on password change | delegated (context backstop) | done | `6732117`, `3576b8d` (PR #377, merged `4d96813`) |
 | T10 | S5, S12, S13 | Admin 2FA reset, self-reset refusal, emergency command | delegated (context backstop) | done | `61b3c0a`, `e948274` (PR #378, merged `ed33082`) |
-| T11 | S11 | `secure` cookie per HTTPS request; tunnel setup guide | delegated (parallel with T12) | done | (T11 commit) |
-| T12 | S2, S5, S13 | Follow-ups: setup retry, emergency CLI process test and in-transaction lookup, reset takes the login lock | delegated (parallel with T11) | done | (T12 commit) |
+| T11 | S11 | `secure` cookie per HTTPS request; tunnel setup guide | delegated (parallel with T12) | done | `36e1d4a`, fix next |
+| T12 | S2, S5, S13 | Follow-ups: setup retry, emergency CLI process test and in-transaction lookup, reset takes the login lock | delegated (parallel with T11) | done | `fdf11b0` |
 
 Route evidence: units depend on each other in order, so no writer trigger applies.
 
@@ -501,3 +501,12 @@ Route evidence: units depend on each other in order, so no writer trigger applie
   - **Reset lock.** `resetTwoFactor` and the emergency `reset-2fa` both take the target's login advisory lock, so a reset cannot interleave with a code check. Two e2e tests hold the lock on another connection and prove the reset waits.
   - **New `src/e2e/emergency-cli.e2e.test.ts`.** It spawns the real command for usage, `unlock` (real and unknown user) and `reset-2fa` (mandatory role, optional role, unknown user), checking exact output and exit codes.
   - **Checks.** RED by name. 12 of 13 mutations caught; the uncaught one is the lookup order above. Auth unit tests 348/348, e2e 40/40.
+- L57 (2026-11-21, T11 and T12).
+  - **Review results.** GGA passed. The seam check after the two parallel writers passed: full e2e 507/507, suite 5235/5235, `tsc` and lint clean. The independent verifier found one blocker, B1, and two advisories, all fixed RED first.
+  - **B1, the client address behind Cloudflare.** Cloudflare appends the real client to a client-sent `X-Forwarded-For`, and the app took the FIRST element, the client's own choice. Through the tunnel that would have dodged the IP lock or locked out someone else's address.
+    - Fix: from a loopback proxy, the app now reads `CF-Connecting-IP` (Cloudflare overwrites it), or else the LAST `X-Forwarded-For` element.
+    - Both guides now say so.
+    - Live check against the restarted dev server: loopback `192.168.0.5, 181.197.4.20` was recorded as `181.197.4.20`; loopback with `CF-Connecting-IP: 181.197.4.21` as `.21`; LAN forgeries as the connection's own `192.168.0.9`.
+  - **Advisory: L56 overstated the reset lock.** The second step issued the full session after its commit, so a reset could still land in between. `issueSession` now takes an executor, and the second step issues the session inside its locked transaction. The e2e saw RED by name. This also removes T7's "code spent but no session" gap (L34).
+  - **Advisory: the guide's `ingress validate`.** It now passes `--config` for the service's `config.yml`.
+  - **Process note.** Restarting the app dev server with `pkill -f next-server` also killed the portal dev server on :3001. It was restarted at once (`cd portal && npx next dev -p 3001 -H 0.0.0.0`). Next time, kill by port.

@@ -588,8 +588,11 @@ already hosts the R2 backups, so it adds no new provider.
   same cookies as today.
 - The login locks see the **real client address**. `cloudflared` connects to
   the app from this same PC (loopback), and only a loopback proxy is believed
-  when it reports the client's address and protocol. Any other machine that
-  sends those headers gets them replaced by its own connection's values.
+  when it reports the client's address and protocol. From it, the app reads
+  `CF-Connecting-IP`, which Cloudflare always overwrites, or else the **last**
+  entry of `X-Forwarded-For`, the one Cloudflare appended. The first entry is
+  whatever the client sent, so it is never used. Any other machine that sends
+  those headers gets them replaced by its own connection's values.
 
 **Steps on the workshop PC.** These follow Cloudflare's guide for a
 locally-managed tunnel run as a Windows service
@@ -635,7 +638,7 @@ Read it on the day: Cloudflare may have changed a step. Run everything in an
 5. Check the rules, and point the subdomain at the tunnel:
 
    ```bat
-   cloudflared.exe tunnel ingress validate
+   cloudflared.exe tunnel --config C:\Windows\System32\config\systemprofile\.cloudflared\config.yml ingress validate
    cloudflared.exe tunnel route dns dforce app.example.com
    ```
 
