@@ -106,7 +106,6 @@ Route evidence: units depend on each other in order, so no writer trigger applie
 - Follow-ups recorded now, built later:
   - T7: a wrong second-step code must count toward the user lock, or six digits can be guessed (likely a new `login_outcome` value, so a migration).
   - T8: on an install with no key, a mandatory role cannot finish login, so who generates the key on the workshop PC is the owner's call before T8 ships. WINDOWS.md and WINDOWS.es.md get the key and backup note with T8.
-- Next: T6 (pending session, proxy gate, e2e fixtures).
 - L27 (2026-11-20, owner): "Si, opción 1, y seguí con todo lo que falta, solo detente cuando necesites algo, corre todas las revisiones necesarias, no me preguntes." Standing consent for every Gentle AI review of the remaining units; key generation becomes S14, built with T8.
 - L28 (2026-11-20, design for T6–T10, before any write). Grounded in `authenticate.ts`, `session.ts`, `proxy.ts`, `forced-change.ts`, `actions.ts` and `api/login/route.ts`.
   - **Storage (T6, migration 0041).**
@@ -449,3 +448,22 @@ Route evidence: units depend on each other in order, so no writer trigger applie
 
   A mutation that made the revoke delete every user's devices failed two tests by name. Unit 1233/1233, the 2FA e2e 37/37, lint clean.
 - L52 (2026-11-21, T10): Gentle AI review (risk + reliability, granted under L27) APPROVED and acknowledged, with two suggestions left as follow-ups. The emergency `reset-2fa` looks up the user before `BEGIN`, which is harmless because the writes key on the id. The CLI branch's printed message and exit code are pinned only by manual runs; a spawned-process e2e would pin them.
+- L53 (2026-11-21, feature close): T1–T10 are done; T11 (`secure` cookie) stays deferred until the HTTPS tunnel exists (S11).
+  - **Integration check on the tracker branch:**
+    - full e2e 499/499 on a freshly recreated `dforce_e2e`;
+    - suite 5203/5203;
+    - `tsc` clean;
+    - lint 0 errors (13 pre-existing warnings).
+  - `main` had not moved. The tracker #365 merges to `main` under ordinary policy; nothing is deployed.
+  - **Owner actions at the workshop PC update:**
+    1. Update with `standalone.ps1 -SetupOnly`. It creates `TOTP_ENCRYPTION_KEY` once. This is its first real run, because the `.ps1` was never executed here.
+    2. Keep a copy of `.env` outside the PC.
+    3. Run migrations 0039–0042.
+    4. Have the phone at hand: every `administrador` and `jefe_taller` sets up 2FA at the next sign-in.
+  - **Open follow-ups, in the log above:**
+    - permanent lock by anyone who knows a username (S6, owner's choice);
+    - the emergency CLI branch has no process-level test;
+    - the setup page has no retry button;
+    - a reset can race a code check;
+    - "Último acceso" uses the app date format.
+
