@@ -50,7 +50,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | done | `aadc097` (PR #376, merged `73c3112`) |
 | T9 | S3, S9 | Trusted device, revoked on password change | delegated (context backstop) | done | `6732117`, `3576b8d` (PR #377, merged `4d96813`) |
 | T10 | S5, S12, S13 | Admin 2FA reset, self-reset refusal, emergency command | delegated (context backstop) | done | `61b3c0a`, `e948274` (PR #378, merged `ed33082`) |
-| T11 | S11 | `secure` cookie per HTTPS request; tunnel setup guide | delegated (parallel with T12) | done | `36e1d4a`, fix next |
+| T11 | S11 | `secure` cookie per HTTPS request; tunnel setup guide | delegated (parallel with T12) | done | `36e1d4a`, `40b1e67` |
 | T12 | S2, S5, S13 | Follow-ups: setup retry, emergency CLI process test and in-transaction lookup, reset takes the login lock | delegated (parallel with T11) | done | `fdf11b0` |
 
 Route evidence: units depend on each other in order, so no writer trigger applies.
