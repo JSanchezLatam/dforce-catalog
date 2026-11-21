@@ -27,11 +27,17 @@ import { useToast } from "@/shared/ui/ToastProvider";
 /** Data only across the Server Component boundary: the date arrives formatted, `mandatory` as a boolean. */
 type Props = { enabled: boolean; enabledOn: string | null; codesLeft: number; mandatory: boolean };
 
-type View = { kind: "status" } | { kind: "enrolling"; secret: string; qrDataUrl: string } | { kind: "codes"; codes: string[] };
+type View =
+  | { kind: "status" }
+  | { kind: "password" }
+  | { kind: "enrolling"; secret: string; qrDataUrl: string }
+  | { kind: "codes"; codes: string[] };
 
 const BASE = "/api/account/two-factor";
 
 function errorText(error: unknown): string {
+  if (error === "invalid_password") return "Contraseña incorrecta.";
+  if (error === "code_used") return "Ese código ya se usó. Esperá el siguiente en la app.";
   if (error === "invalid_code") return "Código incorrecto. Revisá la app e intentá de nuevo.";
   if (error === "locked") return "Demasiados códigos incorrectos. Por seguridad, el acceso quedó bloqueado por un rato.";
   if (error === "unavailable") return "La verificación en dos pasos no está disponible. Avisá al administrador.";
@@ -158,28 +164,33 @@ function downloadCodes(codes: string[]) {
   link.href = url;
   link.download = "codigos-de-recuperacion.txt";
   link.click();
-  URL.revokeObjectURL(url);
+  // Revoked in a later task: revoking in the click's own task can cancel the download.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 /** Mi cuenta → "Verificación en dos pasos" (T8a), mockup screen `s4`. */
 export function TwoFactorSection({ enabled, enabledOn, codesLeft, mandatory }: Props) {
   // Local state wins over the props: the codes are shown once and must survive the refresh behind them.
   const [view, setView] = useState<View>({ kind: "status" });
+  const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const router = useRouter();
   const { addToast } = useToast();
 
-  async function start() {
+  // Re-authentication before a new secret: a stolen session must not enrol its own.
+  async function start(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setBusy(true);
     setError(null);
-    const result = await post("start");
+    const result = await post("start", { password });
     setBusy(false);
     if (!result.ok) {
       setError(result.message);
       return;
     }
+    setPassword("");
     setCode("");
     setView({ kind: "enrolling", secret: String(result.body.secret), qrDataUrl: String(result.body.qrDataUrl) });
   }
@@ -206,6 +217,7 @@ export function TwoFactorSection({ enabled, enabledOn, codesLeft, mandatory }: P
 
   function cancel() {
     setView({ kind: "status" });
+    setPassword("");
     setError(null);
   }
 
@@ -239,12 +251,35 @@ export function TwoFactorSection({ enabled, enabledOn, codesLeft, mandatory }: P
         </div>
 
         {view.kind === "status" && !on && (
-          <>
+          <Button type="button" className="self-start" onClick={() => setView({ kind: "password" })}>
+            Activar
+          </Button>
+        )}
+
+        {view.kind === "password" && (
+          <form onSubmit={start} className="flex flex-col gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="two-factor-password">Contraseña actual</Label>
+              <Input
+                id="two-factor-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+                className="max-w-xs"
+              />
+            </div>
             <InlineError message={error} />
-            <Button type="button" className="self-start" disabled={busy} onClick={start}>
-              Activar
-            </Button>
-          </>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={busy || !password}>
+                Continuar
+              </Button>
+              <Button type="button" variant="outline" disabled={busy} onClick={cancel}>
+                Cancelar
+              </Button>
+            </div>
+          </form>
         )}
 
         {view.kind === "enrolling" && (

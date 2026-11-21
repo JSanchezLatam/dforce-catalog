@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, count, eq, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, count, eq, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import QRCode from "qrcode";
 
 import { db } from "@/shared/db/client";
@@ -8,18 +8,20 @@ import { loginAttempts, recoveryCodes, users, userTotp } from "@/shared/db/schem
 
 import { currentLock, takeLoginLocks } from "./login-attempts";
 import { loginKey } from "./login-lock";
+import { verifyPassword } from "./password";
 import { generateRecoveryCodes, hashRecoveryCode } from "./recovery-codes";
 import type { Role } from "./roles";
 import { openSecret, sealSecret, totpKey } from "./secret-box";
-import { revokeOtherSessions } from "./session";
 import { generateTotpSecret, otpauthUri, verifyTotp } from "./totp";
 
 /**
  * 2FA enrolment from Mi cuenta (T8a, L37): start, confirm, regenerate the
  * recovery codes, disable. Every operation takes the user id from the session.
- * Re-authentication (regenerate, disable) runs under the login advisory locks and
- * counts a wrong code as `bad_code`, so a stolen session gets no more guesses at
- * the app code than a login does (S6); confirm needs no lock, as the secret is new.
+ * Start asks for the current password, so a stolen session cannot enrol its own
+ * secret; a wrong one is not counted, like the password change. Re-authentication
+ * (regenerate, disable) runs under the login advisory locks and counts a wrong
+ * code as `bad_code`, so a stolen session gets no more guesses at the app code
+ * than a login does (S6); confirm needs no lock, as the secret is new.
  */
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -33,14 +35,22 @@ export const DEFAULT_ISSUER = "DForce";
 
 export type EnrolmentFailure = {
   ok: false;
-  reason: "unavailable" | "invalid_code" | "locked" | "already_enabled" | "not_enrolling" | "not_enabled" | "required_for_role";
+  reason:
+    | "unavailable"
+    | "invalid_password"
+    | "invalid_code"
+    | "code_used"
+    | "locked"
+    | "already_enabled"
+    | "not_enrolling"
+    | "not_enabled"
+    | "required_for_role";
 };
 
 export type EnrolmentDeps = {
   key?: () => Buffer;
   transaction?: typeof db.transaction;
   now?: () => Date;
-  revokeOtherSessions?: typeof revokeOtherSessions;
 };
 
 const fail = (reason: EnrolmentFailure["reason"]): EnrolmentFailure => ({ ok: false, reason });
@@ -121,7 +131,11 @@ async function reauthenticate(
   const secret = open(row.secretSealed, userId, key);
   if (secret === null) return fail("unavailable");
   const step = verifyTotp(secret, code, now, row.lastStep ?? undefined);
-  if (step === null) return wrong();
+  if (step === null) {
+    // The user's own code, already spent at a step `last_step` covers: not a guess, so no `bad_code`.
+    const spent = verifyTotp(secret, code, now);
+    return spent !== null && row.lastStep !== null && spent <= row.lastStep ? fail("code_used") : wrong();
+  }
   const stored = await tx
     .update(userTotp)
     .set({ lastStep: step })
@@ -137,9 +151,11 @@ async function reauthenticate(
  */
 export async function startEnrolment(
   userId: string,
+  password: string,
   issuer: string,
   deps: EnrolmentDeps = {},
 ): Promise<{ ok: true; secret: string; otpauthUri: string; qrDataUrl: string } | EnrolmentFailure> {
+  if (!password) return fail("invalid_password");
   const key = readKey(deps);
   if (!key) return fail("unavailable");
   const transaction = deps.transaction ?? db.transaction.bind(db);
@@ -147,9 +163,12 @@ export async function startEnrolment(
   const secret = generateTotpSecret();
   const secretSealed = sealSecret(secret, userId, key);
 
-  const username = await transaction(async (tx) => {
-    const [user] = await tx.select({ username: users.username }).from(users).where(eq(users.id, userId));
-    if (!user) return null;
+  const started = await transaction(async (tx) => {
+    const [user] = await tx
+      .select({ username: users.username, passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.id, userId));
+    if (!user || !(await verifyPassword(password, user.passwordHash))) return fail("invalid_password");
     const written = await tx
       .insert(userTotp)
       .values({ userId, secretSealed, enabledAt: null, lastStep: null, createdAt: now })
@@ -159,11 +178,11 @@ export async function startEnrolment(
         setWhere: isNull(userTotp.enabledAt),
       })
       .returning({ userId: userTotp.userId });
-    return written.length === 1 ? user.username : null;
+    return written.length === 1 ? { username: user.username } : fail("already_enabled");
   });
-  if (username === null) return fail("already_enabled");
+  if ("ok" in started) return started;
 
-  const uri = otpauthUri({ secret, issuer, account: username });
+  const uri = otpauthUri({ secret, issuer, account: started.username });
   // Black on white with a quiet zone whatever the theme, or phones fail to scan it on the dark ground.
   const qrDataUrl = await QRCode.toDataURL(uri, { margin: 2, width: 240 });
   return { ok: true, secret: secret.match(/.{1,4}/g)!.join(" "), otpauthUri: uri, qrDataUrl };
@@ -223,7 +242,8 @@ export async function regenerateRecoveryCodes(
 
 /**
  * Needs a current app code and a role 2FA is optional for (S2). Removes the
- * secret and the codes, then revokes every session but `currentToken`.
+ * secret and the codes and revokes every session but `currentToken`, in one
+ * transaction: 2FA is never off with the other sessions still open.
  */
 export async function disableTwoFactor(
   userId: string,
@@ -244,9 +264,11 @@ export async function disableTwoFactor(
     if (failure) return failure;
     await tx.delete(recoveryCodes).where(eq(recoveryCodes.userId, userId));
     await tx.delete(userTotp).where(eq(userTotp.userId, userId));
+    // revokeOtherSessions' predicate, on `tx`: that helper writes through `db`, outside this transaction.
+    await tx.execute(
+      sql`UPDATE sessions SET revoked_at = ${now} WHERE user_id = ${userId} AND revoked_at IS NULL AND id <> ${currentToken}`,
+    );
     return null;
   });
-  if (refused) return refused;
-  await (deps.revokeOtherSessions ?? revokeOtherSessions)(userId, currentToken);
-  return { ok: true };
+  return refused ?? { ok: true };
 }

@@ -51,23 +51,30 @@ describe("POST /api/account/two-factor/start", () => {
   it("starts for the session user with the workshop name as issuer", async () => {
     startEnrolment.mockResolvedValue({ ok: true, secret: "ABCD EFGH", otpauthUri: "otpauth://x", qrDataUrl: "data:x" });
 
-    const res = await START(req("start", "tecnico", { userId: "someone-else" }));
+    const res = await START(req("start", "tecnico", { password: "clave-actual", userId: "someone-else" }));
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ secret: "ABCD EFGH", otpauthUri: "otpauth://x", qrDataUrl: "data:x" });
-    expect(startEnrolment).toHaveBeenCalledWith("user-1", "Taller Fuerza");
+    expect(startEnrolment).toHaveBeenCalledWith("user-1", "clave-actual", "Taller Fuerza");
   });
 
   it.each([null, { name: null }, { name: "   " }])("falls back to DForce when the workshop config is %j", async (config) => {
     getWorkshopConfig.mockResolvedValue(config);
     startEnrolment.mockResolvedValue({ ok: true, secret: "A", otpauthUri: "o", qrDataUrl: "d" });
 
-    await START(req("start", "tecnico"));
+    await START(req("start", "tecnico", { password: "clave-actual" }));
 
-    expect(startEnrolment).toHaveBeenCalledWith("user-1", "DForce");
+    expect(startEnrolment).toHaveBeenCalledWith("user-1", "clave-actual", "DForce");
+  });
+
+  it.each([undefined, { password: 1234 }, { password: null }])("passes the body %j as an empty password, which the service refuses", async (body) => {
+    startEnrolment.mockResolvedValue({ ok: false, reason: "invalid_password" });
+    await START(req("start", "tecnico", body));
+    expect(startEnrolment).toHaveBeenCalledWith("user-1", "", "Taller Fuerza");
   });
 
   it.each([
+    ["invalid_password", 400],
     ["already_enabled", 409],
     ["unavailable", 503],
   ])("maps %s to %i", async (reason, status) => {
@@ -120,12 +127,15 @@ describe("POST /api/account/two-factor/recovery-codes", () => {
 
   it.each([
     ["invalid_code", 400],
+    ["code_used", 409],
+    ["locked", 429],
     ["not_enabled", 409],
     ["unavailable", 503],
   ])("maps %s to %i", async (reason, status) => {
     regenerateRecoveryCodes.mockResolvedValue({ ok: false, reason });
     const res = await RECOVERY_CODES(req("recovery-codes", "tecnico", { code: "123456" }));
     expect(res.status).toBe(status);
+    expect(await res.json()).toEqual({ error: reason });
   });
 });
 
@@ -150,6 +160,8 @@ describe("POST /api/account/two-factor/disable", () => {
   it.each([
     ["required_for_role", 403],
     ["invalid_code", 400],
+    ["code_used", 409],
+    ["locked", 429],
     ["not_enabled", 409],
     ["unavailable", 503],
   ])("maps %s to %i", async (reason, status) => {

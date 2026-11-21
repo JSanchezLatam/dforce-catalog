@@ -43,41 +43,48 @@ describe("enrolment input that is not six digits", () => {
   );
 });
 
+describe("startEnrolment without a password", () => {
+  it("answers invalid_password before reading the key or opening a transaction", async () => {
+    const key = vi.fn(brokenKey);
+    const transaction = vi.fn();
+
+    expect(await startEnrolment("u1", "", "Taller", { key, transaction })).toEqual({ ok: false, reason: "invalid_password" });
+    expect(key).not.toHaveBeenCalled();
+    expect(transaction).not.toHaveBeenCalled();
+  });
+});
+
 describe("disableTwoFactor for a mandatory role (S2)", () => {
   it.each(["administrador", "jefe_taller"] as const)(
     "refuses %s even with a well-formed code, before any key or database work",
     async (role) => {
       const key = vi.fn(brokenKey);
       const transaction = vi.fn();
-      const revoke = vi.fn();
 
-      const result = await disableTwoFactor("u1", role, "123456", "t", { key, transaction, revokeOtherSessions: revoke });
+      const result = await disableTwoFactor("u1", role, "123456", "t", { key, transaction });
 
       expect(result).toEqual({ ok: false, reason: "required_for_role" });
       expect(key).not.toHaveBeenCalled();
       expect(transaction).not.toHaveBeenCalled();
-      expect(revoke).not.toHaveBeenCalled();
     },
   );
 });
 
 describe("enrolment without a usable key", () => {
   it.each([
-    ["startEnrolment", (deps: object) => startEnrolment("u1", "Taller", deps)],
+    ["startEnrolment", (deps: object) => startEnrolment("u1", "clave", "Taller", deps)],
     ["confirmEnrolment", (deps: object) => confirmEnrolment("u1", "123456", deps)],
     ["regenerateRecoveryCodes", (deps: object) => regenerateRecoveryCodes("u1", "123456", deps)],
     ["disableTwoFactor", (deps: object) => disableTwoFactor("u1", "tecnico", "123456", "t", deps)],
   ])("%s answers unavailable and opens no transaction, so it writes nothing", async (_name, run) => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const transaction = vi.fn();
-    const revoke = vi.fn();
 
-    expect(await run({ key: brokenKey, transaction, revokeOtherSessions: revoke })).toEqual({
+    expect(await run({ key: brokenKey, transaction })).toEqual({
       ok: false,
       reason: "unavailable",
     });
     expect(transaction).not.toHaveBeenCalled();
-    expect(revoke).not.toHaveBeenCalled();
     // The reason, never the key.
     expect(error).toHaveBeenCalledWith("2FA unavailable:", "TOTP_ENCRYPTION_KEY must be 32 bytes in base64");
     error.mockRestore();

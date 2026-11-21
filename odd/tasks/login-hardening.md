@@ -46,7 +46,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T5 | S2, S4 | TOTP core, secret encryption, recovery hashes, env key (library only; storage lands with T6/T8) | inline | done | `a2718ad`, `168cfa3`, `30eb200` (PR #372, merged `823402f`) |
 | T6 | S2 | Pending session, proxy gate, e2e fixtures | delegated (context backstop, L28) | done | `a038c74`, `5e34740`, `02c1d5c` (PR #373, merged `edb0cb0`) |
 | T7 | S4, S6, S12 | Second-step page and recovery-code path | delegated (context backstop, L28) | done | `bde0eb3`, `780b8f2`, `a7c1bc1` (PR #374, merged `d2e0eaf`) |
-| T8a | S2, S4, S12, S14 | Enrolment from Mi cuenta, recovery codes, regenerate, disable; key generation in `standalone.ps1` | delegated (context backstop) | done | (this commit) |
+| T8a | S2, S4, S12, S14 | Enrolment from Mi cuenta, recovery codes, regenerate, disable; key generation in `standalone.ps1` | delegated (context backstop) | done | `fe8097b`, next commits |
 | T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | pending | |
 | T9 | S3, S9 | Trusted device, revoked on password change | inline | pending | |
 | T10 | S5, S13 | Admin 2FA reset, self-reset refusal, emergency command | inline | pending | |
@@ -302,3 +302,20 @@ Route evidence: units depend on each other in order, so no writer trigger applie
   - **Advisories kept.**
     - Start and confirm need no re-authentication, so a stolen session of a user without 2FA can enrol its own secret. That needs an admin reset (T10) and is by design in L37.
     - In the `.ps1`: a lowercase blank key line reaches `Fail` (safe); `.env` backups are named to the second; an ANSI `.env` with non-ASCII bytes is decoded as UTF-8 after the backup; `KEY= # comment` counts as set.
+- L40 (2026-11-20, T8a): Gentle AI review (risk, reliability and resilience, granted under L27) approved and acknowledged.
+  - **Fixed after the review by a bounded writer**, each with RED by name:
+    - Activar asks for the current password first ("Contraseña actual", wrong: "Contraseña incorrecta.", not counted toward the lock, like the password change). A stolen session can no longer enrol its own secret without it.
+    - Disable revokes the other sessions inside its own transaction.
+    - A right code already used answers `code_used` (409, "Ese código ya se usó. Esperá el siguiente en la app.") and writes no `bad_code`.
+    - The `.txt` download revokes its URL after the click's task.
+    - Route tests now cover `locked`, `invalid_password` and `code_used`.
+  - **Mutations caught by name:**
+    - the password check removed;
+    - a revoke through `db` or after commit;
+    - `code_used` removed;
+    - `code_used` still writing `bad_code`.
+  - **Checks:** suite 5065/5065, `tsc` and lint clean, e2e 28/28.
+  - **Browser check at the LAN IP (phone):** a wrong current password is refused inline, and the right one shows the QR.
+  - **Recorded:**
+    - The section can show "Desactivada" for a moment if "Ya los guardé" beats the refresh.
+    - A lost single-use race at the SQL guard still counts as `bad_code`.

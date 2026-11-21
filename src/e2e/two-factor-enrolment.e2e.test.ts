@@ -58,7 +58,7 @@ async function createUser(name: string, role: Role): Promise<{ id: string; usern
 
 /** Start and confirm at step 0; returns the plain secret and the codes shown once. */
 async function enrol(id: string): Promise<{ secret: string; codes: string[] }> {
-  const started = await startEnrolment(id, "Taller E2E", nowAt(0));
+  const started = await startEnrolment(id, PASSWORD, "Taller E2E", nowAt(0));
   if (!started.ok) throw new Error(`start failed: ${started.reason}`);
   const secret = started.secret.replace(/ /g, "");
   const confirmed = await confirmEnrolment(id, totpAt(secret, at(0)), nowAt(0));
@@ -96,7 +96,7 @@ describe("2FA enrolment against a real database", () => {
   it("start then confirm enables 2FA with the step stored and 10 hashed codes, returned once in plain text", async () => {
     const { id, username } = await createUser("enrol", "tecnico");
 
-    const started = await startEnrolment(id, "Taller E2E", nowAt(0));
+    const started = await startEnrolment(id, PASSWORD, "Taller E2E", nowAt(0));
     expect(started.ok).toBe(true);
     if (!started.ok) return;
     expect(started.secret).toMatch(/^[A-Z2-7]{4}( [A-Z2-7]{4})+$/);
@@ -124,8 +124,8 @@ describe("2FA enrolment against a real database", () => {
 
   it("a restart replaces an unfinished secret, so the first one no longer confirms", async () => {
     const { id } = await createUser("restart-unfinished", "tecnico");
-    const first = await startEnrolment(id, "Taller E2E", nowAt(0));
-    const second = await startEnrolment(id, "Taller E2E", nowAt(0));
+    const first = await startEnrolment(id, PASSWORD, "Taller E2E", nowAt(0));
+    const second = await startEnrolment(id, PASSWORD, "Taller E2E", nowAt(0));
     if (!first.ok || !second.ok) throw new Error("start failed");
 
     expect(second.secret).not.toBe(first.secret);
@@ -137,7 +137,7 @@ describe("2FA enrolment against a real database", () => {
 
   it("a wrong code at confirm leaves 2FA disabled and writes no codes", async () => {
     const { id } = await createUser("confirm-wrong", "tecnico");
-    const started = await startEnrolment(id, "Taller E2E", nowAt(0));
+    const started = await startEnrolment(id, PASSWORD, "Taller E2E", nowAt(0));
     if (!started.ok) throw new Error("start failed");
     const right = totpAt(started.secret.replace(/ /g, ""), at(0));
 
@@ -148,12 +148,27 @@ describe("2FA enrolment against a real database", () => {
     expect((await twoFactorStatus(id)).enabled).toBe(false);
   });
 
+  // Re-authentication before start: a stolen session must not enrol its own secret.
+  it("start with a wrong password writes nothing and counts nothing; the right one starts", async () => {
+    const { id, username } = await createUser("start-password", "tecnico");
+
+    expect(await startEnrolment(id, "clave-incorrecta", "Taller E2E", nowAt(0))).toEqual({
+      ok: false,
+      reason: "invalid_password",
+    });
+    expect(await totpRow(id)).toBeUndefined();
+    expect(await db.select().from(loginAttempts).where(eq(loginAttempts.username, username))).toHaveLength(0);
+
+    expect((await startEnrolment(id, PASSWORD, "Taller E2E", nowAt(0))).ok).toBe(true);
+    expect(await totpRow(id)).toMatchObject({ enabledAt: null });
+  });
+
   it("refuses a restart once enabled and keeps the enabled secret", async () => {
     const { id } = await createUser("restart-enabled", "tecnico");
     await enrol(id);
     const before = await totpRow(id);
 
-    expect(await startEnrolment(id, "Taller E2E", nowAt(1))).toEqual({ ok: false, reason: "already_enabled" });
+    expect(await startEnrolment(id, PASSWORD, "Taller E2E", nowAt(1))).toEqual({ ok: false, reason: "already_enabled" });
 
     expect(await totpRow(id)).toEqual(before);
     expect(await codeRows(id)).toHaveLength(10);
@@ -193,7 +208,7 @@ describe("2FA enrolment against a real database", () => {
     expect((await totpRow(id)).lastStep).toBe(Math.floor(at(1).getTime() / 30_000));
 
     // The same app code works once.
-    expect(await regenerateRecoveryCodes(id, totpAt(secret, at(1)), nowAt(1))).toEqual({ ok: false, reason: "invalid_code" });
+    expect(await regenerateRecoveryCodes(id, totpAt(secret, at(1)), nowAt(1))).toEqual({ ok: false, reason: "code_used" });
   });
 
   // A stolen session must not get unlimited guesses at the app code: wrong
@@ -221,6 +236,18 @@ describe("2FA enrolment against a real database", () => {
     expect(await twoFactorStatus(id)).toMatchObject({ enabled: true });
   });
 
+  // A right code already spent is the user's own, not a guess: it must not count toward the lock.
+  it("a code already used at confirm answers code_used on regenerate and writes no bad_code row", async () => {
+    const { id, username } = await createUser("reauth-used", "tecnico");
+    const { secret, codes } = await enrol(id);
+
+    expect(await regenerateRecoveryCodes(id, totpAt(secret, at(0)), nowAt(0))).toEqual({ ok: false, reason: "code_used" });
+
+    const rows = await db.select().from(loginAttempts).where(eq(loginAttempts.username, username));
+    expect(rows.filter((row) => row.outcome === "bad_code")).toHaveLength(0);
+    expect((await codeRows(id)).map((r) => r.codeHash).sort()).toEqual(codes.map((c) => hashRecoveryCode(c, totpKey())).sort());
+  });
+
   // Pins the advisory locks in re-authentication: without them parallel guesses each pass the lock check.
   it("counts at most five of fifteen parallel wrong re-authentication codes", async () => {
     const { id, username } = await createUser("reauth-parallel", "tecnico");
@@ -241,13 +268,13 @@ describe("2FA enrolment against a real database", () => {
   it("never enables a secret other than the one confirm checked, when a restart races it", async () => {
     for (let i = 0; i < 20; i += 1) {
       const { id } = await createUser(`confirm-race-${i}`, "tecnico");
-      const started = await startEnrolment(id, "Taller E2E", nowAt(0));
+      const started = await startEnrolment(id, PASSWORD, "Taller E2E", nowAt(0));
       if (!started.ok) throw new Error(started.reason);
       const secret = started.secret.replace(/ /g, "");
 
       const [confirmed, restarted] = await Promise.all([
         confirmEnrolment(id, totpAt(secret, at(0)), nowAt(0)),
-        startEnrolment(id, "Taller E2E", nowAt(0)),
+        startEnrolment(id, PASSWORD, "Taller E2E", nowAt(0)),
       ]);
 
       const row = await totpRow(id);
@@ -300,11 +327,35 @@ describe("2FA enrolment against a real database", () => {
     expect((await sessionRow(token)).pending).toBeNull();
   });
 
+  // The revoke commits with the deletes or not at all: never 2FA off with the other sessions still open.
+  it("disable revokes the other sessions inside its own transaction", async () => {
+    const { id } = await createUser("disable-atomic", "tecnico");
+    const { secret } = await enrol(id);
+    const current = await issueSession(id, "tecnico");
+    const other = await issueSession(id, "tecnico");
+    let seenInside: Date | null | undefined;
+    const rolledBack = new Error("forced rollback");
+    const transaction = ((run: Parameters<typeof db.transaction>[0]) =>
+      db.transaction(async (tx) => {
+        await run(tx);
+        seenInside = (await tx.select().from(sessions).where(eq(sessions.id, other.token)))[0].revokedAt;
+        throw rolledBack;
+      })) as typeof db.transaction;
+
+    await expect(disableTwoFactor(id, "tecnico", totpAt(secret, at(1)), current.token, { ...nowAt(1), transaction })).rejects.toBe(
+      rolledBack,
+    );
+
+    expect(seenInside).toBeInstanceOf(Date);
+    expect((await sessionRow(other.token)).revokedAt).toBeNull();
+    expect((await totpRow(id)).enabledAt).not.toBeNull();
+  });
+
   // A restore without the original .env: an install problem, never a wrong code (T7's B1).
   it("with a key that no longer opens the secret, confirm, regenerate and disable answer unavailable and write nothing", async () => {
     const otherKey = () => Buffer.alloc(32, 7);
     const pendingUser = await createUser("wrong-key-pending", "tecnico");
-    const started = await startEnrolment(pendingUser.id, "Taller E2E", nowAt(0));
+    const started = await startEnrolment(pendingUser.id, PASSWORD, "Taller E2E", nowAt(0));
     if (!started.ok) throw new Error("start failed");
     const pendingSecret = started.secret.replace(/ /g, "");
     const error = vi.spyOn(console, "error").mockImplementation(() => {});

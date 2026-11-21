@@ -34,9 +34,15 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 async function enrolTo(user: ReturnType<typeof userEvent.setup>, code = "123456") {
+  await passwordStep(user);
   reply(START_OK);
-  await user.click(screen.getByRole("button", { name: "Activar" }));
+  await user.click(screen.getByRole("button", { name: "Continuar" }));
   await user.type(await screen.findByLabelText("Código de la app"), code);
+}
+
+async function passwordStep(user: ReturnType<typeof userEvent.setup>, password = "clave-actual") {
+  await user.click(screen.getByRole("button", { name: "Activar" }));
+  await user.type(await screen.findByLabelText("Contraseña actual"), password);
 }
 
 describe("TwoFactorSection — Desactivada", () => {
@@ -54,12 +60,45 @@ describe("TwoFactorSection — Desactivada", () => {
     expect(screen.queryByText(/opcional/)).not.toBeInTheDocument();
   });
 
+  it("Activar first asks for the current password, and Cancelar goes back without a request", async () => {
+    const user = userEvent.setup();
+    render(<TwoFactorSection {...OFF} />);
+
+    await user.click(screen.getByRole("button", { name: "Activar" }));
+
+    const field = screen.getByLabelText("Contraseña actual");
+    expect(field).toHaveAttribute("type", "password");
+    expect(field).toHaveAttribute("autocomplete", "current-password");
+    expect(screen.getByRole("button", { name: "Continuar" })).toBeDisabled();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(screen.getByRole("button", { name: "Activar" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Contraseña actual")).not.toBeInTheDocument();
+  });
+
+  it("keeps the password step and says so inline on a wrong password, with no QR", async () => {
+    const user = userEvent.setup();
+    render(<TwoFactorSection {...OFF} />);
+    await passwordStep(user, "otra-clave");
+    reply({ status: 400, body: { error: "invalid_password" } });
+
+    await user.click(screen.getByRole("button", { name: "Continuar" }));
+
+    expect(sentTo(0)).toEqual(["/api/account/two-factor/start", { password: "otra-clave" }]);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Contraseña incorrecta.");
+    expect(screen.getByLabelText("Contraseña actual")).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Código QR para la app de autenticación" })).not.toBeInTheDocument();
+    expect(addToast).not.toHaveBeenCalled();
+  });
+
   it("shows the missing-key message inline when Activar is unavailable", async () => {
     const user = userEvent.setup();
     render(<TwoFactorSection {...OFF} />);
+    await passwordStep(user);
     reply({ status: 503, body: { error: "unavailable" } });
 
-    await user.click(screen.getByRole("button", { name: "Activar" }));
+    await user.click(screen.getByRole("button", { name: "Continuar" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "La verificación en dos pasos no está disponible. Avisá al administrador.",
@@ -73,11 +112,12 @@ describe("TwoFactorSection — enrolling", () => {
   it("shows the QR, the grouped key and one numeric code field; Cancelar goes back", async () => {
     const user = userEvent.setup();
     render(<TwoFactorSection {...OFF} />);
+    await passwordStep(user);
     reply(START_OK);
 
-    await user.click(screen.getByRole("button", { name: "Activar" }));
+    await user.click(screen.getByRole("button", { name: "Continuar" }));
 
-    expect(sentTo(0)).toEqual(["/api/account/two-factor/start", null]);
+    expect(sentTo(0)).toEqual(["/api/account/two-factor/start", { password: "clave-actual" }]);
     expect(await screen.findByRole("img", { name: "Código QR para la app de autenticación" })).toHaveAttribute(
       "src",
       "data:image/png;base64,QR",
@@ -145,10 +185,14 @@ describe("TwoFactorSection — enrolling", () => {
     await screen.findByRole("list", { name: "Códigos de recuperación" });
 
     let saved: Blob | null = null;
-    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn((b: Blob) => ((saved = b), "blob:codes")), revokeObjectURL: vi.fn() }));
+    const revoke = vi.fn();
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn((b: Blob) => ((saved = b), "blob:codes")), revokeObjectURL: revoke }));
     const clicked: HTMLAnchorElement[] = [];
+    // Revoking in the same task as the click can cancel the download, so the revoke must come later.
+    let revokedInClickTask: number | null = null;
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
       clicked.push(this);
+      queueMicrotask(() => (revokedInClickTask = revoke.mock.calls.length));
     });
     const print = vi.fn();
     vi.stubGlobal("print", print);
@@ -159,6 +203,8 @@ describe("TwoFactorSection — enrolling", () => {
     expect(clicked[0].getAttribute("download")).toMatch(/\.txt$/);
     const text = await saved!.text();
     for (const code of CODES) expect(text).toContain(code);
+    expect(revokedInClickTask).toBe(0);
+    await waitFor(() => expect(revoke).toHaveBeenCalledWith("blob:codes"));
 
     await user.click(screen.getByRole("button", { name: "Imprimir" }));
     expect(print).toHaveBeenCalledTimes(1);
@@ -199,6 +245,18 @@ describe("TwoFactorSection — Activa", () => {
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
       "Demasiados códigos incorrectos. Por seguridad, el acceso quedó bloqueado por un rato.",
     );
+  });
+
+  it("says a code already used is not wrong, only spent", async () => {
+    const user = userEvent.setup();
+    render(<TwoFactorSection {...ON} />);
+    await user.click(screen.getByRole("button", { name: "Generar códigos nuevos" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Código de la app"), "111111");
+    reply({ status: 409, body: { error: "code_used" } });
+    await user.click(within(dialog).getByRole("button", { name: "Generar" }));
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Ese código ya se usó. Esperá el siguiente en la app.");
   });
 
   it("Generar códigos nuevos asks for an app code, shows a wrong one inline, then shows the new codes and toasts", async () => {

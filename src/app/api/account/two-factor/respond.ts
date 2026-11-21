@@ -4,7 +4,9 @@ import type { EnrolmentFailure } from "@/modules/auth/enrolment";
 
 /** Shared by the four 2FA routes under Mi cuenta (T8a); not a route itself. */
 const STATUS: Record<EnrolmentFailure["reason"], number> = {
+  invalid_password: 400,
   invalid_code: 400,
+  code_used: 409,
   locked: 429,
   required_for_role: 403,
   already_enabled: 409,
