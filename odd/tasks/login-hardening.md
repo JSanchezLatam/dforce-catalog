@@ -349,3 +349,15 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - A second `enroll` session of the same user stays confined until it expires.
     - The new copy not in the mockup: "La configuración venció. Volvé a iniciar sesión." and "No se pudo completar. Intentá de nuevo."
   - **Owner impact.** Once this reaches the workshop PC, every `administrador` and `jefe_taller` sets up 2FA at their next sign-in. Sessions already open are not cut (A3).
+- L43 (2026-11-20, T8b): GGA passed. An independent verifier passed S2 and S12 with no blockers.
+  - **Probes:**
+    - 12 parallel confirms on one `enroll` token produced one full session.
+    - When two `enroll` tokens raced, one won and the loser's start answered `no_pending_session`.
+    - A body `userId` naming another user had no effect.
+    - An `enroll` session was blocked on path variants and on the Mi cuenta and password routes, and forwarded no identity.
+    - The role and TTL matrix came out right, including an unfinished `user_totp` and a deactivated user.
+  - **Adapted e2e:** the verifier confirmed none was weakened.
+  - **Advisories kept:**
+    - The access log cannot tell a setup login from a password-only one.
+    - Setup confirm has no attempt limit; the secret belongs to that session.
+    - The proxy matcher's `login` lookahead skips any path starting with `login`. That predates this unit, and no such route exists.
