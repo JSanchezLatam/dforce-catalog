@@ -13,10 +13,13 @@ const HOURS = new Intl.NumberFormat("es-PA", { maximumFractionDigits: 1 });
  */
 export function TechnicianMonthTable({
   rows,
+  mes,
   mesLabel,
   canManageTechnicians,
 }: {
   rows: TecnicoMonthRow[];
+  /** The `YYYY-MM` key the closed counts belong to; the count links to those orders. */
+  mes: string;
   mesLabel: string;
   canManageTechnicians: boolean;
 }) {
@@ -60,7 +63,19 @@ export function TechnicianMonthTable({
               {sorted.map((row) => (
                 <TableRow key={row.tecnicoId}>
                   <TableCell className="whitespace-normal font-medium">{row.nombre}</TableCell>
-                  <TableCell className="text-right tabular-nums">{row.closed}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {row.closed > 0 ? (
+                      <Link
+                        href={`/service-orders?${new URLSearchParams({ status: "done", tecnico: row.tecnicoId, mes })}`}
+                        aria-label={`Ver las ${row.closed} órdenes cerradas de ${row.nombre} en ${mesLabel}`}
+                        className="link-accent inline-flex min-h-11 min-w-11 items-center justify-end"
+                      >
+                        {row.closed}
+                      </Link>
+                    ) : (
+                      row.closed
+                    )}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{HOURS.format(row.hours)} h</TableCell>
                 </TableRow>
               ))}

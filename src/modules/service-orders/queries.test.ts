@@ -123,6 +123,7 @@ function ordenServicioListItem(overrides: Partial<OrdenServicioListItem> = {}): 
     id: "o1",
     status: "open",
     appointmentAt: null,
+    completedAt: null,
     clienteName: "Pérez",
     vehiculoPlate: "AB1234",
     vehiculoMake: "Toyota",

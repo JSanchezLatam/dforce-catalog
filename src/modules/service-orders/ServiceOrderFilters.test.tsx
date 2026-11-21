@@ -227,3 +227,76 @@ describe("ServiceOrderFilters — the status options", () => {
     expect(labels).not.toContain("Abierta");
   });
 });
+
+/**
+ * technician-orders — the "Técnico" filter is admin/jefe only: the page passes
+ * the roster to them and an empty list to anyone else, so no roster, no select.
+ */
+describe("ServiceOrderFilters — Técnico filter and the month chip", () => {
+  const ROSTER = [
+    { id: "t1", nombre: "Luis Pérez" },
+    { id: "t2", nombre: "Ana Gómez" },
+  ];
+
+  it("renders no Técnico select without a roster (the técnico's own view)", () => {
+    render(<ServiceOrderFilters selected={{}} pageSize={10} tecnicos={[]} />);
+
+    expect(screen.queryByRole("combobox", { name: "Técnico" })).not.toBeInTheDocument();
+  });
+
+  it("pushes the chosen técnico immediately", async () => {
+    const user = userEvent.setup();
+    render(<ServiceOrderFilters selected={{}} pageSize={10} tecnicos={ROSTER} />);
+
+    await user.click(screen.getByRole("combobox", { name: "Técnico" }));
+    await user.click(await screen.findByRole("option", { name: "Luis Pérez" }));
+
+    expect(push).toHaveBeenCalledWith("/service-orders?tecnico=t1");
+  });
+
+  it("shows the selected técnico's name on the trigger, and offers Limpiar", () => {
+    render(<ServiceOrderFilters selected={{ tecnicoId: "t2" }} pageSize={10} tecnicos={ROSTER} />);
+
+    expect(screen.getByRole("combobox", { name: "Técnico" })).toHaveTextContent("Ana Gómez");
+    expect(screen.getByRole("button", { name: "Limpiar" })).toBeInTheDocument();
+  });
+
+  it("shows the month as a chip whose × removes only the month", async () => {
+    const user = userEvent.setup();
+    seedUrl("status=done&tecnico=t1&mes=2026-11");
+    render(
+      <ServiceOrderFilters
+        selected={{ status: "done", tecnicoId: "t1", closedIn: "2026-11" }}
+        pageSize={10}
+        tecnicos={ROSTER}
+        closedInLabel="Noviembre 2026"
+      />,
+    );
+
+    expect(screen.getByText("Cerradas en noviembre 2026")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Quitar filtro de mes" }));
+
+    expect(push).toHaveBeenCalledWith("/service-orders?status=done&tecnico=t1");
+  });
+
+  it("choosing Todos drops the tecnico param", async () => {
+    const user = userEvent.setup();
+    seedUrl("status=done&tecnico=t1");
+    render(<ServiceOrderFilters selected={{ status: "done", tecnicoId: "t1" }} pageSize={10} tecnicos={ROSTER} />);
+
+    await user.click(screen.getByRole("combobox", { name: "Técnico" }));
+    await user.click(await screen.findByRole("option", { name: "Todos" }));
+
+    expect(push).toHaveBeenCalledWith("/service-orders?status=done");
+  });
+
+  it("Limpiar drops the técnico and the month along with everything else", async () => {
+    const user = userEvent.setup();
+    seedUrl("tecnico=t1&mes=2026-11");
+    render(<ServiceOrderFilters selected={{ tecnicoId: "t1", closedIn: "2026-11" }} pageSize={10} tecnicos={ROSTER} closedInLabel="Noviembre 2026" />);
+
+    await user.click(screen.getByRole("button", { name: "Limpiar" }));
+
+    expect(push).toHaveBeenCalledWith("/service-orders");
+  });
+});

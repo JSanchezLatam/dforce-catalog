@@ -118,7 +118,7 @@ export default async function MetricsPage({ searchParams }: { searchParams: Prom
               <HoursBarChart bars={hoursBars} mesLabel={monthLabel(mes)} />
             </CardContent>
           </Card>
-          <TechnicianMonthTable rows={technicians} mesLabel={monthLabel(mes)} canManageTechnicians={can(user, "technicians.manage")} />
+          <TechnicianMonthTable rows={technicians} mes={mes} mesLabel={monthLabel(mes)} canManageTechnicians={can(user, "technicians.manage")} />
         </div>
       </section>
     </div>

@@ -3,6 +3,7 @@ import { PermissionDenied } from "@/shared/ui/PermissionDenied";
 import { ArrowDown, ArrowUp, CalendarDays, Eye, Wrench } from "lucide-react";
 
 import { can } from "@/modules/auth/policy";
+import { monthLabel } from "@/modules/metrics/months";
 import { requireSessionFromHeaders } from "@/modules/auth/session";
 import { orderScope } from "@/modules/service-orders/scope";
 import { computePageWindow, parsePageSize } from "@/modules/inventory-view/queries";
@@ -61,6 +62,22 @@ function normalizeOrdenFilters(searchParams: SearchParams): OrdenServicioFilters
   };
 }
 
+// Years 1000-2999 only: Postgres rejects year 0, and no workshop order predates 1000.
+const MONTH_KEY = /^[12]\d{3}-(0[1-9]|1[0-2])$/;
+
+/**
+ * Admin/jefe-only filters. `tecnico` must name a roster row and `mes` must be a
+ * `YYYY-MM` key; anything else is dropped rather than reaching the query.
+ */
+function normalizeAdminFilters(searchParams: SearchParams, roster: readonly { id: string }[]): Pick<OrdenServicioFilters, "tecnicoId" | "closedIn"> {
+  const tecnicoId = firstValue(searchParams.tecnico);
+  const mes = firstValue(searchParams.mes);
+  return {
+    ...(tecnicoId && roster.some((row) => row.id === tecnicoId) ? { tecnicoId } : {}),
+    ...(mes && MONTH_KEY.test(mes) ? { closedIn: mes } : {}),
+  };
+}
+
 /**
  * R20/R21 — paginated, status-filtered service-order list. Mirrors
  * inventory/page.tsx's template (design.md §8): server component,
@@ -85,6 +102,15 @@ export default async function ServiceOrdersPage({
     return <PermissionDenied title="Órdenes de servicio" />;
   }
 
+  // The "Técnico" and month filters are admin/jefe only (owner, 2026-11-21).
+  // Deactivated técnicos stay in this roster: their orders are history, and
+  // Métricas links to them. Plain `{ id, nombre }` pairs: the roster row's
+  // `Date`s must not cross the client boundary.
+  const seesAll = can(user, "service-orders.readAll");
+  const roster = seesAll || can(user, "service-orders.create") ? await listTecnicos({ includeInactive: seesAll }) : [];
+  const filterTecnicos = seesAll ? roster.map(({ id, nombre }) => ({ id, nombre })) : [];
+  if (seesAll) Object.assign(filters, normalizeAdminFilters(params, filterTecnicos));
+
   // `listInventory({}, { offset: 0, limit: 1000 })` used to be a third leg of
   // this `Promise.all`, preloading the whole catalogue so `ServiceOrderForm`'s
   // parts picker could search it client-side. That picker came out of order
@@ -106,7 +132,7 @@ export default async function ServiceOrdersPage({
 
   // D11: a técnico's empty list is not "no orders registered". One indexed read,
   // made only here — never for admin/jefe, a filtered list or a non-empty page.
-  const unfiltered = !filters.status && !filters.search;
+  const unfiltered = !filters.status && !filters.search && !filters.tecnicoId && !filters.closedIn;
   const tecnicoEmptyReason =
     items.length === 0 && unfiltered && !can(user, "service-orders.readAll")
       ? (await findTecnicoByUserId(user.id))
@@ -115,11 +141,13 @@ export default async function ServiceOrdersPage({
       : null;
 
   const pageCount = Math.max(1, Math.ceil(total / pageWindow.limit));
+  // Arriving from Métricas the question is "when was it closed", not "when is the appointment".
+  const closedView = Boolean(filters.closedIn);
 
   // Only the create form reads the roster, and a técnico cannot create. Plain
   // `{ id, nombre }` pairs: the roster row's `Date`s must not cross the boundary.
   const tecnicos = can(user, "service-orders.create")
-    ? (await listTecnicos()).map(({ id, nombre }) => ({ id, nombre }))
+    ? roster.filter((row) => !row.deactivatedAt).map(({ id, nombre }) => ({ id, nombre }))
     : [];
 
   // The props that cross into the client (design D3). Every one is a string, an
@@ -153,9 +181,20 @@ export default async function ServiceOrdersPage({
         }
       />
 
+      {filters.closedIn && (
+        <Link href={`/metrics?mes=${filters.closedIn}`} className="link-accent mb-3 inline-block text-sm">
+          ← Volver a Métricas ({monthLabel(filters.closedIn)})
+        </Link>
+      )}
+
       <Card size="sm" className="mb-4">
         <CardContent>
-          <ServiceOrderFilters selected={filters} pageSize={pageSize} />
+          <ServiceOrderFilters
+            selected={filters}
+            pageSize={pageSize}
+            tecnicos={filterTecnicos}
+            closedInLabel={filters.closedIn ? monthLabel(filters.closedIn) : undefined}
+          />
         </CardContent>
       </Card>
 
@@ -214,7 +253,7 @@ export default async function ServiceOrdersPage({
                     <TableHead className="w-10">
                       <SelectAllCheckbox />
                     </TableHead>
-                    {COLUMNS.map((column) =>
+                    {(closedView ? CLOSED_COLUMNS : COLUMNS).map((column) =>
                       column.sort ? (
                         <SortableHeader
                           key={column.label}
@@ -247,7 +286,7 @@ export default async function ServiceOrdersPage({
                       <TableCell>
                         <StatusBadge status={orden.status} label={ORDER_STATUS_LABEL[orden.status]} />
                       </TableCell>
-                      <TableCell>{formatDateTime(orden.appointmentAt)}</TableCell>
+                      <TableCell>{formatDateTime(closedView ? orden.completedAt : orden.appointmentAt)}</TableCell>
                       <TableCell>
                         {/* The `h-7` (28px) hand-copied link that used to live
                             here is deleted, not restyled — it sat under
@@ -302,7 +341,7 @@ export default async function ServiceOrdersPage({
                 </div>
                 <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                   <CalendarDays className="h-4 w-4" aria-hidden="true" />
-                  <span>Cita</span> {formatDateTime(orden.appointmentAt)}
+                  <span>{closedView ? "Cerrada" : "Cita"}</span> {formatDateTime(closedView ? orden.completedAt : orden.appointmentAt)}
                 </div>
               </RecordCard>
             ))}
@@ -355,16 +394,17 @@ const ORDER_REFUSAL_MESSAGES: Record<string, string> = {
  * what is in it IS the spec's "Sort and pagination do not clear it" scenario.
  * `sort`, `dir`, `page` and `pageSize` are all absent, and the strongest
  * guarantee of that is the argument: this takes the already-narrowed
- * `OrdenServicioFilters`, which `normalizeOrdenFilters` builds from `status`
- * and `search`. Reading `searchParams` here instead would put every other key
+ * `OrdenServicioFilters`, built from `status`, `search` and the admin/jefe
+ * `tecnico`/`mes` (already validated against the roster and `YYYY-MM`). Reading `searchParams` here instead would put every other key
  * one typo away from wiping a selection on every column-header click.
  *
  * `search` goes LAST (D11, mirrors `customers/page.tsx:392-397`): it is free
- * text and can contain anything, `|` included, while `status` is a closed
- * enum that cannot be confused with part of a search term.
+ * text and can contain anything, `|` included, while `status`, the técnico id
+ * and the month key are closed values that cannot be confused with part of a
+ * search term.
  */
 function buildFilterKey(filters: OrdenServicioFilters): string {
-  return `status=${filters.status ?? "all"}|search=${filters.search ?? ""}`;
+  return `status=${filters.status ?? "all"}|tecnico=${filters.tecnicoId ?? ""}|mes=${filters.closedIn ?? ""}|search=${filters.search ?? ""}`;
 }
 
 /**
@@ -394,6 +434,9 @@ const COLUMNS: readonly { label: string; hideBelowXl?: boolean; sort?: keyof typ
   { label: "Estado", sort: "status" },
   { label: "Cita", sort: "appointmentAt" },
 ];
+
+/** The month view swaps Cita for the closing date; not sortable, the month already bounds it. */
+const CLOSED_COLUMNS: typeof COLUMNS = [...COLUMNS.filter((column) => column.label !== "Cita"), { label: "Cerrada" }];
 
 /**
  * The `Vehículo` cell identifies the car, not merely its registration (spec's
@@ -443,6 +486,14 @@ function SortableHeader({
   );
 }
 
+/** `tecnico`/`mes` ride along on sort and page links; the page re-validates them on arrival. */
+function setAdminFilterParams(query: URLSearchParams, params: SearchParams) {
+  const tecnicoId = firstValue(params.tecnico);
+  if (tecnicoId) query.set("tecnico", tecnicoId);
+  const mes = firstValue(params.mes);
+  if (mes) query.set("mes", mes);
+}
+
 /**
  * Server-Side Full-Result-Set Sort with Page Reset — `page` is dropped
  * entirely (the spec allows either). Clicking the already-active column
@@ -461,6 +512,7 @@ function buildSortHref(params: SearchParams, key: keyof typeof ORDEN_SORT, curre
   if (size) query.set("pageSize", size);
   const term = firstValue(params.search);
   if (term) query.set("search", term);
+  setAdminFilterParams(query, params);
   const nextDir = currentSort?.key === key && currentSort.dir === "asc" ? "desc" : "asc";
   query.set("sort", key);
   query.set("dir", nextDir);
@@ -485,6 +537,7 @@ function buildPageHrefPattern(params: SearchParams, sort: OrdenSort | undefined)
   // `?search=a&search=b` reads as an array and drops silently.
   const term = firstValue(params.search);
   if (term) query.set("search", term);
+  setAdminFilterParams(query, params);
   if (sort) {
     query.set("sort", sort.key);
     query.set("dir", sort.dir);
