@@ -48,7 +48,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T7 | S4, S6, S12 | Second-step page and recovery-code path | delegated (context backstop, L28) | done | `bde0eb3`, `780b8f2`, `a7c1bc1` (PR #374, merged `d2e0eaf`) |
 | T8a | S2, S4, S12, S14 | Enrolment from Mi cuenta, recovery codes, regenerate, disable; key generation in `standalone.ps1` | delegated (context backstop) | done | `fe8097b`, `e1968c7`, `d68500d` (PR #375, merged `93d3bfc`) |
 | T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | done | `aadc097` (PR #376, merged `73c3112`) |
-| T9 | S3, S9 | Trusted device, revoked on password change | delegated (context backstop) | done | `6732117`, next commit |
+| T9 | S3, S9 | Trusted device, revoked on password change | delegated (context backstop) | done | `6732117`, `3576b8d` |
 | T10 | S5, S13 | Admin 2FA reset, self-reset refusal, emergency command | inline | pending | |
 | T11 | S11 | `secure` cookie | inline | deferred until the tunnel | |
 
@@ -406,3 +406,4 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - The device purge depends on the attempts purge succeeding that day.
     - `changePassword` revokes other sessions after commit, which predates this unit.
     - T10's reset must call the device revoke inside its own transaction.
+- L48 (2026-11-21, T9): Gentle AI review (risk + reliability, granted under L27) APPROVED and acknowledged. Its notes are already recorded: on plain HTTP the cookie has no `secure` flag, which is deferred to T11 with the session cookie; expired-device cleanup waits on the attempts purge.
