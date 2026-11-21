@@ -301,6 +301,11 @@ export class AdminSafetyError extends Error {
  */
 type TxLike = { execute: (query: ReturnType<typeof sql>) => Promise<{ rows: Record<string, unknown>[] }> };
 
+/** S9 and A5: no trusted device may keep skipping the code once the password or the account changes hands. */
+async function revokeTrustedDevicesTx(tx: TxLike, userId: string): Promise<void> {
+  await tx.execute(sql`DELETE FROM trusted_devices WHERE user_id = ${userId}`);
+}
+
 /**
  * technicians-and-work-lines: every técnico login has exactly one roster row.
  * Idempotent — `tecnico.user_id` is UNIQUE, so an existing link (the backfill's,
@@ -380,7 +385,7 @@ export type UpdateUserDeps = {
   applyUpdate?: (tx: TxLike, targetId: string, patch: UserPatch) => Promise<void>;
   ensureRosterRow?: typeof ensureRosterRow;
   revokeOtherSessions?: typeof revokeOtherSessions;
-  revokeTrustedDevices?: typeof revokeTrustedDevices;
+  revokeTrustedDevices?: (tx: TxLike, userId: string) => Promise<void>;
 };
 
 async function getTargetTx(tx: TxLike, targetId: string) {
@@ -463,7 +468,7 @@ export async function updateUser(
 
     await applyUpdate(tx, targetId, patch);
     // S9: the reset password is known to the administrator, so no device keeps skipping the code.
-    if (passwordHash !== undefined) await (deps.revokeTrustedDevices ?? revokeTrustedDevices)(targetId, tx as never);
+    if (passwordHash !== undefined) await (deps.revokeTrustedDevices ?? revokeTrustedDevicesTx)(tx, targetId);
 
     // Promotion only. Runs after the UPDATE so the roster name reads the new
     // `users.name`; a failure aborts the whole edit.
@@ -504,6 +509,7 @@ export async function deactivateUser(
     listActiveAdminIds?: (tx: TxLike) => Promise<string[]>;
     setDeactivatedAt?: (tx: TxLike, targetId: string, deactivatedAt: Date) => Promise<void>;
     revokeOtherSessions?: typeof revokeOtherSessions;
+    revokeTrustedDevices?: (tx: TxLike, userId: string) => Promise<void>;
   } = {},
 ): Promise<void> {
   const database = deps.database ?? db;
@@ -517,6 +523,7 @@ export async function deactivateUser(
       throw new AdminSafetyError(violation);
     }
     await setDeactivatedAt(tx, targetId, new Date());
+    await (deps.revokeTrustedDevices ?? revokeTrustedDevicesTx)(tx, targetId);
   });
 
   const revoke = deps.revokeOtherSessions ?? revokeOtherSessions;

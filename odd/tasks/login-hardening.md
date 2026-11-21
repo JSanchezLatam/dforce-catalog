@@ -48,7 +48,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T7 | S4, S6, S12 | Second-step page and recovery-code path | delegated (context backstop, L28) | done | `bde0eb3`, `780b8f2`, `a7c1bc1` (PR #374, merged `d2e0eaf`) |
 | T8a | S2, S4, S12, S14 | Enrolment from Mi cuenta, recovery codes, regenerate, disable; key generation in `standalone.ps1` | delegated (context backstop) | done | `fe8097b`, `e1968c7`, `d68500d` (PR #375, merged `93d3bfc`) |
 | T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | done | `aadc097` (PR #376, merged `73c3112`) |
-| T9 | S3, S9 | Trusted device, revoked on password change | delegated (context backstop) | done | (this commit) |
+| T9 | S3, S9 | Trusted device, revoked on password change | delegated (context backstop) | done | `6732117`, next commit |
 | T10 | S5, S13 | Admin 2FA reset, self-reset refusal, emergency command | inline | pending | |
 | T11 | S11 | `secure` cookie | inline | deferred until the tunnel | |
 
@@ -392,3 +392,17 @@ Route evidence: units depend on each other in order, so no writer trigger applie
     - the cookie is not cleared on logout or forget, and once revoked it matches nothing;
     - one cookie per browser;
     - forget asks for no code, because it only removes access.
+- L47 (2026-11-21, T9).
+  - **GGA:** passed.
+  - **Independent verifier:** S3 and S9 pass with no blockers. Its probes:
+    - Another user's cookie, an expired row, a forged token and the stored hash all fail to skip the code. So does a device revoked then re-enabled.
+    - A wrong password, a locked user and a deactivated user are all refused even with a valid cookie.
+    - Only a literal `true` with a right code sets the cookie.
+    - Every password-writing path revokes its devices.
+  - **Applied after it, RED first:**
+    - Deactivating a user revokes their devices inside the same transaction (A5). A reactivated user could otherwise skip the code with an old cookie.
+    - GGA's advisory: `updateUser` no longer casts its transaction (`as never`). Both paths share a `TxLike` helper.
+  - **Recorded:**
+    - The device purge depends on the attempts purge succeeding that day.
+    - `changePassword` revokes other sessions after commit, which predates this unit.
+    - T10's reset must call the device revoke inside its own transaction.

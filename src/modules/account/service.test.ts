@@ -500,7 +500,7 @@ describe("updateUser", () => {
 
       await updateUser("admin-1", "user-9", { password: "nuevatemp1" }, deps);
 
-      expect(revokeDevices).toHaveBeenCalledWith("user-9", expect.anything());
+      expect(revokeDevices).toHaveBeenCalledWith(expect.anything(), "user-9");
       const patch = applyUpdate.mock.calls[0][2] as { passwordHash: string; mustChangePassword: boolean };
       expect(patch.mustChangePassword).toBe(true);
       expect(patch.passwordHash).not.toBe("nuevatemp1");

@@ -21,7 +21,7 @@ import { POST as FORGET_DEVICES } from "@/app/api/account/two-factor/forget-devi
 import { POST as CHANGE_PASSWORD } from "@/app/api/account/password/route";
 import { POST as LOGIN } from "@/app/api/login/route";
 import { POST as VERIFY } from "@/app/api/two-factor/verify/route";
-import { updateUser } from "@/modules/account/service";
+import { deactivateUser, updateUser } from "@/modules/account/service";
 import { disableTwoFactor } from "@/modules/auth/enrolment";
 import { hashPassword } from "@/modules/auth/password";
 import { sealSecret, totpKey } from "@/modules/auth/secret-box";
@@ -226,6 +226,17 @@ describe("trusted devices against a real database", () => {
 
     expect(await devicesOf(id)).toHaveLength(0);
     expect((await login(username, device, NEW_PASSWORD)).body).toMatchObject({ pending: "verify" });
+  });
+
+  // A5: a reactivated user must not skip the code with a cookie from before.
+  it("deactivating a user forgets every device of that user", async () => {
+    const { id, username } = await createLogin("deactivated");
+    const { id: adminId } = await createLogin("deactivator", { role: "administrador", twoFactor: false });
+    await trust(username);
+
+    await deactivateUser(adminId, id);
+
+    expect(await devicesOf(id)).toHaveLength(0);
   });
 
   it("disabling 2FA forgets every device", async () => {
