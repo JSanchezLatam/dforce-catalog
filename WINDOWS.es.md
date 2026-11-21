@@ -390,8 +390,8 @@ su propio correo. El respaldo de R2 guarda la base de datos, no `.env`. Una
 restauración en una máquina nueva sin la clave original deja ilegibles todos
 los secretos de 2FA y los códigos de recuperación: los usuarios con 2FA no
 pueden terminar de iniciar sesión y necesitan un reseteo de emergencia de 2FA
-desde esta PC antes de volver a activarla (ese comando llega en una
-actualización posterior). Un administrador o jefe de taller sin 2FA tampoco puede
+desde esta PC antes de volver a activarla:
+`node scripts\emergency.mjs reset-2fa <usuario>`. Un administrador o jefe de taller sin 2FA tampoco puede
 pasar de la pantalla de configuración obligatoria hasta que vuelva la clave,
 porque activarla también la necesita. Los demás usuarios sin 2FA no se ven
 afectados. Por la misma razón, nunca genere una clave nueva encima de una que
@@ -495,6 +495,7 @@ día sin respaldo externo hasta la siguiente corrida exitosa.
 | Síntoma | Causa | Solución |
 |---------|-------|----------|
 | El login dice `Pedí al administrador que te desbloquee.` y el bloqueado **es** el único administrador | Tercer bloqueo seguido por contraseña incorrecta: dura hasta que un administrador desbloquee, y no queda ninguno con sesión | En esta PC, desde la carpeta del proyecto: `node scripts\emergency.mjs unlock <usuario>` (lee `DATABASE_URL` del `.env`). El usuario respeta mayúsculas y minúsculas |
+| El único administrador perdió el teléfono con la app de 2FA **y** los códigos de recuperación, o una restauración dejó ilegibles los secretos de 2FA | No queda ningún administrador que pueda entrar a resetear la 2FA desde Gestión de usuarios | En esta PC, desde la carpeta del proyecto: `node scripts\emergency.mjs reset-2fa <usuario>`. Borra la 2FA, los códigos de recuperación y los dispositivos de confianza del usuario y cierra sus sesiones; un administrador o jefe de taller la vuelve a configurar al entrar. El usuario respeta mayúsculas y minúsculas |
 | `FATAL: password authentication failed for user "postgres"` | PostgreSQL se instaló con `winget`, que nunca mostró la pantalla de contraseña | "Postgres instalado con winget" más abajo |
 | Todas las pantallas funcionan pero la sincronización de inventario/clientes no trae nada | La IP pública de esta máquina no está en la lista de permitidos de Interfuerza | "Interfuerza necesita la IP pública de esta máquina en su lista de permitidos" más abajo |
 | `npm : File ...\npm.ps1 cannot be loaded because running scripts is disabled` | `npm` se resuelve a `npm.ps1`, que la política de ejecución por defecto bloquea | Use `npm.cmd` en su lugar: mismo programa, wrapper por lotes, ninguna configuración de máquina cambiada |
