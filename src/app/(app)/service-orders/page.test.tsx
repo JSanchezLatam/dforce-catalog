@@ -57,6 +57,7 @@ vi.mock("@/modules/inventory-view/queries", async (importOriginal) => {
   return { ...actual, listInventory };
 });
 
+import { formatDateTime } from "@/shared/datetime";
 import { ToastProvider } from "@/shared/ui/ToastProvider";
 import ServiceOrdersPage from "./page";
 
@@ -1056,11 +1057,23 @@ describe("ServiceOrdersPage — técnico and month filters", () => {
   });
 
   it("shows the Cerrada column instead of Cita while the month filter is on", async () => {
-    listOrdenesServicio.mockResolvedValue([orden({ status: "done", completedAt: new Date("2026-11-14T15:00:00Z") })]);
-    countOrdenesServicio.mockResolvedValue(1);
+    const completedAt = new Date("2026-11-14T15:00:00Z");
+    const appointmentAt = new Date("2026-11-03T14:00:00Z");
+    listOrdenesServicio.mockResolvedValueOnce([orden({ status: "done", completedAt, appointmentAt })]);
+    countOrdenesServicio.mockResolvedValueOnce(1);
     render(await ServiceOrdersPage({ searchParams: Promise.resolve({ tecnico: "t1", mes: "2026-11" }) }));
 
     expect(screen.getByRole("columnheader", { name: "Cerrada" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Cita" })).not.toBeInTheDocument();
+    // The cell and the phone card both show the closing date, never the appointment.
+    const table = screen.getByTestId("service-orders-table");
+    const cards = screen.getByTestId("service-orders-cards");
+    // ICU puts a narrow no-break space before "a. m."; toHaveTextContent collapses the element's whitespace, not ours.
+    const shown = (date: Date) => formatDateTime(date).replace(/\s+/g, " ");
+    for (const region of [table, cards]) {
+      expect(region).toHaveTextContent(shown(completedAt));
+      expect(region).not.toHaveTextContent(shown(appointmentAt));
+    }
+    expect(within(cards).getByText("Cerrada")).toBeInTheDocument();
   });
 });
