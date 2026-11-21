@@ -372,6 +372,29 @@ Esta es la falla que vale la pena entender porque no parece una: con Postgres en
 con éxito a la base de datos *equivocada* y simplemente se muestra vacía. Nada
 registra un error. `standalone.ps1 status` imprime a cuál apunta `.env`.
 
+## La clave de 2FA: guarde una copia de `.env` fuera de esta PC
+
+La verificación en dos pasos necesita `TOTP_ENCRYPTION_KEY` en `.env`: 32 bytes
+al azar en base64 que cifran el secreto de la app de autenticación de cada
+usuario y firman sus códigos de recuperación. `env.example` la trae vacía a
+propósito, para que dos instalaciones nunca compartan la clave. El paso de
+configuración de `standalone.ps1` (la primera instalación, y `-SetupOnly` en "La
+actualización" más arriba) genera una cuando la encuentra ausente o vacía, la
+escribe en su lugar (UTF-8 sin BOM, después de una copia `.env.bak-*`), imprime
+`TOTP_ENCRYPTION_KEY generada en .env` y nunca muestra el valor. Un valor
+existente no se toca nunca. Una instalación anterior a 2FA recibe su clave en la
+próxima actualización.
+
+**Guarde una copia de `.env` en otro lugar que no sea esta PC**: un pendrive o
+su propio correo. El respaldo de R2 guarda la base de datos, no `.env`. Una
+restauración en una máquina nueva sin la clave original deja ilegibles todos
+los secretos de 2FA y los códigos de recuperación: los usuarios con 2FA no
+pueden terminar de iniciar sesión y necesitan un reseteo de emergencia de 2FA
+desde esta PC antes de volver a activarla (ese comando llega en una
+actualización posterior). Los
+usuarios sin 2FA no se ven afectados. Por la misma razón, nunca genere una clave
+nueva encima de una que funciona.
+
 ## Respaldos
 
 Automático. `install-service` registra `DforceCatalogoBackup`: una tarea del

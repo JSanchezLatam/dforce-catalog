@@ -9,9 +9,14 @@ const session = vi.hoisted(() => vi.fn());
 const getUserProfile = vi.hoisted(() => vi.fn());
 const listOwnFeedback = vi.hoisted(() => vi.fn());
 const canMock = vi.hoisted(() => vi.fn());
+const twoFactorStatus = vi.hoisted(() => vi.fn());
 vi.mock("@/modules/auth/session", () => ({ requireSessionFromHeaders: session }));
 vi.mock("@/modules/account/queries", () => ({ getUserProfile }));
 vi.mock("@/modules/feedback/service", () => ({ listOwnFeedback }));
+vi.mock("@/modules/auth/enrolment", async (original) => ({
+  ...(await original<typeof import("@/modules/auth/enrolment")>()),
+  twoFactorStatus,
+}));
 vi.mock("@/modules/auth/policy", async (original) => {
   const real = await original<typeof import("@/modules/auth/policy")>();
   canMock.mockImplementation(real.can);
@@ -47,6 +52,7 @@ beforeEach(() => {
   session.mockResolvedValue(USER);
   getUserProfile.mockResolvedValue({ username: "jperez", name: "Juan", email: "j@x.com" });
   listOwnFeedback.mockResolvedValue([]);
+  twoFactorStatus.mockResolvedValue({ enabled: false, enabledAt: null, codesLeft: 0 });
 });
 
 describe("/account", () => {
@@ -80,5 +86,30 @@ describe("/account", () => {
     expect(listOwnFeedback).not.toHaveBeenCalled();
     expect(screen.queryByText("Mis comentarios")).not.toBeInTheDocument();
     expect(screen.getByText("Mi cuenta")).toBeInTheDocument();
+  });
+
+  it("renders the 2FA section between the profile and the password form, for the session user", async () => {
+    render(await AccountPage());
+
+    expect(twoFactorStatus).toHaveBeenCalledWith("u1");
+    const heading = screen.getByRole("heading", { name: "Verificación en dos pasos" });
+    expect(screen.getByText("Usuario").compareDocumentPosition(heading)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(heading.compareDocumentPosition(screen.getByText("Contraseña actual"))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.getByText(/Es opcional para tu rol\./)).toBeInTheDocument();
+  });
+
+  // 23 is above 12, so a month-first date cannot pass; 03:00 UTC is still the 22nd in the workshop (UTC-5).
+  it("shows the enabled date as dd/mm/aaaa in the workshop's zone, and the codes left", async () => {
+    twoFactorStatus.mockResolvedValue({ enabled: true, enabledAt: new Date("2026-11-23T03:00:00Z"), codesLeft: 7 });
+    render(await AccountPage());
+    expect(screen.getByText(/Te quedan/)).toHaveTextContent("Activada el 22/11/2026. Te quedan 7 de 10 códigos de recuperación.");
+  });
+
+  it("treats an administrador as a mandatory role: no Desactivar", async () => {
+    session.mockResolvedValue({ ...USER, role: "administrador" });
+    twoFactorStatus.mockResolvedValue({ enabled: true, enabledAt: new Date("2026-11-23T15:00:00Z"), codesLeft: 10 });
+    render(await AccountPage());
+    expect(screen.getByRole("button", { name: "Generar códigos nuevos" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Desactivar" })).not.toBeInTheDocument();
   });
 });

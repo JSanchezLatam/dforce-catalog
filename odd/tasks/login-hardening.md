@@ -46,7 +46,7 @@ Owner's words: "Si, quiero 2FA. pero para todos. de forma opcional. y lo que rec
 | T5 | S2, S4 | TOTP core, secret encryption, recovery hashes, env key (library only; storage lands with T6/T8) | inline | done | `a2718ad`, `168cfa3`, `30eb200` (PR #372, merged `823402f`) |
 | T6 | S2 | Pending session, proxy gate, e2e fixtures | delegated (context backstop, L28) | done | `a038c74`, `5e34740`, `02c1d5c` (PR #373, merged `edb0cb0`) |
 | T7 | S4, S6, S12 | Second-step page and recovery-code path | delegated (context backstop, L28) | done | `bde0eb3`, `780b8f2`, `a7c1bc1` (PR #374, merged `d2e0eaf`) |
-| T8a | S2, S4, S12, S14 | Enrolment from Mi cuenta, recovery codes, regenerate, disable; key generation in `standalone.ps1` | delegated (context backstop) | in progress | |
+| T8a | S2, S4, S12, S14 | Enrolment from Mi cuenta, recovery codes, regenerate, disable; key generation in `standalone.ps1` | delegated (context backstop) | done | (this commit) |
 | T8b | S2, S12 | Mandatory roles: `enroll` pending session and the setup screen | delegated (context backstop) | pending | |
 | T9 | S3, S9 | Trusted device, revoked on password change | inline | pending | |
 | T10 | S5, S13 | Admin 2FA reset, self-reset refusal, emergency command | inline | pending | |
@@ -275,3 +275,18 @@ Route evidence: units depend on each other in order, so no writer trigger applie
   - `scripts/macos/dev.sh` does the same for the dev Mac.
   - WINDOWS.md and WINDOWS.es.md explain the key and the copy.
   - STACK.md lists the new tables.
+- L38 (2026-11-20, T8a), written by a bounded writer.
+  - **Service.** `enrolment.ts` covers start, confirm, regenerate and disable. Refusals are enforced in SQL. Re-authentication goes through T7's single-use `last_step` update. A wrong key answers `unavailable` and writes nothing.
+  - **Routes.** Four routes under `/api/account/two-factor/` are guarded by `account.self`, like `/api/account`, so `pantalla` gets no 2FA (A1).
+  - **Mi cuenta.** The `s4` states are built. The dd/mm/aaaa date is rebuilt, because `es-PA` puts the month first. Descargar .txt uses a Blob with `a[download]`, so there is no clipboard API anywhere.
+  - **S14.** `standalone.ps1` and `dev.sh` write the key once, never over a value already set. The `.ps1` change has never been executed, because there is no PowerShell here. The Windows docs and STACK.md are updated.
+  - **Writer's checks.** RED was observed by name. Ten mutations were caught. The suite passes 5052/5052, `tsc` and lint are clean, and the 2FA e2e passes 27/27.
+  - **Parent fix before commit.** The writer flagged that regenerate and disable gave unlimited guesses at the app code, so a stolen session could brute-force six digits. Re-authentication now takes the login advisory locks, refuses while locked, and counts a wrong code as `bad_code` (S6). It returns `locked` (429), and the UI says "Demasiados códigos incorrectos. Por seguridad, el acceso quedó bloqueado por un rato." The e2e saw RED by name. The UI test was written after the code and is backed by a mutation.
+  - **Browser check at the LAN IP.**
+    - Phone, dark theme: Activar shows a 240px QR and the grouped key. A real code confirms, the 10 codes appear, Descargar .txt saves `codigos-de-recuperacion.txt`, the "Verificación en dos pasos activada" toast appears, and the state reads "Activada el 20/11/2026. Te quedan 10 de 10 códigos de recuperación." There is no horizontal scroll.
+    - Desktop: "Generar códigos nuevos" refuses a wrong code inline in its dialog, then a right code shows new codes with their toast.
+    - QA rows removed.
+  - **Recorded.**
+    - Imprimir prints the whole page.
+    - A failed revoke after a committed disable leaves the other sessions open.
+    - `scripts/macos/standalone.sh` also copies `env.example` without a key.
